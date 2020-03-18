@@ -1,0 +1,12 @@
+[run]
+branch = False
+# Coverage of ecotaxa-back services
+source =
+   ../../py
+
+[paths]
+source =
+   ../../py
+
+[report]
+show_missing = True

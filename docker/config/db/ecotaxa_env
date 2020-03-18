@@ -1,0 +1,3 @@
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres12
+POSTGRES_DB=ecotaxa

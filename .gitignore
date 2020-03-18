@@ -1,0 +1,5 @@
+py/pypy_venv
+py/venv
+QA/venv
+docker/pg_data
+*.pyc

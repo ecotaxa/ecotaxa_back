@@ -1,0 +1,492 @@
+# -*- coding: utf-8 -*-
+# This file is part of Ecotaxa, see license.md in the application root directory for license informations.
+# Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
+#
+import csv
+import datetime
+import logging
+import random
+import shutil
+import time
+from pathlib import Path, PurePath
+from typing import Dict
+
+from PIL import Image as PIL_Image
+# noinspection PyProtectedMember
+from sqlalchemy.engine import ResultProxy
+
+from db.Acquisition import Acquisition
+from db.Image import Image
+from db.Object import Object, ObjectFields, classif_qual_revert
+from db.Process import Process
+from db.Sample import Sample
+from utils import clean_value, to_float, none_to_empty, calc_astral_day_time, encode_equal_list
+from .DBWriter import DBWriter
+from .ImportBase import ImportBase
+
+
+class ImportStep2(ImportBase):
+
+    def __init__(self):
+        super(ImportStep2, self).__init__()
+        # Received from parameters
+        # The row count seen at previous step
+        self.total_row_count = 0
+
+    parent_classes = {"acq": Acquisition, "sample": Sample,
+                      "process": Process}
+    target_classes = {**parent_classes,
+                      "obj_head": Object, "obj_field": ObjectFields,
+                      "image": Image}
+    parent_pks = {"acq": Acquisition.acquisid.name, "sample": Sample.sampleid.name,
+                  "process": Process.processid.name}
+
+    def run(self):
+        """
+            Do the real job using injected parameters.
+        :return:
+        """
+        super(ImportStep2, self).prepare_run()
+        loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
+        logging.info("loaded_files = %s", loaded_files)
+        self.update_mapping(self.prj)
+        existing_parent_ids = self.fetch_existing_parent_ids()
+        # The created objects (unicity from object_id in TSV, orig_id in model)
+        existing_objects: set = self.fetch_existing_objects()
+        existing_objects_and_image = self.fetch_existing_images()
+        logging.info("existing_parent_ids = %s", existing_parent_ids)
+        random.seed()
+        source_dir = Path(self.source_dir_or_zip)
+        total_row_count = 0
+        db_writer = DBWriter(self.session)
+        start_time = time.time()
+        for a_csv_file in self.possible_tsv_files(source_dir):
+            relative_file = a_csv_file.relative_to(source_dir)
+            # relative name for logging and recording what was done
+            relative_name: str = relative_file.as_posix()
+            if relative_name in loaded_files and self.skip_already_loaded_file == 'Y':
+                logging.info("File %s skipped, already loaded" % relative_name)
+                continue
+            logging.info("Analyzing file %s" % relative_name)
+
+            a_csv_file = self.handle_uvpapp_format(a_csv_file, relative_file)
+
+            with open(a_csv_file.as_posix(), encoding='latin_1') as csvfile:
+                # Read as a dict, first line gives the format
+                rdr = csv.DictReader(csvfile, delimiter='\t', quotechar='"')
+                # Read types line (2nd line in file). This line is ignored.
+                _type_line = {field: v for field, v in rdr.__next__().items()}
+                # Cleanup field names, keeping original ones as key
+                clean_fields = {field: field.strip(" \t").lower() for field in rdr.fieldnames}
+                # Extract field list from header cooked by CSV reader
+                field_list = [clean_fields[field] for field in rdr.fieldnames]
+                # Only keep the fields we can persist
+                field_list = self.filter_unmapped_fields(field_list, relative_name)
+
+                # Remove fields which are unknown in ORM
+                target_fields = {alias: set() for alias in self.target_classes.keys()}
+                field_list = self.filter_not_in_db_fields(field_list, relative_name, target_fields)
+
+                # We can now prepare ORM classes with optimal performance
+                ObjectGen, ObjectFieldsGen, ImageGen = db_writer.generators(target_fields)
+
+                # For annotation, if there is both an id and a category then ignore category
+                ignore_annotation_category: bool = 'object_annotation_category_id' in field_list \
+                                                   and 'object_annotation_category' in field_list
+
+                vals_cache = dict()
+                # Loop over all lines
+                row_count_for_csv = 0
+                for rawlig in rdr:
+                    # Bean counting
+                    row_count_for_csv += 1
+                    total_row_count += 1
+
+                    lig = {clean_fields[field]: v for field, v in rawlig.items()}
+
+                    # ------------- extract method do_one_tsv_line from here
+
+                    # First read into dicts, faster than doing settattr()
+                    dicts_to_write = {alias: dict() for alias in self.target_classes.keys()}
+
+                    if ignore_annotation_category:
+                        # Remove category as required, but only if there is really an id value
+                        # it can happen that the id is empty, even if table header is present
+                        if clean_value(lig.get('object_annotation_category_id', '')) != '':
+                            del lig['object_annotation_category']
+
+                    # Read TSV line into dicts
+                    self.read_fields_to_dicts(field_list, lig, dicts_to_write, vals_cache)
+
+                    # Create SQLAlchemy mappers of the object itself and slaves (1<->1)
+                    object_head_to_write = ObjectGen(**dicts_to_write["obj_head"])
+                    object_fields_to_write = ObjectFieldsGen(**dicts_to_write["obj_field"])
+                    image_to_write = ImageGen(**dicts_to_write["image"])
+                    # Parents are created the same way, _when needed_ (i.e. nearly never),
+                    #  in @see add_parent_objects
+
+                    object_head_to_write.sunpos = self.compute_sun_position(object_head_to_write)
+
+                    self.add_parent_objects(existing_parent_ids, object_head_to_write, dicts_to_write)
+
+                    key_exist_obj = "%s*%s" % (object_fields_to_write.orig_id, image_to_write.orig_file_name)
+                    if self.skip_object_duplicate == 'Y' and key_exist_obj in existing_objects_and_image:
+                        logging.info("***************** Continue")
+                        continue
+
+                    must_write_obj = self.create_or_link_slaves(db_writer, existing_objects, object_fields_to_write,
+                                                                object_head_to_write)
+
+                    db_writer.add(object_head_to_write, object_fields_to_write, image_to_write, must_write_obj)
+
+                    existing_objects.add(object_fields_to_write.orig_id)
+
+                    self.deal_with_image(a_csv_file, image_to_write)
+
+                    db_writer.close_row()
+
+                    # ------------- to here
+                    if (total_row_count % 100) == 0:
+                        db_writer.persist()
+                        # TODO
+                        # self.UpdateProgress(100 * total_row_count / self.param.TotalRowCount,
+                        #                     "Processing files %d/%d" % (total_row_count, self.total_row_count))
+
+                db_writer.persist()
+                # Bean counting continues
+                elapsed = time.time() - start_time
+                rows_per_sec = int(total_row_count / elapsed)
+                logging.info("File %s : %d rows loaded, %d so far at %d rows/s",
+                             relative_name, row_count_for_csv, total_row_count,
+                             rows_per_sec)
+
+                loaded_files.append(relative_name)
+                self.prj.fileloaded = "\n".join(loaded_files)
+
+                db_writer.eof_cleanup()
+
+                # TODO: Just for tests
+                # if total_row_count > 10000:
+                #    break
+        self.update_counts_and_img0()
+        self.propagate_geo()
+        logging.info("Total of %d rows loaded" % total_row_count)
+        # TODO
+        # appli.project.main.RecalcProjectTaxoStat(Prj.projid)
+        # appli.project.main.UpdateProjectStat(Prj.projid)
+
+    def filter_unmapped_fields(self, field_list, relative_name):
+        """
+            Sanitize field list by removing the ones which are unknown in mapping.
+        :param field_list:
+        :param relative_name:
+        :return:
+        """
+        ok_fields = [field for field in field_list if field in self.mapping]
+        ko_fields = [field for field in field_list if field not in self.mapping]
+        if len(ko_fields) > 0:
+            logging.warning("In %s, field(s) %s not mapped, values will be ignored",
+                            relative_name, ko_fields)
+        return ok_fields
+
+    def filter_not_in_db_fields(self, field_list, relative_name, target_fields):
+        """
+            Sanitize (more) field list by removing the ones which cannot be output into
+            a DB table.
+        :param field_list:
+        :param relative_name:
+        :param target_fields: The used field, by target table.
+        :return:
+        """
+        ok_fields = []
+        ko_fields = []
+        for a_field in field_list:
+            mapping = self.mapping[a_field]
+            target_tbl = mapping["table"]
+            target_fld = mapping["field"]
+            target_class = self.target_classes[target_tbl]
+            try:
+                _target_col = getattr(target_class, target_fld)
+                # TODO: col must be a Column, not, e.g. a relationship
+                target_fields[target_tbl].add(target_fld)
+            except AttributeError:
+                ko_fields.append(a_field)
+                continue
+            ok_fields.append(a_field)
+        if len(ko_fields) > 0:
+            logging.warning("In %s, field(s) %s not known from DB, values will be ignored",
+                            relative_name, ko_fields)
+        return ok_fields
+
+    def create_or_link_slaves(self, db_writer, existing_objects, object_fields_to_write, object_head_to_write) -> bool:
+        # It can be a line with a complementary image
+        if object_fields_to_write.orig_id in existing_objects:
+            logging.info("Second image for %s ", object_fields_to_write.orig_id)
+            # In this case just point to previous
+            # TODO: It looks useless, anyway in original code the object is not added into session
+            # object_head_to_write.objid = existing_objects[object_fields_to_write.orig_id]
+            return False
+        else:
+            # or create it
+            object_head_to_write.projid = self.prj_id
+            object_head_to_write.random_value = random.randint(1, 99999999)
+            # Below left NULL @see self.update_counts_and_img0
+            # object_head_to_write.img0id = XXXXX
+            db_writer.link(object_fields_to_write, object_head_to_write)
+            return True
+
+    astral_cache = {'date': None, 'time': None, 'long': None, 'lat': None, 'r': ''}
+
+    @staticmethod
+    def compute_sun_position(object_head_to_write):
+        # Compute sun position if not already done
+        cache = ImportStep2.astral_cache
+        if not (cache['date'] == object_head_to_write.objdate
+                and cache['time'] == object_head_to_write.objtime
+                and cache['long'] == object_head_to_write.longitude
+                and cache['lat'] == object_head_to_write.latitude):
+            ImportStep2.astral_cache = {'date': object_head_to_write.objdate,
+                                        'time': object_head_to_write.objtime,
+                                        'long': object_head_to_write.longitude,
+                                        'lat': object_head_to_write.latitude,
+                                        'r': ''}
+            cache = ImportStep2.astral_cache
+            try:
+                cache['r'] = calc_astral_day_time(cache['date'],
+                                                  cache['time'],
+                                                  cache['lat'],
+                                                  cache['long'])
+            except Exception as e:
+                # autre erreurs par exemple si l'heure n'est pas valide;
+                logging.error("Astral error : %s for %s", e, cache)
+        return cache['r']
+
+    def read_fields_to_dicts(self, field_list, lig, dicts_to_write, vals_cache: Dict):
+        for a_field in field_list:
+            # CSV reader returns a minimal dict with no value equal to None
+            # TODO: below could be replaced with an intersect() of field names. To benchmark.
+            if a_field not in lig:
+                continue
+            # We have a value
+            raw_val = lig.get(a_field)
+            # Try to get the value from the cache
+            cache_key = (a_field, raw_val)
+            cached_field_value = vals_cache.get(cache_key)
+            m = self.mapping[a_field]
+            field_name = m.get("field")
+            field_table = m.get("table")
+            if cached_field_value is None:
+                csv_val = clean_value(raw_val)
+                # If no relevant value, leave field as NULL
+                if csv_val == '':
+                    continue
+                if m['type'] == 'n':
+                    cached_field_value = to_float(csv_val)
+                elif a_field == 'object_date':
+                    cached_field_value = datetime.date(int(csv_val[0:4]), int(csv_val[4:6]), int(csv_val[6:8]))
+                elif a_field == 'object_time':
+                    csv_val = csv_val.zfill(6)
+                    cached_field_value = datetime.time(int(csv_val[0:2]), int(csv_val[2:4]), int(csv_val[4:6]))
+                elif field_name == 'classif_when':
+                    v2 = clean_value(lig.get('object_annotation_time', '000000')).zfill(6)
+                    cached_field_value = datetime.datetime(int(csv_val[0:4]), int(csv_val[4:6]),
+                                                           int(csv_val[6:8]), int(v2[0:2]),
+                                                           int(v2[2:4]), int(v2[4:6]))
+                    # no caching of this one
+                    cache_key = "0"
+                elif field_name == 'classif_id':
+                    # numeric version is in "if type=n" case
+                    csv_val = self.taxo_mapping.get(csv_val.lower(), csv_val)
+                    # Use initial mapping
+                    cached_field_value = self.taxo_found[none_to_empty(csv_val).lower()]
+                elif field_name == 'classif_who':
+                    # Eventually map to another user if asked so
+                    cached_field_value = self.found_users[none_to_empty(csv_val).lower()].get('id', None)
+                elif field_name == 'classif_qual':
+                    cached_field_value = classif_qual_revert.get(csv_val.lower())
+                else:
+                    # Assume it's an ordinary text field with nothing special
+                    cached_field_value = csv_val
+                # Cache if relevant, setting the cache_key to "0" above effectively voids
+                vals_cache[cache_key] = cached_field_value
+
+            # Write the field into the right object
+            # TODO: sanitize mappings and forget this .get
+            dict_to_write = dicts_to_write.get(field_table)
+            if dict_to_write is not None:
+                dict_to_write[field_name] = cached_field_value
+            else:
+                logging.info("skip T %s %s %s", field_table, field_name, cached_field_value)
+
+    def add_parent_objects(self, existing_ids, object_head_to_write, dicts_to_write):
+        # Assignment of Sample, Acquisition & Process ID, creating them if necessary
+        # Due to amount of duplicated information in TSV, this happens for few % of rows
+        #  so no real need to optimize here.
+        for alias, parent_class in self.parent_classes.items():
+            dict_to_write = dicts_to_write[alias]
+            ids_for_obj = existing_ids[alias]
+            # Here we take advantage from consistent naming conventions
+            # The 3 involved tables have "orig_id" column serving the same purpose
+            parent_orig_id = dict_to_write.get("orig_id")
+            if parent_orig_id is None:
+                continue
+            fk_to_obj = self.parent_pks[alias]
+            if dict_to_write.get("orig_id") in ids_for_obj:
+                # This parent object was known before, don't add it into the session (DB)
+                # but link the child object_head to it (like newly created ones below)
+                pass
+            else:
+                # Create the SQLAlchemy wrapper
+                obj_to_write = parent_class(**dict_to_write)
+                # Link with project
+                obj_to_write.projid = self.prj_id
+                self.session.add(obj_to_write)
+                self.session.flush()
+                # We now have a (generated) PK to copy back into repository
+                ids_for_obj[parent_orig_id] = getattr(obj_to_write, fk_to_obj)
+                logging.info("++ IDS %s %s", alias, ids_for_obj)
+            # Anyway
+            setattr(object_head_to_write, fk_to_obj, ids_for_obj[parent_orig_id])
+
+    def deal_with_image(self, a_csv_file: Path, image_to_write: Image):
+        """
+            Generate image, create DB line and copy image file into vault.
+        :param a_csv_file:
+        :param image_to_write:
+        :return:
+        """
+        # As per zip files structure, image files are in same directory as their description
+        img_file_path = a_csv_file.with_name(image_to_write.orig_file_name)
+
+        if image_to_write.imgid is not None:
+            # Images are stored in folders of 10K images max
+            vault_folder = "%04d" % (image_to_write.imgid // 10000)
+            ndx_in_vault_folder = "%04d" % (image_to_write.imgid % 10000)
+        else:
+            # No ID yet
+            vault_folder = a_csv_file.stem
+            ndx_in_vault_folder = img_file_path.stem
+
+        vault_folder_path: PurePath = self.vault.sub_path(vault_folder)
+
+        # We store in DB line the path relative to vault
+        vault_filename = "%s%s" % (ndx_in_vault_folder, img_file_path.suffix)
+        vault_subpath = "%s/%s" % (vault_folder, vault_filename)
+        image_to_write.file_name = vault_subpath
+
+        self.vault.ensure_exists(vault_folder)
+
+        # Copy image file from unzip directory to vault
+        img_path: str = vault_folder_path.joinpath(vault_filename).as_posix()
+        # TODO: Move if on same filesystem
+        # TODO: OS copy otherwise, 3x less time
+        shutil.copyfile(img_file_path.as_posix(), img_path)
+
+        im = PIL_Image.open(img_path)
+        image_to_write.width = im.size[0]
+        image_to_write.height = im.size[1]
+        size_limit = int(self.config['THUMBSIZELIMIT'])
+        # Generate a thumbnail if image is too large
+        if (im.size[0] > size_limit) or (im.size[1] > size_limit):
+            # We force thumbnail format to JPEG
+            vault_thumb_filename = "%s_mini%s" % (ndx_in_vault_folder, '.jpg')
+            # TODO: Doesn't it affect aspect ratio?
+            im.thumbnail((size_limit, size_limit))
+            if im.mode == 'P':
+                im = im.convert("RGB")
+            thumb_path: str = vault_folder_path.joinpath(vault_thumb_filename).as_posix()
+            im.save(thumb_path)
+            image_to_write.thumb_file_name = "%s/%s" % (vault_folder, vault_thumb_filename)
+            image_to_write.thumb_width = im.size[0]
+            image_to_write.thumb_height = im.size[1]
+        else:
+            # Close the PIL image, when resized it was done during im.save
+            # Otherwise there is a FD exhaustion on PyPy
+            im.close()
+            # Need empty fields for bulk insert
+            image_to_write.thumb_file_name = None
+            image_to_write.thumb_width = None
+            image_to_write.thumb_height = None
+        if image_to_write.imgrank is None:
+            image_to_write.imgrank = 0  # default value
+
+    def update_counts_and_img0(self):
+        # noinspection SqlRedundantOrderingDirection
+        self.session.execute("""
+        UPDATE obj_head o
+           SET imgcount = (SELECT count(*) FROM images WHERE objid = o.objid),
+               img0id = (SELECT imgid FROM images WHERE objid = o.objid ORDER BY imgrank ASC LIMIT 1)
+         WHERE projid = :prj
+           AND (imgcount IS NULL or img0id IS NULL) """,
+                             {'prj': self.prj_id})
+        self.session.commit()
+
+    def propagate_geo(self):
+        """
+            Create sample geo from object one.
+            TODO: Waste of space or needed afterwards?
+        :return:
+        """
+        self.session.execute("""
+        UPDATE samples s 
+           SET latitude = sll.latitude, longitude = sll.longitude
+          FROM (SELECT o.sampleid, min(o.latitude) latitude, min(o.longitude) longitude
+                  FROM obj_head o
+                 WHERE projid=:projid 
+                   AND o.latitude IS NOT NULL 
+                   AND o.longitude IS NOT NULL
+              GROUP BY o.sampleid) sll 
+         WHERE s.sampleid = sll.sampleid 
+           AND projid = :projid """,
+                             {'projid': self.prj_id})
+        self.session.commit()
+
+    def fetch_existing_objects(self):
+        # Get existing object IDs (orig_id aka object_id in TSV) from the project
+        existing_objects = set()
+        # TODO: Why using the view? Why an outer join in the view?
+        res: ResultProxy = self.session.execute("SELECT o.orig_id "
+                                                "  FROM objects o "
+                                                " WHERE o.projid = :prj",
+                                                {"prj": self.prj_id})
+        for rec in res:
+            existing_objects.add(rec[0])
+        return existing_objects
+
+    def fetch_existing_parent_ids(self):
+        """
+        Get from DB the present IDs for the tables we are going to update and current project
+        :return:
+        """
+        existing_ids = {}
+        # Get orig_id from acquisition, sample, process
+        for alias, clazz in self.parent_classes.items():
+            sql = "SELECT orig_id," + self.parent_pks[alias] + \
+                  "  FROM " + clazz.__tablename__ + \
+                  " WHERE projid=" + str(self.prj_id)
+            res: ResultProxy = self.session.execute(sql)
+            # Store result into a dict key=orig_id, value=pk for table
+            collect = {}
+            for r in res:
+                collect[r[0]] = int(r[1])
+            existing_ids[alias] = collect
+        return existing_ids
+
+    def update_mapping(self, prj):
+        """
+        DB update of mappings for the Project
+        TODO: Dup code 4 times
+        """
+        prj.mappingobj = encode_equal_list({v['field']: v.get('title') for k, v in self.mapping.items()
+                                            if v['table'] == 'obj_field' and v['field'][0] in ('t', 'n')
+                                            and v.get('title') is not None})
+        prj.mappingsample = encode_equal_list({v['field']: v.get('title') for k, v in self.mapping.items()
+                                               if v['table'] == 'sample' and v['field'][0] in ('t', 'n')
+                                               and v.get('title') is not None})
+        prj.mappingacq = encode_equal_list({v['field']: v.get('title') for k, v in self.mapping.items()
+                                            if v['table'] == 'acq' and v['field'][0] in ('t', 'n')
+                                            and v.get('title') is not None})
+        prj.mappingprocess = encode_equal_list({v['field']: v.get('title') for k, v in self.mapping.items()
+                                                if v['table'] == 'process' and v['field'][0] in ('t', 'n')
+                                                and v.get('title') is not None})
+        self.session.commit()

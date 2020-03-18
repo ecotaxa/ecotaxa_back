@@ -1,0 +1,192 @@
+<html><head lang="en">
+<link rel="stylesheet" type="text/css" href="/static/DataTables1.10.18/Bootstrap-3.3.7/css/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="/static/jquery-ui/jquery-ui.min.css">
+    <link rel="stylesheet" type="text/css" href="/static/style20190201.css">
+  
+    <link rel="stylesheet" type="text/css" href="/static/select2/css/select2.css">
+  
+
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>EcoTaxa</title>
+<style type="text/css">.featuredimagezoomerhidden {visibility: hidden!important;}</style></head>
+<body>
+
+<script src="/static/jquery.min.js"></script>
+<script src="/static/jquery-ui/jquery-ui.min.js"></script>
+<script type="text/javascript" src="/static/DataTables1.10.18/Bootstrap-3.3.7/js/bootstrap.min.js"></script>
+
+<script src="/static/select2/js/select2.full.js"></script>
+
+<script src="/static/jquery.lazy.min.js"></script>
+<link rel="stylesheet" href="/static/multizoom.css" type="text/css">
+<script type="text/javascript" src="/static/multizoom.js"></script>
+<script src="/static/common_20190123.js"></script>
+<link rel="stylesheet" href="/static/fontawesome-free-5.5.0-web/css/all.min.css">
+
+<script>
+function AddZoom(element)
+{
+//index=element.attr("id").substring(1,10)
+var pos=element.attr("pos");
+element.addimagezoom({ // single image zoom
+		zoomrange: [4, 10],
+		magnifiersize: [400,400],
+		magnifierpos: pos,
+		cursorshade: true,
+		largeimage: '/vault/'+element.attr('data-zoom-image')
+	});
+};
+
+$(document).ready(function() {
+});
+</script>
+
+<div id="divheadinfo" class="headinfo">
+<div class="headinfo panel panel-default">  <div class="panel-body" style="padding: 1px 5px 1px 5px;">
+<table width="100%"><tbody><tr>
+
+    <td width="140px"><a href="/"><img height="30" src="/static/logo_ecotaxa_20.png" style="margin: 10px 0"></a></td>
+
+
+    <td></td>
+    <td align="right" width="300px">
+        
+            Not logged ( <a href="/login">log in / register</a> )
+          
+    </td>
+</tr></tbody></table>
+</div></div>
+  
+    
+</div>
+<!-- Main body -->
+<div id="bodydiv">
+
+    <div style="margin:5px;"><div id="homeText" '=""><style type="text/css" media="screen">
+	.home-block {
+		margin-bottom: 30px;
+		margin-top: 30px;
+	}
+	#hero-text {
+		text-align: center;
+		font-size: 150%;
+		font-weight: 100;
+		font-style: italic;
+	}
+	#illustration {
+	}
+	#logos {
+		text-align: center;
+		font-size: 110%;
+		font-weight: 100;
+	}
+	#logos img {
+		opacity: 0.5;
+	}
+	#logos a:hover img {
+		opacity: 1;
+	}
+	#instructions {
+		
+	}
+</style>
+
+<!-- Hero text -->
+<div class="row home-block" id="hero-text">
+	<div class="col-sm-12">
+		EcoTaxa is a web application dedicated to the visual exploration and the taxonomic annotation of images that illustrate the beauty of planktonic biodiversity.
+	</div>
+</div>
+
+<!-- Illustration -->
+<div class="row home-block" id="illustration">
+	<div class="col-sm-12">
+		<img src="/static/home/montage_plankton.jpg" width="100%" alt="plankton">
+	</div>
+</div>
+
+<!-- Logos -->
+<div class="row home-block" id="logos">
+  <div class="col-sm-3">
+  	<p><a href="http://www.obs-vlfr.fr" title="> - Observatoire Oceanologique de Villefranche sur Mer"><img src="/static/home/logo-oov-t-v8-5.png" height="80" alt="Logo Oov T V8 5"><br>
+		Observatoire Oceanologique de Villefranche-sur-mer</a></p>
+  </div>
+  <div class="col-sm-3">
+  	<p><a href="http://www.sb-roscoff.fr" title="Station Biologique de Roscoff - CNRS UPMC - Roscoff France"><img src="/static/home/logo_roscoff.png" height="80" alt="Logo Roscoff"><br>Station Biologique de Roscoff</a></p>
+  </div>
+  <div class="col-sm-3">
+		<p><a href="http://www.oceanomics.eu" title="Welcome to Oceanomics, understand the richness of oceanic plankton"><img src="/static/home/oceanomics.png" height="80" alt="Oceanomics Logo Horizontal"><br>Oceanomics</a></p>
+	</div>
+  <div class="col-sm-3">
+		<p><a href="http://face-foundation.org/partner-university-fund/" title="Partner University Fund"><img src="/static/home/logo_puf_180.png" height="80" alt="PUF logo"><br>Partner University Fund</a></p>
+	</div>
+</div>
+
+
+	</div>
+	<div class="row" id="homeSelectors" style="margin-top: 20px; margin-bottom: 20px;">
+		<div class="col-sm-4">
+        <a href="/explore/" class="btn btn-primary btn-lg btn-block">Explore images</a>
+		</div>
+		<div class="col-sm-4">
+        <a href="/prj/" class="btn btn-primary btn-lg  btn-block">Contribute to a project</a>
+		</div>		
+		<div class="col-sm-4">
+        <a href="/part/" class="btn btn-primary btn-lg  btn-block">Particle module</a>
+		</div>		
+	</div>
+<div class="row" id="homeLegal"><div class="col-sm-12"><div class="row" id="instructions">
+
+	<!-- For explore -->
+	<div class="col-sm-4">
+		<p>As a visitor, you have free access to the specimens that have been already identified by taxonomist experts.</p>
+
+		<p>You can explore the database by navigating along the UniEuk taxonomic tree which aims at unifying taxonomic names and tree according to reliable and curated molecular phylogenies. It encompasses the whole Eukaryotic and Prokaryotic lineages (Viruses coming soon) that have been molecularly described. Then images can be filtered according to several sample criteria: geographic location, depth, date and time of sampling, and imaging instrument.</p>
+
+	</div>
+
+	<!-- For projects -->
+	<div class="col-sm-4">
+		<p>As a scientist, you can contribute to the richness of this image database and/or to the collaborative taxonomic annotation effort. Images are organised in projects which should be consistent in terms of sampling and imaging techniques. We provide tools to support the annotation of large image datasets by supervised machine learning prediction.</p>
+	</div>
+
+	<!-- For particule -->
+	<div class="col-sm-4">
+		<p>The PARTICLE module of ECOTAXA is designed to host data from the Underwater Vision Profiler (UVP) and the LIIST instruments.
+      <br>It permits to:
+<br> •	Load particle data and associate them with CTD data and zooplankton images loaded and annotated in Ecotaxa
+<br> •	Process size spectra from the particle data
+<br> •	Download the resulting particle spectra, the CTD and the zooplankton data according to defined permissions
+<br> •	Visualize data and permit their promotion thanks to the internet access
+    </p>
+	</div>
+
+</div>
+<div style="font-size: 80%;margin-top: 30px;">
+<p>EcoTaxa is not responsible for the safety of the images and archived data even if the application managers make their best to secure the application and the hosted data. </p>
+
+<p>People annotating images in the EcoTaxa application cannot claim for any retribution but they can download and use the results of their work.
+The application can be freely downloaded and installed for scientific utilization. It can be installed either on servers or individual Windows computers.</p>
+
+<p>To download EcoTaxa and install the application, email <a href="mailto:marc.picheral@obs-vlfr.fr">marc.picheral@obs-vlfr.fr</a></p>
+
+<p>If you use EcoTaxa in your work, we would appreciate that you cite it as: Picheral M, Colin S, Irisson J-O. EcoTaxa, a tool for the taxonomic classification of images. http://ecotaxa.obs-vlfr.fr</p>
+<p>Software developed by Laurent Navarro (<a href="http://www.altidev.com">Altidev</a>)</p>
+</div><br><a href="/privacy">Privacy</a></div></div></div>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+</body></html>
