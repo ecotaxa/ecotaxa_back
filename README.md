@@ -5,7 +5,7 @@
 In this directory:
 - `py` is for Python back-end
 - `java` is for Java back-end
-- `docker` is a simple docker-compose configuration for setting up a DB server quickly, without impacting you whole system. It also embed a PgAdmin4 docker image.
+- `docker` is a simple docker-compose configuration for setting up a DB server quickly, without impacting your whole system. It also embeds a PgAdmin4 docker image.
 - `QA` contains all tests & measurements on the code 
 
 What is shared between back-end and legacy EcoTaxa:
