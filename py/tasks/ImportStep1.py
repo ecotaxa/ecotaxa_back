@@ -22,7 +22,7 @@ from utils import none_to_empty, decode_equal_list, to_float, convert_degree_min
 class ImportStep1(ImportBase):
 
     def __init__(self):
-        super(ImportStep1, self).__init__()
+        super().__init__()
         # Received from parameters
         self.intra_step = 0
         self.step_errors = []
@@ -31,7 +31,7 @@ class ImportStep1(ImportBase):
         self.total_row_count = 0
 
     def run(self):
-        super(ImportStep1, self).prepare_run()
+        super().prepare_run()
         loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
         logging.info("loaded_files = %s", loaded_files)
 
@@ -208,7 +208,7 @@ class ImportStep1(ImportBase):
 
     def validate_tsv_line(self, relative_name, lig, clean_fields, classif_id_seen, cols_seen,
                           vals_cache) -> bool:
-        latitude_seen = False
+        latitude_was_seen = False
         for raw_field, a_field in clean_fields.items():
             m = self.mapping.get(a_field)
             # No mapping, not stored
@@ -223,13 +223,13 @@ class ImportStep1(ImportBase):
             # Not seen already, proceed
             csv_val = clean_value_and_none(raw_val)
             cols_seen.add(a_field)
-            # From V1.1, if column is present then it's considered as seen,
-            #  before there was at least one value needed
+            # From V1.1, if column is present then it's considered as seen.
+            #  Before, the criterion was 'at least one value'.
             if csv_val == '':
                 # If no relevant value, leave field as NULL
                 continue
             if a_field == 'object_lat':
-                latitude_seen = True
+                latitude_was_seen = True
                 vf = convert_degree_minute_float_to_decimal_degree(csv_val)
                 if vf < -90 or vf > 90:
                     self.log_for_user("Invalid Lat. value '%s' for Field '%s' in file %s. "
@@ -268,14 +268,13 @@ class ImportStep1(ImportBase):
                     # Record that the taxo was seen
                     self.taxo_found[csv_val.lower()] = None
             elif a_field == 'object_annotation_person_name':
-                self.found_users[csv_val.lower()] = {
-                    'email': clean_value_and_none(lig.get('object_annotation_person_email', ''))
-                }
+                maybe_email = clean_value_and_none(lig.get('object_annotation_person_email', ''))
+                self.found_users[csv_val.lower()] = {'email': maybe_email}
             elif a_field == 'object_annotation_status':
                 if csv_val != 'noid' and csv_val.lower() not in classif_qual_revert:
                     self.log_for_user("Invalid Annotation Status '%s' for Field '%s' in file %s."
                                       % (csv_val, raw_field, relative_name))
-        return latitude_seen
+        return latitude_was_seen
 
     def validate_tsv_structure(self, relative_name, field_list, project_was_empty, last_numbers, type_line,
                                warn_messages):
@@ -294,6 +293,9 @@ class ImportStep1(ImportBase):
             if a_field in self.PredefinedFields:
                 _target_table = self.PredefinedFields[a_field]['table']
                 self.mapping[a_field] = self.PredefinedFields[a_field]
+            elif a_field in self.ProgFields:
+                # Not mapped, but not a free field
+                pass
             else:  # not a predefined field, so nXX ou tXX
                 if target_table == "object":
                     target_table = "obj_field"

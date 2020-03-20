@@ -7,9 +7,7 @@ from typing import Dict
 
 from sqlalchemy import MetaData
 from sqlalchemy.orm import Session
-from sqlalchemy.orm import relationship
 
-from db import Model
 from db.Image import Image
 from db.Model import minimal_table_of
 from db.Object import Object, ObjectFields
@@ -29,8 +27,6 @@ class DBWriter(object):
     def __init__(self, session: Session):
         self.session = session
 
-        self.bulks = []
-
         self.obj_bulks = []
         self.obj_tbl = None
         self.obj_fields_bulks = []
@@ -43,55 +39,36 @@ class DBWriter(object):
         self.obj_seq_cache = SequenceCache(self.session, "seq_objects", 100)
         self.img_seq_cache = SequenceCache(self.session, "seq_images", 100)
 
-    do_bulk = False
-    use_temp = False
-    use_orm_views = False
     use_sqlalchemy_core = True
+
+    # The properties used in code, not in mapping. If not listed here they are not persisted
+    # TODO: Provoke a crash at runtime for tests if one is forgotten. Dropping data silently is bad.
+    obj_head_prog_cols = {'sunpos', 'random_value', 'acquisid', 'processid', 'sampleid'}
+    obj_fields_prog_cols = {}
 
     def generators(self, target_fields: Dict[str, set]):
         # Small optimization, the below allows minimal SQLAlchemy SQL sent to DB
         metadata = MetaData()
         if self.use_sqlalchemy_core:
             ObjectView = Bean
-            self.obj_tbl = minimal_table_of(metadata, Object, target_fields["obj_head"])
+            obj_head_cols = target_fields["obj_head"].union(self.obj_head_prog_cols)
+            self.obj_tbl = minimal_table_of(metadata, Object, obj_head_cols)
             ObjectFieldsView = Bean
-            self.obj_fields_tbl = minimal_table_of(metadata, ObjectFields, target_fields["obj_field"])
+            obj_fields_cols = target_fields["obj_field"].union(self.obj_fields_prog_cols)
+            self.obj_fields_tbl = minimal_table_of(metadata, ObjectFields, obj_fields_cols)
             ImageView = Bean
             # noinspection PyUnresolvedReferences
             self.img_tbl = Image.__table__
-        elif self.use_temp:
-            from sqlalchemy.dialects.postgresql import VARCHAR
-            ObjectView = Model.partial_clone_of(metadata, Object, target_fields["obj_head"],
-                                                [("orig_id", VARCHAR(255))])
-            ObjectFieldsView = Model.partial_clone_of(metadata, ObjectFields, target_fields["obj_field"],
-                                                      ["orig_id"])
-            ImageView = Model.partial_clone_of(metadata, Image, target_fields["image"],
-                                               [("orig_id", VARCHAR(255)), "imgrank"])
-            ObjectView.__table__.create(self.session.connection())
-            ObjectFieldsView.__table__.create(self.session.connection())
-            ImageView.__table__.create(self.session.connection())
-        elif self.use_orm_views:
-            ObjectView = Model.view_of(metadata, Object, target_fields["obj_head"])
-            ObjectFieldsView = Model.view_of(metadata, ObjectFields, target_fields["obj_field"])
-            ImageView = Model.view_of(metadata, Image, target_fields["image"])
         else:
+            # Plain base objects with relations
             ObjectView = Object
             ObjectFieldsView = ObjectFields
             ImageView = Image
-        if self.use_orm_views:
-            ObjectFieldsView.objhrel = relationship(ObjectView, uselist=False, back_populates="objfrel")
-            ObjectView.objfrel = relationship(ObjectFieldsView, uselist=False, back_populates="objhrel")
 
         return ObjectView, ObjectFieldsView, ImageView
 
     def do_bulk_save(self):
-        if self.do_bulk:
-            if not self.bulks:
-                return
-            nb_bulks = str(len(self.bulks))
-            self.session.bulk_save_objects(self.bulks)
-            self.bulks.clear()
-        elif self.use_sqlalchemy_core:
+        if self.use_sqlalchemy_core:
             nb_bulks = "%d/%d/%d" % (len(self.obj_bulks), len(self.obj_fields_bulks), len(self.img_bulks))
             # TODO: Can be reused?
             inserts = [self.obj_tbl.insert(), self.obj_fields_tbl.insert(), self.img_tbl.insert()]
@@ -102,12 +79,12 @@ class DBWriter(object):
                     continue
                 self.session.execute(an_insert, a_bulk_set)
                 a_bulk_set.clear()
-        logging.info("Batch save objects of %s", nb_bulks)
+            logging.info("Batch save objects of %s", nb_bulks)
 
     def add(self, object_head_to_write, object_fields_to_write, image_to_write, must_write_obj):
         assert object_head_to_write.projid is not None
         assert object_fields_to_write.orig_id is not None
-        if self.use_sqlalchemy_core or self.do_bulk:
+        if self.use_sqlalchemy_core:
             # Bulk mode or Core do not create links (using ORM relationship), so we have to do manually
             # Default value from sequences
             if must_write_obj:
@@ -115,20 +92,16 @@ class DBWriter(object):
                 object_fields_to_write.objfid = object_head_to_write.objid
             image_to_write.imgid = self.img_seq_cache.next()
             image_to_write.objid = object_head_to_write.objid
-        if self.use_sqlalchemy_core:
             if must_write_obj:
                 self.obj_fields_bulks.append(object_fields_to_write)
                 self.obj_bulks.append(object_head_to_write)
             self.img_bulks.append(image_to_write)
-        elif self.do_bulk:
-            self.bulks.append(object_fields_to_write)
-            self.bulks.append(object_head_to_write)
         else:
             self.session.add(object_head_to_write)
             self.session.add(object_fields_to_write)
 
     def close_row(self):
-        if self.do_bulk or self.use_sqlalchemy_core:
+        if self.use_sqlalchemy_core:
             # The UPDATE should take place in the batch
             # self.bulks.append(image_to_write)
             pass
@@ -136,21 +109,18 @@ class DBWriter(object):
             self.session.flush()
 
     def persist(self):
-        if self.do_bulk or self.use_sqlalchemy_core:
+        if self.use_sqlalchemy_core:
             self.do_bulk_save()
         else:
             self.session.commit()
 
     def eof_cleanup(self):
-
-        if self.use_temp:
-            ObjectFieldsGen.__table__.drop(self.session.connection())
-            ObjectGen.__table__.drop(self.session.connection())
-            ImageGen.__table__.drop(self.session.connection())
-
         self.session.commit()
 
     def link(self, object_fields_to_write, object_head_to_write):
-        # Add, using ORM, the ObjectFields twin
-        if not (self.bulks or self.use_sqlalchemy_core):
+        if self.use_sqlalchemy_core:
+            # Link is done during @see do_bulk_save
+            pass
+        else:
+            # Add, using ORM, the ObjectFields twin
             object_fields_to_write.objhrel = object_head_to_write

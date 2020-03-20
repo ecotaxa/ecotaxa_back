@@ -44,11 +44,6 @@ class ImportBase(Service):
         'object_depth_max': {'table': 'obj_head', 'field': 'depth_max', 'type': 'n'},
         'object_annotation_category': {'table': 'obj_head', 'field': 'classif_id', 'type': 't'},
         'object_annotation_category_id': {'table': 'obj_head', 'field': 'classif_id', 'type': 'n'},
-        # TODO: Does it work in Prod DB????
-        # 'object_annotation_time': {'table': 'obj_head', 'field': 'tmp_annottime', 'type': 't'},
-        # 'object_annotation_person_email': {'table': 'obj_head', 'field': 'tmp_annotemail', 'type': 't'},
-        # 'annotation_person_first_name': {'table': 'obj_head', 'field': 'tmp_todelete1', 'type': 't'},
-        # end TODO
         'object_annotation_date': {'table': 'obj_head', 'field': 'classif_when', 'type': 't'},
         'object_annotation_person_name': {'table': 'obj_head', 'field': 'classif_who', 'type': 't'},
         'object_annotation_status': {'table': 'obj_head', 'field': 'classif_qual', 'type': 't'},
@@ -57,6 +52,12 @@ class ImportBase(Service):
         'sample_dataportal_descriptor': {'table': 'sample', 'field': 'dataportal_descriptor', 'type': 't'},
         'acq_instrument': {'table': 'acq', 'field': 'instrument', 'type': 't'},
     }
+
+    # Fields which are not mapped, i.e. not directly destined to DB, but needed by Import for fallback
+    ProgFields = {'object_annotation_time',
+                  'object_annotation_person_email',
+                  # 'annotation_person_first_name' # historical
+                  }
 
     # C'est un set de table 😁
     PossibleTables = set([v['table'] for v in PredefinedFields.values()])
@@ -77,8 +78,8 @@ class ImportBase(Service):
         self.vault = Vault(join(self.link_src, 'vault'))
         self.temptask = TempTaskDir(join(self.link_src, 'temptask'))
         # Parameters
-        self.prj_id: int = 1
-        self.task_id: int = 1
+        self.prj_id: int = -1
+        self.task_id: int = -1
         self.mapping: dict = {}
         self.taxo_mapping: dict = self.PredefinedFields
         self.taxo_found = {}

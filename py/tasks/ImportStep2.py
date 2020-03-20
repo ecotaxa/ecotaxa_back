@@ -19,6 +19,7 @@ from db.Acquisition import Acquisition
 from db.Image import Image
 from db.Object import Object, ObjectFields, classif_qual_revert
 from db.Process import Process
+from db.Project import Project
 from db.Sample import Sample
 from utils import clean_value, to_float, none_to_empty, calc_astral_day_time, encode_equal_list
 from .DBWriter import DBWriter
@@ -79,20 +80,20 @@ class ImportStep2(ImportBase):
                 # Cleanup field names, keeping original ones as key
                 clean_fields = {field: field.strip(" \t").lower() for field in rdr.fieldnames}
                 # Extract field list from header cooked by CSV reader
-                field_list = [clean_fields[field] for field in rdr.fieldnames]
+                field_set = set([clean_fields[field] for field in rdr.fieldnames])
                 # Only keep the fields we can persist
-                field_list = self.filter_unmapped_fields(field_list, relative_name)
+                field_set = self.filter_unused_fields(field_set, relative_name)
 
                 # Remove fields which are unknown in ORM
                 target_fields = {alias: set() for alias in self.target_classes.keys()}
-                field_list = self.filter_not_in_db_fields(field_list, relative_name, target_fields)
+                field_set = self.filter_not_in_db_fields(field_set, relative_name, target_fields)
 
                 # We can now prepare ORM classes with optimal performance
                 ObjectGen, ObjectFieldsGen, ImageGen = db_writer.generators(target_fields)
 
                 # For annotation, if there is both an id and a category then ignore category
-                ignore_annotation_category: bool = 'object_annotation_category_id' in field_list \
-                                                   and 'object_annotation_category' in field_list
+                ignore_annotation_category: bool = 'object_annotation_category_id' in field_set \
+                                                   and 'object_annotation_category' in field_set
 
                 vals_cache = dict()
                 # Loop over all lines
@@ -116,7 +117,7 @@ class ImportStep2(ImportBase):
                             del lig['object_annotation_category']
 
                     # Read TSV line into dicts
-                    self.read_fields_to_dicts(field_list, lig, dicts_to_write, vals_cache)
+                    self.read_fields_to_dicts(field_set, lig, dicts_to_write, vals_cache)
 
                     # Create SQLAlchemy mappers of the object itself and slaves (1<->1)
                     object_head_to_write = ObjectGen(**dicts_to_write["obj_head"])
@@ -168,39 +169,42 @@ class ImportStep2(ImportBase):
                 # TODO: Just for tests
                 # if total_row_count > 10000:
                 #    break
+        # Ensure the ORM has no shadow copy before going to plain SQL
+        self.session.expunge_all()
+        # TODO: Move to right DB classes
         self.update_counts_and_img0()
         self.propagate_geo()
         logging.info("Total of %d rows loaded" % total_row_count)
-        # TODO
-        # appli.project.main.RecalcProjectTaxoStat(Prj.projid)
-        # appli.project.main.UpdateProjectStat(Prj.projid)
+        Project.update_taxo_stats(self.session, self.prj_id)
+        # Stats depend on taxo stats
+        Project.update_stats(self.session, self.prj_id)
 
-    def filter_unmapped_fields(self, field_list, relative_name):
+    def filter_unused_fields(self, field_list: set, relative_name) -> set:
         """
-            Sanitize field list by removing the ones which are unknown in mapping.
+            Sanitize field list by removing the ones which are not known in mapping, nor used programmatically.
         :param field_list:
         :param relative_name:
         :return:
         """
-        ok_fields = [field for field in field_list if field in self.mapping]
-        ko_fields = [field for field in field_list if field not in self.mapping]
+        ok_fields = set([field for field in field_list if field in self.mapping or field in self.ProgFields])
+        ko_fields = [field for field in field_list if field not in ok_fields]
         if len(ko_fields) > 0:
-            logging.warning("In %s, field(s) %s not mapped, values will be ignored",
+            logging.warning("In %s, field(s) %s not used, values will be ignored",
                             relative_name, ko_fields)
         return ok_fields
 
-    def filter_not_in_db_fields(self, field_list, relative_name, target_fields):
+    def filter_not_in_db_fields(self, field_set: set, relative_name, target_fields) -> set:
         """
             Sanitize (more) field list by removing the ones which cannot be output into
             a DB table.
-        :param field_list:
+        :param field_set:
         :param relative_name:
         :param target_fields: The used field, by target table.
         :return:
         """
-        ok_fields = []
+        ok_fields = set()
         ko_fields = []
-        for a_field in field_list:
+        for a_field in field_set - self.ProgFields:
             mapping = self.mapping[a_field]
             target_tbl = mapping["table"]
             target_fld = mapping["field"]
@@ -212,7 +216,7 @@ class ImportStep2(ImportBase):
             except AttributeError:
                 ko_fields.append(a_field)
                 continue
-            ok_fields.append(a_field)
+            ok_fields.add(a_field)
         if len(ko_fields) > 0:
             logging.warning("In %s, field(s) %s not known from DB, values will be ignored",
                             relative_name, ko_fields)
@@ -261,8 +265,8 @@ class ImportStep2(ImportBase):
                 logging.error("Astral error : %s for %s", e, cache)
         return cache['r']
 
-    def read_fields_to_dicts(self, field_list, lig, dicts_to_write, vals_cache: Dict):
-        for a_field in field_list:
+    def read_fields_to_dicts(self, field_set, lig, dicts_to_write, vals_cache: Dict):
+        for a_field in field_set:
             # CSV reader returns a minimal dict with no value equal to None
             # TODO: below could be replaced with an intersect() of field names. To benchmark.
             if a_field not in lig:
@@ -280,7 +284,14 @@ class ImportStep2(ImportBase):
                 # If no relevant value, leave field as NULL
                 if csv_val == '':
                     continue
-                if m['type'] == 'n':
+                #
+                # Bug in 2.2 @see https://github.com/oceanomics/ecotaxa_dev/issues/340
+                # if a_field == 'object_lat':
+                #     # It's 'n' type but since AVPApp they can contain a notation like ddd°MM.SS
+                #     cached_field_value = convert_degree_minute_float_to_decimal_degree(csv_val)
+                # elif a_field == 'object_lon':
+                #     cached_field_value = convert_degree_minute_float_to_decimal_degree(csv_val)
+                elif m['type'] == 'n':
                     cached_field_value = to_float(csv_val)
                 elif a_field == 'object_date':
                     cached_field_value = datetime.date(int(csv_val[0:4]), int(csv_val[4:6]), int(csv_val[6:8]))
@@ -424,7 +435,6 @@ class ImportStep2(ImportBase):
     def propagate_geo(self):
         """
             Create sample geo from object one.
-            TODO: Waste of space or needed afterwards?
         :return:
         """
         self.session.execute("""
@@ -432,7 +442,7 @@ class ImportStep2(ImportBase):
            SET latitude = sll.latitude, longitude = sll.longitude
           FROM (SELECT o.sampleid, min(o.latitude) latitude, min(o.longitude) longitude
                   FROM obj_head o
-                 WHERE projid=:projid 
+                 WHERE projid = :projid 
                    AND o.latitude IS NOT NULL 
                    AND o.longitude IS NOT NULL
               GROUP BY o.sampleid) sll 
@@ -442,7 +452,7 @@ class ImportStep2(ImportBase):
         self.session.commit()
 
     def fetch_existing_objects(self):
-        # Get existing object IDs (orig_id aka object_id in TSV) from the project
+        # Get existing object IDs (orig_id AKA object_id in TSV) from the project
         existing_objects = set()
         # TODO: Why using the view? Why an outer join in the view?
         res: ResultProxy = self.session.execute("SELECT o.orig_id "
@@ -475,7 +485,7 @@ class ImportStep2(ImportBase):
     def update_mapping(self, prj):
         """
         DB update of mappings for the Project
-        TODO: Dup code 4 times
+        TODO: Dup code 4 times, use Mapping class
         """
         prj.mappingobj = encode_equal_list({v['field']: v.get('title') for k, v in self.mapping.items()
                                             if v['table'] == 'obj_field' and v['field'][0] in ('t', 'n')

@@ -14,7 +14,7 @@ def do_dump():
     sce = AsciiDumper()
     # Dump after an import thru legacy 2.2 and empty DB
     #sce.run(projid=1,out="ref.txt")
-    sce.run(projid=14,out="new.txt")
+    sce.run(projid=1,out="new.txt")
 
 
 if __name__ == '__main__':

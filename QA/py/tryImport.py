@@ -36,4 +36,10 @@ if __name__ == '__main__':
     # Map to admin
     sce2.found_users['elizandro rodriguez'] = {'id': 1}
     sce2.run()
-    print("All is is projet #%d" % sce2.prj_id)
+
+    out_dump = "new.txt"
+    print("All is in projet #%d, doing dump into %s" % (sce2.prj_id, out_dump))
+
+    from tech.AsciiDump import AsciiDumper
+    sce = AsciiDumper()
+    sce.run(projid=sce2.prj_id, out=out_dump)

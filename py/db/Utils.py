@@ -9,14 +9,21 @@ class Bean(dict):
     """
         Holder with just fields & value
     """
+    # TODO: A proper subclass with known fields
+
+    # def __init__(self, cols, *args, **kwargs):
+    #     super().__init__(*args, **kwargs)
+    #     self.cols = cols
+
     def __getattr__(self, attr):
         """ To support e.g. obj.latitude """
-        #return self.get(attr)
         return self[attr]
 
     def __setattr__(self, key, value):
         """ To support e.g. obj.prjid = 1 """
+        #assert key in self.cols
         self[key] = value
+
 
 class SequenceCache(object):
     """
@@ -38,7 +45,7 @@ class SequenceCache(object):
 
     def next(self):
         try:
-            return self.store.pop()
+            return self.store.pop(0)
         except IndexError:
             self.populate()
             return self.next()

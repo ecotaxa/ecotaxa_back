@@ -122,12 +122,14 @@ def decode_equal_list(txt):
 # TODO: Most probably better elsewhere
 def convert_degree_minute_float_to_decimal_degree(v):
     m = re.search(r"(-?\d+)°(\d+) (\d+)", v)
+    # The original RE below, PyCharm says the string in invalid
+    # m = re.search("(-?\d+)°(\d+) (\d+)", v)
     if m:  # data in format DDD°MM SSS
         parts = [float(x) for x in m.group(1, 2, 3)]
         parts[1] += parts[2] / 60  # on ajoute les secondes en fraction des minutes
         parts[0] += parts[1] / 60  # on ajoute les minutes en fraction des degrés
         return parts[0]
-    else:  # historical format, decimal part was in minutes
+    else:  # decimal part was in minutes
         v = to_float(v)
         f, i = math.modf(v)
         return i + (f / 0.6)
