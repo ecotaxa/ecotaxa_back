@@ -81,7 +81,7 @@ class DBWriter(object):
                 a_bulk_set.clear()
             logging.info("Batch save objects of %s", nb_bulks)
 
-    def add(self, object_head_to_write, object_fields_to_write, image_to_write, must_write_obj):
+    def add_db_entities(self, object_head_to_write, object_fields_to_write, image_to_write, must_write_obj):
         assert object_head_to_write.projid is not None
         assert object_fields_to_write.orig_id is not None
         if self.use_sqlalchemy_core:
@@ -99,6 +99,15 @@ class DBWriter(object):
         else:
             self.session.add(object_head_to_write)
             self.session.add(object_fields_to_write)
+
+    def add_vignette_backup(self, object_head_to_write, backup_img_to_write):
+        if self.use_sqlalchemy_core:
+            backup_img_to_write.objid = object_head_to_write.objid
+            backup_img_to_write.imgid = self.img_seq_cache.next()
+            self.img_bulks.append(backup_img_to_write)
+        else:
+            self.session.add(backup_img_to_write)
+
 
     def close_row(self):
         if self.use_sqlalchemy_core:
@@ -124,3 +133,4 @@ class DBWriter(object):
         else:
             # Add, using ORM, the ObjectFields twin
             object_fields_to_write.objhrel = object_head_to_write
+

@@ -1,5 +1,6 @@
 import configparser
 from os.path import realpath, dirname, join
+from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -26,12 +27,17 @@ class VignetteMaker(object):
         # 254 is nearly white, easier to detect programmatically
         self.bgcolor = "black" if self.fontcolor == "white" else 254
         self.footerheight_px = int(section['footerheight_px'])
+        # Processing option, not relaed to image itself
+        self.keep_original: bool = section.get('keeporiginal', 'n').lower() == 'y'
         # Read font from present directory
         # TODO: Elsewhere?
         font_file = join(HERE, 'source-sans-pro-v9-latin-300.ttf')
         self.fnt = ImageFont.truetype(font_file, int(round(self.fontheight_px * 1.5)))
 
-    def make_vignette(self, in_file_path: str, out_file_path: str, ):
+    def must_keep_original(self):
+        return self.keep_original
+
+    def make_vignette(self, in_file_path: Path, out_file_path: Path ):
         pil_image = Image.open(in_file_path)
         imgnp = np.array(pil_image)
         scalebarsize_px = int(round(self.scalebarsize_mm * 1000 / self.pixel_size, 0) * self.scale)

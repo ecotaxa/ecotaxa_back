@@ -2,6 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import configparser
 import csv
 import datetime
 import logging
@@ -15,13 +16,15 @@ from PIL import Image as PIL_Image
 # noinspection PyProtectedMember
 from sqlalchemy.engine import ResultProxy
 
+from BO.Vignette import VignetteMaker
 from db.Acquisition import Acquisition
 from db.Image import Image
 from db.Object import Object, ObjectFields, classif_qual_revert
 from db.Process import Process
 from db.Project import Project
 from db.Sample import Sample
-from utils import clean_value, to_float, none_to_empty, calc_astral_day_time, encode_equal_list
+from utils import clean_value, to_float, none_to_empty, calc_astral_day_time, encode_equal_list, \
+    convert_degree_minute_float_to_decimal_degree
 from .DBWriter import DBWriter
 from .ImportBase import ImportBase
 
@@ -70,7 +73,16 @@ class ImportStep2(ImportBase):
                 continue
             logging.info("Analyzing file %s" % relative_name)
 
-            a_csv_file = self.handle_uvpapp_format(a_csv_file, relative_file)
+            a_csv_file, was_uvpv6 = self.handle_uvpapp_format(a_csv_file, relative_file)
+
+            vignette_maker = False
+            if was_uvpv6:
+                # Pick vignette-ing config file from the zipped directory
+                potential_config = a_csv_file.parent / "compute_vignette.txt"
+                if potential_config.exists():
+                    vignette_maker_cfg = configparser.ConfigParser()
+                    vignette_maker_cfg.read(potential_config.as_posix())
+                    vignette_maker = VignetteMaker(vignette_maker_cfg)
 
             with open(a_csv_file.as_posix(), encoding='latin_1') as csvfile:
                 # Read as a dict, first line gives the format
@@ -138,11 +150,38 @@ class ImportStep2(ImportBase):
                     must_write_obj = self.create_or_link_slaves(db_writer, existing_objects, object_fields_to_write,
                                                                 object_head_to_write)
 
-                    db_writer.add(object_head_to_write, object_fields_to_write, image_to_write, must_write_obj)
+                    db_writer.add_db_entities(object_head_to_write, object_fields_to_write, image_to_write,
+                                              must_write_obj)
 
                     existing_objects.add(object_fields_to_write.orig_id)
 
-                    self.deal_with_image(a_csv_file, image_to_write)
+                    img_file_path_from_tsv = a_csv_file.parent / image_to_write.orig_file_name
+
+                    if vignette_maker:
+                        # If there is need for a vignette, the file named in the TSV is NOT the one written,
+                        # and pointed at, by the usual DB line. Instead, it's the vignette.
+                        # We generate the vignette into temporary work directory
+                        # TODO: Dup code, temptask dir is constant over service life
+                        img_file_path = self.temptask.base_dir_for(self.task_id) / "tempvignette.png"
+                        vignette_maker.make_vignette(img_file_path_from_tsv, img_file_path)
+
+                    self.deal_with_images(a_csv_file, was_uvpv6, vignette_maker, image_to_write)
+
+                    if vignette_maker and vignette_maker.must_keep_original():
+                        # In this case, the original image is kept in another DB line
+                        backup_img_to_write = ImageGen(**dicts_to_write["image"])
+                        backup_img_to_write.imgrank = 100
+                        backup_img_to_write.thumb_file_name = None
+                        backup_img_to_write.thumb_width = None
+                        backup_img_to_write.thumb_height = None
+                        db_writer.add_vignette_backup(object_head_to_write, backup_img_to_write)
+                        # Store original image
+                        dest_img_path, _dummy1, _dummy1, _dummy1 = self.store_into_vault(img_file_path_from_tsv,
+                                                                                         backup_img_to_write)
+                        # Get original image dimensions
+                        im = PIL_Image.open(dest_img_path)
+                        backup_img_to_write.width, backup_img_to_write.height = im.size
+                        del im
 
                     db_writer.close_row()
 
@@ -284,13 +323,12 @@ class ImportStep2(ImportBase):
                 # If no relevant value, leave field as NULL
                 if csv_val == '':
                     continue
-                #
-                # Bug in 2.2 @see https://github.com/oceanomics/ecotaxa_dev/issues/340
-                # if a_field == 'object_lat':
-                #     # It's 'n' type but since AVPApp they can contain a notation like ddd°MM.SS
-                #     cached_field_value = convert_degree_minute_float_to_decimal_degree(csv_val)
-                # elif a_field == 'object_lon':
-                #     cached_field_value = convert_degree_minute_float_to_decimal_degree(csv_val)
+                if a_field == 'object_lat':
+                    # It's [n] type but since AVPApp they can contain a notation like ddd°MM.SS
+                    # which can be [t] as well.
+                    cached_field_value = convert_degree_minute_float_to_decimal_degree(csv_val)
+                elif a_field == 'object_lon':
+                    cached_field_value = convert_degree_minute_float_to_decimal_degree(csv_val)
                 elif m['type'] == 'n':
                     cached_field_value = to_float(csv_val)
                 elif a_field == 'object_date':
@@ -359,39 +397,25 @@ class ImportStep2(ImportBase):
             # Anyway
             setattr(object_head_to_write, fk_to_obj, ids_for_obj[parent_orig_id])
 
-    def deal_with_image(self, a_csv_file: Path, image_to_write: Image):
+    def deal_with_images(self, a_csv_file: Path, was_uvpv6: bool, vignette_maker: VignetteMaker, image_to_write: Image):
         """
-            Generate image, create DB line and copy image file into vault.
+            Generate image, eventually the vignette, create DB line(s) and copy image file into vault.
         :param a_csv_file:
         :param image_to_write:
         :return:
         """
-        # As per zip files structure, image files are in same directory as their description
-        img_file_path = a_csv_file.with_name(image_to_write.orig_file_name)
-
-        if image_to_write.imgid is not None:
-            # Images are stored in folders of 10K images max
-            vault_folder = "%04d" % (image_to_write.imgid // 10000)
-            ndx_in_vault_folder = "%04d" % (image_to_write.imgid % 10000)
+        if vignette_maker:
+            # Source file is the temporary vignette
+            img_file_path = self.temptask.base_dir_for(self.task_id) / "tempvignette.png"
+        elif was_uvpv6:
+            # Files are in a subdirectory for UVPV6
+            img_file_path = a_csv_file.parent.joinpath(image_to_write.orig_file_name)
         else:
-            # No ID yet
-            vault_folder = a_csv_file.stem
-            ndx_in_vault_folder = img_file_path.stem
+            # As per zip files structure, image files are in same directory as their description
+            img_file_path = a_csv_file.with_name(image_to_write.orig_file_name)
 
-        vault_folder_path: PurePath = self.vault.sub_path(vault_folder)
-
-        # We store in DB line the path relative to vault
-        vault_filename = "%s%s" % (ndx_in_vault_folder, img_file_path.suffix)
-        vault_subpath = "%s/%s" % (vault_folder, vault_filename)
-        image_to_write.file_name = vault_subpath
-
-        self.vault.ensure_exists(vault_folder)
-
-        # Copy image file from unzip directory to vault
-        img_path: str = vault_folder_path.joinpath(vault_filename).as_posix()
-        # TODO: Move if on same filesystem
-        # TODO: OS copy otherwise, 3x less time
-        shutil.copyfile(img_file_path.as_posix(), img_path)
+        img_path, ndx_in_vault_folder, vault_folder, vault_folder_path = self.store_into_vault(img_file_path,
+                                                                                               image_to_write)
 
         im = PIL_Image.open(img_path)
         image_to_write.width = im.size[0]
@@ -420,6 +444,24 @@ class ImportStep2(ImportBase):
             image_to_write.thumb_height = None
         if image_to_write.imgrank is None:
             image_to_write.imgrank = 0  # default value
+
+    def store_into_vault(self, img_file_path, image_to_write):
+        assert image_to_write.imgid is not None
+        # Images are stored in folders of 10K images max
+        vault_folder = "%04d" % (image_to_write.imgid // 10000)
+        ndx_in_vault_folder = "%04d" % (image_to_write.imgid % 10000)
+        vault_folder_path: PurePath = self.vault.sub_path(vault_folder)
+        # We store in DB line the path relative to vault
+        vault_filename = "%s%s" % (ndx_in_vault_folder, img_file_path.suffix)
+        vault_subpath = "%s/%s" % (vault_folder, vault_filename)
+        image_to_write.file_name = vault_subpath
+        self.vault.ensure_exists(vault_folder)
+        # Copy image file from unzip directory to vault
+        dest_img_path: str = vault_folder_path.joinpath(vault_filename).as_posix()
+        # TODO: Move if on same filesystem
+        # TODO: OS copy otherwise, 3x less time
+        shutil.copyfile(img_file_path.as_posix(), dest_img_path)
+        return dest_img_path, ndx_in_vault_folder, vault_folder, vault_folder_path
 
     def update_counts_and_img0(self):
         # noinspection SqlRedundantOrderingDirection

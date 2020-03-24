@@ -4,11 +4,13 @@
 #
 # Ye olde utils no project can do without :)
 #
+import datetime
 import math
 import re
 
-from astral import LocationInfo
+from astral import LocationInfo, Depression
 from astral.sun import sun
+from pytz import utc
 
 
 def clean_value(value: str):
@@ -19,6 +21,7 @@ def clean_value(value: str):
     """
     value = value.strip()
     #    if len(value) < 4 and value.lower() in ('nan', 'na'):
+    # TODO: Use RE and benchmark
     if value.lower() in ('nan', 'na'):
         return ''
     return value
@@ -62,7 +65,7 @@ def none_to_empty(value: str):
     return value
 
 
-def calc_astral_day_time(date, time, latitude, longitude):
+def calc_astral_day_time(date: datetime.datetime, time, latitude, longitude):
     """
     Compute sun position for given coordinates and time.
     :param date: UTC date
@@ -72,26 +75,60 @@ def calc_astral_day_time(date, time, latitude, longitude):
     :return: D for Day, U for Dusk, N for Night, A pour Dawn (Aube in French)
     """
     l = LocationInfo()
-    l.solar_depression = 'nautical'
     l.latitude = latitude
     l.longitude = longitude
-    s = sun(l.observer, date=date)
-    # print(Date,Time,Latitude,Longitude,s,)
+    s = sun(l.observer, date=date, dawn_dusk_depression=Depression.NAUTICAL)
     ret = '?'
-    interp = ({'d': 'sunrise', 'f': 'sunset', 'r': 'D'}
-              , {'d': 'sunset', 'f': 'dusk', 'r': 'U'}
-              , {'d': 'dusk', 'f': 'dawn', 'r': 'N'}
-              , {'d': 'dawn', 'f': 'sunrise', 'r': 'A'}
+    # The intervals and their interpretation
+    interp = ({'from:': s['dusk'].time(), 'to:': s['dawn'].time(), '=>': 'N'},
+              {'from:': s['dawn'].time(), 'to:': s['sunrise'].time(), '=>': 'A'},
+              {'from:': s['sunrise'].time(), 'to:': s['sunset'].time(), '=>': 'D'},
+              {'from:': s['sunset'].time(), 'to:': s['dusk'].time(), '=>': 'U'},
               )
-    for i in interp:
-        if s[i['d']].time() < s[i['f']].time() \
-                and (time >= s[i['d']].time() and time <= s[i['f']].time()):
-            ret = i['r']
-        elif s[i['d']].time() > s[i['f']].time() \
-                and (time >= s[i['d']].time() or time <= s[i['f']].time()):
+    for intrv in interp:
+        if (intrv['from:'] < intrv['to:']
+                and intrv['from:'] <= time <= intrv['to:']):
+            # Normal interval
+            ret = intrv['=>']
+        elif intrv['from:'] > intrv['to:'] \
+                and (time >= intrv['from:'] or time <= intrv['to:']):
             # Change of day b/w the 2 parts of the interval
-            ret = i['r']
+            ret = intrv['=>']
+
     return ret
+
+
+ONE_DAY = datetime.timedelta(days=1)
+
+
+def calc_astral_day_time2(date: datetime.datetime, time, latitude, longitude):
+    """
+    Compute sun position for given coordinates and time.
+    :param date: UTC date
+    :param time: UTC time
+    :param latitude: latitude
+    :param longitude: longitude
+    :return: D for Day, U for Dusk, N for Night, A pour Dawn (Aube in French)
+    """
+    loc = LocationInfo()
+    loc.latitude = latitude
+    loc.longitude = longitude
+    sun_phases = sun(observer=loc.observer, date=date, dawn_dusk_depression=Depression.NAUTICAL)
+    observation_time = datetime.datetime.combine(date, time, tzinfo=utc)
+    if observation_time < sun_phases['dawn']:
+        sun_phases = sun(observer=loc.observer, date=date - ONE_DAY, dawn_dusk_depression=Depression.NAUTICAL)
+    elif observation_time > sun_phases['dusk']:
+        sun_phases = sun(observer=loc.observer, date=date + ONE_DAY, dawn_dusk_depression=Depression.NAUTICAL)
+    # The intervals and their interpretation
+    interp = [
+        {'from:': sun_phases['dawn'], 'to:': sun_phases['sunrise'], '=>': 'A'},
+        {'from:': sun_phases['sunrise'], 'to:': sun_phases['sunset'], '=>': 'D'},
+        {'from:': sun_phases['sunset'], 'to:': sun_phases['dusk'], '=>': 'U'},
+    ]
+    for intrv in interp:
+        if intrv['from:'] <= observation_time <= intrv['to:']:
+            return intrv['=>']
+    return '?'
 
 
 def encode_equal_list(map: dict):
@@ -122,14 +159,13 @@ def decode_equal_list(txt):
 # TODO: Most probably better elsewhere
 def convert_degree_minute_float_to_decimal_degree(v):
     m = re.search(r"(-?\d+)°(\d+) (\d+)", v)
-    # The original RE below, PyCharm says the string in invalid
-    # m = re.search("(-?\d+)°(\d+) (\d+)", v)
     if m:  # data in format DDD°MM SSS
         parts = [float(x) for x in m.group(1, 2, 3)]
         parts[1] += parts[2] / 60  # on ajoute les secondes en fraction des minutes
         parts[0] += parts[1] / 60  # on ajoute les minutes en fraction des degrés
         return parts[0]
     else:  # decimal part was in minutes
+        # Bug in 2.2 @see https://github.com/oceanomics/ecotaxa_dev/issues/340
         v = to_float(v)
         f, i = math.modf(v)
         return i + (f / 0.6)

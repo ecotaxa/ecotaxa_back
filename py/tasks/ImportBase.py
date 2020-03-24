@@ -183,6 +183,8 @@ class ImportBase(Service):
                 taxo_found[found_k]['id'] = rec_taxon['id']
 
     def handle_uvpapp_format(self, csv_file, relative_name):
+        was_uvpv6 = False
+        # TODO: Use FS and a BO
         if relative_name.name.endswith("Images.zip"):
             # It comes from UVPAPP, each sample is in a .zip
             sample_dir = self.temptask.base_dir_for(self.task_id) / relative_name.stem
@@ -198,7 +200,8 @@ class ImportBase(Service):
                 with zipfile.ZipFile(csv_file.as_posix(), 'r') as z:
                     z.extractall(sample_dir.as_posix())
             csv_file = sample_csv
-        return csv_file
+            was_uvpv6 = True
+        return csv_file, was_uvpv6
 
     def prepare_run(self):
         """

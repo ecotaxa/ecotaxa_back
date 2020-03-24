@@ -25,7 +25,7 @@ if __name__ == '__main__':
     sce1 = ImportStep1()
     sce1.prj_id = prj_sce.create("Test LS")
     sce1.task_id = task_sce.create()
-    sce1.input_path = "data/import_test.zip"
+    sce1.input_path = "data/V6.zip"
     sce1.run()
     # Do step2
     sce2 = ImportStep2()

@@ -37,6 +37,7 @@ def test_vignette1():
     config = configparser.ConfigParser()
     config.read_string(CONFIG)
     maker = VignetteMaker(config)
+    assert maker.must_keep_original()
     original = join(HERE, "0128.png")
     vignette = join(HERE, "0128_vig.png")
     maker.make_vignette(original, vignette)

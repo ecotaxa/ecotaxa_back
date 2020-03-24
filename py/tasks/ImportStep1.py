@@ -116,7 +116,7 @@ class ImportStep1(ImportBase):
                 continue
             logging.info("Analyzing file %s" % relative_name)
 
-            a_csv_file = self.handle_uvpapp_format(a_csv_file, relative_file)
+            a_csv_file, was_uvpv6 = self.handle_uvpapp_format(a_csv_file, relative_file)
 
             with open(a_csv_file.as_posix(), encoding='latin_1') as csvfile:
                 # Read as a dict, first line gives the format

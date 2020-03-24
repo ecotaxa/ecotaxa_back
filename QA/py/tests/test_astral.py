@@ -2,6 +2,7 @@ from unittest import TestCase
 
 
 class Testcalc_astral_day_time(TestCase):
+
     def test_calc_astral_day_time(self):
         from utils import calc_astral_day_time
         from datetime import date, time
@@ -14,6 +15,7 @@ class Testcalc_astral_day_time(TestCase):
         self.assertEqual(calc_astral_day_time(Date, time( 1,0,0), Latitude, 0 ),'N') #  1h Night
         self.assertEqual(calc_astral_day_time(Date, time( 6,0,0), Latitude, 0 ),'A') #  6h Dawn
         self.assertEqual(calc_astral_day_time(Date, time(18,0,0), Latitude, 0 ),'U') # 18h Dusk
+
         # 'dawn/aube':17h36 ,'sunrise/levé': 18h26  , 'sunset/coucher': 5h41, 'dusk/crepuscule':6h31
         self.assertEqual(calc_astral_day_time(Date, time(12, 0, 0), Latitude, -180), 'N')  # 12h 180 Nigth
         self.assertEqual(calc_astral_day_time(Date, time(18, 0, 0), Latitude, -180), 'A')  # 18h 180 Dawn
