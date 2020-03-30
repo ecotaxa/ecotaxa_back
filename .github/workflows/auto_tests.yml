@@ -42,11 +42,9 @@ jobs:
       working-directory: ./QA/py
       run: |
         PYTHONPATH=../../py coverage run --source=../py -m pytest
-    - name: Keep coverage
-      uses: actions/upload-artifact@v1
-      with:
-        name: coverage
-        path: QA/py/.coverage
+    - name: Compute coverage
+      run: |
+        coverage report
 
     # Runs a set of commands using the runners shell
     #- name: Run a multi-line script
