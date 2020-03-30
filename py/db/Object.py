@@ -81,11 +81,13 @@ class ObjectFields(Model):
     objhrel = relationship("Object", uselist=False, back_populates="objfrel")
     # TODO: Isn't this the natural PK for objects?, it looks unique per projet
     orig_id = Column(VARCHAR(255))
+    # TODO: Can't see any value in DB
     object_link = Column(VARCHAR(255))
 
 
 # Ajout des colonnes numériques & textuelles libres
 for i in range(1, 501):
+    # 8 bytes each, if present
     setattr(ObjectFields, "n%02d" % i, Column(FLOAT))
 for i in range(1, 21):
     setattr(ObjectFields, "t%02d" % i, Column(VARCHAR(250)))

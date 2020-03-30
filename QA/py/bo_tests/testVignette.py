@@ -4,11 +4,12 @@
 #
 
 import configparser
-from os.path import dirname, realpath, join
+from os.path import dirname, realpath
+from pathlib import Path
 
 from BO.Vignette import VignetteMaker
 
-HERE = dirname(realpath(__file__))
+HERE = Path(dirname(realpath(__file__)))
 
 CONFIG = """
 [vignette]
@@ -38,8 +39,7 @@ def test_vignette1():
     config.read_string(CONFIG)
     maker = VignetteMaker(config)
     assert maker.must_keep_original()
-    original = join(HERE, "0128.png")
-    vignette = join(HERE, "0128_vig.png")
+    original = HERE / "0128.png"
+    vignette = HERE / "0128_vig.png"
     maker.make_vignette(original, vignette)
     # TODO: Auto check, so far it's just automatically verifying that the code does not crash
-
