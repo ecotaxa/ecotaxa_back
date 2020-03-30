@@ -31,16 +31,17 @@ jobs:
       run: python -m pip install --upgrade pip
     - name: Install backend dependencies
       run: |
-        cd py
         pip install -r requirements.txt
+      working-directory: $GITHUB_WORKSPACE/py
     - name: Install QA dependencies
       run: |
-        cd ../QA/py
         pip install -r requirements.txt
+      working-directory: $GITHUB_WORKSPACE/QA/py
     # Runs a single command using the runners shell
     - name: Run pytest in QA
       run: |
         python -m pytest
+      working-directory: $GITHUB_WORKSPACE/QA/py
 
     # Runs a set of commands using the runners shell
     #- name: Run a multi-line script
