@@ -22,11 +22,19 @@ jobs:
     steps:
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
     - uses: actions/checkout@v2
-
+    # Base python setup
+    - name: Set up Python
+      uses: actions/setup-python@v1
+      with:
+        python-version: '3.6'
+    - name: Install dependencies
+      run: |
+        cd QA/py
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
     # Runs a single command using the runners shell
     - name: Run pytest in QA
       run: |
-        cd $GITHUB_WORKSPACE
         python -m pytest
 
     # Runs a set of commands using the runners shell
