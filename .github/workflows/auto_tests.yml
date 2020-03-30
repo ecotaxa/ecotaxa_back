@@ -43,6 +43,7 @@ jobs:
       run: |
         PYTHONPATH=../../py coverage run --source=../py -m pytest
     - name: Compute coverage
+      working-directory: ./QA/py
       run: |
         coverage report
 
