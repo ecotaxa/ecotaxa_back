@@ -1,5 +1,7 @@
 # ecotaxa-back
 
+![CI](https://github.com/ecotaxa/ecotaxa_back/workflows/CI/badge.svg)
+
 #### Backend (decoupled from UI) for EcoTaxa
 
 In this directory:
