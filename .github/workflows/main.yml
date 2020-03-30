@@ -35,12 +35,11 @@ jobs:
         pip install -r requirements.txt
     - name: Install QA dependencies
       run: |
-        cd QA/py
+        cd ../QA/py
         pip install -r requirements.txt
     # Runs a single command using the runners shell
     - name: Run pytest in QA
       run: |
-        cd QA/py
         python -m pytest
 
     # Runs a set of commands using the runners shell
