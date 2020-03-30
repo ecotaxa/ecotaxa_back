@@ -27,13 +27,19 @@ jobs:
       uses: actions/setup-python@v1
       with:
         python-version: '3.6'
-    - name: Install dependencies
+    - name: Install common pip
+      run: python -m pip install --upgrade pip
+    - name: Install backend dependencies
+      working-directory: ./py
       run: |
-        cd QA/py
-        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    - name: Install QA dependencies
+      working-directory: ./QA/py
+      run: |
         pip install -r requirements.txt
     # Runs a single command using the runners shell
     - name: Run pytest in QA
+      working-directory: ./QA/py
       run: |
         python -m pytest
 
