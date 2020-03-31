@@ -1,3 +1,0 @@
-selenium==3.141.0
-pytest==5.4.1
-coverage==5.0.3
