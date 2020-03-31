@@ -47,8 +47,8 @@ jobs:
     #    restore-keys: |
     #      ${{ runner.os }}-pip-    # Base python setup
     # Setup should speed up
-    - name: Customize docker image
-      run: docker
+    #- name: Customize docker image
+    #  run: docker
     - name: Set up Python
       uses: actions/setup-python@v1
       with:
