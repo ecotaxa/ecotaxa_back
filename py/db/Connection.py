@@ -34,4 +34,5 @@ class Connection(object):
         engine = sqlalchemy.create_engine(url, client_encoding='utf8', echo=False)
         session_factory = sessionmaker(bind=engine)
         self.sess: Session = session_factory()
-        self.meta: MetaData = sqlalchemy.MetaData(bind=engine, reflect=True)
+        self.meta: MetaData = sqlalchemy.MetaData(bind=engine)
+        self.meta.reflect()

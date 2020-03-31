@@ -3,10 +3,9 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-from sqlalchemy.orm import Session
-
 from db.Connection import Connection, check_sqlalchemy_version
 from link import read_config, read_link
+from sqlalchemy.orm import Session
 
 
 class Service(object):
@@ -17,7 +16,7 @@ class Service(object):
     def __init__(self):
         check_sqlalchemy_version()
         config = read_config()
-        conn = Connection(host=config['DB_HOST'], port=config['DB_PORT'],db=config['DB_DATABASE'],
+        conn = Connection(host=config['DB_HOST'], port=config['DB_PORT'], db=config['DB_DATABASE'],
                           user=config['DB_USER'], password=config['DB_PASSWORD'])
         self.session: Session = conn.sess
         self.config = config
