@@ -2,7 +2,7 @@ import sys
 from os.path import join
 
 # Import services under test as a library
-sys.path.extend([join("..", "..", "..", "py")])
+sys.path.extend([join("../..", "..", "..", "py")])
 
 import logging
 
@@ -13,8 +13,8 @@ def do_dump():
     from tech.AsciiDump import AsciiDumper
     sce = AsciiDumper()
     # Dump after an import thru legacy 2.2 and empty DB
-    #sce.run(projid=1,out="ref.txt")
-    sce.run(projid=1,out="new.txt")
+    sce.run(projid=2, out="ref_uvpv6.txt")
+    # sce.run(projid=1,out="new.txt")
 
 
 if __name__ == '__main__':

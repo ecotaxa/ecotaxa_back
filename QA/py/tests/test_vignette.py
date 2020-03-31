@@ -9,7 +9,7 @@ from pathlib import Path
 
 from BO.Vignette import VignetteMaker
 
-HERE = Path(dirname(realpath(__file__)))
+DATA_DIR = Path(dirname(realpath(__file__))) / ".." / "data" / "vignette"
 
 CONFIG = """
 [vignette]
@@ -39,7 +39,7 @@ def test_vignette1():
     config.read_string(CONFIG)
     maker = VignetteMaker(config)
     assert maker.must_keep_original()
-    original = HERE / "0128.png"
-    vignette = HERE / "0128_vig.png"
+    original = DATA_DIR / "0128.png"
+    vignette = DATA_DIR / "0128_vig.png"
     maker.make_vignette(original, vignette)
     # TODO: Auto check, so far it's just automatically verifying that the code does not crash

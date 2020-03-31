@@ -17,8 +17,8 @@ class Service(object):
     def __init__(self):
         check_sqlalchemy_version()
         config = read_config()
-        conn = Connection(host=config['DB_HOST'], user=config['DB_USER'], password=config['DB_PASSWORD']
-                          , db=config['DB_DATABASE'])
+        conn = Connection(host=config['DB_HOST'], port=config['DB_PORT'],db=config['DB_DATABASE'],
+                          user=config['DB_USER'], password=config['DB_PASSWORD'])
         self.session: Session = conn.sess
         self.config = config
         self.link_src = read_link()[0]

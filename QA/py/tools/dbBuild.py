@@ -5,7 +5,7 @@ import sys
 from os.path import join
 
 # Import services under test as a library
-sys.path.extend([join("..", "..", "py")])
+sys.path.extend([join("../..", "..", "py")])
 from lib.legacyProcesses import Manage
 
 if __name__ == '__main__':
