@@ -15,8 +15,27 @@ jobs:
   
   test:
     # The type of runner that the job will run on
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
+    # Container for postgres
+    # TODO: find a smaller one?
+    container: node:10.18-jessie
 
+    # Service containers to run with `container-job`
+    services:
+      # Label used to access the service container
+      postgres:
+        # Docker Hub image
+        image: postgres
+        # Provide the password for postgres
+        env:
+          POSTGRES_PASSWORD: postgres12
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+           
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -48,6 +67,11 @@ jobs:
       working-directory: ./QA/py
       run: |
         PYTHONPATH=../../py coverage run --source=../../py -m pytest
+      env:
+        # The hostname used to communicate with the PostgreSQL service container
+        POSTGRES_HOST: postgres
+        # The default PostgreSQL port
+        POSTGRES_PORT: 5432
     - name: Compute coverage
       working-directory: ./QA/py
       run: |
