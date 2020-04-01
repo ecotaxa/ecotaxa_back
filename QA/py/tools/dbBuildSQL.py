@@ -37,11 +37,12 @@ TEMPLATE=template0 LC_CTYPE='C' LC_COLLATE='C' CONNECTION LIMIT=-1;
 
 class EcoTaxaDB(object):
 
-    def __init__(self, dbdir: Path):
+    def __init__(self, dbdir: Path, conffile: Path):
         self.db_dir = dbdir.resolve()
         self.data_dir = self.db_dir / "Data"
         self.pwd_file = self.db_dir / "pg_pwd.txt"
         self.schema_creation_file = self.db_dir / "schem_prod.sql"
+        self.conf_file = conffile
 
     def get_env(self):
         # Return the environment for postgres subprocesses
@@ -84,12 +85,27 @@ class EcoTaxaDB(object):
 
     def create(self):
         if not (PG_HOST and PG_PORT):
+            host = 'localhost'
             self.init()
             self.launch()
-            # TODO: Password is ignored in this context
-            self.ddl('localhost', 'postgres12')
+            # TODO: Password (in call to self.ddl) is ignored in this context
         else:
-            self.ddl(PG_HOST, 'postgres12')
+            host = PG_HOST
+        self.ddl(host, 'postgres12')
+        self.write_config(host)
+
+    CONF = """
+DB_USER="postgres"
+DB_PASSWORD="postgres12"
+DB_HOST="%s"
+DB_PORT="%d"
+DB_DATABASE="ecotaxa"
+THUMBSIZELIMIT=400
+    """
+
+    def write_config(self, host):
+        with open(str(self.conf_file), "w") as f:
+            f.write(self.CONF % (host, PG_PORT))
 
     def cleanup(self):
         # Remove data files
