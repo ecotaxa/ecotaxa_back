@@ -52,3 +52,7 @@ jobs:
       working-directory: ./QA/py
       run: |
         coverage report
+    - name: codecov.io
+      working-directory: ./QA/py
+      run : |
+        bash <(curl -s https://codecov.io/bash) -t 2e451ec5-8bfa-42ea-90ba-754db15ec348
