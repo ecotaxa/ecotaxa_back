@@ -41,6 +41,7 @@ RUN mkdir -p /usr/lib/python3/dist-packages
 COPY --from=builder --chown=root:root /usr/lib/python3/dist-packages/ /usr/lib/python3/dist-packages/
 RUN mkdir -p /usr/local/lib/python3.6/dist-packages
 COPY --from=builder --chown=root:root /usr/local/lib/python3.6/dist-packages/ /usr/local/lib/python3.6/dist-packages/
+COPY --from=builder --chown=root:root /usr/local/bin/ /usr/local/bin/
 
 #RUN pip3 install *.whl
 # Below should say 'all installed already'
