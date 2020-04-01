@@ -3,22 +3,29 @@ Build the DB from scratch in EcoTaxa V2_2, using an SQL Dump, so the 2_2 source 
 """
 import shutil
 import sys
+from os import environ
 from os.path import join
 from pathlib import Path
 
 from lib.processes import SyncSubProcess
 
-pg_lib = "/usr/lib/postgresql/12/bin/"
-pgctl_bin = join(pg_lib, "pg_ctl")
-initdb_bin = join(pg_lib, "initdb")
 psql_bin = "psql"
-mustExist = [pgctl_bin, initdb_bin]
-for aFile in mustExist:
-    if not Path(aFile).exists():
-        print("File/directory %s not found where expected" % aFile)
-        sys.exit(-1)
+# If we already have a server don't create one, e.g. in GitHub action
+PG_HOST = environ.get("POSTGRES_HOST")
+PG_PORT = environ.get("POSTGRES_PORT")
+if PG_HOST and PG_PORT:
+    PG_PORT = int(PG_PORT)
+else:
+    pg_lib = "/usr/lib/postgresql/12/bin/"
+    pgctl_bin = join(pg_lib, "pg_ctl")
+    initdb_bin = join(pg_lib, "initdb")
+    mustExist = [pgctl_bin, initdb_bin]
+    for aFile in mustExist:
+        if not Path(aFile).exists():
+            print("File/directory %s not found where expected" % aFile)
+            sys.exit(-1)
+    PG_PORT = 5440
 
-PG_PORT = 5440
 CREATE_DB_SQL = """
 create DATABASE ecotaxa
 WITH ENCODING='LATIN1'
@@ -60,9 +67,9 @@ class EcoTaxaDB(object):
         # TODO: proper wait
         import time; time.sleep(2)
 
-    def ddl(self):
+    def ddl(self, host):
         # -h localhost force use of TCP/IP socket, otherwise psql tries local pipes in /var/run
-        pg_opts = ['-U', 'postgres', '-h', 'localhost', '-p', "%d" % PG_PORT]
+        pg_opts = ['-U', 'postgres', '-h', host, '-p', "%d" % PG_PORT]
         cre_opts = ['-c', CREATE_DB_SQL]
         cmd = [psql_bin] + pg_opts + cre_opts
         pg_sub_process = SyncSubProcess(cmd)
@@ -72,9 +79,12 @@ class EcoTaxaDB(object):
         pg_sub_process = SyncSubProcess(cmd)
 
     def create(self):
-        self.init()
-        self.launch()
-        self.ddl()
+        if not(PG_HOST and PG_PORT):
+            self.init()
+            self.launch()
+            self.ddl('localhost')
+        else:
+            self.ddl(PG_HOST)
 
     def cleanup(self):
         # Remove data files

@@ -4,17 +4,22 @@
 #
 
 
-# noinspection PyUnresolvedReferences
-from tests.config_fixture import config
-# noinspection PyUnresolvedReferences
-from tests.db_fixture import database
-
 # Import services
+from os.path import dirname, realpath
+from pathlib import Path
+
 from crud.Project import ProjectService
 from crud.Task import TaskService
 from tasks.ImportStep1 import ImportStep1
 from tasks.ImportStep2 import ImportStep2
 
+# noinspection PyUnresolvedReferences
+from tests.config_fixture import config
+# noinspection PyUnresolvedReferences
+from tests.db_fixture import database
+
+DATA_DIR = (Path(dirname(realpath(__file__))) / ".." / "data").resolve()
+V6_FILE = DATA_DIR / "V6.zip"
 
 
 def test_import(config, database):
@@ -25,7 +30,7 @@ def test_import(config, database):
     sce1 = ImportStep1()
     sce1.prj_id = prj_sce.create("Test LS")
     sce1.task_id = task_sce.create()
-    sce1.input_path = "../data/V6.zip"
+    sce1.input_path = str(V6_FILE)
     sce1.run()
     # Do step2
     sce2 = ImportStep2()
