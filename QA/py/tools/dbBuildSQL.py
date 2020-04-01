@@ -26,12 +26,14 @@ else:
             sys.exit(-1)
     PG_PORT = 5440
 
+# noinspection SqlResolve,SqlNoDataSourceInspection
 CREATE_DB_SQL = """
 create DATABASE ecotaxa
 WITH ENCODING='LATIN1'
 OWNER=postgres
 TEMPLATE=template0 LC_CTYPE='C' LC_COLLATE='C' CONNECTION LIMIT=-1;
 """
+
 
 class EcoTaxaDB(object):
 
@@ -53,7 +55,7 @@ class EcoTaxaDB(object):
         # Create data files
         pg_opts = ['-U', 'postgres', '-A', 'trust', '-E', 'Latin1', '--locale=C', '--pwfile=%s' % self.pwd_file]
         cmd = [initdb_bin] + pg_opts
-        pg_sub_process = SyncSubProcess(cmd, env=self.get_env())
+        SyncSubProcess(cmd, env=self.get_env())
 
     def launch(self):
         # Produce connection sockets in a user-writable directory (linux)
@@ -63,29 +65,36 @@ class EcoTaxaDB(object):
         # Cook an environment for the subprocess
         # we do NOT use os.environ in order not to pollute current process
         # Note: the process dies right away as pgctl launches a daemon
-        pg_sub_process = SyncSubProcess(cmd, env=self.get_env())
+        SyncSubProcess(cmd, env=self.get_env())
         # TODO: proper wait
-        import time; time.sleep(2)
+        import time
+        time.sleep(2)
 
-    def ddl(self, host):
+    def ddl(self, host, password):
         # -h localhost force use of TCP/IP socket, otherwise psql tries local pipes in /var/run
+        env = {'PGPASSWORD': password}
         pg_opts = ['-U', 'postgres', '-h', host, '-p', "%d" % PG_PORT]
         cre_opts = ['-c', CREATE_DB_SQL]
         cmd = [psql_bin] + pg_opts + cre_opts
-        pg_sub_process = SyncSubProcess(cmd)
+        SyncSubProcess(cmd, env=env)
         #
         schem_opts = ['-d', 'ecotaxa', '-f', self.schema_creation_file]
         cmd = [psql_bin] + pg_opts + schem_opts
-        pg_sub_process = SyncSubProcess(cmd)
+        SyncSubProcess(cmd, env=env)
 
     def create(self):
-        if not(PG_HOST and PG_PORT):
+        if not (PG_HOST and PG_PORT):
             self.init()
             self.launch()
-            self.ddl('localhost')
+            # TODO: Password is ignored in this context
+            self.ddl('localhost', 'postgres12')
         else:
-            self.ddl(PG_HOST)
+            self.ddl(PG_HOST, 'postgres12')
 
     def cleanup(self):
         # Remove data files
-        shutil.rmtree(self.data_dir)
+        if not (PG_HOST and PG_PORT):
+            shutil.rmtree(self.data_dir)
+        else:
+            # Server should do the cleanup, e.g. exit docker
+            pass
