@@ -11,6 +11,8 @@ HERE = dirname(realpath(__file__))
 class VignetteMaker(object):
     """
         Vignette factory, from original images and using a configuration file.
+
+        AFTER ANY MODIFICATION HERE, please the corresponding UT with visual check of the output.
     """
 
     def __init__(self, cfg: configparser):
@@ -39,16 +41,16 @@ class VignetteMaker(object):
 
     def make_vignette(self, in_file_path: Path, out_file_path: Path):
         pil_image = Image.open(in_file_path)
-        imgnp = np.array(pil_image)
+        np_img = np.array(pil_image)
         scalebarsize_px = int(round(self.scalebarsize_mm * 1000 / self.pixel_size, 0) * self.scale)
         minimgwidth = scalebarsize_px + 10
         if self.gamma != 1:
-            imgnp = np.power((imgnp / 255), (1 / self.gamma)) * 255
-            imgnp = imgnp.astype(np.uint8)
+            np_img = np.power((np_img / 255), (1 / self.gamma)) * 255
+            np_img = np_img.astype(np.uint8)
         if self.invert:
-            imgnp = 255 - imgnp
-        pil_image = Image.fromarray(
-            imgnp)  # Transformation du tableau en image PIL une fois les calcules numerique faits
+            np_img = 255 - np_img
+        # Turn numpy array into an image, once calculations are done.
+        pil_image = Image.fromarray(np_img)
         if self.scale != 1:
             pil_image = pil_image.resize((int(pil_image.size[0] * self.scale), int(pil_image.size[1] * self.scale)),
                                          Image.BICUBIC)
@@ -64,6 +66,7 @@ class VignetteMaker(object):
         # Compose a drawing context for the scale
         draw = ImageDraw.Draw(pil_image)
         line_points = [(9, height - 4), (9 + int(round(scalebarsize_px)), height - 4)]
+        # noinspection PyUnresolvedReferences
         line_points.insert(0, (line_points[0][0], line_points[0][1] + 2))
         line_points.append((line_points[2][0], line_points[2][1] + 2))
         # print(line_points)
@@ -73,7 +76,8 @@ class VignetteMaker(object):
         draw.text((10, height - 10 - self.fontheight_px), "%g mm" % self.scalebarsize_mm,
                   fill=self.fontcolor, font=self.fnt)
 
-        # pil_image =pil_image.transform((pil_image.size[0],pil_image.size[1]+200),Image.EXTENT,(0,0,pil_image.size[0],pil_image.size[1]),fill=1,fillcolor='red')
+        # pil_image =pil_image.transform((pil_image.size[0],pil_image.size[1]+200),Image.EXTENT,
+        # (0,0,pil_image.size[0],pil_image.size[1]),fill=1,fillcolor='red')
         # pil_image.save(dir+'\\testgamma_%s_%d.png'%(imgname,g))
         pil_image.save(out_file_path)
         # pil_image.show()
