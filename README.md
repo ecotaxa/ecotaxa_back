@@ -2,7 +2,7 @@
 
 ![CI](https://github.com/ecotaxa/ecotaxa_back/workflows/CI/badge.svg)
 ![Codecov](https://img.shields.io/codecov/c/github/grololo06/ecotaxa_back)
-[![codecov](https://codecov.io/gh/grololo06/ecotaxa-back/branch/master/graph/badge.svg?token=4U81AA6D7C)](https://codecov.io/gh/grololo06/ecotaxa-back)
+
 
 
 
