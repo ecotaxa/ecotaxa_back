@@ -33,14 +33,21 @@ def GetClassifQualClass(q):
 class Object(Model):
     __tablename__ = 'obj_head'
     objid = Column(BIGINT, Sequence('seq_objects'), primary_key=True)
+
     projid = Column(INTEGER, ForeignKey('projects.projid'), nullable=False)
+
     project = relationship("Project")
-    latitude = Column(DOUBLE_PRECISION)
-    longitude = Column(DOUBLE_PRECISION)
+    #
     objdate = Column(DATE)
     objtime = Column(TIME)
+
+    latitude = Column(DOUBLE_PRECISION)
+    longitude = Column(DOUBLE_PRECISION)
     depth_min = Column(FLOAT)
     depth_max = Column(FLOAT)
+    #
+    sunpos = Column(CHAR(1))  # Sun position, from date, time and coords
+    #
     classif_id = Column(INTEGER)
     classif = relationship("Taxonomy", primaryjoin="Taxonomy.id==Object.classif_id", foreign_keys="Taxonomy.id",
                            uselist=False, )
@@ -49,11 +56,14 @@ class Object(Model):
     classiffier = relationship("User", primaryjoin="User.id==Object.classif_who", foreign_keys="User.id",
                                uselist=False, )
     classif_when = Column(TIMESTAMP)
+
     classif_auto_id = Column(INTEGER)
     classif_auto_score = Column(DOUBLE_PRECISION)
     classif_auto_when = Column(TIMESTAMP)
     classif_auto = relationship("Taxonomy", primaryjoin="Taxonomy.id==foreign(Object.classif_auto_id)", uselist=False, )
+
     classif_crossvalidation_id = Column(INTEGER)
+    #
     # The _first_ image
     # Relation b/w next images and present Object are in Image.objid
     # TODO: WTF, normalize.
@@ -62,10 +72,12 @@ class Object(Model):
     imgcount = Column(INTEGER)
     images = relationship("Image")
     complement_info = Column(VARCHAR)
+
     similarity = Column(DOUBLE_PRECISION)
-    sunpos = Column(CHAR(1))  # Sun position
+
     # TODO: Why random? It makes testing a bit more difficult
     random_value = Column(INTEGER)
+
     sampleid = Column(INTEGER, ForeignKey('samples.sampleid'))
     sample = relationship("Sample")
     acquisid = Column(INTEGER, ForeignKey('acquisitions.acquisid'))
@@ -126,6 +138,7 @@ Index('is_objectfieldsorigid', ObjectFields.orig_id)
 class ObjectsClassifHisto(Model):
     __tablename__ = 'objectsclassifhisto'
     objid = Column(BIGINT, ForeignKey('obj_head.objid', ondelete="CASCADE"), primary_key=True)
+    # TODO: FK on taxonomy
     classif_date = Column(TIMESTAMP, primary_key=True)
     classif_type = Column(CHAR(1))  # A : Automatic, M : Manual
     classif_id = Column(INTEGER)

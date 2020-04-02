@@ -10,6 +10,7 @@ from db.Model import Model
 
 
 class Process(Model):
+    # db table
     __tablename__ = 'process'
     processid = Column(BIGINT, Sequence('seq_process'), primary_key=True)
     projid = Column(INTEGER, ForeignKey('projects.projid'))

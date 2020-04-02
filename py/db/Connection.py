@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker, Session
 def check_sqlalchemy_version():
     version = sqlalchemy.__version__
     expected_version = "1.3.15"
-    if version != expected_version:
+    if version != expected_version: # pragma: no cover
         logging.error("Not the expected SQLAlchemy version (%s instead of %s), exiting to avoid data corruption",
                       version, expected_version)
         exit(-1)

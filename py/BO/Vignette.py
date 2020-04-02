@@ -37,7 +37,7 @@ class VignetteMaker(object):
     def must_keep_original(self):
         return self.keep_original
 
-    def make_vignette(self, in_file_path: Path, out_file_path: Path ):
+    def make_vignette(self, in_file_path: Path, out_file_path: Path):
         pil_image = Image.open(in_file_path)
         imgnp = np.array(pil_image)
         scalebarsize_px = int(round(self.scalebarsize_mm * 1000 / self.pixel_size, 0) * self.scale)

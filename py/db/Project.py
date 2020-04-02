@@ -45,48 +45,6 @@ class Project(Model):
     def __str__(self):
         return "{0} ({1})".format(self.title, self.projid)
 
-    def check_right(self, Level,
-                    userid=None):  # Level -1=Read public, 0 = Read, 1 = Annotate, 2 = Admin . userid=None = current user
-        # pp=self.projmembers.filter(member=userid).first()
-        if userid is None:
-            u = current_user
-            userid = getattr(u, 'id', None)
-            if userid is None:  # correspond à anonymous
-                if Level <= -1 and self.visible:  # V1.2 tout projet visible est visible par tous
-                    return True
-                return False
-        else:
-            u = users.query.filter_by(id=userid).first()
-        if len([x for x in u.roles if x == 'Application Administrator']) > 0:
-            return True  # Admin à tous les droits
-        pp = [x for x in self.projmembers if x.member == userid]
-        if len(pp) == 0:  # pas de privileges pour cet utilisateur
-            if Level <= -1 and self.visible:  # V1.2 tout projet visible est visible par tous
-                return True
-            return False
-        pp = pp[0]  # on recupere la premiere ligne seulement.
-        if pp.privilege == 'Manage':
-            return True
-        if pp.privilege == 'Annotate' and Level <= 1:
-            return True
-        if Level <= 0:
-            return True
-        return False
-
-    def get_first_manager(self):
-        # retourne le utilisateur créé avec un privilege Manage
-        lst = sorted([(r.id, r.memberrel.email, r.memberrel.name) for r in self.projmembers if r.privilege == 'Manage'],
-                     key=lambda r: r[0])
-        if lst:
-            return lst[0]
-        return None
-
-    def get_first_manager_mailto(self):
-        r = self.get_first_manager()
-        if r:
-            return "<a href='mailto:{1}'>{2} ({1})</a>".format(*r)
-        return ""
-
     @staticmethod
     def update_stats(session: Session, projid: int):
         session.execute("""

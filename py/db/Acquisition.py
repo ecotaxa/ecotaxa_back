@@ -17,6 +17,7 @@ class Acquisition(Model):
     project = relationship("Project")
     # i.e. acq_id from TSV
     orig_id = Column(VARCHAR(255))
+    # TODO: Put into a dedicated table
     instrument = Column(VARCHAR(255))
 
     def __str__(self):

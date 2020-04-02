@@ -98,39 +98,6 @@ def calc_astral_day_time(date: datetime.datetime, time, latitude, longitude):
     return ret
 
 
-ONE_DAY = datetime.timedelta(days=1)
-
-
-def calc_astral_day_time2(date: datetime.datetime, time, latitude, longitude):
-    """
-    Compute sun position for given coordinates and time.
-    :param date: UTC date
-    :param time: UTC time
-    :param latitude: latitude
-    :param longitude: longitude
-    :return: D for Day, U for Dusk, N for Night, A pour Dawn (Aube in French)
-    """
-    loc = LocationInfo()
-    loc.latitude = latitude
-    loc.longitude = longitude
-    sun_phases = sun(observer=loc.observer, date=date, dawn_dusk_depression=Depression.NAUTICAL)
-    observation_time = datetime.datetime.combine(date, time, tzinfo=utc)
-    if observation_time < sun_phases['dawn']:
-        sun_phases = sun(observer=loc.observer, date=date - ONE_DAY, dawn_dusk_depression=Depression.NAUTICAL)
-    elif observation_time > sun_phases['dusk']:
-        sun_phases = sun(observer=loc.observer, date=date + ONE_DAY, dawn_dusk_depression=Depression.NAUTICAL)
-    # The intervals and their interpretation
-    interp = [
-        {'from:': sun_phases['dawn'], 'to:': sun_phases['sunrise'], '=>': 'A'},
-        {'from:': sun_phases['sunrise'], 'to:': sun_phases['sunset'], '=>': 'D'},
-        {'from:': sun_phases['sunset'], 'to:': sun_phases['dusk'], '=>': 'U'},
-    ]
-    for intrv in interp:
-        if intrv['from:'] <= observation_time <= intrv['to:']:
-            return intrv['=>']
-    return '?'
-
-
 def encode_equal_list(map: dict):
     """
         Turn a dict into a string key=value, with sorted keys.
@@ -169,3 +136,38 @@ def convert_degree_minute_float_to_decimal_degree(v):
         v = to_float(v)
         f, i = math.modf(v)
         return i + (f / 0.6)
+
+
+# noinspection PyUnreachableCode
+if False:  # pragma: no cover
+    ONE_DAY = datetime.timedelta(days=1)
+
+
+    def calc_astral_day_time2(date: datetime.datetime, time, latitude, longitude):
+        """
+        Compute sun position for given coordinates and time.
+        :param date: UTC date
+        :param time: UTC time
+        :param latitude: latitude
+        :param longitude: longitude
+        :return: D for Day, U for Dusk, N for Night, A pour Dawn (Aube in French)
+        """
+        loc = LocationInfo()
+        loc.latitude = latitude
+        loc.longitude = longitude
+        sun_phases = sun(observer=loc.observer, date=date, dawn_dusk_depression=Depression.NAUTICAL)
+        observation_time = datetime.datetime.combine(date, time, tzinfo=utc)
+        if observation_time < sun_phases['dawn']:
+            sun_phases = sun(observer=loc.observer, date=date - ONE_DAY, dawn_dusk_depression=Depression.NAUTICAL)
+        elif observation_time > sun_phases['dusk']:
+            sun_phases = sun(observer=loc.observer, date=date + ONE_DAY, dawn_dusk_depression=Depression.NAUTICAL)
+        # The intervals and their interpretation
+        interp = [
+            {'from:': sun_phases['dawn'], 'to:': sun_phases['sunrise'], '=>': 'A'},
+            {'from:': sun_phases['sunrise'], 'to:': sun_phases['sunset'], '=>': 'D'},
+            {'from:': sun_phases['sunset'], 'to:': sun_phases['dusk'], '=>': 'U'},
+        ]
+        for intrv in interp:
+            if intrv['from:'] <= observation_time <= intrv['to:']:
+                return intrv['=>']
+        return '?'

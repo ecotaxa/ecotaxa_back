@@ -9,6 +9,7 @@ class Bean(dict):
     """
         Holder with just fields & value
     """
+
     # TODO: A proper subclass with known fields
 
     # def __init__(self, cols, *args, **kwargs):
@@ -21,7 +22,7 @@ class Bean(dict):
 
     def __setattr__(self, key, value):
         """ To support e.g. obj.prjid = 1 """
-        #assert key in self.cols
+        # assert key in self.cols
         self[key] = value
 
 
