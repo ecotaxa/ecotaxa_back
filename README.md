@@ -1,7 +1,7 @@
 # ecotaxa-back
 
 ![CI](https://github.com/ecotaxa/ecotaxa_back/workflows/CI/badge.svg)
-![Codecov](https://img.shields.io/codecov/c/github/grololo06/jinja2schema)
+![Codecov](https://img.shields.io/codecov/c/github/grololo06/ecotaxa_back)
 
 #### Backend (decoupled from UI) for EcoTaxa
 
