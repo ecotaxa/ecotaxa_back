@@ -14,7 +14,7 @@ DATA_DIR = Path(dirname(realpath(__file__))) / ".." / "data" / "vignette"
 CONFIG = """
 [vignette]
 ; gamma coefficiant of the gamma correction
-gamma=1
+gamma=1.2
 ; invert image (black => white) : Values Y/N case insensitive
 invert=y
 ; size in millimeter of the scale bar
@@ -28,13 +28,16 @@ fontheight_px=6
 ; height of the footer in pixel
 footerheight_px=31
 ; scale factor to resize the image, 1 = No change , >1 increase size using bucubic method
-scale=1
+scale=5
 ; pixel_size in micrometer will be added during sample generation, used to compute scalebar width
 Pixel_Size=73
 """
 
 
 def test_vignette1():
+    """
+        Just a check that the code does not error out.
+    """
     config = configparser.ConfigParser()
     config.read_string(CONFIG)
     maker = VignetteMaker(config)
@@ -42,4 +45,3 @@ def test_vignette1():
     original = DATA_DIR / "0128.png"
     vignette = DATA_DIR / "0128_vig.png"
     maker.make_vignette(original, vignette)
-    # TODO: Auto check, so far it's just automatically verifying that the code does not crash
