@@ -5,7 +5,8 @@
 from sqlalchemy import Index, Column, ForeignKey, Sequence, Integer
 from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, INTEGER, REAL, DOUBLE_PRECISION, DATE, TIME, FLOAT, CHAR, \
     TIMESTAMP
-from sqlalchemy.orm import relationship
+from sqlalchemy.engine import ResultProxy
+from sqlalchemy.orm import relationship, Session
 
 from .Model import Model
 # noinspection PyUnresolvedReferences
@@ -85,6 +86,19 @@ class Object(Model):
     processid = Column(INTEGER, ForeignKey('process.processid'))
     processrel = relationship("Process")
     objfrel = relationship("ObjectFields", uselist=False, back_populates="objhrel")
+
+    @classmethod
+    def fetch_existing_objects(cls, session: Session, prj_id):
+        ret = set()
+        # TODO: Why using the view? Why an outer join in the view?
+        res: ResultProxy = session.execute(
+            "SELECT o.orig_id "
+            "  FROM objects o "
+            " WHERE o.projid = :prj",
+            {"prj": prj_id})
+        for rec in res:
+            ret.add(rec[0])
+        return ret
 
 
 class ObjectFields(Model):
