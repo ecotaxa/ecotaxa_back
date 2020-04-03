@@ -81,7 +81,7 @@ t01=toto"""
 
 
 def test_mapping1():
-    a_mapping = TableMapping("mytbl", None)
+    a_mapping = TableMapping("mytbl")
     a_mapping.load_from_equal_list(MAPP)
     assert len(a_mapping) == 70
     assert a_mapping.max_by_type['n'] == 69
