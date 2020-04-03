@@ -10,7 +10,9 @@ class SyncSubProcess(object):
         A process for which we wait for termination.
     """
 
-    def __init__(self, args, env=None, cwd=None):
+    def __init__(self, args, env=None, cwd=None, out_file=None):
+        if out_file:
+            out_file = open(out_file, "w")
         self.pid = subprocess.call(args=args, env=env, shell=False, cwd=cwd, timeout=20,
-                                   universal_newlines=True, stderr=subprocess.STDOUT)
+                                   universal_newlines=True, stdout=out_file, stderr=subprocess.STDOUT)
 

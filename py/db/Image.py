@@ -4,6 +4,8 @@
 #
 from sqlalchemy import Index, Column, ForeignKey, Sequence
 from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, INTEGER
+from sqlalchemy.engine import ResultProxy
+from sqlalchemy.orm import Session
 
 from db.Model import Model
 
@@ -25,6 +27,23 @@ class Image(Model):
     thumb_file_name = Column(VARCHAR(255))
     thumb_width = Column(INTEGER)
     thumb_height = Column(INTEGER)
+
+    @staticmethod
+    def fetch_existing_images(session: Session, prj_id):
+        """
+            Get all object/image pairs from the project
+        """
+        ret = set()
+        res: ResultProxy = session.execute(
+            # Must be reloaded from DB, as phase 1 added all objects for duplicates checking
+            "SELECT concat(o.orig_id,'*',i.orig_file_name) "
+            "  FROM images i "
+            "  JOIN objects o ON i.objid = o.objid "
+            " WHERE o.projid= :prj",
+            {"prj": prj_id})
+        for rec in res:
+            ret.add(rec[0])
+        return ret
 
 
 Index('IS_ImagesObjects', Image.objid)

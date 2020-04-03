@@ -4,19 +4,24 @@
 #
 import csv
 import datetime
+import json
 import logging
 import sys
 import zipfile
 from pathlib import Path
 
 from PIL import Image as PIL_Image
-# noinspection PyProtectedMember
-from sqlalchemy.engine import ResultProxy
 
+from BO.Mappings import ProjectMapping, GlobalMapping
 from db.Object import classif_qual_revert
+from db.Taxonomy import Taxonomy
+from db.User import User
 from tasks.ImportBase import ImportBase
-from utils import none_to_empty, decode_equal_list, to_float, convert_degree_minute_float_to_decimal_degree, \
+from utils import none_to_empty, to_float, convert_degree_minute_float_to_decimal_degree, \
     clean_value_and_none
+
+
+# noinspection PyProtectedMember
 
 
 class ImportStep1(ImportBase):
@@ -70,21 +75,18 @@ class ImportStep1(ImportBase):
             else:
                 self.update_progress(1, "Unzip File on temporary folder")
             # sinon on pose une question
+        # Prepare response in pure text
+        resp = {"prj": self.prj_id,
+                "tsk": self.task_id,
+                "src": self.source_dir_or_zip,
+                "map": self.custom_mapping.as_dict()}
+        return json.dumps(resp)
 
     def do_intra_step_1(self, loaded_files, warn_messages):
-        # Reset at each attempt
-        self.mapping = {}
-        # Import existing mapping into project
-        # TODO: Use mapping class
-        for k, v in decode_equal_list(self.prj.mappingobj).items():
-            self.mapping['object_' + v] = {'table': 'obj_field', 'title': v, 'type': k[0], 'field': k}
-        for k, v in decode_equal_list(self.prj.mappingsample).items():
-            self.mapping['sample_' + v] = {'table': 'sample', 'title': v, 'type': k[0], 'field': k}
-        for k, v in decode_equal_list(self.prj.mappingacq).items():
-            self.mapping['acq_' + v] = {'table': 'acq', 'title': v, 'type': k[0], 'field': k}
-        for k, v in decode_equal_list(self.prj.mappingprocess).items():
-            self.mapping['process_' + v] = {'table': 'process', 'title': v, 'type': k[0], 'field': k}
-        project_was_empty = len(self.mapping) == 0
+        # The mapping to custom columns
+        self.custom_mapping = ProjectMapping().load_from_project(self.prj)
+        project_was_empty = self.custom_mapping.is_empty()
+
         # Reset at each attempt
         self.taxo_found = {}
         self.found_users = {}
@@ -93,13 +95,6 @@ class ImportStep1(ImportBase):
         existing_objects_and_image = self.fetch_existing_images()
         logging.info("SubTask1 : Analyze TSV Files")
         self.update_progress(1, "Unzip File into temporary folder")
-        # We have "free" fields at the end of each target DB table, e.g. n00 in ObjectField, or t05 in Sample.
-        # Following variable helps tracking their usage.
-        last_numbers = {x: {'n': 0, 't': 0} for x in self.PossibleTables}
-        for m in self.mapping.values():
-            v = int(m['field'][1:])
-            if v > last_numbers[m['table']][m['field'][0]]:
-                last_numbers[m['table']][m['field'][0]] = v
         source_dir = Path(self.source_dir_or_zip)
         self.total_row_count = 0
         # record fields for which some values are present
@@ -128,7 +123,7 @@ class ImportStep1(ImportBase):
                 # Extract field list from header cooked by CSV reader
                 field_list = [clean_fields[field] for field in rdr.fieldnames]
                 # Validation of TSV structure
-                self.validate_tsv_structure(relative_name, field_list, project_was_empty, last_numbers, type_line,
+                self.validate_tsv_structure(relative_name, field_list, project_was_empty, type_line,
                                             warn_messages)
                 # Validation of TSV content
                 nb_no_gps_4_csv, row_count_for_csv = self.validate_tsv_content(relative_name, rdr, clean_fields,
@@ -150,7 +145,7 @@ class ImportStep1(ImportBase):
         self.update_progress(1, "Unzip File on temporary folder")
         logging.info("Taxo Found = %s", self.taxo_found)
         logging.info("Users Found = %s", self.found_users)
-        not_seen_fields = [k for k in self.mapping if k not in cols_seen]
+        not_seen_fields = self.custom_mapping.all_fields.keys() - cols_seen
         logging.info("For Information, not seen fields %s", not_seen_fields)
         if len(not_seen_fields) > 0:
             warn_messages.append("Some fields configured in the project are not seen in this import {0} "
@@ -173,8 +168,8 @@ class ImportStep1(ImportBase):
         for lig in rdr:
             row_count_for_csv += 1
 
-            latitude_seen = self.validate_tsv_line(relative_name, lig, clean_fields, classif_id_seen, cols_seen,
-                                                   vals_cache)
+            latitude_seen = self.validate_tsv_line(relative_name, lig, clean_fields,
+                                                   classif_id_seen, cols_seen, vals_cache)
 
             if not latitude_seen:
                 nb_objects_without_gps += 1
@@ -210,10 +205,12 @@ class ImportStep1(ImportBase):
                           vals_cache) -> bool:
         latitude_was_seen = False
         for raw_field, a_field in clean_fields.items():
-            m = self.mapping.get(a_field)
-            # No mapping, not stored
+            m = self.PredefinedFields.get(a_field)
             if m is None:
-                continue
+                m = self.custom_mapping.search_field(a_field)
+                # No mapping, not stored
+                if m is None:
+                    continue
             raw_val = lig.get(raw_field)
             # Try to get the value from the cache
             cache_key = (raw_field, raw_val)
@@ -276,67 +273,63 @@ class ImportStep1(ImportBase):
                                       % (csv_val, raw_field, relative_name))
         return latitude_was_seen
 
-    def validate_tsv_structure(self, relative_name, field_list, project_was_empty, last_numbers, type_line,
+    def validate_tsv_structure(self, relative_name, field_list, project_was_empty, type_line,
                                warn_messages):
         a_field: str
         for a_field in field_list:
-            if a_field in self.mapping:
-                # Field already mapped
-                continue
-            splitted_col = a_field.split("_", 1)
-            if len(splitted_col) != 2:
+            # split at first _ as the column name might contain an _
+            split_col = a_field.split("_", 1)
+            if len(split_col) != 2:
                 self.log_for_user(
                     "Invalid Header '%s' in file %s. Format must be Table_Field. Field ignored" % (
                         a_field, relative_name))
                 continue
-            target_table = splitted_col[0]
             if a_field in self.PredefinedFields:
-                _target_table = self.PredefinedFields[a_field]['table']
-                self.mapping[a_field] = self.PredefinedFields[a_field]
-            elif a_field in self.ProgFields:
+                # OK it's a predefined one
+                continue
+            if a_field in self.ProgFields:
                 # Not mapped, but not a free field
-                pass
-            else:  # not a predefined field, so nXX ou tXX
-                if target_table == "object":
-                    target_table = "obj_field"
-                if target_table not in self.PossibleTables:
-                    self.log_for_user(
-                        "Invalid Header '%s' in file %s. Table Incorrect. Field ignored" % (
-                            a_field, relative_name))
+                continue
+            # Not a predefined field, so nXX or tXX
+            if self.custom_mapping.search_field(a_field):
+                # Custom field was already mapped, in a previous import or another TSV of present import
+                continue
+            # e.g. acq_sn -> acq -> acquisitions
+            tsv_table_prfx = split_col[0]
+            target_table = GlobalMapping.TSV_table_to_table(tsv_table_prfx)
+            if target_table not in self.PossibleTables:
+                self.log_for_user(
+                    "Invalid Header '%s' in file %s. Unknown table prefix. Field ignored" % (
+                        a_field, relative_name))
+                continue
+            if target_table not in ('obj_head', 'obj_field'):
+                # In other tables, all types are forced to text
+                sel_type = 't'
+                # TODO: Tell the user that an eventual type is just ignored
+            else:
+                sel_type = self.PossibleTypes.get(type_line[a_field])
+                if sel_type is None:
+                    self.log_for_user("Invalid Type '%s' for Field '%s' in file %s. "
+                                      "Incorrect Type. Field ignored" % (type_line[a_field],
+                                                                         a_field,
+                                                                         relative_name))
                     continue
-                if target_table not in ('obj_head', 'obj_field'):
-                    # In other tables, all types are forced to text
-                    sel_type = 't'
-                else:
-                    sel_type = self.PossibleTypes.get(type_line[a_field])
-                    if sel_type is None:
-                        self.log_for_user("Invalid Type '%s' for Field '%s' in file %s. "
-                                          "Incorrect Type. Field ignored" % (type_line[a_field],
-                                                                             a_field,
-                                                                             relative_name))
-                        continue
-                last_numbers[target_table][sel_type] += 1
-                self.mapping[a_field] = {'table': target_table,
-                                         'field': sel_type + "%02d" % last_numbers[target_table][sel_type],
-                                         'type': sel_type, 'title': splitted_col[1]}
-                logging.info("New field %s found in file %s", a_field, relative_name)
-                if not project_was_empty:
-                    warn_messages.append(
-                        "New field %s found in file %s" % (a_field, relative_name))
+            # Add the new custom column
+            target_col = split_col[1]
+            self.custom_mapping.add_column(target_table, tsv_table_prfx, target_col, sel_type)
+            logging.info("New field %s found in file %s", a_field, relative_name)
+            # Warn that project settings were extended
+            if not project_was_empty:
+                warn_messages.append(
+                    "New field %s found in file %s" % (a_field, relative_name))
 
     def resolve_users(self):
-        # Resolve TSV names from DB names or emails
+        """
+            Resolve TSV names from DB names or emails
+        """
         names = [x for x in self.found_users.keys()]
         emails = [x.get('email') for x in self.found_users.values()]
-        res: ResultProxy = self.session.execute(
-            "SELECT id, lower(name), lower(email) "
-            "  FROM users "
-            " WHERE lower(name) = ANY(:nms) or email = ANY(:ems) ",
-            {"nms": names, "ems": emails})
-        for rec in res:
-            for u in self.found_users:
-                if u == rec[1] or none_to_empty(self.found_users[u].get('email')).lower() == rec[2]:
-                    self.found_users[u]['id'] = rec[0]
+        User.find_users(self.session, names, emails, self.found_users)
         logging.info("Users Found = %s", self.found_users)
         not_found_user = [k for k, v in self.found_users.items() if v.get("id") is None]
         if len(not_found_user) > 0:
@@ -344,11 +337,7 @@ class ImportStep1(ImportBase):
         return not_found_user
 
     def check_classif(self, classif_id_seen):
-        res: ResultProxy = self.session.execute("SELECT id "
-                                                "  FROM taxonomy "
-                                                " WHERE id = ANY (:een)",
-                                                {"een": list(classif_id_seen)})
-        classif_id_found_in_db = {int(r['id']) for r in res}
+        classif_id_found_in_db = Taxonomy.find_ids(self.session, list(classif_id_seen))
         classif_id_not_found_in_db = classif_id_seen.difference(classif_id_found_in_db)
         if len(classif_id_not_found_in_db) > 0:
             msg = "Some specified classif_id don't exist, correct them prior to reload: %s" % (

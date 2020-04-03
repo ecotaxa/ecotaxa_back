@@ -2,10 +2,14 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from typing import List
 
 from sqlalchemy import Column, ForeignKey, Sequence, Integer, String, Boolean, func
 from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.engine import ResultProxy
+from sqlalchemy.orm import Session
 
+from utils import none_to_empty
 from .Model import Model
 
 
@@ -39,6 +43,21 @@ class User(Model):  # TODO , UserMixin):
     country = Column(String(50))
     usercreationdate = Column(TIMESTAMP, default=func.now())
     usercreationreason = Column(String(1000))
+
+    @staticmethod
+    def find_users(session: Session, names: List[str], emails: List[str], found_users: dict):
+        """
+            Find the users in DB, by name or email.
+        """
+        res: ResultProxy = session.execute(
+            "SELECT id, lower(name), lower(email) "
+            "  FROM users "
+            " WHERE lower(name) = ANY(:nms) or email = ANY(:ems) ",
+            {"nms": names, "ems": emails})
+        for rec in res:
+            for u in found_users:
+                if u == rec[1] or none_to_empty(found_users[u].get('email')).lower() == rec[2]:
+                    found_users[u]['id'] = rec[0]
 
     def __str__(self):
         return "{0} ({1})".format(self.name, self.email)

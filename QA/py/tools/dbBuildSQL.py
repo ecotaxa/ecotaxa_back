@@ -66,7 +66,7 @@ class EcoTaxaDB(object):
         # Cook an environment for the subprocess
         # we do NOT use os.environ in order not to pollute current process
         # Note: the process dies right away as pgctl launches a daemon
-        SyncSubProcess(cmd, env=self.get_env())
+        SyncSubProcess(cmd, env=self.get_env(), out_file="server.log")
         # TODO: proper wait
         import time
         time.sleep(2)
@@ -77,11 +77,11 @@ class EcoTaxaDB(object):
         pg_opts = ['-U', 'postgres', '-h', host, '-p', "%d" % PG_PORT]
         cre_opts = ['-c', CREATE_DB_SQL]
         cmd = [psql_bin] + pg_opts + cre_opts
-        SyncSubProcess(cmd, env=env)
+        SyncSubProcess(cmd, env=env, out_file="db_create.log")
         #
         schem_opts = ['-d', 'ecotaxa', '-f', self.schema_creation_file]
         cmd = [psql_bin] + pg_opts + schem_opts
-        SyncSubProcess(cmd, env=env)
+        SyncSubProcess(cmd, env=env, out_file="db_build.log")
 
     def create(self):
         if not (PG_HOST and PG_PORT):

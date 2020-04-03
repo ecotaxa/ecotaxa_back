@@ -98,13 +98,13 @@ def calc_astral_day_time(date: datetime.datetime, time, latitude, longitude):
     return ret
 
 
-def encode_equal_list(map: dict):
+def encode_equal_list(a_mapping: dict):
     """
         Turn a dict into a string key=value, with sorted keys.
-    :param map:
+    :param a_mapping:
     :return:
     """
-    l = ["%s=%s" % (k, v) for k, v in map.items()]
+    l = ["%s=%s" % (k, v) for k, v in a_mapping.items()]
     l.sort()
     return "\n".join(l)
 

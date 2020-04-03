@@ -5,6 +5,7 @@
 import configparser
 import csv
 import datetime
+import json
 import logging
 import random
 import shutil
@@ -12,18 +13,15 @@ import time
 from pathlib import Path, PurePath
 from typing import Dict
 
+# noinspection PyPackageRequirements
 from PIL import Image as PIL_Image
-# noinspection PyProtectedMember
-from sqlalchemy.engine import ResultProxy
 
+from BO.Mappings import ProjectMapping
 from BO.Vignette import VignetteMaker
-from db.Acquisition import Acquisition
 from db.Image import Image
-from db.Object import Object, ObjectFields, classif_qual_revert
-from db.Process import Process
+from db.Object import classif_qual_revert, Object
 from db.Project import Project
-from db.Sample import Sample
-from utils import clean_value, to_float, none_to_empty, calc_astral_day_time, encode_equal_list, \
+from utils import clean_value, to_float, none_to_empty, calc_astral_day_time, \
     convert_degree_minute_float_to_decimal_degree
 from .DBWriter import DBWriter
 from .ImportBase import ImportBase
@@ -31,19 +29,17 @@ from .ImportBase import ImportBase
 
 class ImportStep2(ImportBase):
 
-    def __init__(self):
+    def __init__(self, json_params: str):
         super(ImportStep2, self).__init__()
         # Received from parameters
+        params = json.loads(json_params)
+        # TODO a clean interface
+        self.prj_id = params["prj"]
+        self.task_id = params["tsk"]
+        self.source_dir_or_zip = params["src"]
+        self.custom_mapping = ProjectMapping().load_from_dict(params["map"])
         # The row count seen at previous step
         self.total_row_count = 0
-
-    parent_classes = {"acq": Acquisition, "sample": Sample,
-                      "process": Process}
-    target_classes = {**parent_classes,
-                      "obj_head": Object, "obj_field": ObjectFields,
-                      "image": Image}
-    parent_pks = {"acq": Acquisition.acquisid.name, "sample": Sample.sampleid.name,
-                  "process": Process.processid.name}
 
     def run(self):
         """
@@ -53,11 +49,11 @@ class ImportStep2(ImportBase):
         super(ImportStep2, self).prepare_run()
         loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
         logging.info("loaded_files = %s", loaded_files)
-        self.update_mapping(self.prj)
+        self.save_mapping()
         existing_parent_ids = self.fetch_existing_parent_ids()
         # The created objects (unicity from object_id in TSV, orig_id in model)
         existing_objects: set = self.fetch_existing_objects()
-        existing_objects_and_image = self.fetch_existing_images()
+        existing_objects_and_image: set = self.fetch_existing_images()
         logging.info("existing_parent_ids = %s", existing_parent_ids)
         random.seed()
         source_dir = Path(self.source_dir_or_zip)
@@ -134,7 +130,7 @@ class ImportStep2(ImportBase):
                     # Create SQLAlchemy mappers of the object itself and slaves (1<->1)
                     object_head_to_write = ObjectGen(**dicts_to_write["obj_head"])
                     object_fields_to_write = ObjectFieldsGen(**dicts_to_write["obj_field"])
-                    image_to_write = ImageGen(**dicts_to_write["image"])
+                    image_to_write = ImageGen(**dicts_to_write["images"])
                     # Parents are created the same way, _when needed_ (i.e. nearly never),
                     #  in @see add_parent_objects
 
@@ -169,7 +165,7 @@ class ImportStep2(ImportBase):
 
                     if vignette_maker and vignette_maker.must_keep_original():
                         # In this case, the original image is kept in another DB line
-                        backup_img_to_write = ImageGen(**dicts_to_write["image"])
+                        backup_img_to_write = ImageGen(**dicts_to_write["images"])
                         backup_img_to_write.imgrank = 100
                         backup_img_to_write.thumb_file_name = None
                         backup_img_to_write.thumb_width = None
@@ -225,7 +221,10 @@ class ImportStep2(ImportBase):
         :param relative_name:
         :return:
         """
-        ok_fields = set([field for field in field_list if field in self.mapping or field in self.ProgFields])
+        ok_fields = set([field for field in field_list
+                         if field in self.custom_mapping.all_fields
+                         or field in self.PredefinedFields
+                         or field in self.ProgFields])
         ko_fields = [field for field in field_list if field not in ok_fields]
         if len(ko_fields) > 0:
             logging.warning("In %s, field(s) %s not used, values will be ignored",
@@ -244,7 +243,9 @@ class ImportStep2(ImportBase):
         ok_fields = set()
         ko_fields = []
         for a_field in field_set - self.ProgFields:
-            mapping = self.mapping[a_field]
+            mapping = self.PredefinedFields.get(a_field)
+            if not mapping:
+                mapping = self.custom_mapping.search_field(a_field)
             target_tbl = mapping["table"]
             target_fld = mapping["field"]
             target_class = self.target_classes[target_tbl]
@@ -315,9 +316,11 @@ class ImportStep2(ImportBase):
             # Try to get the value from the cache
             cache_key = (a_field, raw_val)
             cached_field_value = vals_cache.get(cache_key)
-            m = self.mapping[a_field]
-            field_name = m.get("field")
+            m = self.PredefinedFields.get(a_field)
+            if not m:
+                m = self.custom_mapping.search_field(a_field)
             field_table = m.get("table")
+            field_name = m.get("field")
             if cached_field_value is None:
                 csv_val = clean_value(raw_val)
                 # If no relevant value, leave field as NULL
@@ -368,9 +371,11 @@ class ImportStep2(ImportBase):
                 logging.info("skip T %s %s %s", field_table, field_name, cached_field_value)
 
     def add_parent_objects(self, existing_ids, object_head_to_write, dicts_to_write):
-        # Assignment of Sample, Acquisition & Process ID, creating them if necessary
-        # Due to amount of duplicated information in TSV, this happens for few % of rows
-        #  so no real need to optimize here.
+        """
+            Assignment of Sample, Acquisition & Process ID, creating them if necessary
+            Due to amount of duplicated information in TSV, this happens for few % of rows
+             so no real need to optimize here.
+        """
         for alias, parent_class in self.parent_classes.items():
             dict_to_write = dicts_to_write[alias]
             ids_for_obj = existing_ids[alias]
@@ -379,7 +384,7 @@ class ImportStep2(ImportBase):
             parent_orig_id = dict_to_write.get("orig_id")
             if parent_orig_id is None:
                 continue
-            fk_to_obj = self.parent_pks[alias]
+            fk_to_obj = parent_class.pk()
             if dict_to_write.get("orig_id") in ids_for_obj:
                 # This parent object was known before, don't add it into the session (DB)
                 # but link the child object_head to it (like newly created ones below)
@@ -391,7 +396,8 @@ class ImportStep2(ImportBase):
                 obj_to_write.projid = self.prj_id
                 self.session.add(obj_to_write)
                 self.session.flush()
-                # We now have a (generated) PK to copy back into repository
+                # We now have a (generated) PK to copy back into objects
+                # TODO: Skip the getattr() below in favor of obj_to_write.pk_val()
                 ids_for_obj[parent_orig_id] = getattr(obj_to_write, fk_to_obj)
                 logging.info("++ IDS %s %s", alias, ids_for_obj)
             # Anyway
@@ -402,6 +408,8 @@ class ImportStep2(ImportBase):
             Generate image, eventually the vignette, create DB line(s) and copy image file into vault.
         :param a_csv_file:
         :param image_to_write:
+        :param was_uvpv6:
+        :param vignette_maker:
         :return:
         """
         if vignette_maker:
@@ -495,50 +503,23 @@ class ImportStep2(ImportBase):
 
     def fetch_existing_objects(self):
         # Get existing object IDs (orig_id AKA object_id in TSV) from the project
-        existing_objects = set()
-        # TODO: Why using the view? Why an outer join in the view?
-        res: ResultProxy = self.session.execute("SELECT o.orig_id "
-                                                "  FROM objects o "
-                                                " WHERE o.projid = :prj",
-                                                {"prj": self.prj_id})
-        for rec in res:
-            existing_objects.add(rec[0])
-        return existing_objects
+        return Object.fetch_existing_objects(self.session, self.prj_id)
 
     def fetch_existing_parent_ids(self):
         """
-        Get from DB the present IDs for the tables we are going to update and current project
+        Get from DB the present IDs for the tables we are going to update, in current project.
         :return:
         """
         existing_ids = {}
         # Get orig_id from acquisition, sample, process
         for alias, clazz in self.parent_classes.items():
-            sql = "SELECT orig_id," + self.parent_pks[alias] + \
-                  "  FROM " + clazz.__tablename__ + \
-                  " WHERE projid=" + str(self.prj_id)
-            res: ResultProxy = self.session.execute(sql)
-            # Store result into a dict key=orig_id, value=pk for table
-            collect = {}
-            for r in res:
-                collect[r[0]] = int(r[1])
+            collect = clazz.get_orig_id_and_pk(self.session, self.prj_id)
             existing_ids[alias] = collect
         return existing_ids
 
-    def update_mapping(self, prj):
+    def save_mapping(self):
         """
         DB update of mappings for the Project
-        TODO: Dup code 4 times, use Mapping class
         """
-        prj.mappingobj = encode_equal_list({v['field']: v.get('title') for k, v in self.mapping.items()
-                                            if v['table'] == 'obj_field' and v['field'][0] in ('t', 'n')
-                                            and v.get('title') is not None})
-        prj.mappingsample = encode_equal_list({v['field']: v.get('title') for k, v in self.mapping.items()
-                                               if v['table'] == 'sample' and v['field'][0] in ('t', 'n')
-                                               and v.get('title') is not None})
-        prj.mappingacq = encode_equal_list({v['field']: v.get('title') for k, v in self.mapping.items()
-                                            if v['table'] == 'acq' and v['field'][0] in ('t', 'n')
-                                            and v.get('title') is not None})
-        prj.mappingprocess = encode_equal_list({v['field']: v.get('title') for k, v in self.mapping.items()
-                                                if v['table'] == 'process' and v['field'][0] in ('t', 'n')
-                                                and v.get('title') is not None})
+        self.custom_mapping.write_to_project(self.prj)
         self.session.commit()

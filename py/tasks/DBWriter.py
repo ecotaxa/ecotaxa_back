@@ -64,7 +64,7 @@ class DBWriter(object):
         nb_bulks = "%d/%d/%d" % (len(self.obj_bulks), len(self.obj_fields_bulks), len(self.img_bulks))
         # TODO: Can be reused?
         inserts = [self.obj_tbl.insert(), self.obj_fields_tbl.insert(), self.img_tbl.insert()]
-        # TODO: compiled_cache?
+        # TODO: SQLAlchemy compiled_cache?
         bulk_sets = [self.obj_bulks, self.obj_fields_bulks, self.img_bulks]
         for a_bulk_set, an_insert in zip(bulk_sets, inserts):
             if not a_bulk_set:
