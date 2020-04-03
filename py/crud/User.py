@@ -2,17 +2,19 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from db.Task import Task
+from db.User import User
 from framework.Service import Service
 
 
-class TaskService(Service):
+class UserService(Service):
     """
-        Basic CRUD operations on Task
+        Basic CRUD operations on User
     """
 
-    def create(self) -> int:
-        tsk = Task()
-        self.session.add(tsk)
+    def create(self, name, email) -> int:
+        usr = User()
+        usr.name = name
+        usr.email = email
+        self.session.add(usr)
         self.session.commit()
-        return tsk.id
+        return usr.id
