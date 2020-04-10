@@ -5,7 +5,7 @@
     <content url="file://$MODULE_DIR$/../../py">
       <excludeFolder url="file://$MODULE_DIR$/../../py" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.6 (QA venv)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.6 (venv) (3)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
   <component name="PackageRequirementsSettings">

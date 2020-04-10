@@ -5,7 +5,8 @@
 from collections import OrderedDict
 
 from db.Acquisition import Acquisition
-from db.Object import ObjectFields
+from db.Image import Image
+from db.Object import ObjectFields, Object
 from db.Process import Process
 from db.Project import Project
 from db.Sample import Sample
@@ -16,6 +17,44 @@ class GlobalMapping(object):
     """
         Information about mapping process (from TSV to DB)
     """
+    PredefinedFields = {
+        # A mapping from TSV columns to objects and fields
+        'object_id': {'table': ObjectFields.__tablename__, 'field': 'orig_id', 'type': 't'},
+        'sample_id': {'table': Sample.__tablename__, 'field': 'orig_id', 'type': 't'},
+        'acq_id': {'table': Acquisition.__tablename__, 'field': 'orig_id', 'type': 't'},
+        'process_id': {'table': Process.__tablename__, 'field': 'orig_id', 'type': 't'},
+        'object_lat': {'table': Object.__tablename__, 'field': 'latitude', 'type': 'n'},
+        'object_lon': {'table': Object.__tablename__, 'field': 'longitude', 'type': 'n'},
+        'object_date': {'table': Object.__tablename__, 'field': 'objdate', 'type': 't'},
+        'object_time': {'table': Object.__tablename__, 'field': 'objtime', 'type': 't'},
+        'object_link': {'table': ObjectFields.__tablename__, 'field': 'object_link', 'type': 't'},
+        'object_depth_min': {'table': Object.__tablename__, 'field': 'depth_min', 'type': 'n'},
+        'object_depth_max': {'table': Object.__tablename__, 'field': 'depth_max', 'type': 'n'},
+        'object_annotation_category': {'table': Object.__tablename__, 'field': 'classif_id', 'type': 't'},
+        'object_annotation_category_id': {'table': Object.__tablename__, 'field': 'classif_id', 'type': 'n'},
+        'object_annotation_date': {'table': Object.__tablename__, 'field': 'classif_when', 'type': 't'},
+        'object_annotation_person_name': {'table': Object.__tablename__, 'field': 'classif_who', 'type': 't'},
+        'object_annotation_status': {'table': Object.__tablename__, 'field': 'classif_qual', 'type': 't'},
+        'img_rank': {'table': Image.__tablename__, 'field': 'imgrank', 'type': 'n'},
+        'img_file_name': {'table': Image.__tablename__, 'field': 'orig_file_name', 'type': 't'},
+        'sample_dataportal_descriptor': {'table': Sample.__tablename__, 'field': 'dataportal_descriptor', 'type': 't'},
+        'acq_instrument': {'table': Acquisition.__tablename__, 'field': 'instrument', 'type': 't'},
+    }
+
+    # C'est un set de table 😁
+    PossibleTables = set([v['table'] for v in PredefinedFields.values()])
+
+    parent_classes = {Acquisition.__tablename__: Acquisition,
+                      Sample.__tablename__: Sample,
+                      Process.__tablename__: Process}
+
+    target_classes = {**parent_classes,
+                      Object.__tablename__: Object,
+                      ObjectFields.__tablename__: ObjectFields,
+                      Image.__tablename__: Image}
+
+    # (f)loat->(n)umerical
+    PossibleTypes = {'[f]': 'n', '[t]': 't'}
     # TSV prefix to 'real' table name, only for extendable tables
     PrefixToTable = {
         'object': ObjectFields.__tablename__,

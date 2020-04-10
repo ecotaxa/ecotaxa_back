@@ -5,7 +5,9 @@
 import logging
 from typing import Dict
 
+# noinspection PyPackageRequirements
 from sqlalchemy import MetaData
+# noinspection PyPackageRequirements
 from sqlalchemy.orm import Session
 
 from db.Image import Image
@@ -93,28 +95,20 @@ class DBWriter(object):
         backup_img_to_write.imgid = self.img_seq_cache.next()
         self.img_bulks.append(backup_img_to_write)
 
-    def close_row(self):
-        # The UPDATE should take place in the batch
-        # self.bulks.append(image_to_write)
-        pass
-
     def persist(self):
         self.do_bulk_save()
 
     def eof_cleanup(self):
         self.session.commit()
 
-    def link(self, object_fields_to_write, object_head_to_write):
-        # Link is done during @see do_bulk_save
-        pass
-
-
 # noinspection PyUnreachableCode
-if False: # pragma: no cover
+if False:  # pragma: no cover
     class DBWriterPlain(object):
         """
         Database writer (without optimizations).
         """
+        # noinspection PyPackageRequirements
+        from sqlalchemy.orm import Session
 
         def __init__(self, session: Session):
             self.session = session
@@ -126,13 +120,8 @@ if False: # pragma: no cover
             self.img_bulks = []
             self.img_tbl = None
 
-            # Save a bit of time for commit
-            self.session.execute("SET synchronous_commit TO OFF;")
-            self.obj_seq_cache = SequenceCache(self.session, "seq_objects", 100)
-            self.img_seq_cache = SequenceCache(self.session, "seq_images", 100)
-
         @staticmethod
-        def generators(target_fields: Dict[str, set]):
+        def generators():
             # Small optimization, the below allows minimal SQLAlchemy SQL sent to DB
             # Plain base objects with relations
             ObjectView = Object
@@ -144,13 +133,13 @@ if False: # pragma: no cover
         def do_bulk_save(self):
             pass
 
-        def add_db_entities(self, object_head_to_write, object_fields_to_write, image_to_write, must_write_obj):
+        def add_db_entities(self, object_head_to_write, object_fields_to_write, _image_to_write, _must_write_obj):
             assert object_head_to_write.projid is not None
             assert object_fields_to_write.orig_id is not None
             self.session.add(object_head_to_write)
             self.session.add(object_fields_to_write)
 
-        def add_vignette_backup(self, object_head_to_write, backup_img_to_write):
+        def add_vignette_backup(self, _object_head_to_write, backup_img_to_write):
             self.session.add(backup_img_to_write)
 
         def close_row(self):
@@ -162,6 +151,7 @@ if False: # pragma: no cover
         def eof_cleanup(self):
             self.session.commit()
 
-        def link(self, object_fields_to_write, object_head_to_write):
+        @staticmethod
+        def link(object_fields_to_write, object_head_to_write):
             # Add, using ORM, the ObjectFields twin
             object_fields_to_write.objhrel = object_head_to_write

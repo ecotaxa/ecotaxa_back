@@ -36,7 +36,7 @@ def minimal_table_of(metadata: MetaData, clazz, to_keep: Set[str]) -> Table:
 
 
 # noinspection PyUnreachableCode
-if False: # pragma: no cover
+if False:  # pragma: no cover
     def view_of(metadata, clazz, to_keep: Set[str]) -> ClassVar:
         """
             Return a Model, i.e. a SQLAlchemy mapper with only the given fields.
@@ -102,4 +102,3 @@ if False: # pragma: no cover
 
     def print_table(tbl: Table):
         print(CreateTable(tbl).compile(dialect=postgresql.dialect()))
-

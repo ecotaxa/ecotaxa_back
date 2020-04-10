@@ -100,6 +100,18 @@ class Object(Model):
             ret.add(rec[0])
         return ret
 
+    @staticmethod
+    def update_counts_and_img0(session: Session, prj_id):
+        # noinspection SqlRedundantOrderingDirection
+        session.execute("""
+        UPDATE obj_head o
+           SET imgcount = (SELECT count(*) FROM images WHERE objid = o.objid),
+               img0id = (SELECT imgid FROM images WHERE objid = o.objid ORDER BY imgrank ASC LIMIT 1)
+         WHERE projid = :prj
+           AND (imgcount IS NULL or img0id IS NULL) """,
+                        {'prj': prj_id})
+        session.commit()
+
 
 class ObjectFields(Model):
     __tablename__ = 'obj_field'

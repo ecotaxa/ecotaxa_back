@@ -28,13 +28,32 @@ class Sample(Model):
 
     @classmethod
     def get_orig_id_and_pk(cls, session: Session, prj_id):
-        sql = "SELECT orig_id, sampleid"+ \
+        sql = "SELECT orig_id, sampleid" + \
               "  FROM " + cls.__tablename__ + \
               " WHERE projid = :prj"
         res: ResultProxy = session.execute(sql, {"prj": prj_id})
         ret = {r[0]: int(r[1]) for r in res}
         return ret
 
+    @staticmethod
+    def propagate_geo(session: Session, prj_id):
+        """
+            Create sample geo from object one.
+        :return:
+        """
+        session.execute("""
+        UPDATE samples s 
+           SET latitude = sll.latitude, longitude = sll.longitude
+          FROM (SELECT o.sampleid, min(o.latitude) latitude, min(o.longitude) longitude
+                  FROM obj_head o
+                 WHERE projid = :projid 
+                   AND o.latitude IS NOT NULL 
+                   AND o.longitude IS NOT NULL
+              GROUP BY o.sampleid) sll 
+         WHERE s.sampleid = sll.sampleid 
+           AND projid = :projid """,
+                        {'projid': prj_id})
+        session.commit()
 
     def __str__(self):
         return "{0} ({1})".format(self.orig_id, self.processid)

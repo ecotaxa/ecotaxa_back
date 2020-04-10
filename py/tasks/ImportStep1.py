@@ -6,13 +6,18 @@ import csv
 import datetime
 import json
 import logging
+import re
 import sys
 import zipfile
 from pathlib import Path
+from typing import Set
 
+# noinspection PyPackageRequirements
 from PIL import Image as PIL_Image
 
+from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping, GlobalMapping
+from db.Image import Image
 from db.Object import classif_qual_revert
 from db.Taxonomy import Taxonomy
 from db.User import User
@@ -31,6 +36,7 @@ class ImportStep1(ImportBase):
         # Received from parameters
         self.intra_step = 0
         self.step_errors = []
+        # Where the input data is
         self.input_path: str = ""
         # The row count seen at previous step
         self.total_row_count = 0
@@ -83,7 +89,7 @@ class ImportStep1(ImportBase):
         return json.dumps(resp)
 
     def do_intra_step_1(self, loaded_files, warn_messages):
-        # The mapping to custom columns
+        # The mapping to custom columns, either empty or from previous import operations
         self.custom_mapping = ProjectMapping().load_from_project(self.prj)
         project_was_empty = self.custom_mapping.is_empty()
 
@@ -92,17 +98,19 @@ class ImportStep1(ImportBase):
         self.found_users = {}
         # Reset errors
         self.step_errors = []
-        existing_objects_and_image = self.fetch_existing_images()
+        # This is only necessary if we must ignore duplicates
+        existing_objects_and_image = self.fetch_existing_images(self.ignore_duplicates == 'Y')
         logging.info("SubTask1 : Analyze TSV Files")
         self.update_progress(1, "Unzip File into temporary folder")
         source_dir = Path(self.source_dir_or_zip)
+        source_bundle = InBundle(self.source_dir_or_zip)
         self.total_row_count = 0
         # record fields for which some values are present
         cols_seen = set()
         # taxonomy ids @see Taxonomy
         classif_id_seen = set()
         nb_objects_without_gps = 0
-        for a_csv_file in self.possible_tsv_files(source_dir):
+        for a_csv_file in source_bundle.possible_files():
             relative_file = a_csv_file.relative_to(source_dir)
             # relative name for logging and recording what was done
             relative_name: str = relative_file.as_posix()
@@ -111,7 +119,7 @@ class ImportStep1(ImportBase):
                 continue
             logging.info("Analyzing file %s" % relative_name)
 
-            a_csv_file, was_uvpv6 = self.handle_uvpapp_format(a_csv_file, relative_file)
+            a_csv_file, was_uvpv6 = InBundle.handle_uvpapp_format(self, a_csv_file, relative_file)
 
             with open(a_csv_file.as_posix(), encoding='latin_1') as csvfile:
                 # Read as a dict, first line gives the format
@@ -188,7 +196,7 @@ class ImportStep1(ImportBase):
                 # noinspection PyBroadException
                 try:
                     _im = PIL_Image.open(img_file_path.as_posix())
-                except:
+                except Exception as _e:
                     self.log_for_user("Error while reading Image '%s' in file %s. %s"
                                       % (img_file_name, relative_name, sys.exc_info()[0]))
 
@@ -205,7 +213,7 @@ class ImportStep1(ImportBase):
                           vals_cache) -> bool:
         latitude_was_seen = False
         for raw_field, a_field in clean_fields.items():
-            m = self.PredefinedFields.get(a_field)
+            m = GlobalMapping.PredefinedFields.get(a_field)
             if m is None:
                 m = self.custom_mapping.search_field(a_field)
                 # No mapping, not stored
@@ -284,10 +292,10 @@ class ImportStep1(ImportBase):
                     "Invalid Header '%s' in file %s. Format must be Table_Field. Field ignored" % (
                         a_field, relative_name))
                 continue
-            if a_field in self.PredefinedFields:
+            if a_field in GlobalMapping.PredefinedFields:
                 # OK it's a predefined one
                 continue
-            if a_field in self.ProgFields:
+            if a_field in InBundle.ProgFields:
                 # Not mapped, but not a free field
                 continue
             # Not a predefined field, so nXX or tXX
@@ -297,7 +305,7 @@ class ImportStep1(ImportBase):
             # e.g. acq_sn -> acq -> acquisitions
             tsv_table_prfx = split_col[0]
             target_table = GlobalMapping.TSV_table_to_table(tsv_table_prfx)
-            if target_table not in self.PossibleTables:
+            if target_table not in GlobalMapping.PossibleTables:
                 self.log_for_user(
                     "Invalid Header '%s' in file %s. Unknown table prefix. Field ignored" % (
                         a_field, relative_name))
@@ -307,7 +315,7 @@ class ImportStep1(ImportBase):
                 sel_type = 't'
                 # TODO: Tell the user that an eventual type is just ignored
             else:
-                sel_type = self.PossibleTypes.get(type_line[a_field])
+                sel_type = GlobalMapping.PossibleTypes.get(type_line[a_field])
                 if sel_type is None:
                     self.log_for_user("Invalid Type '%s' for Field '%s' in file %s. "
                                       "Incorrect Type. Field ignored" % (type_line[a_field],
@@ -354,3 +362,39 @@ class ImportStep1(ImportBase):
                 z.extractall(self.source_dir_or_zip)
         else:
             self.source_dir_or_zip = self.input_path
+
+    def resolve_taxo_found(self, taxo_found) -> [str]:
+        lower_taxon_list = []
+        not_found_taxo = []
+        regexsearchparenthese = re.compile(r'(.+) \((.+)\)$')
+        for lowertaxon in taxo_found.keys():
+            taxo_found[lowertaxon] = {'nbr': 0, 'id': None}
+            lower_taxon_list.append(lowertaxon)
+            resregex = regexsearchparenthese.match(lowertaxon)
+            if resregex:  # Si on trouve des parenthèse à la fin
+                lowertaxonLT = resregex.group(1) + '<' + resregex.group(2)
+                taxo_found[lowertaxon]['alterdisplayname'] = lowertaxonLT
+                lower_taxon_list.append(lowertaxonLT)
+
+        Taxonomy.fetch_taxons(self.session, taxo_found, lower_taxon_list)
+
+        logging.info("Taxo Found = %s", taxo_found)
+        for FoundK, FoundV in taxo_found.items():
+            if FoundV['nbr'] == 0:
+                logging.info("Taxo '%s' Not Found", FoundK)
+                not_found_taxo.append(FoundK)
+            elif FoundV['nbr'] > 1:
+                # more than one is like not found
+                logging.info("Taxo '%s' Found more than once", FoundK)
+                not_found_taxo.append(FoundK)
+                taxo_found[FoundK]['id'] = None
+        for FoundK, FoundV in taxo_found.items():
+            # in the end we just keep the id, other fields were transitory
+            taxo_found[FoundK] = FoundV['id']
+        return not_found_taxo
+
+    def fetch_existing_images(self, do_it: bool) -> Set:
+        if do_it:
+            return Image.fetch_existing_images(self.session, self.prj_id)
+        else:
+            return set()
