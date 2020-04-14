@@ -40,8 +40,8 @@ def test_vignette1():
     """
     config = configparser.ConfigParser()
     config.read_string(CONFIG)
-    maker = VignetteMaker(config)
+    vignette = "0128_vig.png"
+    maker = VignetteMaker(config, DATA_DIR, vignette)
     assert maker.must_keep_original()
-    original = DATA_DIR / "0128.png"
-    vignette = DATA_DIR / "0128_vig.png"
-    maker.make_vignette(original, vignette)
+    original = "0128.png"
+    maker.make_vignette(original)

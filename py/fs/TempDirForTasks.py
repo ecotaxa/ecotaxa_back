@@ -5,9 +5,9 @@
 from pathlib import Path
 
 
-class TempTaskDir(object):
+class TempDirForTasks(object):
     """
-        A directory for storing data for a task.
+        Base directory for storing data for all tasks.
     """
 
     def __init__(self, path: str):

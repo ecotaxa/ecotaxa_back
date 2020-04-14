@@ -3,471 +3,135 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import configparser
-import csv
-import datetime
 import logging
 import random
 import shutil
 import time
 import zipfile
-from pathlib import Path, PurePath
-from typing import List, Dict
+from pathlib import Path
 
-# noinspection PyPackageRequirements
-from PIL import Image as PIL_Image
 # noinspection PyPackageRequirements
 from sqlalchemy.orm import Session
 
-from BO.Mappings import GlobalMapping, ProjectMapping
-from BO.SpaceTime import compute_sun_position, astral_cache
+from BO.Mappings import GlobalMapping
+from BO.TSVFile import TSVFile
 from BO.Vignette import VignetteMaker
+from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic
 from db.Image import Image
-from db.Object import Object, classif_qual_revert
-from tasks.DBWriter import DBWriter
-from tasks.ImportBase import ImportBase
-from utils import clean_value, none_to_empty, convert_degree_minute_float_to_decimal_degree, to_float
+from db.Object import Object
+from db.Taxonomy import Taxonomy
+
+logger = logging.getLogger(__name__)
+
 
 
 class InBundle(object):
     """
         From EcoTaxa point of view, some structured data coming into the system.
     """
-
-    # Fields which are not mapped, i.e. not directly destined to DB, but needed here for fallback values.
-    ProgFields = {'object_annotation_time',
-                  'object_annotation_person_email',
-                  # 'annotation_person_first_name' # historical
-                  }
+    FILTERS = ("**/ecotaxa*.txt", "**/ecotaxa*.tsv", "**/*Images.zip")
 
     def __init__(self, path: str):
         self.path = Path(path)
-        self.not_to_import = set()
-
-    def dont_import(self, relative_name):
-        self.not_to_import.add(relative_name)
-
-    def possible_files(self):
-        """
-            Return the files we have to process. Generator function to save mem...
-        """
-        for a_filter in ("**/ecotaxa*.txt", "**/ecotaxa*.tsv", "**/*Images.zip"):
-            for an_used_file in self.path.glob(a_filter):
-                yield an_used_file
+        # Compute the files we have to process.
+        self.possible_files = []
+        for a_filter in self.FILTERS:
+            self.possible_files.extend(self.path.glob(a_filter))
 
     def possible_files_as_posix(self):
         """
-            Return the files we have to process. Generator function to save mem...
+            Return the relative names of the files we have to process. Generator function.
         """
-        for a_file in self.possible_files():
+        for a_file in self.possible_files:
             relative_file = a_file.relative_to(self.path)
             # relative name for logging and recording what was done
             yield relative_file.as_posix()
 
-    def do_import(self, imp: ImportBase, prj_id, db_writer: DBWriter, custom_mapping: ProjectMapping,
-                  fetch_existing_images,
-                  loaded_files: List[str]) -> int:
+    def do_import(self, where: ImportWhere, how: ImportHow) -> int:
         """
-            Do the import itself. Read from self, and write using the writer, directed by mapping,
-                updating loaded_files.
-            :return: The number of loaded rows
+            Import the full bundle, i.e. every contained file.
+            :param where:
+            :param how:
+            :return:
         """
         random.seed()
         total_row_count = 0
         start_time = time.time()
-        session = db_writer.session
-        # Get parent (enclosing) Sample, Acquisition, Process
-        existing_parent_ids = self.fetch_existing_parent_ids(session, prj_id=prj_id)
+        # Borrow session from writer
+        session = where.db_writer.session
+        # Get parent (enclosing) Sample, Acquisition, Process, if any
+        how.existing_parent_ids = self.fetch_existing_parent_ids(session, prj_id=how.prj_id)
         # The created objects (unicity from object_id in TSV, orig_id in model)
-        existing_objects: set = self.fetch_existing_objects(session, prj_id=prj_id)
-        objects_and_images_to_skip: set = Image.fetch_existing_images(session, prj_id) \
-            if fetch_existing_images else set()
-        logging.info("existing_parent_ids = %s", existing_parent_ids)
+        how.existing_objects = self.fetch_existing_objects(session, prj_id=how.prj_id)
+        logger.info("existing_parent_ids = %s", how.existing_parent_ids)
 
-        for a_csv_file in self.possible_files():
-            relative_file = a_csv_file.relative_to(self.path)
-            # relative name for logging and recording what was done
-            relative_name: str = relative_file.as_posix()
-            if relative_name in self.not_to_import:
-                continue
-            logging.info("Analyzing file %s" % relative_name)
+        ret = self.import_each_file(where, how, start_time, total_row_count)
+        return ret
 
-            a_csv_file, was_uvpv6 = self.handle_uvpapp_format(imp, a_csv_file, relative_file)
+    def import_each_file(self, where: ImportWhere, how: ImportHow, start_time, total_row_count):
+        """
+            Import each file in the bundle.
+            :param where:
+            :param how:
+            :param start_time:
+            :param total_row_count:
+            :return:
+        """
 
-            vignette_maker = False
-            if was_uvpv6:
-                # Pick vignette-ing config file from the zipped directory
-                potential_config = a_csv_file.parent / "compute_vignette.txt"
-                if potential_config.exists():
-                    vignette_maker_cfg = configparser.ConfigParser()
-                    vignette_maker_cfg.read(potential_config.as_posix())
-                    vignette_maker = VignetteMaker(vignette_maker_cfg)
+        for a_file in self.possible_files:
 
-            with open(a_csv_file.as_posix(), encoding='latin_1') as csvfile:
-                # Read as a dict, first line gives the format
-                rdr = csv.DictReader(csvfile, delimiter='\t', quotechar='"')
-                # Read types line (2nd line in file). This line is ignored.
-                _type_line = {field: v for field, v in rdr.__next__().items()}
-                # Cleanup field names, keeping original ones as key
-                clean_fields = {field: field.strip(" \t").lower() for field in rdr.fieldnames}
-                # Extract field list from header cooked by CSV reader
-                field_set = set([clean_fields[field] for field in rdr.fieldnames])
-                # Only keep the fields we can persist
-                field_set = self.filter_unused_fields(custom_mapping, field_set, relative_name)
+            if a_file.name.endswith("Images.zip"):
+                # It's another kind of bundle
+                sub_bundle = UVPV6Bundle(a_file)
+                relative_name = sub_bundle.relative_name
+                logger.info("Importing UVPV6 file %s" % relative_name)
+                sub_bundle.before_import(how)
+                rows_for_csv = sub_bundle.import_each_file(where, how, start_time, total_row_count)
+                sub_bundle.after_import(how)
+            else:
+                tsv_to_read = TSVFile(a_file, self.path)
+                relative_name = tsv_to_read.relative_name
+                logger.info("Importing file %s" % relative_name)
+                if relative_name in how.files_not_to_import:
+                    continue
 
-                # Remove fields which are unknown in ORM
-                target_fields = {alias: set() for alias in GlobalMapping.target_classes.keys()}
-                field_set = self.filter_not_in_db_fields(custom_mapping, field_set, relative_name, target_fields)
+                rows_for_csv = tsv_to_read.do_import(where, how,
+                                                     total_row_count, self.notify_user)
 
-                # We can now prepare ORM classes with optimal performance
-                ObjectGen, ObjectFieldsGen, ImageGen = db_writer.generators(target_fields)
+                how.loaded_files.append(relative_name)
 
-                # For annotation, if there is both an id and a category then ignore category
-                ignore_annotation_category: bool = 'object_annotation_category_id' in field_set \
-                                                   and 'object_annotation_category' in field_set
+                where.db_writer.persist()
 
-                vals_cache = dict()
-                # Loop over all lines
-                row_count_for_csv = 0
-                for rawlig in rdr:
-                    # Bean counting
-                    row_count_for_csv += 1
-                    total_row_count += 1
+            elapsed = time.time() - start_time
+            rows_per_sec = int(total_row_count / elapsed)
+            logger.info("File %s : %d rows loaded, %d so far at %d rows/s",
+                         relative_name, rows_for_csv, total_row_count,
+                         rows_per_sec)
 
-                    lig = {clean_fields[field]: v for field, v in rawlig.items()}
+        where.db_writer.eof_cleanup()
 
-                    # ------------- extract method do_one_tsv_line from here
-
-                    # First read into dicts, faster than doing settattr()
-                    dicts_to_write = {alias: dict() for alias in GlobalMapping.target_classes.keys()}
-
-                    if ignore_annotation_category:
-                        # Remove category as required, but only if there is really an id value
-                        # it can happen that the id is empty, even if table header is present
-                        if clean_value(lig.get('object_annotation_category_id', '')) != '':
-                            del lig['object_annotation_category']
-
-                    # Read TSV line into dicts
-                    self.read_fields_to_dicts(imp, custom_mapping, field_set, lig, dicts_to_write, vals_cache)
-
-                    # Create SQLAlchemy mappers of the object itself and slaves (1<->1)
-                    object_head_to_write = ObjectGen(**dicts_to_write["obj_head"])
-                    object_fields_to_write = ObjectFieldsGen(**dicts_to_write["obj_field"])
-                    image_to_write = ImageGen(**dicts_to_write["images"])
-                    # Parents are created the same way, _when needed_ (i.e. nearly never),
-                    #  in @see add_parent_objects
-
-                    try:
-                        object_head_to_write.sunpos = compute_sun_position(object_head_to_write)
-                    except Exception as e:
-                        # e.g. in case of invalid time
-                        logging.error("Astral error : %s for %s", e, astral_cache)
-
-                    self.add_parent_objects(prj_id, session, existing_parent_ids, object_head_to_write, dicts_to_write)
-
-                    key_exist_obj = "%s*%s" % (object_fields_to_write.orig_id, image_to_write.orig_file_name)
-                    if key_exist_obj in objects_and_images_to_skip:
-                        continue
-
-                    must_write_obj = self.create_or_link_slaves(prj_id, existing_objects, object_fields_to_write,
-                                                                object_head_to_write)
-
-                    db_writer.add_db_entities(object_head_to_write, object_fields_to_write, image_to_write,
-                                              must_write_obj)
-
-                    existing_objects.add(object_fields_to_write.orig_id)
-
-                    img_file_path_from_tsv = a_csv_file.parent / image_to_write.orig_file_name
-
-                    if vignette_maker:
-                        # If there is need for a vignette, the file named in the TSV is NOT the one written,
-                        # and pointed at, by the usual DB line. Instead, it's the vignette.
-                        # We generate the vignette into temporary work directory
-                        # TODO: Dup code, temptask dir is constant over service life
-                        img_file_path = imp.temptask.base_dir_for(imp.task_id) / "tempvignette.png"
-                        vignette_maker.make_vignette(img_file_path_from_tsv, img_file_path)
-
-                    self.deal_with_images(imp, a_csv_file, was_uvpv6, vignette_maker, image_to_write)
-
-                    if vignette_maker and vignette_maker.must_keep_original():
-                        # In this case, the original image is kept in another DB line
-                        backup_img_to_write = ImageGen(**dicts_to_write["images"])
-                        backup_img_to_write.imgrank = 100
-                        backup_img_to_write.thumb_file_name = None
-                        backup_img_to_write.thumb_width = None
-                        backup_img_to_write.thumb_height = None
-                        db_writer.add_vignette_backup(object_head_to_write, backup_img_to_write)
-                        # Store original image
-                        dest_img_path, _dummy1, _dummy1, _dummy1 = self.store_into_vault(imp, img_file_path_from_tsv,
-                                                                                         backup_img_to_write)
-                        # Get original image dimensions
-                        im = PIL_Image.open(dest_img_path)
-                        backup_img_to_write.width, backup_img_to_write.height = im.size
-                        del im
-
-                    # ------------- to here
-                    if (total_row_count % 100) == 0:
-                        db_writer.persist()
-                        # TODO
-                        # self.UpdateProgress(100 * total_row_count / self.param.TotalRowCount,
-                        #                     "Processing files %d/%d" % (total_row_count, self.total_row_count))
-
-                db_writer.persist()
-                # Bean counting continues
-                elapsed = time.time() - start_time
-                rows_per_sec = int(total_row_count / elapsed)
-                logging.info("File %s : %d rows loaded, %d so far at %d rows/s",
-                             relative_name, row_count_for_csv, total_row_count,
-                             rows_per_sec)
-
-                loaded_files.append(relative_name)
-
-                db_writer.eof_cleanup()
-
-                # TODO: Just for tests
-                # if total_row_count > 10000:
-                #    break
         return total_row_count
 
-    def filter_unused_fields(self, custom_mapping, field_list: set, relative_name) -> set:
+    def notify_user(self, count):
         """
-            Sanitize field list by removing the ones which are not known in mapping, nor used programmatically.
-        :param custom_mapping:
-        :param field_list:
-        :param relative_name:
-        :return:
+            Callback during TSV import.
         """
-        ok_fields = set([field for field in field_list
-                         if field in custom_mapping.all_fields
-                         or field in GlobalMapping.PredefinedFields
-                         or field in self.ProgFields])
-        ko_fields = [field for field in field_list if field not in ok_fields]
-        if len(ko_fields) > 0:
-            logging.warning("In %s, field(s) %s not used, values will be ignored",
-                            relative_name, ko_fields)
-        return ok_fields
-
-    @staticmethod
-    def handle_uvpapp_format(imp: ImportBase, csv_file, relative_name):
-        was_uvpv6 = False
-        # TODO: Use FS and a BO
-        if relative_name.name.endswith("Images.zip"):
-            # It comes from UVPAPP, each sample is in a .zip
-            sample_dir = imp.temptask.base_dir_for(imp.task_id) / relative_name.stem
-            sample_csv = sample_dir / ("ecotaxa_" + relative_name.stem[:-7] + ".tsv")
-            if sample_dir.exists():
-                # target directory exists, maybe from a previous unzip?
-                if not sample_csv.exists():
-                    # incorrect unzipping
-                    # sample_dir.rmdir() # on détruit le repertoire et on redezippe
-                    shutil.rmtree(sample_dir.as_posix())
-            if not sample_dir.exists():
-                sample_dir.mkdir()
-                with zipfile.ZipFile(csv_file.as_posix(), 'r') as z:
-                    z.extractall(sample_dir.as_posix())
-            csv_file = sample_csv
-            was_uvpv6 = True
-        return csv_file, was_uvpv6
-
-    @staticmethod
-    def read_fields_to_dicts(imp: ImportBase, custom_mapping, field_set, lig, dicts_to_write, vals_cache: Dict):
-        predefined_mapping = GlobalMapping.PredefinedFields
-        for a_field in field_set:
-            # CSV reader returns a minimal dict with no value equal to None
-            # TODO: below could be replaced with an intersect() of field names. To benchmark.
-            if a_field not in lig:
-                continue
-            # We have a value
-            raw_val = lig.get(a_field)
-            # Try to get the value from the cache
-            cache_key = (a_field, raw_val)
-            cached_field_value = vals_cache.get(cache_key)
-            m = predefined_mapping.get(a_field)
-            if not m:
-                m = custom_mapping.search_field(a_field)
-            field_table = m.get("table")
-            field_name = m.get("field")
-            if cached_field_value is None:
-                csv_val = clean_value(raw_val)
-                # If no relevant value, leave field as NULL
-                if csv_val == '':
-                    continue
-                if a_field == 'object_lat':
-                    # It's [n] type but since AVPApp they can contain a notation like ddd°MM.SS
-                    # which can be [t] as well.
-                    cached_field_value = convert_degree_minute_float_to_decimal_degree(csv_val)
-                elif a_field == 'object_lon':
-                    cached_field_value = convert_degree_minute_float_to_decimal_degree(csv_val)
-                elif m['type'] == 'n':
-                    cached_field_value = to_float(csv_val)
-                elif a_field == 'object_date':
-                    cached_field_value = datetime.date(int(csv_val[0:4]), int(csv_val[4:6]), int(csv_val[6:8]))
-                elif a_field == 'object_time':
-                    csv_val = csv_val.zfill(6)
-                    cached_field_value = datetime.time(int(csv_val[0:2]), int(csv_val[2:4]), int(csv_val[4:6]))
-                elif field_name == 'classif_when':
-                    v2 = clean_value(lig.get('object_annotation_time', '000000')).zfill(6)
-                    cached_field_value = datetime.datetime(int(csv_val[0:4]), int(csv_val[4:6]),
-                                                           int(csv_val[6:8]), int(v2[0:2]),
-                                                           int(v2[2:4]), int(v2[4:6]))
-                    # no caching of this one
-                    cache_key = "0"
-                elif field_name == 'classif_id':
-                    # numeric version is in "if type=n" case
-                    csv_val = imp.taxo_mapping.get(csv_val.lower(), csv_val)
-                    # Use initial mapping
-                    cached_field_value = imp.taxo_found[none_to_empty(csv_val).lower()]
-                elif field_name == 'classif_who':
-                    # Eventually map to another user if asked so
-                    cached_field_value = imp.found_users[none_to_empty(csv_val).lower()].get('id', None)
-                elif field_name == 'classif_qual':
-                    cached_field_value = classif_qual_revert.get(csv_val.lower())
-                else:
-                    # Assume it's an ordinary text field with nothing special
-                    cached_field_value = csv_val
-                # Cache if relevant, setting the cache_key to "0" above effectively voids
-                vals_cache[cache_key] = cached_field_value
-
-            # Write the field into the right object
-            # TODO: sanitize mappings and forget this .get
-            dict_to_write = dicts_to_write.get(field_table)
-            if dict_to_write is not None:
-                dict_to_write[field_name] = cached_field_value
-            else:
-                logging.info("skip T %s %s %s", field_table, field_name, cached_field_value)
-
-    @staticmethod
-    def create_or_link_slaves(prj_id, existing_objects, object_fields_to_write,
-                              object_head_to_write) -> bool:
-        # It can be a line with a complementary image
-        if object_fields_to_write.orig_id in existing_objects:
-            logging.info("Second image for %s ", object_fields_to_write.orig_id)
-            # In this case just point to previous
-            # TODO: It looks useless, anyway in original code the object is not added into session
-            # object_head_to_write.objid = existing_objects[object_fields_to_write.orig_id]
-            return False
-        else:
-            # or create it
-            object_head_to_write.projid = prj_id
-            object_head_to_write.random_value = random.randint(1, 99999999)
-            # Below left NULL @see self.update_counts_and_img0
-            # object_head_to_write.img0id = XXXXX
-            return True
-
-    @staticmethod
-    def add_parent_objects(prj_id, session: Session, existing_ids, object_head_to_write, dicts_to_write):
-        """
-            Assignment of Sample, Acquisition & Process ID, creating them if necessary
-            Due to amount of duplicated information in TSV, this happens for few % of rows
-             so no real need to optimize here.
-        """
-        for alias, parent_class in GlobalMapping.parent_classes.items():
-            dict_to_write = dicts_to_write[alias]
-            ids_for_obj = existing_ids[alias]
-            # Here we take advantage from consistent naming conventions
-            # The 3 involved tables have "orig_id" column serving the same purpose
-            parent_orig_id = dict_to_write.get("orig_id")
-            if parent_orig_id is None:
-                continue
-            fk_to_obj = parent_class.pk()
-            if dict_to_write.get("orig_id") in ids_for_obj:
-                # This parent object was known before, don't add it into the session (DB)
-                # but link the child object_head to it (like newly created ones below)
-                pass
-            else:
-                # Create the SQLAlchemy wrapper
-                obj_to_write = parent_class(**dict_to_write)
-                # Link with project
-                obj_to_write.projid = prj_id
-                session.add(obj_to_write)
-                session.flush()
-                # We now have a (generated) PK to copy back into objects
-                # TODO: Skip the getattr() below in favor of obj_to_write.pk_val()
-                ids_for_obj[parent_orig_id] = getattr(obj_to_write, fk_to_obj)
-                logging.info("++ IDS %s %s", alias, ids_for_obj)
-            # Anyway
-            setattr(object_head_to_write, fk_to_obj, ids_for_obj[parent_orig_id])
-
-    def deal_with_images(self, imp: ImportBase, a_csv_file: Path, was_uvpv6: bool, vignette_maker: VignetteMaker,
-                         image_to_write: Image):
-        """
-            Generate image, eventually the vignette, create DB line(s) and copy image file into vault.
-        :param imp: TODO drop
-        :param a_csv_file:
-        :param image_to_write:
-        :param was_uvpv6:
-        :param vignette_maker:
-        :return:
-        """
-        if vignette_maker:
-            # Source file is the temporary vignette
-            img_file_path = imp.temptask.base_dir_for(imp.task_id) / "tempvignette.png"
-        elif was_uvpv6:
-            # Files are in a subdirectory for UVPV6
-            img_file_path = a_csv_file.parent.joinpath(image_to_write.orig_file_name)
-        else:
-            # As per zip files structure, image files are in same directory as their description
-            img_file_path = a_csv_file.with_name(image_to_write.orig_file_name)
-
-        img_path, ndx_in_vault_folder, vault_folder, vault_folder_path = self.store_into_vault(imp, img_file_path,
-                                                                                               image_to_write)
-
-        im = PIL_Image.open(img_path)
-        image_to_write.width = im.size[0]
-        image_to_write.height = im.size[1]
-        size_limit = int(imp.config['THUMBSIZELIMIT'])
-        # Generate a thumbnail if image is too large
-        if (im.size[0] > size_limit) or (im.size[1] > size_limit):
-            # We force thumbnail format to JPEG
-            vault_thumb_filename = "%s_mini%s" % (ndx_in_vault_folder, '.jpg')
-            # TODO: Doesn't it affect aspect ratio?
-            im.thumbnail((size_limit, size_limit))
-            if im.mode == 'P':
-                im = im.convert("RGB")
-            thumb_path: str = vault_folder_path.joinpath(vault_thumb_filename).as_posix()
-            im.save(thumb_path)
-            image_to_write.thumb_file_name = "%s/%s" % (vault_folder, vault_thumb_filename)
-            image_to_write.thumb_width = im.size[0]
-            image_to_write.thumb_height = im.size[1]
-        else:
-            # Close the PIL image, when resized it was done during im.save
-            # Otherwise there is a FD exhaustion on PyPy
-            im.close()
-            # Need empty fields for bulk insert
-            image_to_write.thumb_file_name = None
-            image_to_write.thumb_width = None
-            image_to_write.thumb_height = None
-        if image_to_write.imgrank is None:
-            image_to_write.imgrank = 0  # default value
-
-    @staticmethod
-    def store_into_vault(imp: ImportBase, img_file_path, image_to_write):
-        assert image_to_write.imgid is not None
-        # Images are stored in folders of 10K images max
-        vault_folder = "%04d" % (image_to_write.imgid // 10000)
-        ndx_in_vault_folder = "%04d" % (image_to_write.imgid % 10000)
-        vault_folder_path: PurePath = imp.vault.sub_path(vault_folder)
-        # We store in DB line the path relative to vault
-        vault_filename = "%s%s" % (ndx_in_vault_folder, img_file_path.suffix)
-        vault_subpath = "%s/%s" % (vault_folder, vault_filename)
-        image_to_write.file_name = vault_subpath
-        imp.vault.ensure_exists(vault_folder)
-        # Copy image file from unzip directory to vault
-        dest_img_path: str = vault_folder_path.joinpath(vault_filename).as_posix()
-        # TODO: Move if on same filesystem
-        # TODO: OS copy otherwise, 3x less time
-        shutil.copyfile(img_file_path.as_posix(), dest_img_path)
-        return dest_img_path, ndx_in_vault_folder, vault_folder, vault_folder_path
+        # TODO
+        # self.UpdateProgress(100 * total_row_count / self.param.TotalRowCount,
+        #                     "Processing files %d/%d" % (total_row_count, self.total_row_count))
 
     @staticmethod
     def fetch_existing_objects(session, prj_id):
-        # Get existing object IDs (orig_id AKA object_id in TSV) from the project
+        """
+            Get existing object IDs (orig_id AKA object_id in TSV) from the project
+        """
         return Object.fetch_existing_objects(session, prj_id)
 
     @staticmethod
     def fetch_existing_parent_ids(session, prj_id):
         """
-        Get from DB the present IDs for the tables we are going to update, in current project.
-        :return:
+            Get from DB the present IDs for the tables we are going to update, in current project.
+            :return:
         """
         existing_ids = {}
         # Get orig_id from acquisition, sample, process
@@ -476,35 +140,116 @@ class InBundle(object):
             existing_ids[alias] = collect
         return existing_ids
 
-    def filter_not_in_db_fields(self, custom_mapping: ProjectMapping, field_set: set, relative_name,
-                                target_fields) -> set:
+    def validate_import(self, session: Session, how: ImportHow, diag: ImportDiagnostic):
         """
-            Sanitize (more) field list by removing the ones which cannot be output into
-            a DB table.
-        :param custom_mapping:
-        :param field_set:
-        :param relative_name:
-        :param target_fields: The used field, by target table.
-        :return:
+            Validate the full bundle, i.e. every contained file.
+            :return:
         """
-        ok_fields = set()
-        ko_fields = []
-        for a_field in field_set - self.ProgFields:
-            mapping = GlobalMapping.PredefinedFields.get(a_field)
-            if not mapping:
-                mapping = custom_mapping.search_field(a_field)
-            target_tbl = mapping["table"]
-            target_fld = mapping["field"]
-            target_class = GlobalMapping.target_classes[target_tbl]
-            try:
-                _target_col = getattr(target_class, target_fld)
-                # TODO: col must be a Column, not, e.g. a relationship
-                target_fields[target_tbl].add(target_fld)
-            except AttributeError:
-                ko_fields.append(a_field)
-                continue
-            ok_fields.add(a_field)
-        if len(ko_fields) > 0:
-            logging.warning("In %s, field(s) %s not known from DB, values will be ignored",
-                            relative_name, ko_fields)
-        return ok_fields
+        how.objects_and_images_to_skip = Image.fetch_existing_images(session, how.prj_id)
+
+        total_row_count = self.validate_all_files(how, diag, session)
+
+        if total_row_count == 0:
+            diag.warn("No object to import. It maybe due to :<br>"
+                      "*  Empty TSV table<br>"
+                      "*  TSV table already imported => 'SKIP TSV' option should be enabled")
+        # print(self.mapping)
+        if len(diag.classif_id_seen) > 0:
+            self.check_classif(session, diag, diag.classif_id_seen)
+
+        logger.info("Taxo Found = %s", how.taxo_found)
+        logger.info("Users Found = %s", how.found_users)
+        not_seen_fields = how.custom_mapping.all_fields.keys() - diag.cols_seen
+        logger.info("For Information, not seen fields %s", not_seen_fields)
+        if len(not_seen_fields) > 0:
+            diag.warn("Some fields configured in the project are not seen in this import {0} "
+                      .format(", ".join(not_seen_fields)))
+        if diag.nb_objects_without_gps > 0:
+            diag.warn("{0} objects doesn't have GPS information  "
+                      .format(diag.nb_objects_without_gps))
+        return total_row_count
+
+    def validate_all_files(self, how, diag, session):
+
+        total_row_count = 0
+        for a_file in self.possible_files:
+
+            if a_file.name.endswith("Images.zip"):
+                # It's another kind of bundle
+                sub_bundle = UVPV6Bundle(a_file)
+                relative_name = sub_bundle.relative_name
+                logger.info("Analyzing UVPV6 %s" % relative_name)
+                rows_for_csv = sub_bundle.validate_all_files(how, diag, session)
+                sub_bundle.cleanup()
+            else:
+                tsv_to_validate = TSVFile(a_file, self.path)
+                relative_name = tsv_to_validate.relative_name
+                logger.info("Analyzing file %s" % relative_name)
+                if relative_name in how.files_not_to_import:
+                    continue
+                rows_for_csv = tsv_to_validate.do_validate(how, diag)
+
+            logger.info("File %s : %d row analysed", relative_name, rows_for_csv)
+            total_row_count += rows_for_csv
+
+        return total_row_count
+
+    @staticmethod
+    def check_classif(session: Session, diag: ImportDiagnostic, classif_id_seen):
+        classif_id_found_in_db = Taxonomy.find_ids(session, list(classif_id_seen))
+        classif_id_not_found_in_db = classif_id_seen.difference(classif_id_found_in_db)
+        if len(classif_id_not_found_in_db) > 0:
+            msg = "Some specified classif_id don't exist, correct them prior to reload: %s" % (
+                ",".join([str(x) for x in classif_id_not_found_in_db]))
+            diag.error(msg)
+            logger.error(msg)
+
+
+class UVPV6Bundle(InBundle):
+    """
+        An UVPV6 bundle, i.e. an *Images.zip inside a enclosing .zip or directory.
+        We have e.g. b_da_19_Images.zip.
+        The zip contains:
+            - At root, an optional vignette generation config (compute_vignette.txt)
+            - At root, the index TSV file, with name derived from the zip, e.g. ecotaxa_b_da_19.tsv
+    """
+    VIGNETTE_CONFIG = "compute_vignette.txt"
+    TEMP_VIGNETTE = "tempvignette.png"
+
+    def __init__(self, path: Path):
+        assert path.suffix.lower() == ".zip"
+        self.relative_name = path.name
+        # Extract the zip file, in order to fall back to a directory like base InBundle
+        name_no_zip = path.stem  # e.g. b_da_19_Images
+        sample_id = name_no_zip[:-7]  # e.g. b_da_19
+        # Derive directories & files
+        # The file gets extracted by convention in same directory as its parent
+        sample_dir = path.parent / name_no_zip
+        tsv_file = "ecotaxa_" + sample_id + ".tsv"
+        sample_tsv = sample_dir / tsv_file
+        if sample_dir.exists():
+            # Target directory exists, from step1 if we're in step2
+            if not sample_tsv.exists():
+                # There was an incorrect unzipping before, as we miss the main TSV
+                shutil.rmtree(sample_dir.as_posix())
+        if not sample_dir.exists():
+            sample_dir.mkdir()
+            with zipfile.ZipFile(path.as_posix(), 'r') as z:
+                z.extractall(sample_dir.as_posix())
+        super().__init__(sample_dir.as_posix())
+
+    def before_import(self, how: ImportHow):
+        how.vignette_maker = None
+        # Pick vignette-ing config file from the zipped directory
+        potential_config = self.path / self.VIGNETTE_CONFIG
+        if potential_config.exists():
+            vignette_maker_cfg = configparser.ConfigParser()
+            vignette_maker_cfg.read(potential_config.as_posix())
+            how.vignette_maker = VignetteMaker(vignette_maker_cfg, self.path, self.TEMP_VIGNETTE)
+
+    @staticmethod
+    def after_import(how: ImportHow):
+        how.vignette_maker = None
+
+    def cleanup(self):
+        shutil.rmtree(self.path)

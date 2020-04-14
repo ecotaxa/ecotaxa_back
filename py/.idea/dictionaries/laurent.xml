@@ -2,12 +2,15 @@
   <dictionary name="laurent">
     <words>
       <w>classif</w>
+      <w>diag</w>
       <w>imgrank</w>
       <w>intra</w>
       <w>prfx</w>
+      <w>taxa</w>
       <w>taxo</w>
       <w>taxon</w>
       <w>temptask</w>
+      <w>vals</w>
     </words>
   </dictionary>
 </component>

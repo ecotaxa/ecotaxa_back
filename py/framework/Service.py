@@ -3,9 +3,10 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
+from sqlalchemy.orm import Session
+
 from db.Connection import Connection, check_sqlalchemy_version
 from link import read_config, read_link
-from sqlalchemy.orm import Session
 
 
 class Service(object):

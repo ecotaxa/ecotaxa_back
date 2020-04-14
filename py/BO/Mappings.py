@@ -98,6 +98,8 @@ class ProjectMapping(object):
         # for fast lookup from TSV analysis
         # key = TSV full column, val = ( TableMapping, DB col )
         self.all_fields = dict()
+        # to track emptiness after load
+        self.was_empty = False
 
     def write_to_project(self, prj: Project):
         """
@@ -172,6 +174,8 @@ class ProjectMapping(object):
             for real_col, tsv_col in a_mapping.real_cols_to_tsv.items():
                 all_fields["%s_%s" % (prfx, tsv_col)] = (a_mapping, real_col)
         self.all_fields = all_fields
+        self.was_empty = len(all_fields) == 0
+
 
 
 class TableMapping(object):

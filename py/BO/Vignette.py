@@ -19,7 +19,7 @@ class VignetteMaker(object):
         AFTER ANY MODIFICATION HERE, please the corresponding UT with visual check of the output.
     """
 
-    def __init__(self, cfg: configparser):
+    def __init__(self, cfg: configparser, src_base: Path, target_filename: str):
         # Store all config. as the same file is used several times
         section = cfg['vignette']
         self.gamma = float(section['gamma'])
@@ -36,15 +36,18 @@ class VignetteMaker(object):
         # Processing option, not relaed to image itself
         self.keep_original: bool = section.get('keeporiginal', 'n').lower() == 'y'
         # Read font from present directory
-        # TODO: Elsewhere?
-        font_file = join(HERE, 'source-sans-pro-v9-latin-300.ttf')
+        font_file = join(HERE, 'resources', 'source-sans-pro-v9-latin-300.ttf')
         self.fnt = ImageFont.truetype(font_file, int(round(self.fontheight_px * 1.5)))
+        # Where to find source images
+        self.src_base = src_base
+        # The common target file, erased at each call
+        self.target_file = target_filename
 
     def must_keep_original(self):
         return self.keep_original
 
-    def make_vignette(self, in_file_path: Path, out_file_path: Path):
-        pil_image = Image.open(in_file_path)
+    def make_vignette(self, in_file_path: Path):
+        pil_image = Image.open(self.src_base / in_file_path)
         np_img = np.array(pil_image)
         scalebarsize_px = int(round(self.scalebarsize_mm * 1000 / self.pixel_size, 0) * self.scale)
         minimgwidth = scalebarsize_px + 10
@@ -79,9 +82,10 @@ class VignetteMaker(object):
         # fnt=draw.getfont()
         draw.text((10, height - 10 - self.fontheight_px), "%g mm" % self.scalebarsize_mm,
                   fill=self.fontcolor, font=self.fnt)
-
         # pil_image =pil_image.transform((pil_image.size[0],pil_image.size[1]+200),Image.EXTENT,
         # (0,0,pil_image.size[0],pil_image.size[1]),fill=1,fillcolor='red')
         # pil_image.save(dir+'\\testgamma_%s_%d.png'%(imgname,g))
-        pil_image.save(out_file_path)
+        target_file = self.src_base.parent / self.target_file
+        pil_image.save(target_file)
         # pil_image.show()
+        return target_file

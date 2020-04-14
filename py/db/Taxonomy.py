@@ -4,10 +4,13 @@
 #
 from typing import List
 
+# noinspection PyPackageRequirements
 from sqlalchemy import Index, Column, Sequence, func
-from sqlalchemy.dialects.postgresql import VARCHAR, INTEGER, CHAR, \
-    TIMESTAMP
+# noinspection PyPackageRequirements
+from sqlalchemy.dialects.postgresql import VARCHAR, INTEGER, CHAR, TIMESTAMP
+# noinspection PyPackageRequirements,PyProtectedMember
 from sqlalchemy.engine import ResultProxy
+# noinspection PyPackageRequirements
 from sqlalchemy.orm import Session
 
 from db.Model import Model
@@ -48,9 +51,9 @@ class Taxonomy(Model):
         return {int(r['id']) for r in res}
 
     @staticmethod
-    def fetch_taxons(session: Session, taxo_found, taxon_lower_list):
+    def resolve_taxa(session: Session, taxo_found, taxon_lower_list):
         """
-            Match taxons in taxon_lower_list and return the matched ones in taxo_found.
+            Match taxa in taxon_lower_list and return the matched ones in taxo_found.
         """
         res: ResultProxy = session.execute(
             """SELECT t.id, lower(t.name) AS name, lower(t.display_name) AS display_name, 
@@ -58,8 +61,8 @@ class Taxonomy(Model):
                 FROM taxonomy t
                 LEFT JOIN taxonomy p on t.parent_id = p.id
                 WHERE lower(t.name) = ANY(:nms) OR lower(t.display_name) = ANY(:dms) 
-                    OR lower(t.name)||'<'||lower(p.name) = ANY(:chv) """
-            , {"nms": taxon_lower_list, "dms": taxon_lower_list, "chv": taxon_lower_list})
+                    OR lower(t.name)||'<'||lower(p.name) = ANY(:chv) """,
+            {"nms": taxon_lower_list, "dms": taxon_lower_list, "chv": taxon_lower_list})
         for rec_taxon in res:
             for found_k, found_v in taxo_found.items():
                 if ((found_k == rec_taxon['name'])
