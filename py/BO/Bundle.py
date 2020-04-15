@@ -165,7 +165,7 @@ class InBundle(object):
             diag.warn("Some fields configured in the project are not seen in this import {0} "
                       .format(", ".join(not_seen_fields)))
         if diag.nb_objects_without_gps > 0:
-            diag.warn("{0} objects doesn't have GPS information  "
+            diag.warn("{0} objects don't have GPS information  "
                       .format(diag.nb_objects_without_gps))
         return total_row_count
 

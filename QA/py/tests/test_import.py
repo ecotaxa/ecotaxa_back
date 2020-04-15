@@ -33,25 +33,26 @@ def test_import(config, database, caplog):
     user_sce.create("admin", "me@home.fr")
 
     # Do step1
-    sce1 = ImportAnalysis()
-    sce1.prj_id = prj_sce.create("Test LS")
-    sce1.task_id = task_sce.create()
-    sce1.input_path = str(PLAIN_FILE)
-    # sce1.input_path = str(V6_FILE)
-    step1_out = sce1.run()
-    # Serialize output
+    params = {"prj": prj_sce.create("Test LS"),
+              "tsk": task_sce.create(),
+              "src": str(PLAIN_FILE)}
+    # Mapping for missing taxonomy IDs
+    taxo_mapping = {}
+    params["map"] = taxo_mapping
+    step1_out = ImportAnalysis.call(params)
     # Do step2
-    sce2 = RealImport(step1_out)
-    # Map to admin
-    sce2.users_found['elizandro rodriguez'] = {'id': 1}
-    sce2.run()
+    params.update(step1_out)
+    # Simulate a missing user and map it to admin
+    params["fu"]['elizandro rodriguez'] = {'id': 1}
+    print(params)
+    step2_out = RealImport.call(params)
 
     out_dump = "new.txt"
-    print("All is in projet #%d, doing dump into %s" % (sce2.prj_id, out_dump))
+    print("All is in projet #%d, doing dump into %s" % (params["prj"], out_dump))
 
     from tech.AsciiDump import AsciiDumper
     sce = AsciiDumper()
-    sce.run(projid=sce2.prj_id, out=out_dump)
+    sce.run(projid=params["prj"], out=out_dump)
 
 
 def test_import_uvpv6(config, database, caplog):
@@ -59,22 +60,15 @@ def test_import_uvpv6(config, database, caplog):
     prj_sce = ProjectService()
     task_sce = TaskService()
 
-    # Do step1
-    sce1 = ImportAnalysis()
-    sce1.prj_id = prj_sce.create("Test LS")
-    sce1.task_id = task_sce.create()
-    sce1.input_path = str(V6_FILE)
-    step1_out = sce1.run()
-    # Serialize output
+    params = {"prj": prj_sce.create("Test LS"),
+              "tsk": task_sce.create(),
+              "src": str(V6_FILE)}
+    # Mapping for missing taxonomy IDs
+    taxo_mapping = {}
+    params["map"] = taxo_mapping
+    step1_out = ImportAnalysis.call(params)
     # Do step2
-    sce2 = RealImport(step1_out)
-    # Map to admin
-    sce2.users_found['elizandro rodriguez'] = {'id': 1}
-    sce2.run()
-
-    out_dump = "new.txt"
-    print("All is in projet #%d, doing dump into %s" % (sce2.prj_id, out_dump))
-
-    from tech.AsciiDump import AsciiDumper
-    sce = AsciiDumper()
-    sce.run(projid=sce2.prj_id, out=out_dump)
+    params.update(step1_out)
+    print(params)
+    step2_out = RealImport.call(params)
+    print(step2_out)

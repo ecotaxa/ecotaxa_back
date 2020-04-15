@@ -483,7 +483,7 @@ class TSVFile(object):
             # Verify duplicate images
             key_exist_obj = "%s*%s" % (object_id, img_file_name)
             if not how.skip_object_duplicates and key_exist_obj in diag.existing_objects_and_image:
-                diag.warn("Duplicate object %s Image '%s' in file %s. "
+                diag.warn("Duplicate object '%s' Image '%s' in file %s. "
                           % (object_id, img_file_name, self.relative_name))
             diag.existing_objects_and_image.add(key_exist_obj)
 
@@ -502,6 +502,8 @@ class TSVFile(object):
             # Try to get the value from the cache
             cache_key = (raw_field, raw_val)
             if cache_key in vals_cache:
+                if a_field == 'object_lat':
+                    latitude_was_seen = True
                 continue
             vals_cache[cache_key] = 1
             # Same column with same value was not seen already, proceed
@@ -547,9 +549,9 @@ class TSVFile(object):
                               % (csv_val, raw_field, self.relative_name))
             elif a_field == 'object_annotation_category':
                 if clean_value_and_none(lig.get('object_annotation_category_id', '')) == '':
-                    # Apply the mapping
+                    # Apply the mapping, if and only if there is no id
                     csv_val = how.taxo_mapping.get(csv_val.lower(), csv_val)
-                    # Record that the taxo was seen
+                    # Record that the taxon was seen
                     how.taxo_found[csv_val.lower()] = None
             elif a_field == 'object_annotation_person_name':
                 maybe_email = clean_value_and_none(lig.get('object_annotation_person_email', ''))

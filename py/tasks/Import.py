@@ -7,6 +7,7 @@ import json
 import logging
 import re
 import zipfile
+from abc import ABC
 from os.path import join
 from typing import Union, Set, Dict
 
@@ -29,39 +30,39 @@ from utils import none_to_empty
 logger = logging.getLogger(__name__)
 
 
-class ImportServiceBase(Service):
+class ImportServiceBase(Service, ABC):
     """
         Common methods and data for import task steps.
     """
+    prj_id: int = 0
+    """ The project ID to import into """
+    task_id: int = -1
+    """ The task ID to use for reporting """
+    source_dir_or_zip: str = ""
+    """ In UI: Choose a folder or zip file on the server
+      OR Upload folder(s) compressed as a zip file """
+    taxo_mapping: dict = {}
+    """ Optional taxonomy mapping """
+    skip_already_loaded_file: str = "N"
+    """ Skip tsv files that have already been imported """
+    skip_object_duplicate: str = "No"
+    """ Skip objects that have already been imported """
 
     def __init__(self):
         super().__init__()
         # From legacy code, vault and temptask are in src directory
         self.vault = Vault(join(self.link_src, 'vault'))
         self.temp_for_task = TempDirForTasks(join(self.link_src, 'temptask'))
-        # Parameters
-        self.prj_id: int = -1
-        self.task_id: int = -1
-
-        self.custom_mapping: Union[ProjectMapping, None] = None
-
-        self.taxo_mapping: dict = {}
-        self.taxo_found = {}
-        self.users_found = {}
-
-        # Choose a folder or zip file on the server
-        #  OR
-        # Upload folder(s) compressed as a zip file
-        self.source_dir_or_zip: str = ""
-
-        # Skip tsv files that have already been imported
-        self.skip_already_loaded_file: str = "N"
-        # Skip objects that have already been imported
-        self.skip_object_duplicate: str = "N"
-
         # Work vars
         self.prj: Union[Project, None] = None
         self.task: Union[Task, None] = None
+
+    def prepare_run(self):
+        """
+            Load what's needed for run.
+        """
+        self.prj = self.session.query(Project).filter_by(projid=self.prj_id).first()
+        self.task = self.session.query(Task).filter_by(id=self.task_id).first()
 
     def update_param(self):
         if hasattr(self, 'param'):
@@ -80,27 +81,27 @@ class ImportServiceBase(Service):
         print(msg)
         pass
 
-    def prepare_run(self):
-        """
-            Load what's needed for run.
-        """
-        self.prj = self.session.query(Project).filter_by(projid=self.prj_id).first()
-        self.task = self.session.query(Task).filter_by(id=self.task_id).first()
-
 
 class ImportAnalysis(ImportServiceBase):
     """
         Before doing the real import, analyze the input in order to prevent issues and give choices
         to user.
     """
+    SUP = ImportServiceBase
+
+    MSG_IN = {"prj": id(SUP.prj_id),
+              "tsk": id(SUP.task_id),
+              "src": id(SUP.source_dir_or_zip),
+              "map": id(SUP.taxo_mapping),
+              "sal": id(SUP.skip_already_loaded_file),
+              "sod": id(SUP.skip_object_duplicate)
+              }
 
     def __init__(self):
         super().__init__()
         # Received from parameters
         self.intra_step = 0
         self.step_errors = []
-        # Where the input data is
-        self.input_path: str = ""
         # The row count seen at previous step
         self.total_row_count = 0
 
@@ -109,76 +110,78 @@ class ImportAnalysis(ImportServiceBase):
         loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
         logger.info("Previously loaded files: %s", loaded_files)
 
-        not_found_user = {}
-        not_found_taxo = {}
+        resp = {}
         if self.intra_step == 0:
             # Subtask 1, unzip or point to source directory
             self.update_progress(1, "Unzip File into temporary folder")
             self.unzip_if_needed()
             self.intra_step = 1
+            resp.update({"src": self.source_dir_or_zip})
 
         if self.intra_step == 1:
             # Validate files
             logger.info("SubTask1 : Analyze TSV Files")
-            if self.do_intra_step_1(loaded_files):
-                # If anything went wrong we loop on this state
+            how, diag = self.do_intra_step_1(loaded_files)
+            resp.update({"cmp": how.custom_mapping.as_dict()})
+
+            if len(diag.errors) > 0:
+                # If anything went wrong we loop on intra_step 1
+                # Feedback to user
+                self.task.taskstate = "Error"
+                self.task.progressmsg = "Some errors were found during file parsing "
+                logger.error(self.task.progressmsg)
+                self.session.commit()
+                resp.update({"err": diag.errors})
+            else:
+                # Move to intra_step 2
                 self.intra_step = 2
+                logger.info("Start Sub Step 1.2")
+                # Resolve users...
+                not_found_users = self.resolve_users(self.session, how.found_users)
+                if len(not_found_users) > 0:
+                    logger.info("Some Users Not Found = %s", not_found_users)
+                # ...and taxonomy
+                not_found_taxo = self.resolve_taxa(self.session, how.taxo_found)
+                if len(not_found_taxo) > 0:
+                    logger.info("Some Taxo Not Found = %s", not_found_taxo)
+                # # raise Exception("TEST")
+                # if len(not_found_users) == 0 and len(not_found_taxo) == 0 and len(warn_messages) == 0:
+                #     # all OK, proceed straight away to step2
+                #     # TODO
+                #     pass
+                #     # self.SPStep2()
+                # else:
+                #     self.task.taskstate = "Question"
+                # if len(warn_messages) > 0:
+                #     self.update_progress(1, "Unzip File on temporary folder")
+                # else:
+                #     self.update_progress(1, "Unzip File on temporary folder")
+                # sinon on pose une question
 
-        if self.intra_step == 2:
-            logger.info("Start Sub Step 1.2")
-            # Resolve users...
-            not_found_user = self.resolve_users(self.session, self.users_found)
-            if len(not_found_user) > 0:
-                logger.info("Some Users Not Found = %s", not_found_user)
-            # ...and taxonomy
-            not_found_taxo = self.resolve_taxa(self.session, self.taxo_found)
-            if len(not_found_taxo) > 0:
-                logger.info("Some Taxo Not Found = %s", not_found_taxo)
+                # Prepare response in serializable form
+                resp.update(
+                    {"fu": how.found_users,
+                     "ft": how.taxo_found,
+                     "nfu": not_found_users,
+                     "nft": not_found_taxo,
+                     "wrn": diag.messages})
 
-            # # raise Exception("TEST")
-            # if len(not_found_user) == 0 and len(not_found_taxo) == 0 and len(warn_messages) == 0:
-            #     # all OK, proceed straight away to step2
-            #     # TODO
-            #     pass
-            #     # self.SPStep2()
-            # else:
-            #     self.task.taskstate = "Question"
-            # if len(warn_messages) > 0:
-            #     self.update_progress(1, "Unzip File on temporary folder")
-            # else:
-            #     self.update_progress(1, "Unzip File on temporary folder")
-            # sinon on pose une question
-        # Prepare response in pure text
-        resp = {"prj": self.prj_id,
-                "tsk": self.task_id,
-                "src": self.source_dir_or_zip,
-                "map": self.custom_mapping.as_dict(),
-                "nfu": not_found_user,
-                "nft": not_found_taxo,
-                "wrn": []}  # TODO
-        return json.dumps(resp)
+        return resp
 
     def do_intra_step_1(self, loaded_files):
-        # The mapping to custom columns, either empty or from previous import operations
-        self.custom_mapping = ProjectMapping().load_from_project(self.prj)
+        # The mapping to custom columns, either empty or from previous import operations on same project.
+        custom_mapping = ProjectMapping().load_from_project(self.prj)
         # Source bundle construction
         source_bundle = InBundle(self.source_dir_or_zip)
         # Configure the validation to come, directives.
-        import_how = ImportHow(self.prj_id, self.custom_mapping, self.skip_object_duplicate == 'Y', loaded_files)
+        import_how = ImportHow(self.prj_id, custom_mapping, self.skip_object_duplicate == 'Y', loaded_files)
         if self.skip_already_loaded_file == 'Y':
             import_how.compute_skipped(source_bundle)
         # A structure to collect validation result
         import_diag = ImportDiagnostic()
         # Do the bulk job of validation
-        row_count = source_bundle.validate_import(self.session, import_how, import_diag)
-        # Feedback to user
-        if len(import_diag.errors) > 0:
-            self.task.taskstate = "Error"
-            self.task.progressmsg = "Some errors were found during file parsing "
-            logger.error(self.task.progressmsg)
-            self.session.commit()
-            return False
-        return True
+        source_bundle.validate_import(self.session, import_how, import_diag)
+        return import_how, import_diag
 
     @staticmethod
     def resolve_users(session, users_found: Dict) -> [str]:
@@ -193,7 +196,7 @@ class ImportAnalysis(ImportServiceBase):
         return not_found_users
 
     @staticmethod
-    def resolve_taxa(session, taxo_found) -> [str]:
+    def resolve_taxa(session, taxo_found: dict) -> [str]:
         """
             Resolve taxa names.
             :param session:
@@ -236,74 +239,93 @@ class ImportAnalysis(ImportServiceBase):
             return set()
 
     def unzip_if_needed(self):
-        if self.input_path.lower().endswith("zip"):
+        """
+            If a .zip was sent, unzip it. Otherwise it is assumed that we point to an import directory.
+        """
+        if self.source_dir_or_zip.lower().endswith(".zip"):
             logger.info("SubTask0 : Unzip File into temporary folder")
             self.update_progress(1, "Unzip File into temporary folder")
+            input_path = self.source_dir_or_zip
             self.source_dir_or_zip = self.temp_for_task.data_dir_for(self.task_id)
-            with zipfile.ZipFile(self.input_path, 'r') as z:
+            with zipfile.ZipFile(input_path, 'r') as z:
                 z.extractall(self.source_dir_or_zip)
-        else:
-            self.source_dir_or_zip = self.input_path
 
 
 class RealImport(ImportServiceBase):
+    SUP = ImportServiceBase
 
-    def __init__(self, json_params: str):
-        super().__init__()
-        # Received from parameters
-        params = json.loads(json_params)
-        # TODO a clean interface
-        self.prj_id = params["prj"]
-        self.task_id = params["tsk"]
-        self.source_dir_or_zip = params["src"]
-        self.custom_mapping = ProjectMapping().load_from_dict(params["map"])
-        # The row count seen at previous step
-        self.total_row_count = 0
+    custom_mapping: ProjectMapping = ProjectMapping()
+    found_users = 2
+    taxo_found = 3
+    not_found_users = 4
+    not_found_taxo = 5
 
-    def run(self):
-        """
-            Do the real job using injected parameters.
-            :return:
-        """
-        super().prepare_run()
-        loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
-        logger.info("Previously loaded files: %s", loaded_files)
+    MSG_IN = dict(ImportAnalysis.MSG_IN)
+    MSG_IN.update({  # output from step 1
+        "cmp": id(custom_mapping),
+        "fu": id(found_users),
+        "ft": id(taxo_found),
+        "nfu": id(not_found_users),
+        "nft": id(not_found_taxo)})
 
-        self.save_mapping()
-        source_bundle = InBundle(self.source_dir_or_zip)
-        # Configure the import to come, destination
-        db_writer = DBWriter(self.session)
-        import_where = ImportWhere(db_writer, self.vault, self.temp_for_task.base_dir_for(self.task_id))
-        # Configure the import to come, directives
-        import_how = ImportHow(self.prj_id, self.custom_mapping, self.skip_object_duplicate == 'Y', loaded_files)
-        import_how.taxo_found = self.taxo_found
-        import_how.taxo_mapping = self.taxo_mapping
-        import_how.found_users = self.users_found
-        if self.skip_already_loaded_file == 'Y':
-            import_how.compute_skipped(source_bundle)
-        if self.skip_object_duplicate == 'Y':
-            import_how.objects_and_images_to_skip = Image.fetch_existing_images(self.session, self.prj_id)
-        import_how.do_thumbnail_above(int(self.config['THUMBSIZELIMIT']))
 
-        # Do the bulk job of import
-        row_count = source_bundle.do_import(import_where, import_how)
+def __init__(self):
+    super().__init__()
+    # The row count seen at previous step
+    self.total_row_count = 0
 
-        # Update loaded files in DB
-        self.prj.fileloaded = "\n".join(import_how.loaded_files)
-        self.session.commit()
 
-        # Ensure the ORM has no shadow copy before going to plain SQL
-        self.session.expunge_all()
-        Object.update_counts_and_img0(self.session, self.prj_id)
-        Sample.propagate_geo(self.session, self.prj_id)
-        Project.update_taxo_stats(self.session, self.prj_id)
-        # Stats depend on taxo stats
-        Project.update_stats(self.session, self.prj_id)
-        logger.info("Total of %d rows loaded" % row_count)
+def run(self):
+    """
+        Do the real job using injected parameters.
+        :return:
+    """
+    super().prepare_run()
+    loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
+    logger.info("Previously loaded files: %s", loaded_files)
 
-    def save_mapping(self):
-        """
-        DB update of mappings for the Project
-        """
-        self.custom_mapping.write_to_project(self.prj)
-        self.session.commit()
+    # Transcode from serialized
+    # noinspection PyTypeChecker
+    self.custom_mapping = ProjectMapping().load_from_dict(self.custom_mapping)
+
+    self.save_mapping(self.custom_mapping)
+    source_bundle = InBundle(self.source_dir_or_zip)
+    # Configure the import to come, destination
+    db_writer = DBWriter(self.session)
+    import_where = ImportWhere(db_writer, self.vault, self.temp_for_task.base_dir_for(self.task_id))
+    # Configure the import to come, directives
+    import_how = ImportHow(self.prj_id, self.custom_mapping, self.skip_object_duplicate == 'Y', loaded_files)
+    import_how.taxo_mapping = self.taxo_mapping
+    import_how.taxo_found = self.taxo_found
+    import_how.found_users = self.found_users
+    if self.skip_already_loaded_file == 'Y':
+        import_how.compute_skipped(source_bundle)
+    if self.skip_object_duplicate == 'Y':
+        import_how.objects_and_images_to_skip = Image.fetch_existing_images(self.session, self.prj_id)
+    import_how.do_thumbnail_above(int(self.config['THUMBSIZELIMIT']))
+
+    # Do the bulk job of import
+    row_count = source_bundle.do_import(import_where, import_how)
+
+    # Update loaded files in DB
+    self.prj.fileloaded = "\n".join(import_how.loaded_files)
+    self.session.commit()
+
+    # Ensure the ORM has no shadow copy before going to plain SQL
+    self.session.expunge_all()
+    Object.update_counts_and_img0(self.session, self.prj_id)
+    Sample.propagate_geo(self.session, self.prj_id)
+    Project.update_taxo_stats(self.session, self.prj_id)
+    # Stats depend on taxo stats
+    Project.update_stats(self.session, self.prj_id)
+    logger.info("Total of %d rows loaded" % row_count)
+    # TODO: better way?
+    self.custom_mapping = self.custom_mapping.to_dict()
+
+
+def save_mapping(self, custom_mapping):
+    """
+    DB update of mappings for the Project
+    """
+    custom_mapping.write_to_project(self.prj)
+    self.session.commit()

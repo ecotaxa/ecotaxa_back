@@ -54,19 +54,20 @@ class ImportHow(object):
         # From user choices
         self.files_not_to_import = set()
         self.objects_and_images_to_skip: Set = set()
+        self.taxo_mapping = {}
         self.skip_object_duplicates = skip_object_duplicates
         # The maximum image dimension before a thumbnail gets generated
         self.max_dim: int = int(1e10)
-        # Mappings
+        # Mappings, collected during ImportAnalysis and read during RealImport
         self.custom_mapping: ProjectMapping = custom_mapping
-        # TODO: for validate it's !=
+        # TODO: for validating it's !=
         self.found_users = {}
+        # The taxa found in TSV
         self.taxo_found = {}
-        self.taxo_mapping = {}
-        # Collected during import
+        # Collected during RealImport
         self.existing_parent_ids: Union[Dict, None] = None
         self.existing_objects: Union[Set, None] = None
-        # Updated during import
+        # Updated during RealImport
         self.loaded_files = loaded_files
         # For UVPV6 vignetting
         self.vignette_maker = None

@@ -30,6 +30,7 @@ class GlobalMapping(object):
         'object_link': {'table': ObjectFields.__tablename__, 'field': 'object_link', 'type': 't'},
         'object_depth_min': {'table': Object.__tablename__, 'field': 'depth_min', 'type': 'n'},
         'object_depth_max': {'table': Object.__tablename__, 'field': 'depth_max', 'type': 'n'},
+        # !!! 2 TSV fields end up into a single DB column
         'object_annotation_category': {'table': Object.__tablename__, 'field': 'classif_id', 'type': 't'},
         'object_annotation_category_id': {'table': Object.__tablename__, 'field': 'classif_id', 'type': 'n'},
         'object_annotation_date': {'table': Object.__tablename__, 'field': 'classif_when', 'type': 't'},
