@@ -69,7 +69,7 @@ class EcoTaxaDB(object):
         SyncSubProcess(cmd, env=self.get_env(), out_file="server.log")
         # TODO: proper wait
         import time
-        time.sleep(2)
+        time.sleep(5)
 
     def ddl(self, host, password):
         # -h localhost force use of TCP/IP socket, otherwise psql tries local pipes in /var/run

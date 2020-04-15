@@ -269,63 +269,63 @@ class RealImport(ImportServiceBase):
         "nft": id(not_found_taxo)})
 
 
-def __init__(self):
-    super().__init__()
-    # The row count seen at previous step
-    self.total_row_count = 0
+    def __init__(self):
+        super().__init__()
+        # The row count seen at previous step
+        self.total_row_count = 0
 
 
-def run(self):
-    """
-        Do the real job using injected parameters.
-        :return:
-    """
-    super().prepare_run()
-    loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
-    logger.info("Previously loaded files: %s", loaded_files)
+    def run(self):
+        """
+            Do the real job using injected parameters.
+            :return:
+        """
+        super().prepare_run()
+        loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
+        logger.info("Previously loaded files: %s", loaded_files)
 
-    # Transcode from serialized
-    # noinspection PyTypeChecker
-    self.custom_mapping = ProjectMapping().load_from_dict(self.custom_mapping)
+        # Transcode from serialized
+        # noinspection PyTypeChecker
+        self.custom_mapping = ProjectMapping().load_from_dict(self.custom_mapping)
 
-    self.save_mapping(self.custom_mapping)
-    source_bundle = InBundle(self.source_dir_or_zip)
-    # Configure the import to come, destination
-    db_writer = DBWriter(self.session)
-    import_where = ImportWhere(db_writer, self.vault, self.temp_for_task.base_dir_for(self.task_id))
-    # Configure the import to come, directives
-    import_how = ImportHow(self.prj_id, self.custom_mapping, self.skip_object_duplicate == 'Y', loaded_files)
-    import_how.taxo_mapping = self.taxo_mapping
-    import_how.taxo_found = self.taxo_found
-    import_how.found_users = self.found_users
-    if self.skip_already_loaded_file == 'Y':
-        import_how.compute_skipped(source_bundle)
-    if self.skip_object_duplicate == 'Y':
-        import_how.objects_and_images_to_skip = Image.fetch_existing_images(self.session, self.prj_id)
-    import_how.do_thumbnail_above(int(self.config['THUMBSIZELIMIT']))
+        self.save_mapping(self.custom_mapping)
+        source_bundle = InBundle(self.source_dir_or_zip)
+        # Configure the import to come, destination
+        db_writer = DBWriter(self.session)
+        import_where = ImportWhere(db_writer, self.vault, self.temp_for_task.base_dir_for(self.task_id))
+        # Configure the import to come, directives
+        import_how = ImportHow(self.prj_id, self.custom_mapping, self.skip_object_duplicate == 'Y', loaded_files)
+        import_how.taxo_mapping = self.taxo_mapping
+        import_how.taxo_found = self.taxo_found
+        import_how.found_users = self.found_users
+        if self.skip_already_loaded_file == 'Y':
+            import_how.compute_skipped(source_bundle)
+        if self.skip_object_duplicate == 'Y':
+            import_how.objects_and_images_to_skip = Image.fetch_existing_images(self.session, self.prj_id)
+        import_how.do_thumbnail_above(int(self.config['THUMBSIZELIMIT']))
 
-    # Do the bulk job of import
-    row_count = source_bundle.do_import(import_where, import_how)
+        # Do the bulk job of import
+        row_count = source_bundle.do_import(import_where, import_how)
 
-    # Update loaded files in DB
-    self.prj.fileloaded = "\n".join(import_how.loaded_files)
-    self.session.commit()
+        # Update loaded files in DB
+        self.prj.fileloaded = "\n".join(import_how.loaded_files)
+        self.session.commit()
 
-    # Ensure the ORM has no shadow copy before going to plain SQL
-    self.session.expunge_all()
-    Object.update_counts_and_img0(self.session, self.prj_id)
-    Sample.propagate_geo(self.session, self.prj_id)
-    Project.update_taxo_stats(self.session, self.prj_id)
-    # Stats depend on taxo stats
-    Project.update_stats(self.session, self.prj_id)
-    logger.info("Total of %d rows loaded" % row_count)
-    # TODO: better way?
-    self.custom_mapping = self.custom_mapping.to_dict()
+        # Ensure the ORM has no shadow copy before going to plain SQL
+        self.session.expunge_all()
+        Object.update_counts_and_img0(self.session, self.prj_id)
+        Sample.propagate_geo(self.session, self.prj_id)
+        Project.update_taxo_stats(self.session, self.prj_id)
+        # Stats depend on taxo stats
+        Project.update_stats(self.session, self.prj_id)
+        logger.info("Total of %d rows loaded" % row_count)
+        # TODO: better way?
+        self.custom_mapping = self.custom_mapping.as_dict()
 
 
-def save_mapping(self, custom_mapping):
-    """
-    DB update of mappings for the Project
-    """
-    custom_mapping.write_to_project(self.prj)
-    self.session.commit()
+    def save_mapping(self, custom_mapping):
+        """
+        DB update of mappings for the Project
+        """
+        custom_mapping.write_to_project(self.prj)
+        self.session.commit()
