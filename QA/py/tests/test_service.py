@@ -28,10 +28,10 @@ def test_service():
     assert len(rsp["p2"]) == 2
 
 
-def test_typo_service():
-    req = {"p1": 6, "typo": 5}
-    with pytest.raises(Exception):
-        TestService.call(req)
+# def test_typo_service():
+#     req = {"p1": 6, "typo": 5}
+#     with pytest.raises(Exception):
+#         TestService.call(req)
 
 class SubService(TestService):
     SUP = TestService
