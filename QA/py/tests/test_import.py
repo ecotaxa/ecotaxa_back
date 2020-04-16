@@ -28,7 +28,6 @@ ISSUES_DIR = DATA_DIR / "import_issues"
 EMPTY_DIR = DATA_DIR / "import_issues" / "no_relevant_file"
 
 
-
 def test_import(config, database, caplog):
     caplog.set_level(logging.DEBUG)
     prj_sce = ProjectService()
@@ -101,7 +100,8 @@ def test_import_empty(config, database, caplog):
               "tsk": task_sce.create(),
               "src": str(EMPTY_DIR)}
     step1_out = ImportAnalysis.call(params)
-    assert len(step1_out["wrn"]) == 1
+    assert len(step1_out["err"]) == 1
+
 
 def test_import_issues(config, database, caplog):
     caplog.set_level(logging.DEBUG)

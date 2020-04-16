@@ -24,7 +24,6 @@ from db.Taxonomy import Taxonomy
 logger = logging.getLogger(__name__)
 
 
-
 class InBundle(object):
     """
         From EcoTaxa point of view, some structured data coming into the system.
@@ -105,8 +104,8 @@ class InBundle(object):
             elapsed = time.time() - start_time
             rows_per_sec = int(total_row_count / elapsed)
             logger.info("File %s : %d rows loaded, %d so far at %d rows/s",
-                         relative_name, rows_for_csv, total_row_count,
-                         rows_per_sec)
+                        relative_name, rows_for_csv, total_row_count,
+                        rows_per_sec)
 
         where.db_writer.eof_cleanup()
 
@@ -150,9 +149,9 @@ class InBundle(object):
         total_row_count = self.validate_all_files(how, diag, session)
 
         if total_row_count == 0:
-            diag.warn("No object to import. It maybe due to :<br>"
-                      "*  Empty TSV table<br>"
-                      "*  TSV table already imported => 'SKIP TSV' option should be enabled")
+            diag.error("No object to import. It maybe due to :<br>"
+                       "*  Empty TSV table<br>"
+                       "*  TSV table already imported => 'SKIP TSV' option should be enabled")
         # print(self.mapping)
         if len(diag.classif_id_seen) > 0:
             self.check_classif(session, diag, diag.classif_id_seen)
@@ -199,8 +198,8 @@ class InBundle(object):
         classif_id_found_in_db = Taxonomy.find_ids(session, list(classif_id_seen))
         classif_id_not_found_in_db = classif_id_seen.difference(classif_id_found_in_db)
         if len(classif_id_not_found_in_db) > 0:
-            msg = "Some specified classif_id don't exist, correct them prior to reload: %s" % (
-                ",".join([str(x) for x in classif_id_not_found_in_db]))
+            msg = "Some specified classif_id don't exist, correct them prior to reload: %s" % \
+                  (",".join([str(x) for x in classif_id_not_found_in_db]))
             diag.error(msg)
             logger.error(msg)
 

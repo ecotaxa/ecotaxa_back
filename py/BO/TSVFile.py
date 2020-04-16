@@ -223,7 +223,7 @@ class TSVFile(object):
         return ret
 
     @staticmethod
-    def read_fields_to_dicts(how: ImportHow, field_set: Set, lig: Dict[str,str], dicts_to_write, vals_cache: Dict):
+    def read_fields_to_dicts(how: ImportHow, field_set: Set, lig: Dict[str, str], dicts_to_write, vals_cache: Dict):
         """
             Read the data line into target dicts. Values go into the right bucket, i.e. target dict, depending
             on mappings (standard one and per-project custom one)
@@ -401,8 +401,8 @@ class TSVFile(object):
             # split at first _ as the column name might contain an _
             split_col = a_field.split("_", 1)
             if len(split_col) != 2:
-                diag.warn("Invalid Header '%s' in file %s. Format must be Table_Field. Field ignored"
-                          % (a_field, self.relative_name))
+                diag.error("Invalid Header '%s' in file %s. Format must be Table_Field. Field ignored"
+                           % (a_field, self.relative_name))
                 continue
             if a_field in GlobalMapping.PredefinedFields:
                 # OK it's a predefined one
@@ -419,8 +419,8 @@ class TSVFile(object):
             # e.g. acq -> acquisitions
             target_table = GlobalMapping.TSV_table_to_table(tsv_table_prfx)
             if target_table not in GlobalMapping.PossibleTables:
-                diag.warn("Invalid Header '%s' in file %s. Unknown table prefix. Field ignored"
-                          % (a_field, self.relative_name))
+                diag.error("Invalid Header '%s' in file %s. Unknown table prefix. Field ignored"
+                           % (a_field, self.relative_name))
                 continue
             if target_table not in ('obj_head', 'obj_field'):
                 # In other tables, all types are forced to text
@@ -429,9 +429,9 @@ class TSVFile(object):
             else:
                 sel_type = GlobalMapping.PossibleTypes.get(type_line[a_field])
                 if sel_type is None:
-                    diag.warn("Invalid Type '%s' for Field '%s' in file %s. "
-                              "Incorrect Type. Field ignored"
-                              % (type_line[a_field], a_field, self.relative_name))
+                    diag.error("Invalid Type '%s' for Field '%s' in file %s. "
+                               "Incorrect Type. Field ignored"
+                               % (type_line[a_field], a_field, self.relative_name))
                     continue
             # Add the new custom column
             target_col = split_col[1]
@@ -452,28 +452,28 @@ class TSVFile(object):
             # Verify the image file
             object_id = clean_value_and_none(lig.get('object_id', ''))
             if object_id == '':
-                diag.warn("Missing object_id in line '%s' of file %s. "
-                          % (row_count_for_csv, self.relative_name))
+                diag.error("Missing object_id in line '%s' of file %s. "
+                           % (row_count_for_csv, self.relative_name))
             img_file_name = clean_value_and_none(lig.get('img_file_name', 'MissingField img_file_name'))
             # Below works as well for UVPV6, as the file 'name' is in fact a relative path,
             # e.g. 'sub1/20200205-111823_3.png'
             img_file_path = self.path.parent / img_file_name
             if not img_file_path.exists():
-                diag.warn("Missing Image '%s' in file %s. "
-                          % (img_file_name, self.relative_name))
+                diag.error("Missing Image '%s' in file %s. "
+                           % (img_file_name, self.relative_name))
             else:
                 # noinspection PyBroadException
                 try:
                     _im = PIL_Image.open(img_file_path.as_posix())
                 except Exception as _e:
-                    diag.warn("Error while reading Image '%s' in file %s. %s"
-                              % (img_file_name, self.relative_name, sys.exc_info()[0]))
+                    diag.error("Error while reading Image '%s' in file %s. %s"
+                               % (img_file_name, self.relative_name, sys.exc_info()[0]))
 
             # Verify duplicate images
             key_exist_obj = "%s*%s" % (object_id, img_file_name)
             if not how.skip_object_duplicates and key_exist_obj in diag.existing_objects_and_image:
-                diag.warn("Duplicate object '%s' Image '%s' in file %s. "
-                          % (object_id, img_file_name, self.relative_name))
+                diag.error("Duplicate object '%s' Image '%s' in file %s. "
+                           % (object_id, img_file_name, self.relative_name))
             diag.existing_objects_and_image.add(key_exist_obj)
 
         return row_count_for_csv
@@ -506,38 +506,38 @@ class TSVFile(object):
             if a_field == 'object_lat':
                 vf = convert_degree_minute_float_to_decimal_degree(csv_val)
                 if vf < -90 or vf > 90:
-                    diag.warn("Invalid Lat. value '%s' for Field '%s' in file %s. "
-                              "Incorrect range -90/+90°."
-                              % (csv_val, raw_field, self.relative_name))
+                    diag.error("Invalid Lat. value '%s' for Field '%s' in file %s. "
+                               "Incorrect range -90/+90°."
+                               % (csv_val, raw_field, self.relative_name))
                     del vals_cache[cache_key]
                 else:
                     latitude_was_seen = True
             elif a_field == 'object_lon':
                 vf = convert_degree_minute_float_to_decimal_degree(csv_val)
                 if vf < -180 or vf > 180:
-                    diag.warn("Invalid Long. value '%s' for Field '%s' in file %s. "
-                              "Incorrect range -180/+180°."
-                              % (csv_val, raw_field, self.relative_name))
+                    diag.error("Invalid Long. value '%s' for Field '%s' in file %s. "
+                               "Incorrect range -180/+180°."
+                               % (csv_val, raw_field, self.relative_name))
             elif m['type'] == 'n':
                 vf = to_float(csv_val)
                 if vf is None:
-                    diag.warn("Invalid float value '%s' for Field '%s' in file %s."
-                              % (csv_val, raw_field, self.relative_name))
+                    diag.error("Invalid float value '%s' for Field '%s' in file %s."
+                               % (csv_val, raw_field, self.relative_name))
                 elif a_field == 'object_annotation_category_id':
                     diag.classif_id_seen.add(int(csv_val))
             elif a_field == 'object_date':
                 try:
                     datetime.date(int(csv_val[0:4]), int(csv_val[4:6]), int(csv_val[6:8]))
                 except ValueError:
-                    diag.warn("Invalid Date value '%s' for Field '%s' in file %s."
-                              % (csv_val, raw_field, self.relative_name))
+                    diag.error("Invalid Date value '%s' for Field '%s' in file %s."
+                               % (csv_val, raw_field, self.relative_name))
             elif a_field == 'object_time':
                 try:
                     csv_val = csv_val.zfill(6)
                     datetime.time(int(csv_val[0:2]), int(csv_val[2:4]), int(csv_val[4:6]))
                 except ValueError:
-                    diag.warn("Invalid Time value '%s' for Field '%s' in file %s."
-                              % (csv_val, raw_field, self.relative_name))
+                    diag.error("Invalid Time value '%s' for Field '%s' in file %s."
+                               % (csv_val, raw_field, self.relative_name))
             elif a_field == 'object_annotation_category':
                 if clean_value_and_none(lig.get('object_annotation_category_id', '')) == '':
                     # Apply the mapping, if and only if there is no id
@@ -550,8 +550,8 @@ class TSVFile(object):
                 how.found_users[csv_val.lower()] = {'email': maybe_email}
             elif a_field == 'object_annotation_status':
                 if csv_val != 'noid' and csv_val.lower() not in classif_qual_revert:
-                    diag.warn("Invalid Annotation Status '%s' for Field '%s' in file %s."
-                              % (csv_val, raw_field, self.relative_name))
+                    diag.error("Invalid Annotation Status '%s' for Field '%s' in file %s."
+                               % (csv_val, raw_field, self.relative_name))
         # Update missing GPS count
         if not latitude_was_seen:
             diag.nb_objects_without_gps += 1
