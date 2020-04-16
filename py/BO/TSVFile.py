@@ -355,6 +355,8 @@ class TSVFile(object):
             # TODO: Doesn't it affect aspect ratio?
             im.thumbnail((how.max_dim, how.max_dim))
             if im.mode == 'P':
+                # (8-bit pixels, mapped to any other mode using a color palette)
+                # from https://pillow.readthedocs.io/en/latest/handbook/concepts.html#modes
                 im = im.convert("RGB")
             thumb_path: str = vault_folder_path.joinpath(vault_thumb_filename).as_posix()
             im.save(thumb_path)
@@ -515,12 +517,14 @@ class TSVFile(object):
                 # If no relevant value, leave field as NULL
                 continue
             if a_field == 'object_lat':
-                latitude_was_seen = True
                 vf = convert_degree_minute_float_to_decimal_degree(csv_val)
                 if vf < -90 or vf > 90:
                     diag.warn("Invalid Lat. value '%s' for Field '%s' in file %s. "
                               "Incorrect range -90/+90°."
                               % (csv_val, raw_field, self.relative_name))
+                    del vals_cache[cache_key]
+                else:
+                    latitude_was_seen = True
             elif a_field == 'object_lon':
                 vf = convert_degree_minute_float_to_decimal_degree(csv_val)
                 if vf < -180 or vf > 180:

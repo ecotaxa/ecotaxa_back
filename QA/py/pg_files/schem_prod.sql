@@ -2118,6 +2118,7 @@ COPY public.taxonomy (id, parent_id, name, id_source, nbrobj, nbrobjcum, creatio
 78418	1	Oncaeidae	87064	199577	64180	\N	\N	Oncaeidae	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 84963	1	detritus	m002	8206157	2131844	\N	\N	detritus	\N	2018-01-02 00:00:00	\N	\N	\N	A	M
 85011	1	other	m004	1175412	992515	\N	\N	other<living	\N	2019-01-29 05:53:34	\N	\N	\N	A	M
+99999	1	other	m004	0	0	\N	\N	other<dead	\N	2019-01-29 05:53:34	\N	\N	\N	A	M
 85012	1	t001	m142	180622	\N	\N	\N	t001	\N	2018-01-02 00:00:00	\N	\N	\N	A	M
 85078	1	egg	m129	142336	3465	\N	\N	egg<other	\N	2019-01-29 05:53:34	\N	\N	\N	A	M
 \.

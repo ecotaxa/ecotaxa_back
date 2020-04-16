@@ -2,10 +2,14 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+# noinspection PyPackageRequirements
 from sqlalchemy import Index, Column, ForeignKey, Sequence, Integer
+# noinspection PyPackageRequirements
 from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, INTEGER, REAL, DOUBLE_PRECISION, DATE, TIME, FLOAT, CHAR, \
     TIMESTAMP
+# noinspection PyPackageRequirements,PyProtectedMember
 from sqlalchemy.engine import ResultProxy
+# noinspection PyPackageRequirements
 from sqlalchemy.orm import relationship, Session
 
 from .Model import Model
@@ -19,12 +23,6 @@ classif_qual = {'P': 'predicted', 'D': 'dubious', 'V': 'validated'}
 classif_qual_revert = {}
 for (k, v) in classif_qual.items():
     classif_qual_revert[v] = k
-
-
-def GetClassifQualClass(q):
-    if q in classif_qual:
-        return 'status-' + classif_qual[q]
-    return 'status-unknown'
 
 
 # TODO: SQLAlchemy uses nextval(seq) in the generated SQL

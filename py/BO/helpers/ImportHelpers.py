@@ -62,7 +62,7 @@ class ImportHow(object):
         self.custom_mapping: ProjectMapping = custom_mapping
         # TODO: for validating it's !=
         self.found_users = {}
-        # The taxa found in TSV
+        # The taxa found in TSV, key = taxon NAME (str)
         self.taxo_found = {}
         # Collected during RealImport
         self.existing_parent_ids: Union[Dict, None] = None

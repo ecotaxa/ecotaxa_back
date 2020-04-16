@@ -139,12 +139,6 @@ class ProjectMapping(object):
         self.build_all_fields()
         return self
 
-    def is_empty(self) -> bool:
-        for a_mapping in self.all:
-            if not a_mapping.is_empty():
-                return False
-        return True
-
     def add_column(self, target_table: str, tsv_table: str, tsv_field: str, sel_type):
         """
             A new custom column was found, add it into the right bucket.
@@ -178,7 +172,6 @@ class ProjectMapping(object):
         self.was_empty = len(all_fields) == 0
 
 
-
 class TableMapping(object):
     """
         The mapping for a given DB table, i.e. from TSV columns to DB ones.
@@ -209,7 +202,6 @@ class TableMapping(object):
                 continue
             db_col, tsv_col_no_prfx = a_map.split('=', 1)
             self.add_association(db_col, tsv_col_no_prfx)
-        # TODO: Adjust max in the end only
 
     def load_from_dict(self, dict_mapping: dict):
         for db_col, tsv_col_no_prfx in dict_mapping.items():

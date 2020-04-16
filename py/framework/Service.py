@@ -4,9 +4,10 @@
 #
 import copy
 import json
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from typing import Dict, Union
 
+# noinspection PyPackageRequirements
 from sqlalchemy.orm import Session
 
 from db.Connection import Connection, check_sqlalchemy_version
@@ -32,6 +33,7 @@ class BaseService(object):
         # Assign default values, gathering internal IDs
         by_id = {}
         s_name: str
+        # noinspection PyTypeChecker
         for a_class in (cls,) + cls.__bases__:
             for s_name in vars(a_class):
                 if s_name[0] == "_":
@@ -77,7 +79,7 @@ class BaseService(object):
         pass
 
 
-class Service(BaseService):
+class Service(BaseService, ABC):
     """
         A service for EcoTaxa. Supplies common useful features like a DB session and filesystem conventions.
     """

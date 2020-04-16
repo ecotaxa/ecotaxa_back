@@ -109,20 +109,6 @@ def encode_equal_list(a_mapping: dict):
     return "\n".join(l)
 
 
-def decode_equal_list(txt):
-    """
-        Inverse of previous
-    :param map:
-    :return:
-    """
-    res = {}
-    for l in str(txt).splitlines():
-        ls = l.split('=', 1)
-        if len(ls) == 2:
-            res[ls[0].strip().lower()] = ls[1].strip().lower()
-    return res
-
-
 # TODO: Most probably better elsewhere
 def convert_degree_minute_float_to_decimal_degree(v):
     m = re.search(r"(-?\d+)°(\d+) (\d+)", v)

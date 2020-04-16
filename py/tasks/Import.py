@@ -62,6 +62,7 @@ class ImportServiceBase(Service, ABC):
             Load what's needed for run.
         """
         self.prj = self.session.query(Project).filter_by(projid=self.prj_id).first()
+        assert self.prj is not None
         self.task = self.session.query(Task).filter_by(id=self.task_id).first()
 
     def update_param(self):
@@ -122,7 +123,8 @@ class ImportAnalysis(ImportServiceBase):
             # Validate files
             logger.info("SubTask1 : Analyze TSV Files")
             how, diag = self.do_intra_step_1(loaded_files)
-            resp.update({"cmp": how.custom_mapping.as_dict()})
+            resp.update({"cmp": how.custom_mapping.as_dict(),
+                         "wrn": diag.messages})
 
             if len(diag.errors) > 0:
                 # If anything went wrong we loop on intra_step 1
@@ -163,8 +165,7 @@ class ImportAnalysis(ImportServiceBase):
                     {"fu": how.found_users,
                      "ft": how.taxo_found,
                      "nfu": not_found_users,
-                     "nft": not_found_taxo,
-                     "wrn": diag.messages})
+                     "nft": not_found_taxo})
 
         return resp
 
@@ -232,12 +233,6 @@ class ImportAnalysis(ImportServiceBase):
             taxo_found[found_k] = found_v['id']
         return not_found_taxo
 
-    def fetch_existing_images(self, do_it: bool) -> Set:
-        if do_it:
-            return Image.fetch_existing_images(self.session, self.prj_id)
-        else:
-            return set()
-
     def unzip_if_needed(self):
         """
             If a .zip was sent, unzip it. Otherwise it is assumed that we point to an import directory.
@@ -268,12 +263,10 @@ class RealImport(ImportServiceBase):
         "nfu": id(not_found_users),
         "nft": id(not_found_taxo)})
 
-
     def __init__(self):
         super().__init__()
         # The row count seen at previous step
         self.total_row_count = 0
-
 
     def run(self):
         """
@@ -321,7 +314,6 @@ class RealImport(ImportServiceBase):
         logger.info("Total of %d rows loaded" % row_count)
         # TODO: better way?
         self.custom_mapping = self.custom_mapping.as_dict()
-
 
     def save_mapping(self, custom_mapping):
         """
