@@ -39,7 +39,7 @@ def test_import(config, database, caplog):
     # Do step1
     params = {"prj": prj_sce.create("Test LS"),
               "tsk": task_sce.create(),
-              "src": str(PLAIN_FILE)}
+              "src": str(PLAIN_DIR)}
     # Mapping for missing taxonomy IDs
     taxo_mapping = {}
     params["map"] = taxo_mapping
@@ -66,7 +66,7 @@ def test_import_again(config, database, caplog):
     # Do step1
     params = {"prj": 1,
               "tsk": task_sce.create(),
-              "src": str(PLAIN_DIR),
+              "src": str(PLAIN_FILE),
               "sal": "Y",
               "sod": "Y"}
     step1_out = ImportAnalysis.call(params)

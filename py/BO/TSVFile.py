@@ -9,7 +9,7 @@ import random
 import shutil
 import sys
 from pathlib import Path, PurePath
-from typing import Dict
+from typing import Dict, Set
 
 # noinspection PyPackageRequirements
 from PIL import Image as PIL_Image
@@ -59,14 +59,12 @@ class TSVFile(object):
             clean_fields = {field: field.strip(" \t").lower() for field in rdr.fieldnames}
             # Extract field list from header cooked by CSV reader
             field_set = set([clean_fields[field] for field in rdr.fieldnames])
-            # Only keep the fields we can persist
-            field_set = self.filter_unused_fields(how.custom_mapping, field_set)
 
-            # Remove fields which are unknown in ORM
-            target_fields = {alias: set() for alias in GlobalMapping.target_classes.keys()}
-            field_set = self.filter_not_in_db_fields(how.custom_mapping, field_set, target_fields)
+            # Only keep the fields we can persist, the ones ignored at first step will be signalled here as well
+            field_set = self.filter_unused_fields(how.custom_mapping, field_set) - self.ProgFields
 
             # We can now prepare ORM classes with optimal performance
+            target_fields = self.dispatch_fields_by_table(how.custom_mapping, field_set)
             ObjectGen, ObjectFieldsGen, ImageGen = where.db_writer.generators(target_fields)
 
             # For annotation, if there is both an id and a category then ignore category
@@ -205,47 +203,36 @@ class TSVFile(object):
             # Anyway
             setattr(object_head_to_write, fk_to_obj, ids_for_obj[parent_orig_id])
 
-    def filter_not_in_db_fields(self, custom_mapping: ProjectMapping, field_set: set,
-                                target_fields) -> set:
+    @staticmethod
+    def dispatch_fields_by_table(custom_mapping: ProjectMapping, field_set: set) -> Dict[str, Set]:
         """
-            Sanitize (more) field list by removing the ones which cannot be output into
-            a DB table.
+            Build a set of target DB columns by target table.
         :param custom_mapping:
         :param field_set:
         :param target_fields: The used field, by target table.
         :return:
         """
-        ok_fields = set()
-        ko_fields = []
-        for a_field in field_set - self.ProgFields:
+        ret = {alias: set() for alias in GlobalMapping.target_classes.keys()}
+        for a_field in field_set:
             mapping = GlobalMapping.PredefinedFields.get(a_field)
             if not mapping:
                 mapping = custom_mapping.search_field(a_field)
             target_tbl = mapping["table"]
             target_fld = mapping["field"]
-            target_class = GlobalMapping.target_classes[target_tbl]
-            try:
-                _target_col = getattr(target_class, target_fld)
-                # TODO: col must be a Column, not, e.g. a relationship
-                target_fields[target_tbl].add(target_fld)
-            except AttributeError:
-                ko_fields.append(a_field)
-                continue
-            ok_fields.add(a_field)
-        if len(ko_fields) > 0:
-            logger.warning("In %s, field(s) %s not known from DB, values will be ignored",
-                           self.relative_name, ko_fields)
-        return ok_fields
+            ret[target_tbl].add(target_fld)
+        return ret
 
     @staticmethod
-    def read_fields_to_dicts(how: ImportHow, field_set, lig, dicts_to_write, vals_cache: Dict):
+    def read_fields_to_dicts(how: ImportHow, field_set: Set, lig: Dict[str,str], dicts_to_write, vals_cache: Dict):
+        """
+            Read the data line into target dicts. Values go into the right bucket, i.e. target dict, depending
+            on mappings (standard one and per-project custom one)
+        """
         predefined_mapping = GlobalMapping.PredefinedFields
         custom_mapping = how.custom_mapping
-        for a_field in field_set:
-            # CSV reader returns a minimal dict with no value equal to None
-            # TODO: below could be replaced with an intersect() of field names. To benchmark.
-            if a_field not in lig:
-                continue
+        # CSV reader returns a minimal dict with no value equal to None
+        # so we have values only for common fields.
+        for a_field in field_set.intersection(lig.keys()):
             # We have a value
             raw_val = lig.get(a_field)
             # Try to get the value from the cache
@@ -254,8 +241,8 @@ class TSVFile(object):
             m = predefined_mapping.get(a_field)
             if not m:
                 m = custom_mapping.search_field(a_field)
-            field_table = m.get("table")
-            field_name = m.get("field")
+            field_table = m["table"]
+            field_name = m["field"]
             if cached_field_value is None:
                 csv_val = clean_value(raw_val)
                 # If no relevant value, leave field as NULL
@@ -299,12 +286,8 @@ class TSVFile(object):
                 vals_cache[cache_key] = cached_field_value
 
             # Write the field into the right object
-            # TODO: sanitize mappings and forget this .get
-            dict_to_write = dicts_to_write.get(field_table)
-            if dict_to_write is not None:
-                dict_to_write[field_name] = cached_field_value
-            else:
-                logger.info("skip T %s %s %s", field_table, field_name, cached_field_value)
+            dict_to_write = dicts_to_write[field_table]
+            dict_to_write[field_name] = cached_field_value
 
     @staticmethod
     def create_or_link_slaves(prj_id, existing_objects, object_fields_to_write,
@@ -371,7 +354,7 @@ class TSVFile(object):
             image_to_write.thumb_file_name = None
             image_to_write.thumb_width = None
             image_to_write.thumb_height = None
-        if image_to_write.imgrank is None:
+        if "imgrank" not in image_to_write:
             image_to_write.imgrank = 0  # default value
 
     @staticmethod
@@ -409,6 +392,10 @@ class TSVFile(object):
             return rows_for_csv
 
     def validate_structure(self, how: ImportHow, diag: ImportDiagnostic, field_list, type_line):
+        """
+            TSV 'structure' is in first text line.
+            Our implementation add a line of expected types in second line.
+        """
         a_field: str
         for a_field in field_list:
             # split at first _ as the column name might contain an _
@@ -421,7 +408,7 @@ class TSVFile(object):
                 # OK it's a predefined one
                 continue
             if a_field in TSVFile.ProgFields:
-                # Not mapped, but not a free field
+                # Not mapped, but not a programmatically-used field
                 continue
             # Not a predefined field, so nXX or tXX
             if how.custom_mapping.search_field(a_field):

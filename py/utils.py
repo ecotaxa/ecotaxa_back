@@ -7,6 +7,7 @@
 import datetime
 import math
 import re
+from typing import Union
 
 from astral import LocationInfo, Depression
 from astral.sun import sun
@@ -27,7 +28,7 @@ def clean_value(value: str):
     return value
 
 
-def clean_value_and_none(value: str):
+def clean_value_and_none(value: Union[str, None]):
     """
         Like previous but filter None as well
     """
