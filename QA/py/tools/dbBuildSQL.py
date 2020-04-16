@@ -2,7 +2,7 @@
 Build the DB from scratch in EcoTaxa V2_2, using an SQL Dump, so the 2_2 source tree is not needed.
 """
 import shutil
-import sys
+import sys, time
 from os import environ
 from os.path import join
 from pathlib import Path
@@ -34,6 +34,15 @@ OWNER=postgres
 TEMPLATE=template0 LC_CTYPE='C' LC_COLLATE='C' CONNECTION LIMIT=-1;
 """
 
+import socket
+
+
+def is_port_opened(host: str, port: int):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    result = sock.connect_ex((host, port))
+    sock.close()
+    return result == 0
+
 
 class EcoTaxaDB(object):
 
@@ -58,7 +67,7 @@ class EcoTaxaDB(object):
         cmd = [initdb_bin] + pg_opts
         SyncSubProcess(cmd, env=self.get_env())
 
-    def launch(self):
+    def launch(self, host):
         # Produce connection sockets in a user-writable directory (linux)
         pg_opts = ['-o', '-c unix_socket_directories="' + str(self.db_dir / "run") + '"']
         pg_opts += ['-o', '"-p %d"' % PG_PORT]
@@ -67,9 +76,9 @@ class EcoTaxaDB(object):
         # we do NOT use os.environ in order not to pollute current process
         # Note: the process dies right away as pgctl launches a daemon
         SyncSubProcess(cmd, env=self.get_env(), out_file="server.log")
-        # TODO: proper wait
-        import time
-        time.sleep(5)
+        # Wait until the server port is opened
+        while not is_port_opened(host, PG_PORT):
+            time.sleep(1)
 
     def ddl(self, host, password):
         # -h localhost force use of TCP/IP socket, otherwise psql tries local pipes in /var/run
@@ -87,7 +96,7 @@ class EcoTaxaDB(object):
         if not (PG_HOST and PG_PORT):
             host = 'localhost'
             self.init()
-            self.launch()
+            self.launch(host)
             # TODO: Password (in call to self.ddl) is ignored in this context
         else:
             host = PG_HOST
@@ -100,7 +109,7 @@ DB_PASSWORD="postgres12"
 DB_HOST="%s"
 DB_PORT="%d"
 DB_DATABASE="ecotaxa"
-THUMBSIZELIMIT=400
+THUMBSIZELIMIT=100
     """
 
     def write_config(self, host):
