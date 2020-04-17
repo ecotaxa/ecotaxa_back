@@ -56,7 +56,7 @@ class Sample(Model):
         session.commit()
 
     def __str__(self):
-        return "{0} ({1})".format(self.orig_id, self.processid)
+        return "{0} ({1})".format(self.orig_id, self.sampleid)
 
 
 for i in range(1, 31):

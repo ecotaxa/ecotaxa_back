@@ -26,7 +26,7 @@ class Task(Model):
     lastupdate = Column(DATE)
 
     def __str__(self):
-        return self.name
+        return "{0} ({1})".format(self.id, self.taskclass)
 
 
 setattr(Task, "questiondata", Column(VARCHAR))

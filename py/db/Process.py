@@ -2,12 +2,11 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from db.Model import Model
 from sqlalchemy import Sequence, Column, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, INTEGER
 from sqlalchemy.engine import ResultProxy
 from sqlalchemy.orm import relationship, Session
-
-from db.Model import Model
 
 
 class Process(Model):
@@ -32,9 +31,8 @@ class Process(Model):
         ret = {r[0]: int(r[1]) for r in res}
         return ret
 
-
-def __str__(self):
-    return "{0} ({1})".format(self.orig_id, self.processid)
+    def __str__(self):
+        return "{0} ({1})".format(self.orig_id, self.processid)
 
 
 for i in range(1, 31):
