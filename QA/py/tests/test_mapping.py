@@ -90,3 +90,17 @@ def test_mapping1():
     assert a_mapping.max_by_type['t'] == 2
     enc: str = a_mapping.as_equal_list()
     assert enc.split("=") == (MAPP + "\nt02=lol").split("=")
+
+MAPP2 = """n01=lat_end
+n02=lon_end
+
+n03=area
+
+n04=mean
+n05=stddev"""
+
+def test_mapping2():
+    a_mapping = TableMapping("mytbl")
+    a_mapping.load_from_equal_list(MAPP2)
+    assert len(a_mapping) == 5
+    assert not a_mapping.is_empty()

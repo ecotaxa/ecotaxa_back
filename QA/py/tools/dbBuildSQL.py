@@ -109,7 +109,7 @@ DB_PASSWORD="postgres12"
 DB_HOST="%s"
 DB_PORT="%d"
 DB_DATABASE="ecotaxa"
-THUMBSIZELIMIT=100
+THUMBSIZELIMIT=99
     """
 
     def write_config(self, host):

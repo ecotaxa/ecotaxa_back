@@ -26,7 +26,8 @@ class Vault(object):
         try:
             if not subdir.exists():
                 subdir.mkdir()
-        except Exception as e:
+        except Exception as e:  # pragma: no cover
+            # TODO: Multi-thread hammering test program for having a collision.
             if not subdir.exists():
                 raise e
         self.ok_subs.add(sub_directory)

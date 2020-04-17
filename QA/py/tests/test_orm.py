@@ -8,6 +8,7 @@ from db.Project import Project
 from db.Sample import Sample
 from db.Task import Task
 from db.Taxonomy import Taxonomy
+from db.User import User, Role
 
 def test_to_str():
     """ Just to ensure there is no type in __str__ methods """
@@ -17,3 +18,5 @@ def test_to_str():
     assert str(Sample()) is not None
     assert str(Task()) is not None
     assert str(Taxonomy()) is not None
+    assert str(User()) is not None
+    assert str(Role()) is not None

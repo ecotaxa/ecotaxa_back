@@ -3,6 +3,8 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 # noinspection PyPackageRequirements
+from typing import Dict
+
 from sqlalchemy import Index, Column, ForeignKey, Sequence, Integer
 # noinspection PyPackageRequirements
 from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, INTEGER, REAL, DOUBLE_PRECISION, DATE, TIME, FLOAT, CHAR, \
@@ -86,16 +88,16 @@ class Object(Model):
     objfrel = relationship("ObjectFields", uselist=False, back_populates="objhrel")
 
     @classmethod
-    def fetch_existing_objects(cls, session: Session, prj_id):
-        ret = set()
+    def fetch_existing_objects(cls, session: Session, prj_id) -> Dict[str, int]:
+        ret = {}
         # TODO: Why using the view? Why an outer join in the view?
         res: ResultProxy = session.execute(
-            "SELECT o.orig_id "
+            "SELECT o.orig_id, o.objid "
             "  FROM objects o "
             " WHERE o.projid = :prj",
             {"prj": prj_id})
         for rec in res:
-            ret.add(rec[0])
+            ret[rec[0]] = rec[1]
         return ret
 
     @staticmethod

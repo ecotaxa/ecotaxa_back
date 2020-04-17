@@ -4,7 +4,7 @@
 #
 import logging
 from pathlib import Path
-from typing import List, Union, Set, Dict
+from typing import List, Union, Set, Dict, Optional
 
 from BO.Mappings import ProjectMapping
 from fs.Vault import Vault
@@ -66,7 +66,7 @@ class ImportHow(object):
         self.taxo_found = {}
         # Collected during RealImport
         self.existing_parent_ids: Union[Dict, None] = None
-        self.existing_objects: Union[Set, None] = None
+        self.existing_objects: Optional[Dict[str, int]] = None
         # Updated during RealImport
         self.loaded_files = loaded_files
         # For UVPV6 vignetting
@@ -75,11 +75,10 @@ class ImportHow(object):
     def do_thumbnail_above(self, max_dim):
         self.max_dim = max_dim
 
-    def compute_skipped(self, bundle):
+    def compute_skipped(self, bundle, logger):
         """
             Compute files _not_ to load.
         """
         for relative_name in bundle.possible_files_as_posix():
             if relative_name in self.loaded_files:
-                logging.info("File %s will be skipped, already loaded" % relative_name)
                 self.files_not_to_import.add(relative_name)

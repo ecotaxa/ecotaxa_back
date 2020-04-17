@@ -90,9 +90,11 @@ class InBundle(object):
             else:
                 tsv_to_read = TSVFile(a_file, self.path)
                 relative_name = tsv_to_read.relative_name
-                logger.info("Importing file %s" % relative_name)
                 if relative_name in how.files_not_to_import:
+                    logger.info("Skipping already loaded file %s" % relative_name)
                     continue
+                else:
+                    logger.info("Importing file %s" % relative_name)
 
                 rows_for_csv = tsv_to_read.do_import(where, how,
                                                      total_row_count, self.notify_user)
@@ -152,7 +154,7 @@ class InBundle(object):
             diag.error("No object to import. It maybe due to :<br>"
                        "*  Empty TSV table<br>"
                        "*  TSV table already imported => 'SKIP TSV' option should be enabled")
-        # print(self.mapping)
+
         if len(diag.classif_id_seen) > 0:
             self.check_classif(session, diag, diag.classif_id_seen)
 
@@ -183,9 +185,11 @@ class InBundle(object):
             else:
                 tsv_to_validate = TSVFile(a_file, self.path)
                 relative_name = tsv_to_validate.relative_name
-                logger.info("Analyzing file %s" % relative_name)
                 if relative_name in how.files_not_to_import:
+                    logger.info("Skipping already loaded file %s" % relative_name)
                     continue
+                else:
+                    logger.info("Analyzing file %s" % relative_name)
                 rows_for_csv = tsv_to_validate.do_validate(how, diag)
 
             logger.info("File %s : %d row analysed", relative_name, rows_for_csv)
@@ -227,8 +231,8 @@ class UVPV6Bundle(InBundle):
         tsv_file = "ecotaxa_" + sample_id + ".tsv"
         sample_tsv = sample_dir / tsv_file
         if sample_dir.exists():
-            # Target directory exists, from step1 if we're in step2
-            if not sample_tsv.exists():
+            # Target directory exists, e.g. from step1 if we're in step2
+            if not sample_tsv.exists(): # pragma: no cover
                 # There was an incorrect unzipping before, as we miss the main TSV
                 shutil.rmtree(sample_dir.as_posix())
         if not sample_dir.exists():

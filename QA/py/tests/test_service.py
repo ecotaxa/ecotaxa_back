@@ -28,10 +28,24 @@ def test_service():
     assert len(rsp["p2"]) == 2
 
 
-# def test_typo_service():
-#     req = {"p1": 6, "typo": 5}
-#     with pytest.raises(Exception):
-#         TestService.call(req)
+def test_service_json():
+    req = '{"p1": 6, "p2": {"-": "bar"}}'
+    rsp = TestService.call(req)
+    assert rsp == '{"p1": 16, "p2": {"-": "bar", "+": "foo"}}'
+
+
+class BadService(BaseService):
+    SUP = TestService
+    MSG_IN = {"p1": id(SUP.my_param),
+              "p2": id(SUP.my_dict),
+              "p3": 55
+              }
+
+def test_typo_service():
+    req = {"p1": 6, "p2": 5}
+    with pytest.raises(AttributeError):
+        BadService.call(req)
+
 
 class SubService(TestService):
     SUP = TestService

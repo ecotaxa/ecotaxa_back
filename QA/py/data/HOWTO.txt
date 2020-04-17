@@ -2,6 +2,7 @@
 To build a standard import file:
  - Start from one or several directories like m106_mn01_n1_sml, m106_mn02_n2_sml
  - Zip all into a zip file which can be imported into EcoTaxa
+ - Note: do not zip the containing directory, but all included dictories.
 
 To build an UVPV6 import file:
  - Start from one or several diectories like b_da_19_Images

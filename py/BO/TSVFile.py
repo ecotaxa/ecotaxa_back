@@ -44,6 +44,8 @@ class TSVFile(object):
         # relative name for logging and recording what was done
         self.relative_name: str = relative_file.as_posix()
 
+    REPORT_EVERY = 100
+
     def do_import(self, where: ImportWhere, how: ImportHow,
                   counter: int, call_every_chunk) -> int:
         """
@@ -102,8 +104,9 @@ class TSVFile(object):
 
                 try:
                     object_head_to_write.sunpos = compute_sun_position(object_head_to_write)
-                except Exception as e:
-                    # e.g. in case of invalid time
+                except Exception as e: # pragma: no cover
+                    # See astral.py for cases
+                    # TODO: Find a test case, e.g. by launching algo onto the whole DB
                     logger.error("Astral error : %s for %s", e, astral_cache)
 
                 self.add_parent_objects(how.prj_id, session, how.existing_parent_ids, object_head_to_write,
@@ -111,6 +114,7 @@ class TSVFile(object):
 
                 key_exist_obj = "%s*%s" % (object_fields_to_write.orig_id, image_to_write.orig_file_name)
                 if key_exist_obj in how.objects_and_images_to_skip:
+                    logger.info("Image skipped: %s %s", object_fields_to_write.orig_id, image_to_write.orig_file_name)
                     continue
 
                 must_write_obj = self.create_or_link_slaves(how.prj_id, how.existing_objects, object_fields_to_write,
@@ -119,7 +123,7 @@ class TSVFile(object):
                 where.db_writer.add_db_entities(object_head_to_write, object_fields_to_write, image_to_write,
                                                 must_write_obj)
 
-                how.existing_objects.add(object_fields_to_write.orig_id)
+                how.existing_objects[object_fields_to_write.orig_id] = object_head_to_write.objid
 
                 instead_image = None
                 if how.vignette_maker:
@@ -146,9 +150,9 @@ class TSVFile(object):
 
                 self.deal_with_images(where, how, image_to_write, instead_image)
 
-                if (counter % 100) == 0:
+                if (counter % self.REPORT_EVERY) == 0:
                     where.db_writer.persist()
-                    call_every_chunk()
+                    call_every_chunk(counter)
 
         return row_count_for_csv
 
@@ -164,7 +168,8 @@ class TSVFile(object):
                          or field in GlobalMapping.PredefinedFields
                          or field in self.ProgFields])
         ko_fields = [field for field in field_list if field not in ok_fields]
-        if len(ko_fields) > 0:
+        if len(ko_fields) > 0:  # pragma: no cover
+            # This cannot happen as step1 prevents it. However the code is left in case API evolves.
             logger.warning("In %s, field(s) %s not used, values will be ignored",
                            self.relative_name, ko_fields)
         return ok_fields
@@ -183,9 +188,10 @@ class TSVFile(object):
             # The 3 involved tables have "orig_id" column serving the same purpose
             parent_orig_id = dict_to_write.get("orig_id")
             if parent_orig_id is None:
+                # No way to identify, ignore
                 continue
             fk_to_obj = parent_class.pk()
-            if dict_to_write.get("orig_id") in ids_for_obj:
+            if parent_orig_id in ids_for_obj:
                 # This parent object was known before, don't add it into the session (DB)
                 # but link the child object_head to it (like newly created ones below)
                 pass
@@ -209,7 +215,6 @@ class TSVFile(object):
             Build a set of target DB columns by target table.
         :param custom_mapping:
         :param field_set:
-        :param target_fields: The used field, by target table.
         :return:
         """
         ret = {alias: set() for alias in GlobalMapping.target_classes.keys()}
@@ -290,14 +295,14 @@ class TSVFile(object):
             dict_to_write[field_name] = cached_field_value
 
     @staticmethod
-    def create_or_link_slaves(prj_id, existing_objects, object_fields_to_write,
+    def create_or_link_slaves(prj_id, existing_objects: Dict, object_fields_to_write,
                               object_head_to_write) -> bool:
         # It can be a line with a complementary image
         if object_fields_to_write.orig_id in existing_objects:
             logger.info("Second image for %s ", object_fields_to_write.orig_id)
+            # Set the objid which will be copied for storing the image
+            object_head_to_write.objid = existing_objects[object_fields_to_write.orig_id]
             # In this case just point to previous
-            # TODO: It looks useless, anyway in original code the object is not added into session
-            # object_head_to_write.objid = existing_objects[object_fields_to_write.orig_id]
             return False
         else:
             # or create it
@@ -471,9 +476,11 @@ class TSVFile(object):
 
             # Verify duplicate images
             key_exist_obj = "%s*%s" % (object_id, img_file_name)
-            if not how.skip_object_duplicates and key_exist_obj in diag.existing_objects_and_image:
-                diag.error("Duplicate object '%s' Image '%s' in file %s. "
-                           % (object_id, img_file_name, self.relative_name))
+            if not how.skip_object_duplicates:
+                # Ban the duplicates, except if we can skip them.
+                if key_exist_obj in diag.existing_objects_and_image:
+                    diag.error("Duplicate object '%s' Image '%s' in file %s. "
+                               % (object_id, img_file_name, self.relative_name))
             diag.existing_objects_and_image.add(key_exist_obj)
 
         return row_count_for_csv

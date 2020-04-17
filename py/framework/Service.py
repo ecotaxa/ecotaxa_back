@@ -49,6 +49,7 @@ class BaseService(object):
                 setattr(instance, s_name, copy.deepcopy(s_val))
                 by_id[id(getattr(cls, s_name))] = s_name
         # Assign members with input vars
+        # noinspection PyUnresolvedReferences
         msg_descrip = cls.MSG_IN
         for p_name, p_val_id in msg_descrip.items():
             try:
@@ -76,7 +77,7 @@ class BaseService(object):
 
     @abstractmethod
     def run(self) -> Dict:
-        pass
+        """ Should not be called """
 
 
 class Service(BaseService, ABC):

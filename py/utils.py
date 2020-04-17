@@ -73,7 +73,7 @@ def calc_astral_day_time(date: datetime.datetime, time, latitude, longitude):
     :param time: UTC time
     :param latitude: latitude
     :param longitude: longitude
-    :return: D for Day, U for Dusk, N for Night, A pour Dawn (Aube in French)
+    :return: D for Day, U for Dusk, N for Night, A for Dawn (Aube in French)
     """
     l = LocationInfo()
     l.latitude = latitude

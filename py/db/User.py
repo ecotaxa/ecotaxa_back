@@ -26,7 +26,7 @@ class Role(Model):  # TODO, RoleMixin):
 
     #    description = Column(String(255))
     def __str__(self):
-        return self.name
+        return "{0} ({1})".format(self.name, self.id)
 
 
 class User(Model):  # TODO , UserMixin):

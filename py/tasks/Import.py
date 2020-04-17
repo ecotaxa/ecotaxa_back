@@ -9,7 +9,7 @@ import re
 import zipfile
 from abc import ABC
 from os.path import join
-from typing import Union, Set, Dict
+from typing import Union, Dict
 
 from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping
@@ -43,7 +43,7 @@ class ImportServiceBase(Service, ABC):
       OR Upload folder(s) compressed as a zip file """
     taxo_mapping: dict = {}
     """ Optional taxonomy mapping """
-    skip_already_loaded_file: str = "N"
+    skip_already_loaded_files: str = "N"
     """ Skip tsv files that have already been imported """
     skip_object_duplicate: str = "No"
     """ Skip objects that have already been imported """
@@ -65,22 +65,12 @@ class ImportServiceBase(Service, ABC):
         assert self.prj is not None
         self.task = self.session.query(Task).filter_by(id=self.task_id).first()
 
-    def update_param(self):
-        if hasattr(self, 'param'):
-            self.task.inputparam = json.dumps(self.param.__dict__)
-        self.task.lastupdate = datetime.datetime.now()
-        self.session.commit()
-
     def update_progress(self, percent: int, message: str):
+        # TODO: See while sync with legacy
         self.task.progresspct = percent
         self.task.progressmsg = message
-        self.update_param()
-
-    @staticmethod
-    def log_for_user(msg: str):
-        # TODO
-        print(msg)
-        pass
+        self.task.lastupdate = datetime.datetime.now()
+        self.session.commit()
 
 
 class ImportAnalysis(ImportServiceBase):
@@ -94,7 +84,7 @@ class ImportAnalysis(ImportServiceBase):
               "tsk": id(SUP.task_id),
               "src": id(SUP.source_dir_or_zip),
               "map": id(SUP.taxo_mapping),
-              "sal": id(SUP.skip_already_loaded_file),
+              "sal": id(SUP.skip_already_loaded_files),
               "sod": id(SUP.skip_object_duplicate)
               }
 
@@ -131,7 +121,9 @@ class ImportAnalysis(ImportServiceBase):
                 # Feedback to user
                 self.task.taskstate = "Error"
                 self.task.progressmsg = "Some errors were found during file parsing "
-                logger.error(self.task.progressmsg)
+                logger.error(self.task.progressmsg + ":")
+                for an_err in diag.errors:
+                    logger.error(an_err)
                 self.session.commit()
                 resp.update({"err": diag.errors})
             else:
@@ -176,10 +168,12 @@ class ImportAnalysis(ImportServiceBase):
         source_bundle = InBundle(self.source_dir_or_zip)
         # Configure the validation to come, directives.
         import_how = ImportHow(self.prj_id, custom_mapping, self.skip_object_duplicate == 'Y', loaded_files)
-        if self.skip_already_loaded_file == 'Y':
-            import_how.compute_skipped(source_bundle)
+        if self.skip_already_loaded_files == 'Y':
+            import_how.compute_skipped(source_bundle, logger)
         # A structure to collect validation result
         import_diag = ImportDiagnostic()
+        if self.skip_object_duplicate != 'Y':
+            import_diag.existing_objects_and_image = Image.fetch_existing_images(self.session, self.prj_id)
         # Do the bulk job of validation
         source_bundle.validate_import(self.session, import_how, import_diag)
         return import_how, import_diag
@@ -291,8 +285,8 @@ class RealImport(ImportServiceBase):
         import_how.taxo_mapping = self.taxo_mapping
         import_how.taxo_found = self.taxo_found
         import_how.found_users = self.found_users
-        if self.skip_already_loaded_file == 'Y':
-            import_how.compute_skipped(source_bundle)
+        if self.skip_already_loaded_files == 'Y':
+            import_how.compute_skipped(source_bundle, logger)
         if self.skip_object_duplicate == 'Y':
             import_how.objects_and_images_to_skip = Image.fetch_existing_images(self.session, self.prj_id)
         import_how.do_thumbnail_above(int(self.config['THUMBSIZELIMIT']))

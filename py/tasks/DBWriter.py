@@ -26,6 +26,7 @@ class DBWriter(object):
         Database writer for import (with optimizations).
         @see SQLAlchemy Core documentation for principles.
     """
+    SEQUENCE_CACHE_SIZE = 100
 
     def __init__(self, session: Session):
         self.session = session
@@ -39,8 +40,8 @@ class DBWriter(object):
 
         # Save a bit of time for commit
         self.session.execute("SET synchronous_commit TO OFF;")
-        self.obj_seq_cache = SequenceCache(self.session, "seq_objects", 100)
-        self.img_seq_cache = SequenceCache(self.session, "seq_images", 100)
+        self.obj_seq_cache = SequenceCache(self.session, "seq_objects", self.SEQUENCE_CACHE_SIZE)
+        self.img_seq_cache = SequenceCache(self.session, "seq_images", self.SEQUENCE_CACHE_SIZE)
 
     # The properties used in code, not in mapping. If not listed here they are not persisted
     # TODO: Provoke a crash at runtime for tests if one is forgotten. Dropping data silently is bad.
@@ -76,13 +77,14 @@ class DBWriter(object):
         logging.info("Batch save objects of %s", nb_bulks)
 
     def add_db_entities(self, object_head_to_write, object_fields_to_write, image_to_write, must_write_obj):
-        assert object_head_to_write.projid is not None
-        assert object_fields_to_write.orig_id is not None
         # Bulk mode or Core do not create links (using ORM relationship), so we have to do manually
-        # Default value from sequences
         if must_write_obj:
+            assert object_head_to_write.projid is not None
+            assert object_fields_to_write.orig_id is not None
+            # Default value from sequences
             object_head_to_write.objid = self.obj_seq_cache.next()
             object_fields_to_write.objfid = object_head_to_write.objid
+        # There is at least an image
         image_to_write.imgid = self.img_seq_cache.next()
         image_to_write.objid = object_head_to_write.objid
         if must_write_obj:
