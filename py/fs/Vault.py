@@ -2,6 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import shutil
 from pathlib import Path, PurePath
 
 
@@ -38,3 +39,53 @@ class Vault(object):
         :return:
         """
         return self.path.joinpath(sub_directory)
+
+    @staticmethod
+    def address_for_id(img_id: int) -> (str, str):
+        """
+            Return the address, i.e. folder and unique identifier inside folder, for a given image ID.
+        :param img_id:
+        :return:
+        """
+        # Images are stored in folders of 10K images max
+        return "%04d" % (img_id // 10000), "%04d" % (img_id % 10000)
+
+    def store_image(self, img_file_path: Path, img_id: int) -> str:
+        """
+            Store, i.e. copy, an image with given path, into self with given ID.
+        :return: The image path, relative to root directory.
+        """
+        assert img_id is not None
+        folder, ndx_in_folder = self.address_for_id(img_id)
+        self.ensure_exists(folder)
+        folder_path: PurePath = self.sub_path(folder)
+        # Return the path relative to vault, keeping file suffix, e.g. .jpg or .png
+        filename = "%s%s" % (ndx_in_folder, img_file_path.suffix)
+
+        # Copy image file from source to vault (self)
+        # TODO: Move if on same filesystem and unzip was done?
+        # TODO: OS copy otherwise, 3x less time
+        dest_img_path: str = folder_path.joinpath(filename).as_posix()
+        shutil.copyfile(img_file_path.as_posix(), dest_img_path)
+        # Return relative path, unix style
+        sub_path = "%s/%s" % (folder, filename)
+        return sub_path
+
+    def path_to(self, sub_path: str) -> str:
+        """
+            Return absolute path to given relative subpath.
+        :return:
+        """
+        return self.path.joinpath(sub_path).as_posix()
+
+    def thumbnail_paths(self, img_id) -> (str, str):
+        """
+            Return relative and absolute paths to a thumbnail image.
+            It is assumed that the main image was stored before.
+        :return:
+        """
+        folder, ndx_in_folder = self.address_for_id(img_id)
+        # We force thumbnail format to JPEG
+        sub_path = "%s/%s_mini%s" % (folder, ndx_in_folder, '.jpg')
+        return sub_path, self.path_to(sub_path)
+

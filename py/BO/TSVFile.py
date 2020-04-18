@@ -6,9 +6,8 @@ import csv
 import datetime
 import logging
 import random
-import shutil
 import sys
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import Dict, Set
 
 # noinspection PyPackageRequirements
@@ -104,7 +103,7 @@ class TSVFile(object):
 
                 try:
                     object_head_to_write.sunpos = compute_sun_position(object_head_to_write)
-                except Exception as e: # pragma: no cover
+                except Exception as e:  # pragma: no cover
                     # See astral.py for cases
                     # TODO: Find a test case, e.g. by launching algo onto the whole DB
                     logger.error("Astral error : %s for %s", e, astral_cache)
@@ -140,11 +139,10 @@ class TSVFile(object):
                         where.db_writer.add_vignette_backup(object_head_to_write, backup_img_to_write)
                         # Store original image
                         orig_file_name = self.path.parent.joinpath(image_to_write.orig_file_name)
-                        dest_img_path, _dummy1, _dummy1, _dummy1 = self.store_into_vault(where.vault,
-                                                                                         orig_file_name,
-                                                                                         backup_img_to_write)
+                        sub_path = where.vault.store_image(orig_file_name, backup_img_to_write.imgid)
+                        backup_img_to_write.file_name = sub_path
                         # Get original image dimensions
-                        im = PIL_Image.open(dest_img_path)
+                        im = PIL_Image.open(where.vault.path_to(sub_path))
                         backup_img_to_write.width, backup_img_to_write.height = im.size
                         del im
 
@@ -231,7 +229,7 @@ class TSVFile(object):
     def read_fields_to_dicts(how: ImportHow, field_set: Set, lig: Dict[str, str], dicts_to_write, vals_cache: Dict):
         """
             Read the data line into target dicts. Values go into the right bucket, i.e. target dict, depending
-            on mappings (standard one and per-project custom one)
+            on mappings (standard one and per-project custom one).
         """
         predefined_mapping = GlobalMapping.PredefinedFields
         custom_mapping = how.custom_mapping
@@ -240,7 +238,7 @@ class TSVFile(object):
         for a_field in field_set.intersection(lig.keys()):
             # We have a value
             raw_val = lig.get(a_field)
-            # Try to get the value from the cache
+            # Try to get the transformed value from the cache
             cache_key = (a_field, raw_val)
             cached_field_value = vals_cache.get(cache_key)
             m = predefined_mapping.get(a_field)
@@ -329,26 +327,26 @@ class TSVFile(object):
             # TODO: Unsure if it works on Windows, as there is a "/" for UVPV6
             img_file_path = self.path.parent.joinpath(image_to_write.orig_file_name)
 
-        img_path, ndx_in_vault_folder, vault_folder, vault_folder_path = self.store_into_vault(where.vault,
-                                                                                               img_file_path,
-                                                                                               image_to_write)
+        sub_path = where.vault.store_image(img_file_path, image_to_write.imgid)
+        image_to_write.file_name = sub_path
+        if "imgrank" not in image_to_write:
+            image_to_write.imgrank = 0  # default value
 
-        im = PIL_Image.open(img_path)
+        im = PIL_Image.open(where.vault.path_to(sub_path))
         image_to_write.width = im.size[0]
         image_to_write.height = im.size[1]
         # Generate a thumbnail if image is too large
         if (im.size[0] > how.max_dim) or (im.size[1] > how.max_dim):
-            # We force thumbnail format to JPEG
-            vault_thumb_filename = "%s_mini%s" % (ndx_in_vault_folder, '.jpg')
             # TODO: Doesn't it affect aspect ratio?
             im.thumbnail((how.max_dim, how.max_dim))
             if im.mode == 'P':
                 # (8-bit pixels, mapped to any other mode using a color palette)
                 # from https://pillow.readthedocs.io/en/latest/handbook/concepts.html#modes
+                # Tested using a PNG with
                 im = im.convert("RGB")
-            thumb_path: str = vault_folder_path.joinpath(vault_thumb_filename).as_posix()
-            im.save(thumb_path)
-            image_to_write.thumb_file_name = "%s/%s" % (vault_folder, vault_thumb_filename)
+            thumb_relative_path, thumb_full_path = where.vault.thumbnail_paths(image_to_write.imgid)
+            im.save(thumb_full_path)
+            image_to_write.thumb_file_name = thumb_relative_path
             image_to_write.thumb_width = im.size[0]
             image_to_write.thumb_height = im.size[1]
         else:
@@ -359,27 +357,6 @@ class TSVFile(object):
             image_to_write.thumb_file_name = None
             image_to_write.thumb_width = None
             image_to_write.thumb_height = None
-        if "imgrank" not in image_to_write:
-            image_to_write.imgrank = 0  # default value
-
-    @staticmethod
-    def store_into_vault(vault, img_file_path, image_to_write):
-        assert image_to_write.imgid is not None
-        # Images are stored in folders of 10K images max
-        vault_folder = "%04d" % (image_to_write.imgid // 10000)
-        ndx_in_vault_folder = "%04d" % (image_to_write.imgid % 10000)
-        vault_folder_path: PurePath = vault.sub_path(vault_folder)
-        # We store in DB line the path relative to vault
-        vault_filename = "%s%s" % (ndx_in_vault_folder, img_file_path.suffix)
-        vault_subpath = "%s/%s" % (vault_folder, vault_filename)
-        image_to_write.file_name = vault_subpath
-        vault.ensure_exists(vault_folder)
-        # Copy image file from unzip directory to vault
-        dest_img_path: str = vault_folder_path.joinpath(vault_filename).as_posix()
-        # TODO: Move if on same filesystem
-        # TODO: OS copy otherwise, 3x less time
-        shutil.copyfile(img_file_path.as_posix(), dest_img_path)
-        return dest_img_path, ndx_in_vault_folder, vault_folder, vault_folder_path
 
     def do_validate(self, how: ImportHow, diag: ImportDiagnostic):
         with open(self.path.as_posix(), encoding='latin_1') as csv_file:
@@ -486,6 +463,15 @@ class TSVFile(object):
         return row_count_for_csv
 
     def validate_line(self, how: ImportHow, diag: ImportDiagnostic, lig, clean_fields, vals_cache):
+        """
+            Validate a line from data point of view.
+        :param how:
+        :param diag:
+        :param lig:
+        :param clean_fields:
+        :param vals_cache:
+        :return:
+        """
         latitude_was_seen = False
         for raw_field, a_field in clean_fields.items():
             m = GlobalMapping.PredefinedFields.get(a_field)
