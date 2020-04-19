@@ -100,16 +100,14 @@ class TSVFile(object):
 
                 lig = {self.clean_fields[field]: v for field, v in rawlig.items()}
 
-                # First read into dicts, faster than doing settattr()
-                dicts_to_write = {alias: dict() for alias in GlobalMapping.TARGET_CLASSES.keys()}
-
                 if ignore_annotation_category:
                     # Remove category as required, but only if there is really an id value
                     # it can happen that the id is empty, even if table header is present
                     if clean_value(lig.get('object_annotation_category_id', '')) != '':
                         del lig['object_annotation_category']
 
-                # Read TSV line into dicts
+                # First, read TSV line into dicts, faster than doing settattr()
+                dicts_to_write = {alias: dict() for alias in GlobalMapping.TARGET_CLASSES.keys()}
                 self.read_fields_to_dicts(how, field_set, lig, dicts_to_write, vals_cache)
 
                 # Create SQLAlchemy mappers of the object itself and slaves (1<->1)
