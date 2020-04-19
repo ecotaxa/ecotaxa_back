@@ -104,3 +104,23 @@ def test_mapping2():
     a_mapping.load_from_equal_list(MAPP2)
     assert len(a_mapping) == 5
     assert not a_mapping.is_empty()
+
+MAPP_SRC = """n01=lat_end
+n02=lon_end
+n03=area
+n04=mean
+n05=stddev"""
+
+MAPP_DST = """n01=stddev
+n02=lat_end
+n03=mean
+n04=area
+n05=lon_end"""
+
+def test_reshuff():
+    src_mapping = TableMapping("mytbl")
+    src_mapping.load_from_equal_list(MAPP_SRC)
+    dst_mapping = TableMapping("mytbl")
+    dst_mapping.load_from_equal_list(MAPP_DST)
+    remap = src_mapping.transforms_from(dst_mapping)
+    assert remap == [('n01', 'n05'), ('n02', 'n01'), ('n03', 'n04'), ('n04', 'n03'), ('n05', 'n02')]
