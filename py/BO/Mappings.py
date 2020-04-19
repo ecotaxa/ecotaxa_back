@@ -17,7 +17,7 @@ class GlobalMapping(object):
     """
         Information about mapping process (from TSV to DB)
     """
-    PredefinedFields = {
+    PREDEFINED_FIELDS = {
         # A mapping from TSV columns to objects and fields
         'object_id': {'table': ObjectFields.__tablename__, 'field': 'orig_id', 'type': 't'},
         'sample_id': {'table': Sample.__tablename__, 'field': 'orig_id', 'type': 't'},
@@ -43,34 +43,34 @@ class GlobalMapping(object):
     }
 
     # C'est un set de table 😁
-    PossibleTables = set([v['table'] for v in PredefinedFields.values()])
+    POSSIBLE_TABLES = set([v['table'] for v in PREDEFINED_FIELDS.values()])
 
-    parent_classes = {Acquisition.__tablename__: Acquisition,
+    PARENT_CLASSES = {Acquisition.__tablename__: Acquisition,
                       Sample.__tablename__: Sample,
                       Process.__tablename__: Process}
 
-    target_classes = {**parent_classes,
+    TARGET_CLASSES = {**PARENT_CLASSES,
                       Object.__tablename__: Object,
                       ObjectFields.__tablename__: ObjectFields,
                       Image.__tablename__: Image}
 
     # (f)loat->(n)umerical
-    PossibleTypes = {'[f]': 'n', '[t]': 't'}
+    POSSIBLE_TYPES = {'[f]': 'n', '[t]': 't'}
     # TSV prefix to 'real' table name, only for extendable tables
-    PrefixToTable = {
+    PREFIX_TO_TABLE = {
         'object': ObjectFields.__tablename__,
         'acq': Acquisition.__tablename__,
         'process': Process.__tablename__,
         'sample': Sample.__tablename__,
     }
-    TableToPrefix = {v: k for k, v in PrefixToTable.items()}
+    TABLE_TO_PREFIX = {v: k for k, v in PREFIX_TO_TABLE.items()}
 
     @classmethod
     def TSV_table_to_table(cls, table):
         """
             Return the real table name behind the one uses in TSV composed column names.
         """
-        return cls.PrefixToTable.get(table, table)
+        return cls.PREFIX_TO_TABLE.get(table, table)
 
 
 class ProjectMapping(object):
@@ -165,7 +165,7 @@ class ProjectMapping(object):
         all_fields = {}
         for a_mapping in self.all:
             tbl = a_mapping.table
-            prfx = GlobalMapping.TableToPrefix.get(tbl, tbl)
+            prfx = GlobalMapping.TABLE_TO_PREFIX.get(tbl, tbl)
             for real_col, tsv_col in a_mapping.real_cols_to_tsv.items():
                 all_fields["%s_%s" % (prfx, tsv_col)] = (a_mapping, real_col)
         self.all_fields = all_fields
@@ -239,3 +239,15 @@ class TableMapping(object):
 
     def as_equal_list(self):
         return encode_equal_list(self.real_cols_to_tsv)
+
+    def transforms_from(self, other):
+        """
+            Return what should be applied to other in order to stick to self.
+        """
+        ret = []
+        for a_real, a_tsv in other.real_cols_to_tsv.items():
+            self_real = self.tsv_cols_to_real[a_tsv]
+            if self_real != a_real:
+                # output the transform
+                ret.append((a_real, self_real))
+        return ret

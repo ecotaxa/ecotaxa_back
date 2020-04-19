@@ -22,7 +22,7 @@ class BaseService(object):
     @classmethod
     def call(cls, json_params: Union[str, Dict]):
         assert cls != BaseService
-        # Create the subclass
+        # Create the subclass instance
         instance: BaseService = cls()
         # Decode the params
         params = json_params
@@ -32,9 +32,49 @@ class BaseService(object):
             was_json = True
         # Assign default values, gathering internal IDs
         by_id = {}
-        s_name: str
+        cls._set_defaults(instance, by_id)
+        # Assign members with input vars
+        # noinspection PyUnresolvedReferences
+        msg_descrip = cls.MSG_IN
+        cls._set_params(instance, params, msg_descrip, by_id)
+        # Run the service
+        ret = instance.run()
+        # If no explicit reply, serialize input
+        if ret is None:
+            ret = {}
+            for p_name, p_val_id in msg_descrip.items():
+                p_val = getattr(instance, by_id[p_val_id])
+                ret[p_name] = p_val
+        # Reply using the same dialect as request
+        if was_json:
+            ret = json.dumps(ret)
+        return ret
+
+    @classmethod
+    def _set_params(cls, instance, params, msg_descrip, by_id):
+        """
+            For given instance, set attributes from runtime parameters.
+        """
+        for p_name, p_val_id in msg_descrip.items():
+            try:
+                p_val = params[p_name]
+            except KeyError:
+                # Not a big deal is a MSG field is not provided
+                # TODO: Introspect the field to see if it's a Union with None
+                continue
+            try:
+                setattr(instance, by_id[p_val_id], p_val)
+            except KeyError:
+                raise AttributeError("Could not find addr for %s, by_id: %s" % (p_name, by_id))
+
+    @classmethod
+    def _set_defaults(cls, instance, by_id):
+        """
+            For given instance, set attributes to their default value, i.e. the ones from class and ancestors.
+        """
         # noinspection PyTypeChecker
         for a_class in (cls,) + cls.__bases__:
+            s_name: str
             for s_name in vars(a_class):
                 if s_name[0] == "_":
                     # Don't clone private attributes
@@ -48,32 +88,6 @@ class BaseService(object):
                     continue
                 setattr(instance, s_name, copy.deepcopy(s_val))
                 by_id[id(getattr(cls, s_name))] = s_name
-        # Assign members with input vars
-        # noinspection PyUnresolvedReferences
-        msg_descrip = cls.MSG_IN
-        for p_name, p_val_id in msg_descrip.items():
-            try:
-                p_val = params[p_name]
-            except KeyError:
-                # Not a big deal is a MSG field is not provided
-                # TODO: Introspect the field to see if it's a Union with None
-                continue
-            try:
-                setattr(instance, by_id[p_val_id], p_val)
-            except KeyError:
-                raise AttributeError("Could not find addr for %s, by_id: %s" % (p_name, by_id))
-        # Run the service
-        ret = instance.run()
-        # If no explicit reply, serialize input
-        if ret is None:
-            ret = {}
-            for p_name, p_val_id in msg_descrip.items():
-                p_val = getattr(instance, by_id[p_val_id])
-                ret[p_name] = p_val
-        # Reply using the same dialect as request
-        if was_json:
-            ret = json.dumps(ret)
-        return ret
 
     @abstractmethod
     def run(self) -> Dict:

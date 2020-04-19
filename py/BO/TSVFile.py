@@ -7,8 +7,9 @@ import datetime
 import logging
 import random
 import sys
+from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, Set
+from typing import Dict, Set, Optional
 
 # noinspection PyPackageRequirements
 from PIL import Image as PIL_Image
@@ -43,25 +44,42 @@ class TSVFile(object):
         # relative name for logging and recording what was done
         self.relative_name: str = relative_file.as_posix()
 
+        # when open()-ed, below members are active
+        self.rdr: Optional[csv.DictReader] = None
+        # key: not normalized field, from TSV header e.g. "\t ObJect_laT "
+        # value: normalized field i.e. "object_lat"
+        self.clean_fields: Optional[OrderedDict[str, str]] = None
+        # The 2nd line, with types
+        # key: normalized field
+        # value: TSV type e.g. [f]
+        self.type_line: Optional[Dict[str, str]] = None
+
+    def open(self):
+        csv_file = open(self.path.as_posix(), encoding='latin_1')
+        # Read as a dict, first line gives the format
+        self.rdr = csv.DictReader(csv_file, delimiter='\t', quotechar='"')
+        # Cleanup field names, keeping original ones as key.
+        clean_fields = OrderedDict()
+        for raw_field in self.rdr.fieldnames:
+            clean_fields[raw_field] = raw_field.strip(" \t").lower()
+        self.clean_fields = clean_fields
+        # Read types line (2nd line in file)
+        line_2 = self.rdr.__next__()
+        self.type_line = {clean_fields[raw_field]: v for raw_field, v in line_2.items()}
+        # When called using "with", the file will be closed on code block leave
+        return csv_file
+
     REPORT_EVERY = 100
 
-    def do_import(self, where: ImportWhere, how: ImportHow,
-                  counter: int, call_every_chunk) -> int:
+    def do_import(self, where: ImportWhere, how: ImportHow, counter: int, call_every_chunk) -> int:
         """
             Import self into DB.
         """
         session = where.db_writer.session
-        with open(self.path.as_posix(), encoding='latin_1') as csv_file:
-            # Read as a dict, first line gives the format
-            rdr = csv.DictReader(csv_file, delimiter='\t', quotechar='"')
-            # Read types line (2nd line in file). This line is ignored.
-            _type_line = {field: v for field, v in rdr.__next__().items()}
-            # Cleanup field names, keeping original ones as key
-            clean_fields = {field: field.strip(" \t").lower() for field in rdr.fieldnames}
-            # Extract field list from header cooked by CSV reader
-            field_set = set([clean_fields[field] for field in rdr.fieldnames])
-
-            # Only keep the fields we can persist, the ones ignored at first step will be signalled here as well
+        with self.open():
+            # Only keep the fields we can persist, the ones ignored at first step would be signalled here as well
+            # if we didn't prohibit the move to 2nd step in this case.
+            field_set = set(self.clean_fields.values())
             field_set = self.filter_unused_fields(how.custom_mapping, field_set) - self.ProgFields
 
             # We can now prepare ORM classes with optimal performance
@@ -75,15 +93,15 @@ class TSVFile(object):
             vals_cache = dict()
             # Loop over all lines
             row_count_for_csv = 0
-            for rawlig in rdr:
+            for rawlig in self.rdr:
                 # Bean counting
                 row_count_for_csv += 1
                 counter += 1
 
-                lig = {clean_fields[field]: v for field, v in rawlig.items()}
+                lig = {self.clean_fields[field]: v for field, v in rawlig.items()}
 
                 # First read into dicts, faster than doing settattr()
-                dicts_to_write = {alias: dict() for alias in GlobalMapping.target_classes.keys()}
+                dicts_to_write = {alias: dict() for alias in GlobalMapping.TARGET_CLASSES.keys()}
 
                 if ignore_annotation_category:
                     # Remove category as required, but only if there is really an id value
@@ -108,8 +126,8 @@ class TSVFile(object):
                     # TODO: Find a test case, e.g. by launching algo onto the whole DB
                     logger.error("Astral error : %s for %s", e, astral_cache)
 
-                self.add_parent_objects(how.prj_id, session, how.existing_parent_ids, object_head_to_write,
-                                        dicts_to_write)
+                self.add_parent_objects(how.prj_id, session, how.existing_parent_ids,
+                                        object_head_to_write, dicts_to_write)
 
                 key_exist_obj = "%s*%s" % (object_fields_to_write.orig_id, image_to_write.orig_file_name)
                 if key_exist_obj in how.objects_and_images_to_skip:
@@ -136,6 +154,7 @@ class TSVFile(object):
                         backup_img_to_write.thumb_file_name = None
                         backup_img_to_write.thumb_width = None
                         backup_img_to_write.thumb_height = None
+                        # Store backup image into DB
                         where.db_writer.add_vignette_backup(object_head_to_write, backup_img_to_write)
                         # Store original image
                         orig_file_name = self.path.parent.joinpath(image_to_write.orig_file_name)
@@ -154,18 +173,18 @@ class TSVFile(object):
 
         return row_count_for_csv
 
-    def filter_unused_fields(self, custom_mapping, field_list: set) -> set:
+    def filter_unused_fields(self, custom_mapping, field_set: set) -> set:
         """
             Sanitize field list by removing the ones which are not known in mapping, nor used programmatically.
             :param custom_mapping:
-            :param field_list:
+            :param field_set:
             :return:
         """
-        ok_fields = set([field for field in field_list
+        ok_fields = set([field for field in field_set
                          if field in custom_mapping.all_fields
-                         or field in GlobalMapping.PredefinedFields
+                         or field in GlobalMapping.PREDEFINED_FIELDS
                          or field in self.ProgFields])
-        ko_fields = [field for field in field_list if field not in ok_fields]
+        ko_fields = [field for field in field_set if field not in ok_fields]
         if len(ko_fields) > 0:  # pragma: no cover
             # This cannot happen as step1 prevents it. However the code is left in case API evolves.
             logger.warning("In %s, field(s) %s not used, values will be ignored",
@@ -179,7 +198,7 @@ class TSVFile(object):
             Due to amount of duplicated information in TSV, this happens for few % of rows
              so no real need to optimize here.
         """
-        for alias, parent_class in GlobalMapping.parent_classes.items():
+        for alias, parent_class in GlobalMapping.PARENT_CLASSES.items():
             dict_to_write = dicts_to_write[alias]
             ids_for_obj = existing_ids[alias]
             # Here we take advantage from consistent naming conventions
@@ -208,16 +227,16 @@ class TSVFile(object):
             setattr(object_head_to_write, fk_to_obj, ids_for_obj[parent_orig_id])
 
     @staticmethod
-    def dispatch_fields_by_table(custom_mapping: ProjectMapping, field_set: set) -> Dict[str, Set]:
+    def dispatch_fields_by_table(custom_mapping: ProjectMapping, field_set: Set) -> Dict[str, Set]:
         """
             Build a set of target DB columns by target table.
         :param custom_mapping:
         :param field_set:
         :return:
         """
-        ret = {alias: set() for alias in GlobalMapping.target_classes.keys()}
+        ret = {alias: set() for alias in GlobalMapping.TARGET_CLASSES.keys()}
         for a_field in field_set:
-            mapping = GlobalMapping.PredefinedFields.get(a_field)
+            mapping = GlobalMapping.PREDEFINED_FIELDS.get(a_field)
             if not mapping:
                 mapping = custom_mapping.search_field(a_field)
             target_tbl = mapping["table"]
@@ -231,7 +250,7 @@ class TSVFile(object):
             Read the data line into target dicts. Values go into the right bucket, i.e. target dict, depending
             on mappings (standard one and per-project custom one).
         """
-        predefined_mapping = GlobalMapping.PredefinedFields
+        predefined_mapping = GlobalMapping.PREDEFINED_FIELDS
         custom_mapping = how.custom_mapping
         # CSV reader returns a minimal dict with no value equal to None
         # so we have values only for common fields.
@@ -269,7 +288,7 @@ class TSVFile(object):
                     cached_field_value = datetime.datetime(int(csv_val[0:4]), int(csv_val[4:6]),
                                                            int(csv_val[6:8]), int(v2[0:2]),
                                                            int(v2[2:4]), int(v2[4:6]))
-                    # no caching of this one
+                    # no caching of this one as it depends on another value on same line
                     cache_key = "0"
                 elif field_name == 'classif_id':
                     # We map 2 fields to classif_id, the second (text one) has [t] type, treated here.
@@ -332,17 +351,20 @@ class TSVFile(object):
         if "imgrank" not in image_to_write:
             image_to_write.imgrank = 0  # default value
 
+        self.dimensions_and_resize(how, where, sub_path, image_to_write)
+
+    @staticmethod
+    def dimensions_and_resize(how, where, sub_path, image_to_write):
         im = PIL_Image.open(where.vault.path_to(sub_path))
         image_to_write.width = im.size[0]
         image_to_write.height = im.size[1]
         # Generate a thumbnail if image is too large
         if (im.size[0] > how.max_dim) or (im.size[1] > how.max_dim):
-            # TODO: Doesn't it affect aspect ratio?
             im.thumbnail((how.max_dim, how.max_dim))
             if im.mode == 'P':
                 # (8-bit pixels, mapped to any other mode using a color palette)
                 # from https://pillow.readthedocs.io/en/latest/handbook/concepts.html#modes
-                # Tested using a PNG with
+                # Tested using a PNG with palette
                 im = im.convert("RGB")
             thumb_relative_path, thumb_full_path = where.vault.thumbnail_paths(image_to_write.imgid)
             im.save(thumb_full_path)
@@ -359,34 +381,25 @@ class TSVFile(object):
             image_to_write.thumb_height = None
 
     def do_validate(self, how: ImportHow, diag: ImportDiagnostic):
-        with open(self.path.as_posix(), encoding='latin_1') as csv_file:
-            # Read as a dict, first line gives the format
-            rdr = csv.DictReader(csv_file, delimiter='\t', quotechar='"')
-            # Read types line (2nd line in file)
-            type_line = {field.strip(" \t").lower(): v for field, v in rdr.__next__().items()}
-            # Cleanup field names, keeping original ones as key
-            clean_fields = {field: field.strip(" \t").lower() for field in rdr.fieldnames}
-            # Extract field list from header cooked by CSV reader
-            field_list = [clean_fields[field] for field in rdr.fieldnames]
-            #
-            self.validate_structure(how, diag, field_list, type_line)
-            rows_for_csv = self.validate_content(how, diag, rdr, clean_fields)
+        with self.open():
+            self.validate_structure(how, diag)
+            rows_for_csv = self.validate_content(how, diag)
             return rows_for_csv
 
-    def validate_structure(self, how: ImportHow, diag: ImportDiagnostic, field_list, type_line):
+    def validate_structure(self, how: ImportHow, diag: ImportDiagnostic):
         """
-            TSV 'structure' is in first text line.
-            Our implementation add a line of expected types in second line.
+            TSV ordinary 'structure' is in first text line.
+            Our implementation adds a line of expected types in second line.
         """
         a_field: str
-        for a_field in field_list:
+        for a_field in self.clean_fields.values():
             # split at first _ as the column name might contain an _
             split_col = a_field.split("_", 1)
             if len(split_col) != 2:
                 diag.error("Invalid Header '%s' in file %s. Format must be Table_Field. Field ignored"
                            % (a_field, self.relative_name))
                 continue
-            if a_field in GlobalMapping.PredefinedFields:
+            if a_field in GlobalMapping.PREDEFINED_FIELDS:
                 # OK it's a predefined one
                 continue
             if a_field in TSVFile.ProgFields:
@@ -400,7 +413,7 @@ class TSVFile(object):
             tsv_table_prfx = split_col[0]
             # e.g. acq -> acquisitions
             target_table = GlobalMapping.TSV_table_to_table(tsv_table_prfx)
-            if target_table not in GlobalMapping.PossibleTables:
+            if target_table not in GlobalMapping.POSSIBLE_TABLES:
                 diag.error("Invalid Header '%s' in file %s. Unknown table prefix. Field ignored"
                            % (a_field, self.relative_name))
                 continue
@@ -409,11 +422,13 @@ class TSVFile(object):
                 sel_type = 't'
                 # TODO: Tell the user that an eventual type is just ignored
             else:
-                sel_type = GlobalMapping.PossibleTypes.get(type_line[a_field])
-                if sel_type is None:
+                sel_type = self.type_line[a_field]
+                try:
+                    sel_type = GlobalMapping.POSSIBLE_TYPES[sel_type]
+                except KeyError:
                     diag.error("Invalid Type '%s' for Field '%s' in file %s. "
                                "Incorrect Type. Field ignored"
-                               % (type_line[a_field], a_field, self.relative_name))
+                               % (sel_type, a_field, self.relative_name))
                     continue
             # Add the new custom column
             target_col = split_col[1]
@@ -423,13 +438,13 @@ class TSVFile(object):
             if not how.custom_mapping.was_empty:
                 diag.warn("New field %s found in file %s" % (a_field, self.relative_name))
 
-    def validate_content(self, how: ImportHow, diag: ImportDiagnostic, rdr, clean_fields):
+    def validate_content(self, how: ImportHow, diag: ImportDiagnostic):
         row_count_for_csv = 0
         vals_cache = {}
-        for lig in rdr:
+        for lig in self.rdr:
             row_count_for_csv += 1
 
-            self.validate_line(how, diag, lig, clean_fields, vals_cache)
+            self.validate_line(how, diag, lig, vals_cache)
 
             # Verify the image file
             object_id = clean_value_and_none(lig.get('object_id', ''))
@@ -462,21 +477,22 @@ class TSVFile(object):
 
         return row_count_for_csv
 
-    def validate_line(self, how: ImportHow, diag: ImportDiagnostic, lig, clean_fields, vals_cache):
+    def validate_line(self, how: ImportHow, diag: ImportDiagnostic, lig, vals_cache):
         """
             Validate a line from data point of view.
         :param how:
         :param diag:
         :param lig:
-        :param clean_fields:
         :param vals_cache:
         :return:
         """
         latitude_was_seen = False
-        for raw_field, a_field in clean_fields.items():
-            m = GlobalMapping.PredefinedFields.get(a_field)
+        predefined_mapping = GlobalMapping.PREDEFINED_FIELDS
+        custom_mapping = how.custom_mapping
+        for raw_field, a_field in self.clean_fields.items():
+            m = predefined_mapping.get(a_field)
             if m is None:
-                m = how.custom_mapping.search_field(a_field)
+                m = custom_mapping.search_field(a_field)
                 # No mapping, not stored
                 if m is None:
                     continue

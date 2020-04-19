@@ -28,14 +28,16 @@ class InBundle(object):
     """
         From EcoTaxa point of view, some structured data coming into the system.
     """
-    FILTERS = ("**/ecotaxa*.txt", "**/ecotaxa*.tsv", "**/*Images.zip")
+    TSV_FILTERS = ("**/ecotaxa*.txt", "**/ecotaxa*.tsv")
+    UVPV6_FILTER = "**/*Images.zip"
 
     def __init__(self, path: str):
         self.path = Path(path)
         # Compute the files we have to process.
         self.possible_files = []
-        for a_filter in self.FILTERS:
+        for a_filter in self.TSV_FILTERS:
             self.possible_files.extend(self.path.glob(a_filter))
+        self.sub_bundles = [a_bundle for a_bundle in self.path.glob(self.UVPV6_FILTER)]
 
     def possible_files_as_posix(self):
         """
@@ -54,7 +56,6 @@ class InBundle(object):
             :return:
         """
         random.seed()
-        total_row_count = 0
         start_time = time.time()
         # Borrow session from writer
         session = where.db_writer.session
@@ -64,10 +65,11 @@ class InBundle(object):
         how.existing_objects = self.fetch_existing_objects(session, prj_id=how.prj_id)
         logger.info("existing_parent_ids = %s", how.existing_parent_ids)
 
-        ret = self.import_each_file(where, how, start_time, total_row_count)
+        total_row_count = 0
+        ret = self.import_each_file(where, how, total_row_count, start_time)
         return ret
 
-    def import_each_file(self, where: ImportWhere, how: ImportHow, start_time, total_row_count):
+    def import_each_file(self, where: ImportWhere, how: ImportHow, total_row_count, start_time):
         """
             Import each file in the bundle.
             :param where:
@@ -77,37 +79,36 @@ class InBundle(object):
             :return:
         """
 
-        for a_file in self.possible_files:
-
-            if a_file.name.endswith("Images.zip"):
-                # It's another kind of bundle
-                sub_bundle = UVPV6Bundle(a_file)
-                relative_name = sub_bundle.relative_name
-                logger.info("Importing UVPV6 file %s" % relative_name)
-                sub_bundle.before_import(how)
-                rows_for_csv = sub_bundle.import_each_file(where, how, start_time, total_row_count)
-                sub_bundle.after_import(how)
-            else:
-                tsv_to_read = TSVFile(a_file, self.path)
-                relative_name = tsv_to_read.relative_name
-                if relative_name in how.files_not_to_import:
-                    logger.info("Skipping already loaded file %s" % relative_name)
-                    continue
-                else:
-                    logger.info("Importing file %s" % relative_name)
-
-                rows_for_csv = tsv_to_read.do_import(where, how,
-                                                     total_row_count, self.notify_user)
-
-                how.loaded_files.append(relative_name)
-
-                where.db_writer.persist()
-
+        def log_stats():
             elapsed = time.time() - start_time
             rows_per_sec = int(total_row_count / elapsed)
             logger.info("File %s : %d rows loaded, %d so far at %d rows/s",
                         relative_name, rows_for_csv, total_row_count,
                         rows_per_sec)
+
+        for a_file in self.sub_bundles:
+            sub_bundle = UVPV6Bundle(a_file)
+            relative_name = sub_bundle.relative_name
+            logger.info("Importing UVPV6 file %s" % relative_name)
+            sub_bundle.before_import(how)
+            rows_for_csv = sub_bundle.import_each_file(where, how, total_row_count, start_time)
+            total_row_count += rows_for_csv
+            sub_bundle.after_import(how)
+            log_stats()
+
+        for a_file in self.possible_files:
+            tsv_to_read = TSVFile(a_file, self.path)
+            relative_name = tsv_to_read.relative_name
+            if relative_name in how.files_not_to_import:
+                logger.info("Skipping already loaded file %s" % relative_name)
+                continue
+            else:
+                logger.info("Importing file %s" % relative_name)
+            rows_for_csv = tsv_to_read.do_import(where, how, total_row_count, self.notify_user)
+            total_row_count += rows_for_csv
+            how.loaded_files.append(relative_name)
+            where.db_writer.persist()
+            log_stats()
 
         where.db_writer.eof_cleanup()
 
@@ -136,7 +137,7 @@ class InBundle(object):
         """
         existing_ids = {}
         # Get orig_id from acquisition, sample, process
-        for alias, clazz in GlobalMapping.parent_classes.items():
+        for alias, clazz in GlobalMapping.PARENT_CLASSES.items():
             collect = clazz.get_orig_id_and_pk(session, prj_id)
             existing_ids[alias] = collect
         return existing_ids
@@ -171,26 +172,28 @@ class InBundle(object):
         return total_row_count
 
     def validate_all_files(self, how, diag, session):
-
         total_row_count = 0
-        for a_file in self.possible_files:
+        for a_file in self.sub_bundles:
+            # It's another kind of bundle
+            sub_bundle = UVPV6Bundle(a_file)
+            relative_name = sub_bundle.relative_name
+            logger.info("Analyzing UVPV6 %s" % relative_name)
+            rows_for_csv = sub_bundle.validate_all_files(how, diag, session)
+            sub_bundle.cleanup()
 
-            if a_file.name.endswith("Images.zip"):
-                # It's another kind of bundle
-                sub_bundle = UVPV6Bundle(a_file)
-                relative_name = sub_bundle.relative_name
-                logger.info("Analyzing UVPV6 %s" % relative_name)
-                rows_for_csv = sub_bundle.validate_all_files(how, diag, session)
-                sub_bundle.cleanup()
+            logger.info("File %s : %d row analysed", relative_name, rows_for_csv)
+            total_row_count += rows_for_csv
+
+        for a_file in self.possible_files:
+            # TSV file with attached images
+            tsv_to_validate = TSVFile(a_file, self.path)
+            relative_name = tsv_to_validate.relative_name
+            if relative_name in how.files_not_to_import:
+                logger.info("Skipping already loaded file %s" % relative_name)
+                continue
             else:
-                tsv_to_validate = TSVFile(a_file, self.path)
-                relative_name = tsv_to_validate.relative_name
-                if relative_name in how.files_not_to_import:
-                    logger.info("Skipping already loaded file %s" % relative_name)
-                    continue
-                else:
-                    logger.info("Analyzing file %s" % relative_name)
-                rows_for_csv = tsv_to_validate.do_validate(how, diag)
+                logger.info("Analyzing file %s" % relative_name)
+            rows_for_csv = tsv_to_validate.do_validate(how, diag)
 
             logger.info("File %s : %d row analysed", relative_name, rows_for_csv)
             total_row_count += rows_for_csv
@@ -232,7 +235,7 @@ class UVPV6Bundle(InBundle):
         sample_tsv = sample_dir / tsv_file
         if sample_dir.exists():
             # Target directory exists, e.g. from step1 if we're in step2
-            if not sample_tsv.exists(): # pragma: no cover
+            if not sample_tsv.exists():  # pragma: no cover
                 # There was an incorrect unzipping before, as we miss the main TSV
                 shutil.rmtree(sample_dir.as_posix())
         if not sample_dir.exists():
