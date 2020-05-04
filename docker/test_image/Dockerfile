@@ -7,6 +7,8 @@ RUN apt-get update
 RUN apt-get install python3 python3-pip postgresql-client curl --no-install-recommends --yes
 # All below is just for compiling psycopg2cffi, i.e. running the backend under pypy
 RUN apt-get install python3-dev python3-setuptools g++ libpq-dev python3-wheel --yes
+# uvloop for uvicorn needs cython needs make
+RUN apt-get install make file cython3 --yes
 
 # Generate binary packages (wheels)
 COPY py/requirements.txt ./reqs.txt
@@ -37,6 +39,7 @@ COPY QA/py/requirements.txt ./reqs_qa.txt
 # OK but the .whl remain and take space
 #COPY --from=builder /*.whl ./
 
+# So copy the dist-packages directly
 RUN mkdir -p /usr/lib/python3/dist-packages
 COPY --from=builder --chown=root:root /usr/lib/python3/dist-packages/ /usr/lib/python3/dist-packages/
 RUN mkdir -p /usr/local/lib/python3.6/dist-packages

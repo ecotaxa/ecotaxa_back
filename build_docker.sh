@@ -4,7 +4,7 @@
 #
 # The docker image is referenced in GitHub QA actions
 #
-docker build -t grololo06/ecotaxa -f docker/test_image/Dockerfile
+docker build -t grololo06/ecotaxa -f docker/test_image/Dockerfile .
 # once built:
 # docker push grololo06/ecotaxa:latest
 # needing before:
