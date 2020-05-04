@@ -29,7 +29,7 @@ class InBundle(object):
         From EcoTaxa point of view, some structured data coming into the system.
     """
     TSV_FILTERS = ("**/ecotaxa*.txt", "**/ecotaxa*.tsv")
-    UVPV6_FILTER = "**/*Images.zip"
+    UVP6_FILTER = "**/*Images.zip"
 
     def __init__(self, path: str):
         self.path = Path(path)
@@ -37,7 +37,7 @@ class InBundle(object):
         self.possible_files = []
         for a_filter in self.TSV_FILTERS:
             self.possible_files.extend(self.path.glob(a_filter))
-        self.sub_bundles = [a_bundle for a_bundle in self.path.glob(self.UVPV6_FILTER)]
+        self.sub_bundles = [a_bundle for a_bundle in self.path.glob(self.UVP6_FILTER)]
 
     def possible_files_as_posix(self):
         """
@@ -87,9 +87,9 @@ class InBundle(object):
                         rows_per_sec)
 
         for a_file in self.sub_bundles:
-            sub_bundle = UVPV6Bundle(a_file)
+            sub_bundle = UVP6Bundle(a_file)
             relative_name = sub_bundle.relative_name
-            logger.info("Importing UVPV6 file %s" % relative_name)
+            logger.info("Importing UVP6 file %s" % relative_name)
             sub_bundle.before_import(how)
             rows_for_csv = sub_bundle.import_each_file(where, how, total_row_count, start_time)
             total_row_count += rows_for_csv
@@ -175,9 +175,9 @@ class InBundle(object):
         total_row_count = 0
         for a_file in self.sub_bundles:
             # It's another kind of bundle
-            sub_bundle = UVPV6Bundle(a_file)
+            sub_bundle = UVP6Bundle(a_file)
             relative_name = sub_bundle.relative_name
-            logger.info("Analyzing UVPV6 %s" % relative_name)
+            logger.info("Analyzing UVP6 %s" % relative_name)
             rows_for_csv = sub_bundle.validate_all_files(how, diag, session)
             sub_bundle.cleanup()
 
@@ -211,9 +211,9 @@ class InBundle(object):
             logger.error(msg)
 
 
-class UVPV6Bundle(InBundle):
+class UVP6Bundle(InBundle):
     """
-        An UVPV6 bundle, i.e. an *Images.zip inside a enclosing .zip or directory.
+        An UVP6 bundle, i.e. an *Images.zip inside a enclosing .zip or directory.
         We have e.g. b_da_19_Images.zip.
         The zip contains:
             - At root, an optional vignette generation config (compute_vignette.txt)

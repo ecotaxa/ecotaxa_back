@@ -3,7 +3,6 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import datetime
-import json
 import logging
 import re
 import zipfile
@@ -14,6 +13,7 @@ from typing import Union, Dict
 from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping
 from BO.helpers.ImportHelpers import ImportHow, ImportDiagnostic, ImportWhere
+from api.imports import ImportPrepReq, ImportRealReq, ImportRealRsp, ImportPrepRsp
 from db.Image import Image
 from db.Object import Object
 from db.Project import Project
@@ -34,22 +34,27 @@ class ImportServiceBase(Service, ABC):
     """
         Common methods and data for import task steps.
     """
+    req: Union[ImportPrepReq, ImportRealReq]
     prj_id: int = 0
-    """ The project ID to import into """
     task_id: int = -1
-    """ The task ID to use for reporting """
-    source_dir_or_zip: str = ""
-    """ In UI: Choose a folder or zip file on the server
-      OR Upload folder(s) compressed as a zip file """
-    taxo_mapping: dict = {}
-    """ Optional taxonomy mapping """
-    skip_already_loaded_files: str = "N"
-    """ Skip tsv files that have already been imported """
-    skip_object_duplicate: str = "No"
-    """ Skip objects that have already been imported """
 
-    def __init__(self):
+    # """ The task ID to use for reporting """
+    # source_dir_or_zip: str = ""
+    # """ In UI: Choose a folder or zip file on the server
+    #   OR Upload folder(s) compressed as a zip file """
+    # taxo_mapping: dict = {}
+    # """ Optional taxonomy mapping """
+    # skip_already_loaded_files: str = "N"
+    # """ Skip tsv files that have already been imported """
+    # skip_object_duplicate: str = "No"
+    # """ Skip objects that have already been imported """
+
+    def __init__(self, prj_id: int, req: Union[ImportPrepReq, ImportRealReq]):
         super().__init__()
+        self.prj_id = prj_id
+        """ The project ID to import into """
+        self.task_id = req.task_id
+        self.req = req
         # From legacy code, vault and temptask are in src directory
         self.vault = Vault(join(self.link_src, 'vault'))
         self.temp_for_task = TempDirForTasks(join(self.link_src, 'temptask'))
@@ -64,6 +69,7 @@ class ImportServiceBase(Service, ABC):
         self.prj = self.session.query(Project).filter_by(projid=self.prj_id).first()
         assert self.prj is not None
         self.task = self.session.query(Task).filter_by(id=self.task_id).first()
+        assert self.task is not None
 
     def update_progress(self, percent: int, message: str):
         # TODO: See while sync with legacy
@@ -78,43 +84,42 @@ class ImportAnalysis(ImportServiceBase):
         Before doing the real import, analyze the input in order to prevent issues and give choices
         to user.
     """
-    SUP = ImportServiceBase
+    req: ImportPrepReq  # Not used, just for typings
 
-    MSG_IN = {"prj": id(SUP.prj_id),
-              "tsk": id(SUP.task_id),
-              "src": id(SUP.source_dir_or_zip),
-              "map": id(SUP.taxo_mapping),
-              "sal": id(SUP.skip_already_loaded_files),
-              "sod": id(SUP.skip_object_duplicate)
-              }
-
-    def __init__(self):
-        super().__init__()
+    def __init__(self, prj_id: int, req: ImportPrepReq):
+        super().__init__(prj_id, req)
         # Received from parameters
+        self.source_dir_or_zip = req.source_path
+        # From DB record
         self.intra_step = 0
         self.step_errors = []
         # The row count seen at previous step
         self.total_row_count = 0
 
-    def run(self):
+    def run(self) -> ImportPrepRsp:
         super().prepare_run()
         loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
         logger.info("Previously loaded files: %s", loaded_files)
 
-        resp = {}
+        ret = ImportPrepRsp(task_id=self.task_id,
+                            source_path=self.source_dir_or_zip,
+                            taxo_mappings=self.req.taxo_mappings,
+                            skip_existing_objects=self.req.skip_existing_objects,
+                            skip_loaded_files=self.req.skip_loaded_files)
+
         if self.intra_step == 0:
             # Subtask 1, unzip or point to source directory
             self.update_progress(1, "Unzip File into temporary folder")
             self.unzip_if_needed()
             self.intra_step = 1
-            resp.update({"src": self.source_dir_or_zip})
+            ret.source_path = self.source_dir_or_zip
 
         if self.intra_step == 1:
             # Validate files
             logger.info("SubTask1 : Analyze TSV Files")
             how, diag = self.do_intra_step_1(loaded_files)
-            resp.update({"cmp": how.custom_mapping.as_dict(),
-                         "wrn": diag.messages})
+            ret.mappings = how.custom_mapping.as_dict()
+            ret.warnings = diag.messages
 
             if len(diag.errors) > 0:
                 # If anything went wrong we loop on intra_step 1
@@ -125,7 +130,7 @@ class ImportAnalysis(ImportServiceBase):
                 for an_err in diag.errors:
                     logger.error(an_err)
                 self.session.commit()
-                resp.update({"err": diag.errors})
+                ret.errors = diag.errors
             else:
                 # Move to intra_step 2
                 self.intra_step = 2
@@ -153,13 +158,12 @@ class ImportAnalysis(ImportServiceBase):
                 # sinon on pose une question
 
                 # Prepare response in serializable form
-                resp.update(
-                    {"fu": how.found_users,
-                     "ft": how.taxo_found,
-                     "nfu": not_found_users,
-                     "nft": not_found_taxo})
+                ret.found_users = how.found_users
+                ret.taxo_found = how.taxo_found
+                ret.not_found_taxo = not_found_taxo
+                ret.not_found_users = not_found_users
 
-        return resp
+        return ret
 
     def do_intra_step_1(self, loaded_files):
         # The mapping to custom columns, either empty or from previous import operations on same project.
@@ -167,12 +171,12 @@ class ImportAnalysis(ImportServiceBase):
         # Source bundle construction
         source_bundle = InBundle(self.source_dir_or_zip)
         # Configure the validation to come, directives.
-        import_how = ImportHow(self.prj_id, custom_mapping, self.skip_object_duplicate == 'Y', loaded_files)
-        if self.skip_already_loaded_files == 'Y':
+        import_how = ImportHow(self.prj_id, custom_mapping, self.req.skip_existing_objects, loaded_files)
+        if self.req.skip_loaded_files:
             import_how.compute_skipped(source_bundle, logger)
         # A structure to collect validation result
         import_diag = ImportDiagnostic()
-        if self.skip_object_duplicate != 'Y':
+        if not self.req.skip_existing_objects:
             import_diag.existing_objects_and_image = Image.fetch_existing_images(self.session, self.prj_id)
         # Do the bulk job of validation
         source_bundle.validate_import(self.session, import_how, import_diag)
@@ -241,28 +245,19 @@ class ImportAnalysis(ImportServiceBase):
 
 
 class RealImport(ImportServiceBase):
-    SUP = ImportServiceBase
+    """
+        Real import, assumes that previous step completed successfully.
+    """
+    req: ImportRealReq  # Not used, just here for correct typings
 
-    custom_mapping: ProjectMapping = ProjectMapping()
-    found_users = 2
-    taxo_found = 3
-    not_found_users = 4
-    not_found_taxo = 5
-
-    MSG_IN = dict(ImportAnalysis.MSG_IN)
-    MSG_IN.update({  # output from step 1
-        "cmp": id(custom_mapping),
-        "fu": id(found_users),
-        "ft": id(taxo_found),
-        "nfu": id(not_found_users),
-        "nft": id(not_found_taxo)})
-
-    def __init__(self):
-        super().__init__()
+    def __init__(self, prj_id: int, req: ImportRealReq):
+        super().__init__(prj_id, req)
         # The row count seen at previous step
         self.total_row_count = 0
+        #
+        self.custom_mapping: Union[Dict, ProjectMapping] = req.mappings
 
-    def run(self):
+    def run(self) -> ImportRealRsp:
         """
             Do the real job using injected parameters.
             :return:
@@ -271,23 +266,22 @@ class RealImport(ImportServiceBase):
         loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
         logger.info("Previously loaded files: %s", loaded_files)
 
-        # Transcode from serialized
-        # noinspection PyTypeChecker
+        # Transcode from serialized and save straight away
         self.custom_mapping = ProjectMapping().load_from_dict(self.custom_mapping)
-
         self.save_mapping(self.custom_mapping)
-        source_bundle = InBundle(self.source_dir_or_zip)
+
+        source_bundle = InBundle(self.req.source_path)
         # Configure the import to come, destination
         db_writer = DBWriter(self.session)
         import_where = ImportWhere(db_writer, self.vault, self.temp_for_task.base_dir_for(self.task_id))
         # Configure the import to come, directives
-        import_how = ImportHow(self.prj_id, self.custom_mapping, self.skip_object_duplicate == 'Y', loaded_files)
-        import_how.taxo_mapping = self.taxo_mapping
-        import_how.taxo_found = self.taxo_found
-        import_how.found_users = self.found_users
-        if self.skip_already_loaded_files == 'Y':
+        import_how = ImportHow(self.prj_id, self.custom_mapping, self.req.skip_existing_objects, loaded_files)
+        import_how.taxo_mapping = self.req.taxo_mappings
+        import_how.taxo_found = self.req.taxo_found
+        import_how.found_users = self.req.found_users
+        if self.req.skip_loaded_files:
             import_how.compute_skipped(source_bundle, logger)
-        if self.skip_object_duplicate == 'Y':
+        if not self.req.skip_existing_objects:
             import_how.objects_and_images_to_skip = Image.fetch_existing_images(self.session, self.prj_id)
         import_how.do_thumbnail_above(int(self.config['THUMBSIZELIMIT']))
 
@@ -307,7 +301,10 @@ class RealImport(ImportServiceBase):
         Project.update_stats(self.session, self.prj_id)
         logger.info("Total of %d rows loaded" % row_count)
         # TODO: better way?
-        self.custom_mapping = self.custom_mapping.as_dict()
+        # self.custom_mapping = self.custom_mapping.as_dict()
+        # Prepare response
+        ret = ImportRealRsp()
+        return ret
 
     def save_mapping(self, custom_mapping):
         """

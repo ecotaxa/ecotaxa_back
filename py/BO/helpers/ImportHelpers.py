@@ -2,7 +2,6 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-import logging
 from pathlib import Path
 from typing import List, Union, Set, Dict, Optional
 
@@ -22,8 +21,8 @@ class ImportDiagnostic(object):
         # taxonomy ids @see Taxonomy
         self.classif_id_seen = set()
         self.nb_objects_without_gps = 0
-        self.messages = []
-        self.errors = []
+        self.messages: List[str] = []
+        self.errors: List[str] = []
         self.existing_objects_and_image = set()
 
     def warn(self, message: str):
@@ -69,7 +68,7 @@ class ImportHow(object):
         self.existing_objects: Optional[Dict[str, int]] = None
         # Updated during RealImport
         self.loaded_files = loaded_files
-        # For UVPV6 vignetting
+        # For UVP6 vignetting
         self.vignette_maker = None
 
     def do_thumbnail_above(self, max_dim):

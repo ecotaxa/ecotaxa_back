@@ -5,6 +5,7 @@
 # noinspection PyPackageRequirements
 from typing import Dict
 
+# noinspection PyPackageRequirements
 from sqlalchemy import Index, Column, ForeignKey, Sequence, Integer
 # noinspection PyPackageRequirements
 from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, INTEGER, REAL, DOUBLE_PRECISION, DATE, TIME, FLOAT, CHAR, \

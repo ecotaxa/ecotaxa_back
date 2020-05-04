@@ -340,8 +340,8 @@ class TSVFile(object):
             # Source file is a replacement
             img_file_path = instead_image
         else:
-            # Files are in a subdirectory for UVPV6, same directory for non-UVPV6
-            # TODO: Unsure if it works on Windows, as there is a "/" for UVPV6
+            # Files are in a subdirectory for UVP6, same directory for non-UVP6
+            # TODO: Unsure if it works on Windows, as there is a "/" for UVP6
             img_file_path = self.path.parent.joinpath(image_to_write.orig_file_name)
 
         sub_path = where.vault.store_image(img_file_path, image_to_write.imgid)
@@ -450,7 +450,7 @@ class TSVFile(object):
                 diag.error("Missing object_id in line '%s' of file %s. "
                            % (row_count_for_csv, self.relative_name))
             img_file_name = clean_value_and_none(lig.get('img_file_name', 'MissingField img_file_name'))
-            # Below works as well for UVPV6, as the file 'name' is in fact a relative path,
+            # Below works as well for UVP6, as the file 'name' is in fact a relative path,
             # e.g. 'sub1/20200205-111823_3.png'
             img_file_path = self.path.parent / img_file_name
             if not img_file_path.exists():
