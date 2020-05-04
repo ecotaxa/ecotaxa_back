@@ -4,7 +4,7 @@ Build the DB from scratch in EcoTaxa V2_2, using an SQL Dump, so the 2_2 source 
 import shutil
 import sys, time
 from os import environ
-from os.path import join
+from os.path import join, dirname, realpath
 from pathlib import Path
 
 from lib.processes import SyncSubProcess
@@ -123,3 +123,10 @@ THUMBSIZELIMIT=99
         else:
             # Server should do the cleanup, e.g. exit docker
             pass
+
+if __name__ == '__main__':
+    HERE = Path(dirname(realpath(__file__)))
+    PG_DIR = HERE / ".." / "pg_files"
+    db = EcoTaxaDB(PG_DIR, Path("fakeconf"))
+    db.cleanup()
+    db.create()

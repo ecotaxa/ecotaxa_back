@@ -4,7 +4,7 @@ To build a standard import file:
  - Zip all into a zip file which can be imported into EcoTaxa
  - Note: do not zip the containing directory, but all included dictories.
 
-To build an UVPV6 import file:
+To build an UVP6 import file:
  - Start from one or several diectories like b_da_19_Images
  - Zip the content of each of them into zip file named e.g. b_da_19_Images.zip. The zip file must NOT contain a root directory, only files flat.
- - Zip all obtained zip files into a final e.g. V6.zip which can be imported into EcoTaxa
+ - Zip all obtained zip files into a final e.g. UVP6_example.zip which can be imported into EcoTaxa

@@ -13,7 +13,7 @@ def do_dump():
     from tech.AsciiDump import AsciiDumper
     sce = AsciiDumper()
     # Dump after an import thru legacy 2.2 and empty DB
-    sce.run(projid=2, out="ref_uvpv6.txt")
+    sce.run(projid=2, out="ref_uvp6.txt")
     # sce.run(projid=1,out="new.txt")
 
 
