@@ -31,3 +31,24 @@ def api_import(project_id: int, params: ImportRealReq):
     """
     sce = RealImport(project_id, params)
     return sce.run()
+
+
+# In a development environment, dump the API definition at each run
+def dump_openapi():
+    import sys
+    if "--reload" not in sys.argv:
+        return  # It's not dev
+    import json
+    from pathlib import Path
+    dest: Path = Path("..") / "openapi.json"
+    with dest.open("w") as fd:
+        json.dump(app.openapi(),
+                  fd,
+                  ensure_ascii=False,
+                  allow_nan=False,
+                  indent=None,
+                  separators=(",", ":"),
+                  )
+
+
+dump_openapi()
