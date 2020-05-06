@@ -46,8 +46,6 @@ def dump_openapi():
                               allow_nan=False,
                               indent=None,
                               separators=(",", ":"))
-        # TODO: No idea why but leading / are not appreciated by openapi code generator
-        json_def = json_def.replace(r'"paths":{"/', r'"paths":{"')
         fd.write(json_def)
 
 
