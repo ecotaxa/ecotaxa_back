@@ -10,9 +10,8 @@ from tasks.Import import ImportAnalysis, RealImport
 
 # TODO: A nicer API doc, see https://github.com/tiangolo/fastapi/issues/1140
 
-app = FastAPI()
-app.openapi_prefix = "/api"
-app.title = "EcoTaxa"
+app = FastAPI(title="EcoTaxa",
+              version="0.0.1")
 
 
 @app.post("/import_prep/{project_id}", response_model=ImportPrepRsp)
@@ -42,13 +41,14 @@ def dump_openapi():
     from pathlib import Path
     dest: Path = Path("..") / "openapi.json"
     with dest.open("w") as fd:
-        json.dump(app.openapi(),
-                  fd,
-                  ensure_ascii=False,
-                  allow_nan=False,
-                  indent=None,
-                  separators=(",", ":"),
-                  )
+        json_def = json.dumps(app.openapi(),
+                              ensure_ascii=False,
+                              allow_nan=False,
+                              indent=None,
+                              separators=(",", ":"))
+        # TODO: No idea why but leading / are not appreciated by openapi code generator
+        json_def = json_def.replace(r'"paths":{"/', r'"paths":{"')
+        fd.write(json_def)
 
 
 dump_openapi()
