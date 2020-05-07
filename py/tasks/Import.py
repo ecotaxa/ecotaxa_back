@@ -8,7 +8,7 @@ import re
 import zipfile
 from abc import ABC
 from os.path import join
-from typing import Union, Dict
+from typing import Union, Dict, Optional
 
 from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping
@@ -38,17 +38,6 @@ class ImportServiceBase(Service, ABC):
     prj_id: int = 0
     task_id: int = -1
 
-    # """ The task ID to use for reporting """
-    # source_dir_or_zip: str = ""
-    # """ In UI: Choose a folder or zip file on the server
-    #   OR Upload folder(s) compressed as a zip file """
-    # taxo_mapping: dict = {}
-    # """ Optional taxonomy mapping """
-    # skip_already_loaded_files: str = "N"
-    # """ Skip tsv files that have already been imported """
-    # skip_object_duplicate: str = "No"
-    # """ Skip objects that have already been imported """
-
     def __init__(self, prj_id: int, req: Union[ImportPrepReq, ImportRealReq]):
         super().__init__()
         self.prj_id = prj_id
@@ -71,12 +60,17 @@ class ImportServiceBase(Service, ABC):
         self.task = self.session.query(Task).filter_by(id=self.task_id).first()
         assert self.task is not None
 
-    def update_progress(self, percent: int, message: str):
-        # TODO: See while sync with legacy
-        self.task.progresspct = percent
+    def update_task(self, taskstate: Optional[str], percent: Optional[int], message: str):
+        if taskstate is not None:
+            self.task.taskstate = taskstate
+        if percent is not None:
+            self.task.progresspct = percent
         self.task.progressmsg = message
         self.task.lastupdate = datetime.datetime.now()
         self.session.commit()
+
+    def update_progress(self, percent: int, message: str):
+        self.update_task(taskstate=None, percent=percent, message=message)
 
 
 class ImportAnalysis(ImportServiceBase):
@@ -100,68 +94,27 @@ class ImportAnalysis(ImportServiceBase):
         super().prepare_run()
         loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
         logger.info("Previously loaded files: %s", loaded_files)
-
-        ret = ImportPrepRsp(task_id=self.task_id,
-                            source_path=self.source_dir_or_zip,
-                            taxo_mappings=self.req.taxo_mappings,
-                            skip_existing_objects=self.req.skip_existing_objects,
-                            skip_loaded_files=self.req.skip_loaded_files)
-
-        if self.intra_step == 0:
-            # Subtask 1, unzip or point to source directory
-            self.update_progress(1, "Unzip File into temporary folder")
-            self.unzip_if_needed()
-            self.intra_step = 1
-            ret.source_path = self.source_dir_or_zip
-
-        if self.intra_step == 1:
-            # Validate files
-            logger.info("SubTask1 : Analyze TSV Files")
-            how, diag = self.do_intra_step_1(loaded_files)
-            ret.mappings = how.custom_mapping.as_dict()
-            ret.warnings = diag.messages
-
-            if len(diag.errors) > 0:
-                # If anything went wrong we loop on intra_step 1
-                # Feedback to user
-                self.task.taskstate = "Error"
-                self.task.progressmsg = "Some errors were found during file parsing "
-                logger.error(self.task.progressmsg + ":")
-                for an_err in diag.errors:
-                    logger.error(an_err)
-                self.session.commit()
-                ret.errors = diag.errors
-            else:
-                # Move to intra_step 2
-                self.intra_step = 2
-                logger.info("Start Sub Step 1.2")
-                # Resolve users...
-                not_found_users = self.resolve_users(self.session, how.found_users)
-                if len(not_found_users) > 0:
-                    logger.info("Some Users Not Found = %s", not_found_users)
-                # ...and taxonomy
-                not_found_taxo = self.resolve_taxa(self.session, how.taxo_found)
-                if len(not_found_taxo) > 0:
-                    logger.info("Some Taxo Not Found = %s", not_found_taxo)
-                # # raise Exception("TEST")
-                # if len(not_found_users) == 0 and len(not_found_taxo) == 0 and len(warn_messages) == 0:
-                #     # all OK, proceed straight away to step2
-                #     # TODO
-                #     pass
-                #     # self.SPStep2()
-                # else:
-                #     self.task.taskstate = "Question"
-                # if len(warn_messages) > 0:
-                #     self.update_progress(1, "Unzip File on temporary folder")
-                # else:
-                #     self.update_progress(1, "Unzip File on temporary folder")
-                # sinon on pose une question
-
-                # Prepare response in serializable form
-                ret.found_users = how.found_users
-                ret.taxo_found = how.taxo_found
-                ret.not_found_taxo = not_found_taxo
-                ret.not_found_users = not_found_users
+        # Prepare response
+        ret = ImportPrepRsp(source_path=self.source_dir_or_zip)
+        self.update_progress(0, "Starting")
+        # Unzip or point to source directory
+        self.unzip_if_needed()
+        ret.source_path = self.source_dir_or_zip
+        # Validate files
+        logger.info("Analyze TSV Files")
+        how, diag, nb_rows = self.do_intra_step_1(loaded_files)
+        ret.mappings = how.custom_mapping.as_dict()
+        ret.warnings = diag.messages
+        ret.errors = diag.errors
+        ret.rowcount = nb_rows
+        # Resolve users...
+        logger.info("Resolve users")
+        self.resolve_users(self.session, how.found_users)
+        ret.found_users = how.found_users
+        # ...and taxonomy
+        logger.info("Resolve taxonomy")
+        self.resolve_taxa(self.session, how.taxo_found)
+        ret.found_taxa = how.taxo_found
 
         return ret
 
@@ -179,23 +132,21 @@ class ImportAnalysis(ImportServiceBase):
         if not self.req.skip_existing_objects:
             import_diag.existing_objects_and_image = Image.fetch_existing_images(self.session, self.prj_id)
         # Do the bulk job of validation
-        source_bundle.validate_import(self.session, import_how, import_diag)
-        return import_how, import_diag
+        nb_rows = source_bundle.validate_import(self.session, import_how, import_diag)
+        return import_how, import_diag, nb_rows
 
     @staticmethod
-    def resolve_users(session, users_found: Dict) -> [str]:
+    def resolve_users(session, users_found: Dict):
         """
             Resolve TSV names from DB names or emails.
         """
         names = [x for x in users_found.keys()]
         emails = [x.get('email') for x in users_found.values()]
         User.find_users(session, names, emails, users_found)
-        logger.info("Users Found = %s", users_found)
-        not_found_users = [k for k, v in users_found.items() if v.get("id") is None]
-        return not_found_users
+        logger.info("Users Found for all TSVs = %s", users_found)
 
     @staticmethod
-    def resolve_taxa(session, taxo_found: dict) -> [str]:
+    def resolve_taxa(session, taxo_found: dict):
         """
             Resolve taxa names.
             :param session:
@@ -203,7 +154,6 @@ class ImportAnalysis(ImportServiceBase):
             :return not found taxa
         """
         lower_taxon_list = []
-        not_found_taxo = []
         regexsearchparenthese = re.compile(r'(.+) \((.+)\)$')
         for taxon_lc in taxo_found.keys():
             taxo_found[taxon_lc] = {'nbr': 0, 'id': None}
@@ -216,20 +166,18 @@ class ImportAnalysis(ImportServiceBase):
 
         Taxonomy.resolve_taxa(session, taxo_found, lower_taxon_list)
 
-        logger.info("Taxo Found = %s", taxo_found)
+        logger.info("For all TSVs, taxa with no ID found from DB = %s", taxo_found)
         for found_k, found_v in taxo_found.items():
             if found_v['nbr'] == 0:
                 logger.info("Taxo '%s' Not Found", found_k)
-                not_found_taxo.append(found_k)
             elif found_v['nbr'] > 1:
                 # more than one is like not found
                 logger.info("Taxo '%s' Found more than once", found_k)
-                not_found_taxo.append(found_k)
                 taxo_found[found_k]['id'] = None
         for found_k, found_v in taxo_found.items():
             # in the end we just keep the id, other fields were transitory
             taxo_found[found_k] = found_v['id']
-        return not_found_taxo
+        logger.info("For all TSVs, taxa with no ID resolved = %s", taxo_found)
 
     def unzip_if_needed(self):
         """
@@ -252,8 +200,6 @@ class RealImport(ImportServiceBase):
 
     def __init__(self, prj_id: int, req: ImportRealReq):
         super().__init__(prj_id, req)
-        # The row count seen at previous step
-        self.total_row_count = 0
         #
         self.custom_mapping: Union[Dict, ProjectMapping] = req.mappings
 
@@ -266,7 +212,7 @@ class RealImport(ImportServiceBase):
         loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
         logger.info("Previously loaded files: %s", loaded_files)
 
-        # Transcode from serialized and save straight away
+        # Transcode from serialized form and save straight away
         self.custom_mapping = ProjectMapping().load_from_dict(self.custom_mapping)
         self.save_mapping(self.custom_mapping)
 
@@ -277,7 +223,7 @@ class RealImport(ImportServiceBase):
         # Configure the import to come, directives
         import_how = ImportHow(self.prj_id, self.custom_mapping, self.req.skip_existing_objects, loaded_files)
         import_how.taxo_mapping = self.req.taxo_mappings
-        import_how.taxo_found = self.req.taxo_found
+        import_how.taxo_found = self.req.found_taxa
         import_how.found_users = self.req.found_users
         if self.req.skip_loaded_files:
             import_how.compute_skipped(source_bundle, logger)
@@ -286,7 +232,7 @@ class RealImport(ImportServiceBase):
         import_how.do_thumbnail_above(int(self.config['THUMBSIZELIMIT']))
 
         # Do the bulk job of import
-        row_count = source_bundle.do_import(import_where, import_how)
+        row_count = source_bundle.do_import(import_where, import_how, self.req.rowcount, self.report_progress)
 
         # Update loaded files in DB
         self.prj.fileloaded = "\n".join(import_how.loaded_files)
@@ -300,11 +246,13 @@ class RealImport(ImportServiceBase):
         # Stats depend on taxo stats
         Project.update_stats(self.session, self.prj_id)
         logger.info("Total of %d rows loaded" % row_count)
-        # TODO: better way?
-        # self.custom_mapping = self.custom_mapping.as_dict()
         # Prepare response
         ret = ImportRealRsp()
         return ret
+
+    def report_progress(self, current, total):
+        self.update_progress(100 * current / total,
+                             "Processing files %d/%d" % (current, total))
 
     def save_mapping(self, custom_mapping):
         """

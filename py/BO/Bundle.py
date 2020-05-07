@@ -6,17 +6,17 @@ import configparser
 import logging
 import random
 import shutil
-import time
 import zipfile
 from pathlib import Path
-
 # noinspection PyPackageRequirements
+from typing import Callable
+
 from sqlalchemy.orm import Session
 
 from BO.Mappings import GlobalMapping
 from BO.TSVFile import TSVFile
 from BO.Vignette import VignetteMaker
-from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic
+from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
 from db.Image import Image
 from db.Object import Object
 from db.Taxonomy import Taxonomy
@@ -48,15 +48,16 @@ class InBundle(object):
             # relative name for logging and recording what was done
             yield relative_file.as_posix()
 
-    def do_import(self, where: ImportWhere, how: ImportHow) -> int:
+    def do_import(self, where: ImportWhere, how: ImportHow, rowcount: int, report_def: Callable) -> int:
         """
             Import the full bundle, i.e. every contained file.
             :param where:
             :param how:
-            :return:
+            :param rowcount: Total rowcount, from preparation step.
+            :return: The total number of rows
         """
         random.seed()
-        start_time = time.time()
+        stats = ImportStats(rowcount, report_def)
         # Borrow session from writer
         session = where.db_writer.session
         # Get parent (enclosing) Sample, Acquisition, Process, if any
@@ -65,25 +66,21 @@ class InBundle(object):
         how.existing_objects = self.fetch_existing_objects(session, prj_id=how.prj_id)
         logger.info("existing_parent_ids = %s", how.existing_parent_ids)
 
-        total_row_count = 0
-        ret = self.import_each_file(where, how, total_row_count, start_time)
+        ret = self.import_each_file(where, how, stats)
         return ret
 
-    def import_each_file(self, where: ImportWhere, how: ImportHow, total_row_count, start_time):
+    def import_each_file(self, where: ImportWhere, how: ImportHow, stats: ImportStats):
         """
             Import each file in the bundle.
             :param where:
             :param how:
-            :param start_time:
-            :param total_row_count:
-            :return:
+            :param stats:
         """
 
         def log_stats():
-            elapsed = time.time() - start_time
-            rows_per_sec = int(total_row_count / elapsed)
+            elapsed, rows_per_sec = stats.so_far()
             logger.info("File %s : %d rows loaded, %d so far at %d rows/s",
-                        relative_name, rows_for_csv, total_row_count,
+                        relative_name, rows_for_csv, stats.current_row_count,
                         rows_per_sec)
 
         for a_file in self.sub_bundles:
@@ -91,8 +88,8 @@ class InBundle(object):
             relative_name = sub_bundle.relative_name
             logger.info("Importing UVP6 file %s" % relative_name)
             sub_bundle.before_import(how)
-            rows_for_csv = sub_bundle.import_each_file(where, how, total_row_count, start_time)
-            total_row_count += rows_for_csv
+            rows_for_csv = sub_bundle.import_each_file(where, how, stats)
+            stats.add_rows(rows_for_csv)
             sub_bundle.after_import(how)
             log_stats()
 
@@ -104,23 +101,15 @@ class InBundle(object):
                 continue
             else:
                 logger.info("Importing file %s" % relative_name)
-            rows_for_csv = tsv_to_read.do_import(where, how, total_row_count, self.notify_user)
-            total_row_count += rows_for_csv
+            rows_for_csv = tsv_to_read.do_import(where, how, stats)
+            stats.add_rows(rows_for_csv)
             how.loaded_files.append(relative_name)
             where.db_writer.persist()
             log_stats()
 
         where.db_writer.eof_cleanup()
 
-        return total_row_count
-
-    def notify_user(self, count):
-        """
-            Callback during TSV import.
-        """
-        # TODO
-        # self.UpdateProgress(100 * total_row_count / self.param.TotalRowCount,
-        #                     "Processing files %d/%d" % (total_row_count, self.total_row_count))
+        return stats.current_row_count
 
     @staticmethod
     def fetch_existing_objects(session, prj_id):
@@ -142,7 +131,7 @@ class InBundle(object):
             existing_ids[alias] = collect
         return existing_ids
 
-    def validate_import(self, session: Session, how: ImportHow, diag: ImportDiagnostic):
+    def validate_import(self, session: Session, how: ImportHow, diag: ImportDiagnostic) -> int:
         """
             Validate the full bundle, i.e. every contained file.
             :return:

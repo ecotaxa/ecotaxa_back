@@ -2,8 +2,9 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import time
 from pathlib import Path
-from typing import List, Union, Set, Dict, Optional
+from typing import List, Union, Set, Dict, Optional, Callable
 
 from BO.Mappings import ProjectMapping
 from fs.Vault import Vault
@@ -61,7 +62,7 @@ class ImportHow(object):
         self.custom_mapping: ProjectMapping = custom_mapping
         # TODO: for validating it's !=
         self.found_users = {}
-        # The taxa found in TSV, key = taxon NAME (str)
+        # The taxa _names_ found in TSV _without ID_, key = taxon NAME (str), value = None during analysis
         self.taxo_found = {}
         # Collected during RealImport
         self.existing_parent_ids: Union[Dict, None] = None
@@ -81,3 +82,28 @@ class ImportHow(object):
         for relative_name in bundle.possible_files_as_posix():
             if relative_name in self.loaded_files:
                 self.files_not_to_import.add(relative_name)
+
+
+class ImportStats(object):
+    """
+        During an import, the statistics for reporting progress.
+    """
+
+    def __init__(self, total_rows: int, report_def: Optional[Callable] = None):
+        self.start_time = time.time()
+        self.total_row_count = total_rows
+        self.current_row_count = 0
+        self.report_def = report_def
+
+    def add_rows(self, nb_rows: int):
+        self.current_row_count += nb_rows
+
+    def so_far(self):
+        elapsed = time.time() - self.start_time
+        rows_per_sec = int(self.current_row_count / elapsed)
+        return elapsed, rows_per_sec
+
+    def report(self, current):
+        if not self.report_def:
+            return
+        self.report_def(current, self.total_row_count)

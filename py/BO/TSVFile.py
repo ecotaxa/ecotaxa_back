@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from BO.Mappings import GlobalMapping, ProjectMapping
 from BO.SpaceTime import compute_sun_position, astral_cache
-from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic
+from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
 from db.Image import Image
 from db.Object import classif_qual_revert
 from utils import clean_value, none_to_empty, to_float, convert_degree_minute_float_to_decimal_degree, \
@@ -71,11 +71,12 @@ class TSVFile(object):
 
     REPORT_EVERY = 100
 
-    def do_import(self, where: ImportWhere, how: ImportHow, counter: int, call_every_chunk) -> int:
+    def do_import(self, where: ImportWhere, how: ImportHow, stats: ImportStats) -> int:
         """
             Import self into DB.
         """
         session = where.db_writer.session
+        counter = stats.current_row_count
         with self.open():
             # Only keep the fields we can persist, the ones ignored at first step would be signalled here as well
             # if we didn't prohibit the move to 2nd step in this case.
@@ -167,7 +168,7 @@ class TSVFile(object):
 
                 if (counter % self.REPORT_EVERY) == 0:
                     where.db_writer.persist()
-                    call_every_chunk(counter)
+                    stats.report(counter)
 
         return row_count_for_csv
 
