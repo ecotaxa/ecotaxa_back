@@ -7,8 +7,8 @@
 import logging
 from os.path import dirname, realpath
 from pathlib import Path
-from pprint import pprint
 
+# noinspection PyPackageRequirements
 # noinspection PyPackageRequirements
 from api.imports import *
 # Import services
@@ -36,8 +36,9 @@ ISSUES_DIR2 = DATA_DIR / "import_issues" / "no_classif_id"
 EMPTY_DIR = DATA_DIR / "import_issues" / "no_relevant_file"
 
 
-def real_params_from_prep_out(prep_out: ImportPrepRsp) -> ImportRealReq:
-    return ImportRealReq(**prep_out.dict(exclude={'warnings', 'errors'}))
+def real_params_from_prep_out(task_id, prep_out: ImportPrepRsp) -> ImportRealReq:
+    return ImportRealReq(task_id=task_id,
+                         **prep_out.dict(exclude={'warnings', 'errors'}))
 
 
 def test_import(config, database, caplog):
@@ -54,7 +55,7 @@ def test_import(config, database, caplog):
                            source_path=str(PLAIN_FILE))
     prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
     # Do real import, real, reusing prep output
-    params = real_params_from_prep_out(prep_out)
+    params = real_params_from_prep_out(task_id, prep_out)
     # Simulate a missing user and map it to admin
     params.found_users['elizandro rodriguez'] = {'id': 1}
     print(params)
@@ -66,6 +67,7 @@ def test_import(config, database, caplog):
     # sce.run(projid=params["prj"], out=out_dump)
 
 
+# @pytest.mark.skip()
 def test_import_again_skipping(config, database, caplog):
     """ Re-import similar files into same project
         CANNOT RUN BY ITSELF """
@@ -86,6 +88,7 @@ def test_import_again_skipping(config, database, caplog):
     assert found_err
 
 
+# @pytest.mark.skip()
 def test_import_a_bit_more_skipping(config, database, caplog):
     """ Re-import similar files into same project, with an extra one
         CANNOT RUN BY ITSELF """
@@ -106,7 +109,9 @@ def test_import_a_bit_more_skipping(config, database, caplog):
     # # A single TSV should be analyzed
     # assert found_imps == 1
     # Do real import
-    params = real_params_from_prep_out(prep_out)
+    params = real_params_from_prep_out(task_id, prep_out)
+    params.skip_loaded_files = True
+    params.skip_existing_objects = True
     # Simulate a missing user and map it to admin
     params.found_users['elizandro rodriguez'] = {'id': 1}
     RealImport(prj_id, params).run()
@@ -123,11 +128,11 @@ def test_import_again_not_skipping_tsv_skipping_imgs(config, database, caplog):
     # Do preparation
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(PLAIN_DIR),
-                           skip_loaded_files=False,
                            skip_existing_objects=True)
     prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
     # Do real import
-    params = real_params_from_prep_out(prep_out)
+    params = real_params_from_prep_out(task_id, prep_out)
+    params.skip_existing_objects = True
     # Simulate a missing user and map it to admin
     params.found_users['elizandro rodriguez'] = {'id': 1}
     RealImport(prj_id, params).run()
@@ -159,7 +164,7 @@ def test_import_uvp6(config, database, caplog):
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(V6_FILE))
     prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
-    params = real_params_from_prep_out(prep_out)
+    params = real_params_from_prep_out(task_id, prep_out)
     assert len(prep_out.errors) == 0
     # Do real import
     RealImport(prj_id, params).run()
