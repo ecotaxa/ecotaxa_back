@@ -90,7 +90,8 @@ def test_import_again_skipping(config, database, caplog):
 
 # @pytest.mark.skip()
 def test_import_a_bit_more_skipping(config, database, caplog):
-    """ Re-import similar files into same project, with an extra one
+    """ Re-import similar files into same project, with an extra one.
+        The extra one has missing values in the TSV.
         CANNOT RUN BY ITSELF """
     caplog.set_level(logging.DEBUG)
     task_id = TaskService().create()
