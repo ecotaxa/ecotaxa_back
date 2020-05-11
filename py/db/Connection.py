@@ -23,7 +23,7 @@ class Connection(object):
         A connection to the DB.
     """
 
-    def __init__(self, user, password, db, host='localhost', port=5432):
+    def __init__(self, user, password, db, host, port=5432):
         """
         Returns a connection and a metadata object
         """

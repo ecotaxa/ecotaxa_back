@@ -121,8 +121,9 @@ def convert_degree_minute_float_to_decimal_degree(v):
     else:  # decimal part was in minutes
         # Bug in 2.2 @see https://github.com/oceanomics/ecotaxa_dev/issues/340
         v = to_float(v)
-        f, i = math.modf(v)
-        return i + (f / 0.6)
+        #f, i = math.modf(v)
+        #return i + (f / 0.6)
+        return v
 
 
 # noinspection PyUnreachableCode

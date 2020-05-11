@@ -248,6 +248,7 @@ class TSVFile(object):
         """
             Read the data line into target dicts. Values go into the right bucket, i.e. target dict, depending
             on mappings (standard one and per-project custom one).
+            :param field_set: The fields present in DB record
         """
         predefined_mapping = GlobalMapping.PREDEFINED_FIELDS
         custom_mapping = how.custom_mapping
@@ -256,20 +257,21 @@ class TSVFile(object):
         for a_field in field_set.intersection(lig.keys()):
             # We have a value
             raw_val = lig.get(a_field)
-            # Try to get the transformed value from the cache
-            cache_key = (a_field, raw_val)
-            cached_field_value = vals_cache.get(cache_key)
             m = predefined_mapping.get(a_field)
             if not m:
                 m = custom_mapping.search_field(a_field)
             field_table = m["table"]
             field_name = m["field"]
-            if cached_field_value is None:
+            # Try to get the transformed value from the cache
+            cache_key = (a_field, raw_val)
+            if cache_key in vals_cache:
+                cached_field_value = vals_cache.get(cache_key)
+            else:
                 csv_val = clean_value(raw_val)
-                # If no relevant value, leave field as NULL
+                # If no relevant value, set field to NULL, i.e. None
                 if csv_val == '':
-                    continue
-                if a_field == 'object_lat':
+                    cached_field_value = None
+                elif a_field == 'object_lat':
                     # It's [n] type but since AVPApp they can contain a notation like ddd°MM.SS
                     # which can be [t] as well.
                     cached_field_value = convert_degree_minute_float_to_decimal_degree(csv_val)
@@ -309,6 +311,11 @@ class TSVFile(object):
             # Write the field into the right object
             dict_to_write = dicts_to_write[field_table]
             dict_to_write[field_name] = cached_field_value
+        # Ensure that all dicts' fields are valued, to None if needed
+        for a_field in field_set.difference(lig.keys()):
+            m = predefined_mapping.get(a_field, custom_mapping.search_field(a_field))
+            dicts_to_write[m["table"]][m["field"]] = None
+
 
     @staticmethod
     def create_or_link_slaves(prj_id, existing_objects: Dict, object_fields_to_write,

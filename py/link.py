@@ -22,13 +22,13 @@ def read_link():
     abs_conf = {}
     for k in conf:
         abs_path = abspath(path.join(INI_DIR, conf[k]))
-        assert path.exists(abs_path)
+        assert path.exists(abs_path), "%s does not exist for key %s" % (abs_path, k)
         abs_conf[k] = abs_path
-    return abs_conf['spagh_src'], abs_conf['spagh_env']
+    return abs_conf['spagh_src']
 
 
 def read_config():
-    legacy_src = read_link()[0]
+    legacy_src = read_link()
     # We have to cook a pseudo-config as configparser needs an ini-like section
     config_file = join(legacy_src, "appli", "config.cfg")
     config_string = "[conf]\n" + open(config_file).read()
