@@ -122,8 +122,8 @@ class TSVFile(object):
                     object_head_to_write.sunpos = compute_sun_position(object_head_to_write)
                 except Exception as e:  # pragma: no cover
                     # See astral.py for cases
-                    # TODO: Find a test case, e.g. by launching algo onto the whole DB
-                    logger.error("Astral error : %s for %s", e, astral_cache)
+                    # Astral error : Sun never reaches 12.0 degrees below the horizon, at this location. for {'objtime': datetime.time(12, 29), 'latitude': -64.2062166666667, 'objdate': datetime.date(2011, 1, 9), 'longitude': -52.5906333333333 }
+                    logger.error("Astral error : %s for %s", e, object_head_to_write)
 
                 self.add_parent_objects(how.prj_id, session, how.existing_parent_ids,
                                         object_head_to_write, dicts_to_write)
@@ -314,7 +314,8 @@ class TSVFile(object):
         # Ensure that all dicts' fields are valued, to None if needed
         for a_field in field_set.difference(lig.keys()):
             m = predefined_mapping.get(a_field, custom_mapping.search_field(a_field))
-            dicts_to_write[m["table"]][m["field"]] = None
+            if m["field"] not in dicts_to_write[m["table"]]:
+                dicts_to_write[m["table"]][m["field"]] = None
 
 
     @staticmethod

@@ -15,6 +15,8 @@ from db.Model import minimal_table_of
 from db.Object import Object, ObjectFields
 from db.Utils import SequenceCache, Bean
 
+logger = logging.getLogger(__name__)
+
 
 # TODO: Dropped in pgAdmin
 # self.session.execute("ALTER TABLE obj_field ADD CONSTRAINT obj_field_objfid_fkey DEFERRABLE;")
@@ -74,7 +76,7 @@ class DBWriter(object):
                 continue
             self.session.execute(an_insert, a_bulk_set)
             a_bulk_set.clear()
-        logging.info("Batch save objects of %s", nb_bulks)
+        logger.info("Batch save objects of %s", nb_bulks)
 
     def add_db_entities(self, object_head_to_write, object_fields_to_write, image_to_write, must_write_obj):
         # Bulk mode or Core do not create links (using ORM relationship), so we have to do manually
@@ -102,6 +104,7 @@ class DBWriter(object):
 
     def eof_cleanup(self):
         self.session.commit()
+
 
 # noinspection PyUnreachableCode
 if False:  # pragma: no cover

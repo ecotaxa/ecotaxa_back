@@ -54,6 +54,7 @@ class InBundle(object):
             :param where:
             :param how:
             :param rowcount: Total rowcount, from preparation step.
+            :param report_def: A def to call at certain points for reporting progress.
             :return: The total number of rows
         """
         random.seed()
@@ -131,14 +132,14 @@ class InBundle(object):
             existing_ids[alias] = collect
         return existing_ids
 
-    def validate_import(self, session: Session, how: ImportHow, diag: ImportDiagnostic) -> int:
+    def validate_import(self, how: ImportHow, diag: ImportDiagnostic, session: Session, report_def: Callable) -> int:
         """
             Validate the full bundle, i.e. every contained file.
             :return:
         """
         how.objects_and_images_to_skip = Image.fetch_existing_images(session, how.prj_id)
 
-        total_row_count = self.validate_all_files(how, diag, session)
+        total_row_count = self.validate_each_file(how, diag, report_def)
 
         if total_row_count == 0:
             diag.error("No object to import. It maybe due to :<br>"
@@ -160,20 +161,21 @@ class InBundle(object):
                       .format(diag.nb_objects_without_gps))
         return total_row_count
 
-    def validate_all_files(self, how, diag, session):
+    def validate_each_file(self, how: ImportHow, diag: ImportDiagnostic, report_def: Callable):
         total_row_count = 0
-        for a_file in self.sub_bundles:
+        for num_file, a_file in enumerate(self.sub_bundles):
             # It's another kind of bundle
             sub_bundle = UVP6Bundle(a_file)
             relative_name = sub_bundle.relative_name
             logger.info("Analyzing UVP6 %s" % relative_name)
-            rows_for_csv = sub_bundle.validate_all_files(how, diag, session)
+            rows_for_csv = sub_bundle.validate_each_file(how, diag, report_def)
             sub_bundle.cleanup()
 
             logger.info("File %s : %d row analysed", relative_name, rows_for_csv)
+            report_def(num_file, len(self.sub_bundles))
             total_row_count += rows_for_csv
 
-        for a_file in self.possible_files:
+        for num_file, a_file in enumerate(self.possible_files):
             # TSV file with attached images
             tsv_to_validate = TSVFile(a_file, self.path)
             relative_name = tsv_to_validate.relative_name
@@ -182,6 +184,7 @@ class InBundle(object):
                 continue
             else:
                 logger.info("Analyzing file %s" % relative_name)
+            report_def(num_file, len(self.possible_files))
             rows_for_csv = tsv_to_validate.do_validate(how, diag)
 
             logger.info("File %s : %d row analysed", relative_name, rows_for_csv)

@@ -84,11 +84,6 @@ class ImportAnalysis(ImportServiceBase):
         super().__init__(prj_id, req)
         # Received from parameters
         self.source_dir_or_zip = req.source_path
-        # From DB record
-        self.intra_step = 0
-        self.step_errors = []
-        # The row count seen at previous step
-        self.total_row_count = 0
 
     def run(self) -> ImportPrepRsp:
         super().prepare_run()
@@ -132,7 +127,7 @@ class ImportAnalysis(ImportServiceBase):
         if not self.req.skip_existing_objects:
             import_diag.existing_objects_and_image = Image.fetch_existing_images(self.session, self.prj_id)
         # Do the bulk job of validation
-        nb_rows = source_bundle.validate_import(self.session, import_how, import_diag)
+        nb_rows = source_bundle.validate_import(import_how, import_diag, self.session, self.report_progress)
         return import_how, import_diag, nb_rows
 
     @staticmethod
@@ -178,6 +173,10 @@ class ImportAnalysis(ImportServiceBase):
             # in the end we just keep the id, other fields were transitory
             taxo_found[found_k] = found_v['id']
         logger.info("For all TSVs, taxa with no ID resolved = %s", taxo_found)
+
+    def report_progress(self, current, total):
+        self.update_progress(20 * current / total,
+                             "Validating files %d/%d" % (current, total))
 
     def unzip_if_needed(self):
         """
@@ -251,7 +250,7 @@ class RealImport(ImportServiceBase):
         return ret
 
     def report_progress(self, current, total):
-        self.update_progress(100 * current / total,
+        self.update_progress(20 + 80 * current / total,
                              "Processing files %d/%d" % (current, total))
 
     def save_mapping(self, custom_mapping):

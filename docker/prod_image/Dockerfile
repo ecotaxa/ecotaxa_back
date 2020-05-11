@@ -34,7 +34,8 @@ RUN apt-get update && \
 #apt-get install python3 python3-pip postgresql-client curl iputils-ping iproute2 --no-install-recommends --yes && \
 apt-get install python3 python3-pip libpq5 --no-install-recommends --yes && \
 apt-get clean && \
-rm -rf /var/lib/apt/lists/*
+rm -rf /var/lib/apt/lists/* && \
+rm -rf /var/log/*
 
 # Copy the dist-packages directly from builder, as wheels stick
 RUN mkdir -p /usr/lib/python3/dist-packages

@@ -3,6 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from collections import OrderedDict
+from typing import Dict, Tuple
 
 from db.Acquisition import Acquisition
 from db.Image import Image
@@ -98,7 +99,7 @@ class ProjectMapping(object):
         self.by_table_name = {a_mapping.table: a_mapping for a_mapping in self.all}
         # for fast lookup from TSV analysis
         # key = TSV full column, val = ( TableMapping, DB col )
-        self.all_fields = dict()
+        self.all_fields: Dict[str, Tuple[TableMapping, str]] = dict()
         # to track emptiness after load
         self.was_empty = False
 
@@ -182,7 +183,7 @@ class TableMapping(object):
         # key = DB column, val = TSV field name WITHOUT table prefix
         self.real_cols_to_tsv = OrderedDict()
         # key = TSV field name WITHOUT table prefix, val = DB column
-        self.tsv_cols_to_real = OrderedDict()
+        self.tsv_cols_to_real: Dict[str, str] = OrderedDict()
         self.max_by_type = {'n': 0, 't': 0}
 
     def load_from_equal_list(self, str_mapping: str):
