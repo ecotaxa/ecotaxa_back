@@ -2,7 +2,6 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-import logging
 from typing import Dict
 
 # noinspection PyPackageRequirements
@@ -14,8 +13,9 @@ from db.Image import Image
 from db.Model import minimal_table_of
 from db.Object import Object, ObjectFields
 from db.Utils import SequenceCache, Bean
+from tech.DynamicLogs import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # TODO: Dropped in pgAdmin

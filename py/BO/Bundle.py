@@ -3,7 +3,6 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import configparser
-import logging
 import random
 import shutil
 import zipfile
@@ -20,8 +19,9 @@ from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, I
 from db.Image import Image
 from db.Object import Object
 from db.Taxonomy import Taxonomy
+from tech.DynamicLogs import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class InBundle(object):

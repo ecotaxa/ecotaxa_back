@@ -4,7 +4,6 @@
 #
 import csv
 import datetime
-import logging
 import random
 import sys
 from collections import OrderedDict
@@ -17,14 +16,15 @@ from PIL import Image as PIL_Image
 from sqlalchemy.orm import Session
 
 from BO.Mappings import GlobalMapping, ProjectMapping
-from BO.SpaceTime import compute_sun_position, astral_cache
+from BO.SpaceTime import compute_sun_position
 from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
 from db.Image import Image
 from db.Object import classif_qual_revert
+from tech.DynamicLogs import get_logger
 from utils import clean_value, none_to_empty, to_float, convert_degree_minute_float_to_decimal_degree, \
     clean_value_and_none
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TSVFile(object):
@@ -316,7 +316,6 @@ class TSVFile(object):
             m = predefined_mapping.get(a_field, custom_mapping.search_field(a_field))
             if m["field"] not in dicts_to_write[m["table"]]:
                 dicts_to_write[m["table"]][m["field"]] = None
-
 
     @staticmethod
     def create_or_link_slaves(prj_id, existing_objects: Dict, object_fields_to_write,

@@ -128,5 +128,8 @@ if __name__ == '__main__':
     HERE = Path(dirname(realpath(__file__)))
     PG_DIR = HERE / ".." / "pg_files"
     db = EcoTaxaDB(PG_DIR, Path("fakeconf"))
-    db.cleanup()
+    try:
+        db.cleanup()
+    except FileNotFoundError:
+        pass
     db.create()

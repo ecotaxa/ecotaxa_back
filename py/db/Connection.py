@@ -2,20 +2,22 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-import logging
 
 import sqlalchemy
 from sqlalchemy import MetaData
 from sqlalchemy.orm import sessionmaker, Session
 
-logger = logging.getLogger(__name__)
+from tech.DynamicLogs import get_logger
+
+logger = get_logger(__name__)
+
 
 def check_sqlalchemy_version():
     version = sqlalchemy.__version__
     expected_version = "1.3.16"
     if version != expected_version:  # pragma: no cover
         logger.fatal("Not the expected SQLAlchemy version (%s instead of %s), exiting to avoid data corruption",
-                      version, expected_version)
+                     version, expected_version)
         exit(-1)
 
 

@@ -3,6 +3,8 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
+from sqlalchemy import Table, text
+
 from db.Acquisition import Acquisition
 from db.Image import Image
 from db.Model import Model
@@ -11,7 +13,6 @@ from db.Process import Process
 from db.Project import Project
 from db.Sample import Sample
 from framework.Service import Service
-from sqlalchemy import Table, text
 
 
 class AsciiDumper(Service):
@@ -24,6 +25,7 @@ class AsciiDumper(Service):
     def __init__(self):
         super().__init__()
 
+    # noinspection PyTypeChecker
     def run(self, projid: int, out: str):
         """
             Produce the file.

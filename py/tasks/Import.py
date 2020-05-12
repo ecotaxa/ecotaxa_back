@@ -3,7 +3,6 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import datetime
-import logging
 import re
 import zipfile
 from abc import ABC
@@ -25,9 +24,10 @@ from framework.Service import Service
 from fs.TempDirForTasks import TempDirForTasks
 from fs.Vault import Vault
 from tasks.DBWriter import DBWriter
+from tech.DynamicLogs import get_logger, switch_log_to_file
 from utils import none_to_empty
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ImportServiceBase(Service, ABC):
@@ -47,6 +47,9 @@ class ImportServiceBase(Service, ABC):
         # From legacy code, vault and temptask are in src directory
         self.vault = Vault(join(self.link_src, 'vault'))
         self.temp_for_task = TempDirForTasks(join(self.link_src, 'temptask'))
+        # Redirect logging
+        log_file = self.temp_for_task.base_dir_for(req.task_id) / 'TaskLogBack.txt'
+        switch_log_to_file(str(log_file))
         # Work vars
         self.prj: Union[Project, None] = None
         self.task: Union[Task, None] = None

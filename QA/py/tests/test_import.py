@@ -9,7 +9,6 @@ from os.path import dirname, realpath
 from pathlib import Path
 
 # noinspection PyPackageRequirements
-# noinspection PyPackageRequirements
 from api.imports import *
 # Import services
 # noinspection PyPackageRequirements
@@ -20,6 +19,7 @@ from crud.Task import TaskService
 from crud.User import UserService
 # noinspection PyPackageRequirements
 from tasks.Import import ImportAnalysis, RealImport
+from tech.AsciiDump import AsciiDumper
 
 # noinspection PyUnresolvedReferences
 from tests.config_fixture import config
@@ -27,8 +27,8 @@ from tests.config_fixture import config
 from tests.db_fixture import database
 
 DATA_DIR = (Path(dirname(realpath(__file__))) / ".." / "data").resolve()
-V6_FILE = DATA_DIR / "UVP6_example.zip"
 PLAIN_FILE = DATA_DIR / "import_test.zip"
+V6_FILE = DATA_DIR / "UVP6_example.zip"
 PLAIN_DIR = DATA_DIR / "import_test"
 PLUS_DIR = DATA_DIR / "import_test_plus"
 ISSUES_DIR = DATA_DIR / "import_issues" / "tsv_issues"
@@ -49,7 +49,8 @@ def test_import(config, database, caplog):
     task_id = TaskService().create()
     user_sce = UserService()
     # Create an admin for mapping
-    user_sce.create("admin", "me@home.fr")
+    # Now in SQL
+    # user_sce.create("admin", "me@home.fr")
     # Do preparation, preparation
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(PLAIN_FILE))
@@ -61,10 +62,6 @@ def test_import(config, database, caplog):
     print(params)
     RealImport(prj_id, params).run()
 
-    # out_dump = "new.txt"
-    # sce = AsciiDumper()
-    # print("All is in projet #%d, doing dump into %s" % (params["prj"], out_dump))
-    # sce.run(projid=params["prj"], out=out_dump)
 
 
 # @pytest.mark.skip()
@@ -155,6 +152,12 @@ def test_import_again_not_skipping_nor_imgs(config, database, caplog):
                    if "Duplicate object" in an_err])
     assert nb_errs == 11
 
+def test_equal_dump_prj1(config, database, caplog):
+    caplog.set_level(logging.DEBUG)
+    out_dump = "prj1.txt"
+    sce = AsciiDumper()
+    sce.run(projid=1, out=out_dump)
+
 
 # @pytest.mark.skip()
 def test_import_uvp6(config, database, caplog):
@@ -170,6 +173,11 @@ def test_import_uvp6(config, database, caplog):
     # Do real import
     RealImport(prj_id, params).run()
 
+def test_equal_dump_prj2(config, database, caplog):
+    caplog.set_level(logging.DEBUG)
+    out_dump = "prj2.txt"
+    sce = AsciiDumper()
+    sce.run(projid=2, out=out_dump)
 
 # @pytest.mark.skip()
 def test_import_empty(config, database, caplog):
@@ -195,19 +203,19 @@ def test_import_issues(config, database, caplog):
                            source_path=str(ISSUES_DIR))
     prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
     assert prep_out.errors == [
-        "Invalid Header 'nounderscorecol' in file ecotaxa_m106_mn01_n3_sml.tsv. Format must be Table_Field. Field ignored",
-        "Invalid Header 'unknown_target' in file ecotaxa_m106_mn01_n3_sml.tsv. Unknown table prefix. Field ignored",
-        "Invalid Type '[H]' for Field 'object_wrongtype' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect Type. Field ignored",
-        "Invalid float value 'a' for Field 'object_buggy_float' in file ecotaxa_m106_mn01_n3_sml.tsv.",
-        "Invalid Lat. value '100' for Field 'object_lat' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect range -90/+90°.",
-        "Invalid Long. value '200' for Field 'object_lon' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect range -180/+180°.",
-        "Invalid Date value '20140433' for Field 'object_date' in file ecotaxa_m106_mn01_n3_sml.tsv.",
-        "Invalid Time value '009920' for Field 'object_time' in file ecotaxa_m106_mn01_n3_sml.tsv.",
-        "Invalid Annotation Status 'predit' for Field 'object_annotation_status' in file ecotaxa_m106_mn01_n3_sml.tsv.",
-        "Missing Image 'm106_mn01_n3_sml_1081.jpg2' in file ecotaxa_m106_mn01_n3_sml.tsv. ",
-        "Error while reading Image 'm106_mn01_n3_sml_corrupted_image.jpg' in file ecotaxa_m106_mn01_n3_sml.tsv. <class 'PIL.UnidentifiedImageError'>",
-        "Missing object_id in line '5' of file ecotaxa_m106_mn01_n3_sml.tsv. ",
-        "Missing Image 'nada.png' in file ecotaxa_m106_mn01_n3_sml.tsv. "]
+"Invalid Header 'nounderscorecol' in file ecotaxa_m106_mn01_n3_sml.tsv. Format must be Table_Field. Field ignored",
+"Invalid Header 'unknown_target' in file ecotaxa_m106_mn01_n3_sml.tsv. Unknown table prefix. Field ignored",
+"Invalid Type '[H]' for Field 'object_wrongtype' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect Type. Field ignored",
+"Invalid float value 'a' for Field 'object_buggy_float' in file ecotaxa_m106_mn01_n3_sml.tsv.",
+"Invalid Lat. value '100' for Field 'object_lat' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect range -90/+90°.",
+"Invalid Long. value '200' for Field 'object_lon' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect range -180/+180°.",
+"Invalid Date value '20140433' for Field 'object_date' in file ecotaxa_m106_mn01_n3_sml.tsv.",
+"Invalid Time value '009920' for Field 'object_time' in file ecotaxa_m106_mn01_n3_sml.tsv.",
+"Invalid Annotation Status 'predit' for Field 'object_annotation_status' in file ecotaxa_m106_mn01_n3_sml.tsv.",
+"Missing Image 'm106_mn01_n3_sml_1081.jpg2' in file ecotaxa_m106_mn01_n3_sml.tsv. ",
+"Error while reading Image 'm106_mn01_n3_sml_corrupted_image.jpg' in file ecotaxa_m106_mn01_n3_sml.tsv. <class 'PIL.UnidentifiedImageError'>",
+"Missing object_id in line '5' of file ecotaxa_m106_mn01_n3_sml.tsv. ",
+"Missing Image 'nada.png' in file ecotaxa_m106_mn01_n3_sml.tsv. "]
 
 
 # @pytest.mark.skip()
@@ -220,4 +228,5 @@ def test_import_classif_issue(config, database, caplog):
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(ISSUES_DIR2))
     prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
-    assert prep_out.errors == ["Some specified classif_id don't exist, correct them prior to reload: 99999999"]
+    assert prep_out.errors == [
+        "Some specified classif_id don't exist, correct them prior to reload: 99999999"]
