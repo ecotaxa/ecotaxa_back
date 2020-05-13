@@ -25,6 +25,8 @@ class ImportDiagnostic(object):
         self.messages: List[str] = []
         self.errors: List[str] = []
         self.existing_objects_and_image = set()
+        # the files which were found but skipped
+        self.skipped_files = []
 
     def warn(self, message: str):
         self.messages.append(message)

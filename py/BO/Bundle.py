@@ -98,7 +98,7 @@ class InBundle(object):
             tsv_to_read = TSVFile(a_file, self.path)
             relative_name = tsv_to_read.relative_name
             if relative_name in how.files_not_to_import:
-                logger.info("Skipping already loaded file %s" % relative_name)
+                logger.info("Skipping load of already loaded file %s" % relative_name)
                 continue
             else:
                 logger.info("Importing file %s" % relative_name)
@@ -142,9 +142,24 @@ class InBundle(object):
         total_row_count = self.validate_each_file(how, diag, report_def)
 
         if total_row_count == 0:
-            diag.error("No object to import. It maybe due to :<br>"
-                       "*  Empty TSV table<br>"
-                       "*  TSV table already imported => 'SKIP TSV' option should be enabled")
+            # Try to be explicit in messages
+            nb_found = len(self.possible_files)
+            nb_skipped = len(diag.skipped_files)
+            err_msg = ["No object to import."]
+            if nb_found == 0:
+                err_msg.append("* No .txt or .tsv file was found, of which name starts with 'ecotaxa'.")
+            else:
+                nb_validated = nb_found - nb_skipped
+                if nb_skipped > 0:
+                    if nb_validated == 0:
+                        err_msg.append("* 'SKIP TSV' option was set and all TSV files were imported before.")
+                    else:
+                        err_msg.append("* 'SKIP TSV' option was set and new TSV file(s) are not compliant.")
+                if nb_validated > 0:
+                    err_msg.append("*  TSV file(s) might be empty.")
+                if how.skip_object_duplicates:
+                    err_msg.append("*  'SKIP OBJECTS' option was set and all objects might be in already.")
+            diag.error("<br>".join(err_msg))
 
         if len(diag.classif_id_seen) > 0:
             self.check_classif(session, diag, diag.classif_id_seen)
@@ -180,7 +195,8 @@ class InBundle(object):
             tsv_to_validate = TSVFile(a_file, self.path)
             relative_name = tsv_to_validate.relative_name
             if relative_name in how.files_not_to_import:
-                logger.info("Skipping already loaded file %s" % relative_name)
+                logger.info("Skipping validation of already loaded file %s" % relative_name)
+                diag.skipped_files.append(relative_name)
                 continue
             else:
                 logger.info("Analyzing file %s" % relative_name)
