@@ -7,6 +7,7 @@ from typing import Dict, Tuple
 
 from db.Acquisition import Acquisition
 from db.Image import Image
+from db.Model import Model
 from db.Object import ObjectFields, Object
 from db.Process import Process
 from db.Project import Project
@@ -88,15 +89,15 @@ class ProjectMapping(object):
     """
 
     def __init__(self):
-        self.object_mappings: TableMapping = TableMapping(ObjectFields.__tablename__)
-        self.sample_mappings: TableMapping = TableMapping(Sample.__tablename__)
-        self.acquisition_mappings: TableMapping = TableMapping(Acquisition.__tablename__)
-        self.process_mappings: TableMapping = TableMapping(Process.__tablename__)
+        self.object_mappings: TableMapping = TableMapping(ObjectFields)
+        self.sample_mappings: TableMapping = TableMapping(Sample)
+        self.acquisition_mappings: TableMapping = TableMapping(Acquisition)
+        self.process_mappings: TableMapping = TableMapping(Process)
         # store for iteration
         self.all = [self.object_mappings, self.sample_mappings,
                     self.acquisition_mappings, self.process_mappings]
         # for 'generic' access to mappings
-        self.by_table_name = {a_mapping.table: a_mapping for a_mapping in self.all}
+        self.by_table_name = {a_mapping.table_name: a_mapping for a_mapping in self.all}
         # for fast lookup from TSV analysis
         # key = TSV full column, val = ( TableMapping, DB col )
         self.all_fields: Dict[str, Tuple[TableMapping, str]] = dict()
@@ -127,7 +128,7 @@ class ProjectMapping(object):
         """
             Return the mapping as a serializable object for messaging.
         """
-        out_dict = {mapping.table: mapping.real_cols_to_tsv
+        out_dict = {mapping.table_name: mapping.real_cols_to_tsv
                     for mapping in self.all}
         return out_dict
 
@@ -136,18 +137,20 @@ class ProjectMapping(object):
             Use data produced by @as_dict previous for loading self.
         """
         for a_mapping in self.all:
-            a_mapping.load_from_dict(in_dict[a_mapping.table])
+            a_mapping.load_from_dict(in_dict[a_mapping.table_name])
         self.build_all_fields()
         return self
 
-    def add_column(self, target_table: str, tsv_table: str, tsv_field: str, sel_type):
+    def add_column(self, target_table: str, tsv_table: str, tsv_field: str, sel_type) -> bool:
         """
             A new custom column was found, add it into the right bucket.
+            :return: True if the target column exists in target table.
         """
         for_table: TableMapping = self.by_table_name[target_table]
-        for_table.add_column_for_table(tsv_field, sel_type)
+        ok_exists = for_table.add_column_for_table(tsv_field, sel_type)
         real_col = for_table.tsv_cols_to_real[tsv_field]
         self.all_fields["%s_%s" % (tsv_table, tsv_field)] = (for_table, real_col)
+        return ok_exists
 
     def search_field(self, full_tsv_field: str):
         """
@@ -157,7 +160,7 @@ class ProjectMapping(object):
         if mping is None:
             return None
         (mping, real_col) = mping
-        return {'table': mping.table, 'field': real_col, 'type': real_col[0]}
+        return {'table': mping.table_name, 'field': real_col, 'type': real_col[0]}
 
     def build_all_fields(self):
         """
@@ -165,7 +168,7 @@ class ProjectMapping(object):
         """
         all_fields = {}
         for a_mapping in self.all:
-            tbl = a_mapping.table
+            tbl = a_mapping.table_name
             prfx = GlobalMapping.TABLE_TO_PREFIX.get(tbl, tbl)
             for real_col, tsv_col in a_mapping.real_cols_to_tsv.items():
                 all_fields["%s_%s" % (prfx, tsv_col)] = (a_mapping, real_col)
@@ -178,8 +181,9 @@ class TableMapping(object):
         The mapping for a given DB table, i.e. from TSV columns to DB ones.
     """
 
-    def __init__(self, table: str):
+    def __init__(self, table: Model):
         self.table = table
+        self.table_name = table.__tablename__
         # key = DB column, val = TSV field name WITHOUT table prefix
         self.real_cols_to_tsv = OrderedDict()
         # key = TSV field name WITHOUT table prefix, val = DB column
@@ -227,16 +231,18 @@ class TableMapping(object):
     def is_empty(self):
         return len(self.real_cols_to_tsv) == 0
 
-    def add_column_for_table(self, tsv_col_no_prfx: str, sel_type: str):
+    def add_column_for_table(self, tsv_col_no_prfx: str, sel_type: str) -> bool:
         """
             Add a free column during TSV header analysis.
             :param tsv_col_no_prfx: The field name from cvs, e.g. feret for object_feret
             :param sel_type: column type
+            :return: True if the target column exists in table.
         """
         assert sel_type in ('n', 't')
         new_max = self.max_by_type[sel_type] + 1
         db_col = "%s%02d" % (sel_type, new_max)
         self.add_association(db_col, tsv_col_no_prfx)
+        return db_col in self.table.__dict__
 
     def as_equal_list(self):
         return encode_equal_list(self.real_cols_to_tsv)

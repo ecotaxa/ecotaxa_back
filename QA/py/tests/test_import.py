@@ -33,6 +33,7 @@ PLAIN_DIR = DATA_DIR / "import_test"
 PLUS_DIR = DATA_DIR / "import_test_plus"
 ISSUES_DIR = DATA_DIR / "import_issues" / "tsv_issues"
 ISSUES_DIR2 = DATA_DIR / "import_issues" / "no_classif_id"
+ISSUES_DIR3 = DATA_DIR / "import_issues" / "tsv_too_many_cols"
 EMPTY_DIR = DATA_DIR / "import_issues" / "no_relevant_file"
 
 
@@ -63,7 +64,6 @@ def test_import(config, database, caplog):
     RealImport(prj_id, params).run()
 
 
-
 # @pytest.mark.skip()
 def test_import_again_skipping(config, database, caplog):
     """ Re-import similar files into same project
@@ -80,7 +80,7 @@ def test_import_again_skipping(config, database, caplog):
     errs = prep_out.errors
     found_err = False
     for an_err in errs:
-        if "No object to import" in an_err:
+        if "all TSV files were imported before" in an_err:
             found_err = True
     assert found_err
 
@@ -152,6 +152,7 @@ def test_import_again_not_skipping_nor_imgs(config, database, caplog):
                    if "Duplicate object" in an_err])
     assert nb_errs == 11
 
+
 def test_equal_dump_prj1(config, database, caplog):
     caplog.set_level(logging.DEBUG)
     out_dump = "prj1.txt"
@@ -173,11 +174,13 @@ def test_import_uvp6(config, database, caplog):
     # Do real import
     RealImport(prj_id, params).run()
 
+
 def test_equal_dump_prj2(config, database, caplog):
     caplog.set_level(logging.DEBUG)
     out_dump = "prj2.txt"
     sce = AsciiDumper()
     sce.run(projid=2, out=out_dump)
+
 
 # @pytest.mark.skip()
 def test_import_empty(config, database, caplog):
@@ -203,19 +206,19 @@ def test_import_issues(config, database, caplog):
                            source_path=str(ISSUES_DIR))
     prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
     assert prep_out.errors == [
-"Invalid Header 'nounderscorecol' in file ecotaxa_m106_mn01_n3_sml.tsv. Format must be Table_Field. Field ignored",
-"Invalid Header 'unknown_target' in file ecotaxa_m106_mn01_n3_sml.tsv. Unknown table prefix. Field ignored",
-"Invalid Type '[H]' for Field 'object_wrongtype' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect Type. Field ignored",
-"Invalid float value 'a' for Field 'object_buggy_float' in file ecotaxa_m106_mn01_n3_sml.tsv.",
-"Invalid Lat. value '100' for Field 'object_lat' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect range -90/+90°.",
-"Invalid Long. value '200' for Field 'object_lon' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect range -180/+180°.",
-"Invalid Date value '20140433' for Field 'object_date' in file ecotaxa_m106_mn01_n3_sml.tsv.",
-"Invalid Time value '009920' for Field 'object_time' in file ecotaxa_m106_mn01_n3_sml.tsv.",
-"Invalid Annotation Status 'predit' for Field 'object_annotation_status' in file ecotaxa_m106_mn01_n3_sml.tsv.",
-"Missing Image 'm106_mn01_n3_sml_1081.jpg2' in file ecotaxa_m106_mn01_n3_sml.tsv. ",
-"Error while reading Image 'm106_mn01_n3_sml_corrupted_image.jpg' in file ecotaxa_m106_mn01_n3_sml.tsv. <class 'PIL.UnidentifiedImageError'>",
-"Missing object_id in line '5' of file ecotaxa_m106_mn01_n3_sml.tsv. ",
-"Missing Image 'nada.png' in file ecotaxa_m106_mn01_n3_sml.tsv. "]
+        "Invalid Header 'nounderscorecol' in file ecotaxa_m106_mn01_n3_sml.tsv. Format must be Table_Field. Field ignored",
+        "Invalid Header 'unknown_target' in file ecotaxa_m106_mn01_n3_sml.tsv. Unknown table prefix. Field ignored",
+        "Invalid Type '[H]' for Field 'object_wrongtype' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect Type. Field ignored",
+        "Invalid float value 'a' for Field 'object_buggy_float' in file ecotaxa_m106_mn01_n3_sml.tsv.",
+        "Invalid Lat. value '100' for Field 'object_lat' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect range -90/+90°.",
+        "Invalid Long. value '200' for Field 'object_lon' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect range -180/+180°.",
+        "Invalid Date value '20140433' for Field 'object_date' in file ecotaxa_m106_mn01_n3_sml.tsv.",
+        "Invalid Time value '009920' for Field 'object_time' in file ecotaxa_m106_mn01_n3_sml.tsv.",
+        "Invalid Annotation Status 'predit' for Field 'object_annotation_status' in file ecotaxa_m106_mn01_n3_sml.tsv.",
+        "Missing Image 'm106_mn01_n3_sml_1081.jpg2' in file ecotaxa_m106_mn01_n3_sml.tsv. ",
+        "Error while reading Image 'm106_mn01_n3_sml_corrupted_image.jpg' in file ecotaxa_m106_mn01_n3_sml.tsv. <class 'PIL.UnidentifiedImageError'>",
+        "Missing object_id in line '5' of file ecotaxa_m106_mn01_n3_sml.tsv. ",
+        "Missing Image 'nada.png' in file ecotaxa_m106_mn01_n3_sml.tsv. "]
 
 
 # @pytest.mark.skip()
@@ -230,3 +233,22 @@ def test_import_classif_issue(config, database, caplog):
     prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
     assert prep_out.errors == [
         "Some specified classif_id don't exist, correct them prior to reload: 99999999"]
+
+
+def test_import_too_many_custom_columns(config, database, caplog):
+    """ The TSV contains too many custom columns.
+        Not a realistic case, but it simulates what happens if importing into a project with
+         mappings """
+    caplog.set_level(logging.DEBUG)
+    prj_id = ProjectService().create("Test LS 6")
+    task_id = TaskService().create()
+
+    params = ImportPrepReq(task_id=task_id,
+                           source_path=str(ISSUES_DIR3))
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
+    assert prep_out.errors == ['Field acq_cus29, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too '
+     'many custom fields, or bad type.',
+     'Field acq_cus30, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too '
+     'many custom fields, or bad type.',
+     'Field acq_cus31, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too '
+     'many custom fields, or bad type.']
