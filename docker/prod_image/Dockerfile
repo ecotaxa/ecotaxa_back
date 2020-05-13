@@ -61,6 +61,8 @@ COPY link.ini /
 # Get starting script
 COPY prod_image/start.sh /app
 RUN chmod +x start.sh
+# Make all app world-writable as we run as non-root
+RUN chmod -R a+rw /app
 
 EXPOSE 8000
 CMD ["./start.sh"]
