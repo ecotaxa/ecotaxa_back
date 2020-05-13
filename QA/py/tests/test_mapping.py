@@ -4,6 +4,7 @@
 #
 
 from BO.Mappings import TableMapping
+from db.Object import ObjectFields
 
 # noinspection PyUnresolvedReferences
 from tests.config_fixture import config
@@ -81,7 +82,7 @@ t01=toto"""
 
 
 def test_mapping1():
-    a_mapping = TableMapping("mytbl")
+    a_mapping = TableMapping(ObjectFields)
     a_mapping.load_from_equal_list(MAPP)
     assert len(a_mapping) == 70
     assert a_mapping.max_by_type['n'] == 69
@@ -100,7 +101,7 @@ n04=mean
 n05=stddev"""
 
 def test_mapping2():
-    a_mapping = TableMapping("mytbl")
+    a_mapping = TableMapping(ObjectFields)
     a_mapping.load_from_equal_list(MAPP2)
     assert len(a_mapping) == 5
     assert not a_mapping.is_empty()
@@ -118,9 +119,9 @@ n04=area
 n05=lon_end"""
 
 def test_reshuff():
-    src_mapping = TableMapping("mytbl")
+    src_mapping = TableMapping(ObjectFields)
     src_mapping.load_from_equal_list(MAPP_SRC)
-    dst_mapping = TableMapping("mytbl")
+    dst_mapping = TableMapping(ObjectFields)
     dst_mapping.load_from_equal_list(MAPP_DST)
     remap = src_mapping.transforms_from(dst_mapping)
     assert remap == [('n01', 'n05'), ('n02', 'n01'), ('n03', 'n04'), ('n04', 'n03'), ('n05', 'n02')]

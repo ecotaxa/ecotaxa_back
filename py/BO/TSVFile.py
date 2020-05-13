@@ -10,16 +10,15 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Dict, Set, Optional
 
-# noinspection PyPackageRequirements
-from PIL import Image as PIL_Image
-# noinspection PyPackageRequirements
-from sqlalchemy.orm import Session
-
 from BO.Mappings import GlobalMapping, ProjectMapping
 from BO.SpaceTime import compute_sun_position
 from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
+# noinspection PyPackageRequirements
+from PIL import Image as PIL_Image
 from db.Image import Image
 from db.Object import classif_qual_revert
+# noinspection PyPackageRequirements
+from sqlalchemy.orm import Session
 from tech.DynamicLogs import get_logger
 from utils import clean_value, none_to_empty, to_float, convert_degree_minute_float_to_decimal_degree, \
     clean_value_and_none
@@ -294,9 +293,12 @@ class TSVFile(object):
                 elif field_name == 'classif_id':
                     # We map 2 fields to classif_id, the second (text one) has [t] type, treated here.
                     # The first, numeric, version is in "if type=n" case above.
-                    csv_val = how.taxo_mapping.get(csv_val.lower(), csv_val)
+                    mapped_val = how.taxo_mapping.get(csv_val.lower(), csv_val)
                     # Use initial mapping
-                    cached_field_value = how.taxo_found[none_to_empty(csv_val).lower()]
+                    cached_field_value = how.taxo_found[none_to_empty(mapped_val).lower()]
+                    # better crash than write bad value into the DB
+                    assert cached_field_value is not None, "Colmun %s: no classification of %s mapped as %s" % (
+                        a_field, csv_val, mapped_val)
                 elif field_name == 'classif_who':
                     # Eventually map to another user if asked so
                     cached_field_value = how.found_users[none_to_empty(csv_val).lower()].get('id', None)
@@ -443,7 +445,7 @@ class TSVFile(object):
                 logger.info("New field %s found in file %s", a_field, self.relative_name)
             else:
                 diag.error("Field %s, in file %s, cannot be mapped. Too many custom fields, or bad type."
-                           %(a_field, self.relative_name))
+                           % (a_field, self.relative_name))
             # Warn that project settings were extended, i.e. empty columns
             if not how.custom_mapping.was_empty:
                 diag.warn("New field %s found in file %s" % (a_field, self.relative_name))

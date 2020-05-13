@@ -71,7 +71,7 @@ class Taxonomy(Model):
                         or (('alterdisplayname' in found_v) and (
                                 found_v['alterdisplayname'] == rec_taxon['display_name']))):
                     taxo_found[found_k]['nbr'] += 1
-                taxo_found[found_k]['id'] = rec_taxon['id']
+                    taxo_found[found_k]['id'] = rec_taxon['id']
 
 
 Index('IS_TaxonomyParent', Taxonomy.parent_id)

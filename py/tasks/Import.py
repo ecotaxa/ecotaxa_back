@@ -164,7 +164,7 @@ class ImportAnalysis(ImportServiceBase):
 
         Taxonomy.resolve_taxa(session, taxo_found, lower_taxon_list)
 
-        logger.info("For all TSVs, taxa with no ID found from DB = %s", taxo_found)
+        logger.info("For all TSVs, taxa (no ID in TSV) found from DB = %s", taxo_found)
         for found_k, found_v in taxo_found.items():
             if found_v['nbr'] == 0:
                 logger.info("Taxo '%s' Not Found", found_k)
@@ -175,7 +175,7 @@ class ImportAnalysis(ImportServiceBase):
         for found_k, found_v in taxo_found.items():
             # in the end we just keep the id, other fields were transitory
             taxo_found[found_k] = found_v['id']
-        logger.info("For all TSVs, taxa with no ID resolved = %s", taxo_found)
+        logger.info("For all TSVs, taxa (no ID in TSV) resolved = %s", taxo_found)
 
     def report_progress(self, current, total):
         self.update_progress(20 * current / total,

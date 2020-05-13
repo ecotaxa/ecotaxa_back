@@ -9,6 +9,7 @@ from os.path import dirname, realpath
 from pathlib import Path
 
 # noinspection PyPackageRequirements
+import pytest
 from api.imports import *
 # Import services
 # noinspection PyPackageRequirements
@@ -16,7 +17,6 @@ from crud.Project import ProjectService
 # noinspection PyPackageRequirements
 from crud.Task import TaskService
 # noinspection PyPackageRequirements
-from crud.User import UserService
 # noinspection PyPackageRequirements
 from tasks.Import import ImportAnalysis, RealImport
 from tech.AsciiDump import AsciiDumper
@@ -35,6 +35,7 @@ ISSUES_DIR = DATA_DIR / "import_issues" / "tsv_issues"
 ISSUES_DIR2 = DATA_DIR / "import_issues" / "no_classif_id"
 ISSUES_DIR3 = DATA_DIR / "import_issues" / "tsv_too_many_cols"
 EMPTY_DIR = DATA_DIR / "import_issues" / "no_relevant_file"
+AMBIG_DIR = DATA_DIR / "import de categories ambigues"
 
 
 def real_params_from_prep_out(task_id, prep_out: ImportPrepRsp) -> ImportRealReq:
@@ -48,7 +49,7 @@ def test_import(config, database, caplog):
     prj_id = ProjectService().create("Test LS")
     # Create a task for this run
     task_id = TaskService().create()
-    user_sce = UserService()
+    # user_sce = UserService()
     # Create an admin for mapping
     # Now in SQL
     # user_sce.create("admin", "me@home.fr")
@@ -133,6 +134,10 @@ def test_import_again_not_skipping_tsv_skipping_imgs(config, database, caplog):
     params.skip_existing_objects = True
     # Simulate a missing user and map it to admin
     params.found_users['elizandro rodriguez'] = {'id': 1}
+    # 'other' category is ambiguous as it maps (in test DB) to other<living and other<dead
+    params.found_taxa['other'] = 99999  # 'other<dead'
+    # 'ozzeur' category is unknown
+    params.found_taxa['ozzeur'] = 85011  # 'other<living'
     RealImport(prj_id, params).run()
 
 
@@ -247,8 +252,24 @@ def test_import_too_many_custom_columns(config, database, caplog):
                            source_path=str(ISSUES_DIR3))
     prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
     assert prep_out.errors == ['Field acq_cus29, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too '
-     'many custom fields, or bad type.',
-     'Field acq_cus30, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too '
-     'many custom fields, or bad type.',
-     'Field acq_cus31, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too '
-     'many custom fields, or bad type.']
+                               'many custom fields, or bad type.',
+                               'Field acq_cus30, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too '
+                               'many custom fields, or bad type.',
+                               'Field acq_cus31, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too '
+                               'many custom fields, or bad type.']
+
+
+def test_import_ambiguous_classification(config, database, caplog):
+    """ See https://github.com/oceanomics/ecotaxa_dev/issues/87 """
+    caplog.set_level(logging.DEBUG)
+    prj_id = ProjectService().create("Test LS 7")
+    task_id = TaskService().create()
+
+    params = ImportPrepReq(task_id=task_id,
+                           source_path=str(AMBIG_DIR))
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
+    params = real_params_from_prep_out(task_id, prep_out)
+    assert len(prep_out.errors) == 0
+    with pytest.raises(Exception):
+        # Do real import, this has to fail as we have unmapped taxonomy
+        RealImport(prj_id, params).run()
