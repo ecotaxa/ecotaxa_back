@@ -2,8 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-
-from pathlib import Path
+import os
 
 # noinspection PyPackageRequirements
 from sqlalchemy.orm import Session
@@ -17,18 +16,37 @@ class BaseService(object):
         A service, i.e. a stateless object which lives only for the time it does its job.
     """
 
+#
+# In postgresql.conf, postgresql should listen to docker0 interface, typically:
+#
+# listen_addresses = '127.0.0.1,172.17.0.1'       # what IP address(es) to listen on;
+#
+def _get_default_gateway():
+    # TODO: somewhere else
+    for a_line in open('/proc/net/route').readlines():
+        # Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT
+        # eth0	00000000	010011AC	0003	0	0	0	00000000	0	0	0
+        fields = a_line.split()
+        if fields[1] == "00000000":  # default route
+            gw = fields[2]
+            ip = [gw[i:i + 2] for i in range(6, -1, -2)]
+            ip = [str(int(i, 16)) for i in ip]
+            ip_str = ".".join(ip)
+            return ip_str
+    return ""
+
 
 def _turn_localhost_for_docker(host: str, port: str):
     """ Turn localhost to the address as seen from inside the container
         For win & mac0s there is a solution, environment var host.docker.internal
          but https://github.com/docker/for-linux/issues/264
     """
-    if host == "localhost":
-        # If we can direct connect via socket then do it
-        socket_path = Path("/var/run/postgresql/.s.PGSQL.%s" % port)
-        if socket_path.is_socket():
-            # Will turn to a socket connection, i.e. no network interface needed
-            return ""
+    if host == "localhost" and os.getcwd() == "/app":
+        # noinspection PyBroadException
+        try:
+            return _get_default_gateway()
+        except Exception:
+            pass
     return host
 
 
@@ -41,9 +59,15 @@ class Service(BaseService):
         check_sqlalchemy_version()
         config = read_config()
         port = config['DB_PORT']
+        if port is None:
+            port = '5432'
         host = _turn_localhost_for_docker(config['DB_HOST'], port)
         conn = Connection(host=host, port=port, db=config['DB_DATABASE'],
                           user=config['DB_USER'], password=config['DB_PASSWORD'])
         self.session: Session = conn.sess
         self.config = config
         self.link_src = read_link()
+
+
+if __name__ == '__main__':
+    _get_default_gateway()
