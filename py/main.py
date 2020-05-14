@@ -6,11 +6,12 @@ import sys
 import traceback
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from uvicorn.middleware.debug import PlainTextResponse
 
 from api.imports import *
 from tasks.Import import ImportAnalysis, RealImport
+from tech.StatusSce import StatusService
 
 # TODO: A nicer API doc, see https://github.com/tiangolo/fastapi/issues/1140
 
@@ -35,6 +36,13 @@ def api_import(project_id: int, params: ImportRealReq):
     sce = RealImport(project_id, params)
     return sce.run()
 
+@app.get("/status")
+def api_status() -> Response:
+    """
+        Import an EcoTaxa archive or directory.
+    """
+    sce = StatusService()
+    return Response(sce.run(), media_type="text/plain")
 
 async def internal_server_error_handler(_request: Any, exc: Exception) -> PlainTextResponse:
     """
