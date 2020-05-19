@@ -7,6 +7,7 @@ import re
 import zipfile
 from abc import ABC
 from os.path import join
+from pathlib import Path
 from typing import Union, Dict, Optional
 
 from BO.Bundle import InBundle
@@ -120,7 +121,7 @@ class ImportAnalysis(ImportServiceBase):
         # The mapping to custom columns, either empty or from previous import operations on same project.
         custom_mapping = ProjectMapping().load_from_project(self.prj)
         # Source bundle construction
-        source_bundle = InBundle(self.source_dir_or_zip)
+        source_bundle = InBundle(self.source_dir_or_zip, Path(self.temp_for_task.data_dir_for(self.task_id)))
         # Configure the validation to come, directives.
         import_how = ImportHow(self.prj_id, custom_mapping, self.req.skip_existing_objects, loaded_files)
         if self.req.skip_loaded_files:
@@ -218,7 +219,7 @@ class RealImport(ImportServiceBase):
         self.custom_mapping = ProjectMapping().load_from_dict(self.custom_mapping)
         self.save_mapping(self.custom_mapping)
 
-        source_bundle = InBundle(self.req.source_path)
+        source_bundle = InBundle(self.req.source_path, Path(self.temp_for_task.data_dir_for(self.task_id)))
         # Configure the import to come, destination
         db_writer = DBWriter(self.session)
         import_where = ImportWhere(db_writer, self.vault, self.temp_for_task.base_dir_for(self.task_id))

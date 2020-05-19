@@ -8,7 +8,7 @@ import shutil
 import zipfile
 from pathlib import Path
 # noinspection PyPackageRequirements
-from typing import Callable
+from typing import Callable, List
 
 from sqlalchemy.orm import Session
 
@@ -31,13 +31,14 @@ class InBundle(object):
     TSV_FILTERS = ("**/ecotaxa*.txt", "**/ecotaxa*.tsv")
     UVP6_FILTER = "**/*Images.zip"
 
-    def __init__(self, path: str):
+    def __init__(self, path: str, temp_dir: Path):
         self.path = Path(path)
         # Compute the files we have to process.
         self.possible_files = []
         for a_filter in self.TSV_FILTERS:
             self.possible_files.extend(self.path.glob(a_filter))
-        self.sub_bundles = [a_bundle for a_bundle in self.path.glob(self.UVP6_FILTER)]
+        self.sub_bundles: List[UVP6Bundle] = [UVP6Bundle(a_bundle, temp_dir)
+                                              for a_bundle in self.path.glob(self.UVP6_FILTER)]
 
     def possible_files_as_posix(self):
         """
@@ -84,8 +85,7 @@ class InBundle(object):
                         relative_name, rows_for_csv, stats.current_row_count,
                         rows_per_sec)
 
-        for a_file in self.sub_bundles:
-            sub_bundle = UVP6Bundle(a_file)
+        for sub_bundle in self.sub_bundles:
             relative_name = sub_bundle.relative_name
             logger.info("Importing UVP6 file %s" % relative_name)
             sub_bundle.before_import(how)
@@ -178,9 +178,8 @@ class InBundle(object):
 
     def validate_each_file(self, how: ImportHow, diag: ImportDiagnostic, report_def: Callable):
         total_row_count = 0
-        for num_file, a_file in enumerate(self.sub_bundles):
+        for num_file, sub_bundle in enumerate(self.sub_bundles):
             # It's another kind of bundle
-            sub_bundle = UVP6Bundle(a_file)
             relative_name = sub_bundle.relative_name
             logger.info("Analyzing UVP6 %s" % relative_name)
             rows_for_csv = sub_bundle.validate_each_file(how, diag, report_def)
@@ -230,15 +229,16 @@ class UVP6Bundle(InBundle):
     VIGNETTE_CONFIG = "compute_vignette.txt"
     TEMP_VIGNETTE = "tempvignette.png"
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, temp_dir: Path):
         assert path.suffix.lower() == ".zip"
         self.relative_name = path.name
         # Extract the zip file, in order to fall back to a directory like base InBundle
         name_no_zip = path.stem  # e.g. b_da_19_Images
         sample_id = name_no_zip[:-7]  # e.g. b_da_19
         # Derive directories & files
-        # The file gets extracted by convention in same directory as its parent
-        sample_dir = path.parent / name_no_zip
+        # The file gets extracted into temporary directory, as .zip containing folder
+        # might be write-protected
+        sample_dir = temp_dir / name_no_zip
         tsv_file = "ecotaxa_" + sample_id + ".tsv"
         sample_tsv = sample_dir / tsv_file
         if sample_dir.exists():
@@ -250,7 +250,7 @@ class UVP6Bundle(InBundle):
             sample_dir.mkdir()
             with zipfile.ZipFile(path.as_posix(), 'r') as z:
                 z.extractall(sample_dir.as_posix())
-        super().__init__(sample_dir.as_posix())
+        super().__init__(sample_dir.as_posix(), temp_dir)
 
     def before_import(self, how: ImportHow):
         how.vignette_maker = None

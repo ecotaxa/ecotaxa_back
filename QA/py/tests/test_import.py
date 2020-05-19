@@ -29,6 +29,7 @@ from tests.db_fixture import database
 DATA_DIR = (Path(dirname(realpath(__file__))) / ".." / "data").resolve()
 PLAIN_FILE = DATA_DIR / "import_test.zip"
 V6_FILE = DATA_DIR / "UVP6_example.zip"
+V6_DIR = DATA_DIR / "import_uvp6_zip_in_dir"
 PLAIN_DIR = DATA_DIR / "import_test"
 PLUS_DIR = DATA_DIR / "import_test_plus"
 ISSUES_DIR = DATA_DIR / "import_issues" / "tsv_issues"
@@ -179,7 +180,6 @@ def test_import_uvp6(config, database, caplog):
     # Do real import
     RealImport(prj_id, params).run()
 
-
 def test_equal_dump_prj2(config, database, caplog):
     caplog.set_level(logging.DEBUG)
     out_dump = "prj2.txt"
@@ -273,3 +273,21 @@ def test_import_ambiguous_classification(config, database, caplog):
     with pytest.raises(Exception):
         # Do real import, this has to fail as we have unmapped taxonomy
         RealImport(prj_id, params).run()
+
+def test_import_uvp6_zip_in_dir(config, database, caplog):
+    """
+        An *Images.zip inside a directory.
+    """
+    caplog.set_level(logging.DEBUG)
+    prj_id = ProjectService().create("Test LS 8")
+    task_id = TaskService().create()
+
+    params = ImportPrepReq(task_id=task_id,
+                           source_path=str(V6_DIR))
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
+    params = real_params_from_prep_out(task_id, prep_out)
+    assert len(prep_out.errors) == 0
+    # Do real import
+    RealImport(prj_id, params).run()
+
+
