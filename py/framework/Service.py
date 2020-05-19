@@ -18,8 +18,11 @@ class BaseService(object):
 
 #
 # In postgresql.conf, postgresql should listen to docker0 interface, typically:
-#
-# listen_addresses = '127.0.0.1,172.17.0.1'       # what IP address(es) to listen on;
+#    listen_addresses = '127.0.0.1,172.17.0.1'       # what IP address(es) to listen on;
+# as docker0 interface has 172.17.0.1 address
+# Also in pg_hba.conf:
+#    host    all             all             172.17.0.2/32           md5 or peer or trust
+# as running docker processes are on 172.17.0.2
 #
 def _get_default_gateway():
     # TODO: somewhere else
@@ -67,6 +70,10 @@ class Service(BaseService):
         self.session: Session = conn.sess
         self.config = config
         self.link_src = read_link()
+
+    def __del__(self):
+        # Release DB session
+        self.session.close()
 
 
 if __name__ == '__main__':
