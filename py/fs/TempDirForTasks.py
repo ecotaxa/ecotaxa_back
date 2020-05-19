@@ -27,3 +27,20 @@ class TempDirForTasks(object):
             # TODO: Cache for current instance
             data_subdir.mkdir()
         return str(data_subdir.absolute())
+
+    def unzip_dir_for(self, task_id: int) -> str:
+        data_subdir = self.base_dir_for(task_id).joinpath("unzip")
+        if not data_subdir.exists():
+            # TODO: Cache for current instance
+            data_subdir.mkdir()
+        return str(data_subdir.absolute())
+
+    def in_base_dir_for(self, task_id: int, file_name: str) -> str:
+        """
+            Return full path to a file at root of temporary directory.
+        :param task_id: The task ID this temporary directory belongs to.
+        :param file_name: The file name.
+        :return: str
+        """
+        file_in_dir = self.base_dir_for(task_id).joinpath(file_name)
+        return str(file_in_dir.absolute())

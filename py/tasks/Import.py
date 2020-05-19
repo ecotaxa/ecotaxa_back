@@ -87,12 +87,17 @@ class ImportAnalysis(ImportServiceBase):
     def __init__(self, prj_id: int, req: ImportPrepReq):
         super().__init__(prj_id, req)
         # Received from parameters
-        self.source_dir_or_zip = req.source_path
+        self.source_dir_or_zip: str = req.source_path
+
+    FROM_HTTP_FILE="uploaded.zip"
 
     def run(self) -> ImportPrepRsp:
         super().prepare_run()
         loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
         logger.info("Previously loaded files: %s", loaded_files)
+        # Special case, Http file was directly copied inside temp directory
+        if self.source_dir_or_zip == self.FROM_HTTP_FILE:
+            self.source_dir_or_zip = self.temp_for_task.in_base_dir_for(self.task_id, self.source_dir_or_zip)
         # Prepare response
         ret = ImportPrepRsp(source_path=self.source_dir_or_zip)
         self.update_progress(0, "Starting")
@@ -190,7 +195,7 @@ class ImportAnalysis(ImportServiceBase):
             logger.info("SubTask0 : Unzip File into temporary folder")
             self.update_progress(1, "Unzip File into temporary folder")
             input_path = self.source_dir_or_zip
-            self.source_dir_or_zip = self.temp_for_task.data_dir_for(self.task_id)
+            self.source_dir_or_zip = self.temp_for_task.unzip_dir_for(self.task_id)
             with zipfile.ZipFile(input_path, 'r') as z:
                 z.extractall(self.source_dir_or_zip)
 
