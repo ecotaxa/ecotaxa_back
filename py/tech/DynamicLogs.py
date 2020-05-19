@@ -34,12 +34,12 @@ logging_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 # TODO: It should be thread/request local
 _the_handler = DynamicFileHandler("api.log")
 _the_handler.setFormatter(logging.Formatter(logging_format))
-_the_handler.setLevel(logging.INFO)
 
 
 def get_logger(name) -> logging.Logger:
     ret = logging.getLogger(name)
     ret.addHandler(_the_handler)
+    ret.setLevel(logging.INFO)
     return ret
 
 

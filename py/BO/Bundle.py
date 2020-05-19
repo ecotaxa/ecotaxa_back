@@ -183,7 +183,6 @@ class InBundle(object):
             relative_name = sub_bundle.relative_name
             logger.info("Analyzing UVP6 %s" % relative_name)
             rows_for_csv = sub_bundle.validate_each_file(how, diag, report_def)
-            sub_bundle.cleanup()
 
             logger.info("File %s : %d row analysed", relative_name, rows_for_csv)
             report_def(num_file, len(self.sub_bundles))
@@ -264,6 +263,3 @@ class UVP6Bundle(InBundle):
     @staticmethod
     def after_import(how: ImportHow):
         how.vignette_maker = None
-
-    def cleanup(self):
-        shutil.rmtree(self.path)
