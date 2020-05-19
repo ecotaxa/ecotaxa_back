@@ -89,10 +89,12 @@ class InBundle(object):
             relative_name = sub_bundle.relative_name
             logger.info("Importing UVP6 file %s" % relative_name)
             sub_bundle.before_import(how)
-            rows_for_csv = sub_bundle.import_each_file(where, how, stats)
-            stats.add_rows(rows_for_csv)
+            _rows_for_bundle = sub_bundle.import_each_file(where, how, stats)
+            # Already counted in recursive call
+            # stats.add_rows(rows_for_csv)
             sub_bundle.after_import(how)
-            log_stats()
+            # Already displayed in recursive call
+            # log_stats()
 
         for a_file in self.possible_files:
             tsv_to_read = TSVFile(a_file, self.path)
