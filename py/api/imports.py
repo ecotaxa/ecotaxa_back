@@ -14,6 +14,7 @@ class ImportPrepReq(BaseModel):
     taxo_mappings: Dict[str, int] = Field(title="Optional taxonomy mapping", default={})
     skip_loaded_files: bool = Field(default=False)
     skip_existing_objects: bool = Field(default=False)
+    update_mode: bool = Field(title="Update data, no creation or image copy", default=False)
 
 
 class ImportPrepRsp(BaseModel):
@@ -44,6 +45,7 @@ class ImportRealReq(BaseModel):
     taxo_mappings: Dict[str, int] = Field(title="Optional taxonomy mapping", default={})
     skip_loaded_files: bool = Field(default=False)
     skip_existing_objects: bool = Field(default=False)
+    update_mode: bool = Field(title="Update data, no creation or image copy", default=False)
     # From step 1
     # TODO: Avoid duplication
     mappings: Dict[str, Dict[str, str]] = Field(title="Fields mapping", default={})
