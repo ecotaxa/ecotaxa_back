@@ -32,12 +32,12 @@ class AsciiDumper(Service):
         """
         with open(out, "w") as fd:
             self.dump_table(fd, Project, "projid=%d" % projid)
+            self.dump_table(fd, Sample, "projid=%d" % projid)
+            self.dump_table(fd, Process, "projid=%d" % projid)
+            self.dump_table(fd, Acquisition, "projid=%d" % projid)
             self.dump_table(fd, Object, "projid=%d" % projid)
             self.dump_table(fd, ObjectFields, "objfid in (select objid from obj_head where projid=%s)" % projid)
             self.dump_table(fd, Image, "objid in (select objid from obj_head where projid=%s)" % projid)
-            self.dump_table(fd, Process, "projid=%d" % projid)
-            self.dump_table(fd, Sample, "projid=%d" % projid)
-            self.dump_table(fd, Acquisition, "projid=%d" % projid)
 
     def dump_table(self, out, a_table: Model, where):
         base_table: Table = a_table.__table__
@@ -45,5 +45,9 @@ class AsciiDumper(Service):
         pk = [a_pk_col.name for a_pk_col in base_table.primary_key]
         res = self.session.execute(base_table.select().where(text(where)).order_by(pk[0]))
         for a_row in res:
-            row_dict = dict(zip(cols, a_row))
-            print(repr(row_dict), file=out)
+            vals = []
+            for col, col_val in zip(cols, a_row):
+                if col_val is not None:
+                    vals.append("%s=%s" % (col, repr(col_val)))
+            ln = "%s(%s)" % (base_table, ",".join(vals))
+            print(ln, file=out)
