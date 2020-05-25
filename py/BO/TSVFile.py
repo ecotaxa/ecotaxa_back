@@ -10,15 +10,16 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Dict, Set, Optional
 
+# noinspection PyPackageRequirements
+from PIL import Image as PIL_Image
+# noinspection PyPackageRequirements
+from sqlalchemy.orm import Session
+
 from BO.Mappings import GlobalMapping, ProjectMapping
 from BO.SpaceTime import compute_sun_position
 from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
-# noinspection PyPackageRequirements
-from PIL import Image as PIL_Image
 from db.Image import Image
 from db.Object import classif_qual_revert
-# noinspection PyPackageRequirements
-from sqlalchemy.orm import Session
 from tech.DynamicLogs import get_logger
 from utils import clean_value, none_to_empty, to_float, convert_degree_minute_float_to_decimal_degree, \
     clean_value_and_none
@@ -117,6 +118,8 @@ class TSVFile(object):
                 # Parents are created the same way, _when needed_ (i.e. nearly never),
                 #  in @see add_parent_objects
 
+                # Default value, so there is something to write into the DB in case of Exception
+                object_head_to_write.sunpos = "?"
                 try:
                     object_head_to_write.sunpos = compute_sun_position(object_head_to_write)
                 except Exception as e:  # pragma: no cover
