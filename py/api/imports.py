@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List, Dict, Union
+from typing import List, Dict, Optional
 
 from .pydantic import BaseModel, Field
 
@@ -11,10 +11,11 @@ class ImportPrepReq(BaseModel):
     """ Import preparation, request. """
     task_id: int = Field(title="The existing task to use")
     source_path: str = Field(title="Source path on server, to zip or plain directory")
-    taxo_mappings: Dict[str, int] = Field(title="Optional taxonomy mapping", default={})
+    taxo_mappings: Dict[str, str] = Field(title="Optional taxonomy mapping", default={})
     skip_loaded_files: bool = Field(default=False)
     skip_existing_objects: bool = Field(default=False)
-    update_mode: bool = Field(title="Update data, no creation or image copy", default=False)
+    update_mode: str = Field(title="Update data ('Yes'), including classification ('Cla')",
+                             default="")
 
 
 class ImportPrepRsp(BaseModel):
@@ -27,10 +28,10 @@ class ImportPrepRsp(BaseModel):
                                          description="key = user name; value = "
                                                      "dict with (key = 'id' if resolved, else 'email')",
                                          default={})
-    found_taxa: Dict[str, Union[int, None]] = Field(title="Taxa found without ID in TSV files",
-                                                    description="key = taxon NAME; value = "
-                                                                "taxon ID if resolved, else None",
-                                                    default={})
+    found_taxa: Dict[str, Optional[int]] = Field(title="Taxa found without ID in TSV files",
+                                                 description="key = taxon NAME; value = "
+                                                             "taxon ID if resolved, else None",
+                                                 default={})
     warnings: List[str] = Field(title="Warnings from analysis", default=[])
     errors: List[str] = Field(title="Errors from analysis",
                               description="Do NOT proceed to real import if not empty.",
@@ -42,10 +43,11 @@ class ImportRealReq(BaseModel):
     """ Import for real, request. """
     task_id: int = Field(title="The existing task to use")
     source_path: str = Field(title="Source path on server, to plain directory")
-    taxo_mappings: Dict[str, int] = Field(title="Optional taxonomy mapping", default={})
+    taxo_mappings: Dict[str, str] = Field(title="Optional taxonomy mapping", default={})
     skip_loaded_files: bool = Field(default=False)
     skip_existing_objects: bool = Field(default=False)
-    update_mode: bool = Field(title="Update data, no creation or image copy", default=False)
+    update_mode: str = Field(title="Update data ('Yes'), including classification ('Cla')",
+                             default="")
     # From step 1
     # TODO: Avoid duplication
     mappings: Dict[str, Dict[str, str]] = Field(title="Fields mapping", default={})
@@ -53,10 +55,10 @@ class ImportRealReq(BaseModel):
                                          description="key = user name; value = "
                                                      "dict with (key = 'id' if resolved, else 'email')",
                                          default={})
-    found_taxa: Dict[str, Union[int, None]] = Field(title="Taxa found in TSV files",
-                                                    description="key = taxon NAME; value = "
-                                                                "taxon ID if resolved, else None",
-                                                    default={})
+    found_taxa: Dict[str, Optional[int]] = Field(title="Taxa found in TSV files",
+                                                 description="key = taxon NAME; value = "
+                                                             "taxon ID if resolved, else None",
+                                                 default={})
     rowcount: int = Field(title="Number of TSV rows, counted during validation", default=0)
 
 

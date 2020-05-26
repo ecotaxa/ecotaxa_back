@@ -16,6 +16,7 @@ class BaseService(object):
         A service, i.e. a stateless object which lives only for the time it does its job.
     """
 
+
 #
 # In postgresql.conf, postgresql should listen to docker0 interface, typically:
 #    listen_addresses = '127.0.0.1,172.17.0.1'       # what IP address(es) to listen on;
@@ -39,7 +40,7 @@ def _get_default_gateway():
     return ""
 
 
-def _turn_localhost_for_docker(host: str, port: str):
+def _turn_localhost_for_docker(host: str, _port: str):
     """ Turn localhost to the address as seen from inside the container
         For win & mac0s there is a solution, environment var host.docker.internal
          but https://github.com/docker/for-linux/issues/264

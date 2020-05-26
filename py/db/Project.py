@@ -68,8 +68,10 @@ class Project(Model):
         DELETE FROM projects_taxo_stat 
          WHERE projid = :prjid;
         INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
-        SELECT projid, coalesce(classif_id, -1) id, count(*) nbr, count(case when classif_qual = 'V' then 1 end) nbr_v,
-               count(case when classif_qual = 'D' then 1 end) nbr_d, count(case when classif_qual = 'P' then 1 end) nbr_p
+        SELECT projid, coalesce(classif_id, -1) id, count(*) nbr, 
+               count(case when classif_qual = 'V' then 1 end) nbr_v,
+               count(case when classif_qual = 'D' then 1 end) nbr_d, 
+               count(case when classif_qual = 'P' then 1 end) nbr_p
           FROM obj_head
          WHERE projid = :prjid
         GROUP BY projid, classif_id;

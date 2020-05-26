@@ -37,9 +37,10 @@ def minimal_table_of(metadata: MetaData, clazz, to_keep: Set[str]) -> Table:
 
 # noinspection PyUnreachableCode
 if False:  # pragma: no cover
-    def view_of(metadata, clazz, to_keep: Set[str]) -> ClassVar:
+    def view_of(_metadata, clazz, to_keep: Set[str]) -> ClassVar:
         """
             Return a Model, i.e. a SQLAlchemy mapper with only the given fields.
+        :param _metadata: unused
         :param clazz: the base mapper class
         :param to_keep: the column (fields) names to keep
         :return: new class

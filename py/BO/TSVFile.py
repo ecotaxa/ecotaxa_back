@@ -13,13 +13,15 @@ from typing import Dict, Set, Optional
 # noinspection PyPackageRequirements
 from PIL import Image as PIL_Image
 # noinspection PyPackageRequirements
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from BO.Mappings import GlobalMapping, ProjectMapping
-from BO.SpaceTime import compute_sun_position
+from BO.SpaceTime import compute_sun_position, USED_FIELDS_FOR_SUNPOS
 from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
 from db.Image import Image
-from db.Object import classif_qual_revert
+from db.Model import Model
+from db.Object import classif_qual_revert, Object, ObjectFields
 from tech.DynamicLogs import get_logger
 from utils import clean_value, none_to_empty, to_float, convert_degree_minute_float_to_decimal_degree, \
     clean_value_and_none
@@ -81,7 +83,7 @@ class TSVFile(object):
             # Only keep the fields we can persist, the ones ignored at first step would be signalled here as well
             # if we didn't prohibit the move to 2nd step in this case.
             field_set = set(self.clean_fields.values())
-            field_set = self.filter_unused_fields(how.custom_mapping, field_set) - self.ProgFields
+            field_set = self.filter_unused_fields(how, field_set) - self.ProgFields
 
             # We can now prepare ORM classes with optimal performance
             target_fields = self.dispatch_fields_by_table(how.custom_mapping, field_set)
@@ -124,27 +126,40 @@ class TSVFile(object):
                     object_head_to_write.sunpos = compute_sun_position(object_head_to_write)
                 except Exception as e:  # pragma: no cover
                     # See astral.py for cases
-                    # Astral error : Sun never reaches 12.0 degrees below the horizon, at this location. for {'objtime': datetime.time(12, 29), 'latitude': -64.2062166666667, 'objdate': datetime.date(2011, 1, 9), 'longitude': -52.5906333333333 }
-                    logger.error("Astral error : %s for %s", e, object_head_to_write)
+                    # Astral error : Sun never reaches 12.0 degrees below the horizon, at this location.
+                    # for {'objtime': datetime.time(12, 29), 'latitude': -64.2, 'objdate': datetime.date(2011, 1, 9),
+                    # 'longitude': -52.59 }
+                    nb_fields = object_head_to_write.nb_fields_from(USED_FIELDS_FOR_SUNPOS)
+                    if nb_fields == 4:
+                        logger.error("Astral error : %s for %s", e, object_head_to_write)
+                    elif 0 < nb_fields <= 3:
+                        logger.warning("Not enough fields for computing sun position")
+                    else:
+                        # No field at all for computation
+                        pass
 
-                self.add_parent_objects(how.prj_id, session, how.existing_parent_ids,
-                                        object_head_to_write, dicts_to_write)
+                self.add_parent_objects(how, session, object_head_to_write, dicts_to_write)
 
                 key_exist_obj = "%s*%s" % (object_fields_to_write.orig_id, image_to_write.orig_file_name)
                 if key_exist_obj in how.objects_and_images_to_skip:
                     logger.info("Image skipped: %s %s", object_fields_to_write.orig_id, image_to_write.orig_file_name)
                     continue
 
-                must_write_obj = self.create_or_link_slaves(how.prj_id, how.existing_objects, object_fields_to_write,
-                                                            object_head_to_write)
+                new_records = self.create_or_link_slaves(how, session, object_head_to_write, object_fields_to_write,
+                                                         image_to_write)
 
-                where.db_writer.add_db_entities(object_head_to_write, object_fields_to_write, image_to_write,
-                                                must_write_obj)
+                where.db_writer.add_db_entities(object_head_to_write, object_fields_to_write,
+                                                image_to_write, new_records)
 
-                how.existing_objects[object_fields_to_write.orig_id] = object_head_to_write.objid
+                if new_records > 1:
+                    # We now have an Id from sequences, so ref. it.
+                    how.existing_objects[object_fields_to_write.orig_id] = object_head_to_write.objid
+                else:
+                    # The key already exists with same value, checked in @see self.create_or_link_slaves
+                    pass
 
                 instead_image = None
-                if how.vignette_maker:
+                if new_records > 0 and how.vignette_maker:
                     # If there is need for a vignette, the file named in the TSV is NOT the one written,
                     # and pointed at, by the usual DB line. Instead, it's the vignette.
                     instead_image = how.vignette_maker.make_vignette(image_to_write.orig_file_name)
@@ -166,25 +181,31 @@ class TSVFile(object):
                         backup_img_to_write.width, backup_img_to_write.height = im.size
                         del im
 
-                self.deal_with_images(where, how, image_to_write, instead_image)
+                if new_records > 0:
+                    self.deal_with_images(where, how, image_to_write, instead_image)
 
                 if (counter % self.REPORT_EVERY) == 0:
                     where.db_writer.persist()
+                    session.commit()
                     stats.report(counter)
 
         return row_count_for_csv
 
-    def filter_unused_fields(self, custom_mapping, field_set: set) -> set:
+    def filter_unused_fields(self, how: ImportHow, field_set: set) -> set:
         """
             Sanitize field list by removing the ones which are not known in mapping, nor used programmatically.
-            :param custom_mapping:
+            :param how: import directives.
             :param field_set:
             :return:
         """
         ok_fields = set([field for field in field_set
-                         if field in custom_mapping.all_fields
+                         if field in how.custom_mapping.all_fields
                          or field in GlobalMapping.PREDEFINED_FIELDS
                          or field in self.ProgFields])
+        # Remove classification fields if updating but not classification
+        if how.can_update and not how.update_with_classif:
+            for fld in GlobalMapping.ANNOTATION_FIELDS.keys():
+                ok_fields.remove(fld)
         ko_fields = [field for field in field_set if field not in ok_fields]
         if len(ko_fields) > 0:  # pragma: no cover
             # This cannot happen as step1 prevents it. However the code is left in case API evolves.
@@ -193,7 +214,7 @@ class TSVFile(object):
         return ok_fields
 
     @staticmethod
-    def add_parent_objects(prj_id, session: Session, existing_ids, object_head_to_write, dicts_to_write):
+    def add_parent_objects(how: ImportHow, session: Session, object_head_to_write, dicts_to_write: Dict[str, Dict]):
         """
             Assignment of Sample, Acquisition & Process ID, creating them if necessary
             Due to amount of duplicated information in TSV, this happens for few % of rows
@@ -201,7 +222,7 @@ class TSVFile(object):
         """
         for alias, parent_class in GlobalMapping.PARENT_CLASSES.items():
             dict_to_write = dicts_to_write[alias]
-            ids_for_obj = existing_ids[alias]
+            ids_for_obj = how.existing_parent_ids[alias]
             # Here we take advantage from consistent naming conventions
             # The 3 involved tables have "orig_id" column serving the same purpose
             parent_orig_id = dict_to_write.get("orig_id")
@@ -210,14 +231,25 @@ class TSVFile(object):
                 continue
             fk_to_obj = parent_class.pk()
             if parent_orig_id in ids_for_obj:
+                if how.can_update:
+                    # Update the DB line using sqlalchemy
+                    parent_id = ids_for_obj[parent_orig_id]
+                    filter_for_id = text(parent_class.pk() + "=%d" % parent_id)
+                    parent = session.query(parent_class).filter(filter_for_id).first()
+                    assert parent is not None
+                    updates = TSVFile.update_orm_object(parent, dict_to_write)
+                    if len(updates) > 0:
+                        logger.info("Updating '%s' using %s", filter_for_id, updates)
+                        session.flush()
+                else:
+                    pass
                 # This parent object was known before, don't add it into the session (DB)
                 # but link the child object_head to it (like newly created ones below)
-                pass
             else:
                 # Create the SQLAlchemy wrapper
                 obj_to_write = parent_class(**dict_to_write)
                 # Link with project
-                obj_to_write.projid = prj_id
+                obj_to_write.projid = how.prj_id
                 session.add(obj_to_write)
                 session.flush()
                 # We now have a (generated) PK to copy back into objects
@@ -226,6 +258,16 @@ class TSVFile(object):
                 logger.info("++ IDS %s %s", alias, ids_for_obj)
             # Anyway
             setattr(object_head_to_write, fk_to_obj, ids_for_obj[parent_orig_id])
+
+    @staticmethod
+    def update_orm_object(parent: Model, update_dict: Dict[str, str]):
+        updates = []
+        for attr, value in parent.__dict__.items():
+            if attr in update_dict and update_dict[attr] != value:
+                upd_val = update_dict[attr]
+                setattr(parent, attr, upd_val)
+                updates.append((attr, upd_val))
+        return updates
 
     @staticmethod
     def dispatch_fields_by_table(custom_mapping: ProjectMapping, field_set: Set) -> Dict[str, Set]:
@@ -250,7 +292,11 @@ class TSVFile(object):
         """
             Read the data line into target dicts. Values go into the right bucket, i.e. target dict, depending
             on mappings (standard one and per-project custom one).
-            :param field_set: The fields present in DB record
+            :param how: Importing directives.
+            :param field_set: The fields present in DB record.
+            :param lig: A line of TSV data, as {header: val} dict.
+            :param dicts_to_write: The output data.
+            :param vals_cache: A cache of values, per column and seen value.
         """
         predefined_mapping = GlobalMapping.PREDEFINED_FIELDS
         custom_mapping = how.custom_mapping
@@ -274,7 +320,7 @@ class TSVFile(object):
                 if csv_val == '':
                     cached_field_value = None
                 elif a_field == 'object_lat':
-                    # It's [n] type but since AVPApp they can contain a notation like ddd°MM.SS
+                    # It's [n] type but since UVPApp they can contain a notation like ddd°MM.SS
                     # which can be [t] as well.
                     cached_field_value = convert_degree_minute_float_to_decimal_degree(csv_val)
                 elif a_field == 'object_lon':
@@ -316,29 +362,52 @@ class TSVFile(object):
             # Write the field into the right object
             dict_to_write = dicts_to_write[field_table]
             dict_to_write[field_name] = cached_field_value
-        # Ensure that all dicts' fields are valued, to None if needed
+        # Ensure that all dicts' fields are valued, to None if needed. This is needed for bulk inserts,
+        # in DBWriter.py, as SQL Alchemy core computes an insert for the first line and just injects the
+        # data for following ones.
         for a_field in field_set.difference(lig.keys()):
             m = predefined_mapping.get(a_field, custom_mapping.search_field(a_field))
             if m["field"] not in dicts_to_write[m["table"]]:
                 dicts_to_write[m["table"]][m["field"]] = None
 
     @staticmethod
-    def create_or_link_slaves(prj_id, existing_objects: Dict, object_fields_to_write,
-                              object_head_to_write) -> bool:
-        # It can be a line with a complementary image
-        if object_fields_to_write.orig_id in existing_objects:
-            logger.info("Second image for %s ", object_fields_to_write.orig_id)
-            # Set the objid which will be copied for storing the image
-            object_head_to_write.objid = existing_objects[object_fields_to_write.orig_id]
-            # In this case just point to previous
-            return False
+    def create_or_link_slaves(how: ImportHow, session: Session,
+                              object_head_to_write, object_fields_to_write, image_to_write) -> int:
+        """
+            Create, link or update slave entities, i.e. head, fields, image.
+            :returns the number of new records
+        """
+        if object_fields_to_write.orig_id in how.existing_objects:
+            # Set the objid which will be copied for storing the image, the object itself
+            # will not be stored due to returned False.
+            objid = how.existing_objects[object_fields_to_write.orig_id]
+            object_head_to_write.objid = objid
+            if how.can_update:
+                if object_head_to_write.sunpos == "?":
+                    del object_head_to_write["sunpos"]
+                for a_cls, its_pk, an_upd in zip([Object, ObjectFields],
+                                                 ['objid', 'objfid'],
+                                                 [object_head_to_write, object_fields_to_write]):
+                    filter_for_id = text("%s=%d" % (its_pk, objid))
+                    obj = session.query(a_cls).filter(filter_for_id).first()
+                    assert obj is not None
+                    updates = TSVFile.update_orm_object(obj, an_upd)
+                    if len(updates) > 0:
+                        logger.info("Updating '%s' using %s", filter_for_id, updates)
+                        session.flush()
+                ret = 0  # nothing to write
+            else:
+                # Simply a line with a complementary image
+                logger.info("Second image for %s:%s ", object_fields_to_write.orig_id, image_to_write)
+                ret = 1  # just a new image
         else:
             # or create it
-            object_head_to_write.projid = prj_id
+            object_head_to_write.projid = how.prj_id
             object_head_to_write.random_value = random.randint(1, 99999999)
             # Below left NULL @see self.update_counts_and_img0
             # object_head_to_write.img0id = XXXXX
-            return True
+            ret = 3  # new image + new object_head + new object_fields
+        return ret
 
     def deal_with_images(self, where: ImportWhere, how: ImportHow, image_to_write: Image, instead_image: Path = None):
         """
@@ -565,7 +634,7 @@ class TSVFile(object):
             elif a_field == 'object_annotation_category':
                 if clean_value_and_none(lig.get('object_annotation_category_id', '')) == '':
                     # Apply the mapping, if and only if there is no id
-                    csv_val = how.taxo_mapping.get(csv_val.lower(), csv_val)
+                    csv_val: str = how.taxo_mapping.get(csv_val.lower(), csv_val)
                     # Record that the taxon was seen
                     how.taxo_found[csv_val.lower()] = None
             elif a_field == 'object_annotation_person_name':

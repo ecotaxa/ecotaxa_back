@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Dict
+from typing import Dict, TypeVar
 
 # noinspection PyPackageRequirements
 from sqlalchemy import MetaData
@@ -50,7 +50,7 @@ class DBWriter(object):
     obj_head_prog_cols = {'sunpos', 'random_value', 'acquisid', 'processid', 'sampleid'}
     obj_fields_prog_cols = {}
 
-    def generators(self, target_fields: Dict[str, set]):
+    def generators(self, target_fields: Dict[str, set]) -> (TypeVar, TypeVar, TypeVar):
         # Small optimization, the below allows minimal SQLAlchemy SQL sent to DB
         metadata = MetaData()
         ObjectView = Bean
@@ -78,21 +78,26 @@ class DBWriter(object):
             a_bulk_set.clear()
         logger.info("Batch save objects of %s", nb_bulks)
 
-    def add_db_entities(self, object_head_to_write, object_fields_to_write, image_to_write, must_write_obj):
+    def add_db_entities(self, object_head_to_write, object_fields_to_write, image_to_write, new_records: int):
         # Bulk mode or Core do not create links (using ORM relationship), so we have to do manually
-        if must_write_obj:
+        if new_records > 1:
+            # There is a new image and more
             assert object_head_to_write.projid is not None
             assert object_fields_to_write.orig_id is not None
             # Default value from sequences
             object_head_to_write.objid = self.obj_seq_cache.next()
             object_fields_to_write.objfid = object_head_to_write.objid
-        # There is at least an image
-        image_to_write.imgid = self.img_seq_cache.next()
-        image_to_write.objid = object_head_to_write.objid
-        if must_write_obj:
+        if new_records >= 1:
+            # There is a new image
+            image_to_write.imgid = self.img_seq_cache.next()
+            image_to_write.objid = object_head_to_write.objid
+        if new_records > 1:
+            # There is a new image and more
             self.obj_fields_bulks.append(object_fields_to_write)
             self.obj_bulks.append(object_head_to_write)
-        self.img_bulks.append(image_to_write)
+        if new_records >= 1:
+            # There is a new image
+            self.img_bulks.append(image_to_write)
 
     def add_vignette_backup(self, object_head_to_write, backup_img_to_write):
         backup_img_to_write.objid = object_head_to_write.objid

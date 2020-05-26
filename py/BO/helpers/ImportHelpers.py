@@ -51,12 +51,16 @@ class ImportHow(object):
         During an import, how to do it, special cases, mappings and so on.
     """
 
-    def __init__(self, prj_id, custom_mapping: ProjectMapping, skip_object_duplicates: bool, loaded_files: List[str]):
+    def __init__(self, prj_id, update_mode: str, custom_mapping: ProjectMapping, skip_object_duplicates: bool,
+                 loaded_files: List[str]):
         self.prj_id = prj_id
+        # Update or create
+        self.can_update = update_mode in ('Yes', 'Cla')
+        self.update_with_classif = update_mode == 'Cla'
         # From user choices
         self.files_not_to_import = set()
         self.objects_and_images_to_skip: Set = set()
-        self.taxo_mapping = {}
+        self.taxo_mapping: Dict[str, str] = {}
         self.skip_object_duplicates = skip_object_duplicates
         # The maximum image dimension before a thumbnail gets generated
         self.max_dim: int = int(1e10)
@@ -64,11 +68,14 @@ class ImportHow(object):
         self.custom_mapping: ProjectMapping = custom_mapping
         # TODO: for validating it's !=
         self.found_users = {}
-        # The taxa _names_ found in TSV _without ID_, key = taxon NAME (str), value = None during analysis
-        self.taxo_found = {}
+        # The taxa _names_ found in TSV _without ID_,
+        #     key = taxon NAME (str), value = None during analysis, id during resolve
+        self.taxo_found: Dict[str, Optional[int]] = {}
         # Collected during RealImport
-        self.existing_parent_ids: Union[Dict, None] = None
-        self.existing_objects: Optional[Dict[str, int]] = None
+        # e.g. { 'samples': { 'm106_mn01_n2': 14563 } }
+        self.existing_parent_ids: Dict[str, Dict[str, int]] = {}
+        # e.g. { 'm106_mn01_n1_sml_409': 1455263 }
+        self.existing_objects: Dict[str, int] = {}
         # Updated during RealImport
         self.loaded_files = loaded_files
         # For UVP6 vignetting
@@ -77,7 +84,7 @@ class ImportHow(object):
     def do_thumbnail_above(self, max_dim):
         self.max_dim = max_dim
 
-    def compute_skipped(self, bundle, logger):
+    def compute_skipped(self, bundle, _logger):
         """
             Compute files _not_ to load.
         """

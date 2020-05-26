@@ -89,7 +89,7 @@ class ImportAnalysis(ImportServiceBase):
         # Received from parameters
         self.source_dir_or_zip: str = req.source_path
 
-    FROM_HTTP_FILE="uploaded.zip"
+    FROM_HTTP_FILE = "uploaded.zip"
 
     def run(self) -> ImportPrepRsp:
         super().prepare_run()
@@ -128,7 +128,8 @@ class ImportAnalysis(ImportServiceBase):
         # Source bundle construction
         source_bundle = InBundle(self.source_dir_or_zip, Path(self.temp_for_task.data_dir_for(self.task_id)))
         # Configure the validation to come, directives.
-        import_how = ImportHow(self.prj_id, custom_mapping, self.req.skip_existing_objects, loaded_files)
+        import_how = ImportHow(self.prj_id, self.req.update_mode, custom_mapping, self.req.skip_existing_objects,
+                               loaded_files)
         if self.req.skip_loaded_files:
             import_how.compute_skipped(source_bundle, logger)
         # A structure to collect validation result
@@ -229,7 +230,8 @@ class RealImport(ImportServiceBase):
         db_writer = DBWriter(self.session)
         import_where = ImportWhere(db_writer, self.vault, self.temp_for_task.base_dir_for(self.task_id))
         # Configure the import to come, directives
-        import_how = ImportHow(self.prj_id, self.custom_mapping, self.req.skip_existing_objects, loaded_files)
+        import_how = ImportHow(self.prj_id, self.req.update_mode, self.custom_mapping, self.req.skip_existing_objects,
+                               loaded_files)
         import_how.taxo_mapping = self.req.taxo_mappings
         import_how.taxo_found = self.req.found_taxa
         import_how.found_users = self.req.found_users
@@ -242,8 +244,8 @@ class RealImport(ImportServiceBase):
         # Do the bulk job of import
         row_count = source_bundle.do_import(import_where, import_how, self.req.rowcount, self.report_progress)
 
-        # Update loaded files in DB
-        self.prj.fileloaded = "\n".join(import_how.loaded_files)
+        # Update loaded files in DB, removing duplicates
+        self.prj.fileloaded = "\n".join(set(import_how.loaded_files))
         self.session.commit()
 
         # Ensure the ORM has no shadow copy before going to plain SQL

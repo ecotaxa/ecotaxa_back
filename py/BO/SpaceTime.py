@@ -9,6 +9,8 @@ from utils import calc_astral_day_time
 # TODO: Caching a single value is useful, but less than several of them
 astral_cache = {'date': None, 'time': None, 'long': None, 'lat': None, 'r': ''}
 
+USED_FIELDS_FOR_SUNPOS = {'objdate', 'objtime', 'longitude', 'latitude'}
+
 
 def compute_sun_position(object_head_to_write: Object):
     # Compute sun position if not already done

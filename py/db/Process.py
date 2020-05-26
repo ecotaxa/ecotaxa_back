@@ -5,6 +5,7 @@
 from db.Model import Model
 from sqlalchemy import Sequence, Column, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, INTEGER
+# noinspection PyProtectedMember
 from sqlalchemy.engine import ResultProxy
 from sqlalchemy.orm import relationship, Session
 

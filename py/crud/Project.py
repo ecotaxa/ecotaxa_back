@@ -11,7 +11,7 @@ class ProjectService(Service):
         Basic CRUD operations on Project
     """
 
-    def create(self, title:str) -> int:
+    def create(self, title: str) -> int:
         prj = Project()
         prj.title = title
         self.session.add(prj)

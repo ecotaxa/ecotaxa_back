@@ -25,6 +25,9 @@ class Bean(dict):
         # assert key in self.cols
         self[key] = value
 
+    def nb_fields_from(self, fields_set: set):
+        return len(fields_set.intersection(self.keys()))
+
 
 class SequenceCache(object):
     """

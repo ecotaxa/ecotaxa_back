@@ -19,7 +19,16 @@ class GlobalMapping(object):
     """
         Information about mapping process (from TSV to DB)
     """
+    ANNOTATION_FIELDS = {
+        # !!! 2 TSV fields end up into a single DB column
+        'object_annotation_category': {'table': Object.__tablename__, 'field': 'classif_id', 'type': 't'},
+        'object_annotation_category_id': {'table': Object.__tablename__, 'field': 'classif_id', 'type': 'n'},
+        'object_annotation_date': {'table': Object.__tablename__, 'field': 'classif_when', 'type': 't'},
+        'object_annotation_person_name': {'table': Object.__tablename__, 'field': 'classif_who', 'type': 't'},
+        'object_annotation_status': {'table': Object.__tablename__, 'field': 'classif_qual', 'type': 't'},
+    }
     PREDEFINED_FIELDS = {
+        **ANNOTATION_FIELDS,
         # A mapping from TSV columns to objects and fields
         'object_id': {'table': ObjectFields.__tablename__, 'field': 'orig_id', 'type': 't'},
         'sample_id': {'table': Sample.__tablename__, 'field': 'orig_id', 'type': 't'},
@@ -32,12 +41,6 @@ class GlobalMapping(object):
         'object_link': {'table': ObjectFields.__tablename__, 'field': 'object_link', 'type': 't'},
         'object_depth_min': {'table': Object.__tablename__, 'field': 'depth_min', 'type': 'n'},
         'object_depth_max': {'table': Object.__tablename__, 'field': 'depth_max', 'type': 'n'},
-        # !!! 2 TSV fields end up into a single DB column
-        'object_annotation_category': {'table': Object.__tablename__, 'field': 'classif_id', 'type': 't'},
-        'object_annotation_category_id': {'table': Object.__tablename__, 'field': 'classif_id', 'type': 'n'},
-        'object_annotation_date': {'table': Object.__tablename__, 'field': 'classif_when', 'type': 't'},
-        'object_annotation_person_name': {'table': Object.__tablename__, 'field': 'classif_who', 'type': 't'},
-        'object_annotation_status': {'table': Object.__tablename__, 'field': 'classif_qual', 'type': 't'},
         'img_rank': {'table': Image.__tablename__, 'field': 'imgrank', 'type': 'n'},
         'img_file_name': {'table': Image.__tablename__, 'field': 'orig_file_name', 'type': 't'},
         'sample_dataportal_descriptor': {'table': Sample.__tablename__, 'field': 'dataportal_descriptor', 'type': 't'},

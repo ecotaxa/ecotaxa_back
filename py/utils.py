@@ -5,7 +5,6 @@
 # Ye olde utils no project can do without :)
 #
 import datetime
-import math
 import re
 from typing import Union
 
@@ -75,10 +74,10 @@ def calc_astral_day_time(date: datetime.datetime, time, latitude, longitude):
     :param longitude: longitude
     :return: D for Day, U for Dusk, N for Night, A for Dawn (Aube in French)
     """
-    l = LocationInfo()
-    l.latitude = latitude
-    l.longitude = longitude
-    s = sun(l.observer, date=date, dawn_dusk_depression=Depression.NAUTICAL)
+    loc = LocationInfo()
+    loc.latitude = latitude
+    loc.longitude = longitude
+    s = sun(loc.observer, date=date, dawn_dusk_depression=Depression.NAUTICAL)
     ret = '?'
     # The intervals and their interpretation
     interp = ({'from:': s['dusk'].time(), 'to:': s['dawn'].time(), '=>': 'N'},
@@ -105,9 +104,9 @@ def encode_equal_list(a_mapping: dict):
     :param a_mapping:
     :return:
     """
-    l = ["%s=%s" % (k, v) for k, v in a_mapping.items()]
-    l.sort()
-    return "\n".join(l)
+    eqs = ["%s=%s" % (k, v) for k, v in a_mapping.items()]
+    eqs.sort()
+    return "\n".join(eqs)
 
 
 # TODO: Most probably better elsewhere
@@ -121,8 +120,6 @@ def convert_degree_minute_float_to_decimal_degree(v):
     else:  # decimal part was in minutes
         # Bug in 2.2 @see https://github.com/oceanomics/ecotaxa_dev/issues/340
         v = to_float(v)
-        #f, i = math.modf(v)
-        #return i + (f / 0.6)
         return v
 
 

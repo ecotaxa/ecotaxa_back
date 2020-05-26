@@ -6,6 +6,7 @@ from typing import List
 
 from sqlalchemy import Column, ForeignKey, Sequence, Integer, String, Boolean, func
 from sqlalchemy.dialects.postgresql import TIMESTAMP
+# noinspection PyProtectedMember
 from sqlalchemy.engine import ResultProxy
 from sqlalchemy.orm import Session
 
