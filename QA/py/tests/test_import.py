@@ -31,6 +31,7 @@ PLAIN_FILE = DATA_DIR / "import_test.zip"
 V6_FILE = DATA_DIR / "UVP6_example.zip"
 V6_DIR = DATA_DIR / "import_uvp6_zip_in_dir"
 PLAIN_DIR = DATA_DIR / "import_test"
+UPDATE_DIR = DATA_DIR / "import_update"
 PLUS_DIR = DATA_DIR / "import_test_plus"
 ISSUES_DIR = DATA_DIR / "import_issues" / "tsv_issues"
 ISSUES_DIR2 = DATA_DIR / "import_issues" / "no_classif_id"
@@ -126,6 +127,10 @@ def test_import_again_not_skipping_tsv_skipping_imgs(config, database, caplog):
     task_id = TaskService().create()
     prj_id = 1  # <- need the project from first test
     # Do preparation
+    import_plain(prj_id, task_id)
+
+
+def import_plain(prj_id, task_id):
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(PLAIN_DIR),
                            skip_existing_objects=True)
@@ -139,6 +144,7 @@ def test_import_again_not_skipping_tsv_skipping_imgs(config, database, caplog):
     params.found_taxa['other'] = 99999  # 'other<dead'
     # 'ozzeur' category is unknown
     params.found_taxa['ozzeur'] = 85011  # 'other<living'
+    params.update_mode = True  # TODO, should be in response
     RealImport(prj_id, params).run()
 
 
@@ -166,6 +172,47 @@ def test_equal_dump_prj1(config, database, caplog):
     sce.run(projid=1, out=out_dump)
 
 
+def test_import_update(config, database, caplog):
+    """ Update TSVs """
+    caplog.set_level(logging.DEBUG)
+    task_id = TaskService().create()
+    prj_id = ProjectService().create("Test Import update")
+    # Plain import first
+    import_plain(prj_id, task_id)
+    dump_sce = AsciiDumper()
+    dump_sce.run(projid=prj_id, out='before_upd.txt')
+    # Update without classif, 10 cells
+    do_import_update(prj_id, caplog, 'Yes')
+    nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
+    print("\n".join(caplog.messages))
+    assert nb_upds == 9
+    # Update classif, 2 cells, one classif ID and one classif quality
+    do_import_update(prj_id, caplog, 'Cla')
+    nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
+    print("\n".join(caplog.messages))
+    assert nb_upds == 2
+    dump_sce.run(projid=prj_id, out='after_upd.txt')
+
+
+
+def do_import_update(prj_id, caplog, classif):
+    task_id = TaskService().create()
+    params = ImportPrepReq(task_id=task_id,
+                           skip_existing_objects=True,
+                           update_mode=classif,
+                           source_path=str(UPDATE_DIR))
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
+    assert len(prep_out.errors) == 0
+    params = real_params_from_prep_out(task_id, prep_out)
+    params.found_users['elizandro rodriguez'] = {'id': 1}
+    params.found_taxa['other'] = 99999  # 'other<dead'
+    params.found_taxa['ozzeur'] = 85011  # 'other<living'
+    params.skip_existing_objects = True
+    params.update_mode = classif
+    caplog.clear()
+    RealImport(prj_id, params).run()
+
+
 # @pytest.mark.skip()
 def test_import_uvp6(config, database, caplog):
     caplog.set_level(logging.DEBUG)
@@ -179,6 +226,7 @@ def test_import_uvp6(config, database, caplog):
     assert len(prep_out.errors) == 0
     # Do real import
     RealImport(prj_id, params).run()
+
 
 def test_equal_dump_prj2(config, database, caplog):
     caplog.set_level(logging.DEBUG)
@@ -274,6 +322,7 @@ def test_import_ambiguous_classification(config, database, caplog):
         # Do real import, this has to fail as we have unmapped taxonomy
         RealImport(prj_id, params).run()
 
+
 def test_import_uvp6_zip_in_dir(config, database, caplog):
     """
         An *Images.zip inside a directory.
@@ -289,5 +338,3 @@ def test_import_uvp6_zip_in_dir(config, database, caplog):
     assert len(prep_out.errors) == 0
     # Do real import
     RealImport(prj_id, params).run()
-
-
