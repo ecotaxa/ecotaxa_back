@@ -2,12 +2,13 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from db.Model import Model
 from sqlalchemy import Sequence, Column, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, INTEGER
 # noinspection PyProtectedMember
 from sqlalchemy.engine import ResultProxy
 from sqlalchemy.orm import relationship, Session
+
+from db.Model import Model
 
 
 class Process(Model):
