@@ -540,8 +540,10 @@ class TSVFile(object):
             # e.g. 'sub1/20200205-111823_3.png'
             img_file_path = self.path.parent / img_file_name
             if not img_file_path.exists():
-                diag.error("Missing Image '%s' in file %s. "
-                           % (img_file_name, self.relative_name))
+                if not how.can_update:
+                    # Images are not mandatory during update
+                    diag.error("Missing Image '%s' in file %s. "
+                               % (img_file_name, self.relative_name))
             else:
                 # noinspection PyBroadException
                 try:
