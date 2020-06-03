@@ -205,7 +205,8 @@ class TSVFile(object):
         # Remove classification fields if updating but not classification
         if how.can_update and not how.update_with_classif:
             for fld in GlobalMapping.ANNOTATION_FIELDS.keys():
-                ok_fields.remove(fld)
+                if fld in ok_fields:
+                    ok_fields.remove(fld)
         ko_fields = [field for field in field_set if field not in ok_fields]
         if len(ko_fields) > 0:  # pragma: no cover
             # This cannot happen as step1 prevents it. However the code is left in case API evolves.
