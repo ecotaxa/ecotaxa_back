@@ -40,11 +40,18 @@ class TSVFile(object):
                   # 'annotation_person_first_name' # historical
                   }
 
-    def __init__(self, full_path: Path, parent_path: Path):
-        self.path = full_path
-        relative_file = full_path.relative_to(parent_path)
-        # relative name for logging and recording what was done
-        self.relative_name: str = relative_file.as_posix()
+    def __init__(self, path: Path, bundle_path: Path):
+        self.path: Path = path
+        try:
+            relative_file = path.relative_to(bundle_path)
+            # relative name for logging and recording what was done
+            self.relative_name: str = relative_file.as_posix()
+            # Images take TSV directory as base. The TSV can be in a bundle's subdirectory.
+            self.image_dir = path.parent
+        except ValueError:
+            self.relative_name = path.as_posix()
+            # Images are in the bundle
+            self.image_dir = bundle_path
 
         # when open()-ed, below members are active
         self.rdr: Optional[csv.DictReader] = None
@@ -173,7 +180,7 @@ class TSVFile(object):
                         # Store backup image into DB
                         where.db_writer.add_vignette_backup(object_head_to_write, backup_img_to_write)
                         # Store original image
-                        orig_file_name = self.path.parent.joinpath(image_to_write.orig_file_name)
+                        orig_file_name = self.path_for_image(image_to_write.orig_file_name)
                         sub_path = where.vault.store_image(orig_file_name, backup_img_to_write.imgid)
                         backup_img_to_write.file_name = sub_path
                         # Get original image dimensions
@@ -190,6 +197,15 @@ class TSVFile(object):
                     stats.report(counter)
 
         return row_count_for_csv
+
+    def path_for_image(self, image_path: str):
+        """
+            Path to an image referenced by self. Due to joinpath() behavior:
+            - If no "/" in image_path: must be in same directory as self
+            - If "/" in image_path but not leading / or drive letter: can be in a subdirectory
+            - If leading / or drive letter: can be anywhere
+        """
+        return self.image_dir.joinpath(image_path)
 
     def filter_unused_fields(self, how: ImportHow, field_set: set) -> set:
         """
@@ -232,6 +248,7 @@ class TSVFile(object):
                 continue
             fk_to_obj = parent_class.pk()
             if parent_orig_id in ids_for_obj:
+                # noinspection DuplicatedCode
                 if how.can_update:
                     # Update the DB line using sqlalchemy
                     parent_id = ids_for_obj[parent_orig_id]
@@ -329,10 +346,9 @@ class TSVFile(object):
                 elif m['type'] == 'n':
                     cached_field_value = to_float(csv_val)
                 elif a_field == 'object_date':
-                    cached_field_value = datetime.date(int(csv_val[0:4]), int(csv_val[4:6]), int(csv_val[6:8]))
+                    cached_field_value = Object.date_from_txt(csv_val)
                 elif a_field == 'object_time':
-                    csv_val = csv_val.zfill(6)
-                    cached_field_value = datetime.time(int(csv_val[0:2]), int(csv_val[2:4]), int(csv_val[4:6]))
+                    cached_field_value = Object.time_from_txt(csv_val)
                 elif field_name == 'classif_when':
                     v2 = clean_value(lig.get('object_annotation_time', '000000')).zfill(6)
                     cached_field_value = datetime.datetime(int(csv_val[0:4]), int(csv_val[4:6]),
@@ -386,6 +402,7 @@ class TSVFile(object):
             if how.can_update:
                 if object_head_to_write.sunpos == "?":
                     del object_head_to_write["sunpos"]
+                # noinspection DuplicatedCode
                 for a_cls, its_pk, an_upd in zip([Object, ObjectFields],
                                                  ['objid', 'objfid'],
                                                  [object_head_to_write, object_fields_to_write]):
@@ -399,7 +416,7 @@ class TSVFile(object):
                 ret = 0  # nothing to write
             else:
                 # Simply a line with a complementary image
-                logger.info("Second image for %s:%s ", object_fields_to_write.orig_id, image_to_write)
+                logger.info("One more image for %s:%s ", object_fields_to_write.orig_id, image_to_write)
                 ret = 1  # just a new image
         else:
             # or create it
@@ -425,7 +442,7 @@ class TSVFile(object):
         else:
             # Files are in a subdirectory for UVP6, same directory for non-UVP6
             # TODO: Unsure if it works on Windows, as there is a "/" for UVP6
-            img_file_path = self.path.parent.joinpath(image_to_write.orig_file_name)
+            img_file_path = self.path_for_image(image_to_write.orig_file_name)
 
         sub_path = where.vault.store_image(img_file_path, image_to_write.imgid)
         image_to_write.file_name = sub_path
@@ -539,7 +556,7 @@ class TSVFile(object):
             img_file_name = clean_value_and_none(lig.get('img_file_name', 'MissingField img_file_name'))
             # Below works as well for UVP6, as the file 'name' is in fact a relative path,
             # e.g. 'sub1/20200205-111823_3.png'
-            img_file_path = self.path.parent / img_file_name
+            img_file_path = self.path_for_image(img_file_name)
             if not img_file_path.exists():
                 if not how.can_update:
                     # Images are not mandatory during update
@@ -623,14 +640,13 @@ class TSVFile(object):
                     diag.classif_id_seen.add(int(csv_val))
             elif a_field == 'object_date':
                 try:
-                    datetime.date(int(csv_val[0:4]), int(csv_val[4:6]), int(csv_val[6:8]))
+                    Object.date_from_txt(csv_val)
                 except ValueError:
                     diag.error("Invalid Date value '%s' for Field '%s' in file %s."
                                % (csv_val, raw_field, self.relative_name))
             elif a_field == 'object_time':
                 try:
-                    csv_val = csv_val.zfill(6)
-                    datetime.time(int(csv_val[0:2]), int(csv_val[2:4]), int(csv_val[4:6]))
+                    Object.time_from_txt(csv_val)
                 except ValueError:
                     diag.error("Invalid Time value '%s' for Field '%s' in file %s."
                                % (csv_val, raw_field, self.relative_name))

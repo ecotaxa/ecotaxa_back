@@ -27,6 +27,8 @@ logger = get_logger(__name__)
 class InBundle(object):
     """
         From EcoTaxa point of view, some structured data coming into the system.
+        It contains TSV files and image files, in directory or directory tree.
+        TSV files can be in a separate directory from image ones.
     """
     TSV_FILTERS = ("**/ecotaxa*.txt", "**/ecotaxa*.tsv")
     UVP6_FILTER = "**/*Images.zip"
@@ -217,6 +219,34 @@ class InBundle(object):
                   (",".join([str(x) for x in classif_id_not_found_in_db]))
             diag.error(msg)
             logger.error(msg)
+
+    def remove_all_tsvs(self):
+        """
+            Remove to-be-treated TSV files inside self,
+            used in case a .zip with structured information is sent to Import Simple
+        """
+        self.possible_files = []
+
+    def add_tsv(self, a_tsv_file: Path):
+        """
+            Add a TSV file for treatment.
+        """
+        self.possible_files.append(a_tsv_file)
+
+    IMAGE_FILTERS = ("**/*.jpg", "**/*.png", "**/*.tif")
+
+    def list_image_files(self) -> List[Path]:
+        """
+            Return the list of image files inside self, relative to self.
+        """
+        ret = []
+        for a_filter in self.IMAGE_FILTERS:
+            ret.extend(self.path.glob(a_filter))
+        # Images are duplicated in a hidden folder for .zips coming from OsX
+        ret = [a_file.relative_to(self.path)
+               for a_file in ret
+               if not "__MACOSX" in str(a_file)]
+        return ret
 
 
 class UVP6Bundle(InBundle):

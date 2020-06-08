@@ -13,7 +13,7 @@ from typing import Union, Dict, Optional
 from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping
 from BO.helpers.ImportHelpers import ImportHow, ImportDiagnostic, ImportWhere
-from api.imports import ImportPrepReq, ImportRealReq, ImportRealRsp, ImportPrepRsp
+from api.imports import ImportPrepReq, ImportRealReq, ImportRealRsp, ImportPrepRsp, SimpleImportReq
 from db.Image import Image
 from db.Object import Object
 from db.Project import Project
@@ -35,14 +35,17 @@ class ImportServiceBase(Service, ABC):
     """
         Common methods and data for import task steps.
     """
-    req: Union[ImportPrepReq, ImportRealReq]
+    req: Union[ImportPrepReq, ImportRealReq, SimpleImportReq]
     prj_id: int = 0
     task_id: int = -1
 
-    def __init__(self, prj_id: int, req: Union[ImportPrepReq, ImportRealReq]):
+    def __init__(self, prj_id: int, req: Union[ImportPrepReq, ImportRealReq, SimpleImportReq]):
         super().__init__()
+        # Received from parameters
         self.prj_id = prj_id
         """ The project ID to import into """
+        self.source_dir_or_zip: str = req.source_path
+        """ The source file or directory """
         self.task_id = req.task_id
         self.req = req
         # From legacy code, vault and temptask are in src directory
@@ -76,6 +79,41 @@ class ImportServiceBase(Service, ABC):
     def update_progress(self, percent: int, message: str):
         self.update_task(taskstate=None, percent=percent, message=message)
 
+    FROM_HTTP_FILE = "uploaded.zip"
+
+    def manage_uploaded(self):
+        # Special case, Http file was directly copied inside temp directory
+        if self.source_dir_or_zip == self.FROM_HTTP_FILE:
+            self.source_dir_or_zip = self.temp_for_task.in_base_dir_for(self.task_id, self.source_dir_or_zip)
+
+    def unzip_if_needed(self):
+        """
+            If a .zip was sent, unzip it. Otherwise it is assumed that we point to an import directory.
+        """
+        if self.source_dir_or_zip.lower().endswith(".zip"):
+            logger.info("SubTask : Unzip File into temporary folder")
+            self.update_progress(1, "Unzip File into temporary folder")
+            input_path = self.source_dir_or_zip
+            self.source_dir_or_zip = self.temp_for_task.unzip_dir_for(self.task_id)
+            with zipfile.ZipFile(input_path, 'r') as z:
+                z.extractall(self.source_dir_or_zip)
+
+    def report_progress(self, current, total):
+        self.update_progress(20 + 80 * current / total,
+                             "Processing files %d/%d" % (current, total))
+
+    def do_after_load(self):
+        """
+            After loading of data, update various cross counts.
+        """
+        # Ensure the ORM has no shadow copy before going to plain SQL
+        self.session.expunge_all()
+        Object.update_counts_and_img0(self.session, self.prj_id)
+        Sample.propagate_geo(self.session, self.prj_id)
+        Project.update_taxo_stats(self.session, self.prj_id)
+        # Stats depend on taxo stats
+        Project.update_stats(self.session, self.prj_id)
+
 
 class ImportAnalysis(ImportServiceBase):
     """
@@ -86,18 +124,12 @@ class ImportAnalysis(ImportServiceBase):
 
     def __init__(self, prj_id: int, req: ImportPrepReq):
         super().__init__(prj_id, req)
-        # Received from parameters
-        self.source_dir_or_zip: str = req.source_path
-
-    FROM_HTTP_FILE = "uploaded.zip"
 
     def run(self) -> ImportPrepRsp:
         super().prepare_run()
         loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
         logger.info("Previously loaded files: %s", loaded_files)
-        # Special case, Http file was directly copied inside temp directory
-        if self.source_dir_or_zip == self.FROM_HTTP_FILE:
-            self.source_dir_or_zip = self.temp_for_task.in_base_dir_for(self.task_id, self.source_dir_or_zip)
+        self.manage_uploaded()
         # Prepare response
         ret = ImportPrepRsp(source_path=self.source_dir_or_zip)
         self.update_progress(0, "Starting")
@@ -188,18 +220,6 @@ class ImportAnalysis(ImportServiceBase):
         self.update_progress(20 * current / total,
                              "Validating files %d/%d" % (current, total))
 
-    def unzip_if_needed(self):
-        """
-            If a .zip was sent, unzip it. Otherwise it is assumed that we point to an import directory.
-        """
-        if self.source_dir_or_zip.lower().endswith(".zip"):
-            logger.info("SubTask0 : Unzip File into temporary folder")
-            self.update_progress(1, "Unzip File into temporary folder")
-            input_path = self.source_dir_or_zip
-            self.source_dir_or_zip = self.temp_for_task.unzip_dir_for(self.task_id)
-            with zipfile.ZipFile(input_path, 'r') as z:
-                z.extractall(self.source_dir_or_zip)
-
 
 class RealImport(ImportServiceBase):
     """
@@ -248,21 +268,11 @@ class RealImport(ImportServiceBase):
         self.prj.fileloaded = "\n".join(set(import_how.loaded_files))
         self.session.commit()
 
-        # Ensure the ORM has no shadow copy before going to plain SQL
-        self.session.expunge_all()
-        Object.update_counts_and_img0(self.session, self.prj_id)
-        Sample.propagate_geo(self.session, self.prj_id)
-        Project.update_taxo_stats(self.session, self.prj_id)
-        # Stats depend on taxo stats
-        Project.update_stats(self.session, self.prj_id)
+        self.do_after_load()
         logger.info("Total of %d rows loaded" % row_count)
         # Prepare response
         ret = ImportRealRsp()
         return ret
-
-    def report_progress(self, current, total):
-        self.update_progress(20 + 80 * current / total,
-                             "Processing files %d/%d" % (current, total))
 
     def save_mapping(self, custom_mapping):
         """

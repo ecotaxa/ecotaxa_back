@@ -11,6 +11,7 @@ from uvicorn.middleware.debug import PlainTextResponse
 
 from api.imports import *
 from tasks.Import import ImportAnalysis, RealImport
+from tasks.SimpleImport import SimpleImport
 from tasks.WoRMSFinder import WoRMSFinder
 from tech.StatusSce import StatusService
 
@@ -53,6 +54,14 @@ def api_import(project_id: int, params: ImportRealReq):
         Import an EcoTaxa archive or directory.
     """
     sce = RealImport(project_id, params)
+    return sce.run()
+
+@app.post("/simple_import/{project_id}", response_model=SimpleImportRsp)
+def api_import(project_id: int, params: SimpleImportReq):
+    """
+        Import images only, with same metadata for all.
+    """
+    sce = SimpleImport(project_id, params)
     return sce.run()
 
 

@@ -64,3 +64,18 @@ class ImportRealReq(BaseModel):
 
 class ImportRealRsp(BaseModel):
     """ Import for real, response. """
+
+
+class SimpleImportReq(BaseModel):
+    """ Simple Import preparation, request. """
+    task_id: int = Field(title="The existing task to use, if 0 then it's a dry run")
+    source_path: str = Field(title="Source path on server, to zip or plain directory")
+    values: Dict[str, Optional[str]] = Field(title="Constant values to write for all images, None to ignore.")
+    possible_values = ("imgdate", "imgtime", "latitude", "longitude",
+                       "depthmin", "depthmax", "taxolb", "userlb", "status")
+
+
+class SimpleImportRsp(BaseModel):
+    """ Simple Import, response. """
+    errors: List[str] = Field(title="Validation, copy or insert errors")
+    nb_images: int = Field(title="Number of successfully imported images")
