@@ -8,8 +8,8 @@ import logging
 from os.path import dirname, realpath
 from pathlib import Path
 
-# noinspection PyPackageRequirements
 import pytest
+# noinspection PyPackageRequirements
 from api.imports import *
 # Import services
 # noinspection PyPackageRequirements
@@ -17,8 +17,9 @@ from crud.Project import ProjectService
 # noinspection PyPackageRequirements
 from crud.Task import TaskService
 # noinspection PyPackageRequirements
-# noinspection PyPackageRequirements
 from tasks.Import import ImportAnalysis, RealImport
+# noinspection PyPackageRequirements
+from tasks.SimpleImport import SimpleImport
 from tech.AsciiDump import AsciiDumper
 
 # noinspection PyUnresolvedReferences
@@ -194,7 +195,6 @@ def test_import_update(config, database, caplog):
     dump_sce.run(projid=prj_id, out='after_upd.txt')
 
 
-
 def do_import_update(prj_id, caplog, classif):
     task_id = TaskService().create()
     params = ImportPrepReq(task_id=task_id,
@@ -214,6 +214,7 @@ def do_import_update(prj_id, caplog, classif):
 
 
 # @pytest.mark.skip()
+# noinspection DuplicatedCode
 def test_import_uvp6(config, database, caplog):
     caplog.set_level(logging.DEBUG)
     prj_id = ProjectService().create("Test LS 2")
@@ -266,7 +267,7 @@ def test_import_issues(config, database, caplog):
         "Invalid Lat. value '100' for Field 'object_lat' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect range -90/+90°.",
         "Invalid Long. value '200' for Field 'object_lon' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect range -180/+180°.",
         "Invalid Date value '20140433' for Field 'object_date' in file ecotaxa_m106_mn01_n3_sml.tsv.",
-        "Invalid Time value '009920' for Field 'object_time' in file ecotaxa_m106_mn01_n3_sml.tsv.",
+        "Invalid Time value '9920' for Field 'object_time' in file ecotaxa_m106_mn01_n3_sml.tsv.",
         "Invalid Annotation Status 'predit' for Field 'object_annotation_status' in file ecotaxa_m106_mn01_n3_sml.tsv.",
         "Missing Image 'm106_mn01_n3_sml_1081.jpg2' in file ecotaxa_m106_mn01_n3_sml.tsv. ",
         "Error while reading Image 'm106_mn01_n3_sml_corrupted_image.jpg' in file ecotaxa_m106_mn01_n3_sml.tsv. <class 'PIL.UnidentifiedImageError'>",
@@ -338,3 +339,27 @@ def test_import_uvp6_zip_in_dir(config, database, caplog):
     assert len(prep_out.errors) == 0
     # Do real import
     RealImport(prj_id, params).run()
+
+
+def test_import_images(config, database, caplog):
+    """
+        An all images inside a directory/zip.
+    """
+    caplog.set_level(logging.DEBUG)
+    prj_id = ProjectService().create("Test Import Images")
+
+    vals = {"latitude": "abcde"}
+    params = SimpleImportReq(task_id=0,
+                             source_path=str(PLAIN_DIR),
+                             values=vals)
+    rsp = SimpleImport(prj_id, params).run()
+    assert rsp.errors == ["'abcde' is not a valid value for latitude"]
+    # Do real import
+    vals["latitude"] = "43.8802"
+    vals["longitude"] = "7.2329"
+    params.values = vals
+    params.task_id = TaskService().create()
+    rsp: SimpleImportRsp = SimpleImport(prj_id, params).run()
+    print("\n".join(caplog.messages))
+    assert rsp.errors == []
+    assert rsp.nb_images == 8

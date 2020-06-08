@@ -3,6 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 # noinspection PyPackageRequirements
+import datetime
 from typing import Dict
 
 # noinspection PyPackageRequirements
@@ -15,6 +16,7 @@ from sqlalchemy.engine import ResultProxy
 # noinspection PyPackageRequirements
 from sqlalchemy.orm import relationship, Session
 
+from utils import convert_degree_minute_float_to_decimal_degree
 from .Model import Model
 # noinspection PyUnresolvedReferences
 from .Taxonomy import Taxonomy
@@ -112,6 +114,47 @@ class Object(Model):
            AND (imgcount IS NULL or img0id IS NULL) """,
                         {'prj': prj_id})
         session.commit()
+
+    @staticmethod
+    def _geo_from_txt(txt: str, min_v: float, max_v: float) -> float:
+        """ Convert/check latitude or longitude before setting field
+            :raises ValueError """
+        ret = convert_degree_minute_float_to_decimal_degree(txt)
+        if ret is None:
+            raise ValueError
+        if ret < min_v or ret > max_v:
+            raise ValueError
+        return ret
+
+    @staticmethod
+    def latitude_from_txt(txt: str) -> float:
+        return Object._geo_from_txt(txt, -90, 90)
+
+    @staticmethod
+    def longitude_from_txt(txt: str) -> float:
+        return Object._geo_from_txt(txt, -180, 180)
+
+    @staticmethod
+    def depth_from_txt(txt: str) -> float:
+        """ Convert depth before setting field
+            :raises ValueError """
+        return float(txt)
+
+    @staticmethod
+    def time_from_txt(txt: str) -> datetime.time:
+        """ Convert/check time before setting field. HHMM with optional SS.
+            :raises ValueError """
+        # Left pad with 0s as they tend to be truncated by spreadsheets e.g. 320 -> 0320
+        txt = '0' * (4 - len(txt)) + txt if len(txt) < 4 else txt
+        # Right pad with 0s for seconds e.g. 0320 -> 032000
+        txt += '0' * (6 - len(txt)) if len(txt) < 6 else ""
+        return datetime.time(int(txt[0:2]), int(txt[2:4]), int(txt[4:6]))
+
+    @staticmethod
+    def date_from_txt(txt: str) -> datetime.date:
+        """ Convert/check date before setting field
+            :raises ValueError """
+        return datetime.date(int(txt[0:4]), int(txt[4:6]), int(txt[6:8]))
 
 
 class ObjectFields(Model):
