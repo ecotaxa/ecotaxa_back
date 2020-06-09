@@ -135,7 +135,6 @@ class SimpleImport(ImportServiceBase):
         values = self.req.values
         for a_key, a_val in values.items():
             if a_val is None:
-                values[a_key] = ""
                 continue
             valid_def = self.VALIDATIONS.get(a_key)
             if not valid_def:
