@@ -19,9 +19,9 @@ from sqlalchemy.orm import Session
 from BO.Mappings import GlobalMapping, ProjectMapping
 from BO.SpaceTime import compute_sun_position, USED_FIELDS_FOR_SUNPOS
 from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
-from db.Image import Image
 from db.Model import Model
 from db.Object import classif_qual_revert, Object, ObjectFields
+from db.Utils import Bean
 from tech.DynamicLogs import get_logger
 from utils import clean_value, none_to_empty, to_float, convert_degree_minute_float_to_decimal_degree, \
     clean_value_and_none
@@ -427,7 +427,7 @@ class TSVFile(object):
             ret = 3  # new image + new object_head + new object_fields
         return ret
 
-    def deal_with_images(self, where: ImportWhere, how: ImportHow, image_to_write: Image, instead_image: Path = None):
+    def deal_with_images(self, where: ImportWhere, how: ImportHow, image_to_write: Bean, instead_image: Path = None):
         """
             Generate image, eventually the vignette, create DB line(s) and copy image file into vault.
         :param where:
@@ -446,8 +446,8 @@ class TSVFile(object):
 
         sub_path = where.vault.store_image(img_file_path, image_to_write.imgid)
         image_to_write.file_name = sub_path
-        if "imgrank" not in image_to_write:
-            image_to_write.imgrank = 0  # default value
+        if image_to_write.get("imgrank") is None:
+            image_to_write.imgrank = 0  # default value for missing field, and present with None
 
         self.dimensions_and_resize(how, where, sub_path, image_to_write)
 
