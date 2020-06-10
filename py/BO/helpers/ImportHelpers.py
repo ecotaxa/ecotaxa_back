@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import List, Union, Set, Dict, Optional, Callable
 
 from BO.Mappings import ProjectMapping
+from db.Model import Model
 from fs.Vault import Vault
 from tasks.DBWriter import DBWriter
 
@@ -72,8 +73,8 @@ class ImportHow(object):
         #     key = taxon NAME (str), value = None during analysis, id during resolve
         self.taxo_found: Dict[str, Optional[int]] = {}
         # Collected during RealImport
-        # e.g. { 'samples': { 'm106_mn01_n2': 14563 } }
-        self.existing_parent_ids: Dict[str, Dict[str, int]] = {}
+        # e.g. { 'samples': { 'm106_mn01_n2': {'sampleid':14563 } } }
+        self.existing_parents: Dict[str, Dict[str, Model]] = {}
         # e.g. { 'm106_mn01_n1_sml_409': 1455263 }
         self.existing_objects: Dict[str, int] = {}
         # Updated during RealImport

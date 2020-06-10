@@ -65,10 +65,12 @@ class InBundle(object):
         # Borrow session from writer
         session = where.db_writer.session
         # Get parent (enclosing) Sample, Acquisition, Process, if any
-        how.existing_parent_ids = self.fetch_existing_parent_ids(session, prj_id=how.prj_id)
+        how.existing_parents = self.fetch_existing_parents(session, prj_id=how.prj_id)
+        for alias, _clazz in GlobalMapping.PARENT_CLASSES.items():
+            log_line = {v.orig_id: v.pk() for k, v in how.existing_parents[alias].items()}
+            logger.info("existing %s = %s", alias, log_line)
         # The created objects (unicity from object_id in TSV, orig_id in model)
         how.existing_objects = self.fetch_existing_objects(session, prj_id=how.prj_id)
-        logger.info("existing_parent_ids = %s", how.existing_parent_ids)
 
         ret = self.import_each_file(where, how, stats)
         return ret
@@ -124,17 +126,17 @@ class InBundle(object):
         return Object.fetch_existing_objects(session, prj_id)
 
     @staticmethod
-    def fetch_existing_parent_ids(session, prj_id):
+    def fetch_existing_parents(session, prj_id):
         """
             Get from DB the present IDs for the tables we are going to update, in current project.
             :return:
         """
-        existing_ids = {}
-        # Get orig_id from acquisition, sample, process
+        existing_parents = {}
+        # Get records from acquisition, sample, process
         for alias, clazz in GlobalMapping.PARENT_CLASSES.items():
             collect = clazz.get_orig_id_and_pk(session, prj_id)
-            existing_ids[alias] = collect
-        return existing_ids
+            existing_parents[alias] = collect
+        return existing_parents
 
     def validate_import(self, how: ImportHow, diag: ImportDiagnostic, session: Session, report_def: Callable) -> int:
         """
@@ -245,7 +247,7 @@ class InBundle(object):
         # Images are duplicated in a hidden folder for .zips coming from OsX
         ret = [a_file.relative_to(self.path)
                for a_file in ret
-               if not "__MACOSX" in str(a_file)]
+               if "__MACOSX" not in str(a_file)]
         return ret
 
 

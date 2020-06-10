@@ -5,7 +5,6 @@
 from sqlalchemy import Index, Sequence, Column, ForeignKey
 from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, DOUBLE_PRECISION, INTEGER
 # noinspection PyProtectedMember
-from sqlalchemy.engine import ResultProxy
 from sqlalchemy.orm import relationship, Session
 
 from db.Model import Model
@@ -24,16 +23,20 @@ class Sample(Model):
     dataportal_descriptor = Column(VARCHAR(8000))
 
     @staticmethod
-    def pk():
+    def pk_col():
         return "sampleid"
+
+    def pk(self) -> int:
+        return self.sampleid
 
     @classmethod
     def get_orig_id_and_pk(cls, session: Session, prj_id):
-        sql = "SELECT orig_id, sampleid" + \
-              "  FROM " + cls.__tablename__ + \
-              " WHERE projid = :prj"
-        res: ResultProxy = session.execute(sql, {"prj": prj_id})
-        ret = {r[0]: int(r[1]) for r in res}
+        res = session.query(Sample).filter(Sample.projid == prj_id)
+        # sql = "SELECT orig_id, sampleid" + \
+        #       "  FROM " + cls.__tablename__ + \
+        #       " WHERE projid = :prj"
+        # res: ResultProxy = session.execute(sql, {"prj": prj_id})
+        ret = {r.orig_id: r for r in res}
         return ret
 
     @staticmethod

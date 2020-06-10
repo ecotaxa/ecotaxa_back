@@ -239,25 +239,38 @@ class TSVFile(object):
         """
         for alias, parent_class in GlobalMapping.PARENT_CLASSES.items():
             dict_to_write = dicts_to_write[alias]
-            ids_for_obj = how.existing_parent_ids[alias]
+            parents_for_obj = how.existing_parents[alias]
             # Here we take advantage from consistent naming conventions
             # The 3 involved tables have "orig_id" column serving the same purpose
             parent_orig_id = dict_to_write.get("orig_id")
             if parent_orig_id is None:
-                # No way to identify, ignore
-                continue
-            fk_to_obj = parent_class.pk()
-            if parent_orig_id in ids_for_obj:
+                # No orig_id for parent object in provided dict
+                if len(dict_to_write) > 0:
+                    # There is no orig_id but some data
+                    # See if we don't have the exact same parent
+                    same_parent_orig_id = None
+                    for orig_id, maybe_parent in parents_for_obj.items():
+                        if len(TSVFile.diff_orm_object(maybe_parent, dict_to_write)) == 0:
+                            same_parent_orig_id = orig_id
+                            break
+                    if same_parent_orig_id is not None:
+                        # Replicate found
+                        parent_orig_id = same_parent_orig_id
+                    else:
+                        # Keep parent_orig_id to None, there will be an automatic
+                        # generation of orig_id based on DB-generated sequence.
+                        pass
+                else:
+                    # No data, do nothing.
+                    continue
+            parent = parents_for_obj.get(parent_orig_id)
+            if parent is not None:
                 # noinspection DuplicatedCode
                 if how.can_update:
                     # Update the DB line using sqlalchemy
-                    parent_id = ids_for_obj[parent_orig_id]
-                    filter_for_id = text(parent_class.pk() + "=%d" % parent_id)
-                    parent = session.query(parent_class).filter(filter_for_id).first()
-                    assert parent is not None
                     updates = TSVFile.update_orm_object(parent, dict_to_write)
                     if len(updates) > 0:
-                        logger.info("Updating '%s' using %s", filter_for_id, updates)
+                        logger.info("Updating '%s' using %s", parent.orig_id, updates)
                         session.flush()
                 else:
                     pass
@@ -265,27 +278,41 @@ class TSVFile(object):
                 # but link the child object_head to it (like newly created ones below)
             else:
                 # Create the SQLAlchemy wrapper
-                obj_to_write = parent_class(**dict_to_write)
+                parent = parent_class(**dict_to_write)
                 # Link with project
-                obj_to_write.projid = how.prj_id
-                session.add(obj_to_write)
+                parent.projid = how.prj_id
+                session.add(parent)
                 session.flush()
+                if parent_orig_id is None:
+                    # Generate an ID
+                    parent.orig_id = "GeN_%d" % parent.pk()
+                    parent_orig_id = parent.orig_id
                 # We now have a (generated) PK to copy back into objects
-                # TODO: Skip the getattr() below in favor of obj_to_write.pk_val()
-                ids_for_obj[parent_orig_id] = getattr(obj_to_write, fk_to_obj)
-                logger.info("++ IDS %s %s", alias, ids_for_obj)
-            # Anyway
-            setattr(object_head_to_write, fk_to_obj, ids_for_obj[parent_orig_id])
+                parents_for_obj[parent_orig_id] = parent
+                log_line = {v.orig_id: v.pk() for k, v in parents_for_obj.items()}
+                logger.info("++ IDS %s %s", alias, log_line)
+            # Columns in obj_head have same name as pk of corresponding entities
+            setattr(object_head_to_write, parent.pk_col(), parent.pk())
 
     @staticmethod
-    def update_orm_object(parent: Model, update_dict: Dict[str, str]):
+    def update_orm_object(model: Model, update_dict: Dict[str, str]):
         updates = []
-        for attr, value in parent.__dict__.items():
+        for attr, value in model.__dict__.items():
             if attr in update_dict and update_dict[attr] != value:
                 upd_val = update_dict[attr]
-                setattr(parent, attr, upd_val)
+                setattr(model, attr, upd_val)
                 updates.append((attr, upd_val))
+        # TODO: Extra values in update_dict ?
         return updates
+
+    @staticmethod
+    def diff_orm_object(model: Model, update_dict: Dict[str, str]):
+        diffs = []
+        for attr, value in model.__dict__.items():
+            if attr in update_dict and update_dict[attr] != value:
+                upd_val = update_dict[attr]
+                diffs.append((attr, upd_val))
+        return diffs
 
     @staticmethod
     def dispatch_fields_by_table(custom_mapping: ProjectMapping, field_set: Set) -> Dict[str, Set]:
@@ -401,6 +428,7 @@ class TSVFile(object):
             object_head_to_write.objid = objid
             if how.can_update:
                 if object_head_to_write.sunpos == "?":
+                    # Don't damage sunpos if it could not be computed
                     del object_head_to_write["sunpos"]
                 # noinspection DuplicatedCode
                 for a_cls, its_pk, an_upd in zip([Object, ObjectFields],
@@ -419,12 +447,17 @@ class TSVFile(object):
                 logger.info("One more image for %s:%s ", object_fields_to_write.orig_id, image_to_write)
                 ret = 1  # just a new image
         else:
-            # or create it
-            object_head_to_write.projid = how.prj_id
-            object_head_to_write.random_value = random.randint(1, 99999999)
-            # Below left NULL @see self.update_counts_and_img0
-            # object_head_to_write.img0id = XXXXX
-            ret = 3  # new image + new object_head + new object_fields
+            if how.can_update:
+                # No objects creation while updating
+                logger.info("Object %s not found while updating ", object_fields_to_write.orig_id)
+                ret = 0
+            else:
+                # or create it
+                object_head_to_write.projid = how.prj_id
+                object_head_to_write.random_value = random.randint(1, 99999999)
+                # Below left NULL @see self.update_counts_and_img0
+                # object_head_to_write.img0id = XXXXX
+                ret = 3  # new image + new object_head + new object_fields
         return ret
 
     def deal_with_images(self, where: ImportWhere, how: ImportHow, image_to_write: Bean, instead_image: Path = None):
@@ -490,6 +523,7 @@ class TSVFile(object):
             Our implementation adds a line of expected types in second line.
         """
         a_field: str
+        fields_per_prfx: OrderedDict[str, Set] = OrderedDict()
         for a_field in self.clean_fields.values():
             # split at first _ as the column name might contain an _
             split_col = a_field.split("_", 1)
@@ -497,6 +531,11 @@ class TSVFile(object):
                 diag.error("Invalid Header '%s' in file %s. Format must be Table_Field. Field ignored"
                            % (a_field, self.relative_name))
                 continue
+            # e.g. acq_sn -> acq
+            tsv_table_prfx = split_col[0]
+            # For consistency check inside each table
+            fields_for_prfx = fields_per_prfx.setdefault(tsv_table_prfx, set())
+            fields_for_prfx.add(a_field)
             if a_field in GlobalMapping.PREDEFINED_FIELDS:
                 # OK it's a predefined one
                 continue
@@ -507,8 +546,6 @@ class TSVFile(object):
             if how.custom_mapping.search_field(a_field):
                 # Custom field was already mapped, in a previous import or another TSV of present import
                 continue
-            # e.g. acq_sn -> acq
-            tsv_table_prfx = split_col[0]
             # e.g. acq -> acquisitions
             target_table = GlobalMapping.TSV_table_to_table(tsv_table_prfx)
             if target_table not in GlobalMapping.POSSIBLE_TABLES:
@@ -539,6 +576,15 @@ class TSVFile(object):
             # Warn that project settings were extended, i.e. empty columns
             if not how.custom_mapping.was_empty:
                 diag.warn("New field %s found in file %s" % (a_field, self.relative_name))
+        # Ensure we have ids for all objects, at least potentially as we're just checking the header
+        for a_prfx, fields in fields_per_prfx.items():
+            if a_prfx not in GlobalMapping.PREFIX_TO_TABLE:
+                continue
+            expected_id = "%s_id" % a_prfx
+            if not expected_id in fields:
+                fields = sorted(list(fields))  # Make the output predictable
+                diag.error("In %s, field %s is mandatory as there are some %s columns: %s." %
+                           (self.relative_name, expected_id, a_prfx, fields))
 
     def validate_content(self, how: ImportHow, diag: ImportDiagnostic):
         row_count_for_csv = 0

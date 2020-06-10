@@ -33,6 +33,7 @@ V6_FILE = DATA_DIR / "UVP6_example.zip"
 V6_DIR = DATA_DIR / "import_uvp6_zip_in_dir"
 PLAIN_DIR = DATA_DIR / "import_test"
 UPDATE_DIR = DATA_DIR / "import_update"
+SPARSE_DIR = DATA_DIR / "import_sparse"
 PLUS_DIR = DATA_DIR / "import_test_plus"
 ISSUES_DIR = DATA_DIR / "import_issues" / "tsv_issues"
 ISSUES_DIR2 = DATA_DIR / "import_issues" / "no_classif_id"
@@ -339,6 +340,30 @@ def test_import_uvp6_zip_in_dir(config, database, caplog):
     assert len(prep_out.errors) == 0
     # Do real import
     RealImport(prj_id, params).run()
+
+def test_import_sparse(config, database, caplog):
+    """
+        Import a sparse file, some columns are missing.
+    """
+    caplog.set_level(logging.DEBUG)
+    prj_id = ProjectService().create("Test Sparse")
+    task_id = TaskService().create()
+
+    params = ImportPrepReq(task_id=task_id,
+                           source_path=str(SPARSE_DIR))
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
+    params = real_params_from_prep_out(task_id, prep_out)
+    print(prep_out.errors)
+    assert prep_out.errors == \
+           ["Field acq_id is mandatory as there are some acq columns: ['acq_hardware', 'acq_imgtype', 'acq_instrument'].",
+            "Field sample_id is mandatory as there are some sample columns: ['sample_program', 'sample_ship', 'sample_stationid']."
+            ]
+    # Do real import, even if we had problems before.
+    RealImport(prj_id, params).run()
+    print("\n".join(caplog.messages))
+    sce = AsciiDumper()
+    sce.run(projid=prj_id, out="chk.dmp")
+
 
 
 def test_import_images(config, database, caplog):

@@ -5,7 +5,6 @@
 from sqlalchemy import Sequence, Column, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, INTEGER
 # noinspection PyProtectedMember
-from sqlalchemy.engine import ResultProxy
 from sqlalchemy.orm import relationship, Session
 
 from db.Model import Model
@@ -21,16 +20,21 @@ class Process(Model):
     orig_id = Column(VARCHAR(255))
 
     @staticmethod
-    def pk():
+    def pk_col():
         return "processid"
+
+    def pk(self) -> int:
+        return self.processid
 
     @classmethod
     def get_orig_id_and_pk(cls, session: Session, prj_id):
-        sql = "SELECT orig_id, processid" + \
-              "  FROM " + cls.__tablename__ + \
-              " WHERE projid = :prj"
-        res: ResultProxy = session.execute(sql, {"prj": prj_id})
-        ret = {r[0]: int(r[1]) for r in res}
+        res = session.query(Process).filter(Process.projid == prj_id)
+        # sql = "SELECT orig_id, processid" + \
+        #       "  FROM " + cls.__tablename__ + \
+        #       " WHERE projid = :prj"
+        # res: ResultProxy = session.execute(sql, {"prj": prj_id})
+        # ret = {r[0]: int(r[1]) for r in res}
+        ret = {r.orig_id: r for r in res}
         return ret
 
     def __str__(self):
