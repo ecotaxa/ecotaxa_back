@@ -355,8 +355,8 @@ def test_import_sparse(config, database, caplog):
     params = real_params_from_prep_out(task_id, prep_out)
     print(prep_out.errors)
     assert prep_out.errors == \
-           ["Field acq_id is mandatory as there are some acq columns: ['acq_hardware', 'acq_imgtype', 'acq_instrument'].",
-            "Field sample_id is mandatory as there are some sample columns: ['sample_program', 'sample_ship', 'sample_stationid']."
+           ["In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field acq_id is mandatory as there are some acq columns: ['acq_hardware', 'acq_imgtype', 'acq_instrument'].",
+            "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field sample_id is mandatory as there are some sample columns: ['sample_program', 'sample_ship', 'sample_stationid']."
             ]
     # Do real import, even if we had problems before.
     RealImport(prj_id, params).run()
