@@ -1,0 +1,8 @@
+img_file_name	img_rank	object_id	object_link	object_lat	object_lon	object_date	object_time	object_depth_min	object_depth_max	object_lat_end	object_lon_end	object_temperature_degrees_minimum	object_temperature_degrees_maximum	object_salinity_minimum	object_salinity_maximum	acq_hardware	acq_imgtype	acq_instrument	sample_ship	sample_program	sample_stationid
+[t]	[f]	[t]	[t]	[f]	[f]	[t]	[t]	[f]	[f]	[f]	[f]	[f]	[f]	[f]	[f]	[t]	[t]	[t]	[t]	[t]	[t]
+roi.0729931500.png		roi.0729931500		77.0709	161.8121	20160719	020139.315	120.4473	120.4473	77.0709	161.8121	-1.1783	-1.1783	32.1283	32.1283	VPR08	JPEG2000	VPR	Healy	Hidden Ocean 2016	HLY1601_6
+roi.0729937400.png		roi.0729937400		77.0709	161.8121	20160719	020139.374	120.4473	120.4473	77.0709	161.8121	-1.1783	-1.1783	32.1283	32.1283	VPR08	JPEG2000	VPR	Healy	Hidden Ocean 2016	HLY1601_6
+roi.0729943300.png		roi.0729943300		77.0709	161.8121	20160719	020139.433	120.4473	120.4473	77.0709	161.8121	-1.1783	-1.1783	32.1283	32.1283	VPR08	JPEG2000	VPR	Healy	Hidden Ocean 2016	HLY1601_6
+roi.0729949200.png		roi.0729949200		77.0709	161.8121	20160719	020139.492	120.4473	120.4473	77.0709	161.8121	-1.1783	-1.1783	32.1283	32.1283	VPR08	JPEG2000	VPR	Healy	Hidden Ocean 2016	HLY1601_6
+roi.0729955200.png		roi.0729955200		77.0709	161.8121	20160719	020139.552	120.4822	120.4822	77.0709	161.8121	-1.1766	-1.1766	32.1267	32.1267	VPR08	JPEG2000	VPR	Healy	Hidden Ocean 2016	HLY1601_6
+roi.0729961200.png		roi.0729961200		77.0709	161.8121	20160719	020139.612	120.4822	120.4822	77.0709	161.8121	-1.1766	-1.1766	32.1267	32.1267	VPR08	JPEG2000	VPR	Healy	Hidden Ocean 2016	HLY1601_6
