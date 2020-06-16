@@ -40,16 +40,22 @@ def clean_value_and_none(value: Union[str, None]):
     return value
 
 
+_minus_inf = float("-inf")
+
+
 def to_float(value: str):
     """
-    Convert input str to a python float.
+    Convert input str to a python float, excluding -inf.
     :param value:
     :return:
     """
     if value == '':
         return None
     try:
-        return float(value)
+        ret = float(value)
+        if ret == _minus_inf:
+            return None
+        return ret
     except ValueError:
         return None
 
