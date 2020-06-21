@@ -2,7 +2,8 @@
 Build the DB from scratch in EcoTaxa V2_2, using an SQL Dump, so the 2_2 source tree is not needed.
 """
 import shutil
-import sys, time
+import sys
+import time
 from os import environ
 from os.path import join, dirname, realpath
 from pathlib import Path
@@ -44,7 +45,16 @@ def is_port_opened(host: str, port: int):
     return result == 0
 
 
-class EcoTaxaDB(object):
+class EcoTaxaExistingDB(object):
+    """
+        For running tests onto an existing instance.
+    """
+    def write_config(self, conf_file: Path, host: str, port: int):
+        with open(str(conf_file), "w") as f:
+            f.write(EcoTaxaDBFrom0.CONF % (host, port))
+
+
+class EcoTaxaDBFrom0(object):
 
     def __init__(self, dbdir: Path, conffile: Path):
         self.db_dir = dbdir.resolve()
@@ -124,10 +134,11 @@ THUMBSIZELIMIT=99
             # Server should do the cleanup, e.g. exit docker
             pass
 
+
 if __name__ == '__main__':
     HERE = Path(dirname(realpath(__file__)))
     PG_DIR = HERE / ".." / "pg_files"
-    db = EcoTaxaDB(PG_DIR, Path("fakeconf"))
+    db = EcoTaxaDBFrom0(PG_DIR, Path("fakeconf"))
     try:
         db.cleanup()
     except FileNotFoundError:

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tools.dbBuildSQL import EcoTaxaDB
+from tools.dbBuildSQL import EcoTaxaDBFrom0, EcoTaxaExistingDB
 
 HERE = Path(dirname(realpath(__file__)))
 PG_DIR = HERE / ".." / "pg_files"
@@ -12,11 +12,19 @@ CONF_FILE = HERE / "appli" / "config.cfg"
 
 
 @pytest.fixture(scope="module")
-def database() -> EcoTaxaDB:
+def database() -> EcoTaxaDBFrom0:
     # Setup
-    db = EcoTaxaDB(PG_DIR, CONF_FILE)
+    db = EcoTaxaDBFrom0(PG_DIR, CONF_FILE)
     db.create()
     yield db
     # Teardown
     db.cleanup()
 
+
+@pytest.fixture(scope="module")
+def filled_database() -> EcoTaxaDBFrom0:
+    # Setup
+    db = EcoTaxaExistingDB()
+    db.write_config(CONF_FILE, "localhost", 5434)
+    yield db
+    # Teardown
