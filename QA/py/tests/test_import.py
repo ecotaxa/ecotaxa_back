@@ -137,6 +137,7 @@ def import_plain(prj_id, task_id):
                            source_path=str(PLAIN_DIR),
                            skip_existing_objects=True)
     prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
+    assert prep_out.errors == []
     # Do real import
     params = real_params_from_prep_out(task_id, prep_out)
     params.skip_existing_objects = True
