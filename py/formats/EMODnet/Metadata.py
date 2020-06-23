@@ -7,7 +7,7 @@ from typing import List
 from formats.TxtFromModels import TxtFileWithModel
 
 
-class DwC_Metadata(object):
+class DwcMetadata(object):
     """
         DwC metadata, describes the files inside DwC archive.
     """
@@ -26,9 +26,12 @@ class DwC_Metadata(object):
     def content(self) -> str:
         xml = ['<archive xmlns="http://rs.tdwg.org/dwc/text/" metadata="%s">' % self.dataset_meta_name,
                self.referred_to[0].meta()]
-        for more in (1, 2):
+        for more in range(1, len(self.referred_to)):
             # Only write extensions with data. Should not happen in production.
             if not self.referred_to[more].is_empty():
                 xml.append(self.referred_to[more].meta())
         xml.append("</archive>\n")
         return "\n".join(xml)
+
+
+DwC_Metadata = DwcMetadata

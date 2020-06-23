@@ -19,13 +19,15 @@ def test_emodnet_export(config, filled_database, caplog):
     person1 = EMLPerson(organizationName="IMEV",
                         givenName="Jean-Olivier",
                         surName="Irisson",
-                        country="FR"
+                        country="FR",
+                        positionName='professor'
                         )
     person2 = EMLAssociatedPerson(organizationName="IMEV",
                                   givenName="Laurent",
                                   surName="Salinas",
                                   country="FR",
-                                  role='developer'
+                                  role='developer',
+                                  positionName='engineer'
                                   )
     title = EMLTitle(title="Point B, Juday-Bogorov net series, 2010-2018")
     abstract = """
@@ -37,7 +39,8 @@ de Villefranche (IMEV), as part of its long term monitoring effort.
     """
     keywords = EMLKeywordSet(keywords=["Zooplankton",
                                        "Mediterranean Sea",
-                                       "Ligurian sea"])
+                                       "Ligurian sea"],
+                             keywordThesaurus="GBIF Dataset Type Vocabulary: http://rs.gbif.org/vocabulary/gbif/dataset_type.xml")
     additional_info = """
 marine, harvested by iOBIS.
 The OOV supported the financial effort of the survey. 

@@ -5,9 +5,9 @@
 
 from lxml import etree
 
-etree_sub_element = etree.SubElement
-
 from formats.EMODnet.models import EMLPerson, EMLMeta, EMLAssociatedPerson
+
+etree_sub_element = etree.SubElement
 
 
 class DatasetMetadata(object):
@@ -45,6 +45,9 @@ class DatasetMetadata(object):
             xml_title.text = a_title.title
         for a_person in meta.creators:
             xml_person = etree_sub_element(dataset, "creator")
+            self.person_to_xml(xml_person, a_person)
+        for a_person in meta.contacts:
+            xml_person = etree_sub_element(dataset, "contact")
             self.person_to_xml(xml_person, a_person)
         for a_person in meta.associatedParties:
             xml_person = etree_sub_element(dataset, "associatedParty")
@@ -88,8 +91,6 @@ class DatasetMetadata(object):
             xml_maint = etree_sub_element(dataset, "maintenance")
             etree_sub_element(etree_sub_element(xml_maint, "description"), "para").text = meta.maintenance
             etree_sub_element(xml_maint, "maintenanceUpdateFrequency").text = meta.maintenanceUpdateFrequency
-
-
         # Format for output
         etree.indent(dataset, space="  ")
         as_string = etree.tostring(dataset, pretty_print=True, encoding='unicode')

@@ -38,8 +38,15 @@ class TxtFileWithModel(object):
         self.all.append(entity_dict)
 
     def _sorted_fields(self):
-        # TODO: Use the order in the model
-        return sorted(self.fields)
+        ret = sorted(self.fields)
+        model_fields = self.model.__fields__
+        for ndx in range(len(ret)):
+            field_extra = model_fields[ret[ndx]].field_info.extra
+            if field_extra.get("is_id"):
+                # Move ID first
+                ret.insert(0, ret.pop(ndx))
+                break
+        return ret
 
     def content(self) -> str:
         sorted_fields = self._sorted_fields()
@@ -70,20 +77,18 @@ class TxtFileWithModel(object):
 
     def meta(self) -> str:
         blocks = [self.meta_start()]
-        id_block = None
-        for ndx, a_field in enumerate(self._sorted_fields()):
+        fields = self._sorted_fields()
+        # First field is the id column
+        if self.core_or_ext == "core":
+            id_block = '    <id index="0"/>'
+        else:
+            id_block = '    <coreid index="0"/>'
+        blocks.append(id_block)
+        # Next fields start at 1
+        for ndx, a_field in enumerate(fields[1:]):
             field_desc = self.model.__fields__[a_field]
             term = field_desc.field_info.extra.get("term")
-            is_id = field_desc.field_info.extra.get("is_id")
-            if is_id:
-                if self.core_or_ext == "core":
-                    id_block = '    <id index="%d"/>' % ndx
-                else:
-                    id_block = '    <coreid index="%d"/>' % ndx
-            blocks.append('    <field index="%d" term="%s"/>' % (ndx, term))
-        # id must be first
-        if id_block is not None:  # TODO: never
-            blocks.insert(1, id_block)
+            blocks.append('    <field index="%d" term="%s"/>' % (ndx+1, term))
         blocks.append(self.meta_end())
         return self.LINE_SEP.join(blocks)
 

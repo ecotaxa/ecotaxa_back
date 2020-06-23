@@ -7,6 +7,7 @@ from typing import Optional, List
 
 # noinspection PyPackageRequirements
 from pydantic import root_validator
+# noinspection PyPackageRequirements
 from urllib3.util import Url
 
 from api.pydantic import BaseModel, Field
@@ -113,7 +114,7 @@ class DwcOccurrence(BaseModel):
     taxonRank: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/taxonRank")
     scientificNameAuthorship: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/scientificNameAuthorship")
 
-    # Occurence fields
+    # Occurrence fields
     occurrenceStatus: OccurrenceStatusEnum = Field(term="http://rs.tdwg.org/dwc/terms/occurrenceStatus")
 
     # Record-level fields
@@ -139,7 +140,7 @@ class DwcExtendedMeasurementOrFact(BaseModel):
     """
     # Unicity
     eventID: str = Field(term="http://rs.tdwg.org/dwc/terms/eventID", is_id=True)
-    # If related to the whole event, occurenceID must not be present
+    # If related to the whole event, occurrenceID must not be present
     occurrenceID: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/occurrenceID")
 
     # Note: although measurementType, measurementValue and measurementUnit are free text fields,
@@ -208,7 +209,7 @@ class EMLPerson(BaseModel):
     surName: Optional[str]
 
     organizationName: str
-    positionName: Optional[str]
+    positionName: str
     """ To be used as alternative to persons names (leave individualName blank and use positionName 
     instead e.g. data manager). """
 
@@ -241,7 +242,7 @@ class EMLKeywordSet(BaseModel):
         such as the ASFA thesaurus, the CAB thesaurus or GCMD keywords.
     """
     keywords: List[str]
-    keywordThesaurus: Optional[str]
+    keywordThesaurus: str
 
 
 class EMLGeoCoverage(BaseModel):
@@ -338,7 +339,9 @@ class EMLMeta(BaseModel):
     """ The language in which the resource (not the metadata document) is written. Use ISO language code. """
     abstract: List[str] = Field(title="Paragraphs forming the abstract", min_items=1)
     """ The abstract or description of a dataset provides basic information on the content of the dataset. The 
-    information in the abstract should improve understanding and interpretation of the data. It is recommended that the description indicates whether the dataset is a subset of a larger dataset and – if so – provide a link to the parent metadata and/or dataset.    
+    information in the abstract should improve understanding and interpretation of the data. It is recommended that 
+    the description indicates whether the dataset is a subset of a larger dataset and – if so – provide a link to 
+    the parent metadata and/or dataset.    
     If the data provider or OBIS node require bi- or multilingual entries for the description 
     (e.g. due to national obligations) then the following procedure can be followed:    
         Indicate English as metadata language
@@ -366,7 +369,7 @@ class EMLMeta(BaseModel):
     """ A description of the purpose of this dataset. """
     methods: Optional[EMLMethod]
     """ Methods - sort of deprecated """
-    project: Optional[EMLProject] # TODO: is it project_s_ i.e. a list ?
+    project: Optional[EMLProject]  # TODO: is it project_s_ i.e. a list ?
     """ Project """
     maintenanceUpdateFrequency: Optional[str]
     maintenance: Optional[str]

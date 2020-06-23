@@ -126,26 +126,26 @@ class EMODNetExport(Service):
                 # TODO: Log problems during resolve
                 continue
             self.keep_stats(taxon_info, taxon_4_sample.count)
-            occurence_id = event_id + "_" + str(an_id)
+            occurrence_id = event_id + "_" + str(an_id)
             individual_count = str(taxon_4_sample.count)
             scientific_name = taxon_info.name
             scientific_name_id = "urn:lsid:marinespecies.org:taxname:" + str(aphia_id)
             occ = DwC_Occurrence(eventID=event_id,
-                                 occurrenceID=occurence_id,
+                                 occurrenceID=occurrence_id,
                                  individualCount=individual_count,
                                  scientificName=scientific_name,
                                  scientificNameID=scientific_name_id,
                                  occurrenceStatus=OccurrenceStatusEnum.present,
                                  basisOfRecord=BasisOfRecordEnum.machineObservation)
             occurences.add(occ)
-            self.add_eMoFs_for_occurence(arch=arch, event_id=event_id, occurence_id=occurence_id)
+            self.add_eMoFs_for_occurence(arch=arch, event_id=event_id, occurrence_id=occurrence_id)
 
     @staticmethod
-    def add_eMoFs_for_occurence(arch: DwC_Archive, event_id: str, occurence_id: str):
+    def add_eMoFs_for_occurence(arch: DwC_Archive, event_id: str, occurrence_id: str):
         """
             Add eMoF instances, for given occurence, into the archive.
         """
-        emof = Abundance(event_id, occurence_id, "452")
+        emof = Abundance(event_id, occurrence_id, "452")
         arch.emofs.add(emof)
 
     def enrich_taxa(self, taxa_dict: Dict[int, TaxonInfoForSample]):
