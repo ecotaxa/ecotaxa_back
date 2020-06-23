@@ -2,9 +2,10 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List
 
 import httpx
+import requests
 
 from db.Taxonomy import Taxonomy
 from framework.Service import Service
@@ -14,7 +15,8 @@ class WoRMSFinder(Service):
     """
         A service for finding in WoRMS service the equivalent of a given entry in Taxonomy.
     """
-    client = httpx.AsyncClient(base_url="http://www.marinespecies.org")
+    BASE_URL = "http://www.marinespecies.org"
+    client = httpx.AsyncClient(base_url=BASE_URL)
 
     taxo_cache: Dict[int, Taxonomy] = {}
 
@@ -58,6 +60,27 @@ class WoRMSFinder(Service):
             ret = -2
         else:
             ret = response.json()
+        return ret
+
+    WoRMS_AphiaRecordByName = "/rest/AphiaRecordsByName/%s?marine_only=true"
+
+    the_session = None
+    @classmethod
+    def aphia_records_by_name_sync(cls, name: str) -> List[Dict]:
+        session = cls.the_session
+        if session is None:
+            session = requests.Session()
+            cls.the_session = session
+        req = cls.WoRMS_AphiaRecordByName % name
+        response = session.get(cls.BASE_URL+req)
+        if not response.ok:
+            cls.the_session = None
+            ret = []
+        else:
+            if response.status_code == 204: # No content
+                ret = []
+            else:
+                ret = response.json()
         return ret
 
     WoRMS_URL_ClassifByAphia = "/rest/AphiaClassificationByAphiaID/%d"

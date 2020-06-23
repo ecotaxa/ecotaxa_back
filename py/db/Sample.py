@@ -2,8 +2,12 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from typing import List
+
 from sqlalchemy import Index, Sequence, Column, ForeignKey
 from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, DOUBLE_PRECISION, INTEGER
+# noinspection PyPackageRequirements,PyProtectedMember
+from sqlalchemy.engine import ResultProxy
 # noinspection PyProtectedMember
 from sqlalchemy.orm import relationship, Session
 
@@ -59,8 +63,27 @@ class Sample(Model):
                         {'projid': prj_id})
         session.commit()
 
+    @classmethod
+    def get_sample_summary(cls, session: Session, sample_id: int) -> List:
+        res: ResultProxy = session.execute(
+            "SELECT min(o.objdate+o.objtime), max(o.objdate+o.objtime), min(o.depth_min), max(o.depth_max)"
+            "  FROM objects o "
+            " WHERE o.sampleid = :smp",
+            {"smp": sample_id})
+        return res.fetchone().values()
+
     def __str__(self):
         return "{0} ({1})".format(self.orig_id, self.sampleid)
+
+    @classmethod
+    def get_sums_by_taxon(cls, session, sample_id):
+        res: ResultProxy = session.execute(
+            "SELECT o.classif_id, count(1)"
+            "  FROM objects o "
+            " WHERE o.sampleid = :smp"
+            " GROUP BY o.classif_id",
+            {"smp": sample_id})
+        return res.fetchall()
 
 
 for i in range(1, 31):

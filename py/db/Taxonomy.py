@@ -73,6 +73,22 @@ class Taxonomy(Model):
                     taxo_found[found_k]['nbr'] += 1
                     taxo_found[found_k]['id'] = rec_taxon['id']
 
+    @staticmethod
+    def names_for(session: Session, id_list: List[int]):
+        """
+            Get taxa names from id list.
+        """
+        ret = {}
+        res: ResultProxy = session.execute(
+            """SELECT t.id, t.name
+                FROM taxonomy t
+                LEFT JOIN taxonomy p on t.parent_id = p.id
+                WHERE t.id = ANY(:ids) """,
+            {"ids": id_list})
+        for rec_taxon in res:
+            ret[rec_taxon['id']] = rec_taxon['name']
+        return ret
+
 
 Index('IS_TaxonomyParent', Taxonomy.parent_id)
 Index('IS_TaxonomySource', Taxonomy.id_source)

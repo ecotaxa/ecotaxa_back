@@ -2,6 +2,8 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+# Based on https://fastapi.tiangolo.com/release-notes/
+#
 import sys
 import traceback
 from typing import Any, Tuple, Union
@@ -9,10 +11,12 @@ from typing import Any, Tuple, Union
 from fastapi import FastAPI, Response, status
 from uvicorn.middleware.debug import PlainTextResponse
 
+from api.exports import EMODNetExportReq, EMODNetExportRsp
 from api.imports import *
 from tasks.Import import ImportAnalysis, RealImport
 from tasks.SimpleImport import SimpleImport
 from tasks.WoRMSFinder import WoRMSFinder
+from tasks.export.EMODnet import EMODNetExport
 from tech.StatusSce import StatusService
 
 # TODO: A nicer API doc, see https://github.com/tiangolo/fastapi/issues/1140
@@ -56,12 +60,24 @@ def api_import(project_id: int, params: ImportRealReq):
     sce = RealImport(project_id, params)
     return sce.run()
 
+
 @app.post("/simple_import/{project_id}", response_model=SimpleImportRsp)
 def api_import(project_id: int, params: SimpleImportReq):
     """
         Import images only, with same metadata for all.
     """
     sce = SimpleImport(project_id, params)
+    return sce.run()
+
+
+@app.post("/export/emodnet", response_model=EMODNetExportRsp)
+def api_export_emodnet(params: EMODNetExportReq):
+    """
+        Export in EMODnet format, @see https://www.emodnet-ingestion.eu/
+        Produces a DwC-A archive into a temporary directory, ready for download.
+        https://python-dwca-reader.readthedocs.io/en/latest/index.html
+    """
+    sce = EMODNetExport(params)
     return sce.run()
 
 

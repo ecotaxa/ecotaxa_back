@@ -103,6 +103,7 @@ class SimpleImport(ImportServiceBase):
         obj_id = unq_id.hexdigest()
         tsv_vals = [obj_id, an_image]
         tsv_vals.extend(map(lambda fld: self.req.values.get(self.FIELD_TO_FORM[fld], ""), self.TSV_FIELDS))
+        tsv_vals = ['' if v is None else v for v in tsv_vals]
         return '\t'.join(tsv_vals) + "\n"
 
     def make_tsv(self, bundle: InBundle, images: List[Path]):

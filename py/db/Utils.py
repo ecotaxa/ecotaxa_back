@@ -2,6 +2,10 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from datetime import datetime
+from enum import Enum
+
+from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import Session
 
 
@@ -53,3 +57,20 @@ class SequenceCache(object):
         except IndexError:
             self.populate()
             return self.next()
+
+
+class DateFormat(int, Enum):
+    ISO_8601_2004_E = 1  # ISO 8601:2004(E)
+
+
+def timestamp_to_str(ts: TIMESTAMP, fmt: int = DateFormat.ISO_8601_2004_E) -> str:
+    """
+        Convert a postgres timestamp to a string.
+        As per DBAPI, it's mapped to a DateTime.
+    """
+    ts: datetime
+    if fmt == DateFormat.ISO_8601_2004_E:
+        # e.g. 2009-02-20T08:40Z as we have UTC dates
+        return ts.isoformat()+"Z"
+    else:
+        raise ValueError
