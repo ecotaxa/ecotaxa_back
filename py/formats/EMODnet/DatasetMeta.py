@@ -5,7 +5,7 @@
 
 from lxml import etree
 
-from formats.EMODnet.models import EMLPerson, EMLMeta, EMLAssociatedPerson
+from formats.EMODnet.models import EMLPerson, EMLMeta, EMLAssociatedPerson, EMLAdditionalMeta
 
 etree_sub_element = etree.SubElement
 
@@ -91,11 +91,19 @@ class DatasetMetadata(object):
             xml_maint = etree_sub_element(dataset, "maintenance")
             etree_sub_element(etree_sub_element(xml_maint, "description"), "para").text = meta.maintenance
             etree_sub_element(xml_maint, "maintenanceUpdateFrequency").text = meta.maintenanceUpdateFrequency
+        # Additional Metadata
+        xml_additional_meta = etree_sub_element(etree_sub_element(dataset, "additionalMetadata"), "metadata")
+        self.additional_meta_to_xml(xml_additional_meta, meta.additionalMetadata)
         # Format for output
         etree.indent(dataset, space="  ")
         as_string = etree.tostring(dataset, pretty_print=True, encoding='unicode')
         ret = self.EML_HEADER + as_string.replace("lang=", "xml:lang=") + self.EML_FOOTER
         return ret
+
+    @staticmethod
+    def additional_meta_to_xml(xml_meta_plus, eml_meta_plus: EMLAdditionalMeta):
+        etree_sub_element(xml_meta_plus, "dateStamp").text = eml_meta_plus.dateStamp
+
 
     @staticmethod
     def person_to_xml(xml_person, eml_person: EMLPerson):

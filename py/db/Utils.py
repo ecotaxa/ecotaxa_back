@@ -71,6 +71,10 @@ def timestamp_to_str(ts: TIMESTAMP, fmt: int = DateFormat.ISO_8601_2004_E) -> st
     ts: datetime
     if fmt == DateFormat.ISO_8601_2004_E:
         # e.g. 2009-02-20T08:40Z as we have UTC dates
-        return ts.isoformat()+"Z"
+        ret = ts.isoformat()
+        if len(ret) > 10:
+            return ret+"Z"
+        else:
+            return ret
     else:
         raise ValueError

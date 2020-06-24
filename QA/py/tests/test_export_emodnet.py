@@ -6,7 +6,6 @@ from api.exports import *
 from formats.EMODnet.models import *
 # noinspection PyPackageRequirements
 from tasks.export.EMODnet import EMODNetExport
-
 # noinspection PyUnresolvedReferences
 from tests.config_fixture import config
 # noinspection PyUnresolvedReferences
@@ -61,6 +60,7 @@ We are grateful to the crew of the research boat at OOV that collected plankton 
               "<citetitle>Creative Commons Attribution (CC-BY) 4.0 License</citetitle></ulink>."
     project = EMLProject(title="EcoTaxa",
                          personnel=[person2])
+    meta_plus = EMLAdditionalMeta(dateStamp="2021-06-24")
     meta = EMLMeta(titles=[title],
                    creators=[person1],
                    contacts=[person1],
@@ -76,7 +76,8 @@ We are grateful to the crew of the research boat at OOV that collected plankton 
                    intellectualRights=licence,
                    project=project,
                    maintenance="periodic review of origin data",
-                   maintenanceUpdateFrequency="1M")
+                   maintenanceUpdateFrequency="1M",
+                   additionalMetadata=meta_plus)
     req = EMODNetExportReq(meta=meta, project_ids=prj_ids)
     rsp = EMODNetExport(req).run()
     print("\n".join(caplog.messages))

@@ -2,8 +2,11 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from typing import Tuple
+
 from sqlalchemy import Column, Sequence, Boolean, ForeignKey
 from sqlalchemy.dialects.postgresql import VARCHAR, INTEGER, DOUBLE_PRECISION
+from sqlalchemy.engine import ResultProxy
 from sqlalchemy.orm import Session
 
 from db.Model import Model
@@ -77,6 +80,24 @@ class Project(Model):
         GROUP BY projid, classif_id;
         COMMIT;""",
                         {'prjid': projid})
+
+    @classmethod
+    def get_bounding_geo(cls, session: Session, proj_id: int) -> Tuple:
+        res: ResultProxy = session.execute(
+            "SELECT min(o.latitude), max(o.latitude), min(o.longitude), max(o.longitude)"
+            "  FROM objects o "
+            " WHERE o.projid = :prj",
+            {"prj": proj_id})
+        return res.fetchone().values()
+
+    @classmethod
+    def get_date_range(cls, session: Session, proj_id: int) -> Tuple:
+        res: ResultProxy = session.execute(
+            "SELECT min(o.objdate), max(o.objdate)"
+            "  FROM objects o "
+            " WHERE o.projid = :prj",
+            {"prj": proj_id})
+        return res.fetchone().values()
 
 
 class ProjectTaxoStat(Model):

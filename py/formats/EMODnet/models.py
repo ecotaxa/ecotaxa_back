@@ -7,8 +7,10 @@ from typing import Optional, List
 
 # noinspection PyPackageRequirements
 from pydantic import root_validator
+
 # noinspection PyPackageRequirements
-from urllib3.util import Url
+# from urllib3.util import Url
+Url = str
 
 from api.pydantic import BaseModel, Field
 
@@ -324,6 +326,44 @@ qualityControl: str
 from the associated method step."""
 
 
+class EMLAdditionalMeta(BaseModel):
+    """
+        EML additional metadata
+    """
+    dateStamp: str
+    """ The dateTime the metadata document was created or modified (ISO 8601)."""
+    metadataLanguage: str = Field(title="Title language, ISO-639.2", default="eng")
+    """ The language in which the metadata document (as opposed to the resource being described by the metadata) 
+    is written"""
+
+    citation: Optional[str]
+    """ A single citation for use when citing the dataset. The IPT can also auto-generate 
+    a citation based on the metadata (people, title, organization, onlineURL, DOI etc)."""
+    bibliography: Optional[str]
+    """ A list of citations that form a bibliography on literature related / used in the dataset """
+    resourceLogoUrl: Optional[str]
+    """ URL of the logo associated with a dataset."""
+    parentCollectionIdentifier: Optional[str]
+    collectionIdentifier: Optional[str]
+    formationPeriod: Optional[str]
+    """ Text description of the time period during which the collection was assembled. E.g., “Victorian”, 
+    or “1922 - 1932”, or “c. 1750”. """
+    livingTimePeriod: Optional[str]
+    """ Time period during which biological material was alive (for palaeontological collections). """
+    specimenPreservationMethod: Optional[str]
+    """ """
+    # physical
+    #     objectName
+    #     characterEncoding
+    #     dataFormat
+    #         externallyDefinedFormat
+    #         formatName
+    #     distribution: URL links
+    #         online
+    #             url function="download"
+    #             url function="information"
+
+
 class EMLMeta(BaseModel):
     """
         EML metadata
@@ -373,3 +413,5 @@ class EMLMeta(BaseModel):
     """ Project """
     maintenanceUpdateFrequency: Optional[str]
     maintenance: Optional[str]
+    """ Meta of meta"""
+    additionalMetadata: EMLAdditionalMeta

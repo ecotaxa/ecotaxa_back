@@ -118,7 +118,7 @@ DB_USER="postgres"
 DB_PASSWORD="postgres12"
 DB_HOST="%s"
 DB_PORT="%d"
-DB_DATABASE="ecotaxa"
+DB_DATABASE="ecotaxa3"
 THUMBSIZELIMIT=99
     """
 

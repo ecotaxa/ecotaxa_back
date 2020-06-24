@@ -12,7 +12,8 @@ from db.Utils import timestamp_to_str
 from formats.EMODnet.Archive import DwC_Archive
 from formats.EMODnet.DatasetMeta import DatasetMetadata
 from formats.EMODnet.MoF import SamplingSpeed, Abundance
-from formats.EMODnet.models import DwC_Event, RecordTypeEnum, DwC_Occurrence, OccurrenceStatusEnum, BasisOfRecordEnum
+from formats.EMODnet.models import DwC_Event, RecordTypeEnum, DwC_Occurrence, OccurrenceStatusEnum, BasisOfRecordEnum, \
+    EMLGeoCoverage, EMLTemporalCoverage
 from framework.Service import Service
 from fs.TempDirForTasks import TempDirForTasks
 from tasks.export.TaxaUtils import TaxaCache, TaxonInfoForSample, TaxonInfo, RANKS_BY_ID
@@ -54,27 +55,48 @@ class EMODNetExport(Service):
         logger.info("------------ starting --------------")
         ret = EMODNetExportRsp(task_id=0)
         self.taxa_cache.load()
+        # Load origin project
+        prj_id = self.req.project_ids[0]
+        prj = self.session.query(Project).filter_by(projid=prj_id).first()
+        assert prj is not None, "Project %d not found" % prj_id
         # Create a container
         arch = DwC_Archive(DatasetMetadata(self.req.meta), self.temp_dir / self.DWC_ZIP_NAME)
+        # Complete metadata for what comes from the project
+        self.do_meta(prj)
         # Add data from DB
-        self.add_events(arch)
+        self.add_events(prj, arch)
         # Produced the zip
         arch.build()
         self.taxa_cache.save()
         self.log_stats()
         return ret
 
-    def add_events(self, arch: DwC_Archive):
+    def do_meta(self, prj: Project):
+        """
+            Various queries on the project for getting metadata.
+        """
+        (min_lat, max_lat, min_lon, max_lon) = Project.get_bounding_geo(self.session, prj.projid)
+        self.req.meta.geographicCoverage = EMLGeoCoverage(geographicDescription="See coordinates",
+                                                          westBoundingCoordinate=self.geo_to_txt(min_lon),
+                                                          eastBoundingCoordinate=self.geo_to_txt(max_lon),
+                                                          northBoundingCoordinate=self.geo_to_txt(min_lat),
+                                                          southBoundingCoordinate=self.geo_to_txt(max_lat))
+        (min_date, max_date) = Project.get_date_range(self.session, prj.projid)
+        self.req.meta.temporalCoverage = EMLTemporalCoverage(beginDate=timestamp_to_str(min_date),
+                                                             endDate=timestamp_to_str(max_date))
+
+    def geo_to_txt(self, lat_or_lon: float) -> str:
+        # Round coordinates to ~ 110mm
+        return "%.6f" % lat_or_lon
+
+    def add_events(self, prj: Project, arch: DwC_Archive):
         """
             Add DwC events into the archive.
                 We produce sample-type events.
         """
         institution_code = "IMEV"
-        prj_id = self.req.project_ids[0]
-        prj = self.session.query(Project).filter_by(projid=prj_id).first()
-        assert prj is not None, "Project %d not found" % prj_id
         ds_name = self.sanitize_title(prj.title)
-        samples = Sample.get_orig_id_and_pk(self.session, prj_id=prj_id)
+        samples = Sample.get_orig_id_and_pk(self.session, prj_id=prj.projid)
         a_sample: Sample
         events = arch.events
         for orig_id, a_sample in samples.items():
@@ -82,9 +104,8 @@ class EMODNetExport(Service):
             evt_type = RecordTypeEnum.sample
             summ = Sample.get_sample_summary(self.session, a_sample.sampleid)
             evt_date = self.event_date(summ[0], summ[1])
-            # Round coordinates to ~ 110mm
-            latitude = "%.6f" % a_sample.latitude
-            longitude = "%.6f" % a_sample.longitude
+            latitude = self.geo_to_txt(a_sample.latitude)
+            longitude = self.geo_to_txt(a_sample.longitude)
             evt = DwC_Event(eventID=event_id,
                             type=evt_type,
                             institutionCode=institution_code,
