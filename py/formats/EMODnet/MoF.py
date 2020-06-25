@@ -2,6 +2,17 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+# Other vocabulary found here and there:
+#   not applicable
+#   http://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+#   female
+#   http://vocab.nerc.ac.uk/collection/S10/current/S102/
+#   larvea
+#   http://vocab.nerc.ac.uk/collection/S11/current/S1128/
+#   Temperature of the water body (for ESD)
+#   http://vocab.nerc.ac.uk/collection/P01/current/TEMPPR01/
+
+
 from formats.EMODnet.models import DwC_ExtendedMeasurementOrFact
 
 
@@ -16,7 +27,10 @@ class Count(DwC_ExtendedMeasurementOrFact):
         )
 
 
-class Abundance(DwC_ExtendedMeasurementOrFact):
+class AbundancePerUnitAreaOfTheBed(DwC_ExtendedMeasurementOrFact):
+    # Also:
+    # Abundance of biological entity specified elsewhere per unit of sampling time in the water body
+    # http://vocab.nerc.ac.uk/collection/P01/current/ADBIOL02/
     def __init__(self, event_id: str, occurrence_id: str, value: str):
         super().__init__(
             eventID=event_id,
@@ -42,6 +56,19 @@ class BioMass(DwC_ExtendedMeasurementOrFact):
         )
 
 
+class SamplingInstrumentName(DwC_ExtendedMeasurementOrFact):
+    # One of: http://vocab.nerc.ac.uk/collection/L22/current/
+    # e.g. http://vocab.nerc.ac.uk/collection/L22/current/TOOL1252/
+    def __init__(self, event_id: str, value: str, value_id: str):
+        super().__init__(
+            eventID=event_id,
+            measurementType="Sampling instrument name",
+            measurementTypeID="http://vocab.nerc.ac.uk/collection/Q01/current/Q0100002/",
+            measurementValue=value,  # e.g."Otter-Trawl Maireta System (OTMS)",
+            measurementValueID=value_id
+        )
+
+
 class SamplingSpeed(DwC_ExtendedMeasurementOrFact):
     def __init__(self, event_id: str, value: str):
         super().__init__(
@@ -54,7 +81,8 @@ class SamplingSpeed(DwC_ExtendedMeasurementOrFact):
         )
 
 
-class SampleAperture(DwC_ExtendedMeasurementOrFact):
+class SampleDeviceAperture(DwC_ExtendedMeasurementOrFact):
+    # also width in http://vocab.nerc.ac.uk/collection/Q01/current/Q0100013/
     def __init__(self, event_id: str, value: str):
         super().__init__(
             eventID=event_id,
@@ -66,17 +94,19 @@ class SampleAperture(DwC_ExtendedMeasurementOrFact):
         )
 
 
-class SamplingInstrumentName(DwC_ExtendedMeasurementOrFact):
+class SampleDeviceDiameter(DwC_ExtendedMeasurementOrFact):
     def __init__(self, event_id: str, value: str):
         super().__init__(
             eventID=event_id,
-            measurementType="Sampling instrument name",
-            measurementTypeID="http://vocab.nerc.ac.uk/collection/Q01/current/Q0100002/",
-            measurementValue=value,  # e.g."Otter-Trawl Maireta System (OTMS)",
+            measurementType="Sampling device aperture diameter",
+            measurementTypeID="http://vocab.nerc.ac.uk/collection/Q01/current/Q0100012/",
+            measurementValue=value,
+            measurementUnit="m",
+            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/ULAA/"
         )
 
 
-class SamplingMeshSize(DwC_ExtendedMeasurementOrFact):
+class SamplingNetMeshSize(DwC_ExtendedMeasurementOrFact):
     def __init__(self, event_id: str, value: str):
         super().__init__(
             eventID=event_id,

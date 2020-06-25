@@ -28,7 +28,7 @@ def test_emodnet_export(config, filled_database, caplog):
                                   role='developer',
                                   positionName='engineer'
                                   )
-    title = EMLTitle(title="Point B, Juday-Bogorov net series, 2010-2018")
+    title = EMLTitle(title="Point B, Juday-Bogorov net series, 2018")
     abstract = """
 This series is part of the long term planktonic monitoring of
 Villefranche-sur-mer, which is one of the oldest and richest in the world.

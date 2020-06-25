@@ -12,6 +12,7 @@ class TxtFileWithModel(object):
     """
         Holder class for a set of pydantic model derived instances, which can then be output as
         a txt file, which is fact a TSV one.
+            Format is explained at: https://dwc.tdwg.org/text/
     """
 
     def __init__(self, model: Type[PydanticModel], name: str):
@@ -78,17 +79,20 @@ class TxtFileWithModel(object):
     def meta(self) -> str:
         blocks = [self.meta_start()]
         fields = self._sorted_fields()
-        # First field is the id column
         if self.core_or_ext == "core":
+            # Core: first field is the id column
             id_block = '    <id index="0"/>'
+            field_start = 0
         else:
+            # Extension: Core is _implicitely_ referenced via index 0
             id_block = '    <coreid index="0"/>'
+            field_start = 1
         blocks.append(id_block)
         # Next fields start at 1
-        for ndx, a_field in enumerate(fields[1:]):
+        for ndx, a_field in enumerate(fields[field_start:], field_start):
             field_desc = self.model.__fields__[a_field]
             term = field_desc.field_info.extra.get("term")
-            blocks.append('    <field index="%d" term="%s"/>' % (ndx+1, term))
+            blocks.append('    <field index="%d" term="%s"/>' % (ndx, term))
         blocks.append(self.meta_end())
         return self.LINE_SEP.join(blocks)
 

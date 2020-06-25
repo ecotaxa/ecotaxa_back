@@ -162,7 +162,7 @@ class DwcExtendedMeasurementOrFact(BaseModel):
     #   Measurements related to lithology (sediment characteristics): "lithology"
     # http://seadatanet.maris2.nl/bandit/browse_step.php for just P01
     measurementValueID: Optional[str] = Field(title="controlled vocabulary value ID",
-                                              term="http://rs.iobis.org/obis/terms/valueTypeID")
+                                              term="http://rs.iobis.org/obis/terms/measurementValueID")
 
     measurementTypeID: str = Field(title="controlled vocabulary type ID",
                                    term="http://rs.iobis.org/obis/terms/measurementTypeID")
@@ -176,20 +176,6 @@ class DwcExtendedMeasurementOrFact(BaseModel):
 
 DwC_ExtendedMeasurementOrFact = DwcExtendedMeasurementOrFact
 
-
-# http://vocab.nerc.ac.uk/collection/P06/current/XXXX/
-# http://vocab.nerc.ac.uk/collection/P06/current/NPKM/
-# http://vocab.nerc.ac.uk/collection/L22/current/TOOL1252/
-# http://vocab.nerc.ac.uk/collection/S10/current/S102/
-# http://vocab.nerc.ac.uk/collection/S11/current/S1128/
-# Instrument
-# http://vocab.nerc.ac.uk/collection/Q01/current/Q0100013/
-# http://vocab.nerc.ac.uk/collection/P01/current/APSAZZ01/
-# http://vocab.nerc.ac.uk/collection/Q01/current/Q0100002/
-# http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
-# http://vocab.nerc.ac.uk/collection/P01/current/ADBIOL02/
-# http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL05/
-# http://vocab.nerc.ac.uk/collection/P01/current/TEMPPR01/
 
 # Check tool http://rshiny.lifewatch.be/BioCheck/
 
@@ -319,11 +305,9 @@ class EMLProject(BaseModel):
     studyAreaDescription: Optional[str]
     designDescription: Optional[str]
     """ The description of research design. """
-
-
-qualityControl: str
-"""Description of actions taken to either control or assess the quality of data resulting 
-from the associated method step."""
+    qualityControl: Optional[str]
+    """Description of actions taken to either control or assess the quality of data resulting 
+    from the associated method step."""
 
 
 class EMLAdditionalMeta(BaseModel):
@@ -334,7 +318,7 @@ class EMLAdditionalMeta(BaseModel):
     """ The dateTime the metadata document was created or modified (ISO 8601)."""
     metadataLanguage: str = Field(title="Title language, ISO-639.2", default="eng")
     """ The language in which the metadata document (as opposed to the resource being described by the metadata) 
-    is written"""
+    is written. """
 
     citation: Optional[str]
     """ A single citation for use when citing the dataset. The IPT can also auto-generate 

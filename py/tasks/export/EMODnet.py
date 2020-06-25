@@ -11,7 +11,8 @@ from db.Sample import Sample
 from db.Utils import timestamp_to_str
 from formats.EMODnet.Archive import DwC_Archive
 from formats.EMODnet.DatasetMeta import DatasetMetadata
-from formats.EMODnet.MoF import SamplingSpeed, Abundance
+from formats.EMODnet.MoF import SamplingSpeed, AbundancePerUnitAreaOfTheBed, SamplingInstrumentName, SamplingNetMeshSize, \
+    SampleDeviceDiameter
 from formats.EMODnet.models import DwC_Event, RecordTypeEnum, DwC_Occurrence, OccurrenceStatusEnum, BasisOfRecordEnum, \
     EMLGeoCoverage, EMLTemporalCoverage
 from framework.Service import Service
@@ -125,9 +126,14 @@ class EMODNetExport(Service):
         """
             Add eMoF instances, for given sample, i.e. event, into the archive.
         """
-        # TODO: it's just an example
         emof = SamplingSpeed(event_id, "2")
         arch.emofs.add(emof)
+        # TODO: Not the right one
+        ins = SamplingInstrumentName(event_id, "Modified Juday net - Aksnes and Magnesen (1983)",
+                                     "http://vocab.nerc.ac.uk/collection/L22/current/NETT0079/")
+        arch.emofs.add(ins)
+        arch.emofs.add(SamplingNetMeshSize(event_id, "0.38"))
+        arch.emofs.add(SampleDeviceDiameter(event_id, "0.5"))
 
     def add_occurences(self, arch: DwC_Archive, event_id: str, sample_id: int):
         """
@@ -166,7 +172,7 @@ class EMODNetExport(Service):
         """
             Add eMoF instances, for given occurence, into the archive.
         """
-        emof = Abundance(event_id, occurrence_id, "452")
+        emof = AbundancePerUnitAreaOfTheBed(event_id, occurrence_id, "452")
         arch.emofs.add(emof)
 
     def enrich_taxa(self, taxa_dict: Dict[int, TaxonInfoForSample]):
