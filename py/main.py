@@ -8,11 +8,14 @@ import sys
 import traceback
 from typing import Any, Tuple, Union
 
-from fastapi import FastAPI, Response, status
+from fastapi import FastAPI, Response, status, Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature, TimestampSigner
 from uvicorn.middleware.debug import PlainTextResponse
 
 from api.exports import EMODNetExportReq, EMODNetExportRsp
 from api.imports import *
+from link import read_config
 from tasks.Import import ImportAnalysis, RealImport
 from tasks.SimpleImport import SimpleImport
 from tasks.WoRMSFinder import WoRMSFinder
@@ -24,9 +27,45 @@ from tech.StatusSce import StatusService
 app = FastAPI(title="EcoTaxa",
               version="0.0.1")
 
+secured_scheme = HTTPBearer()
+
+# Read from legacy app config
+SECRET_KEY = read_config()['SECRET_KEY'][1:-1]
+# Hardcoded in Flask
+SALT = b"cookie-session"
+
+serializer = URLSafeTimedSerializer(secret_key=SECRET_KEY, salt=SALT,
+                                    signer=TimestampSigner, signer_kwargs={'key_derivation': 'hmac'})
+max_age = 2678400  # max token age, 31 days
+
+
+async def get_current_user(creds: HTTPAuthorizationCredentials = Depends(secured_scheme)) -> int:
+    """
+        Extract current user from auth string.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        if creds.scheme != 'Bearer':
+            raise credentials_exception
+        payload = serializer.loads(creds.credentials, max_age=max_age)
+        try:
+            ret: int = int(payload["user_id"])
+        except (KeyError, ValueError):
+            raise credentials_exception
+    except (SignatureExpired, BadSignature):
+        raise credentials_exception
+    if ret < 0:
+        raise credentials_exception
+    return ret
+
 
 @app.get("/taxon/resolve/{our_id}", status_code=status.HTTP_200_OK)
-async def api_resolve_taxon(our_id: int, response: Response, t=None) -> Union[PlainTextResponse, Tuple]:
+async def api_resolve_taxon(our_id: int, response: Response, t=None) -> Union[
+    PlainTextResponse, Tuple]:
     """
         Resolve in WoRMs the given taxon.
     """
@@ -44,7 +83,7 @@ async def api_resolve_taxon(our_id: int, response: Response, t=None) -> Union[Pl
 
 
 @app.post("/import_prep/{project_id}", response_model=ImportPrepRsp)
-def api_import(project_id: int, params: ImportPrepReq):
+def api_import(project_id: int, params: ImportPrepReq, current_user: int = Depends(get_current_user)):
     """
         Prepare/validate the import of an EcoTaxa archive or directory.
     """
@@ -53,7 +92,7 @@ def api_import(project_id: int, params: ImportPrepReq):
 
 
 @app.post("/import_real/{project_id}", response_model=ImportRealRsp)
-def api_import(project_id: int, params: ImportRealReq):
+def api_import(project_id: int, params: ImportRealReq, current_user: int = Depends(get_current_user)):
     """
         Import an EcoTaxa archive or directory.
     """
@@ -62,7 +101,7 @@ def api_import(project_id: int, params: ImportRealReq):
 
 
 @app.post("/simple_import/{project_id}", response_model=SimpleImportRsp)
-def api_import(project_id: int, params: SimpleImportReq):
+def api_import(project_id: int, params: SimpleImportReq, current_user: int = Depends(get_current_user)):
     """
         Import images only, with same metadata for all.
     """
@@ -71,7 +110,7 @@ def api_import(project_id: int, params: SimpleImportReq):
 
 
 @app.post("/export/emodnet", response_model=EMODNetExportRsp)
-def api_export_emodnet(params: EMODNetExportReq):
+def api_export_emodnet(params: EMODNetExportReq, current_user: int = Depends(get_current_user)):
     """
         Export in EMODnet format, @see https://www.emodnet-ingestion.eu/
         Produces a DwC-A archive into a temporary directory, ready for download.
@@ -84,7 +123,7 @@ def api_export_emodnet(params: EMODNetExportReq):
 @app.get("/status")
 def api_status() -> Response:
     """
-        Import an EcoTaxa archive or directory.
+        Report the status, mainly used for verifying that the server is up.
     """
     sce = StatusService()
     return Response(sce.run(), media_type="text/plain")
