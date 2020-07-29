@@ -18,7 +18,7 @@ class BaseService(object):
 
 
 #
-# In postgresql.conf, postgresql should listen to docker0 interface, typically:
+# In postgresql.conf, postgresql has to listen to docker0 interface, typically:
 #    listen_addresses = '127.0.0.1,172.17.0.1'       # what IP address(es) to listen on;
 # as docker0 interface has 172.17.0.1 address
 # Also in pg_hba.conf:

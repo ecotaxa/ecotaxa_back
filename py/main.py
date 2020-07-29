@@ -25,7 +25,11 @@ from tech.StatusSce import StatusService
 # TODO: A nicer API doc, see https://github.com/tiangolo/fastapi/issues/1140
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.1")
+              version="0.0.2",
+              # openapi URL as seen from navigator
+              openapi_url="/api/openapi.json",
+              #root_path="/api"
+              )
 
 secured_scheme = HTTPBearer()
 
@@ -64,7 +68,7 @@ async def get_current_user(creds: HTTPAuthorizationCredentials = Depends(secured
 
 
 @app.get("/taxon/resolve/{our_id}", status_code=status.HTTP_200_OK)
-async def api_resolve_taxon(our_id: int, response: Response, t=None) -> Union[
+async def resolve_taxon(our_id: int, response: Response, t=None) -> Union[
     PlainTextResponse, Tuple]:
     """
         Resolve in WoRMs the given taxon.
@@ -83,7 +87,7 @@ async def api_resolve_taxon(our_id: int, response: Response, t=None) -> Union[
 
 
 @app.post("/import_prep/{project_id}", response_model=ImportPrepRsp)
-def api_import(project_id: int, params: ImportPrepReq, current_user: int = Depends(get_current_user)):
+def import_preparation(project_id: int, params: ImportPrepReq, current_user: int = Depends(get_current_user)):
     """
         Prepare/validate the import of an EcoTaxa archive or directory.
     """
@@ -92,7 +96,7 @@ def api_import(project_id: int, params: ImportPrepReq, current_user: int = Depen
 
 
 @app.post("/import_real/{project_id}", response_model=ImportRealRsp)
-def api_import(project_id: int, params: ImportRealReq, current_user: int = Depends(get_current_user)):
+def real_import(project_id: int, params: ImportRealReq, current_user: int = Depends(get_current_user)):
     """
         Import an EcoTaxa archive or directory.
     """
@@ -101,7 +105,7 @@ def api_import(project_id: int, params: ImportRealReq, current_user: int = Depen
 
 
 @app.post("/simple_import/{project_id}", response_model=SimpleImportRsp)
-def api_import(project_id: int, params: SimpleImportReq, current_user: int = Depends(get_current_user)):
+def simple_import(project_id: int, params: SimpleImportReq, current_user: int = Depends(get_current_user)):
     """
         Import images only, with same metadata for all.
     """
@@ -110,7 +114,7 @@ def api_import(project_id: int, params: SimpleImportReq, current_user: int = Dep
 
 
 @app.post("/export/emodnet", response_model=EMODNetExportRsp)
-def api_export_emodnet(params: EMODNetExportReq, current_user: int = Depends(get_current_user)):
+def emodnet_format_export(params: EMODNetExportReq, current_user: int = Depends(get_current_user)):
     """
         Export in EMODnet format, @see https://www.emodnet-ingestion.eu/
         Produces a DwC-A archive into a temporary directory, ready for download.
@@ -121,7 +125,7 @@ def api_export_emodnet(params: EMODNetExportReq, current_user: int = Depends(get
 
 
 @app.get("/status")
-def api_status() -> Response:
+def system_status(current_user: int = Depends(get_current_user)) -> Response:
     """
         Report the status, mainly used for verifying that the server is up.
     """
