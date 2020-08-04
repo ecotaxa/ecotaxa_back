@@ -9,10 +9,10 @@ from tasks.export.EMODnet import EMODNetExport
 # noinspection PyUnresolvedReferences
 from tests.config_fixture import config
 # noinspection PyUnresolvedReferences
-from tests.db_fixture import filled_database
+from tests.db_fixture import database
 
 
-def test_emodnet_export(config, filled_database, caplog):
+def no_test_emodnet_export(config, database, caplog):
     caplog.set_level(logging.DEBUG)
     prj_ids = [757]
     person1 = EMLPerson(organizationName="IMEV",
