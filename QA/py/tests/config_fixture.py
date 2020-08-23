@@ -17,10 +17,10 @@ HERE = Path(dirname(realpath(__file__)))
 TEST_CONFIG = HERE / "link.ini"
 
 # Import setup point
-import link
-from tasks.DBWriter import DBWriter
+import helpers.link_to_legacy as link
+from DB.helpers.DBWriter import DBWriter
 from BO.TSVFile import TSVFile
-from fs.Vault import Vault
+from FS.Vault import Vault
 
 class EcoTaxaConfig(object):
     def cleanup(self):

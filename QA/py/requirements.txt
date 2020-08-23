@@ -1,8 +1,35 @@
-pytest==5.4.2
+# Back-end reqs
+SQLAlchemy==1.3.17
+psycopg2-binary==2.8.5
+Pillow==7.1.2
+astral==2.2
+pytz==2020.1
+numpy==1.18.4
+fastapi==0.60.1
+graphene==2.1.8
+uvicorn==0.11.5
+gunicorn==20.0.4
+httpx==0.13.3
+lxml==4.5.1
+requests==2.24.0
+itsdangerous==1.1.0
+# Testing additions
+pytest==6.0.1
 coverage==5.1
 flake8==3.7.9
 radon==4.1.0
-pydantic==1.5.1
 mypy==0.770
 requests==2.24.0
-lxml==4.5.1
+# For stubs generation
+openapi-generator-cli==4.3.1
+# For generated stubs
+six==1.15.0
+python-dateutil==2.8.1
+# For python API client generator
+typer==0.3.2
+PyYAML==5.3.1
+jinja2==2.11.2
+stringcase==1.2.0
+# For python API client generated classes
+backports-datetime-fromisoformat==1.0.0
+

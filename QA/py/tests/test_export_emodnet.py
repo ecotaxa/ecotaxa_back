@@ -2,10 +2,10 @@
 # noinspection PyPackageRequirements
 import logging
 
-from api.exports import *
 from formats.EMODnet.models import *
 # noinspection PyPackageRequirements
-from tasks.export.EMODnet import EMODNetExport
+from API_operations.exports.EMODnet import EMODNetExport
+from API_models.exports import *
 # noinspection PyUnresolvedReferences
 from tests.config_fixture import config
 # noinspection PyUnresolvedReferences

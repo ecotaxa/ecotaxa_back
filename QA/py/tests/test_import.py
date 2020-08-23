@@ -10,17 +10,18 @@ from pathlib import Path
 
 import pytest
 # noinspection PyPackageRequirements
-from api.imports import *
+from API_models.imports import *
+from API_models.crud import *
 # Import services
 # noinspection PyPackageRequirements
-from crud.Project import ProjectService
+from API_operations.CRUD.Projects import ProjectsService
 # noinspection PyPackageRequirements
-from crud.Task import TaskService
+from API_operations.CRUD.Tasks import TaskService
 # noinspection PyPackageRequirements
-from tasks.Import import ImportAnalysis, RealImport
+from API_operations.imports.Import import ImportAnalysis, RealImport
 # noinspection PyPackageRequirements
-from tasks.SimpleImport import SimpleImport
-from tech.AsciiDump import AsciiDumper
+from API_operations.imports.SimpleImport import SimpleImport
+from API_operations.AsciiDump import AsciiDumper
 
 # noinspection PyUnresolvedReferences
 from tests.config_fixture import config
@@ -47,10 +48,13 @@ def real_params_from_prep_out(task_id, prep_out: ImportPrepRsp) -> ImportRealReq
                          **prep_out.dict(exclude={'warnings', 'errors'}))
 
 
+ADMIN_USER_ID = 1
+
+
 def test_import(config, database, caplog):
     caplog.set_level(logging.DEBUG)
     # Create a dest project
-    prj_id = ProjectService().create("Test LS")
+    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test LS"))
     # Create a task for this run
     task_id = TaskService().create()
     # user_sce = UserService()
@@ -179,7 +183,7 @@ def test_import_update(config, database, caplog):
     """ Update TSVs """
     caplog.set_level(logging.DEBUG)
     task_id = TaskService().create()
-    prj_id = ProjectService().create("Test Import update")
+    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test Import update"))
     # Plain import first
     import_plain(prj_id, task_id)
     dump_sce = AsciiDumper()
@@ -219,7 +223,7 @@ def do_import_update(prj_id, caplog, classif):
 # noinspection DuplicatedCode
 def test_import_uvp6(config, database, caplog):
     caplog.set_level(logging.DEBUG)
-    prj_id = ProjectService().create("Test LS 2")
+    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test LS 2"))
     task_id = TaskService().create()
 
     params = ImportPrepReq(task_id=task_id,
@@ -242,7 +246,7 @@ def test_equal_dump_prj2(config, database, caplog):
 def test_import_empty(config, database, caplog):
     """ Nothing relevant to import """
     caplog.set_level(logging.DEBUG)
-    prj_id = ProjectService().create("Test LS 3")
+    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test LS 3"))
     task_id = TaskService().create()
 
     params = ImportPrepReq(task_id=task_id,
@@ -255,7 +259,7 @@ def test_import_empty(config, database, caplog):
 def test_import_issues(config, database, caplog):
     """ The TSV contains loads of problems """
     caplog.set_level(logging.DEBUG)
-    prj_id = ProjectService().create("Test LS 4")
+    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test LS 4"))
     task_id = TaskService().create()
 
     params = ImportPrepReq(task_id=task_id,
@@ -281,7 +285,7 @@ def test_import_issues(config, database, caplog):
 def test_import_classif_issue(config, database, caplog):
     """ The TSV contains an unknown classification id """
     caplog.set_level(logging.DEBUG)
-    prj_id = ProjectService().create("Test LS 5")
+    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test LS 5"))
     task_id = TaskService().create()
 
     params = ImportPrepReq(task_id=task_id,
@@ -296,7 +300,7 @@ def test_import_too_many_custom_columns(config, database, caplog):
         Not a realistic case, but it simulates what happens if importing into a project with
          mappings """
     caplog.set_level(logging.DEBUG)
-    prj_id = ProjectService().create("Test LS 6")
+    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test LS 6"))
     task_id = TaskService().create()
 
     params = ImportPrepReq(task_id=task_id,
@@ -313,7 +317,7 @@ def test_import_too_many_custom_columns(config, database, caplog):
 def test_import_ambiguous_classification(config, database, caplog):
     """ See https://github.com/oceanomics/ecotaxa_dev/issues/87 """
     caplog.set_level(logging.DEBUG)
-    prj_id = ProjectService().create("Test LS 7")
+    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test LS 7"))
     task_id = TaskService().create()
 
     params = ImportPrepReq(task_id=task_id,
@@ -331,7 +335,7 @@ def test_import_uvp6_zip_in_dir(config, database, caplog):
         An *Images.zip inside a directory.
     """
     caplog.set_level(logging.DEBUG)
-    prj_id = ProjectService().create("Test LS 8")
+    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test LS 8"))
     task_id = TaskService().create()
 
     params = ImportPrepReq(task_id=task_id,
@@ -342,12 +346,13 @@ def test_import_uvp6_zip_in_dir(config, database, caplog):
     # Do real import
     RealImport(prj_id, params).run()
 
+
 def test_import_sparse(config, database, caplog):
     """
         Import a sparse file, some columns are missing.
     """
     caplog.set_level(logging.DEBUG)
-    prj_id = ProjectService().create("Test Sparse")
+    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test Sparse"))
     task_id = TaskService().create()
 
     params = ImportPrepReq(task_id=task_id,
@@ -356,9 +361,10 @@ def test_import_sparse(config, database, caplog):
     params = real_params_from_prep_out(task_id, prep_out)
     print(prep_out.errors)
     assert prep_out.errors == \
-           ["In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field acq_id is mandatory as there are some acq columns: ['acq_hardware', 'acq_imgtype', 'acq_instrument'].",
-            "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field sample_id is mandatory as there are some sample columns: ['sample_program', 'sample_ship', 'sample_stationid']."
-            ]
+           [
+               "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field acq_id is mandatory as there are some acq columns: ['acq_hardware', 'acq_imgtype', 'acq_instrument'].",
+               "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field sample_id is mandatory as there are some sample columns: ['sample_program', 'sample_ship', 'sample_stationid']."
+               ]
     # Do real import, even if we had problems before.
     RealImport(prj_id, params).run()
     print("\n".join(caplog.messages))
@@ -366,13 +372,12 @@ def test_import_sparse(config, database, caplog):
     sce.run(projid=prj_id, out="chk.dmp")
 
 
-
 def test_import_images(config, database, caplog):
     """
         An all images inside a directory/zip.
     """
     caplog.set_level(logging.DEBUG)
-    prj_id = ProjectService().create("Test Import Images")
+    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test Import Images"))
 
     vals = {"latitude": "abcde"}
     params = SimpleImportReq(task_id=0,

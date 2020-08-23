@@ -4,7 +4,7 @@
 #
 
 from BO.Mappings import TableMapping
-from db.Object import ObjectFields
+from DB import ObjectFields
 
 # noinspection PyUnresolvedReferences
 from tests.config_fixture import config
