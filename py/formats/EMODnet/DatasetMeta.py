@@ -104,7 +104,6 @@ class DatasetMetadata(object):
     def additional_meta_to_xml(xml_meta_plus, eml_meta_plus: EMLAdditionalMeta):
         etree_sub_element(xml_meta_plus, "dateStamp").text = eml_meta_plus.dateStamp
 
-
     @staticmethod
     def person_to_xml(xml_person, eml_person: EMLPerson):
         # Individual block

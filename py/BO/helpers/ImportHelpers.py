@@ -7,9 +7,9 @@ from pathlib import Path
 from typing import List, Union, Set, Dict, Optional, Callable
 
 from BO.Mappings import ProjectMapping
-from db.Model import Model
-from fs.Vault import Vault
-from tasks.DBWriter import DBWriter
+from DB.helpers.DBWriter import DBWriter
+from DB.helpers.ORM import Model
+from FS.Vault import Vault
 
 
 class ImportDiagnostic(object):

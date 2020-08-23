@@ -8,7 +8,7 @@ import random
 import sys
 from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, Set, Optional
+from typing import Dict, Set, Optional, Union
 
 # noinspection PyPackageRequirements
 from PIL import Image as PIL_Image
@@ -19,12 +19,13 @@ from sqlalchemy.orm import Session
 from BO.Mappings import GlobalMapping, ProjectMapping
 from BO.SpaceTime import compute_sun_position, USED_FIELDS_FOR_SUNPOS
 from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
-from db.Model import Model
-from db.Object import classif_qual_revert, Object, ObjectFields
-from db.Utils import Bean
-from tech.DynamicLogs import get_logger
-from utils import clean_value, none_to_empty, to_float, convert_degree_minute_float_to_decimal_degree, \
-    clean_value_and_none
+from DB import Sample, Process, Acquisition
+from DB.Object import classif_qual_revert, Object, ObjectFields
+from DB.helpers.Bean import Bean
+from DB.helpers.ORM import detach_from_session_if, Model
+from helpers.DynamicLogs import get_logger
+from .helpers.TSVHelpers import clean_value, clean_value_and_none, to_float, none_to_empty, \
+    convert_degree_minute_float_to_decimal_degree
 
 logger = get_logger(__name__)
 
@@ -94,6 +95,7 @@ class TSVFile(object):
 
             # We can now prepare ORM classes with optimal performance
             target_fields = self.dispatch_fields_by_table(how.custom_mapping, field_set)
+            # noinspection PyPep8Naming
             ObjectGen, ObjectFieldsGen, ImageGen = where.db_writer.generators(target_fields)
 
             # For annotation, if there is both an id and a category then ignore category
@@ -159,7 +161,7 @@ class TSVFile(object):
                                                 image_to_write, new_records)
 
                 if new_records > 1:
-                    # We now have an Id from sequences, so ref. it.
+                    # We now have an Id from sequences, so reference it.
                     how.existing_objects[object_fields_to_write.orig_id] = object_head_to_write.objid
                 else:
                     # The key already exists with same value, checked in @see self.create_or_link_slaves
@@ -237,8 +239,11 @@ class TSVFile(object):
             Due to amount of duplicated information in TSV, this happens for few % of rows
              so no real need to optimize here.
         """
+        parent_class: Union[Sample, Acquisition, Process]
         for alias, parent_class in GlobalMapping.PARENT_CLASSES.items():
             dict_to_write = dicts_to_write[alias]
+            if dict_to_write is None:
+                continue
             parents_for_obj = how.existing_parents[alias]
             # Here we take advantage from consistent naming conventions
             # The 3 involved tables have "orig_id" column serving the same purpose
@@ -278,6 +283,7 @@ class TSVFile(object):
                 # but link the child object_head to it (like newly created ones below)
             else:
                 # Create the SQLAlchemy wrapper
+                # noinspection PyCallingNonCallable
                 parent = parent_class(**dict_to_write)
                 # Link with project
                 parent.projid = how.prj_id
@@ -287,10 +293,11 @@ class TSVFile(object):
                     # Generate an ID
                     parent.orig_id = "GeN_%d" % parent.pk()
                     parent_orig_id = parent.orig_id
-                # We now have a (generated) PK to copy back into objects
-                parents_for_obj[parent_orig_id] = parent
-                log_line = {v.orig_id: v.pk() for k, v in parents_for_obj.items()}
-                logger.info("++ IDS %s %s", alias, log_line)
+                # Store parent object for later reference. Detach it from ORM if we don't plan
+                # to update it, otherwise the simple parent.pk() below provokes a select :(
+                parents_for_obj[parent_orig_id] = detach_from_session_if(not how.can_update, session, parent)
+                # Log the appeared parent
+                logger.info("++ ID %s %s %d", alias, parent_orig_id, parent.pk())
             # Columns in obj_head have same name as pk of corresponding entities
             setattr(object_head_to_write, parent.pk_col(), parent.pk())
 
@@ -423,7 +430,7 @@ class TSVFile(object):
         """
         if object_fields_to_write.orig_id in how.existing_objects:
             # Set the objid which will be copied for storing the image, the object itself
-            # will not be stored due to returned False.
+            # will not be stored due to returned value.
             objid = how.existing_objects[object_fields_to_write.orig_id]
             object_head_to_write.objid = objid
             if how.can_update:
@@ -581,7 +588,7 @@ class TSVFile(object):
             if a_prfx not in GlobalMapping.PREFIX_TO_TABLE:
                 continue
             expected_id = "%s_id" % a_prfx
-            if not expected_id in fields:
+            if expected_id not in fields:
                 fields = sorted(list(fields))  # Make the output predictable
                 diag.error("In %s, field %s is mandatory as there are some %s columns: %s." %
                            (self.relative_name, expected_id, a_prfx, fields))

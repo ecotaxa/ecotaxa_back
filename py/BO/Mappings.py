@@ -5,14 +5,14 @@
 from collections import OrderedDict
 from typing import Dict, Tuple
 
-from db.Acquisition import Acquisition
-from db.Image import Image
-from db.Model import Model
-from db.Object import ObjectFields, Object
-from db.Process import Process
-from db.Project import Project
-from db.Sample import Sample
-from utils import encode_equal_list
+from BO.helpers.TSVHelpers import encode_equal_list
+from DB.Acquisition import Acquisition
+from DB.Image import Image
+from DB.Object import ObjectFields, Object
+from DB.Process import Process
+from DB.Project import Project
+from DB.Sample import Sample
+from DB.helpers.ORM import Model
 
 
 class GlobalMapping(object):

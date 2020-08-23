@@ -5,14 +5,11 @@
 from enum import Enum
 from typing import Optional, List
 
-# noinspection PyPackageRequirements
-from pydantic import root_validator
+from helpers.pydantic import BaseModel, Field, root_validator
 
 # noinspection PyPackageRequirements
 # from urllib3.util import Url
 Url = str
-
-from api.pydantic import BaseModel, Field
 
 
 class EMODNetMeta(BaseModel):

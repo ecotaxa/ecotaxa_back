@@ -3,8 +3,8 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-from db.Object import Object
-from utils import calc_astral_day_time
+from BO.helpers.TSVHelpers import calc_astral_day_time
+from DB.Object import Object
 
 # TODO: Caching a single value is useful, but less than several of them
 astral_cache = {'date': None, 'time': None, 'long': None, 'lat': None, 'r': ''}

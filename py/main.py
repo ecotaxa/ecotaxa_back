@@ -4,89 +4,137 @@
 #
 # Based on https://fastapi.tiangolo.com/release-notes/
 #
-import sys
-import traceback
-from typing import Any, Tuple, Union
 
-from fastapi import FastAPI, Response, status, Depends, HTTPException
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature, TimestampSigner
-from uvicorn.middleware.debug import PlainTextResponse
+from fastapi import FastAPI, Response, status, Depends
+from fastapi_utils.timing import add_timing_middleware
 
-from api.exports import EMODNetExportReq, EMODNetExportRsp
-from api.imports import *
-from link import read_config
-from tasks.Import import ImportAnalysis, RealImport
-from tasks.SimpleImport import SimpleImport
-from tasks.WoRMSFinder import WoRMSFinder
-from tasks.export.EMODnet import EMODNetExport
-from tech.StatusSce import StatusService
+from API_models.crud import *
+from API_models.exports import EMODNetExportReq, EMODNetExportRsp
+from API_models.imports import *
+from API_models.merge import MergeRsp
+from API_models.subset import SubsetReq, SubsetRsp
+from API_operations.CRUD.Projects import ProjectsService, ProjectSearchResult
+from API_operations.CRUD.Users import UserService
+from API_operations.Consistency import ProjectConsistencyChecker
+from API_operations.Merge import MergeService
+from API_operations.Status import StatusService
+from API_operations.Subset import SubsetService
+from API_operations.exports.EMODnet import EMODNetExport
+from API_operations.imports.Import import ImportAnalysis, RealImport
+from API_operations.imports.SimpleImport import SimpleImport
+from helpers.DynamicLogs import get_logger
+from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user
+
+# noinspection PyPackageRequirements
+
+logger = get_logger(__name__)
 
 # TODO: A nicer API doc, see https://github.com/tiangolo/fastapi/issues/1140
 
 app = FastAPI(title="EcoTaxa",
               version="0.0.2",
               # openapi URL as seen from navigator
-              openapi_url="/api/openapi.json",
-              #root_path="/api"
+              openapi_url="/API_models/openapi.json",
+              # root_path="/API_models"
               )
 
-secured_scheme = HTTPBearer()
-
-# Read from legacy app config
-SECRET_KEY = read_config()['SECRET_KEY'][1:-1]
-# Hardcoded in Flask
-SALT = b"cookie-session"
-
-serializer = URLSafeTimedSerializer(secret_key=SECRET_KEY, salt=SALT,
-                                    signer=TimestampSigner, signer_kwargs={'key_derivation': 'hmac'})
-max_age = 2678400  # max token age, 31 days
+# Instrument a bit
+add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
 
 
-async def get_current_user(creds: HTTPAuthorizationCredentials = Depends(secured_scheme)) -> int:
+# noinspection PyUnusedLocal
+@app.post("/login", tags=['authentification'])
+async def login(username: str, password: str) -> str:
     """
-        Extract current user from auth string.
+        Just for description. The _real_ login is done in legacy code via flask.
     """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        if creds.scheme != 'Bearer':
-            raise credentials_exception
-        payload = serializer.loads(creds.credentials, max_age=max_age)
-        try:
-            ret: int = int(payload["user_id"])
-        except (KeyError, ValueError):
-            raise credentials_exception
-    except (SignatureExpired, BadSignature):
-        raise credentials_exception
-    if ret < 0:
-        raise credentials_exception
+    return "Do not use. Use home site /login page instead."
+
+
+@app.get("/users", tags=['users'], response_model=List[UserModel])
+def get_users(current_user: int = Depends(get_current_user)):
+    """
+        Return the list of users.
+    """
+    sce = UserService()
+    return sce.list(current_user)
+
+
+@app.get("/users/me", tags=['users'], response_model=UserModel)
+def show_current_user(current_user: int = Depends(get_current_user)):
+    """
+        Return currently authenticated user.
+    """
+    sce = UserService()
+    return sce.search_by_id(current_user, current_user)
+
+
+@app.get("/users/search", tags=['users'], response_model=List[UserModel])
+def search_user(current_user: int = Depends(get_current_user),
+                by_name: Optional[str] = None):
+    """
+        Search users using various criteria, search is case insensitive and might contain % chars.
+    """
+    sce = UserService()
+    ret = sce.search(current_user, by_name)
     return ret
 
 
-@app.get("/taxon/resolve/{our_id}", status_code=status.HTTP_200_OK)
-async def resolve_taxon(our_id: int, response: Response, t=None) -> Union[
-    PlainTextResponse, Tuple]:
+@app.get("/projects/search", tags=['projects'], response_model=List[ProjectSearchResult])
+def search_projects(current_user: int = Depends(get_current_user),
+                    also_others: bool = False,
+                    title_filter: str = '',
+                    instrument_filter: str = '',
+                    filter_subset: bool = False):
     """
-        Resolve in WoRMs the given taxon.
+        Return projects summary for current user.
     """
-    sce = WoRMSFinder(our_id)
-    ok, ours, theirs = await sce.run()
-    if ok < 0:
-        response.status_code = status.HTTP_404_NOT_FOUND
-    if t:
-        data = "id:%s\nours : %s\ntheir : %s\n" % (our_id, ours, theirs)
-        response.body = data
-        return Response(data, media_type="text/plain", status_code=status.HTTP_200_OK)
-    else:
-        ret = ok, ours, theirs
-        return ret
+    sce = ProjectsService()
+    ret = sce.search(current_user, also_others, title_filter, instrument_filter, filter_subset)
+    return ret
 
 
-@app.post("/import_prep/{project_id}", response_model=ImportPrepRsp)
+@app.post("/projects/create", tags=['projects'], response_model=int)
+def create_project(params: CreateProjectReq, current_user: int = Depends(get_current_user)):
+    """
+        Create an empty project with only a title, and return its number.
+        The project will be managed by current user.
+        The user has to be app administrator or project creator.
+    """
+    sce = ProjectsService()
+    ret = sce.create(current_user, params)
+    return ret
+
+
+@app.post("/projects/{project_id}/subset", tags=['projects'], response_model=SubsetRsp)
+def project_subset(project_id: int, params: SubsetReq, current_user: int = Depends(get_current_user)):
+    """
+        Subset a project into another one.
+    """
+    sce = SubsetService(project_id, params)
+    return sce.run()
+
+
+@app.post("/projects/{project_id}/merge", tags=['projects'], response_model=MergeRsp)
+def project_merge(project_id: int, source_project_id: int, current_user: int = Depends(get_current_user)):
+    """
+        Merge another project into this one. It's more a phagocytosis than a merge, as the source will see
+        all its objects gone and will be erased.
+    """
+    sce = MergeService(current_user, project_id, source_project_id)
+    return sce.run()
+
+
+@app.get("/projects/{project_id}/check", tags=['projects'])
+def project_check(project_id: int, current_user: int = Depends(get_current_user)):
+    """
+        Check consistency of a project.
+    """
+    sce = ProjectConsistencyChecker(current_user, project_id)
+    return sce.run()
+
+
+@app.post("/import_prep/{project_id}", tags=['projects'], response_model=ImportPrepRsp)
 def import_preparation(project_id: int, params: ImportPrepReq, current_user: int = Depends(get_current_user)):
     """
         Prepare/validate the import of an EcoTaxa archive or directory.
@@ -95,7 +143,7 @@ def import_preparation(project_id: int, params: ImportPrepReq, current_user: int
     return sce.run()
 
 
-@app.post("/import_real/{project_id}", response_model=ImportRealRsp)
+@app.post("/import_real/{project_id}", tags=['projects'], response_model=ImportRealRsp)
 def real_import(project_id: int, params: ImportRealReq, current_user: int = Depends(get_current_user)):
     """
         Import an EcoTaxa archive or directory.
@@ -104,7 +152,7 @@ def real_import(project_id: int, params: ImportRealReq, current_user: int = Depe
     return sce.run()
 
 
-@app.post("/simple_import/{project_id}", response_model=SimpleImportRsp)
+@app.post("/simple_import/{project_id}", tags=['projects'], response_model=SimpleImportRsp)
 def simple_import(project_id: int, params: SimpleImportReq, current_user: int = Depends(get_current_user)):
     """
         Import images only, with same metadata for all.
@@ -113,7 +161,7 @@ def simple_import(project_id: int, params: SimpleImportReq, current_user: int = 
     return sce.run()
 
 
-@app.post("/export/emodnet", response_model=EMODNetExportRsp)
+@app.post("/export/emodnet", tags=['WIP'], response_model=EMODNetExportRsp)
 def emodnet_format_export(params: EMODNetExportReq, current_user: int = Depends(get_current_user)):
     """
         Export in EMODnet format, @see https://www.emodnet-ingestion.eu/
@@ -124,7 +172,27 @@ def emodnet_format_export(params: EMODNetExportReq, current_user: int = Depends(
     return sce.run()
 
 
-@app.get("/status")
+# @app.get("/taxon/resolve/{our_id}", tags=['other'], status_code=status.HTTP_200_OK)
+# async def resolve_taxon(our_id: int, response: Response, text_response: bool = False) -> Union[
+#     PlainTextResponse, Tuple]:
+#     """
+#         Resolve in WoRMs the given taxon.
+#         :param text_response: If set, response will be plain text. If not, JSON.
+#     """
+#     sce = WoRMSFinder(our_id)
+#     ok, ours, theirs = await sce.run()
+#     if ok < 0:
+#         response.status_code = status.HTTP_404_NOT_FOUND
+#     if text_response:
+#         data = "id:%s\nours : %s\ntheir : %s\n" % (our_id, ours, theirs)
+#         response.body = data
+#         return PlainTextResponse(data, status_code=status.HTTP_200_OK)
+#     else:
+#         ret = ok, ours, theirs
+#         return ret
+
+
+@app.get("/status", tags=['WIP'])
 def system_status(current_user: int = Depends(get_current_user)) -> Response:
     """
         Report the status, mainly used for verifying that the server is up.
@@ -133,46 +201,6 @@ def system_status(current_user: int = Depends(get_current_user)) -> Response:
     return Response(sce.run(), media_type="text/plain")
 
 
-async def internal_server_error_handler(_request: Any, exc: Exception) -> PlainTextResponse:
-    """
-        Override internal error handler, so that we don't have to look at logs on server side in case of problem.
-    :param _request:
-    :param exc: The exception caught.
-    :return:
-    """
-    tpe, val, tbk = sys.exc_info()
-    status_code = getattr(exc, "status_code", status.HTTP_500_INTERNAL_SERVER_ERROR)
-    tb = traceback.format_exception(tpe, val, tbk)
-    our_stack_ndx = 0
-    # Remove all until our code
-    for ndx, a_line in enumerate(tb):
-        if a_line.find("main.py") != -1:
-            our_stack_ndx = ndx
-            break
-    data = "\n----------- BACK-END -------------\n" + "".join(tb[our_stack_ndx:])
-    return PlainTextResponse(data, status_code=status_code)
-
-
 app.add_exception_handler(status.HTTP_500_INTERNAL_SERVER_ERROR, internal_server_error_handler)
 
-
-# In a development environment, dump the API definition at each run
-def dump_openapi():
-    import sys
-    if "--reload" not in sys.argv:
-        return  # It's not dev
-    import json
-    from pathlib import Path
-    json_def = json.dumps(app.openapi(),
-                          ensure_ascii=False,
-                          allow_nan=False,
-                          indent=None,
-                          separators=(",", ":"))
-    # Copy here for Git commit but also into another dev tree
-    dests = [Path("../openapi.json"), Path("../../ecotaxa_master/to_back/openapi.json")]
-    for dest in dests:
-        with dest.open("w") as fd:
-            fd.write(json_def)
-
-
-dump_openapi()
+dump_openapi(app, __file__)

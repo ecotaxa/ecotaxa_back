@@ -8,18 +8,20 @@ import shutil
 import zipfile
 from pathlib import Path
 # noinspection PyPackageRequirements
-from typing import Callable, List
+from typing import Callable, List, Dict, Union
 
 from sqlalchemy.orm import Session
 
 from BO.Mappings import GlobalMapping
 from BO.TSVFile import TSVFile
+from BO.Taxonomy import TaxonomyBO
 from BO.Vignette import VignetteMaker
 from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
-from db.Image import Image
-from db.Object import Object
-from db.Taxonomy import Taxonomy
-from tech.DynamicLogs import get_logger
+from DB import Sample, Process, Acquisition
+from DB.Image import Image
+from DB.Object import Object
+from DB.helpers.ORM import Model
+from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
 
@@ -126,15 +128,16 @@ class InBundle(object):
         return Object.fetch_existing_objects(session, prj_id)
 
     @staticmethod
-    def fetch_existing_parents(session, prj_id):
+    def fetch_existing_parents(session, prj_id) -> Dict[str, Dict[str, Model]]:
         """
             Get from DB the present IDs for the tables we are going to update, in current project.
             :return:
         """
         existing_parents = {}
         # Get records from acquisition, sample, process
+        clazz: Union[Sample, Process, Acquisition]
         for alias, clazz in GlobalMapping.PARENT_CLASSES.items():
-            collect = clazz.get_orig_id_and_pk(session, prj_id)
+            collect = clazz.get_orig_id_and_model(session, prj_id)
             existing_parents[alias] = collect
         return existing_parents
 
@@ -214,7 +217,7 @@ class InBundle(object):
 
     @staticmethod
     def check_classif(session: Session, diag: ImportDiagnostic, classif_id_seen):
-        classif_id_found_in_db = Taxonomy.find_ids(session, list(classif_id_seen))
+        classif_id_found_in_db = TaxonomyBO.find_ids(session, list(classif_id_seen))
         classif_id_not_found_in_db = classif_id_seen.difference(classif_id_found_in_db)
         if len(classif_id_not_found_in_db) > 0:
             msg = "Some specified classif_id don't exist, correct them prior to reload: %s" % \
