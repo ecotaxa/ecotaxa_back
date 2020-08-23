@@ -66,7 +66,7 @@ class EcoTaxaDBFrom0(object):
     def get_env(self):
         # Return the environment for postgres subprocesses
         ret = {"PGDATA": self.data_dir,
-               "PGDATABASE": "ecotaxa",
+               "PGDATABASE": "ecotaxa3",
                "PGLOG": self.db_dir / "log.txt"
                }
         return ret

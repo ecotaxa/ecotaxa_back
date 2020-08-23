@@ -3,9 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 # noinspection PyUnresolvedReferences
-from utils import clean_value, clean_value_and_none, to_float
-
-from tests.config_fixture import config
+from BO.helpers.TSVHelpers import clean_value, clean_value_and_none, to_float
 
 
 def test_cleans():

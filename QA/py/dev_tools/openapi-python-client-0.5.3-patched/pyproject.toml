@@ -1,0 +1,93 @@
+[tool.poetry]
+name = "openapi-python-client"
+version = "0.5.3"
+description = "Generate modern Python clients from OpenAPI"
+repository = "https://github.com/triaxtec/openapi-python-client"
+license = "MIT"
+keywords=["OpenAPI", "Client", "Generator"]
+authors = ["Dylan Anthony <danthony@triaxtec.com>"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Code Generators",
+    "Typing :: Typed",
+]
+readme = "README.md"
+packages = [
+    {include = "openapi_python_client"},
+]
+include = ["CHANGELOG.md", "openapi_python_client/py.typed"]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+jinja2 = "^2.11.1"
+stringcase = "^1.2.0"
+typer = ">=0.1,<0.4"
+colorama = {version = "^0.4.3", markers = "sys_platform == 'win32'"}
+shellingham = "^1.3.2"
+httpx = ">=0.13,<0.15"
+black = "^19.10b0"
+isort = "^5.0.5"
+pyyaml = "^5.3.1"
+importlib_metadata = {version = "^1.6.0", python = "==3.7"}
+pydantic = "^1.6.1"
+
+[tool.poetry.scripts]
+openapi-python-client = "openapi_python_client.cli:app"
+
+[tool.poetry.dev-dependencies]
+pytest = "*"
+pytest-mock = "*"
+mypy = "*"
+taskipy = "*"
+safety = "*"
+pytest-cov = "*"
+fastapi = "*"
+python-multipart = "*"
+flake8 = "*"
+
+[tool.taskipy.tasks]
+check = """
+isort .\
+ && black .\
+ && flake8 openapi_python_client\
+ && safety check --bare\
+ && mypy openapi_python_client\
+ && pytest --cov openapi_python_client tests\
+"""
+openapi = "python -m end_to_end_tests.fastapi_app"
+gm = "python -m end_to_end_tests.regen_golden_master"
+e2e = "pytest openapi_python_client end_to_end_tests"
+oge = """
+task openapi\
+&& task gm\
+&& task e2e\
+"""
+
+[tool.black]
+line-length = 120
+target_version = ['py37']
+exclude = '''
+(
+  /(
+    | \.git
+    | \.venv
+    | \.mypy_cache
+    | openapi_python_client/templates
+    | tests/test_templates
+  )/
+)
+'''
+
+[tool.isort]
+line_length = 120
+multi_line_output = 3
+include_trailing_comma = true
+skip = [".venv", "tests/test_templates"]
+
+[tool.coverage.run]
+omit = ["openapi_python_client/templates/*"]
+
+[build-system]
+requires = ["poetry>=1.0"]
+build-backend = "poetry.masonry.api"
