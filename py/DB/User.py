@@ -22,11 +22,6 @@ class User(Model):
     name = Column(String(255), nullable=False)
     organisation = Column(String(255))
     active = Column(Boolean(), default=True)
-    roles = relationship('Role', secondary="users_roles",
-                         backref=backref('users',
-                                         # Load roles straight away with User
-                                         # lazy='joined'
-                                         ))
     # The projects that user has rights in, so he/she can participate at various levels.
     # privs_on_projects = relationship('ProjectPrivilege')
 
@@ -34,6 +29,11 @@ class User(Model):
     country = Column(String(50))
     usercreationdate = Column(TIMESTAMP, default=func.now())
     usercreationreason = Column(String(1000))
+
+    # The relationships are created in Relations.py but the typing here helps the IDE
+    roles: relationship
+    privs_on_projects: relationship
+
 
     @staticmethod
     def find_users(session: Session, names: List[str], emails: List[str], found_users: dict):
@@ -65,7 +65,8 @@ class Role(Model):
     __tablename__ = 'roles'
     id = Column(Integer(), primary_key=True)  # ,Sequence('seq_roles')
     name = Column(String(80), unique=True, nullable=False)
-    # 'users' is automatically added by backref of 'Role' relationship in User
+    # The relationships are created in Relations.py but the typing here helps the IDE
+    users: relationship
 
     APP_ADMINISTRATOR = "Application Administrator"
     PROJECT_CREATOR = "Project creator"

@@ -34,12 +34,9 @@ class ProjectPrivilege(Model):
     privilege = Column(VARCHAR(255), nullable=False)
 
     # relationships
-    project = relationship('Project', backref=backref('privs_for_members',
-                                                      cascade="all, delete-orphan",
-                                                      single_parent=True))
-    user = relationship(User, backref=backref('privs_on_projects',
-                                              cascade="all, delete-orphan",
-                                              single_parent=True))
+    # The relationships are created in Relations.py but the typing here helps the IDE
+    project: relationship
+    user: relationship
 
     def __str__(self):
         return "{0} ({1})".format(self.member, self.privilege)

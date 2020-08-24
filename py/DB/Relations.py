@@ -4,18 +4,22 @@
 #
 # After SQL alchemy models are defined individually, setup the relations b/w them
 #
-
 from .Acquisition import Acquisition
 from .Image import Image
-# noinspection PyUnresolvedReferences
 from .Object import Object, ObjectFields, ObjectCNNFeature
 from .Process import Process
 from .Project import Project
+from .ProjectPrivilege import ProjectPrivilege
 from .Sample import Sample
-# noinspection PyUnresolvedReferences
-from .Taxonomy import *
-from .User import *
+from .Taxonomy import Taxonomy
+from .User import User, Role
+from .helpers.ORM import relationship
 
+# User
+User.roles = relationship(Role, secondary="users_roles")
+Role.users = relationship(User, secondary="users_roles")
+
+# Project
 Project.all_objects = relationship(Object)
 Object.project = relationship(Project)
 
@@ -28,8 +32,28 @@ Process.project = relationship(Project)
 Project.all_acquisitions = relationship(Acquisition)
 Acquisition.project = relationship(Project)
 
+# Privileges
+ProjectPrivilege.project = relationship(Project, cascade="all, delete-orphan", single_parent=True)
+Project.privs_for_members = relationship(ProjectPrivilege)
+
+ProjectPrivilege.user = relationship(User, cascade="all, delete-orphan", single_parent=True)
+User.privs_on_projects = relationship(ProjectPrivilege)
+
+# Object
 Object.fields = relationship(ObjectFields, uselist=False)
 ObjectFields.object = relationship(Object, uselist=False)
+
+Object.classif = relationship(Taxonomy, primaryjoin="Taxonomy.id==Object.classif_id",
+                              foreign_keys="Taxonomy.id", uselist=False)
+Object.classifier = relationship(User, primaryjoin="User.id==Object.classif_who", foreign_keys="User.id",
+                                 uselist=False, )
+
+Object.classif_auto = relationship(Taxonomy, primaryjoin="Taxonomy.id==foreign(Object.classif_auto_id)",
+                                   uselist=False, )
+
+ObjectCNNFeature.object = relationship(Object, foreign_keys="Object.objid",
+                                       primaryjoin="ObjectCNNFeature.objcnnid==Object.objid", uselist=False)
+Object.cnn_features = relationship(ObjectCNNFeature)
 
 Object.img0 = relationship(Image, foreign_keys=Image.objid)
 Object.all_images = relationship(Image)

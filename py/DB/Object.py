@@ -52,18 +52,13 @@ class Object(Model):
     sunpos = Column(CHAR(1))  # Sun position, from date, time and coords
     #
     classif_id = Column(INTEGER)
-    classif = relationship("Taxonomy", primaryjoin="Taxonomy.id==Object.classif_id", foreign_keys="Taxonomy.id",
-                           uselist=False, )
     classif_qual = Column(CHAR(1))
     classif_who = Column(Integer, ForeignKey('users.id'))
-    classiffier = relationship("User", primaryjoin="User.id==Object.classif_who", foreign_keys="User.id",
-                               uselist=False, )
     classif_when = Column(TIMESTAMP)
 
     classif_auto_id = Column(INTEGER)
     classif_auto_score = Column(DOUBLE_PRECISION)
     classif_auto_when = Column(TIMESTAMP)
-    classif_auto = relationship("Taxonomy", primaryjoin="Taxonomy.id==foreign(Object.classif_auto_id)", uselist=False, )
 
     classif_crossvalidation_id = Column(INTEGER)
     #
@@ -86,6 +81,10 @@ class Object(Model):
     # The relationships are created in Relations.py but the typing here helps the IDE
     project: relationship
     fields: relationship
+    cnn_features: relationship
+    classif: relationship
+    classif_auto: relationship
+    classifier: relationship
     img0: relationship
     all_images: relationship
     sample: relationship
@@ -166,7 +165,6 @@ class ObjectFields(Model):
     orig_id = Column(VARCHAR(255))
     # TODO: Can't see any value in DB
     object_link = Column(VARCHAR(255))
-
     # The relationships are created in Relations.py but the typing here helps the IDE
     object: relationship
 
@@ -182,9 +180,9 @@ for i in range(1, 21):
 class ObjectCNNFeature(Model):
     __tablename__ = 'obj_cnn_features'
     objcnnid = Column(BIGINT, ForeignKey('obj_head.objid', ondelete="CASCADE"), primary_key=True)
-    objhrel = relationship("Object", foreign_keys="Object.objid",
-                           primaryjoin="ObjectCNNFeature.objcnnid==Object.objid", uselist=False,
-                           backref="objcnnrel")
+    # The relationships are created in Relations.py but the typing here helps the IDE
+    object: relationship
+
 
 
 # Ajout des colonnes numériques & textuelles libres

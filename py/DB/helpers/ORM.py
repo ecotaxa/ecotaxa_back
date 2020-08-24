@@ -3,6 +3,9 @@ from typing import Optional, Iterable, Tuple, List, Set
 from sqlalchemy import Column, inspect, MetaData, Table
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, make_transient
+# For exporting
+# noinspection PyUnresolvedReferences
+from sqlalchemy.orm import relationship
 
 Model = declarative_base()
 
