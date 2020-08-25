@@ -4,9 +4,16 @@
 #
 from typing import Tuple, List
 
-from DB import Object, Sample, ProjectPrivilege, User
+from sqlalchemy.orm import Query
+
+from BO.Mappings import RemapOp, MappedTableT, TableMapping
+from DB import Object, Sample, ProjectPrivilege, User, Project
 from DB import Session, ResultProxy
+from DB.ProjectPrivilege import MANAGE
 from DB.User import Role
+from helpers.DynamicLogs import get_logger
+
+logger = get_logger(__name__)
 
 
 class ProjectBO(object):
@@ -49,6 +56,7 @@ class ProjectBO(object):
 
     @staticmethod
     def projects_for_user(session: Session, user: User,
+                          for_managing: bool = False,
                           also_others: bool = False,
                           title_filter: str = '',
                           instrument_filter: str = '',
@@ -56,6 +64,7 @@ class ProjectBO(object):
         """
         :param session:
         :param user: The user for which the list is needed.
+        :param for_managing: If set, list the projects that the user can manage.
         :param also_others: If set, also list the projects on which given user has no right, so user can
                                 request access to them.
         :param title_filter: If set, filter out the projects with title not matching the required string,
@@ -86,6 +95,9 @@ class ProjectBO(object):
                         JOIN projectspriv pp 
                           ON p.projid = pp.projid 
                          AND pp.member = :user_id """
+                if for_managing:
+                    sql += """
+                         AND pp.privilege = '%s' """ % MANAGE
             sql += " WHERE 1 = 1 "
 
         if title_filter != '':
@@ -143,3 +155,26 @@ class ProjectBO(object):
         ProjectBO.update_taxo_stats(session, prj_id)
         # Stats depend on taxo stats
         ProjectBO.update_stats(session, prj_id)
+
+    @staticmethod
+    def delete(session: Session, prj_id: int):
+        """
+            Completely remove the project.
+        """
+        # TODO: Remove for user prefs
+        # Remove project
+        session.query(Project).filter(Project.projid == prj_id).delete()
+        # Remove privileges
+        session.query(ProjectPrivilege).filter(ProjectPrivilege.projid == prj_id).delete()
+
+    @staticmethod
+    def remap(session: Session, prj_id: int, table: MappedTableT, remaps: List[RemapOp]):
+        """
+            Apply remapping operations onto the given table and given project.
+        """
+
+        # Do the remapping, including blanking of unused columns
+        values = {a_remap.to: a_remap.frm for a_remap in remaps}
+        qry: Query = session.query(table).filter(table.projid == prj_id). \
+            update(values=values, synchronize_session=False)
+        logger.info("Remap query for %s: %s", table.__tablename__, qry)

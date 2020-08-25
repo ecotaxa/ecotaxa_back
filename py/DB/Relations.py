@@ -14,6 +14,8 @@ from .Sample import Sample
 from .Taxonomy import Taxonomy
 from .User import User, Role
 from .helpers.ORM import relationship
+# Particle project
+from .ParticleProject import ParticleProject
 
 # User
 User.roles = relationship(Role, secondary="users_roles")
@@ -47,6 +49,7 @@ Object.classif = relationship(Taxonomy, primaryjoin="Taxonomy.id==Object.classif
                               foreign_keys="Taxonomy.id", uselist=False)
 Object.classifier = relationship(User, primaryjoin="User.id==Object.classif_who", foreign_keys="User.id",
                                  uselist=False, )
+User.classified_objects = relationship(Object)
 
 Object.classif_auto = relationship(Taxonomy, primaryjoin="Taxonomy.id==foreign(Object.classif_auto_id)",
                                    uselist=False, )
@@ -66,3 +69,7 @@ Acquisition.all_objects = relationship(Object)
 
 Object.process = relationship(Process)
 Process.all_objects = relationship(Object)
+
+# Particle Project
+ParticleProject.ecotaxa_project=relationship(Project)
+Project.ecopart_project=relationship(ParticleProject)

@@ -3,3 +3,4 @@ py/venv
 QA/venv
 docker/pg_data
 *.pyc
+/venv/

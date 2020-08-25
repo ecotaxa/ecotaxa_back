@@ -2,8 +2,8 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from collections import OrderedDict
-from typing import Dict, Tuple
+from collections import OrderedDict, namedtuple
+from typing import Dict, Tuple, List, Union, Type, Set
 
 from BO.helpers.TSVHelpers import encode_equal_list
 from DB.Acquisition import Acquisition
@@ -12,7 +12,6 @@ from DB.Object import ObjectFields, Object
 from DB.Process import Process
 from DB.Project import Project
 from DB.Sample import Sample
-from DB.helpers.ORM import Model
 
 
 class GlobalMapping(object):
@@ -70,12 +69,22 @@ class GlobalMapping(object):
     }
     TABLE_TO_PREFIX = {v: k for k, v in PREFIX_TO_TABLE.items()}
 
+    # noinspection PyPep8Naming
     @classmethod
     def TSV_table_to_table(cls, table):
         """
-            Return the real table name behind the one uses in TSV composed column names.
+            Return the real table name behind the one used in TSV composed column names.
         """
         return cls.PREFIX_TO_TABLE.get(table, table)
+
+
+# A re-mapping operation, from and to are real DB columns
+RemapOp = namedtuple("RemapOp", ['frm', 'to'])
+
+# What is mapped, i.e. has free fields
+MAPPED_TABLES = [ObjectFields, Sample, Acquisition, Process]
+# And a typing for it
+MappedTableT = Type[Union[ObjectFields, Sample, Acquisition, Process]]
 
 
 class ProjectMapping(object):
@@ -97,10 +106,11 @@ class ProjectMapping(object):
         self.acquisition_mappings: TableMapping = TableMapping(Acquisition)
         self.process_mappings: TableMapping = TableMapping(Process)
         # store for iteration
-        self.all = [self.object_mappings, self.sample_mappings,
-                    self.acquisition_mappings, self.process_mappings]
+        self.all: List[TableMapping] = [self.object_mappings, self.sample_mappings,
+                                        self.acquisition_mappings, self.process_mappings]
         # for 'generic' access to mappings
-        self.by_table_name = {a_mapping.table_name: a_mapping for a_mapping in self.all}
+        self.by_table_name: Dict[str, TableMapping] = {a_mapping.table_name: a_mapping for a_mapping in self.all}
+        self.by_table: Dict[MappedTableT, TableMapping] = {a_mapping.table: a_mapping for a_mapping in self.all}
         # for fast lookup from TSV analysis
         # key = TSV full column, val = ( TableMapping, DB col )
         self.all_fields: Dict[str, Tuple[TableMapping, str]] = dict()
@@ -116,7 +126,7 @@ class ProjectMapping(object):
         prj.mappingacq = self.acquisition_mappings.as_equal_list()
         prj.mappingprocess = self.process_mappings.as_equal_list()
 
-    def load_from_project(self, prj: Project):
+    def load_from_project(self, prj: Project) -> 'ProjectMapping':
         """
             Load self from Project fields serialization.
         """
@@ -184,8 +194,8 @@ class TableMapping(object):
         The mapping for a given DB table, i.e. from TSV columns to DB ones.
     """
 
-    def __init__(self, table: Model):
-        self.table = table
+    def __init__(self, table: MappedTableT):
+        self.table: MappedTableT = table
         self.table_name = table.__tablename__
         # key = DB column, val = TSV field name WITHOUT table prefix
         self.real_cols_to_tsv = OrderedDict()
@@ -210,10 +220,14 @@ class TableMapping(object):
                 continue
             db_col, tsv_col_no_prfx = a_map.split('=', 1)
             self.add_association(db_col, tsv_col_no_prfx)
+        return self
 
     def load_from_dict(self, dict_mapping: dict):
         for db_col, tsv_col_no_prfx in dict_mapping.items():
             self.add_association(db_col, tsv_col_no_prfx)
+
+    def load_from(self, other: 'TableMapping'):
+        self.load_from_dict(other.real_cols_to_tsv)
 
     def add_association(self, db_col, tsv_col_no_prfx):
         self.real_cols_to_tsv[db_col] = tsv_col_no_prfx
@@ -248,7 +262,10 @@ class TableMapping(object):
         return db_col in self.table.__dict__
 
     def as_equal_list(self):
-        return encode_equal_list(self.real_cols_to_tsv)
+        return encode_equal_list(self.real_cols_to_tsv, "\n")
+
+    def as_cs_equal_list(self):
+        return encode_equal_list(self.real_cols_to_tsv, ", ")
 
     def transforms_from(self, other):
         """
@@ -261,3 +278,43 @@ class TableMapping(object):
                 # output the transform
                 ret.append((a_real, self_real))
         return ret
+
+    def augmented_with(self, source: 'TableMapping') -> \
+            Tuple['TableMapping', List[RemapOp], List[str]]:
+        """
+            Compute a new mapping self + source. Returns it, plus the necessary operations to do on source
+            so that it fits in result, plus eventual problems preventing to do so.
+        """
+        assert self.table == source.table
+        ret = TableMapping(self.table)
+        remaps = []
+        errs = []
+        # Result must contain at least all columns from self
+        ret.load_from(self)
+        for a_real_src_col, a_tsv_src_col in source.real_cols_to_tsv.items():
+            real_col_in_dest = ret.tsv_cols_to_real.get(a_tsv_src_col)
+            if real_col_in_dest is None:
+                # TSV column is not present we need a new one
+                add_ok = ret.add_column_for_table(a_tsv_src_col, a_real_src_col[0])
+                if not add_ok:
+                    errs.append("Column '%s.%s' cannot be mapped. No space left in mapping."
+                                % (self.table.__tablename__, a_tsv_src_col))
+                else:
+                    # The new column will get values from old column
+                    real_col_in_dest = ret.tsv_cols_to_real.get(a_tsv_src_col)
+                    remaps.append(RemapOp(a_real_src_col, real_col_in_dest))
+            else:
+                if real_col_in_dest != a_real_src_col:
+                    # TSV column is present but mapped to a different DB column...
+                    # hopefully of same type
+                    assert real_col_in_dest[0] == a_real_src_col[0]
+                    remaps.append(RemapOp(a_real_src_col, real_col_in_dest))
+                else:
+                    # TSV column is present and mapped to the same column
+                    pass
+        # Source columns which were not targets as well get a NULL
+        dst_cols = set([a_remap.to for a_remap in remaps])
+        src_cols = set([a_remap.frm for a_remap in remaps])
+        for a_col in sorted(src_cols.difference(dst_cols)):
+            remaps.append(RemapOp(None, a_col))
+        return ret, remaps, errs

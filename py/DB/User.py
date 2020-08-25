@@ -22,8 +22,6 @@ class User(Model):
     name = Column(String(255), nullable=False)
     organisation = Column(String(255))
     active = Column(Boolean(), default=True)
-    # The projects that user has rights in, so he/she can participate at various levels.
-    # privs_on_projects = relationship('ProjectPrivilege')
 
     preferences = Column(String(40000))
     country = Column(String(50))
@@ -32,7 +30,10 @@ class User(Model):
 
     # The relationships are created in Relations.py but the typing here helps the IDE
     roles: relationship
+    # The projects that user has rights in, so he/she can participate at various levels.
     privs_on_projects: relationship
+    # The objects of which _present_ classification was done by the user
+    classified_objects: relationship
 
 
     @staticmethod

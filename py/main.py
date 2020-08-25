@@ -34,7 +34,7 @@ logger = get_logger(__name__)
 app = FastAPI(title="EcoTaxa",
               version="0.0.2",
               # openapi URL as seen from navigator
-              openapi_url="/API_models/openapi.json",
+              openapi_url="/api/openapi.json",
               # root_path="/API_models"
               )
 
@@ -83,14 +83,18 @@ def search_user(current_user: int = Depends(get_current_user),
 @app.get("/projects/search", tags=['projects'], response_model=List[ProjectSearchResult])
 def search_projects(current_user: int = Depends(get_current_user),
                     also_others: bool = False,
+                    for_managing: bool = False,
                     title_filter: str = '',
                     instrument_filter: str = '',
                     filter_subset: bool = False):
     """
         Return projects summary for current user.
+        @:param also_others: allows to return projects for which given user has no right
+        @:param for_managing: Allows to return project that can be written to (including erased) by the given user
     """
     sce = ProjectsService()
-    ret = sce.search(current_user, also_others, title_filter, instrument_filter, filter_subset)
+    ret = sce.search(current_user_id=current_user, also_others=also_others, for_managing=for_managing,
+                     title_filter=title_filter, instrument_filter=instrument_filter, filter_subset=filter_subset)
     return ret
 
 
@@ -116,12 +120,14 @@ def project_subset(project_id: int, params: SubsetReq, current_user: int = Depen
 
 
 @app.post("/projects/{project_id}/merge", tags=['projects'], response_model=MergeRsp)
-def project_merge(project_id: int, source_project_id: int, current_user: int = Depends(get_current_user)):
+def project_merge(project_id: int, source_project_id: int, dry_run: bool,
+                  current_user: int = Depends(get_current_user)) -> MergeRsp:
     """
         Merge another project into this one. It's more a phagocytosis than a merge, as the source will see
         all its objects gone and will be erased.
+        - param `dry_run`: If set, then only a diagnostic of doability will be done.
     """
-    sce = MergeService(current_user, project_id, source_project_id)
+    sce = MergeService(current_user, project_id, source_project_id, dry_run)
     return sce.run()
 
 

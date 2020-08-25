@@ -43,6 +43,7 @@ class ProjectsService(Service):
         return prj.projid
 
     def search(self, current_user_id: int,
+               for_managing: bool,
                also_others: bool,
                title_filter: str,
                instrument_filter: str,
@@ -50,7 +51,7 @@ class ProjectsService(Service):
         current_user: User = self.session.query(User).get(current_user_id)
         ret = []
         # TODO: Better perf by going thru the iterator instead of a list?
-        for prj in ProjectBO.projects_for_user(self.session, current_user, also_others,
+        for prj in ProjectBO.projects_for_user(self.session, current_user, for_managing, also_others,
                                                title_filter, instrument_filter, filter_subset):
             ret.append(prj)
         return ret

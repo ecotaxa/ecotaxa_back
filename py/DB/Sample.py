@@ -68,7 +68,7 @@ class Sample(Model):
     @classmethod
     def get_sample_summary(cls, session: Session, sample_id: int) -> List:
         res: ResultProxy = session.execute(
-            "SELECT min(o.objdate+o.objtime), max(o.objdate+o.objtime), min(o.depth_min), max(o.depth_max)"
+            "SELECT MIN(o.objdate+o.objtime), MAX(o.objdate+o.objtime), MIN(o.depth_min), MAX(o.depth_max)"
             "  FROM objects o "
             " WHERE o.sampleid = :smp",
             {"smp": sample_id})

@@ -98,7 +98,7 @@ def calc_astral_day_time(date: datetime.datetime, time, latitude, longitude):
     return ret
 
 
-def encode_equal_list(a_mapping: dict):
+def encode_equal_list(a_mapping: dict, sep: str):
     """
         Turn a dict into a string key=value, with sorted keys.
     :param a_mapping:
@@ -106,7 +106,7 @@ def encode_equal_list(a_mapping: dict):
     """
     eqs = ["%s=%s" % (k, v) for k, v in a_mapping.items()]
     eqs.sort()
-    return "\n".join(eqs)
+    return sep.join(eqs)
 
 
 def convert_degree_minute_float_to_decimal_degree(v):
