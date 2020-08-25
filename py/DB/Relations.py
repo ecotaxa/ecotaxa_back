@@ -13,6 +13,7 @@ from .ProjectPrivilege import ProjectPrivilege
 from .Sample import Sample
 from .Taxonomy import Taxonomy
 from .User import User, Role
+from .Task import Task
 from .helpers.ORM import relationship
 # Particle project
 from .ParticleProject import ParticleProject
@@ -69,6 +70,9 @@ Acquisition.all_objects = relationship(Object)
 
 Object.process = relationship(Process)
 Process.all_objects = relationship(Object)
+
+# Task
+Task.owner = relationship(User)
 
 # Particle Project
 ParticleProject.ecotaxa_project=relationship(Project)

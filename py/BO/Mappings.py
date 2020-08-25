@@ -302,7 +302,9 @@ class TableMapping(object):
                 else:
                     # The new column will get values from old column
                     real_col_in_dest = ret.tsv_cols_to_real.get(a_tsv_src_col)
-                    remaps.append(RemapOp(a_real_src_col, real_col_in_dest))
+                    if real_col_in_dest != a_real_src_col:
+                        # Remap if different
+                        remaps.append(RemapOp(a_real_src_col, real_col_in_dest))
             else:
                 if real_col_in_dest != a_real_src_col:
                     # TSV column is present but mapped to a different DB column...

@@ -25,6 +25,9 @@ class Task(Model):
     creationdate = Column(DATE)
     lastupdate = Column(DATE)
 
+    # The relationships are created in Relations.py but the typing here helps the IDE
+    owner: relationship
+
     def __str__(self):
         return "{0} ({1})".format(self.id, self.taskclass)
 

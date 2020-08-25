@@ -374,7 +374,7 @@ def test_import_sparse(config, database, caplog):
 
 def test_import_images(config, database, caplog):
     """
-        An all images inside a directory/zip.
+        Simple import with fixed values.
     """
     caplog.set_level(logging.DEBUG)
     prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test Import Images"))
@@ -384,7 +384,7 @@ def test_import_images(config, database, caplog):
                              source_path=str(PLAIN_DIR),
                              values=vals)
     rsp = SimpleImport(prj_id, params).run()
-    assert rsp.errors == ["'abcde' is not a valid value for latitude"]
+    assert rsp.errors == ["'abcde' is not a valid value for PossibleSimpleImportFields.latitude"]
     # Do real import
     vals["latitude"] = "43.8802"
     vals["longitude"] = "7.2329"
