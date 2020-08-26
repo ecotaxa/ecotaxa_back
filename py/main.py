@@ -16,6 +16,7 @@ from API_models.subset import SubsetReq, SubsetRsp
 from API_operations.CRUD.Projects import ProjectsService, ProjectSearchResult
 from API_operations.CRUD.Users import UserService
 from API_operations.Consistency import ProjectConsistencyChecker
+from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
 from API_operations.Status import StatusService
 from API_operations.Subset import SubsetService
@@ -119,6 +120,15 @@ def project_subset(project_id: int, params: SubsetReq, current_user: int = Depen
         Subset a project into another one.
     """
     sce = SubsetService(project_id, params)
+    return sce.run()
+
+
+@app.post("/projects/{project_id}/query", tags=['projects'], response_model=SubsetRsp)
+def project_query(project_id: int, filters: ProjectFilters, current_user: int = Depends(get_current_user)):
+    """
+        Query the project.
+    """
+    sce = JsonDumper(project_id, filters)
     return sce.run()
 
 

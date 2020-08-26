@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Optional, Iterable, Tuple, List, Set, Dict, TypeVar
+from typing import Optional, Iterable, Tuple, List, Set, Dict, TypeVar, Type
 
 from sqlalchemy import Column, inspect, MetaData, Table
 from sqlalchemy.ext.declarative import declarative_base
@@ -18,6 +18,9 @@ class Model(_Base):
     __abstract__ = True  # prevent SQLAlchemy from trying to map
     __tablename__: str
 
+
+# Just forD fun :)
+ModelT = Type[Model]
 
 # Generics on some ORM operations
 M = TypeVar('M', bound=Model)

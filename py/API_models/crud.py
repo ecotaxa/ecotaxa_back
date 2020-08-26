@@ -4,7 +4,7 @@
 #
 #  Models used in CRUD API_operations.
 #
-from typing import Optional
+from typing import Optional, Dict
 
 from DB import User, Project
 from helpers.pydantic import BaseModel, Field
@@ -32,3 +32,6 @@ class ProjectSearchResult(BaseModel):
     email: Optional[str]
     name: Optional[str]
     visible: bool
+
+
+ProjectFilters = Dict[str, str]

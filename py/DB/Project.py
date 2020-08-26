@@ -37,6 +37,7 @@ class Project(Model):
     objcount = Column(DOUBLE_PRECISION)
     pctvalidated = Column(DOUBLE_PRECISION)
     pctclassified = Column(DOUBLE_PRECISION)
+    # Settings
     classifsettings = Column(VARCHAR)  # Settings for Automatic classification.
     initclassiflist = Column(VARCHAR)  # Initial list of categories
     classiffieldlist = Column(VARCHAR)  # Fields available on sort & displayed field of Manual classif screen
@@ -50,7 +51,6 @@ class Project(Model):
 
     # Associated taxonomy statistics. Commented out to avoid that the ORM loads the whole list, which can be big.
     # taxo_stats = relationship("ProjectTaxoStat")
-
 
     # The relationships are created in Relations.py but the typing here helps IDE
     all_objects: relationship
