@@ -6,6 +6,7 @@ from os.path import join
 from typing import Dict
 
 from API_models.exports import EMODNetExportReq, EMODNetExportRsp
+from BO.Project import ProjectBO
 from DB.Project import Project
 from DB.Sample import Sample
 from DB.helpers.Postgres import timestamp_to_str
@@ -77,13 +78,13 @@ class EMODNetExport(Service):
         """
             Various queries on the project for getting metadata.
         """
-        (min_lat, max_lat, min_lon, max_lon) = Project.get_bounding_geo(self.session, prj.projid)
+        (min_lat, max_lat, min_lon, max_lon) = ProjectBO.get_bounding_geo(self.session, prj.projid)
         self.req.meta.geographicCoverage = EMLGeoCoverage(geographicDescription="See coordinates",
                                                           westBoundingCoordinate=self.geo_to_txt(min_lon),
                                                           eastBoundingCoordinate=self.geo_to_txt(max_lon),
                                                           northBoundingCoordinate=self.geo_to_txt(min_lat),
                                                           southBoundingCoordinate=self.geo_to_txt(max_lat))
-        (min_date, max_date) = Project.get_date_range(self.session, prj.projid)
+        (min_date, max_date) = ProjectBO.get_date_range(self.session, prj.projid)
         self.req.meta.temporalCoverage = EMLTemporalCoverage(beginDate=timestamp_to_str(min_date),
                                                              endDate=timestamp_to_str(max_date))
 
@@ -106,6 +107,7 @@ class EMODNetExport(Service):
             event_id = orig_id
             evt_type = RecordTypeEnum.sample
             summ = Sample.get_sample_summary(self.session, a_sample.sampleid)
+            assert a_sample.latitude is not None and a_sample.longitude is not None
             evt_date = self.event_date(summ[0], summ[1])
             latitude = self.geo_to_txt(a_sample.latitude)
             longitude = self.geo_to_txt(a_sample.longitude)
@@ -151,6 +153,7 @@ class EMODNetExport(Service):
         # Output
         for an_id, taxon_4_sample in per_taxon.items():
             taxon_info = taxon_4_sample.taxon_info
+            assert taxon_info is not None
             aphia_id = taxon_info.aphia_id
             if not taxon_info.is_valid():
                 # TODO: Log problems during resolve

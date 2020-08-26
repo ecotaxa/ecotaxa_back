@@ -27,6 +27,7 @@ class Sample(Model):
 
     # The relationships are created in Relations.py but the typing here helps IDE
     project: relationship
+    all_objects: relationship
 
     @staticmethod
     def pk_col():
@@ -36,7 +37,7 @@ class Sample(Model):
         return self.sampleid
 
     @classmethod
-    def get_orig_id_and_model(cls, session: Session, prj_id) -> Dict[str, Model]:
+    def get_orig_id_and_model(cls, session: Session, prj_id) -> Dict[str, 'Sample']:
         res = session.query(Sample).filter(Sample.projid == prj_id)
         # sql = "SELECT orig_id, sampleid" + \
         #       "  FROM " + cls.__tablename__ + \
@@ -72,10 +73,14 @@ class Sample(Model):
             "  FROM objects o "
             " WHERE o.sampleid = :smp",
             {"smp": sample_id})
-        return res.fetchone().values()
+        the_res = res.first()
+        assert the_res
+        return [a_val for a_val in the_res.values()]
+
 
     def __str__(self):
         return "{0} ({1})".format(self.orig_id, self.sampleid)
+
 
     @classmethod
     def get_sums_by_taxon(cls, session, sample_id):

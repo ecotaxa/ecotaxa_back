@@ -8,19 +8,17 @@ import shutil
 import zipfile
 from pathlib import Path
 # noinspection PyPackageRequirements
-from typing import Callable, List, Dict, Union
+from typing import Callable, List, Dict
 
 from sqlalchemy.orm import Session
 
-from BO.Mappings import GlobalMapping
+from BO.Mappings import GlobalMapping, ParentTableClassT, ParentTableT
 from BO.TSVFile import TSVFile
 from BO.Taxonomy import TaxonomyBO
 from BO.Vignette import VignetteMaker
 from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
-from DB import Sample, Process, Acquisition
 from DB.Image import Image
 from DB.Object import Object
-from DB.helpers.ORM import Model
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -38,7 +36,7 @@ class InBundle(object):
     def __init__(self, path: str, temp_dir: Path):
         self.path = Path(path)
         # Compute the files we have to process.
-        self.possible_files = []
+        self.possible_files: List[Path] = []
         for a_filter in self.TSV_FILTERS:
             self.possible_files.extend(self.path.glob(a_filter))
         self.sub_bundles: List[UVP6Bundle] = [UVP6Bundle(a_bundle, temp_dir)
@@ -128,18 +126,18 @@ class InBundle(object):
         return Object.fetch_existing_objects(session, prj_id)
 
     @staticmethod
-    def fetch_existing_parents(session, prj_id) -> Dict[str, Dict[str, Model]]:
+    def fetch_existing_parents(session, prj_id) -> Dict[str, Dict[str, ParentTableT]]:
         """
-            Get from DB the present IDs for the tables we are going to update, in current project.
-            :return:
+            Get from DB the present ORM instances for the tables we are going to update,
+            in current project.
         """
         existing_parents = {}
         # Get records from acquisition, sample, process
-        clazz: Union[Sample, Process, Acquisition]
+        clazz: ParentTableClassT
         for alias, clazz in GlobalMapping.PARENT_CLASSES.items():
             collect = clazz.get_orig_id_and_model(session, prj_id)
             existing_parents[alias] = collect
-        return existing_parents
+        return existing_parents  # type: ignore
 
     def validate_import(self, how: ImportHow, diag: ImportDiagnostic, session: Session, report_def: Callable) -> int:
         """
@@ -244,7 +242,7 @@ class InBundle(object):
         """
             Return the list of image files inside self, relative to self.
         """
-        ret = []
+        ret: List[Path] = []
         for a_filter in self.IMAGE_FILTERS:
             ret.extend(self.path.glob(a_filter))
         # Images are duplicated in a hidden folder for .zips coming from OsX

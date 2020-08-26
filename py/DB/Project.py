@@ -51,14 +51,14 @@ class Project(Model):
     # Associated taxonomy statistics. Commented out to avoid that the ORM loads the whole list, which can be big.
     # taxo_stats = relationship("ProjectTaxoStat")
 
-    # The users involved somehow in this project
-    # privs_for_members = relationship('ProjectPrivilege')
 
     # The relationships are created in Relations.py but the typing here helps IDE
     all_objects: relationship
     all_samples: relationship
     all_processes: relationship
     all_acquisitions: relationship
+    # The users involved somehow in this project
+    privs_for_members: relationship
     # The twin EcoPart project
     ecopart_project: relationship
 

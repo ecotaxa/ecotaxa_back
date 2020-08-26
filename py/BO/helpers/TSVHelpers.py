@@ -65,7 +65,7 @@ def none_to_empty(value: str):
     return value
 
 
-def calc_astral_day_time(date: datetime.datetime, time, latitude, longitude):
+def calc_astral_day_time(date: datetime.date, time, latitude, longitude):
     """
     Compute sun position for given coordinates and time.
     :param date: UTC date

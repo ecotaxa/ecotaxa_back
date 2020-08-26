@@ -1,9 +1,14 @@
+# -*- coding: utf-8 -*-
+# This file is part of Ecotaxa, see license.md in the application root directory for license informations.
+# Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
+#
+
 import pickle
 from typing import Dict, Iterable, Optional, List
 
 from sqlalchemy.orm import Session
 
-from DB.Taxonomy import Taxonomy
+from BO.Taxonomy import TaxonomyBO
 from helpers.DynamicLogs import get_logger
 from providers.WoRMS import WoRMSFinder
 
@@ -83,13 +88,13 @@ class TaxonInfo(object):
             # TODO: Several matches
             self.aphia_id = -1
             return
-        worms = worms[0]
-        if worms["status"] != "accepted":
+        first_worms = worms[0]
+        if first_worms["status"] != "accepted":
             # TODO: Not accepted
             self.aphia_id = -1
             return
-        self.aphia_id = worms["AphiaID"]
-        txt_rank = worms["rank"]
+        self.aphia_id = first_worms["AphiaID"]
+        txt_rank = first_worms["rank"]
         try:
             self.rank = ALL_RANKS[txt_rank]
         except KeyError:
@@ -144,7 +149,7 @@ class TaxaCache(object):
         if len(missing_ids) == 0:
             return
         # Enrich with names from DB
-        names = Taxonomy.names_for(session, missing_ids)
+        names = TaxonomyBO.names_for(session, missing_ids)
         for an_id, a_name in names.items():
             self.cache[an_id] = TaxonInfo(a_name)
 
@@ -162,5 +167,5 @@ class TaxaCache(object):
             # TODO: WoRMS has batch mode, allowing several lookups in one go
             to_find = an_info.name
             # TODO: We need an accepted quality, and there might be several matches. See WoRMS API.
-            ret = self.finder_meth(to_find)
+            ret = TaxaCache.finder_meth(to_find)
             an_info.from_worms_api(ret)

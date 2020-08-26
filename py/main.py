@@ -51,7 +51,8 @@ async def login(username: str, password: str) -> str:
     return "Do not use. Use home site /login page instead."
 
 
-@app.get("/users", tags=['users'], response_model=List[UserModel])
+# TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
+@app.get("/users", tags=['users'], response_model=List[UserModel])  # type:ignore
 def get_users(current_user: int = Depends(get_current_user)):
     """
         Return the list of users.
@@ -60,7 +61,8 @@ def get_users(current_user: int = Depends(get_current_user)):
     return sce.list(current_user)
 
 
-@app.get("/users/me", tags=['users'], response_model=UserModel)
+# TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
+@app.get("/users/me", tags=['users'], response_model=UserModel)  # type:ignore
 def show_current_user(current_user: int = Depends(get_current_user)):
     """
         Return currently authenticated user.
@@ -69,7 +71,8 @@ def show_current_user(current_user: int = Depends(get_current_user)):
     return sce.search_by_id(current_user, current_user)
 
 
-@app.get("/users/search", tags=['users'], response_model=List[UserModel])
+# TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
+@app.get("/users/search", tags=['users'], response_model=List[UserModel])  # type:ignore
 def search_user(current_user: int = Depends(get_current_user),
                 by_name: Optional[str] = None):
     """

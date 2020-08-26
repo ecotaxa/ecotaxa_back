@@ -73,7 +73,6 @@ class ImportAnalysis(ImportServiceBase):
         super().__init__(prj_id, req)
 
     def run(self) -> ImportPrepRsp:
-        super().prepare_run()
         loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
         logger.info("Previously loaded files: %s", loaded_files)
         self.manage_uploaded()
@@ -176,20 +175,18 @@ class RealImport(ImportServiceBase):
 
     def __init__(self, prj_id: int, req: ImportRealReq):
         super().__init__(prj_id, req)
-        #
-        self.custom_mapping: Union[Dict, ProjectMapping] = req.mappings
+        # Transcode from serialized form
+        self.custom_mapping = ProjectMapping().load_from_dict(req.mappings)
 
     def run(self) -> ImportRealRsp:
         """
             Do the real job using injected parameters.
             :return:
         """
-        super().prepare_run()
         loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
         logger.info("Previously loaded files: %s", loaded_files)
 
-        # Transcode from serialized form and save straight away
-        self.custom_mapping = ProjectMapping().load_from_dict(self.custom_mapping)
+        # Save mappings straight away
         self.save_mapping(self.custom_mapping)
 
         source_bundle = InBundle(self.req.source_path, Path(self.temp_for_task.data_dir_for(self.task_id)))

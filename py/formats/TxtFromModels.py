@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List, Dict, Any, Type
+from typing import List, Dict, Any, Type, Set
 
 # noinspection PyPackageRequirements
 from pydantic import BaseModel as PydanticModel
@@ -27,7 +27,7 @@ class TxtFileWithModel(object):
         self.core_or_ext = "core" if self.model_name == "Event" else "extension"
         self.namespace = "http://rs.iobis.org/obis/terms" if 'Measurement' in self.model_name \
             else "http://rs.tdwg.org/dwc/terms"
-        self.fields = set()
+        self.fields: Set[str] = set()
         """ the set of fields for which we have at least one value """
         self.all: List[Dict[str, Any]] = []
         """ the dict-transformed values """

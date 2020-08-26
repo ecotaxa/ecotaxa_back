@@ -4,6 +4,8 @@
 #
 #  Models used in CRUD API_operations.
 #
+from typing import Optional
+
 from DB import User, Project
 from helpers.pydantic import BaseModel, Field
 from .helpers.DBtoModel import sqlalchemy_to_pydantic
@@ -27,6 +29,6 @@ class ProjectSearchResult(BaseModel):
     objcount: int
     pctvalidated: float
     pctclassified: float
-    email: str = None
-    name: str = None
+    email: Optional[str]
+    name: Optional[str]
     visible: bool

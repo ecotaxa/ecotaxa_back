@@ -68,7 +68,7 @@ class ImportRealRsp(BaseModel):
     """ Import for real, response. """
 
 
-class PossibleSimpleImportFields(str, Enum):
+class SimpleImportFields(str, Enum):
     imgdate = "imgdate"
     imgtime = "imgtime"
     latitude = "latitude"
@@ -84,13 +84,13 @@ class SimpleImportReq(BaseModel):
     """ Simple Import preparation, request. """
     task_id: int = Field(title="The existing task to use, if 0 then it's a dry run")
     source_path: str = Field(title="Source path on server, to zip or plain directory")
-    values: Dict[PossibleSimpleImportFields, Optional[str]] = Field(
+    values: Dict[SimpleImportFields, Optional[str]] = Field(
         title="Constant values, per field, to write for all images.",
-        description=":" + ", ".join(PossibleSimpleImportFields))
+        description=":" + ", ".join(SimpleImportFields))
     # TODO: How to transmit a constant via OpenApi+FastApi ?
     # possible_values: List[str] = Field(title="Possible field values", const=True,
     #                                    default=[v for v in PossibleSimpleImportFields.__members__])
-    possible_values: List[str] = [v for v in PossibleSimpleImportFields.__members__]
+    possible_values: List[str] = [v for v in SimpleImportFields.__members__]
 
 
 class SimpleImportRsp(BaseModel):

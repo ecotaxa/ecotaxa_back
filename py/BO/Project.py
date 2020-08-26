@@ -2,12 +2,13 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Tuple, List
+from datetime import datetime
+from typing import List, Dict, Any, Iterable
 
 from sqlalchemy.orm import Query
 
-from BO.Mappings import RemapOp, MappedTableT, TableMapping
-from DB import Object, Sample, ProjectPrivilege, User, Project
+from BO.Mappings import RemapOp, MappedTableTypeT
+from DB import Object, Sample, ProjectPrivilege, User, Project, ObjectFields
 from DB import Session, ResultProxy
 from DB.ProjectPrivilege import MANAGE
 from DB.User import Role
@@ -74,7 +75,7 @@ class ProjectBO(object):
         :param filter_subset: If set, filter out project of which title contains 'subset'.
         :return:
         """
-        sql_params = {"user_id": user.id}
+        sql_params: Dict[str, Any] = {"user_id": user.id}
 
         # Default query: all projects, eventually with first manager information
         sql = """SELECT p.projid, p.title, p.status, 
@@ -126,22 +127,26 @@ class ProjectBO(object):
         return ret
 
     @classmethod
-    def get_bounding_geo(cls, session: Session, proj_id: int) -> Tuple:
+    def get_bounding_geo(cls, session: Session, proj_id: int) -> Iterable[float]:
         res: ResultProxy = session.execute(
             "SELECT min(o.latitude), max(o.latitude), min(o.longitude), max(o.longitude)"
             "  FROM objects o "
             " WHERE o.projid = :prj",
             {"prj": proj_id})
-        return res.fetchone().values()
+        vals = res.first()
+        assert vals
+        return [a_val for a_val in vals]
 
     @classmethod
-    def get_date_range(cls, session: Session, proj_id: int) -> Tuple:
+    def get_date_range(cls, session: Session, proj_id: int) -> Iterable[datetime]:
         res: ResultProxy = session.execute(
             "SELECT min(o.objdate), max(o.objdate)"
             "  FROM objects o "
             " WHERE o.projid = :prj",
             {"prj": proj_id})
-        return res.fetchone().values()
+        vals = res.first()
+        assert vals
+        return [a_val for a_val in vals]
 
     @staticmethod
     def do_after_load(session: Session, prj_id: int):
@@ -168,13 +173,19 @@ class ProjectBO(object):
         session.query(ProjectPrivilege).filter(ProjectPrivilege.projid == prj_id).delete()
 
     @staticmethod
-    def remap(session: Session, prj_id: int, table: MappedTableT, remaps: List[RemapOp]):
+    def remap(session: Session, prj_id: int, table: MappedTableTypeT, remaps: List[RemapOp]):
         """
-            Apply remapping operations onto the given table and given project.
+            Apply remapping operations onto the given table for given project.
         """
-
+        assert table != ObjectFields
         # Do the remapping, including blanking of unused columns
         values = {a_remap.to: a_remap.frm for a_remap in remaps}
-        qry: Query = session.query(table).filter(table.projid == prj_id). \
-            update(values=values, synchronize_session=False)
+        qry: Query = session.query(table)
+        if table == ObjectFields:
+            # All tables have direct projid column except ObjectFields
+            qry = qry.join(Object).filter(Object.projid == prj_id)
+        else:
+            qry = qry.filter(table.projid == prj_id)  # type: ignore
+        qry = qry.update(values=values, synchronize_session=False)
+
         logger.info("Remap query for %s: %s", table.__tablename__, qry)

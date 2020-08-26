@@ -2,10 +2,10 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Dict, TypeVar
+from typing import Dict, Tuple, List, Type
 
 # noinspection PyPackageRequirements
-from sqlalchemy import MetaData
+from sqlalchemy import MetaData, Table
 # noinspection PyPackageRequirements
 from sqlalchemy.orm import Session
 
@@ -34,14 +34,14 @@ class DBWriter(object):
     def __init__(self, session: Session):
         self.session = session
 
-        self.obj_bulks = []
-        self.obj_tbl = None
-        self.obj_fields_bulks = []
-        self.obj_fields_tbl = None
-        self.obj_cnn_bulks = []
+        self.obj_bulks: List[Bean] = []
+        self.obj_tbl: Table
+        self.obj_fields_bulks: List[Bean] = []
+        self.obj_fields_tbl: Table
+        self.obj_cnn_bulks: List[Bean] = []
         self.obj_cnn_tbl = ObjectCNNFeature.__table__
-        self.img_bulks = []
-        self.img_tbl = None
+        self.img_bulks: List[Bean] = []
+        self.img_tbl: Table
 
         # Save a bit of time for commit
         self.session.execute("SET synchronous_commit TO OFF;")
@@ -51,10 +51,10 @@ class DBWriter(object):
     # The properties used in code, not in mapping. If not listed here they are not persisted
     # TODO: Provoke a crash at runtime for tests if one is forgotten. Dropping data silently is bad.
     obj_head_prog_cols = {'sunpos', 'random_value', 'acquisid', 'processid', 'sampleid'}
-    obj_fields_prog_cols = {}
+    obj_fields_prog_cols: Dict[str, str] = {}
 
     # noinspection PyPep8Naming
-    def generators(self, target_fields: Dict[str, set]) -> (TypeVar, TypeVar, TypeVar):
+    def generators(self, target_fields: Dict[str, set]) -> Tuple[Type, Type, Type]:
         # Small optimization, the below allows minimal SQLAlchemy SQL sent to DB
         metadata = MetaData()
 
@@ -94,7 +94,8 @@ class DBWriter(object):
             a_bulk_set.clear()
         logger.info("Batch save objects of %s", nb_bulks)
 
-    def add_db_entities(self, object_head_to_write, object_fields_to_write, image_to_write, new_records: int):
+    def add_db_entities(self, object_head_to_write: Bean, object_fields_to_write: Bean, image_to_write: Bean,
+                        new_records: int):
         # Bulk mode or Core do not create links (using ORM relationship), so we have to do manually
         if new_records > 1:
             # There is a new image and more

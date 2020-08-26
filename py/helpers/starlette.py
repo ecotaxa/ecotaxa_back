@@ -4,7 +4,7 @@
 #
 
 # Just to avoid tagging every "starlette" reference in PyCharm
-# noinspection PyUnresolvedReferences
+# noinspection PyUnresolvedReferences,PyPackageRequirements
 from starlette import status
-# noinspection PyUnresolvedReferences
+# noinspection PyUnresolvedReferences,PyPackageRequirements
 from starlette.responses import PlainTextResponse

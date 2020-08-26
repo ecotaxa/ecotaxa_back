@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-import configparser
+from configparser import ConfigParser
 from os.path import realpath, dirname, join
 from pathlib import Path
 
@@ -19,7 +19,7 @@ class VignetteMaker(object):
         AFTER ANY MODIFICATION HERE, please the corresponding UT with visual check of the output.
     """
 
-    def __init__(self, cfg: configparser, src_base: Path, target_filename: str):
+    def __init__(self, cfg: ConfigParser, src_base: Path, target_filename: str):
         # Store all config. as the same file is used several times
         section = cfg['vignette']
         self.gamma = float(section['gamma'])

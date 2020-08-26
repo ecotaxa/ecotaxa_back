@@ -8,7 +8,7 @@ import random
 import sys
 from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, Set, Optional, Union
+from typing import Dict, Set, Any
 
 # noinspection PyPackageRequirements
 from PIL import Image as PIL_Image
@@ -16,10 +16,9 @@ from PIL import Image as PIL_Image
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from BO.Mappings import GlobalMapping, ProjectMapping
+from BO.Mappings import GlobalMapping, ProjectMapping, ParentTableT, ParentTableClassT
 from BO.SpaceTime import compute_sun_position, USED_FIELDS_FOR_SUNPOS
 from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
-from DB import Sample, Process, Acquisition
 from DB.Object import classif_qual_revert, Object, ObjectFields
 from DB.helpers.Bean import Bean
 from DB.helpers.ORM import detach_from_session_if, Model
@@ -55,14 +54,14 @@ class TSVFile(object):
             self.image_dir = bundle_path
 
         # when open()-ed, below members are active
-        self.rdr: Optional[csv.DictReader] = None
+        self.rdr: csv.DictReader
         # key: not normalized field, from TSV header e.g. "\t ObJect_laT "
         # value: normalized field i.e. "object_lat"
-        self.clean_fields: Optional[OrderedDict[str, str]] = None
+        self.clean_fields: OrderedDict[str, str]
         # The 2nd line, with types
         # key: normalized field
         # value: TSV type e.g. [f]
-        self.type_line: Optional[Dict[str, str]] = None
+        self.type_line: Dict[str, str]
 
     def open(self):
         csv_file = open(self.path.as_posix(), encoding='latin_1')
@@ -102,7 +101,7 @@ class TSVFile(object):
             ignore_annotation_category: bool = 'object_annotation_category_id' in field_set \
                                                and 'object_annotation_category' in field_set
 
-            vals_cache = dict()
+            vals_cache: Dict[str, str] = dict()
             # Loop over all lines
             row_count_for_csv = 0
             for rawlig in self.rdr:
@@ -119,7 +118,7 @@ class TSVFile(object):
                         del lig['object_annotation_category']
 
                 # First, read TSV line into dicts, faster than doing settattr()
-                dicts_to_write = {alias: dict() for alias in GlobalMapping.TARGET_CLASSES.keys()}
+                dicts_to_write: Dict[str, Dict] = {alias: dict() for alias in GlobalMapping.TARGET_CLASSES.keys()}
                 self.read_fields_to_dicts(how, field_set, lig, dicts_to_write, vals_cache)
 
                 # Create SQLAlchemy mappers of the object itself and slaves (1<->1)
@@ -233,18 +232,17 @@ class TSVFile(object):
         return ok_fields
 
     @staticmethod
-    def add_parent_objects(how: ImportHow, session: Session, object_head_to_write, dicts_to_write: Dict[str, Dict]):
+    def add_parent_objects(how: ImportHow, session: Session, object_head_to_write,
+                           dicts_to_write: Dict[str, Dict]):
         """
             Assignment of Sample, Acquisition & Process ID, creating them if necessary
             Due to amount of duplicated information in TSV, this happens for few % of rows
              so no real need to optimize here.
         """
-        parent_class: Union[Sample, Acquisition, Process]
+        parent_class: ParentTableClassT
         for alias, parent_class in GlobalMapping.PARENT_CLASSES.items():
             dict_to_write = dicts_to_write[alias]
-            if dict_to_write is None:
-                continue
-            parents_for_obj = how.existing_parents[alias]
+            parents_for_obj: Dict[str, ParentTableT] = how.existing_parents[alias]
             # Here we take advantage from consistent naming conventions
             # The 3 involved tables have "orig_id" column serving the same purpose
             parent_orig_id = dict_to_write.get("orig_id")
@@ -253,14 +251,13 @@ class TSVFile(object):
                 if len(dict_to_write) > 0:
                     # There is no orig_id but some data
                     # See if we don't have the exact same parent
-                    same_parent_orig_id = None
-                    for orig_id, maybe_parent in parents_for_obj.items():
-                        if len(TSVFile.diff_orm_object(maybe_parent, dict_to_write)) == 0:
-                            same_parent_orig_id = orig_id
+                    maybe_orig_id: str
+                    for maybe_orig_id, maybe_parent in parents_for_obj.items():
+                        diff = TSVFile.diff_orm_object(maybe_parent, dict_to_write)
+                        if len(diff) == 0:
+                            # Replicate found
+                            parent_orig_id = maybe_orig_id
                             break
-                    if same_parent_orig_id is not None:
-                        # Replicate found
-                        parent_orig_id = same_parent_orig_id
                     else:
                         # Keep parent_orig_id to None, there will be an automatic
                         # generation of orig_id based on DB-generated sequence.
@@ -268,7 +265,10 @@ class TSVFile(object):
                 else:
                     # No data, do nothing.
                     continue
-            parent = parents_for_obj.get(parent_orig_id)
+            if parent_orig_id is not None:
+                parent = parents_for_obj.get(parent_orig_id)
+            else:
+                parent = None
             if parent is not None:
                 # noinspection DuplicatedCode
                 if how.can_update:
@@ -329,11 +329,12 @@ class TSVFile(object):
         :param field_set:
         :return:
         """
-        ret = {alias: set() for alias in GlobalMapping.TARGET_CLASSES.keys()}
+        ret: Dict[str, Set] = {alias: set() for alias in GlobalMapping.TARGET_CLASSES.keys()}
         for a_field in field_set:
             mapping = GlobalMapping.PREDEFINED_FIELDS.get(a_field)
             if not mapping:
                 mapping = custom_mapping.search_field(a_field)
+                assert mapping is not None
             target_tbl = mapping["table"]
             target_fld = mapping["field"]
             ret[target_tbl].add(target_fld)
@@ -356,14 +357,15 @@ class TSVFile(object):
         # so we have values only for common fields.
         for a_field in field_set.intersection(lig.keys()):
             # We have a value
-            raw_val = lig.get(a_field)
+            raw_val = lig[a_field]
             m = predefined_mapping.get(a_field)
             if not m:
                 m = custom_mapping.search_field(a_field)
+                assert m is not None
             field_table = m["table"]
             field_name = m["field"]
             # Try to get the transformed value from the cache
-            cache_key = (a_field, raw_val)
+            cache_key: Any = (a_field, raw_val)
             if cache_key in vals_cache:
                 cached_field_value = vals_cache.get(cache_key)
             else:
@@ -401,7 +403,8 @@ class TSVFile(object):
                         a_field, csv_val, mapped_val)
                 elif field_name == 'classif_who':
                     # Eventually map to another user if asked so
-                    cached_field_value = how.found_users[none_to_empty(csv_val).lower()].get('id', None)
+                    usr_key = none_to_empty(csv_val).lower()
+                    cached_field_value = how.found_users[usr_key].get('id', None)
                 elif field_name == 'classif_qual':
                     cached_field_value = classif_qual_revert.get(csv_val.lower())
                 else:
@@ -417,7 +420,9 @@ class TSVFile(object):
         # in DBWriter.py, as SQL Alchemy core computes an insert for the first line and just injects the
         # data for following ones.
         for a_field in field_set.difference(lig.keys()):
-            m = predefined_mapping.get(a_field, custom_mapping.search_field(a_field))
+            fld_mping = custom_mapping.search_field(a_field)
+            m = predefined_mapping.get(a_field, fld_mping)
+            assert m is not None
             if m["field"] not in dicts_to_write[m["table"]]:
                 dicts_to_write[m["table"]][m["field"]] = None
 
@@ -550,7 +555,7 @@ class TSVFile(object):
                 # Not mapped, but not a programmatically-used field
                 continue
             # Not a predefined field, so nXX or tXX
-            if how.custom_mapping.search_field(a_field):
+            if how.custom_mapping.search_field(a_field) is not None:
                 # Custom field was already mapped, in a previous import or another TSV of present import
                 continue
             # e.g. acq -> acquisitions
@@ -589,13 +594,13 @@ class TSVFile(object):
                 continue
             expected_id = "%s_id" % a_prfx
             if expected_id not in fields:
-                fields = sorted(list(fields))  # Make the output predictable
+                fields_for_msg = sorted(list(fields))  # Make the output predictable
                 diag.error("In %s, field %s is mandatory as there are some %s columns: %s." %
-                           (self.relative_name, expected_id, a_prfx, fields))
+                           (self.relative_name, expected_id, a_prfx, fields_for_msg))
 
     def validate_content(self, how: ImportHow, diag: ImportDiagnostic):
         row_count_for_csv = 0
-        vals_cache = {}
+        vals_cache: Dict = {}
         for lig in self.rdr:
             row_count_for_csv += 1
 
@@ -662,7 +667,7 @@ class TSVFile(object):
                 continue
             vals_cache[cache_key] = 1
             # Same column with same value was not seen already, proceed
-            csv_val = clean_value_and_none(raw_val)
+            csv_val: str = clean_value_and_none(raw_val)
             diag.cols_seen.add(a_field)
             # From V1.1, if column is present then it's considered as seen.
             #  Before, the criterion was 'at least one value'.
@@ -706,7 +711,7 @@ class TSVFile(object):
             elif a_field == 'object_annotation_category':
                 if clean_value_and_none(lig.get('object_annotation_category_id', '')) == '':
                     # Apply the mapping, if and only if there is no id
-                    csv_val: str = how.taxo_mapping.get(csv_val.lower(), csv_val)
+                    csv_val = how.taxo_mapping.get(csv_val.lower(), csv_val)
                     # Record that the taxon was seen
                     how.taxo_found[csv_val.lower()] = None
             elif a_field == 'object_annotation_person_name':

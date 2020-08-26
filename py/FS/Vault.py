@@ -4,6 +4,7 @@
 #
 import shutil
 from pathlib import Path, PurePath
+from typing import Set, Tuple
 
 
 class Vault(object):
@@ -13,7 +14,7 @@ class Vault(object):
 
     def __init__(self, path: str):
         self.path: Path = Path(path)
-        self.ok_subs = set()
+        self.ok_subs: Set[str] = set()
 
     def ensure_exists(self, sub_directory: str):
         """
@@ -41,7 +42,7 @@ class Vault(object):
         return self.path.joinpath(sub_directory)
 
     @staticmethod
-    def address_for_id(img_id: int) -> (str, str):
+    def address_for_id(img_id: int) -> Tuple[str, str]:
         """
             Return the address, i.e. folder and unique identifier inside folder, for a given image ID.
         :param img_id:
@@ -78,7 +79,7 @@ class Vault(object):
         """
         return self.path.joinpath(sub_path).as_posix()
 
-    def thumbnail_paths(self, img_id) -> (str, str):
+    def thumbnail_paths(self, img_id) -> Tuple[str, str]:
         """
             Return relative and absolute paths to a thumbnail image.
             It is assumed that the main image was stored before.
@@ -88,4 +89,3 @@ class Vault(object):
         # We force thumbnail format to JPEG
         sub_path = "%s/%s_mini%s" % (folder, ndx_in_folder, '.jpg')
         return sub_path, self.path_to(sub_path)
-

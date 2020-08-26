@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from collections import OrderedDict, namedtuple
-from typing import Dict, Tuple, List, Union, Type, Set
+from typing import Dict, Tuple, List, Union, Type, Optional
 
 from BO.helpers.TSVHelpers import encode_equal_list
 from DB.Acquisition import Acquisition
@@ -12,6 +12,10 @@ from DB.Object import ObjectFields, Object
 from DB.Process import Process
 from DB.Project import Project
 from DB.Sample import Sample
+
+# Typing of parent object tables
+ParentTableT = Union[Sample, Acquisition, Process]
+ParentTableClassT = Type[ParentTableT]
 
 
 class GlobalMapping(object):
@@ -49,9 +53,9 @@ class GlobalMapping(object):
     # C'est un set de table 😁
     POSSIBLE_TABLES = set([v['table'] for v in PREDEFINED_FIELDS.values()])
 
-    PARENT_CLASSES = {Acquisition.__tablename__: Acquisition,
-                      Sample.__tablename__: Sample,
-                      Process.__tablename__: Process}
+    PARENT_CLASSES: Dict[str, ParentTableClassT] = {Acquisition.__tablename__: Acquisition,
+                                                    Sample.__tablename__: Sample,
+                                                    Process.__tablename__: Process}
 
     TARGET_CLASSES = {**PARENT_CLASSES,
                       Object.__tablename__: Object,
@@ -81,10 +85,12 @@ class GlobalMapping(object):
 # A re-mapping operation, from and to are real DB columns
 RemapOp = namedtuple("RemapOp", ['frm', 'to'])
 
+# Typings
+MappedTableT = Union[ObjectFields, Sample, Acquisition, Process]  # an instance of one of the 4 classes
+MappedTableTypeT = Type[MappedTableT]  # one of the 4 classes themselves
+
 # What is mapped, i.e. has free fields
-MAPPED_TABLES = [ObjectFields, Sample, Acquisition, Process]
-# And a typing for it
-MappedTableT = Type[Union[ObjectFields, Sample, Acquisition, Process]]
+MAPPED_TABLES: List[MappedTableTypeT] = [ObjectFields, Sample, Acquisition, Process]
 
 
 class ProjectMapping(object):
@@ -110,14 +116,14 @@ class ProjectMapping(object):
                                         self.acquisition_mappings, self.process_mappings]
         # for 'generic' access to mappings
         self.by_table_name: Dict[str, TableMapping] = {a_mapping.table_name: a_mapping for a_mapping in self.all}
-        self.by_table: Dict[MappedTableT, TableMapping] = {a_mapping.table: a_mapping for a_mapping in self.all}
+        self.by_table: Dict[MappedTableTypeT, TableMapping] = {a_mapping.table: a_mapping for a_mapping in self.all}
         # for fast lookup from TSV analysis
         # key = TSV full column, val = ( TableMapping, DB col )
         self.all_fields: Dict[str, Tuple[TableMapping, str]] = dict()
         # to track emptiness after load
         self.was_empty = False
 
-    def write_to_project(self, prj: Project):
+    def write_to_project(self, prj: Project) -> None:
         """
             Write the mappings into given Project .
         """
@@ -145,7 +151,7 @@ class ProjectMapping(object):
                     for mapping in self.all}
         return out_dict
 
-    def load_from_dict(self, in_dict: dict):
+    def load_from_dict(self, in_dict: Dict):
         """
             Use data produced by @as_dict previous for loading self.
         """
@@ -165,14 +171,14 @@ class ProjectMapping(object):
         self.all_fields["%s_%s" % (tsv_table, tsv_field)] = (for_table, real_col)
         return ok_exists
 
-    def search_field(self, full_tsv_field: str):
+    def search_field(self, full_tsv_field: str) -> Optional[Dict]:
         """
             Return the storage (i.e. target of mapping) for a custom field in given table.
         """
-        mping = self.all_fields.get(full_tsv_field)
-        if mping is None:
+        lookup = self.all_fields.get(full_tsv_field)
+        if lookup is None:
             return None
-        (mping, real_col) = mping
+        (mping, real_col) = lookup
         return {'table': mping.table_name, 'field': real_col, 'type': real_col[0]}
 
     def build_all_fields(self):
@@ -194,16 +200,16 @@ class TableMapping(object):
         The mapping for a given DB table, i.e. from TSV columns to DB ones.
     """
 
-    def __init__(self, table: MappedTableT):
-        self.table: MappedTableT = table
+    def __init__(self, table: MappedTableTypeT):
+        self.table: MappedTableTypeT = table
         self.table_name = table.__tablename__
         # key = DB column, val = TSV field name WITHOUT table prefix
-        self.real_cols_to_tsv = OrderedDict()
+        self.real_cols_to_tsv: Dict[str, str] = OrderedDict()
         # key = TSV field name WITHOUT table prefix, val = DB column
         self.tsv_cols_to_real: Dict[str, str] = OrderedDict()
         self.max_by_type = {'n': 0, 't': 0}
 
-    def load_from_equal_list(self, str_mapping: str):
+    def load_from_equal_list(self, str_mapping: Optional[str]):
         """
             Input has form, e.g.:
                 n01=lat_end

@@ -4,7 +4,7 @@
 #
 #  Attempt to map as automatically as possible the DB model into CRUD objects.
 #
-from typing import Type
+from typing import Type, TypeVar
 
 from sqlalchemy import inspect
 from sqlalchemy.orm import ColumnProperty
@@ -16,7 +16,11 @@ class OrmConfig(BaseConfig):
     orm_mode = True
 
 
-def sqlalchemy_to_pydantic(db_model: Type, *,
+# Generify the def with input type
+T = TypeVar('T')
+
+
+def sqlalchemy_to_pydantic(db_model: T, *,
                            config: Type[BaseConfig] = OrmConfig,
                            exclude=None) -> Type[BaseModel]:
     if exclude is None:

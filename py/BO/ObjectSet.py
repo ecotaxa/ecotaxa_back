@@ -12,7 +12,7 @@ from typing import Tuple
 
 from sqlalchemy.orm import Session
 
-from DB import Taxonomy
+from BO.Taxonomy import TaxonomyBO
 from DB.helpers.SQL import WhereClause, SQLParamDict
 
 
@@ -32,7 +32,7 @@ class ObjectSet(object):
         """
         where = WhereClause()
         where *= " o.projid = :projid "
-        params = {"projid": self.prj_id}
+        params: SQLParamDict = {"projid": self.prj_id}
         self.filters.get_sql_filter(where, params, user_id)
         return where, params
 
@@ -97,7 +97,7 @@ class ObjectSetFilter(object):
             if self.taxo_child:
                 where_clause *= " o.classif_id = any (:taxo) "
                 # TODO: Cache if used
-                params['taxo'] = list(Taxonomy.children_of(self.session, [int(self.taxo)]))
+                params['taxo'] = list(TaxonomyBO.children_of(self.session, [int(self.taxo)]))
             else:
                 where_clause *= " o.classif_id = :taxo "
                 params['taxo'] = self.taxo

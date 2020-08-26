@@ -1,4 +1,8 @@
-from typing import Optional, Iterable, Tuple, List, Set
+# -*- coding: utf-8 -*-
+# This file is part of Ecotaxa, see license.md in the application root directory for license informations.
+# Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
+#
+from typing import Optional, Iterable, Tuple, List, Set, Dict, TypeVar
 
 from sqlalchemy import Column, inspect, MetaData, Table
 from sqlalchemy.ext.declarative import declarative_base
@@ -7,7 +11,16 @@ from sqlalchemy.orm import Session, make_transient
 # noinspection PyUnresolvedReferences
 from sqlalchemy.orm import relationship
 
-Model = declarative_base()
+_Base = declarative_base()
+
+
+class Model(_Base):
+    __abstract__ = True  # prevent SQLAlchemy from trying to map
+    __tablename__: str
+
+
+# Generics on some ORM operations
+M = TypeVar('M', bound=Model)
 
 
 def orm_equals(an_obj: Model, another_obj: Model) -> bool:
@@ -21,7 +34,7 @@ def orm_equals(an_obj: Model, another_obj: Model) -> bool:
     return True
 
 
-def clone_of(an_obj: Optional[Model]) -> Optional[Model]:
+def clone_of(an_obj: Optional[M]) -> Optional[M]:
     """
         Return a clone (same class, same plain values) of the ORM-mapped object.
         Keys are not copied, for safety.
@@ -44,15 +57,13 @@ def clone_of(an_obj: Optional[Model]) -> Optional[Model]:
     return ret
 
 
-def detach_from_session(session: Session, an_orm: Model) -> Model:
+def detach_from_session(session: Session, an_orm: M) -> M:
     """
         Detach from the session the given object.
         :param session:
         :param an_orm: A SQLAlchemy produced instance.
         :return:
     """
-    if an_orm is None:
-        return
     if not inspect(an_orm).detached:
         session.expunge(an_orm)
     if an_orm in session:
@@ -60,7 +71,7 @@ def detach_from_session(session: Session, an_orm: Model) -> Model:
     return an_orm
 
 
-def detach_from_session_if(condition: bool, session: Session, an_orm: Model) -> Model:
+def detach_from_session_if(condition: bool, session: Session, an_orm: M) -> M:
     """
         Detach from the session the given object, only if condition is met.
     """
@@ -81,7 +92,8 @@ def detach_all_from_session(session: Session, an_orm_collection: Iterable[Model]
         detach_from_session(session, an_orm)
 
 
-_table_cache = {}
+# key = table name
+_table_cache: Dict[str, Tuple[List[str], List[str]]] = {}
 
 
 def _analyze_cols(orm_table) -> Tuple[List[str], List[str]]:

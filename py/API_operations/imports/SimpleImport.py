@@ -4,9 +4,9 @@
 #
 import hashlib
 from pathlib import Path
-from typing import List
+from typing import List, Dict, Optional
 
-from API_models.imports import SimpleImportReq, SimpleImportRsp
+from API_models.imports import SimpleImportReq, SimpleImportRsp, SimpleImportFields
 from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping
 from BO.Project import ProjectBO
@@ -42,7 +42,6 @@ class SimpleImport(ImportServiceBase):
         """
             Do the real job, i.e. copy files while creating records.
         """
-        self.prepare_run()
         errors = []
         self.manage_uploaded()
         self.unzip_if_needed()
@@ -60,11 +59,11 @@ class SimpleImport(ImportServiceBase):
         import_how.do_thumbnail_above(int(self.config['THUMBSIZELIMIT']))
         # Generate TSV
         req_values = self.req.values
-        if req_values.get("userlb", ""):
-            import_how.found_users["user"] = {"id": req_values.get("userlb")}
-            req_values["userlb"] = "user"
-        if req_values.get("status", ""):
-            req_values["status"] = classif_qual.get(req_values["status"], "")
+        if req_values.get(SimpleImportFields.userlb, ""):
+            import_how.found_users["user"] = {"id": req_values.get(SimpleImportFields.userlb)}
+            req_values[SimpleImportFields.userlb] = "user"
+        if req_values.get(SimpleImportFields.status, ""):
+            req_values[SimpleImportFields.status] = classif_qual.get(req_values[SimpleImportFields.status], "")
         self.make_tsv(source_bundle, images)
         # Import
         nb_image_files = len(images)
@@ -76,17 +75,17 @@ class SimpleImport(ImportServiceBase):
         return ret
 
     # Form fields to TSV values
-    FORM_TO_FIELD = {"imgdate": 'object_date',
-                     "imgtime": 'object_time',
-                     "latitude": 'object_lat',
-                     "longitude": 'object_lon',
-                     "depthmin": 'object_depth_min',
-                     "depthmax": 'object_depth_max',
-                     "taxolb": 'object_annotation_category_id',
-                     "userlb": 'object_annotation_person_name',
-                     "status": 'object_annotation_status'}
-    FIELD_TO_FORM = {v: k for k, v in FORM_TO_FIELD.items()}
-    TSV_FIELDS = sorted([k for k in FIELD_TO_FORM.keys()])
+    FORM_TO_FIELD = {SimpleImportFields.imgdate: 'object_date',
+                     SimpleImportFields.imgtime: 'object_time',
+                     SimpleImportFields.latitude: 'object_lat',
+                     SimpleImportFields.longitude: 'object_lon',
+                     SimpleImportFields.depthmin: 'object_depth_min',
+                     SimpleImportFields.depthmax: 'object_depth_max',
+                     SimpleImportFields.taxolb: 'object_annotation_category_id',
+                     SimpleImportFields.userlb: 'object_annotation_person_name',
+                     SimpleImportFields.status: 'object_annotation_status'}
+    FIELD_TO_FORM: Dict[str, SimpleImportFields] = {v: k for k, v in FORM_TO_FIELD.items()}
+    TSV_FIELDS: List[str] = sorted([k for k in FIELD_TO_FORM.keys()])
     TEXT_FIELDS = ('object_date', 'object_time', 'object_annotation_status', 'object_annotation_person_name')
 
     def make_header(self) -> str:
@@ -104,10 +103,11 @@ class SimpleImport(ImportServiceBase):
         unq_id = hashlib.md5()
         unq_id.update(bytes(str(an_image), encoding="utf-8"))
         obj_id = unq_id.hexdigest()
-        tsv_vals = [obj_id, an_image]
-        tsv_vals.extend(map(lambda fld: self.req.values.get(self.FIELD_TO_FORM[fld], ""), self.TSV_FIELDS))
-        tsv_vals = ['' if v is None else v for v in tsv_vals]
-        return '\t'.join(tsv_vals) + "\n"
+        tsv_vals: List[Optional[str]] = [obj_id, an_image]
+        req_values = self.req.values
+        tsv_vals.extend(map(lambda fld: req_values.get(self.FIELD_TO_FORM[fld], ""), self.TSV_FIELDS))
+        tsv_vals_no_none = ['' if v is None else v for v in tsv_vals]
+        return '\t'.join(tsv_vals_no_none) + "\n"
 
     def make_tsv(self, bundle: InBundle, images: List[Path]):
         """

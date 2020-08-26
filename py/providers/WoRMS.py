@@ -39,7 +39,7 @@ class WoRMSFinder(object):
             Do the real job using injected parameters.
             :return:
         """
-        taxon: Taxonomy = self.get_taxonomy(self.id_to_find)
+        taxon = self.get_taxonomy(self.id_to_find)
         if taxon is None:
             return -1, "", ""
         our_lineage = self.get_lineage(taxon)
@@ -68,6 +68,7 @@ class WoRMSFinder(object):
 
     @classmethod
     def aphia_records_by_name_sync(cls, name: str) -> List[Dict]:
+        ret: List[Dict]  = []
         session = cls.the_session
         if session is None:
             session = requests.Session()
@@ -76,10 +77,9 @@ class WoRMSFinder(object):
         response = session.get(cls.BASE_URL + req)
         if not response.ok:
             cls.the_session = None
-            ret = []
         else:
             if response.status_code == 204:  # No content
-                ret = []
+                pass
             else:
                 ret = response.json()
         return ret
@@ -122,4 +122,5 @@ class WoRMSFinder(object):
             return taxon.name
         else:
             parent = self.get_taxonomy(taxon.parent_id)
+            assert parent is not None
             return "%s > %s" % (self.get_lineage(parent), taxon.name)

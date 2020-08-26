@@ -5,10 +5,10 @@
 #
 # A bit of SQL encapsulation.
 #
-from typing import Type, Dict, Union, List
+from typing import Union, List, Dict
 
 # A dict for sending parametrized SQL to the engine
-SQLParamDict: Type = Dict[str, Union[int, str, List[int], List[str]]]
+SQLParamDict = Dict[str, Union[int, float, str, List[int], List[str]]]
 
 
 class WhereClause(object):

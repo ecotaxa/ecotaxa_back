@@ -7,8 +7,8 @@
 #
 from datetime import datetime
 from enum import Enum
+from typing import List
 
-from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import Session
 
 
@@ -28,7 +28,7 @@ class SequenceCache(object):
         self.sess = session
         self.seq_name = seq_name
         self.size = size
-        self.store = []
+        self.store: List[int] = []
         populate(self.store, self.sess, self.seq_name, self.size)
 
     def next(self):
@@ -43,12 +43,11 @@ class DateFormat(int, Enum):
     ISO_8601_2004_E = 1  # ISO 8601:2004(E)
 
 
-def timestamp_to_str(ts: TIMESTAMP, fmt: int = DateFormat.ISO_8601_2004_E) -> str:
+def timestamp_to_str(ts: datetime, fmt: int = DateFormat.ISO_8601_2004_E) -> str:
     """
         Convert a postgres timestamp to a string.
         As per DBAPI, it's mapped to a DateTime.
     """
-    ts: datetime
     if fmt == DateFormat.ISO_8601_2004_E:
         # e.g. 2009-02-20T08:40Z as we have UTC dates
         ret = ts.isoformat()

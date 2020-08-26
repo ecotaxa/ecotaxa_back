@@ -24,6 +24,7 @@ class Acquisition(Model):
 
     # The relationships are created in Relations.py but the typing here helps IDE
     project: relationship
+    all_objects: relationship
 
     @staticmethod
     def pk_col():
@@ -33,7 +34,7 @@ class Acquisition(Model):
         return self.acquisid
 
     @classmethod
-    def get_orig_id_and_model(cls, session: Session, prj_id) -> Dict[str, Model]:
+    def get_orig_id_and_model(cls, session: Session, prj_id) -> Dict[str, 'Acquisition']:
         res = session.query(Acquisition).filter(Acquisition.projid == prj_id)
         # sql = "SELECT orig_id, acquisid" + \
         #       "  FROM " + cls.__tablename__ + \

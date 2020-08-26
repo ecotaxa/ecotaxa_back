@@ -8,7 +8,7 @@ from sqlalchemy import Column, ForeignKey, Sequence, Integer, String, Boolean, f
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 # noinspection PyProtectedMember
 from sqlalchemy.engine import ResultProxy
-from sqlalchemy.orm import Session, relationship, backref
+from sqlalchemy.orm import Session, relationship
 
 from BO.helpers.TSVHelpers import none_to_empty
 from DB.helpers.ORM import Model
@@ -53,7 +53,7 @@ class User(Model):
 
     def has_role(self, role: str) -> bool:
         # TODO: Cache a bit. All roles are just python objects due to SQLAlchemy magic.
-        return role in [r.name for r in self.roles]
+        return role in [r.name for r in list(self.roles)]
 
     def __str__(self):
         return "{0} ({1})".format(self.name, self.email)

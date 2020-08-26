@@ -5,7 +5,7 @@
 import shutil
 from os.path import join
 from pathlib import Path
-from typing import List, Tuple, Type, Iterator
+from typing import List, Tuple, Iterator
 
 from API_models.subset import SubsetReq, SubsetRsp, LimitMethods
 from BO.Bundle import InBundle
@@ -25,8 +25,9 @@ from .helpers.TaskService import TaskServiceBase
 
 logger = get_logger(__name__)
 
-DBObjectTuple: Type = List[Tuple[Object, ObjectFields, ObjectCNNFeature,
-                                 Image, Sample, Acquisition, Process]]
+# Useful typings
+DBObjectTupleT = Tuple[Object, ObjectFields, ObjectCNNFeature, Image, Sample, Acquisition, Process]
+DBObjectTupleListT = List[DBObjectTupleT]
 
 
 class SubsetService(TaskServiceBase):
@@ -46,7 +47,6 @@ class SubsetService(TaskServiceBase):
         self.first_query = True
 
     def run(self) -> SubsetRsp:
-        super().prepare_run()
         logger.info("Starting subset of '%s'", self.prj.title)
         ret = SubsetRsp()
 
@@ -89,7 +89,7 @@ class SubsetService(TaskServiceBase):
 
         self._clone_all(import_how, writer)
 
-    def _db_fetch(self, objids: List[int]) -> List[DBObjectTuple]:
+    def _db_fetch(self, objids: List[int]) -> List[DBObjectTupleT]:
         """
             Do a DB read of given objects, with auxiliary objects.
             :param objids:
@@ -100,7 +100,7 @@ class SubsetService(TaskServiceBase):
         ret: Query = self.session.query(Object, ObjectFields, ObjectCNNFeature, Image, Sample, Acquisition, Process)
         ret = ret.outerjoin(Image, Object.all_images).outerjoin(ObjectCNNFeature).join(ObjectFields)
         ret = ret.outerjoin(Sample).outerjoin(Acquisition).outerjoin(Process)
-        ret = ret.filter(Object.objid == any_(objids))
+        ret = ret.filter(Object.objid == any_(objids))  # type: ignore
         ret = ret.order_by(Object.objid)
 
         if self.first_query:
@@ -141,7 +141,7 @@ class SubsetService(TaskServiceBase):
             progress = int(90 * nb_objects / total_objects)
             self.update_progress(10 + progress, "Subset creation in progress")
 
-    def _send_to_writer(self, import_how, writer, db_tuple: DBObjectTuple):
+    def _send_to_writer(self, import_how, writer, db_tuple: DBObjectTupleT):
         """
             Send a single tuple from DB to DB
         :param import_how:
@@ -149,21 +149,26 @@ class SubsetService(TaskServiceBase):
         :param db_tuple:
         :return:
         """
-        obj, fields, cnn_features, image, sample, acquisition, process = db_tuple
+        obj_orm, fields_orm, cnn_features_orm, image_orm, sample_orm, acquisition_orm, process_orm = db_tuple
         # Transform all to key-less beans so they can be absorbed by DBWriter
         obj, fields, cnn_features, image, sample, acquisition, process = \
-            bean_of(obj), bean_of(fields), bean_of(cnn_features), \
-            bean_of(image), bean_of(sample), \
-            bean_of(acquisition), bean_of(process)
+            bean_of(obj_orm), bean_of(fields_orm), bean_of(cnn_features_orm), \
+            bean_of(image_orm), bean_of(sample_orm), \
+            bean_of(acquisition_orm), bean_of(process_orm)
+        assert obj is not None and fields is not None
         # A few fields need adjustment
         obj.img0id = None
         # Cut images if asked so
         if not self.req.do_images:
             image = None
         # Write parent entities if needed
-        dict_of_parents = {Process.__tablename__: process,
-                           Sample.__tablename__: sample,
-                           Acquisition.__tablename__: acquisition}
+        dict_of_parents = {}
+        if process:
+            dict_of_parents[Process.__tablename__] = process.__dict__
+        if sample:
+            dict_of_parents[Sample.__tablename__] = sample.__dict__
+        if acquisition:
+            dict_of_parents[Acquisition.__tablename__] = acquisition.__dict__
         TSVFile.add_parent_objects(import_how, self.session, obj, dict_of_parents)
         # Write object and children
         new_records = TSVFile.create_or_link_slaves(how=import_how,

@@ -378,13 +378,14 @@ def test_import_images(config, database, caplog):
     """
     caplog.set_level(logging.DEBUG)
     prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test Import Images"))
+    task_id = TaskService().create()
 
     vals = {"latitude": "abcde"}
-    params = SimpleImportReq(task_id=0,
+    params = SimpleImportReq(task_id=task_id,
                              source_path=str(PLAIN_DIR),
                              values=vals)
     rsp = SimpleImport(prj_id, params).run()
-    assert rsp.errors == ["'abcde' is not a valid value for PossibleSimpleImportFields.latitude"]
+    assert rsp.errors == ["'abcde' is not a valid value for SimpleImportFields.latitude"]
     # Do real import
     vals["latitude"] = "43.8802"
     vals["longitude"] = "7.2329"

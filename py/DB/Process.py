@@ -22,6 +22,7 @@ class Process(Model):
 
     # The relationships are created in Relations.py but the typing here helps IDE
     project: relationship
+    all_objects: relationship
 
     @staticmethod
     def pk_col():
@@ -31,7 +32,7 @@ class Process(Model):
         return self.processid
 
     @classmethod
-    def get_orig_id_and_model(cls, session: Session, prj_id) -> Dict[str, Model]:
+    def get_orig_id_and_model(cls, session: Session, prj_id) -> Dict[str, 'Process']:
         res = session.query(Process).filter(Process.projid == prj_id)
         # sql = "SELECT orig_id, processid" + \
         #       "  FROM " + cls.__tablename__ + \

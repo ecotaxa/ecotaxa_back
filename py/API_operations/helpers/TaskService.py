@@ -5,7 +5,7 @@
 import datetime
 from abc import ABC
 from os.path import join
-from typing import Union, Optional
+from typing import Optional
 
 from DB.Project import Project
 from DB.Task import Task
@@ -31,20 +31,18 @@ class TaskServiceBase(Service, ABC):
         # Redirect logging
         log_file = self.temp_for_task.base_dir_for(task_id) / 'TaskLogBack.txt'
         switch_log_to_file(str(log_file))
-        # Work vars
-        self.prj: Union[Project, None] = None
-        self.task: Union[Task, None] = None
-
-    def prepare_run(self):
-        """
-            Load what's needed for run.
-        """
-        self.prj = self.session.query(Project).filter_by(projid=self.prj_id).first()
-        assert self.prj is not None
-        self.task = self.session.query(Task).filter_by(id=self.task_id).first()
-        assert self.task is not None
+        # Work vars, load straight away
+        prj = self.session.query(Project).get(prj_id)
+        assert prj is not None
+        self.prj = prj
+        task = self.session.query(Task).get(task_id)
+        assert task is not None
+        self.task = task
 
     def update_task(self, taskstate: Optional[str], percent: Optional[int], message: str):
+        """
+            Update various fields in current task.
+        """
         if taskstate is not None:
             self.task.taskstate = taskstate
         if percent is not None:

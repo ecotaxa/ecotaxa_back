@@ -35,15 +35,15 @@ class ProjectConsistencyChecker(Service):
         """
             In old merge code, there was no check if e.g. a merged Sample was not the same as a previous
             one in the target project. The PK of Sample table is not the natural one (orig_id) but a generated
-            ID from a sequence, so this kind of duplication is possible. Worse case if the clones differ.
+            ID from a sequence, so this kind of duplication is possible. Worst case if the clones differ.
             :return:
         """
-        ret = []
+        ret: List[str] = []
         for a_tbl in [Sample, Acquisition, Process]:
             tbl_name = a_tbl.__table__
             qry: Query = self.session.query(a_tbl).join(Project)
             qry = qry.filter(Project.projid == self.prj_id)
-            qry = qry.order_by(a_tbl.orig_id)
+            qry = qry.order_by(a_tbl.orig_id) # type: ignore
             prev_parent = None
             for a_parent in qry.all():
                 if prev_parent and a_parent.orig_id == prev_parent.orig_id:
@@ -55,3 +55,8 @@ class ProjectConsistencyChecker(Service):
                                    format(tbl_name, a_parent.orig_id, prev_parent.pk(), a_parent.pk()))
                 prev_parent = a_parent
         return ret
+
+    def check_partial_time_space(self) -> List[str]:
+        """
+            Objects which are partially located in time/space.
+        """

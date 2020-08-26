@@ -5,7 +5,7 @@
 from typing import List, Dict
 
 from API_models.merge import MergeRsp
-from BO.Mappings import ProjectMapping, RemapOp, MappedTableT, MAPPED_TABLES
+from BO.Mappings import ProjectMapping, RemapOp, MAPPED_TABLES, MappedTableTypeT
 from BO.Project import ProjectBO
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from DB import Object, Sample, Acquisition, Process, Project, ParticleProject
@@ -29,7 +29,7 @@ class MergeService(Service):
         self.src_prj_id = src_prj_id
         self.dry_run = dry_run
         # work vars
-        self.remap_operations: Dict[MappedTableT, RemapOp] = {}
+        self.remap_operations: Dict[MappedTableTypeT, List[RemapOp]] = {}
         self.dest_augmented_mappings = ProjectMapping()
 
     def run(self) -> MergeRsp:
@@ -68,7 +68,7 @@ class MergeService(Service):
         ret = []
         dest_mappings = ProjectMapping().load_from_project(dest_prj)
         src_mappings = ProjectMapping().load_from_project(src_prj)
-        a_tbl: MappedTableT
+        a_tbl: MappedTableTypeT
         for a_tbl in MAPPED_TABLES:
             mappings_for_dest_tbl = dest_mappings.by_table[a_tbl]
             mappings_for_src_tbl = src_mappings.by_table[a_tbl]
@@ -86,18 +86,21 @@ class MergeService(Service):
         """
             Real merge operation.
         """
-        # Loop over involved tables
-        for a_tbl in [Acquisition, Process, Sample, Object, ParticleProject]:
-            remaps = self.remap_operations.get(a_tbl)
+        # Loop over involved tables and remap
+        for a_mapped_tbl in MAPPED_TABLES:
+            remaps = self.remap_operations.get(a_mapped_tbl)
             # Do the remappings if any
             if remaps is not None:
-                logger.info("Doing re-mapping in %s: %s", a_tbl.__tablename__, remaps)
-                ProjectBO.remap(self.session, self.src_prj_id, a_tbl, remaps)
+                logger.info("Doing re-mapping in %s: %s", a_mapped_tbl.__tablename__, remaps)
+                ProjectBO.remap(self.session, self.src_prj_id, a_mapped_tbl, remaps)
+
+        # Loop over tables with FK to project and move
+        for a_fk_to_proj_tbl in [Acquisition, Process, Sample, Object, ParticleProject]:
             # Move all to dest project
-            upd = self.session.query(a_tbl). \
-                filter(a_tbl.projid == self.src_prj_id). \
-                update(values={'projid': self.prj_id}, synchronize_session=False)
-            logger.info("Update in %s: %s rows", a_tbl.__tablename__, upd)
+            upd = self.session.query(a_fk_to_proj_tbl)
+            upd = upd.filter(a_fk_to_proj_tbl.projid == self.src_prj_id)  # type: ignore
+            upd = upd.update(values={'projid': self.prj_id}, synchronize_session=False)
+            logger.info("Update in %s: %s rows", a_fk_to_proj_tbl.__tablename__, upd)
 
         self.dest_augmented_mappings.write_to_project(dest_prj)
 
