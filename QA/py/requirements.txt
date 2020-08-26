@@ -34,5 +34,6 @@ PyYAML==5.3.1
 jinja2==2.11.2
 stringcase==1.2.0
 # For python API client generated classes
-backports-datetime-fromisoformat==1.0.0
+# Fails to build on GH due to obscure compilation issue. Nevermind for the moment.
+#backports-datetime-fromisoformat==1.0.0
 
