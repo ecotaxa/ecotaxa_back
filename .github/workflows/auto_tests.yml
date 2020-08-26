@@ -39,19 +39,15 @@ jobs:
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
     - uses: actions/checkout@v2
     # Run both tests and coverage
-    - name: Run pytest in QA
+    - name: Run tox in QA
       working-directory: ./QA/py
       run: |
-        PYTHONPATH=../../py coverage run --source=../../py -m pytest
+        tox
       env:
         # The hostname used to communicate with the PostgreSQL service container
         POSTGRES_HOST: postgres
         # The default PostgreSQL port
         POSTGRES_PORT: 5432
-    - name: Compute coverage
-      working-directory: ./QA/py
-      run: |
-        coverage report
     - name: codecov.io
       working-directory: ./QA/py
       run : |
