@@ -87,8 +87,12 @@ class EcoTaxaDBFrom0(object):
         # Note: the process dies right away as pgctl launches a daemon
         SyncSubProcess(cmd, env=self.get_env(), out_file="server.log")
         # Wait until the server port is opened
+        waited = 0
         while not is_port_opened(host, PG_PORT):
             time.sleep(1)
+            waited += 1
+            if waited > 30:
+                raise Exception("Waited too long for postgres up")
 
     def ddl(self, host, password):
         # -h localhost force use of TCP/IP socket, otherwise psql tries local pipes in /var/run
