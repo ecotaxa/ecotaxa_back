@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Dict, Tuple, List, Type
+from typing import Dict, Tuple, List, Type, Optional
 
 # noinspection PyPackageRequirements
 from sqlalchemy import MetaData, Table
@@ -94,8 +94,8 @@ class DBWriter(object):
             a_bulk_set.clear()
         logger.info("Batch save objects of %s", nb_bulks)
 
-    def add_db_entities(self, object_head_to_write: Bean, object_fields_to_write: Bean, image_to_write: Bean,
-                        new_records: int):
+    def add_db_entities(self, object_head_to_write: Bean, object_fields_to_write: Bean,
+                        image_to_write: Optional[Bean], new_records: int):
         # Bulk mode or Core do not create links (using ORM relationship), so we have to do manually
         if new_records > 1:
             # There is a new image and more

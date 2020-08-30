@@ -14,7 +14,7 @@ from BO.ObjectSet import ObjectSet
 from BO.Project import ProjectBO
 from BO.TSVFile import TSVFile
 from BO.helpers.ImportHelpers import ImportHow
-from DB import Image, ObjectHeader, ObjectFields, Sample, Acquisition, Process
+from DB import Image, ObjectHeader, ObjectFields, Sample, Acquisition, Process, Project
 from DB import Query, any_, ResultProxy
 from DB.Object import ObjectCNNFeature
 from DB.helpers.Bean import bean_of
@@ -41,8 +41,12 @@ class SubsetService(TaskServiceBase):
     def __init__(self, prj_id: int, req: SubsetReq):
 
         super().__init__(prj_id, req.task_id)
-        self.dest_prj_id = req.dest_prj_id
+        # Load the destination project
+        dest_prj = self.session.query(Project).get(req.dest_prj_id)
+        assert dest_prj is not None
+        self.dest_prj: Project = dest_prj
         self.req = req
+        # Work vars
         self.to_clone: List[int] = []
         self.vault = Vault(join(self.link_src, 'vault'))
         self.first_query = True
@@ -64,7 +68,7 @@ class SubsetService(TaskServiceBase):
         self._do_clone()
 
         # Recompute stats and so on
-        ProjectBO.do_after_load(self.session, self.dest_prj_id)
+        ProjectBO.do_after_load(self.session, self.dest_prj.projid)
         return ret
 
     def _do_clone(self):
@@ -81,14 +85,18 @@ class SubsetService(TaskServiceBase):
         # Narrow the writes in ObjectFields thanks to mappings of original project
         writer.generators({"obj_field": used_columns})
         # Use import helpers
-        dest_prj_id = self.dest_prj_id
+        dest_prj_id = self.dest_prj.projid
         import_how = ImportHow(prj_id=dest_prj_id, update_mode="No",
                                custom_mapping=ProjectMapping(),
                                skip_object_duplicates=False, loaded_files=[])
         # Get parent (enclosing) Sample, Acquisition, Process. There should be 0 in this context...
-        import_how.existing_parents = InBundle.fetch_existing_parents(self.session, prj_id=self.dest_prj_id)
+        import_how.existing_parents = InBundle.fetch_existing_parents(self.session, prj_id=dest_prj_id)
 
         self._clone_all(import_how, writer)
+        # Copy mappings to destination. We could narrow them to the minimum?
+        custom_mapping.write_to_project(self.dest_prj)
+        self.session.commit()
+
 
     def _db_fetch(self, objids: List[int]) -> List[DBObjectTupleT]:
         """
@@ -98,7 +106,8 @@ class SubsetService(TaskServiceBase):
         """
         # TODO: Depending on filter, the joins could be plain (not outer)
         # E.g. if asked for a set of samples
-        ret: Query = self.session.query(ObjectHeader, ObjectFields, ObjectCNNFeature, Image, Sample, Acquisition, Process)
+        ret: Query = self.session.query(ObjectHeader, ObjectFields, ObjectCNNFeature, Image, Sample, Acquisition,
+                                        Process)
         ret = ret.outerjoin(Image, ObjectHeader.all_images).outerjoin(ObjectCNNFeature).join(ObjectFields)
         ret = ret.outerjoin(Sample).outerjoin(Acquisition).outerjoin(Process)
         ret = ret.filter(ObjectHeader.objid == any_(objids))  # type: ignore
@@ -142,7 +151,7 @@ class SubsetService(TaskServiceBase):
             progress = int(90 * nb_objects / total_objects)
             self.update_progress(10 + progress, "Subset creation in progress")
 
-    def _send_to_writer(self, import_how, writer, db_tuple: DBObjectTupleT):
+    def _send_to_writer(self, import_how: ImportHow, writer: DBWriter, db_tuple: DBObjectTupleT):
         """
             Send a single tuple from DB to DB
         :param import_how:
@@ -165,11 +174,11 @@ class SubsetService(TaskServiceBase):
         # Write parent entities if needed
         dict_of_parents = {}
         if process:
-            dict_of_parents[Process.__tablename__] = process.__dict__
+            dict_of_parents[Process.__tablename__] = process
         if sample:
-            dict_of_parents[Sample.__tablename__] = sample.__dict__
+            dict_of_parents[Sample.__tablename__] = sample
         if acquisition:
-            dict_of_parents[Acquisition.__tablename__] = acquisition.__dict__
+            dict_of_parents[Acquisition.__tablename__] = acquisition
         TSVFile.add_parent_objects(import_how, self.session, obj, dict_of_parents)
         # Write object and children
         new_records = TSVFile.create_or_link_slaves(how=import_how,
@@ -222,16 +231,20 @@ class SubsetService(TaskServiceBase):
         # Prepare a where clause and parameters from filter
         object_set: ObjectSet = ObjectSet(self.session, self.prj_id, self.req.filters)
         where, params = object_set.get_sql(self.task.owner_id)
+        selected_tables = "obj_head oh"
+        if "of." in where.get_sql():
+            selected_tables += " JOIN obj_field of ON of.objfid = oh.objid"
 
         sql = """
             SELECT objid FROM (
                 SELECT """ + rank_function + """() OVER (PARTITION BY classif_id ORDER BY RANDOM()) rang,
-                       o.objid
-                  FROM objects o
+                       oh.objid
+                  FROM """ + selected_tables + """
                 """ + where.get_sql() + """ ) sr
             WHERE rang <= :ranklimit """
         params['ranklimit'] = self.req.limit_value
 
+        logger.info("SQL=%s", sql)
         logger.info("SQLParam=%s", params)
 
         res: ResultProxy = self.session.execute(sql, params)

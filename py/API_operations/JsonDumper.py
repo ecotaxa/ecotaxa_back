@@ -3,14 +3,14 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import json
-from typing import IO, Dict, List, Any, Set, Optional
+from typing import IO, Dict, List, Any, Set
 
 from sqlalchemy import any_
 from sqlalchemy.engine import ResultProxy
 from sqlalchemy.orm import Query, contains_eager
 
 from API_models.crud import ProjectFilters
-from BO.Mappings import ProjectMapping, TableMapping, MAPPED_TABLES_SET
+from BO.Mappings import ProjectMapping
 from BO.ObjectSet import ObjectSet
 from DB import Sample, Acquisition, Process, Image, ObjectHeader, ObjectFields, and_
 from DB.Project import Project
@@ -54,7 +54,10 @@ class JsonDumper(Service):
         # TODO: The result seems unneeded so far, we just need the stuff loaded in SQLA session
         _to_dump = self._db_fetch(self.ids_to_dump)
         # prj = to_dump[0][0]
-        to_stream = self.dump_row(out_stream, self.prj)
+        if len(self.ids_to_dump) == 0 or len(_to_dump) == 0:
+            to_stream= {}
+        else:
+            to_stream = self.dump_row(out_stream, self.prj)
         json.dump(obj=to_stream, fp=out_stream, indent="  ")
 
     def dump_row(self, out_stream: IO, a_row: Model) -> Dict[str, Any]:
@@ -124,7 +127,7 @@ class JsonDumper(Service):
             res: ResultProxy = self.session.execute(sql, params)
         ids = [r['objid'] for r in res]
 
-        logger.info("NB ROWS=%d", len(ids))
+        logger.info("NB OBJIDS=%d", len(ids))
 
         self.ids_to_dump = ids
 
@@ -138,19 +141,20 @@ class JsonDumper(Service):
         ret = ret.join(Sample, Project.all_samples).options(contains_eager(Project.all_samples))
         # Fill the all_acquisitions relation
         ret = ret.join(Acquisition, Project.all_acquisitions).options(contains_eager(Sample.all_acquisitions))
-        # # ret = ret.join(Process, Acquisition.all_processes)
+        # Fill the all_processes relation
         ret = ret.join(Process, Project.all_processes).options(contains_eager(Acquisition.all_processes))
-
+        # Fill the all_objects relation, we're done with the hierarchy
         ret = ret.join(ObjectHeader, and_(ObjectHeader.projid == Project.projid,
                                           ObjectHeader.sampleid == Sample.sampleid,
                                           ObjectHeader.acquisid == Acquisition.acquisid,
                                           ObjectHeader.processid == Process.processid)). \
             options(contains_eager(Process.all_objects))
-
+        # Natural joins
         ret = ret.join(ObjectFields)
         ret = ret.join(Image, ObjectHeader.all_images).options(contains_eager(ObjectHeader.all_images))
-        # ret = ret.order_by(ObjectHeader.objid)
         ret = ret.filter(ObjectHeader.objid == any_(objids))  # type: ignore
+        ret = ret.order_by(ObjectHeader.objid)
+        ret = ret.order_by(Image.imgrank)
 
         if self.first_query:
             logger.info("Query: %s", str(ret))
@@ -159,6 +163,7 @@ class JsonDumper(Service):
         with CodeTimer("Get Objects:", logger):
             objs = [an_obj for an_obj in ret.all()]
 
+        # We get as manu lines as images
         logger.info("NB ROWS JOIN=%d", len(objs))
 
         return objs

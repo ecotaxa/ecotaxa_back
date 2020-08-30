@@ -8,7 +8,7 @@ import random
 import sys
 from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, Set, Any
+from typing import Dict, Set, Any, Mapping
 
 # noinspection PyPackageRequirements
 from PIL import Image as PIL_Image
@@ -233,7 +233,7 @@ class TSVFile(object):
 
     @staticmethod
     def add_parent_objects(how: ImportHow, session: Session, object_head_to_write,
-                           dicts_to_write: Dict[str, Dict]):
+                           dicts_to_write: Mapping[str, Dict]):
         """
             Assignment of Sample, Acquisition & Process ID, creating them if necessary
             Due to amount of duplicated information in TSV, this happens for few % of rows
