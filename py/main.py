@@ -128,8 +128,9 @@ def project_query(project_id: int, filters: ProjectFilters, current_user: int = 
     """
         Query the project.
     """
-    sce = JsonDumper(project_id, filters)
-    return sce.run()
+    # TODO: Use a StreamingResponse to avoid buffering
+    sce = JsonDumper(current_user, project_id, filters)
+    import sys; return sce.run(sys.stdout)
 
 
 @app.post("/projects/{project_id}/merge", tags=['projects'], response_model=MergeRsp)

@@ -10,7 +10,7 @@ from sqlalchemy import MetaData, Table
 from sqlalchemy.orm import Session
 
 from DB.Image import Image
-from DB.Object import Object, ObjectFields, ObjectCNNFeature
+from DB.Object import ObjectHeader, ObjectFields, ObjectCNNFeature
 from DB.helpers.Bean import Bean
 from DB.helpers.ORM import minimal_table_of
 from DB.helpers.Postgres import SequenceCache
@@ -61,9 +61,9 @@ class DBWriter(object):
         ObjectView = Bean
         if "obj_head" in target_fields:
             obj_head_cols = target_fields["obj_head"].union(self.obj_head_prog_cols)
-            self.obj_tbl = minimal_table_of(metadata, Object, obj_head_cols)
+            self.obj_tbl = minimal_table_of(metadata, ObjectHeader, obj_head_cols)
         else:
-            self.obj_tbl = Object.__table__
+            self.obj_tbl = ObjectHeader.__table__
 
         ObjectFieldsView = Bean
         if "obj_field" in target_fields:
@@ -155,7 +155,7 @@ if False:  # pragma: no cover
         def generators():
             # Small optimization, the below allows minimal SQLAlchemy SQL sent to DB
             # Plain base objects with relations
-            ObjectView = Object
+            ObjectView = ObjectHeader
             ObjectFieldsView = ObjectFields
             ImageView = Image
 

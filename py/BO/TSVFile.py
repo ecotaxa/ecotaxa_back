@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from BO.Mappings import GlobalMapping, ProjectMapping, ParentTableT, ParentTableClassT
 from BO.SpaceTime import compute_sun_position, USED_FIELDS_FOR_SUNPOS
 from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
-from DB.Object import classif_qual_revert, Object, ObjectFields
+from DB.Object import classif_qual_revert, ObjectHeader, ObjectFields
 from DB.helpers.Bean import Bean
 from DB.helpers.ORM import detach_from_session_if, Model
 from helpers.DynamicLogs import get_logger
@@ -382,9 +382,9 @@ class TSVFile(object):
                 elif m['type'] == 'n':
                     cached_field_value = to_float(csv_val)
                 elif a_field == 'object_date':
-                    cached_field_value = Object.date_from_txt(csv_val)
+                    cached_field_value = ObjectHeader.date_from_txt(csv_val)
                 elif a_field == 'object_time':
-                    cached_field_value = Object.time_from_txt(csv_val)
+                    cached_field_value = ObjectHeader.time_from_txt(csv_val)
                 elif field_name == 'classif_when':
                     v2 = clean_value(lig.get('object_annotation_time', '000000')).zfill(6)
                     cached_field_value = datetime.datetime(int(csv_val[0:4]), int(csv_val[4:6]),
@@ -443,7 +443,7 @@ class TSVFile(object):
                     # Don't damage sunpos if it could not be computed
                     del object_head_to_write["sunpos"]
                 # noinspection DuplicatedCode
-                for a_cls, its_pk, an_upd in zip([Object, ObjectFields],
+                for a_cls, its_pk, an_upd in zip([ObjectHeader, ObjectFields],
                                                  ['objid', 'objfid'],
                                                  [object_head_to_write, object_fields_to_write]):
                     filter_for_id = text("%s=%d" % (its_pk, objid))
@@ -698,13 +698,13 @@ class TSVFile(object):
                     diag.classif_id_seen.add(int(csv_val))
             elif a_field == 'object_date':
                 try:
-                    Object.date_from_txt(csv_val)
+                    ObjectHeader.date_from_txt(csv_val)
                 except ValueError:
                     diag.error("Invalid Date value '%s' for Field '%s' in file %s."
                                % (csv_val, raw_field, self.relative_name))
             elif a_field == 'object_time':
                 try:
-                    Object.time_from_txt(csv_val)
+                    ObjectHeader.time_from_txt(csv_val)
                 except ValueError:
                     diag.error("Invalid Time value '%s' for Field '%s' in file %s."
                                % (csv_val, raw_field, self.relative_name))

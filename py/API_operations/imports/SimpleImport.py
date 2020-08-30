@@ -11,7 +11,7 @@ from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping
 from BO.Project import ProjectBO
 from BO.helpers.ImportHelpers import ImportWhere, ImportHow
-from DB.Object import Object, classif_qual
+from DB.Object import ObjectHeader, classif_qual
 from DB.helpers.DBWriter import DBWriter
 from helpers.DynamicLogs import get_logger
 from .Import import ImportServiceBase
@@ -121,12 +121,12 @@ class SimpleImport(ImportServiceBase):
                 fp.write(tsv_line)
         bundle.add_tsv(dest_file)
 
-    VALIDATIONS = {"imgdate": Object.date_from_txt,
-                   "imgtime": Object.time_from_txt,
-                   "latitude": Object.latitude_from_txt,
-                   "longitude": Object.longitude_from_txt,
-                   "depthmin": Object.depth_from_txt,
-                   "depthmax": Object.depth_from_txt,
+    VALIDATIONS = {"imgdate": ObjectHeader.date_from_txt,
+                   "imgtime": ObjectHeader.time_from_txt,
+                   "latitude": ObjectHeader.latitude_from_txt,
+                   "longitude": ObjectHeader.longitude_from_txt,
+                   "depthmin": ObjectHeader.depth_from_txt,
+                   "depthmax": ObjectHeader.depth_from_txt,
                    "taxolb": lambda x: int(x),
                    "userlb": lambda x: int(x),
                    "status": lambda x: x}

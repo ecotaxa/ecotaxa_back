@@ -11,7 +11,7 @@ PG_DIR = HERE / ".." / "pg_files"
 CONF_FILE = HERE / "appli" / "config.cfg"
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def database() -> EcoTaxaDBFrom0:
     # Setup
     db = EcoTaxaDBFrom0(PG_DIR, CONF_FILE)
@@ -21,7 +21,7 @@ def database() -> EcoTaxaDBFrom0:
     db.cleanup()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def filled_database() -> EcoTaxaDBFrom0:
     # Setup
     db = EcoTaxaExistingDB()

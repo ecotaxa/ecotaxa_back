@@ -18,7 +18,7 @@ from BO.Taxonomy import TaxonomyBO
 from BO.Vignette import VignetteMaker
 from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
 from DB.Image import Image
-from DB.Object import Object
+from DB.Object import ObjectHeader
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -123,7 +123,7 @@ class InBundle(object):
         """
             Get existing object IDs (orig_id AKA object_id in TSV) from the project
         """
-        return Object.fetch_existing_objects(session, prj_id)
+        return ObjectHeader.fetch_existing_objects(session, prj_id)
 
     @staticmethod
     def fetch_existing_parents(session, prj_id) -> Dict[str, Dict[str, ParentTableT]]:

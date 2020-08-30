@@ -14,7 +14,7 @@ from BO.ObjectSet import ObjectSet
 from BO.Project import ProjectBO
 from BO.TSVFile import TSVFile
 from BO.helpers.ImportHelpers import ImportHow
-from DB import Image, Object, ObjectFields, Sample, Acquisition, Process
+from DB import Image, ObjectHeader, ObjectFields, Sample, Acquisition, Process
 from DB import Query, any_, ResultProxy
 from DB.Object import ObjectCNNFeature
 from DB.helpers.Bean import bean_of
@@ -26,7 +26,8 @@ from .helpers.TaskService import TaskServiceBase
 logger = get_logger(__name__)
 
 # Useful typings
-DBObjectTupleT = Tuple[Object, ObjectFields, ObjectCNNFeature, Image, Sample, Acquisition, Process]
+# TODO: Put somewhere else if reused in other classes
+DBObjectTupleT = Tuple[ObjectHeader, ObjectFields, ObjectCNNFeature, Image, Sample, Acquisition, Process]
 DBObjectTupleListT = List[DBObjectTupleT]
 
 
@@ -97,11 +98,11 @@ class SubsetService(TaskServiceBase):
         """
         # TODO: Depending on filter, the joins could be plain (not outer)
         # E.g. if asked for a set of samples
-        ret: Query = self.session.query(Object, ObjectFields, ObjectCNNFeature, Image, Sample, Acquisition, Process)
-        ret = ret.outerjoin(Image, Object.all_images).outerjoin(ObjectCNNFeature).join(ObjectFields)
+        ret: Query = self.session.query(ObjectHeader, ObjectFields, ObjectCNNFeature, Image, Sample, Acquisition, Process)
+        ret = ret.outerjoin(Image, ObjectHeader.all_images).outerjoin(ObjectCNNFeature).join(ObjectFields)
         ret = ret.outerjoin(Sample).outerjoin(Acquisition).outerjoin(Process)
-        ret = ret.filter(Object.objid == any_(objids))  # type: ignore
-        ret = ret.order_by(Object.objid)
+        ret = ret.filter(ObjectHeader.objid == any_(objids))  # type: ignore
+        ret = ret.order_by(ObjectHeader.objid)
 
         if self.first_query:
             logger.info("Query: %s", str(ret))
@@ -234,7 +235,7 @@ class SubsetService(TaskServiceBase):
         logger.info("SQLParam=%s", params)
 
         res: ResultProxy = self.session.execute(sql, params)
-        ids = [r['objid'] for r in res]
+        ids = [r[0] for r in res]
         logger.info("There are %d IDs", len(ids))
 
         self.to_clone = ids

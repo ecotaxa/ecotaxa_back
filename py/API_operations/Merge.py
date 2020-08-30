@@ -8,7 +8,7 @@ from API_models.merge import MergeRsp
 from BO.Mappings import ProjectMapping, RemapOp, MAPPED_TABLES, MappedTableTypeT
 from BO.Project import ProjectBO
 from BO.ProjectPrivilege import ProjectPrivilegeBO
-from DB import Object, Sample, Acquisition, Process, Project, ParticleProject
+from DB import ObjectHeader, Sample, Acquisition, Process, Project, ParticleProject
 from helpers.DynamicLogs import get_logger
 from .helpers.Service import Service
 
@@ -95,7 +95,7 @@ class MergeService(Service):
                 ProjectBO.remap(self.session, self.src_prj_id, a_mapped_tbl, remaps)
 
         # Loop over tables with FK to project and move
-        for a_fk_to_proj_tbl in [Acquisition, Process, Sample, Object, ParticleProject]:
+        for a_fk_to_proj_tbl in [Acquisition, Process, Sample, ObjectHeader, ParticleProject]:
             # Move all to dest project
             upd = self.session.query(a_fk_to_proj_tbl)
             upd = upd.filter(a_fk_to_proj_tbl.projid == self.src_prj_id)  # type: ignore

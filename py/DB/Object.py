@@ -34,7 +34,7 @@ for (k, v) in classif_qual.items():
 #  It's probably possible that the seq is used server-side and not needed in client SQL
 #   Python side: Sequence('seq_objects', optional=True)
 #   Server-side: SERIAL/IDENTITY/Trigger?
-class Object(Model):
+class ObjectHeader(Model):
     __tablename__ = 'obj_head'
     objid = Column(BIGINT, Sequence('seq_objects'), primary_key=True)
 
@@ -129,11 +129,11 @@ class Object(Model):
 
     @staticmethod
     def latitude_from_txt(txt: str) -> float:
-        return Object._geo_from_txt(txt, -90, 90)
+        return ObjectHeader._geo_from_txt(txt, -90, 90)
 
     @staticmethod
     def longitude_from_txt(txt: str) -> float:
-        return Object._geo_from_txt(txt, -180, 180)
+        return ObjectHeader._geo_from_txt(txt, -180, 180)
 
     @staticmethod
     def depth_from_txt(txt: str) -> float:
@@ -160,7 +160,7 @@ class Object(Model):
 
 class ObjectFields(Model):
     __tablename__ = 'obj_field'
-    objfid = Column(BIGINT, ForeignKey(Object.objid, ondelete="CASCADE"), primary_key=True)
+    objfid = Column(BIGINT, ForeignKey(ObjectHeader.objid, ondelete="CASCADE"), primary_key=True)
     # TODO: Isn't this the natural PK for objects?, it looks unique per projet
     orig_id = Column(VARCHAR(255))
     # TODO: Can't see any value in DB
@@ -191,19 +191,19 @@ for i in range(1, 51):
 
 # Index('IS_ObjectsProject',Object.projid,Object.classif_qual)
 # utile pour home de  classif manu, car PG ne sait pas utiliser les Skip scan index.
-Index('is_objectsprojectonly', Object.projid)
-Index('is_objectsprojclassifqual', Object.projid, Object.classif_id, Object.classif_qual)
-Index('is_objectssample', Object.sampleid)
+Index('is_objectsprojectonly', ObjectHeader.projid)
+Index('is_objectsprojclassifqual', ObjectHeader.projid, ObjectHeader.classif_id, ObjectHeader.classif_qual)
+Index('is_objectssample', ObjectHeader.sampleid)
 # TODO: This is sample attributes, indexing here is waste
-Index('is_objectslatlong', Object.latitude, Object.longitude)
+Index('is_objectslatlong', ObjectHeader.latitude, ObjectHeader.longitude)
 # TODO: This is sample attributes, indexing here is waste
-Index('is_objectsdepth', Object.depth_max, Object.depth_min, Object.projid)
+Index('is_objectsdepth', ObjectHeader.depth_max, ObjectHeader.depth_min, ObjectHeader.projid)
 # TODO: This is sample attributes, indexing here is waste
-Index('is_objectstime', Object.objtime, Object.projid)
+Index('is_objectstime', ObjectHeader.objtime, ObjectHeader.projid)
 # TODO: This is sample attributes, indexing here is waste
-Index('is_objectsdate', Object.objdate, Object.projid)
-Index('is_objectsprojrandom', Object.projid, Object.random_value,
-      Object.classif_qual)
+Index('is_objectsdate', ObjectHeader.objdate, ObjectHeader.projid)
+Index('is_objectsprojrandom', ObjectHeader.projid, ObjectHeader.random_value,
+      ObjectHeader.classif_qual)
 Index('is_objectfieldsorigid', ObjectFields.orig_id)
 
 

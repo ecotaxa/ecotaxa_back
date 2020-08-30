@@ -7,7 +7,7 @@ from sqlalchemy import Table, text
 
 from DB.Acquisition import Acquisition
 from DB.Image import Image
-from DB.Object import Object, ObjectFields
+from DB.Object import ObjectHeader, ObjectFields
 from DB.Process import Process
 from DB.Project import Project
 from DB.Sample import Sample
@@ -35,7 +35,7 @@ class AsciiDumper(Service):
             self.dump_table(fd, Sample, "projid=%d" % projid)
             self.dump_table(fd, Process, "projid=%d" % projid)
             self.dump_table(fd, Acquisition, "projid=%d" % projid)
-            self.dump_table(fd, Object, "projid=%d" % projid)
+            self.dump_table(fd, ObjectHeader, "projid=%d" % projid)
             self.dump_table(fd, ObjectFields, "objfid in (select objid from obj_head where projid=%s)" % projid)
             self.dump_table(fd, Image, "objid in (select objid from obj_head where projid=%s)" % projid)
 

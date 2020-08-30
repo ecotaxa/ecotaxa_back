@@ -85,10 +85,19 @@ class EcoTaxaDBFrom0(object):
         # Cook an environment for the subprocess
         # we do NOT use os.environ in order not to pollute current process
         # Note: the process dies right away as pgctl launches a daemon
-        SyncSubProcess(cmd, env=self.get_env(), out_file="server.log")
+        SyncSubProcess(cmd, env=self.get_env(), out_file="postgres_start.log")
         # Wait until the server port is opened
         while not is_port_opened(host, PG_PORT):
-            time.sleep(1)
+            time.sleep(0.5)
+
+    def shutdown(self, host:str):
+        # Stop command
+        cmd = [pgctl_bin, "stop", "-D", self.data_dir]
+        # Cook an environment for the subprocess
+        SyncSubProcess(cmd, env=self.get_env(), out_file="postgres_stop.log")
+        # Wait until the server port is closed
+        while is_port_opened(host, PG_PORT):
+            time.sleep(0.5)
 
     def ddl(self, host, password):
         # -h localhost force use of TCP/IP socket, otherwise psql tries local pipes in /var/run
@@ -129,7 +138,8 @@ THUMBSIZELIMIT=99
     def cleanup(self):
         # Remove data files
         if not (PG_HOST and PG_PORT):
-            shutil.rmtree(self.data_dir)
+            self.shutdown('localhost')
+            shutil.rmtree(self.data_dir, ignore_errors=True)
         else:
             # Server should do the cleanup, e.g. exit docker
             pass

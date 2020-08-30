@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Iterable
 from sqlalchemy.orm import Query
 
 from BO.Mappings import RemapOp, MappedTableTypeT
-from DB import Object, Sample, ProjectPrivilege, User, Project, ObjectFields
+from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFields
 from DB import Session, ResultProxy
 from DB.ProjectPrivilege import MANAGE
 from DB.User import Role
@@ -155,7 +155,7 @@ class ProjectBO(object):
         """
         # Ensure the ORM has no shadow copy before going to plain SQL
         session.expunge_all()
-        Object.update_counts_and_img0(session, prj_id)
+        ObjectHeader.update_counts_and_img0(session, prj_id)
         Sample.propagate_geo(session, prj_id)
         ProjectBO.update_taxo_stats(session, prj_id)
         # Stats depend on taxo stats
@@ -183,7 +183,7 @@ class ProjectBO(object):
         qry: Query = session.query(table)
         if table == ObjectFields:
             # All tables have direct projid column except ObjectFields
-            qry = qry.join(Object).filter(Object.projid == prj_id)
+            qry = qry.join(ObjectHeader).filter(ObjectHeader.projid == prj_id)
         else:
             qry = qry.filter(table.projid == prj_id)  # type: ignore
         qry = qry.update(values=values, synchronize_session=False)

@@ -134,6 +134,9 @@ def test_import_again_not_skipping_tsv_skipping_imgs(config, database, caplog):
     prj_id = 1  # <- need the project from first test
     # Do preparation
     import_plain(prj_id, task_id)
+    # Check that all went fine
+    for a_msg in caplog.records:
+        assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
 
 
 def import_plain(prj_id, task_id):
@@ -199,6 +202,9 @@ def test_import_update(config, database, caplog):
     print("\n".join(caplog.messages))
     assert nb_upds == 2
     dump_sce.run(projid=prj_id, out='after_upd.txt')
+    # Check that all went fine
+    for a_msg in caplog.records:
+        assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
 
 
 def do_import_update(prj_id, caplog, classif):
@@ -217,6 +223,9 @@ def do_import_update(prj_id, caplog, classif):
     params.update_mode = classif
     caplog.clear()
     RealImport(prj_id, params).run()
+    # Check that all went fine
+    for a_msg in caplog.records:
+        assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
 
 
 # @pytest.mark.skip()
@@ -233,6 +242,9 @@ def test_import_uvp6(config, database, caplog):
     assert len(prep_out.errors) == 0
     # Do real import
     RealImport(prj_id, params).run()
+    # Check that all went fine
+    for a_msg in caplog.records:
+        assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
 
 
 def test_equal_dump_prj2(config, database, caplog):
@@ -345,6 +357,9 @@ def test_import_uvp6_zip_in_dir(config, database, caplog):
     assert len(prep_out.errors) == 0
     # Do real import
     RealImport(prj_id, params).run()
+    # Check that all went fine
+    for a_msg in caplog.records:
+        assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
 
 
 def test_import_sparse(config, database, caplog):
@@ -395,3 +410,6 @@ def test_import_images(config, database, caplog):
     print("\n".join(caplog.messages))
     assert rsp.errors == []
     assert rsp.nb_images == 8
+    # Check that all went fine
+    for a_msg in caplog.records:
+        assert a_msg.levelno != logging.ERROR, a_msg.getMessage()

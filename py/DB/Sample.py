@@ -28,6 +28,7 @@ class Sample(Model):
     # The relationships are created in Relations.py but the typing here helps IDE
     project: relationship
     all_objects: relationship
+    all_acquisitions: relationship
 
     @staticmethod
     def pk_col():

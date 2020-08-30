@@ -7,7 +7,7 @@ from typing import Optional
 from typing_extensions import TypedDict
 
 from BO.helpers.TSVHelpers import calc_astral_day_time
-from DB.Object import Object
+from DB.Object import ObjectHeader
 
 
 # TODO: Caching a single value is useful, but less than several of them
@@ -20,12 +20,12 @@ class AstralCache(TypedDict, total=False):
     r: Optional[str]
 
 
-astral_cache: AstralCache = {}
+astral_cache: AstralCache = {'date': date(1, 1, 1), 'time': None, 'long': None, 'lat': None, 'r': '?'}
 
 USED_FIELDS_FOR_SUNPOS = {'objdate', 'objtime', 'longitude', 'latitude'}
 
 
-def compute_sun_position(object_head_to_write: Object):
+def compute_sun_position(object_head_to_write: ObjectHeader):
     # Compute sun position if not already done
     global astral_cache
     if not (astral_cache['date'] == object_head_to_write.objdate

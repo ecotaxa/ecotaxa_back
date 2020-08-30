@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session, make_transient
 # For exporting
 # noinspection PyUnresolvedReferences
 from sqlalchemy.orm import relationship
+# noinspection PyUnresolvedReferences
+from sqlalchemy.engine.result import ResultProxy
 
 _Base = declarative_base()
 

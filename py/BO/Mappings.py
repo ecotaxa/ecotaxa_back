@@ -8,7 +8,7 @@ from typing import Dict, Tuple, List, Union, Type, Optional
 from BO.helpers.TSVHelpers import encode_equal_list
 from DB.Acquisition import Acquisition
 from DB.Image import Image
-from DB.Object import ObjectFields, Object
+from DB.Object import ObjectFields, ObjectHeader
 from DB.Process import Process
 from DB.Project import Project
 from DB.Sample import Sample
@@ -24,11 +24,11 @@ class GlobalMapping(object):
     """
     ANNOTATION_FIELDS = {
         # !!! 2 TSV fields end up into a single DB column
-        'object_annotation_category': {'table': Object.__tablename__, 'field': 'classif_id', 'type': 't'},
-        'object_annotation_category_id': {'table': Object.__tablename__, 'field': 'classif_id', 'type': 'n'},
-        'object_annotation_date': {'table': Object.__tablename__, 'field': 'classif_when', 'type': 't'},
-        'object_annotation_person_name': {'table': Object.__tablename__, 'field': 'classif_who', 'type': 't'},
-        'object_annotation_status': {'table': Object.__tablename__, 'field': 'classif_qual', 'type': 't'},
+        'object_annotation_category': {'table': ObjectHeader.__tablename__, 'field': 'classif_id', 'type': 't'},
+        'object_annotation_category_id': {'table': ObjectHeader.__tablename__, 'field': 'classif_id', 'type': 'n'},
+        'object_annotation_date': {'table': ObjectHeader.__tablename__, 'field': 'classif_when', 'type': 't'},
+        'object_annotation_person_name': {'table': ObjectHeader.__tablename__, 'field': 'classif_who', 'type': 't'},
+        'object_annotation_status': {'table': ObjectHeader.__tablename__, 'field': 'classif_qual', 'type': 't'},
     }
     PREDEFINED_FIELDS = {
         **ANNOTATION_FIELDS,
@@ -37,13 +37,13 @@ class GlobalMapping(object):
         'sample_id': {'table': Sample.__tablename__, 'field': 'orig_id', 'type': 't'},
         'acq_id': {'table': Acquisition.__tablename__, 'field': 'orig_id', 'type': 't'},
         'process_id': {'table': Process.__tablename__, 'field': 'orig_id', 'type': 't'},
-        'object_lat': {'table': Object.__tablename__, 'field': 'latitude', 'type': 'n'},
-        'object_lon': {'table': Object.__tablename__, 'field': 'longitude', 'type': 'n'},
-        'object_date': {'table': Object.__tablename__, 'field': 'objdate', 'type': 't'},
-        'object_time': {'table': Object.__tablename__, 'field': 'objtime', 'type': 't'},
+        'object_lat': {'table': ObjectHeader.__tablename__, 'field': 'latitude', 'type': 'n'},
+        'object_lon': {'table': ObjectHeader.__tablename__, 'field': 'longitude', 'type': 'n'},
+        'object_date': {'table': ObjectHeader.__tablename__, 'field': 'objdate', 'type': 't'},
+        'object_time': {'table': ObjectHeader.__tablename__, 'field': 'objtime', 'type': 't'},
         'object_link': {'table': ObjectFields.__tablename__, 'field': 'object_link', 'type': 't'},
-        'object_depth_min': {'table': Object.__tablename__, 'field': 'depth_min', 'type': 'n'},
-        'object_depth_max': {'table': Object.__tablename__, 'field': 'depth_max', 'type': 'n'},
+        'object_depth_min': {'table': ObjectHeader.__tablename__, 'field': 'depth_min', 'type': 'n'},
+        'object_depth_max': {'table': ObjectHeader.__tablename__, 'field': 'depth_max', 'type': 'n'},
         'img_rank': {'table': Image.__tablename__, 'field': 'imgrank', 'type': 'n'},
         'img_file_name': {'table': Image.__tablename__, 'field': 'orig_file_name', 'type': 't'},
         'sample_dataportal_descriptor': {'table': Sample.__tablename__, 'field': 'dataportal_descriptor', 'type': 't'},
@@ -58,7 +58,7 @@ class GlobalMapping(object):
                                                     Process.__tablename__: Process}
 
     TARGET_CLASSES = {**PARENT_CLASSES,
-                      Object.__tablename__: Object,
+                      ObjectHeader.__tablename__: ObjectHeader,
                       ObjectFields.__tablename__: ObjectFields,
                       Image.__tablename__: Image}
 
@@ -91,7 +91,7 @@ MappedTableTypeT = Type[MappedTableT]  # one of the 4 classes themselves
 
 # What is mapped, i.e. has free fields
 MAPPED_TABLES: List[MappedTableTypeT] = [ObjectFields, Sample, Acquisition, Process]
-
+MAPPED_TABLES_SET = set(MAPPED_TABLES)
 
 class ProjectMapping(object):
     """

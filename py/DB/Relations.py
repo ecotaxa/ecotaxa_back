@@ -4,36 +4,55 @@
 #
 # After SQL alchemy models are defined individually, setup the relations b/w them
 #
+from sqlalchemy import and_
+
 from .Acquisition import Acquisition
 from .Image import Image
-from .Object import Object, ObjectFields, ObjectCNNFeature
+from .Object import ObjectHeader, ObjectFields, ObjectCNNFeature
+# Particle project
+from .ParticleProject import ParticleProject
 from .Process import Process
 from .Project import Project
 from .ProjectPrivilege import ProjectPrivilege
 from .Sample import Sample
+from .Task import Task
 from .Taxonomy import Taxonomy
 from .User import User, Role
-from .Task import Task
 from .helpers.ORM import relationship
-# Particle project
-from .ParticleProject import ParticleProject
 
 # User
 User.roles = relationship(Role, secondary="users_roles")
 Role.users = relationship(User, secondary="users_roles")
 
 # Project
-Project.all_objects = relationship(Object)
-Object.project = relationship(Project)
+Project.all_objects = relationship(ObjectHeader)
+ObjectHeader.project = relationship(Project)
 
-Project.all_samples = relationship(Sample)
+Project.all_samples = relationship(Sample, lazy="raise_on_sql")
 Sample.project = relationship(Project)
 
-Project.all_processes = relationship(Process)
+Project.all_acquisitions = relationship(Acquisition, lazy="raise_on_sql")
+Acquisition.project = relationship(Project)
+
+Project.all_processes = relationship(Process, lazy="raise_on_sql")
 Process.project = relationship(Project)
 
-Project.all_acquisitions = relationship(Acquisition)
-Acquisition.project = relationship(Project)
+# Sample
+# This is a temporary join until the DB evolves
+Sample.all_acquisitions = relationship(Acquisition, viewonly=True, lazy="raise_on_sql",
+                                       secondary=ObjectHeader.__tablename__,
+                                       secondaryjoin=and_(ObjectHeader.projid == Acquisition.projid,
+                                                          ObjectHeader.acquisid == Acquisition.acquisid))
+
+# Acquisition
+# This is a temporary join until the DB evolves
+Acquisition.all_processes = relationship(Process, viewonly=True, lazy="raise_on_sql",
+                                         secondary=ObjectHeader.__tablename__,
+                                         secondaryjoin=and_(ObjectHeader.projid == Process.projid,
+                                                            ObjectHeader.processid == Process.processid))
+
+# Process
+Process.all_objects = relationship(ObjectHeader)
 
 # Privileges
 ProjectPrivilege.project = relationship(Project, cascade="all, delete-orphan", single_parent=True)
@@ -43,37 +62,36 @@ ProjectPrivilege.user = relationship(User, cascade="all, delete-orphan", single_
 User.privs_on_projects = relationship(ProjectPrivilege)
 
 # Object
-Object.fields = relationship(ObjectFields, uselist=False)
-ObjectFields.object = relationship(Object, uselist=False)
+ObjectHeader.fields = relationship(ObjectFields, uselist=False)
+ObjectFields.object = relationship(ObjectHeader, uselist=False)
 
-Object.classif = relationship(Taxonomy, primaryjoin="Taxonomy.id==Object.classif_id",
-                              foreign_keys="Taxonomy.id", uselist=False)
-Object.classifier = relationship(User, primaryjoin="User.id==Object.classif_who", foreign_keys="User.id",
-                                 uselist=False, )
-User.classified_objects = relationship(Object)
+ObjectHeader.classif = relationship(Taxonomy, primaryjoin="Taxonomy.id==ObjectHeader.classif_id",
+                                    foreign_keys="Taxonomy.id", uselist=False)
+ObjectHeader.classifier = relationship(User, primaryjoin="User.id==ObjectHeader.classif_who", foreign_keys="User.id",
+                                       uselist=False)
+User.classified_objects = relationship(ObjectHeader)
 
-Object.classif_auto = relationship(Taxonomy, primaryjoin="Taxonomy.id==foreign(Object.classif_auto_id)",
-                                   uselist=False, )
+ObjectHeader.classif_auto = relationship(Taxonomy, primaryjoin="Taxonomy.id==foreign(ObjectHeader.classif_auto_id)",
+                                         uselist=False)
 
-ObjectCNNFeature.object = relationship(Object, foreign_keys="Object.objid",
-                                       primaryjoin="ObjectCNNFeature.objcnnid==Object.objid", uselist=False)
-Object.cnn_features = relationship(ObjectCNNFeature)
+ObjectCNNFeature.object = relationship(ObjectHeader, foreign_keys="ObjectHeader.objid",
+                                       primaryjoin="ObjectCNNFeature.objcnnid==ObjectHeader.objid", uselist=False)
+ObjectHeader.cnn_features = relationship(ObjectCNNFeature, uselist=False)
 
-Object.img0 = relationship(Image, foreign_keys=Image.objid)
-Object.all_images = relationship(Image)
+ObjectHeader.img0 = relationship(Image, foreign_keys=Image.objid)
+ObjectHeader.all_images = relationship(Image)
 
-Object.sample = relationship(Sample)
-Sample.all_objects = relationship(Object)
+ObjectHeader.sample = relationship(Sample)
+Sample.all_objects = relationship(ObjectHeader)
 
-Object.acquisition = relationship(Acquisition)
-Acquisition.all_objects = relationship(Object)
+ObjectHeader.acquisition = relationship(Acquisition)
+Acquisition.all_objects = relationship(ObjectHeader)
 
-Object.process = relationship(Process)
-Process.all_objects = relationship(Object)
+ObjectHeader.process = relationship(Process)
 
 # Task
 Task.owner = relationship(User)
 
 # Particle Project
-ParticleProject.ecotaxa_project=relationship(Project)
-Project.ecopart_project=relationship(ParticleProject)
+ParticleProject.ecotaxa_project = relationship(Project)
+Project.ecopart_project = relationship(ParticleProject)
