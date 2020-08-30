@@ -9,6 +9,7 @@ from os.path import join, dirname, realpath
 from pathlib import Path
 
 from lib.processes import SyncSubProcess
+import socket
 
 psql_bin = "psql"
 # If we already have a server don't create one, e.g. in GitHub action
@@ -35,8 +36,6 @@ OWNER=postgres
 TEMPLATE=template0 LC_CTYPE='C' LC_COLLATE='C' CONNECTION LIMIT=-1;
 """
 
-import socket
-
 
 def is_port_opened(host: str, port: int):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -49,7 +48,9 @@ class EcoTaxaExistingDB(object):
     """
         For running tests onto an existing instance.
     """
-    def write_config(self, conf_file: Path, host: str, port: int):
+
+    @staticmethod
+    def write_config(conf_file: Path, host: str, port: int):
         with open(str(conf_file), "w") as f:
             f.write(EcoTaxaDBFrom0.CONF % (host, port))
 
@@ -87,17 +88,23 @@ class EcoTaxaDBFrom0(object):
         # Note: the process dies right away as pgctl launches a daemon
         SyncSubProcess(cmd, env=self.get_env(), out_file="postgres_start.log")
         # Wait until the server port is opened
+        start_time = time.time()
         while not is_port_opened(host, PG_PORT):
             time.sleep(0.5)
+            if (time.time() - start_time) > 30:
+                raise Exception("Waited too long for PG up")
 
-    def shutdown(self, host:str):
+    def shutdown(self, host: str):
         # Stop command
         cmd = [pgctl_bin, "stop", "-D", self.data_dir]
         # Cook an environment for the subprocess
         SyncSubProcess(cmd, env=self.get_env(), out_file="postgres_stop.log")
         # Wait until the server port is closed
+        start_time = time.time()
         while is_port_opened(host, PG_PORT):
             time.sleep(0.5)
+            if (time.time() - start_time) > 30:
+                raise Exception("Waited too long for PG down")
 
     def ddl(self, host, password):
         # -h localhost force use of TCP/IP socket, otherwise psql tries local pipes in /var/run

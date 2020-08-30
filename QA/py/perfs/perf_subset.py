@@ -18,7 +18,7 @@ from tools.dbBuildSQL import EcoTaxaExistingDB
 
 
 def main():
-    EcoTaxaExistingDB().write_config(CONF_FILE, "localhost", 5434)
+    EcoTaxaExistingDB.write_config(CONF_FILE, "localhost", 5434)
     # Old project with 1,2M images
     src_prj_id = 152
     task_id = TaskService().create()
