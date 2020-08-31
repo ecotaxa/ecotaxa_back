@@ -38,7 +38,8 @@ class Connection(object):
 
         if Connection.the_session_factory is None:
             # TODO: Not nice, no recovery in case of connection issue.
-            engine = sqlalchemy.create_engine(url, client_encoding='utf8', echo=False)
+            engine = sqlalchemy.create_engine(url, client_encoding='utf8', echo=False, echo_pool=True,
+                                              executemany_mode='batch')
             Connection.the_session_factory = sessionmaker(bind=engine)
             self._meta: MetaData = sqlalchemy.MetaData(bind=engine)
             self._meta.reflect()

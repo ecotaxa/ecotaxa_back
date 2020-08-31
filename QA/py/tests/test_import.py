@@ -71,6 +71,7 @@ def test_import(config, database, caplog):
     params.found_users['elizandro rodriguez'] = {'id': 1}
     print(params)
     RealImport(prj_id, params).run()
+    return prj_id
 
 
 # @pytest.mark.skip()

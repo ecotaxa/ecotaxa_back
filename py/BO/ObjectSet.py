@@ -8,7 +8,7 @@
 #
 # The set comprises all objects from a Project, except the ones filtered by a set of criteria.
 #
-from typing import Tuple
+from typing import Tuple, Optional
 
 from sqlalchemy.orm import Session
 
@@ -22,7 +22,7 @@ class ObjectSet(object):
         A (potentially large) set of objects.
     """
 
-    def __init__(self, session: Session, prj_id: int, filters: dict):
+    def __init__(self, session: Session, prj_id: int, filters: ProjectFilters):
         self.prj_id = prj_id
         self.filters = ObjectSetFilter(session, filters)
 
@@ -49,41 +49,41 @@ class ObjectSetFilter(object):
         """
         self.session = session
         # Now to the filters
-        self.taxo: str = filters.get("taxo", "")
+        self.taxo: Optional[str] = filters.get("taxo", "")
         self.taxo_child: bool = filters.get("taxochild", "") == "Y"
-        self.statusfilter: str = filters.get("statusfilter", "")
-        self.MapN: str = filters.get("MapN", '')
-        self.MapW: str = filters.get("MapW", '')
-        self.MapE: str = filters.get("MapE", '')
-        self.MapS: str = filters.get("MapS", '')
-        self.depth_min: str = filters.get("depthmin", '')
-        self.depth_max: str = filters.get("depthmax", '')
+        self.statusfilter: Optional[str] = filters.get("statusfilter", "")
+        self.MapN: Optional[str] = filters.get("MapN", '')
+        self.MapW: Optional[str] = filters.get("MapW", '')
+        self.MapE: Optional[str] = filters.get("MapE", '')
+        self.MapS: Optional[str] = filters.get("MapS", '')
+        self.depth_min: Optional[str] = filters.get("depthmin", '')
+        self.depth_max: Optional[str] = filters.get("depthmax", '')
         # A coma-separated list of numerical sample ids
-        self.samples: str = filters.get("samples", '')
-        self.instrument: str = filters.get("instrum", '')
+        self.samples: Optional[str] = filters.get("samples", '')
+        self.instrument: Optional[str] = filters.get("instrum", '')
         # A coma-separated list of sunpos values
         #  D for Day, U for Dusk, N for Night, A for Dawn (Aube in French)
-        self.daytime: str = filters.get("daytime", "")
+        self.daytime: Optional[str] = filters.get("daytime", "")
         # A coma-separated list of month numbers
-        self.months: str = filters.get("month", "")
-        self.from_date: str = filters.get("fromdate", '')
-        self.to_date: str = filters.get("todate", '')
+        self.months: Optional[str] = filters.get("month", "")
+        self.from_date: Optional[str] = filters.get("fromdate", '')
+        self.to_date: Optional[str] = filters.get("todate", '')
         # Time (in day) filters
-        self.from_time: str = filters.get("fromtime", '')
-        self.to_time: str = filters.get("totime", '')
+        self.from_time: Optional[str] = filters.get("fromtime", '')
+        self.to_time: Optional[str] = filters.get("totime", '')
         self.invert_time: bool = filters.get("inverttime", '') == "1"
         # Validation date filters
-        self.validated_from: str = filters.get("validfromdate", '')
-        self.validated_to: str = filters.get("validtodate", '')
+        self.validated_from: Optional[str] = filters.get("validfromdate", '')
+        self.validated_to: Optional[str] = filters.get("validtodate", '')
         # Free fields AKA features filtering
-        self.free_num: str = filters.get("freenum", '')
-        self.free_num_start: str = filters.get("freenumst", '')
-        self.free_num_end: str = filters.get("freenumend", '')
+        self.free_num: Optional[str] = filters.get("freenum", '')
+        self.free_num_start: Optional[str] = filters.get("freenumst", '')
+        self.free_num_end: Optional[str] = filters.get("freenumend", '')
         # Free text filtering
-        self.free_text: str = filters.get("freetxt", '')
-        self.free_text_val: str = filters.get("freetxtval", "")
+        self.free_text: Optional[str] = filters.get("freetxt", '')
+        self.free_text_val: Optional[str] = filters.get("freetxtval", "")
         # A coma-separated list of numerical user ids
-        self.annotators: str = filters.get('filt_annot', '')
+        self.annotators: Optional[str] = filters.get('filt_annot', '')
 
     def get_sql_filter(self, where_clause: WhereClause,
                        params: SQLParamDict, user_id: int) -> None:
@@ -91,6 +91,8 @@ class ObjectSetFilter(object):
             The generated SQL assumes that, in the query, 'oh' is the alias for object_head aka ObjectHeader
             and 'of' the alias for ObjectFields
         :param user_id: For filtering validators.
+        :param where_clause: SQL filtering clauses will be added there.
+        :param params: SQL params will be added there.
         :return:
         """
 

@@ -124,7 +124,7 @@ def project_subset(project_id: int, params: SubsetReq, current_user: int = Depen
 
 
 @app.post("/projects/{project_id}/query", tags=['projects'], response_model=SubsetRsp)
-def project_query(project_id: int, filters: ProjectFilters, current_user: int = Depends(get_current_user)):
+def project_query(project_id: int, filters: ProjectFiltersModel, current_user: int = Depends(get_current_user)):
     """
         Query the project.
     """
@@ -181,7 +181,7 @@ def simple_import(project_id: int, params: SimpleImportReq, current_user: int = 
     return sce.run()
 
 
-@app.post("/export/emodnet", tags=['WIP'], response_model=EMODNetExportRsp)
+@app.post("/export/emodnet", tags=['WIP'], include_in_schema=False, response_model=EMODNetExportRsp)
 def emodnet_format_export(params: EMODNetExportReq, current_user: int = Depends(get_current_user)):
     """
         Export in EMODnet format, @see https://www.emodnet-ingestion.eu/

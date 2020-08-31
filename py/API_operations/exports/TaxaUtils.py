@@ -127,7 +127,7 @@ class TaxaCache(object):
         try:
             with open(self.CACHE_FILENAME, "rb") as fd:
                 self.cache = pickle.load(fd)
-        except (FileNotFoundError, EOFError):
+        except (FileNotFoundError, EOFError, ModuleNotFoundError):
             self.cache = {}
 
     def save(self):

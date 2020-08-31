@@ -241,7 +241,10 @@ class TSVFile(object):
         """
         parent_class: ParentTableClassT
         for alias, parent_class in GlobalMapping.PARENT_CLASSES.items():
-            dict_to_write = dicts_to_write[alias]
+            try:
+                dict_to_write = dicts_to_write[alias]
+            except KeyError:
+                continue
             parents_for_obj: Dict[str, ParentTableT] = how.existing_parents[alias]
             # Here we take advantage from consistent naming conventions
             # The 3 involved tables have "orig_id" column serving the same purpose

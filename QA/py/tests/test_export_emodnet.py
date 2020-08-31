@@ -1,20 +1,29 @@
 # noinspection PyUnresolvedReferences
 # noinspection PyPackageRequirements
 import logging
+from os.path import dirname, realpath
+from pathlib import Path
 
-from formats.EMODnet.models import *
+from API_models.exports import *
 # noinspection PyPackageRequirements
 from API_operations.exports.EMODnet import EMODNetExport
-from API_models.exports import *
+from formats.EMODnet.models import *
+
 # noinspection PyUnresolvedReferences
 from tests.config_fixture import config
 # noinspection PyUnresolvedReferences
 from tests.db_fixture import database
+from tests.test_import import test_import
+
+DATA_DIR = (Path(dirname(realpath(__file__))) / ".." / "data").resolve()
+PLAIN_FILE = DATA_DIR / "import_test.zip"
 
 
-def no_test_emodnet_export(config, database, caplog):
+def test_emodnet_export(config, database, caplog):
     caplog.set_level(logging.DEBUG)
-    prj_ids = [757]
+
+    prj_ids = test_import(config, database, caplog)
+
     person1 = EMLPerson(organizationName="IMEV",
                         givenName="Jean-Olivier",
                         surName="Irisson",
@@ -78,6 +87,6 @@ We are grateful to the crew of the research boat at OOV that collected plankton 
                    maintenance="periodic review of origin data",
                    maintenanceUpdateFrequency="1M",
                    additionalMetadata=meta_plus)
-    req = EMODNetExportReq(meta=meta, project_ids=prj_ids)
+    req = EMODNetExportReq(meta=meta, project_ids=[prj_ids])
     rsp = EMODNetExport(req).run()
     print("\n".join(caplog.messages))

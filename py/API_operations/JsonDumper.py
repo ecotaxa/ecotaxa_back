@@ -38,10 +38,12 @@ class JsonDumper(Service):
         self.requester_id = current_user
         self.filters = filters
         prj = self.session.query(Project).get(prj_id)
-        assert prj is not None
+        # We don't check for existence
         self.prj: Project = prj
         # Work vars
-        self.mapping = ProjectMapping().load_from_project(self.prj)
+        self.mapping = ProjectMapping()
+        if self.prj:
+            self.mapping.load_from_project(self.prj)
         self.ids_to_dump: List[int] = []
         self.already_dumped: Set = set()
         self.first_query = True
@@ -50,14 +52,17 @@ class JsonDumper(Service):
         """
             Produce the json into given stream.
         """
-        self._find_what_to_dump()
-        # TODO: The result seems unneeded so far, we just need the stuff loaded in SQLA session
-        _to_dump = self._db_fetch(self.ids_to_dump)
-        # prj = to_dump[0][0]
-        if len(self.ids_to_dump) == 0 or len(_to_dump) == 0:
-            to_stream= {}
+        if self.prj is None:
+            to_stream = {}
         else:
-            to_stream = self.dump_row(out_stream, self.prj)
+            self._find_what_to_dump()
+            # TODO: The result seems unneeded so far, we just need the stuff loaded in SQLA session
+            _to_dump = self._db_fetch(self.ids_to_dump)
+            # prj = to_dump[0][0]
+            if len(self.ids_to_dump) == 0 or len(_to_dump) == 0:
+                to_stream= {}
+            else:
+                to_stream = self.dump_row(out_stream, self.prj)
         json.dump(obj=to_stream, fp=out_stream, indent="  ")
 
     def dump_row(self, out_stream: IO, a_row: Model) -> Dict[str, Any]:
