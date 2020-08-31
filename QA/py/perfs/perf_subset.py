@@ -5,11 +5,12 @@
 # PYTHONPATH=..:../../../py austin ../../venv/bin/python3 perf_subset.py | ./flamegraph.pl --countname=usec > process_subset.svg
 #
 from tests.db_fixture import CONF_FILE
-from api.subset import *
-from api.crud import *
-from crud.Task import TaskService
-from crud.Project import *
-from tasks.Subset import *
+from API_models.crud import *
+from API_models.subset import *
+from API_operations.Subset import *
+from API_operations.CRUD import *
+from API_operations.CRUD.Tasks import TaskService
+from API_operations.CRUD.Projects import *
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -22,7 +23,7 @@ def main():
     # Old project with 1,2M images
     src_prj_id = 152
     task_id = TaskService().create()
-    prj_id = ProjectService().create(1, CreateProjectReq(title="Test LS"))
+    prj_id = ProjectsService().create(1, CreateProjectReq(title="Test LS"))
     req = SubsetReq(task_id=task_id,
                     filters={},
                     dest_prj_id=prj_id,
