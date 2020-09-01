@@ -26,22 +26,25 @@ class Connection(object):
     """
         A connection to the DB via SQLAlchemy.
     """
-    the_session_factory = None
-
     def __init__(self, user, password, db, host, port=5432):
         """
-        Returns a connection and a metadata object
+            Open a SQLAlchemy connection, i.e. an engine.
         """
         # We connect with the help of the PostgreSQL URL
         url = 'postgresql://{}:{}@{}:{}/{}'
         url = url.format(user, password, host, port, db)
+        engine = sqlalchemy.create_engine(url, client_encoding='utf8',
+                                          echo=False, echo_pool=True,
+                                          executemany_mode='batch',
+                                          # Not needed anyway it's not async anywhere
+                                          # pool_size=20, max_overflow=5,
+                                          pool_pre_ping=True)
+        self.session_factory = sessionmaker(bind=engine)
+        self._meta: MetaData = sqlalchemy.MetaData(bind=engine)
+        self._meta.reflect()
 
-        if Connection.the_session_factory is None:
-            # TODO: Not nice, no recovery in case of connection issue.
-            engine = sqlalchemy.create_engine(url, client_encoding='utf8', echo=False, echo_pool=True,
-                                              executemany_mode='batch')
-            Connection.the_session_factory = sessionmaker(bind=engine)
-            self._meta: MetaData = sqlalchemy.MetaData(bind=engine)
-            self._meta.reflect()
-
-        self.sess: Session = Connection.the_session_factory()
+    def get_session(self) -> Session:
+        """
+            Get a fresh session from the connection.
+        """
+        return self.session_factory()

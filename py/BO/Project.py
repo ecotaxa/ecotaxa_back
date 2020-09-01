@@ -120,7 +120,7 @@ class ProjectBO(object):
 
         sql += " ORDER BY LOWER(p.title)"  # pp.member nulls last,
 
-        with CodeTimer("Projects query", logger):
+        with CodeTimer("Projects query:", logger):
             res: ResultProxy = session.execute(sql, sql_params)
             ret = res.fetchall()
         return ret

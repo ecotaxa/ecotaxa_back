@@ -58,19 +58,39 @@ class Service(BaseService):
     """
         A service for EcoTaxa. Supplies common useful features like a DB session and filesystem conventions.
     """
+    the_config = None
+    the_connection = None
+    the_link = None
 
     def __init__(self):
-        check_sqlalchemy_version()
-        config = read_config()
-        port = config['DB_PORT']
-        if port is None:
-            port = '5432'
-        host = _turn_localhost_for_docker(config['DB_HOST'], port)
-        conn = Connection(host=host, port=port, db=config['DB_DATABASE'],
-                          user=config['DB_USER'], password=config['DB_PASSWORD'])
-        self.session: Session = conn.sess
+        # Use a single configuration
+        if not Service.the_config:
+            config = read_config()
+            Service.the_config = config
+        else:
+            config = Service.the_config
+        # Use a single connection
+        if not Service.the_connection:
+            check_sqlalchemy_version()
+            port = config['DB_PORT']
+            if port is None:
+                port = '5432'
+            host = _turn_localhost_for_docker(config['DB_HOST'], port)
+            conn = Connection(host=host, port=port, db=config['DB_DATABASE'],
+                                                user=config['DB_USER'], password=config['DB_PASSWORD'])
+            Service.the_connection = conn
+        else:
+            conn = Service.the_connection
+        # And a single link
+        if not Service.the_link:
+            link_src = read_link()
+            Service.the_link = link_src
+        else:
+            link_src = Service.the_link
+        # Finally feed the subclass
+        self.session: Session = conn.get_session()
         self.config = config
-        self.link_src = read_link()
+        self.link_src = link_src
 
     def __del__(self):
         # Release DB session

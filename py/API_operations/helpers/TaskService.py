@@ -36,7 +36,8 @@ class TaskServiceBase(Service, ABC):
         assert prj is not None
         self.prj = prj
         task = self.session.query(Task).get(task_id)
-        assert task is not None
+        # SimpleImport calls with no task during verification
+        # assert task is not None
         self.task = task
 
     def update_task(self, taskstate: Optional[str], percent: Optional[int], message: str):

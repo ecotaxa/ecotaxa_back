@@ -8,7 +8,6 @@ from typing import Union, Tuple
 
 from fastapi import FastAPI, Response, status, Depends
 from fastapi_utils.timing import add_timing_middleware
-from helpers.starlette import PlainTextResponse
 
 from API_models.crud import *
 from API_models.exports import EMODNetExportReq, EMODNetExportRsp
@@ -28,7 +27,7 @@ from API_operations.imports.Import import ImportAnalysis, RealImport
 from API_operations.imports.SimpleImport import SimpleImport
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower
-
+from helpers.starlette import PlainTextResponse
 # noinspection PyPackageRequirements
 from providers.WoRMS import WoRMSFinder
 
@@ -237,6 +236,19 @@ def system_status(_current_user: int = Depends(get_current_user)) -> Response:
     """
     sce = StatusService()
     return Response(sce.run(), media_type="text/plain")
+
+
+# @app.get("/loadtest", tags=['WIP'], include_in_schema=False)
+# def load_test() -> Response:
+#     """
+#         Simulate load with various response time. The Service() gets a session from the DB pool.
+#         See if we just wait or fail to server:
+#         httperf --server=localhost --port=8000 --uri=/loadtest --num-conns=1000 --num-calls=10
+#     """
+#     sce = StatusService()
+#     import time
+#     time.sleep(random()/10)
+#     return Response(sce.run(), media_type="text/plain")
 
 
 app.add_exception_handler(status.HTTP_500_INTERNAL_SERVER_ERROR, internal_server_error_handler)
