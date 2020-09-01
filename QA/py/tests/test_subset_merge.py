@@ -30,9 +30,6 @@ from DB import Project, ObjectFields
 # noinspection PyUnresolvedReferences
 from ordered_set import OrderedSet
 
-from tests.config_fixture import config
-# noinspection PyUnresolvedReferences
-from tests.db_fixture import database, filled_database
 from tests.test_import import real_params_from_prep_out, ADMIN_USER_ID
 
 OUT_JSON = "out.json"
@@ -78,7 +75,7 @@ def test_subset_uvp6(config, database, caplog):
                        limit_type='P',
                        limit_value=100.0,
                        do_images=True)
-    SubsetService(prj_id=prj_id, req=params).run()
+    SubsetService(prj_id=prj_id, req=params).run(ADMIN_USER_ID)
     # Dump the subset
     with open(OUT_SUBS_JSON, "w") as fd:
         JsonDumper(ADMIN_USER_ID, subset_prj_id, {}).run(fd)

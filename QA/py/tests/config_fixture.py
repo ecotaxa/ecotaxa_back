@@ -27,7 +27,7 @@ class EcoTaxaConfig(object):
         pass
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def config() -> EcoTaxaConfig:
     # Setup
     link.INI_DIR = HERE

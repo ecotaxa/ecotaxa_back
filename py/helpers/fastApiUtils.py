@@ -108,3 +108,25 @@ async def get_current_user(creds: HTTPAuthorizationCredentials = Depends(secured
         Just relay the call to the private def above.
     """
     return _get_current_user(creds.scheme, creds.credentials)
+
+
+_forbidden_exception = HTTPException(
+    status_code=status.HTTP_403_FORBIDDEN,
+    detail="You can't do this."
+)
+
+
+class RightsThrower(object):
+    """
+        Transform any AssertionError during exit into an HTTP error.
+    """
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type:
+            if exc_type == AssertionError:
+                if exc_val.args and exc_val.args[0] == "Not authorized":
+                    raise _forbidden_exception
+            raise exc_type(exc_val)

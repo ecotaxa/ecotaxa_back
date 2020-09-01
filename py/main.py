@@ -24,7 +24,7 @@ from API_operations.exports.EMODnet import EMODNetExport
 from API_operations.imports.Import import ImportAnalysis, RealImport
 from API_operations.imports.SimpleImport import SimpleImport
 from helpers.DynamicLogs import get_logger
-from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user
+from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower
 
 # noinspection PyPackageRequirements
 
@@ -113,7 +113,8 @@ def create_project(params: CreateProjectReq, current_user: int = Depends(get_cur
         The user has to be app administrator or project creator.
     """
     sce = ProjectsService()
-    ret = sce.create(current_user, params)
+    with RightsThrower():
+        ret = sce.create(current_user, params)
     return ret
 
 
@@ -122,8 +123,9 @@ def project_subset(project_id: int, params: SubsetReq, current_user: int = Depen
     """
         Subset a project into another one.
     """
-    sce = SubsetService(project_id, params)
-    return sce.run()
+    with RightsThrower():
+        sce = SubsetService(project_id, params)
+        return sce.run(current_user)
 
 
 @app.post("/projects/{project_id}/query", tags=['projects'], response_model=SubsetRsp)

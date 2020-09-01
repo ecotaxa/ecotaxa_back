@@ -70,6 +70,7 @@ class Role(Model):
     users: relationship
 
     APP_ADMINISTRATOR = "Application Administrator"
+    USERS_ADMINISTRATOR = "Users Administrator"
     PROJECT_CREATOR = "Project creator"
 
     #    description = Column(String(255))

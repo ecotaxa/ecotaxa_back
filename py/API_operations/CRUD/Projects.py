@@ -6,6 +6,7 @@ from typing import List, Union
 
 from API_models.crud import CreateProjectReq, ProjectSearchResult
 from BO.Project import ProjectBO
+from BO.Rights import RightsBO, Action
 from DB.Project import Project, ANNOTATE
 from DB.ProjectPrivilege import ProjectPrivilege, MANAGE
 from DB.User import User, Role
@@ -20,8 +21,10 @@ class ProjectsService(Service):
 
     def create(self, current_user_id: int,
                req: CreateProjectReq) -> Union[int, str]:
-        current_user: User = self.session.query(User).filter_by(id=current_user_id).first()
-        assert current_user.has_role(Role.APP_ADMINISTRATOR) or current_user.has_role(Role.PROJECT_CREATOR)
+        """
+            Create a project, eventually as a clone of another.
+        """
+        current_user, project = RightsBO.user_wants(self.session, current_user_id, Action.CREATE_PROJECT)
         if req.clone_of_id:
             prj = self.session.query(Project).get(req.clone_of_id)
             if prj is None:
@@ -48,6 +51,7 @@ class ProjectsService(Service):
                title_filter: str,
                instrument_filter: str,
                filter_subset: bool) -> List[ProjectSearchResult]:
+        # No rights checking as basically everyone can see all projects
         current_user: User = self.session.query(User).get(current_user_id)
         ret = []
         # TODO: Better perf by going thru the iterator instead of a list?

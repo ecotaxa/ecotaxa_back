@@ -63,6 +63,7 @@ class EcoTaxaDBFrom0(object):
         self.pwd_file = self.db_dir / "pg_pwd.txt"
         self.schema_creation_file = self.db_dir / "schem_prod.sql"
         self.conf_file = conffile
+        self.host = None
 
     def get_env(self):
         # Return the environment for postgres subprocesses
@@ -78,7 +79,7 @@ class EcoTaxaDBFrom0(object):
         cmd = [initdb_bin] + pg_opts
         SyncSubProcess(cmd, env=self.get_env())
 
-    def launch(self, host):
+    def launch(self):
         # Produce connection sockets in a user-writable directory (linux)
         pg_opts = ['-o', '-c unix_socket_directories="' + str(self.db_dir / "run") + '"']
         pg_opts += ['-o', '"-p %d"' % PG_PORT]
@@ -89,7 +90,7 @@ class EcoTaxaDBFrom0(object):
         SyncSubProcess(cmd, env=self.get_env(), out_file="postgres_start.log")
         # Wait until the server port is opened
         start_time = time.time()
-        while not is_port_opened(host, PG_PORT):
+        while not is_port_opened(self.host, PG_PORT):
             time.sleep(0.5)
             if (time.time() - start_time) > 30:
                 raise Exception("Waited too long for PG up")
@@ -106,10 +107,15 @@ class EcoTaxaDBFrom0(object):
             if (time.time() - start_time) > 30:
                 raise Exception("Waited too long for PG down")
 
-    def ddl(self, host, password):
+    def runs(self) -> bool:
+        if not self.host:
+            return False
+        return is_port_opened(self.host, PG_PORT)
+
+    def ddl(self, password):
         # -h localhost force use of TCP/IP socket, otherwise psql tries local pipes in /var/run
         env = {'PGPASSWORD': password}
-        pg_opts = ['-U', 'postgres', '-h', host, '-p', "%d" % PG_PORT]
+        pg_opts = ['-U', 'postgres', '-h', self.host, '-p', "%d" % PG_PORT]
         cre_opts = ['-c', CREATE_DB_SQL]
         cmd = [psql_bin] + pg_opts + cre_opts
         SyncSubProcess(cmd, env=env, out_file="db_create.log")
@@ -120,14 +126,14 @@ class EcoTaxaDBFrom0(object):
 
     def create(self):
         if not (PG_HOST and PG_PORT):
-            host = 'localhost'
+            self.host = 'localhost'
             self.init()
-            self.launch(host)
+            self.launch()
             # TODO: Password (in call to self.ddl) is ignored in this context
         else:
-            host = PG_HOST
-        self.ddl(host, 'postgres12')
-        self.write_config(host)
+            self.host = PG_HOST
+        self.ddl('postgres12')
+        self.write_config()
 
     CONF = """
 DB_USER="postgres"
@@ -139,9 +145,9 @@ THUMBSIZELIMIT=99
 SECRET_KEY = 'THIS KEY MUST BE CHANGED'
     """
 
-    def write_config(self, host):
+    def write_config(self):
         with open(str(self.conf_file), "w") as f:
-            f.write(self.CONF % (host, PG_PORT))
+            f.write(self.CONF % (self.host, PG_PORT))
 
     def cleanup(self):
         # Remove data files

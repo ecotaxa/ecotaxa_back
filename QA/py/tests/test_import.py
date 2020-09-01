@@ -23,10 +23,10 @@ from API_operations.imports.Import import ImportAnalysis, RealImport
 from API_operations.imports.SimpleImport import SimpleImport
 from API_operations.AsciiDump import AsciiDumper
 
-# noinspection PyUnresolvedReferences
-from tests.config_fixture import config
-# noinspection PyUnresolvedReferences
-from tests.db_fixture import database
+# # noinspection PyUnresolvedReferences
+# from tests.config_fixture import config
+# # noinspection PyUnresolvedReferences
+# from tests.db_fixture import database
 
 DATA_DIR = (Path(dirname(realpath(__file__))) / ".." / "data").resolve()
 PLAIN_FILE = DATA_DIR / "import_test.zip"

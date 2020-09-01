@@ -7,8 +7,12 @@ from DB.helpers.ORM import Session
 
 class ProjectPrivilegeBO(object):
     """
-        Project privilege business object. So far just a container for static API_operations involving it.
+        Project privilege business object. So far just a container for API_operations involving it.
     """
+    # TODO: Put in SQL below
+    MANAGE = 'Manage'
+    ANNOTATE = 'Annotate'
+    VIEW = 'View'
 
     @classmethod
     def generous_merge_into(cls, session: Session, dest_prj_id: int, src_prj_id: int):

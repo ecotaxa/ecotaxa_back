@@ -12,9 +12,10 @@ from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping
 from BO.ObjectSet import ObjectSet
 from BO.Project import ProjectBO
+from BO.Rights import RightsBO, Action
 from BO.TSVFile import TSVFile
 from BO.helpers.ImportHelpers import ImportHow
-from DB import Image, ObjectHeader, ObjectFields, Sample, Acquisition, Process, Project
+from DB import Image, ObjectHeader, ObjectFields, Sample, Acquisition, Process, Project, User, Role
 from DB import Query, any_, ResultProxy
 from DB.Object import ObjectCNNFeature
 from DB.helpers.Bean import bean_of
@@ -51,7 +52,11 @@ class SubsetService(TaskServiceBase):
         self.vault = Vault(join(self.link_src, 'vault'))
         self.first_query = True
 
-    def run(self) -> SubsetRsp:
+    def run(self, current_user_id: int) -> SubsetRsp:
+        # Security check
+        current_user = RightsBO.user_wants(self.session, current_user_id, Action.READ, self.prj_id)
+        RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, self.dest_prj.projid)
+        # OK
         logger.info("Starting subset of '%s'", self.prj.title)
         ret = SubsetRsp()
 

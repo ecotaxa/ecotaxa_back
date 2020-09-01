@@ -2835,14 +2835,18 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON TABLES
 COPY public.roles (id, name) FROM stdin;
 1	Application Administrator
 2	Users Administrator
+3	Project creator
 \.
 
 COPY public.users (id, email, password, name, organisation, active, preferences, country, usercreationdate, usercreationreason) FROM stdin;
-1	admin	$6$rounds=656000$cpR/DTfGpK/L/N19$DnR/n7AZeqFNfoGkBM05o6GUoxPgolw01TglHbNVpB2522LLlUI6soZ5b4eW7TjeYj.uMC3G79NGeaX1baHCP1	Application Administrator	\N	t	{"1": {"sortby": "", "ts": 1589266843.5535243, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}, "2": {"sortby": "", "ts": 1589267270.5538993, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}}	\N	2020-05-12 08:59:48.70106	\N
+1	admin	$6$	Application Administrator	\N	t	{"1": {"sortby": "", "ts": 1589266843.5535243, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}, "2": {"sortby": "", "ts": 1589267270.5538993, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}}	\N	2020-05-12 08:59:48.70106	\N
+2	user	$6$	Ordinary User	\N	t	{}	\N	2020-05-13 08:59:48.70106	\N
+3	creator	$6$	User Creating Projects	\N	t	{}	\N	2020-05-13 08:59:48.70106	\N
 \.
 
 COPY public.users_roles (user_id, role_id) FROM stdin;
 1	1
+3	3
 \.
 
 COPY public.taxonomy (id, parent_id, name, id_source, nbrobj, nbrobjcum, creation_datetime, creator_email, display_name, id_instance, lastupdate_datetime, rename_to, source_desc, source_url, taxostatus, taxotype) FROM stdin;
