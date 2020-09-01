@@ -136,6 +136,7 @@ DB_HOST="%s"
 DB_PORT="%d"
 DB_DATABASE="ecotaxa"
 THUMBSIZELIMIT=99
+SECRET_KEY = 'THIS KEY MUST BE CHANGED'
     """
 
     def write_config(self, host):

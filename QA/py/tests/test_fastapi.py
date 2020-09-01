@@ -12,7 +12,7 @@ from main import app
 client = TestClient(app)
 
 
-def test_login(fastapi_noauth, database, caplog):
+def test_login(database, fastapi_noauth, caplog):
     caplog.set_level(logging.DEBUG)
     response = client.get("/login")
     # Post needed
@@ -25,7 +25,7 @@ def test_login(fastapi_noauth, database, caplog):
 ADMIN_AUTH = {"Authorization": "Bearer 1"}
 
 
-def test_users(fastapi_noauth, database):
+def test_users(database, fastapi_noauth):
     response = client.get("/users")
     # Check that we cannot do without auth
     assert response.status_code == status.HTTP_403_FORBIDDEN
@@ -34,7 +34,7 @@ def test_users(fastapi_noauth, database):
     assert response.status_code == status.HTTP_200_OK
 
 
-def test_user_me(fastapi_noauth):
+def test_user_me(database, fastapi_noauth):
     response = client.get("/users/me")
     # Check that we cannot do without auth
     assert response.status_code == status.HTTP_403_FORBIDDEN

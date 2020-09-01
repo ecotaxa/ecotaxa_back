@@ -60,20 +60,28 @@ def dump_openapi(app: FastAPI, main_path: str):
 
 secured_scheme = HTTPBearer()
 
-# Read from legacy app config
-SECRET_KEY = read_config()['SECRET_KEY'][1:-1]
-# Hardcoded in Flask
-SALT = b"cookie-session"
-
-serializer = URLSafeTimedSerializer(secret_key=SECRET_KEY, salt=SALT,
-                                    signer=TimestampSigner, signer_kwargs={'key_derivation': 'hmac'})
-max_age = 2678400  # max token age, 31 days
-
 _credentials_exception = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
     detail="Could not validate credentials",
     headers={"WWW-Authenticate": "Bearer"},
 )
+
+MAX_TOKEN_AGE = 2678400  # max token age, 31 days
+
+_serializer = None
+
+
+def _build_serializer():
+    global _serializer
+    if not _serializer:
+        # Read from legacy app config
+        secret_key = read_config()['SECRET_KEY'][1:-1]
+        # Hardcoded in Flask
+        salt = b"cookie-session"
+        _serializer = URLSafeTimedSerializer(secret_key=secret_key, salt=salt,
+                                             signer=TimestampSigner,
+                                             signer_kwargs={'key_derivation': 'hmac'})
+    return _serializer
 
 
 def _get_current_user(scheme, credentials) -> int:
@@ -83,7 +91,7 @@ def _get_current_user(scheme, credentials) -> int:
     try:
         if scheme != 'Bearer':
             raise _credentials_exception
-        payload = serializer.loads(credentials, max_age=max_age)
+        payload = _build_serializer().loads(credentials, max_age=MAX_TOKEN_AGE)
         try:
             ret: int = int(payload["user_id"])
         except (KeyError, ValueError):
