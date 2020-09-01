@@ -30,35 +30,18 @@ from DB import Project, ObjectFields
 # noinspection PyUnresolvedReferences
 from ordered_set import OrderedSet
 
-from tests.test_import import real_params_from_prep_out, ADMIN_USER_ID
+from tests.test_import import real_params_from_prep_out, ADMIN_USER_ID, V6_FILE, test_import_uvp6
 
 OUT_JSON = "out.json"
 ORIGIN_AFTER_MERGE_JSON = "out_after_merge.json"
 SUBS_AFTER_MERGE_JSON = "out_subs_after_merge.json"
 OUT_SUBS_JSON = "out_subs.json"
 
-DATA_DIR = (Path(dirname(realpath(__file__))) / ".." / "data").resolve()
-V6_FILE = DATA_DIR / "UVP6_example.zip"
-V6_DIR = DATA_DIR / "import_uvp6_zip_in_dir"
-
-
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
 # BUT DON'T COMMIT THE CHANGE
 def test_subset_uvp6(config, database, caplog):
     caplog.set_level(logging.ERROR)
-    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test Subset Merge"))
-    task_id = TaskService().create()
-
-    params = ImportPrepReq(task_id=task_id,
-                           source_path=str(V6_FILE))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
-    params = real_params_from_prep_out(task_id, prep_out)
-    assert len(prep_out.errors) == 0
-    # Do real import
-    RealImport(prj_id, params).run()
-    # Check that all went fine
-    for a_msg in caplog.records:
-        assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
+    prj_id = test_import_uvp6(config, database, caplog, "Test Subset Merge")
     # Dump the project
     caplog.set_level(logging.DEBUG)
     with open(OUT_JSON, "w") as fd:

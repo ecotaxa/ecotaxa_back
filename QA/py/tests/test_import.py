@@ -231,9 +231,10 @@ def do_import_update(prj_id, caplog, classif):
 
 # @pytest.mark.skip()
 # noinspection DuplicatedCode
-def test_import_uvp6(config, database, caplog):
+@pytest.mark.parametrize("title", ["Test LS 2"])
+def test_import_uvp6(config, database, caplog, title):
     caplog.set_level(logging.DEBUG)
-    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test LS 2"))
+    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title=title))
     task_id = TaskService().create()
 
     params = ImportPrepReq(task_id=task_id,
@@ -246,6 +247,7 @@ def test_import_uvp6(config, database, caplog):
     # Check that all went fine
     for a_msg in caplog.records:
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
+    return prj_id
 
 
 def test_equal_dump_prj2(config, database, caplog):
