@@ -11,6 +11,8 @@ from API_operations.Subset import *
 from API_operations.CRUD import *
 from API_operations.CRUD.Tasks import TaskService
 from API_operations.CRUD.Projects import *
+from DB.helpers.DBWriter import DBWriter
+from BO.TSVFile import TSVFile
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -20,6 +22,8 @@ from tools.dbBuildSQL import EcoTaxaExistingDB
 
 def main():
     EcoTaxaExistingDB.write_config(CONF_FILE, "localhost", 5434)
+    DBWriter.SEQUENCE_CACHE_SIZE = 5
+    TSVFile.REPORT_EVERY = 5
     # Old project with 1,2M images
     src_prj_id = 152
     task_id = TaskService().create()

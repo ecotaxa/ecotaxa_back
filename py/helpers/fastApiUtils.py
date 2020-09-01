@@ -52,7 +52,7 @@ def dump_openapi(app: FastAPI, main_path: str):
     # Copy here for Git commit but also into another dev tree
     parent_dir = dirname(main_path)
     dests = [Path(parent_dir, "..", "openapi.json"),
-             Path(parent_dir, "..", "..", "ecotaxa_master", "to_back/openapi.json")]
+             Path(parent_dir, "..", "..", "ecotaxa_master", "to_back", "openapi.json")]
     for dest in dests:
         with dest.open("w") as fd:
             fd.write(json_def)
@@ -69,26 +69,34 @@ serializer = URLSafeTimedSerializer(secret_key=SECRET_KEY, salt=SALT,
                                     signer=TimestampSigner, signer_kwargs={'key_derivation': 'hmac'})
 max_age = 2678400  # max token age, 31 days
 
+_credentials_exception = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail="Could not validate credentials",
+    headers={"WWW-Authenticate": "Bearer"},
+)
 
-async def get_current_user(creds: HTTPAuthorizationCredentials = Depends(secured_scheme)) -> int:
+
+def _get_current_user(scheme, credentials) -> int:
     """
-        Extract current user from auth string.
+        Extract current user from auth string, anything going wrong means security exception.
     """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
     try:
-        if creds.scheme != 'Bearer':
-            raise credentials_exception
-        payload = serializer.loads(creds.credentials, max_age=max_age)
+        if scheme != 'Bearer':
+            raise _credentials_exception
+        payload = serializer.loads(credentials, max_age=max_age)
         try:
             ret: int = int(payload["user_id"])
         except (KeyError, ValueError):
-            raise credentials_exception
+            raise _credentials_exception
     except (SignatureExpired, BadSignature):
-        raise credentials_exception
+        raise _credentials_exception
     if ret < 0:
-        raise credentials_exception
+        raise _credentials_exception
     return ret
+
+
+async def get_current_user(creds: HTTPAuthorizationCredentials = Depends(secured_scheme)) -> int:
+    """
+        Just relay the call to the private def above.
+    """
+    return _get_current_user(creds.scheme, creds.credentials)

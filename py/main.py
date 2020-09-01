@@ -93,8 +93,11 @@ def search_projects(current_user: int = Depends(get_current_user),
                     filter_subset: bool = False):
     """
         Return projects summary for current user.
-        @:param also_others: allows to return projects for which given user has no right
-        @:param for_managing: Allows to return project that can be written to (including erased) by the given user
+        - @param also_others: Allows to return projects for which given user has no right
+        - @param for_managing: Allows to return project that can be written to (including erased) by the given user
+        - @param title_filter: Use this pattern for matching returned projects names
+        - @param instrument_filter: Only return projects where this instrument was used
+        - @param filter_subset: Only return projects having 'subset' in their names
     """
     sce = ProjectsService()
     ret = sce.search(current_user_id=current_user, also_others=also_others, for_managing=for_managing,
