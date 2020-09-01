@@ -54,7 +54,7 @@ class SubsetService(TaskServiceBase):
 
     def run(self, current_user_id: int) -> SubsetRsp:
         # Security check
-        current_user = RightsBO.user_wants(self.session, current_user_id, Action.READ, self.prj_id)
+        RightsBO.user_wants(self.session, current_user_id, Action.READ, self.prj_id)
         RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, self.dest_prj.projid)
         # OK
         logger.info("Starting subset of '%s'", self.prj.title)

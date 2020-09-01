@@ -10,6 +10,7 @@ from API_models.imports import SimpleImportReq, SimpleImportRsp, SimpleImportFie
 from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping
 from BO.Project import ProjectBO
+from BO.Rights import RightsBO, Action
 from BO.helpers.ImportHelpers import ImportWhere, ImportHow
 from DB.Object import ObjectHeader, classif_qual
 from DB.helpers.DBWriter import DBWriter
@@ -28,7 +29,10 @@ class SimpleImport(ImportServiceBase):
     def __init__(self, prj_id: int, req: SimpleImportReq):
         super().__init__(prj_id, req)
 
-    def run(self) -> SimpleImportRsp:
+    def run(self, current_user_id: int) -> SimpleImportRsp:
+        # Security check
+        RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, self.prj_id)
+        # OK
         # Validate values in all cases
         ret = self._validate()
         if len(ret.errors) > 0:

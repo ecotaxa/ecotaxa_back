@@ -13,6 +13,7 @@ from DB import Session, ResultProxy
 from DB.ProjectPrivilege import MANAGE
 from DB.User import Role
 from helpers.DynamicLogs import get_logger
+from helpers.Timer import CodeTimer
 
 logger = get_logger(__name__)
 
@@ -119,11 +120,9 @@ class ProjectBO(object):
 
         sql += " ORDER BY LOWER(p.title)"  # pp.member nulls last,
 
-        import time
-        start = time.time()
-        res: ResultProxy = session.execute(sql, sql_params)
-        ret = res.fetchall()
-        print("Dur SQL: %0.2fms" % ((time.time() - start) * 1000))
+        with CodeTimer("Projects query", logger):
+            res: ResultProxy = session.execute(sql, sql_params)
+            ret = res.fetchall()
         return ret
 
     @classmethod

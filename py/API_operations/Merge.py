@@ -8,6 +8,7 @@ from API_models.merge import MergeRsp
 from BO.Mappings import ProjectMapping, RemapOp, MAPPED_TABLES, MappedTableTypeT
 from BO.Project import ProjectBO
 from BO.ProjectPrivilege import ProjectPrivilegeBO
+from BO.Rights import RightsBO, Action
 from DB import ObjectHeader, Sample, Acquisition, Process, Project, ParticleProject
 from helpers.DynamicLogs import get_logger
 from .helpers.Service import Service
@@ -22,7 +23,7 @@ class MergeService(Service):
         Merge operation, move everything from source into destination project.
     """
 
-    def __init__(self, current_user: int, prj_id: int, src_prj_id: int, dry_run: bool):
+    def __init__(self, prj_id: int, src_prj_id: int, dry_run: bool):
         super().__init__()
         # params
         self.prj_id = prj_id
@@ -32,11 +33,15 @@ class MergeService(Service):
         self.remap_operations: Dict[MappedTableTypeT, List[RemapOp]] = {}
         self.dest_augmented_mappings = ProjectMapping()
 
-    def run(self) -> MergeRsp:
+    def run(self, current_user_id: int) -> MergeRsp:
         """
             Run the service, merge the projects.
         :return:
         """
+        # Security check
+        RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, self.prj_id)
+        RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, self.src_prj_id)
+        # OK
         prj = self.session.query(Project).get(self.prj_id)
         src_prj = self.session.query(Project).get(self.src_prj_id)
 

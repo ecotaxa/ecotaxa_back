@@ -9,6 +9,7 @@ from typing import List
 
 from sqlalchemy.orm import Query
 
+from BO.Rights import RightsBO, Action
 from DB import Sample, Project, Acquisition, Process
 from DB.helpers.ORM import orm_equals
 from .helpers.Service import Service
@@ -20,12 +21,14 @@ class ProjectConsistencyChecker(Service):
         This service aims at listing them.
     """
 
-    def __init__(self, current_user_id: int, prj_id: int):
+    def __init__(self,  prj_id: int):
         super().__init__()
         self.prj_id = prj_id
-        self.requester_id = current_user_id
 
-    def run(self) -> List[str]:
+    def run(self, current_user_id: int) -> List[str]:
+        # Security check
+        RightsBO.user_wants(self.session, current_user_id, Action.READ, self.prj_id)
+        # OK
         ret = []
         # TODO: Permissions
         ret.extend(self.check_duplicate_parents())

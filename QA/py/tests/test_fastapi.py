@@ -63,3 +63,25 @@ def test_create_project(config, database, fastapi_noauth, caplog):
     response = client.post(url, headers=CREATOR_AUTH, json={"title": "Oh yes again"})
     assert response.status_code == status.HTTP_200_OK
     assert int(response.json()) > 0
+
+
+def test_taxon_resolve(config, database, fastapi_noauth):
+    url = "/taxon/resolve/%d"
+    taxon_id = 45072  # From schem_prod.sql
+    response = client.get(url % taxon_id)
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    response = client.get(url % taxon_id, headers=USER_AUTH)
+    assert response.json() == [0,
+                               'living > Cyclopoida',
+                               'Biota > Animalia > Arthropoda > Crustacea > Multicrustacea > Hexanauplia > '
+                               'Copepoda > Neocopepoda > Podoplea > Cyclopoida']
+
+
+def test_project_search(config, database, fastapi_noauth):
+    url = "/projects/search"
+    # Ordinary user looking at all projects by curiosity
+    response = client.get(url, headers=USER_AUTH, params={"also_others": True,
+                                                          "title_filter": "laur",
+                                                          "instrument_filter": "flow"})
+    assert response.json() == []

@@ -14,6 +14,7 @@ from API_operations.helpers.TaskService import TaskServiceBase
 from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping
 from BO.Project import ProjectBO
+from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
 from BO.helpers.ImportHelpers import ImportHow, ImportDiagnostic, ImportWhere
 from BO.helpers.TSVHelpers import none_to_empty
@@ -72,7 +73,10 @@ class ImportAnalysis(ImportServiceBase):
     def __init__(self, prj_id: int, req: ImportPrepReq):
         super().__init__(prj_id, req)
 
-    def run(self) -> ImportPrepRsp:
+    def run(self, current_user_id: int) -> ImportPrepRsp:
+        # Security check
+        RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, self.prj_id)
+        # OK
         loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
         logger.info("Previously loaded files: %s", loaded_files)
         self.manage_uploaded()
@@ -178,11 +182,14 @@ class RealImport(ImportServiceBase):
         # Transcode from serialized form
         self.custom_mapping = ProjectMapping().load_from_dict(req.mappings)
 
-    def run(self) -> ImportRealRsp:
+    def run(self, current_user_id: int) -> ImportRealRsp:
         """
             Do the real job using injected parameters.
             :return:
         """
+        # Security check
+        RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, self.prj_id)
+        # OK
         loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
         logger.info("Previously loaded files: %s", loaded_files)
 

@@ -64,13 +64,13 @@ def test_import(config, database, caplog):
     # Do preparation, preparation
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(PLAIN_FILE))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
     # Do real import, real, reusing prep output
     params = real_params_from_prep_out(task_id, prep_out)
     # Simulate a missing user and map it to admin
     params.found_users['elizandro rodriguez'] = {'id': 1}
     print(params)
-    RealImport(prj_id, params).run()
+    RealImport(prj_id, params).run(ADMIN_USER_ID)
     return prj_id
 
 
@@ -86,7 +86,7 @@ def test_import_again_skipping(config, database, caplog):
                            source_path=str(PLAIN_FILE),
                            skip_loaded_files=True,
                            skip_existing_objects=True)
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
     errs = prep_out.errors
     found_err = False
     for an_err in errs:
@@ -108,7 +108,7 @@ def test_import_a_bit_more_skipping(config, database, caplog):
                            source_path=str(PLUS_DIR),
                            skip_loaded_files=True,
                            skip_existing_objects=True)
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
     # warns = preparation_out["wrn"]
     # found_imps = 0
     # for a_warn in warns:
@@ -122,7 +122,7 @@ def test_import_a_bit_more_skipping(config, database, caplog):
     params.skip_existing_objects = True
     # Simulate a missing user and map it to admin
     params.found_users['elizandro rodriguez'] = {'id': 1}
-    RealImport(prj_id, params).run()
+    RealImport(prj_id, params).run(ADMIN_USER_ID)
     # TODO: Assert the extra "object_extra" in TSV in data/import_test_plus/m106_mn01_n3_sml
 
 
@@ -144,7 +144,7 @@ def import_plain(prj_id, task_id):
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(PLAIN_DIR),
                            skip_existing_objects=True)
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
     assert prep_out.errors == []
     # Do real import
     params = real_params_from_prep_out(task_id, prep_out)
@@ -156,7 +156,7 @@ def import_plain(prj_id, task_id):
     # 'ozzeur' category is unknown
     params.found_taxa['ozzeur'] = 85011  # 'other<living'
     params.update_mode = True  # TODO, should be in response
-    RealImport(prj_id, params).run()
+    RealImport(prj_id, params).run(ADMIN_USER_ID)
 
 
 # @pytest.mark.skip()
@@ -170,7 +170,7 @@ def test_import_again_not_skipping_nor_imgs(config, database, caplog):
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(PLAIN_DIR))
 
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
     nb_errs = len([an_err for an_err in prep_out.errors
                    if "Duplicate object" in an_err])
     assert nb_errs == 11
@@ -214,7 +214,7 @@ def do_import_update(prj_id, caplog, classif):
                            skip_existing_objects=True,
                            update_mode=classif,
                            source_path=str(UPDATE_DIR))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
     assert len(prep_out.errors) == 0
     params = real_params_from_prep_out(task_id, prep_out)
     params.found_users['elizandro rodriguez'] = {'id': 1}
@@ -223,7 +223,7 @@ def do_import_update(prj_id, caplog, classif):
     params.skip_existing_objects = True
     params.update_mode = classif
     caplog.clear()
-    RealImport(prj_id, params).run()
+    RealImport(prj_id, params).run(ADMIN_USER_ID)
     # Check that all went fine
     for a_msg in caplog.records:
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
@@ -239,11 +239,11 @@ def test_import_uvp6(config, database, caplog, title):
 
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(V6_FILE))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
     params = real_params_from_prep_out(task_id, prep_out)
     assert len(prep_out.errors) == 0
     # Do real import
-    RealImport(prj_id, params).run()
+    RealImport(prj_id, params).run(ADMIN_USER_ID)
     # Check that all went fine
     for a_msg in caplog.records:
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
@@ -266,7 +266,7 @@ def test_import_empty(config, database, caplog):
 
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(EMPTY_DIR))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
     assert len(prep_out.errors) == 1
 
 
@@ -279,7 +279,7 @@ def test_import_issues(config, database, caplog):
 
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(ISSUES_DIR))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
     assert prep_out.errors == [
         "Invalid Header 'nounderscorecol' in file ecotaxa_m106_mn01_n3_sml.tsv. Format must be Table_Field. Field ignored",
         "Invalid Header 'unknown_target' in file ecotaxa_m106_mn01_n3_sml.tsv. Unknown table prefix. Field ignored",
@@ -305,7 +305,7 @@ def test_import_classif_issue(config, database, caplog):
 
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(ISSUES_DIR2))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
     assert prep_out.errors == [
         "Some specified classif_id don't exist, correct them prior to reload: 99999999"]
 
@@ -320,7 +320,7 @@ def test_import_too_many_custom_columns(config, database, caplog):
 
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(ISSUES_DIR3))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
     assert prep_out.errors == ['Field acq_cus29, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too '
                                'many custom fields, or bad type.',
                                'Field acq_cus30, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too '
@@ -337,12 +337,12 @@ def test_import_ambiguous_classification(config, database, caplog):
 
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(AMBIG_DIR))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
     params = real_params_from_prep_out(task_id, prep_out)
     assert len(prep_out.errors) == 0
     with pytest.raises(Exception):
         # Do real import, this has to fail as we have unmapped taxonomy
-        RealImport(prj_id, params).run()
+        RealImport(prj_id, params).run(ADMIN_USER_ID)
 
 
 def test_import_uvp6_zip_in_dir(config, database, caplog):
@@ -355,11 +355,11 @@ def test_import_uvp6_zip_in_dir(config, database, caplog):
 
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(V6_DIR))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
     params = real_params_from_prep_out(task_id, prep_out)
     assert len(prep_out.errors) == 0
     # Do real import
-    RealImport(prj_id, params).run()
+    RealImport(prj_id, params).run(ADMIN_USER_ID)
     # Check that all went fine
     for a_msg in caplog.records:
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
@@ -375,7 +375,7 @@ def test_import_sparse(config, database, caplog):
 
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(SPARSE_DIR))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run()
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
     params = real_params_from_prep_out(task_id, prep_out)
     print(prep_out.errors)
     assert prep_out.errors == \
@@ -384,7 +384,7 @@ def test_import_sparse(config, database, caplog):
                "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field sample_id is mandatory as there are some sample columns: ['sample_program', 'sample_ship', 'sample_stationid']."
                ]
     # Do real import, even if we had problems before.
-    RealImport(prj_id, params).run()
+    RealImport(prj_id, params).run(ADMIN_USER_ID)
     print("\n".join(caplog.messages))
     sce = AsciiDumper()
     sce.run(projid=prj_id, out="chk.dmp")
@@ -402,14 +402,14 @@ def test_import_images(config, database, caplog):
     params = SimpleImportReq(task_id=task_id,
                              source_path=str(PLAIN_DIR),
                              values=vals)
-    rsp = SimpleImport(prj_id, params).run()
+    rsp = SimpleImport(prj_id, params).run(ADMIN_USER_ID)
     assert rsp.errors == ["'abcde' is not a valid value for SimpleImportFields.latitude"]
     # Do real import
     vals["latitude"] = "43.8802"
     vals["longitude"] = "7.2329"
     params.values = vals
     params.task_id = TaskService().create()
-    rsp: SimpleImportRsp = SimpleImport(prj_id, params).run()
+    rsp: SimpleImportRsp = SimpleImport(prj_id, params).run(ADMIN_USER_ID)
     print("\n".join(caplog.messages))
     assert rsp.errors == []
     assert rsp.nb_images == 8

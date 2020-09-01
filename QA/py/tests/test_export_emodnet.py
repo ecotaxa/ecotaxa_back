@@ -13,7 +13,7 @@ from formats.EMODnet.models import *
 from tests.config_fixture import config
 # noinspection PyUnresolvedReferences
 from tests.db_fixture import database
-from tests.test_import import test_import
+from tests.test_import import test_import, ADMIN_USER_ID
 
 DATA_DIR = (Path(dirname(realpath(__file__))) / ".." / "data").resolve()
 PLAIN_FILE = DATA_DIR / "import_test.zip"
@@ -88,5 +88,5 @@ We are grateful to the crew of the research boat at OOV that collected plankton 
                    maintenanceUpdateFrequency="1M",
                    additionalMetadata=meta_plus)
     req = EMODNetExportReq(meta=meta, project_ids=[prj_ids])
-    rsp = EMODNetExport(req).run()
+    rsp = EMODNetExport(req).run(ADMIN_USER_ID)
     print("\n".join(caplog.messages))

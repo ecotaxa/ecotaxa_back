@@ -4,13 +4,9 @@
 #
 import json
 import logging
-from os.path import dirname, realpath
-from pathlib import Path
 
-from BO.Mappings import ProjectMapping
 from API_models.crud import *
 # noinspection PyPackageRequirements
-from API_models.imports import *
 from API_models.merge import MergeRsp
 from API_models.subset import SubsetReq
 # Import services
@@ -22,20 +18,22 @@ from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
 from API_operations.Subset import SubsetService
 # noinspection PyPackageRequirements
-from API_operations.imports.Import import ImportAnalysis, RealImport
-from deepdiff import DeepDiff
+from BO.Mappings import ProjectMapping
 # OK we need a bit of direct DB access
+# noinspection PyPackageRequirements
 from DB import Project, ObjectFields
-
+# noinspection PyPackageRequirements
+from deepdiff import DeepDiff
 # noinspection PyUnresolvedReferences
 from ordered_set import OrderedSet
 
-from tests.test_import import real_params_from_prep_out, ADMIN_USER_ID, V6_FILE, test_import_uvp6
+from tests.test_import import ADMIN_USER_ID, test_import_uvp6
 
 OUT_JSON = "out.json"
 ORIGIN_AFTER_MERGE_JSON = "out_after_merge.json"
 SUBS_AFTER_MERGE_JSON = "out_subs_after_merge.json"
 OUT_SUBS_JSON = "out_subs.json"
+
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
 # BUT DON'T COMMIT THE CHANGE
@@ -100,13 +98,12 @@ def test_subset_uvp6(config, database, caplog):
         setattr(an_obj.fields, db_col["field"], 4567)
     session.commit()
 
-
     # Re-merge subset into origin project
     # First a dry run to be sure
-    does_it_work: MergeRsp = MergeService(ADMIN_USER_ID, prj_id=prj_id, src_prj_id=subset_prj_id, dry_run=True).run()
+    does_it_work: MergeRsp = MergeService(prj_id=prj_id, src_prj_id=subset_prj_id, dry_run=True).run(ADMIN_USER_ID)
     assert does_it_work.errors == []
     # Then for real
-    does_it_work: MergeRsp = MergeService(ADMIN_USER_ID, prj_id=prj_id, src_prj_id=subset_prj_id, dry_run=False).run()
+    does_it_work: MergeRsp = MergeService(prj_id=prj_id, src_prj_id=subset_prj_id, dry_run=False).run(ADMIN_USER_ID)
     assert does_it_work.errors == []
 
     # Dump the subset which should be just gone
@@ -143,3 +140,47 @@ def test_subset_uvp6(config, database, caplog):
         key = "root['acquisitions'][0]['processings'][0]['objects'][%d]['foobar']" % obj
         added_values.remove(key)
     assert added_values == {}
+
+
+def test_empty_subset_uvp6(config, database, caplog):
+    with caplog.at_level(logging.ERROR):
+        prj_id = test_import_uvp6(config, database, caplog, "Test empty Subset")
+
+    task_id = TaskService().create()
+    subset_prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Empty subset"))
+    # OK this test is just for covering the code in filters
+    filters: ProjectFilters = {
+        "taxo": "23456",
+        "taxochild": "Y",
+        "statusfilter": "V",
+        "MapN": "40",
+        "MapW": "45",
+        "MapE": "50",
+        "MapS": "55",
+        "depthmin": "10",
+        "depthmax": "40",
+        "samples": "1,3,4",
+        "instrum": "inst",
+        "daytime": "A",
+        "month": "5",
+        "fromdate": "2020-05-01",
+        "todate": "2020-05-31",
+        "fromtime": "14:34:01",
+        "totime": "15:34",
+        "inverttime": "1",
+        "validfromdate": "2020-05-01 12:00",
+        "validtodate": "2020-05-01 18:00",
+        "freenum": "n01",
+        "freenumst": "0",
+        "freenumend": "999999",
+        "freetxt": "p01",
+        "freetxtval": "zooprocess",
+        "filt_annot": "34,67"
+    }
+    params = SubsetReq(task_id=task_id,
+                       dest_prj_id=subset_prj_id,
+                       filters=filters,
+                       limit_type='P',
+                       limit_value=100.0,
+                       do_images=True)
+    SubsetService(prj_id=prj_id, req=params).run(ADMIN_USER_ID)

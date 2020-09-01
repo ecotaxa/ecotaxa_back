@@ -25,6 +25,8 @@ class StatusService(Service):
         ret = ["Config dump:"]
         for k in self.config.keys():
             v = self.config[k]
+            if 'secret' in k.lower() or 'salt' in k.lower() or 'password' in k.lower():
+                v = "*************"
             ret.append("  %s: %s" % (k, v))
         ret.append("Paths:")
         for pk in self.PATHS_IN_CONF:

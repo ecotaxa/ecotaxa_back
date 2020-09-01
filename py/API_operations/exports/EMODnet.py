@@ -7,6 +7,7 @@ from typing import Dict
 
 from API_models.exports import EMODNetExportReq, EMODNetExportRsp
 from BO.Project import ProjectBO
+from BO.Rights import RightsBO, Action
 from DB.Project import Project
 from DB.Sample import Sample
 from DB.helpers.Postgres import timestamp_to_str
@@ -54,7 +55,10 @@ class EMODNetExport(Service):
     DWC_ZIP_NAME = "dwca.zip"
     taxa_cache = TaxaCache()
 
-    def run(self) -> EMODNetExportRsp:
+    def run(self, current_user_id: int) -> EMODNetExportRsp:
+        # Security check
+        RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, self.req.project_ids[0])
+        # OK
         logger.info("------------ starting --------------")
         ret = EMODNetExportRsp(task_id=0)
         self.taxa_cache.load()

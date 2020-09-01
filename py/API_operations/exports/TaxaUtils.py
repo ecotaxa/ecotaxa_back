@@ -31,7 +31,7 @@ ALL_RANKS = {
 RANKS_BY_ID = {v: k for k, v in ALL_RANKS.items()}
 
 
-class TaxonInfo(object):
+class TaxonInfo(object):  # noqa: Work in progress
     """
         Taxon information.
             Collected from our DB

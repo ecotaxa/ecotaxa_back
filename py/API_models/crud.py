@@ -72,9 +72,9 @@ class ProjectFilters(TypedDict, total=False):
     todate: Optional[str]
     """ Format is 'YYYY-MM-DD', include objects collected before this date """
     fromtime: Optional[str]
-    """ Format is '? TODO', include objects collected after this time of day """
+    """ Format is 'HH24:MM:SS', include objects collected after this time of day """
     totime: Optional[str]
-    """ Format is '? TODO', include objects collected before this time of day """
+    """ Format is 'HH24:MM:SS', include objects collected before this time of day """
     inverttime: Optional[str]
     """ If '1', include objects outside fromtime an totime range """
     validfromdate: Optional[str]
