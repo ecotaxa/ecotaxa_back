@@ -115,10 +115,15 @@ _forbidden_exception = HTTPException(
     detail="You can't do this."
 )
 
+_not_found_exception = HTTPException(
+    status_code=status.HTTP_404_NOT_FOUND,
+    detail="Not found."
+)
+
 
 class RightsThrower(object):
     """
-        Transform any AssertionError during exit into an HTTP error.
+        Transform any AssertionError, during exit block of "with" syntax, into an HTTP error.
     """
 
     def __enter__(self):
@@ -126,7 +131,13 @@ class RightsThrower(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type:
+            # An exception was thrown
             if exc_type == AssertionError:
-                if exc_val.args and exc_val.args[0] == "Not authorized":
-                    raise _forbidden_exception
-            raise exc_type(exc_val)
+                if exc_val.args:
+                    if exc_val.args[0] == "Not authorized":
+                        raise _forbidden_exception
+                    elif exc_val.args[0] == "Not found":
+                        raise _not_found_exception
+            # Re-raise
+            raise Exception(str(exc_val)).with_traceback(exc_tb)
+
