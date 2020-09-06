@@ -11,7 +11,7 @@ from sqlalchemy.orm import Query, contains_eager
 
 from API_models.crud import ProjectFilters
 from BO.Mappings import ProjectMapping
-from BO.ObjectSet import ObjectSet
+from BO.ObjectSet import DescribedObjectSet
 from DB import Sample, Acquisition, Process, Image, ObjectHeader, ObjectFields, and_
 from DB.Project import Project
 from DB.helpers.ORM import Model
@@ -115,7 +115,7 @@ class JsonDumper(Service):
             Determine the objects to dump.
         """
         # Prepare a where clause and parameters from filter
-        object_set: ObjectSet = ObjectSet(self.session, self.prj.projid, self.filters)
+        object_set: DescribedObjectSet = DescribedObjectSet(self.session, self.prj.projid, self.filters)
         where, params = object_set.get_sql(self.requester_id)
 
         sql = """

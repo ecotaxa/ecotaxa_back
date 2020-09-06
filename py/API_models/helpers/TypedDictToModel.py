@@ -24,4 +24,7 @@ def parse_typed_dict(typed_dict):
         else:
             raise Exception("Not managed yet")
 
-    return create_model(typed_dict.__name__, **annotations)
+    ret = create_model(typed_dict.__name__, **annotations)
+    # Make the model get-able
+    ret.get = lambda self, k, d: getattr(self, k, d)
+    return ret

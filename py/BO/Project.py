@@ -17,6 +17,9 @@ from helpers.Timer import CodeTimer
 
 logger = get_logger(__name__)
 
+# Typings, to be clear that these are not e.g. object IDs
+ProjectIDListT = List[int]
+
 
 class ProjectBO(object):
     """

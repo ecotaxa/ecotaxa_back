@@ -8,18 +8,29 @@
 #
 # The set comprises all objects from a Project, except the ones filtered by a set of criteria.
 #
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 
-from sqlalchemy.orm import Session
+from BO.Project import ProjectIDListT
+from DB import Project, ObjectHeader, Image
+from DB.helpers.ORM import Session, Query, Delete, any_
 
 from API_models.crud import ProjectFilters
 from BO.Taxonomy import TaxonomyBO
 from DB.helpers.SQL import WhereClause, SQLParamDict
 
+from helpers.DynamicLogs import get_logger
+from helpers.Timer import CodeTimer
 
-class ObjectSet(object):
+# Typings, to be clear that these are not e.g. project IDs
+ObjetIdListT = List[int]
+
+logger = get_logger(__name__)
+
+
+class DescribedObjectSet(object):
     """
-        A (potentially large) set of objects.
+        A (potentially large) set of objects, described by a base rule (all objects in project XXX)
+        and filtered by exclusion conditions.
     """
 
     def __init__(self, session: Session, prj_id: int, filters: ProjectFilters):
@@ -36,6 +47,57 @@ class ObjectSet(object):
         params: SQLParamDict = {"projid": self.prj_id}
         self.filters.get_sql_filter(where, params, user_id)
         return where, params
+
+
+class EnumeratedObjectSet(object):
+    """
+        A set of objects, described by all their IDs.
+    """
+
+    def __init__(self, session: Session, object_ids: ObjetIdListT):
+        self.session = session
+        self.object_ids = object_ids
+
+    def get_projects_ids(self) -> ProjectIDListT:
+        """
+            Return the project IDs for the given objects.
+        """
+        qry: Query = self.session.query(Project.projid).distinct(Project.projid)
+        qry = qry.join(Project.all_objects)
+        qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))  # type: ignore
+        with CodeTimer("Prjs for %d objs: " % len(self.object_ids), logger):
+            return [an_id for an_id in qry.all()]
+
+    def delete(self) -> Tuple[int, int, List[str]]:
+        """
+            Delete all objects in this set.
+                There are referential integrity constraints in the DB making it quite straightforward.
+            Technical Note: We use SQLA Core as we don't want to fetch the rows
+        """
+        # Start with images which are not deleted via a CASCADE on DB side
+        # This is maybe due to relationship cycle b/w ObjectHeader and Images @See comment in Image class
+        img_del_qry: Delete = Image.__table__.delete()
+        img_del_qry = img_del_qry.where(Image.objid == any_(self.object_ids))  # type: ignore
+        img_del_qry = img_del_qry.returning(Image.file_name, Image.thumb_file_name)
+        with CodeTimer("DELETE for %d images: " % len(self.object_ids), logger):
+            files_res = self.session.execute(img_del_qry)
+            img_files = []
+            nb_img_rows = 0
+            for a_file_tuple in files_res:
+                # We have main file and optionally the thumbnail one
+                for a_file in a_file_tuple:
+                    if a_file:
+                        img_files.append(a_file)
+                nb_img_rows += 1
+            logger.info("Removed: %d rows, to remove: %d files", nb_img_rows, len(img_files))
+
+        obj_del_qry: Delete = ObjectHeader.__table__.delete()
+        obj_del_qry = obj_del_qry.where(ObjectHeader.objid == any_(self.object_ids))  # type: ignore
+        with CodeTimer("DELETE for %d objs: " % len(self.object_ids), logger):
+            nb_objs = self.session.execute(obj_del_qry).rowcount
+
+        self.session.commit()
+        return nb_objs, nb_img_rows, img_files
 
 
 class ObjectSetFilter(object):

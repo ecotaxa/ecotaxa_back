@@ -19,6 +19,7 @@ from API_operations.CRUD.Users import UserService
 from API_operations.Consistency import ProjectConsistencyChecker
 from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
+from API_operations.ObjectManager import ObjectManager
 from API_operations.Status import StatusService
 from API_operations.Subset import SubsetService
 from API_operations.exports.EMODnet import EMODNetExport
@@ -131,8 +132,22 @@ def project_subset(project_id: int, params: SubsetReq, current_user: int = Depen
         return sce.run(current_user)
 
 
-@app.post("/projects/{project_id}/query", tags=['projects'], include_in_schema=False, response_model=SubsetRsp)
-def project_query(project_id: int, filters: ProjectFiltersModel, current_user: int = Depends(get_current_user)):
+@app.get("/projects/{project_id}/query", tags=['projects'], response_model=ProjectModel)
+def project_query(project_id: int,
+                  for_managing: Optional[bool] = False,
+                  current_user: int = Depends(get_current_user)):
+    """
+        See if project exists for current user, eventually for managing it.
+    """
+    sce = ProjectsService()
+    for_managing = bool(for_managing)
+    with RightsThrower():
+        ret = sce.query(current_user, project_id, for_managing)
+    return ret
+
+
+@app.post("/projects/{project_id}/dump", tags=['projects'], include_in_schema=False)
+def object_query(project_id: int, filters: ProjectFiltersModel, current_user: int = Depends(get_current_user)):
     """
         Query the project.
     """
@@ -194,6 +209,31 @@ def simple_import(project_id: int, params: SimpleImportReq, current_user: int = 
     sce = SimpleImport(project_id, params)
     with RightsThrower():
         return sce.run(current_user)
+
+
+# TODO: Should be app.get, but for this we need a way to express
+#  that each field in ProjectFilter is part of the params
+@app.post("/object_set/{project_id}/query", tags=['objects'])
+def get_object_set(project_id: int, filters: ProjectFiltersModel,
+                   current_user: int = Depends(get_current_user)) -> List[int]:
+    """
+        Return object ids for the given project with the filters.
+    """
+    sce = ObjectManager()
+    with RightsThrower():
+        return sce.query(current_user, project_id, filters)
+
+
+@app.delete("/object_set/", tags=['objects'])
+def erase_object_list(object_ids: List[int], current_user: int = Depends(get_current_user)) -> Tuple[
+    int, int, int, int]:
+    """
+        Delete the objects with given object ids.
+        Current user needs Manage right on all projects of specified objects.
+    """
+    sce = ObjectManager()
+    with RightsThrower():
+        return sce.delete(current_user, object_ids)
 
 
 @app.post("/export/emodnet", tags=['WIP'], include_in_schema=False, response_model=EMODNetExportRsp)

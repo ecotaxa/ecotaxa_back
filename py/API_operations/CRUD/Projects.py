@@ -38,10 +38,7 @@ class ProjectsService(Service):
         self.session.add(prj)
         self.session.flush()  # to get the project ID
         # Add the manage privilege
-        privilege = ProjectPrivilege()
-        privilege.privilege = MANAGE
-        privilege.project = prj
-        current_user.privs_on_projects.append(privilege)
+        RightsBO.grant(current_user, Action.ADMINISTRATE, prj)
         self.session.commit()
         return prj.projid
 
@@ -59,3 +56,14 @@ class ProjectsService(Service):
                                                title_filter, instrument_filter, filter_subset):
             ret.append(prj)
         return ret
+
+    def query(self, current_user_id: int,
+              prj_id: int,
+              for_managing: bool) -> Project:
+        current_user, project = RightsBO.user_wants(self.session, current_user_id,
+                                                    Action.ADMINISTRATE if for_managing else Action.READ,
+                                                    prj_id)
+        # For mypy, should the project be not found there should have been an assert failed before
+        assert project is not None
+
+        return project

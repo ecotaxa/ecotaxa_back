@@ -10,7 +10,7 @@ from typing import List, Tuple, Iterator
 from API_models.subset import SubsetReq, SubsetRsp, LimitMethods
 from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping
-from BO.ObjectSet import ObjectSet
+from BO.ObjectSet import DescribedObjectSet
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from BO.TSVFile import TSVFile
@@ -234,7 +234,7 @@ class SubsetService(TaskServiceBase):
             rank_function = 'FunctionError'
 
         # Prepare a where clause and parameters from filter
-        object_set: ObjectSet = ObjectSet(self.session, self.prj_id, self.req.filters)
+        object_set: DescribedObjectSet = DescribedObjectSet(self.session, self.prj_id, self.req.filters)
         where, params = object_set.get_sql(self.task.owner_id)
         selected_tables = "obj_head oh"
         if "of." in where.get_sql():

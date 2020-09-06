@@ -65,6 +65,17 @@ def test_create_project(config, database, fastapi_noauth, caplog):
     assert int(response.json()) > 0
 
 
+def test_query_project(config, database, fastapi_noauth, caplog):
+    url = "/projects/%d/query?for_managing=True"
+    response = client.get(url % 88888888)
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    response = client.get(url % 88888888, headers=USER_AUTH)
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    # Even admin cannot see a project which doesn't exist
+    response = client.get(url % 88888888, headers=ADMIN_AUTH)
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
 def test_taxon_resolve(config, database, fastapi_noauth):
     url = "/taxon/resolve/%d"
     taxon_id = 45072  # From schem_prod.sql
