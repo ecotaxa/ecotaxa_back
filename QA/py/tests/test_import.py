@@ -49,12 +49,15 @@ def real_params_from_prep_out(task_id, prep_out: ImportPrepRsp) -> ImportRealReq
 
 
 ADMIN_USER_ID = 1
+ORDINARY_USER_USER_ID = 2
+CREATOR_USER_ID = 3
 
 
-def test_import(config, database, caplog):
+@pytest.mark.parametrize("title", ["Test LS"])
+def test_import(config, database, caplog, title):
     caplog.set_level(logging.DEBUG)
     # Create a dest project
-    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test LS"))
+    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title=title))
     # Create a task for this run
     task_id = TaskService().create()
     # user_sce = UserService()
@@ -65,11 +68,10 @@ def test_import(config, database, caplog):
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(PLAIN_FILE))
     prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
-    # Do real import, real, reusing prep output
+    # Do real import, reusing prep output
     params = real_params_from_prep_out(task_id, prep_out)
     # Simulate a missing user and map it to admin
     params.found_users['elizandro rodriguez'] = {'id': 1}
-    print(params)
     RealImport(prj_id, params).run(ADMIN_USER_ID)
     return prj_id
 

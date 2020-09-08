@@ -3,15 +3,16 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-from sqlalchemy import Column, Table
-from sqlalchemy.dialects import postgresql
-from sqlalchemy.inspection import inspect
-from sqlalchemy.sql.ddl import CreateTable
-
-from DB.helpers.ORM import Model
-
 # noinspection PyUnreachableCode
 if False:  # pragma: no cover
+    from sqlalchemy import Column, Table
+    from sqlalchemy.dialects import postgresql
+    from sqlalchemy.inspection import inspect
+    from sqlalchemy.sql.ddl import CreateTable
+
+    from DB.helpers.ORM import Model
+
+
     def view_of(_metadata, clazz, to_keep: Set[str]) -> ClassVar:
         """
             Return a Model, i.e. a SQLAlchemy mapper with only the given fields.

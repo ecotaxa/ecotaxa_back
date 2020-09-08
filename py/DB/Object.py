@@ -205,7 +205,9 @@ Index('is_objectsdate', ObjectHeader.objdate, ObjectHeader.projid)
 Index('is_objectsprojrandom', ObjectHeader.projid, ObjectHeader.random_value,
       ObjectHeader.classif_qual)
 Index('is_objectfieldsorigid', ObjectFields.orig_id)
-
+# For FK checks during deletion
+Index('is_objectsacquisition', ObjectHeader.acquisid)
+Index('is_objectsprocess', ObjectHeader.processid)
 
 class ObjectsClassifHisto(Model):
     __tablename__ = 'objectsclassifhisto'

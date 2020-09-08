@@ -30,7 +30,11 @@ class StatusService(Service):
             ret.append("  %s: %s" % (k, v))
         ret.append("Paths:")
         for pk in self.PATHS_IN_CONF:
-            path_str = self.config[pk]
+            try:
+                path_str = self.config[pk]
+            except KeyError:
+                ret.append("  %s not found" % pk)
+                continue
             path = Path(path_str.strip("'"))
             if path.exists():
                 status = "OK"

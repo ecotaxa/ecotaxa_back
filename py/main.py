@@ -241,8 +241,8 @@ def get_object_set(project_id: int, filters: ProjectFiltersModel,
 
 
 @app.delete("/object_set/", tags=['objects'])
-def erase_object_list(object_ids: List[int],
-                      current_user: int = Depends(get_current_user)) -> Tuple[int, int, int, int]:
+def erase_object_set(object_ids: List[int],
+                     current_user: int = Depends(get_current_user)) -> Tuple[int, int, int, int]:
     """
         Delete the objects with given object ids.
         Current user needs Manage right on all projects of specified objects.
@@ -292,6 +292,16 @@ def system_status(_current_user: int = Depends(get_current_user)) -> Response:
     """
     sce = StatusService()
     return Response(sce.run(), media_type="text/plain")
+
+
+@app.get("/error", tags=['misc'])
+def system_error(_current_user: int = Depends(get_current_user)):
+    """
+        This entry point will return a 500 internal error, on purpose so the stack trace is visible and client
+        can see what it gives.
+    """
+    with RightsThrower():
+        assert False
 
 
 # @app.get("/loadtest", tags=['WIP'], include_in_schema=False)

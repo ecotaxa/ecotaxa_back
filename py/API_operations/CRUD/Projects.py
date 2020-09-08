@@ -11,7 +11,11 @@ from BO.Rights import RightsBO, Action
 from DB.Project import Project, ANNOTATE
 from DB.User import User
 from DB.helpers.ORM import clone_of
+from FS.VaultRemover import VaultRemover
+from helpers.DynamicLogs import get_logger
 from ..helpers.Service import Service
+
+logger = get_logger(__name__)
 
 
 class ProjectsService(Service):
@@ -80,14 +84,23 @@ class ProjectsService(Service):
         all_object_ids = ProjectBO.get_all_object_ids(self.session, prj_id=prj_id)
         # Build a big set
         obj_set = EnumeratedObjectSet(self.session, all_object_ids)
-        # Go to SQLA core
-        self.session.flush()
+
+        # Prepare a remover thread that will run in // with DB queries
+        remover = VaultRemover(self.link_src, logger).do_start()
         # Do the deletion itself.
-        nb_objs, nb_img_rows, img_files = obj_set.delete(self.DELETE_CHUNK_SIZE)
+        nb_objs, nb_img_rows, img_files = obj_set.delete(self.DELETE_CHUNK_SIZE, remover.add_files)
 
         ProjectBO.delete_object_parents(self.session, prj_id)
 
-        if not only_objects:
+        if only_objects:
+            # Update stats, should all be 0...
+            ProjectBO.update_taxo_stats(self.session, prj_id)
+            # Stats depend on taxo stats
+            ProjectBO.update_stats(self.session, prj_id)
+        else:
             ProjectBO.delete(self.session, prj_id)
 
+        self.session.commit()
+        # Wait for the files handled
+        remover.wait_for_done()
         return nb_objs, 0, nb_img_rows, len(img_files)

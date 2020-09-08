@@ -22,7 +22,7 @@ PLAIN_FILE = DATA_DIR / "import_test.zip"
 def test_emodnet_export(config, database, caplog):
     caplog.set_level(logging.DEBUG)
 
-    prj_ids = test_import(config, database, caplog)
+    prj_ids = test_import(config, database, caplog, "EMODNET project")
 
     person1 = EMLPerson(organizationName="IMEV",
                         givenName="Jean-Olivier",

@@ -38,7 +38,7 @@ async def internal_server_error_handler(_request: Any, exc: Exception) -> PlainT
 
 
 # In a development environment, dump the API definition at each run
-def dump_openapi(app: FastAPI, main_path: str):
+def dump_openapi(app: FastAPI, main_path: str): # pragma: no cover
     import sys
     if "--reload" not in sys.argv:
         return  # It's not dev
@@ -84,9 +84,10 @@ def _build_serializer():
     return _serializer
 
 
-def _get_current_user(scheme, credentials) -> int:
+def _get_current_user(scheme, credentials) -> int:  # pragma: no cover
     """
         Extract current user from auth string, anything going wrong means security exception.
+        Not reasonable to test automatically, so excluded from code coverage measurement.
     """
     try:
         if scheme != 'Bearer':
@@ -140,4 +141,3 @@ class RightsThrower(object):
                         raise _not_found_exception
             # Re-raise
             raise Exception(str(exc_val)).with_traceback(exc_tb)
-

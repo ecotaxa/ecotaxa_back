@@ -17,6 +17,7 @@ from API_operations.CRUD.Tasks import TaskService
 from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
 from API_operations.Subset import SubsetService
+from API_operations.Consistency import ProjectConsistencyChecker
 # noinspection PyPackageRequirements
 from BO.Mappings import ProjectMapping
 # OK we need a bit of direct DB access
@@ -35,11 +36,16 @@ SUBS_AFTER_MERGE_JSON = "out_subs_after_merge.json"
 OUT_SUBS_JSON = "out_subs.json"
 
 
+def check_project(prj_id: int):
+    problems = ProjectConsistencyChecker(prj_id).run(ADMIN_USER_ID)
+    assert problems == []
+
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
 # BUT DON'T COMMIT THE CHANGE
 def test_subset_uvp6(config, database, caplog):
     caplog.set_level(logging.ERROR)
     prj_id = test_import_uvp6(config, database, caplog, "Test Subset Merge")
+    check_project(prj_id)
     # Dump the project
     caplog.set_level(logging.DEBUG)
     with open(OUT_JSON, "w") as fd:
@@ -105,6 +111,9 @@ def test_subset_uvp6(config, database, caplog):
     # Then for real
     does_it_work: MergeRsp = MergeService(prj_id=prj_id, src_prj_id=subset_prj_id, dry_run=False).run(ADMIN_USER_ID)
     assert does_it_work.errors == []
+
+    # The merge introduces duplicates, so below fails
+    # check_project(prj_id)
 
     # Dump the subset which should be just gone
     with open(SUBS_AFTER_MERGE_JSON, "w") as fd:

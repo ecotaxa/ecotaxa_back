@@ -2,16 +2,18 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-
 from typing import List, Tuple
-
-from BO.Project import ProjectBO
-from DB.helpers.ORM import ResultProxy
 
 from API_models.crud import ProjectFilters
 from BO.ObjectSet import DescribedObjectSet, ObjetIdListT, EnumeratedObjectSet
+from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
+from DB.helpers.ORM import ResultProxy
+from FS.VaultRemover import VaultRemover
+from helpers.DynamicLogs import get_logger
 from .helpers.Service import Service
+
+logger = get_logger(__name__)
 
 
 class ObjectManager(Service):
@@ -53,14 +55,19 @@ class ObjectManager(Service):
         prj_ids = obj_set.get_projects_ids()
         for a_prj_id in prj_ids:
             RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, a_prj_id)
-        # Do the deletion itself.
-        nb_objs, nb_img_rows, img_files = obj_set.delete(self.CHUNK_SIZE)
 
-        # TODO: We now have orphan image files
+        # Prepare & start a remover thread that will run in // with DB queries
+        remover = VaultRemover(self.link_src, logger).do_start()
+        # Do the deletion itself.
+        nb_objs, nb_img_rows, img_files = obj_set.delete(self.CHUNK_SIZE, remover.add_files)
+
         # Update stats on impacted project(s)
         for prj_id in prj_ids:
             ProjectBO.update_taxo_stats(self.session, prj_id)
             # Stats depend on taxo stats
             ProjectBO.update_stats(self.session, prj_id)
 
+        self.session.commit()
+        # Wait for the files handled
+        remover.wait_for_done()
         return nb_objs, 0, nb_img_rows, len(img_files)

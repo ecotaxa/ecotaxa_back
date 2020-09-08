@@ -105,6 +105,7 @@ class MergeService(Service):
             upd = self.session.query(a_fk_to_proj_tbl)
             upd = upd.filter(a_fk_to_proj_tbl.projid == self.src_prj_id)  # type: ignore
             upd = upd.update(values={'projid': self.prj_id}, synchronize_session=False)
+            # NOTE: The statement only execute because of the mention in logging line below
             logger.info("Update in %s: %s rows", a_fk_to_proj_tbl.__tablename__, upd)
 
         self.dest_augmented_mappings.write_to_project(dest_prj)

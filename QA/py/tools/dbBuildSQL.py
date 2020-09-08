@@ -143,6 +143,8 @@ DB_PORT="%d"
 DB_DATABASE="ecotaxa"
 THUMBSIZELIMIT=99
 SECRET_KEY = 'THIS KEY MUST BE CHANGED'
+serverloadarea = "/tmp"
+ftpexportarea = "H:\\"
     """
 
     def write_config(self):

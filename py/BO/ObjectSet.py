@@ -8,7 +8,7 @@
 #
 # The set comprises all objects from a Project, except the ones filtered by a set of criteria.
 #
-from typing import Tuple, Optional, List, Iterator
+from typing import Tuple, Optional, List, Iterator, Callable
 
 from API_models.crud import ProjectFilters
 from BO.Project import ProjectIDListT
@@ -110,7 +110,7 @@ class EnumeratedObjectSet(object):
         session.commit()
         return nb_objs, nb_img_rows, img_files
 
-    def delete(self, chunk_size: int) -> Tuple[int, int, List[str]]:
+    def delete(self, chunk_size: int, do_with_files: Optional[Callable[[List[str]], None]]) -> Tuple[int, int, List[str]]:
         """
             Delete all objects in this set, in 'small' DB transactions.
         """
@@ -122,6 +122,8 @@ class EnumeratedObjectSet(object):
             # Cumulate stats
             nb_objs += o
             nb_img_rows += r
+            if do_with_files:
+                do_with_files(i)
             img_files.extend(i)
 
         return nb_objs, nb_img_rows, img_files

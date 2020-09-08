@@ -5,13 +5,13 @@
 from datetime import datetime
 from typing import List, Dict, Any, Iterable
 
-from BO.Mappings import RemapOp, MappedTableTypeT, ParentTableT, ParentTableClassT
+from BO.Mappings import RemapOp, MappedTableTypeT
 from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFields, Acquisition, Process, \
     ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram
 from DB import Session, ResultProxy
 from DB.ProjectPrivilege import MANAGE
 from DB.User import Role
-from DB.helpers.ORM import Delete, Query, any_, ModelT
+from DB.helpers.ORM import Delete, Query
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -185,14 +185,20 @@ class ProjectBO(object):
         session.execute(del_qry)
         upd_qry = ParticleSample.__table__. \
             update().where(ParticleSample.psampleid.in_(soon_invalid_part_samples)).values(sampleid=None)
-        logger.info("Upd part sample :%s", str(upd_qry))
-        session.execute(upd_qry)
+        logger.info("Upd part samples :%s", str(upd_qry))
+        row_count = session.execute(upd_qry).rowcount
+        logger.info(" %d EcoPart samples unlinked and cleaned", row_count)
 
         ret = []
-        # Remove first-level children
+        # Remove first-level children of project
         for a_tbl in (Sample, Acquisition, Process):
-            sub_del: Delete = a_tbl.__table__.delete().where(a_tbl.projid == prj_id)
-            ret.append(session.execute(sub_del).rowcount)
+            sub_del: Delete = a_tbl.__table__.delete().where(a_tbl.projid == prj_id)  # type: ignore
+            logger.info("Del parent :%s", str(sub_del))
+            row_count = session.execute(sub_del).rowcount
+            ret.append(row_count)
+            logger.info("%d rows deleted", row_count)
+            if row_count > 1000:
+                session.commit()
         session.commit()
         return ret
 
@@ -202,10 +208,11 @@ class ProjectBO(object):
             Completely remove the project. It is assumed that contained objects has been removed.
         """
         # TODO: Remove for user prefs
-        # Unlink Particle project
-        part_proj = session.query(ParticleProject).filter(ParticleProject.projid == prj_id)
-        if part_proj:
-            part_proj.projid = None
+        # Unlink Particle project if any
+        upd_qry = ParticleProject.__table__.update().where(ParticleProject.projid == prj_id).values(projid=None)
+        row_count = session.execute(upd_qry).rowcount
+        if row_count:
+            logger.info("%d EcoPart project unlinked", row_count)
         # Remove project
         session.query(Project). \
             filter(Project.projid == prj_id).delete()
