@@ -2,14 +2,14 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List, Union
+from typing import List, Union, Tuple
 
 from API_models.crud import CreateProjectReq, ProjectSearchResult
+from BO.ObjectSet import EnumeratedObjectSet
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from DB.Project import Project, ANNOTATE
-from DB.ProjectPrivilege import ProjectPrivilege, MANAGE
-from DB.User import User, Role
+from DB.User import User
 from DB.helpers.ORM import clone_of
 from ..helpers.Service import Service
 
@@ -63,7 +63,31 @@ class ProjectsService(Service):
         current_user, project = RightsBO.user_wants(self.session, current_user_id,
                                                     Action.ADMINISTRATE if for_managing else Action.READ,
                                                     prj_id)
-        # For mypy, should the project be not found there should have been an assert failed before
+        # For mypy check. Explanation: should the project be not found, there has been an assertion which failed before,
+        # so we don't reach this line.
         assert project is not None
 
         return project
+
+    DELETE_CHUNK_SIZE = 400
+
+    def delete(self, current_user_id: int,
+               prj_id: int,
+               only_objects: bool) -> Tuple[int, int, int, int]:
+        # Security barrier
+        _current_user, _project = RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, prj_id)
+        # Troll-ish way of erasing
+        all_object_ids = ProjectBO.get_all_object_ids(self.session, prj_id=prj_id)
+        # Build a big set
+        obj_set = EnumeratedObjectSet(self.session, all_object_ids)
+        # Go to SQLA core
+        self.session.flush()
+        # Do the deletion itself.
+        nb_objs, nb_img_rows, img_files = obj_set.delete(self.DELETE_CHUNK_SIZE)
+
+        ProjectBO.delete_object_parents(self.session, prj_id)
+
+        if not only_objects:
+            ProjectBO.delete(self.session, prj_id)
+
+        return nb_objs, 0, nb_img_rows, len(img_files)

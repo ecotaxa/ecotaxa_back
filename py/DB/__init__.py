@@ -11,3 +11,4 @@ from sqlalchemy.engine import ResultProxy
 from sqlalchemy.orm import Session, Query
 
 from .Relations import *
+from .ParticleProject import *

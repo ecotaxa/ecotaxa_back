@@ -5,13 +5,13 @@
 from datetime import datetime
 from typing import List, Dict, Any, Iterable
 
-from sqlalchemy.orm import Query
-
-from BO.Mappings import RemapOp, MappedTableTypeT
-from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFields
+from BO.Mappings import RemapOp, MappedTableTypeT, ParentTableT, ParentTableClassT
+from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFields, Acquisition, Process, \
+    ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram
 from DB import Session, ResultProxy
 from DB.ProjectPrivilege import MANAGE
 from DB.User import Role
+from DB.helpers.ORM import Delete, Query, any_, ModelT
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -164,15 +164,54 @@ class ProjectBO(object):
         ProjectBO.update_stats(session, prj_id)
 
     @staticmethod
+    def delete_object_parents(session: Session, prj_id: int) -> List[int]:
+        """
+            Remove object parents, also project children entities, in the project.
+        """
+        # The EcoTaxa samples which are going to disappear. We have to cleanup Particle side.
+        soon_deleted_samples = Query(Sample.sampleid).filter(Sample.projid == prj_id)
+        # The EcoPart samples to clean.
+        soon_invalid_part_samples = Query(ParticleSample.psampleid).filter(
+            ParticleSample.sampleid.in_(soon_deleted_samples))
+
+        # Cleanup EcoPart corresponding tables
+        del_qry = ParticleCategoryHistogramList.__table__. \
+            delete().where(ParticleCategoryHistogramList.psampleid.in_(soon_invalid_part_samples))
+        logger.info("Del part histo lst :%s", str(del_qry))
+        session.execute(del_qry)
+        del_qry = ParticleCategoryHistogram.__table__. \
+            delete().where(ParticleCategoryHistogram.psampleid.in_(soon_invalid_part_samples))
+        logger.info("Del part histo :%s", str(del_qry))
+        session.execute(del_qry)
+        upd_qry = ParticleSample.__table__. \
+            update().where(ParticleSample.psampleid.in_(soon_invalid_part_samples)).values(sampleid=None)
+        logger.info("Upd part sample :%s", str(upd_qry))
+        session.execute(upd_qry)
+
+        ret = []
+        # Remove first-level children
+        for a_tbl in (Sample, Acquisition, Process):
+            sub_del: Delete = a_tbl.__table__.delete().where(a_tbl.projid == prj_id)
+            ret.append(session.execute(sub_del).rowcount)
+        session.commit()
+        return ret
+
+    @staticmethod
     def delete(session: Session, prj_id: int):
         """
-            Completely remove the project.
+            Completely remove the project. It is assumed that contained objects has been removed.
         """
         # TODO: Remove for user prefs
+        # Unlink Particle project
+        part_proj = session.query(ParticleProject).filter(ParticleProject.projid == prj_id)
+        if part_proj:
+            part_proj.projid = None
         # Remove project
-        session.query(Project).filter(Project.projid == prj_id).delete()
+        session.query(Project). \
+            filter(Project.projid == prj_id).delete()
         # Remove privileges
-        session.query(ProjectPrivilege).filter(ProjectPrivilege.projid == prj_id).delete()
+        session.query(ProjectPrivilege). \
+            filter(ProjectPrivilege.projid == prj_id).delete()
 
     @staticmethod
     def remap(session: Session, prj_id: int, table: MappedTableTypeT, remaps: List[RemapOp]):
@@ -191,3 +230,12 @@ class ProjectBO(object):
         qry = qry.update(values=values, synchronize_session=False)
 
         logger.info("Remap query for %s: %s", table.__tablename__, qry)
+
+    @classmethod
+    def get_all_object_ids(cls, session: Session, prj_id: int):  # TODO: Problem with recursive import -> ObjetIdListT:
+        """
+            Return the full list of objects IDs inside a project.
+            TODO: Maybe better in ObjectBO
+        """
+        qry: Query = session.query(ObjectHeader.objid).filter(ObjectHeader.projid == prj_id)
+        return [an_id for an_id in qry.all()]

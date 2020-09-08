@@ -8,16 +8,14 @@
 #
 # The set comprises all objects from a Project, except the ones filtered by a set of criteria.
 #
-from typing import Tuple, Optional, List
-
-from BO.Project import ProjectIDListT
-from DB import Project, ObjectHeader, Image
-from DB.helpers.ORM import Session, Query, Delete, any_
+from typing import Tuple, Optional, List, Iterator
 
 from API_models.crud import ProjectFilters
+from BO.Project import ProjectIDListT
 from BO.Taxonomy import TaxonomyBO
+from DB import Project, ObjectHeader, Image
+from DB.helpers.ORM import Session, Query, Delete, any_
 from DB.helpers.SQL import WhereClause, SQLParamDict
-
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -58,9 +56,22 @@ class EnumeratedObjectSet(object):
         self.session = session
         self.object_ids = object_ids
 
+    def __len__(self):
+        return len(self.object_ids)
+
+    def get_objectid_chunks(self, chunk_size: int) -> Iterator[ObjetIdListT]:
+        """
+            Yield successive n-sized chunks from l.
+            Adapted from
+            https://stackoverflow.com/questions/312443/how-do-you-split-a-list-into-evenly-sized-chunks/312464#312464
+        """
+        lst = self.object_ids
+        for idx in range(0, len(lst), chunk_size):
+            yield lst[idx:idx + chunk_size]
+
     def get_projects_ids(self) -> ProjectIDListT:
         """
-            Return the project IDs for the given objects.
+            Return the project IDs for the owned objectsIDs.
         """
         qry: Query = self.session.query(Project.projid).distinct(Project.projid)
         qry = qry.join(Project.all_objects)
@@ -68,19 +79,19 @@ class EnumeratedObjectSet(object):
         with CodeTimer("Prjs for %d objs: " % len(self.object_ids), logger):
             return [an_id for an_id in qry.all()]
 
-    def delete(self) -> Tuple[int, int, List[str]]:
+    @staticmethod
+    def _delete_chunk(session: Session, a_chunk: ObjetIdListT) -> Tuple[int, int, List[str]]:
         """
-            Delete all objects in this set.
-                There are referential integrity constraints in the DB making it quite straightforward.
+            Delete a chunk from self's object list.
             Technical Note: We use SQLA Core as we don't want to fetch the rows
         """
         # Start with images which are not deleted via a CASCADE on DB side
         # This is maybe due to relationship cycle b/w ObjectHeader and Images @See comment in Image class
         img_del_qry: Delete = Image.__table__.delete()
-        img_del_qry = img_del_qry.where(Image.objid == any_(self.object_ids))  # type: ignore
+        img_del_qry = img_del_qry.where(Image.objid == any_(a_chunk))  # type: ignore
         img_del_qry = img_del_qry.returning(Image.file_name, Image.thumb_file_name)
-        with CodeTimer("DELETE for %d images: " % len(self.object_ids), logger):
-            files_res = self.session.execute(img_del_qry)
+        with CodeTimer("DELETE for %d images: " % len(a_chunk), logger):
+            files_res = session.execute(img_del_qry)
             img_files = []
             nb_img_rows = 0
             for a_file_tuple in files_res:
@@ -92,11 +103,27 @@ class EnumeratedObjectSet(object):
             logger.info("Removed: %d rows, to remove: %d files", nb_img_rows, len(img_files))
 
         obj_del_qry: Delete = ObjectHeader.__table__.delete()
-        obj_del_qry = obj_del_qry.where(ObjectHeader.objid == any_(self.object_ids))  # type: ignore
-        with CodeTimer("DELETE for %d objs: " % len(self.object_ids), logger):
-            nb_objs = self.session.execute(obj_del_qry).rowcount
+        obj_del_qry = obj_del_qry.where(ObjectHeader.objid == any_(a_chunk))  # type: ignore
+        with CodeTimer("DELETE for %d objs: " % len(a_chunk), logger):
+            nb_objs = session.execute(obj_del_qry).rowcount
 
-        self.session.commit()
+        session.commit()
+        return nb_objs, nb_img_rows, img_files
+
+    def delete(self, chunk_size: int) -> Tuple[int, int, List[str]]:
+        """
+            Delete all objects in this set, in 'small' DB transactions.
+        """
+        nb_objs, nb_img_rows, img_files = 0, 0, []
+        # Pick chunks of object ids
+        for a_chunk in self.get_objectid_chunks(chunk_size):
+            # Delete them
+            o, r, i = self._delete_chunk(self.session, a_chunk)
+            # Cumulate stats
+            nb_objs += o
+            nb_img_rows += r
+            img_files.extend(i)
+
         return nb_objs, nb_img_rows, img_files
 
 

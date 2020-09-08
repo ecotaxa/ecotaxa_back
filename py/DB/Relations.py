@@ -10,7 +10,7 @@ from .Acquisition import Acquisition
 from .Image import Image
 from .Object import ObjectHeader, ObjectFields, ObjectCNNFeature
 # Particle project
-from .ParticleProject import ParticleProject
+from .ParticleProject import ParticleProject, ParticleSample
 from .Process import Process
 from .Project import Project
 from .ProjectPrivilege import ProjectPrivilege
@@ -51,9 +51,6 @@ Acquisition.all_processes = relationship(Process, viewonly=True, lazy="raise_on_
                                          secondaryjoin=and_(ObjectHeader.projid == Process.projid,
                                                             ObjectHeader.processid == Process.processid))
 
-# Process
-Process.all_objects = relationship(ObjectHeader)
-
 # Privileges
 ProjectPrivilege.project = relationship(Project, cascade="all, delete-orphan", single_parent=True)
 Project.privs_for_members = relationship(ProjectPrivilege)
@@ -88,6 +85,7 @@ ObjectHeader.acquisition = relationship(Acquisition)
 Acquisition.all_objects = relationship(ObjectHeader)
 
 ObjectHeader.process = relationship(Process)
+Process.all_objects = relationship(ObjectHeader)
 
 # Task
 Task.owner = relationship(User)
@@ -95,3 +93,7 @@ Task.owner = relationship(User)
 # Particle Project
 ParticleProject.ecotaxa_project = relationship(Project)
 Project.ecopart_project = relationship(ParticleProject)
+
+# Particle Sample
+ParticleSample.ecotaxa_sample = relationship(Sample)
+Sample.ecopart_sample = relationship(ParticleSample)

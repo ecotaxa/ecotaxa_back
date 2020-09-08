@@ -5,17 +5,17 @@
 import shutil
 from os.path import join
 from pathlib import Path
-from typing import List, Tuple, Iterator
+from typing import List, Tuple
 
 from API_models.subset import SubsetReq, SubsetRsp, LimitMethods
 from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping
-from BO.ObjectSet import DescribedObjectSet
+from BO.ObjectSet import DescribedObjectSet, EnumeratedObjectSet, ObjetIdListT
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from BO.TSVFile import TSVFile
 from BO.helpers.ImportHelpers import ImportHow
-from DB import Image, ObjectHeader, ObjectFields, Sample, Acquisition, Process, Project, User, Role
+from DB import Image, ObjectHeader, ObjectFields, Sample, Acquisition, Process, Project
 from DB import Query, any_, ResultProxy
 from DB.Object import ObjectCNNFeature
 from DB.helpers.Bean import bean_of
@@ -48,7 +48,7 @@ class SubsetService(TaskServiceBase):
         self.dest_prj: Project = dest_prj
         self.req = req
         # Work vars
-        self.to_clone: List[int] = []
+        self.to_clone: EnumeratedObjectSet = EnumeratedObjectSet(self.session, [])
         self.vault = Vault(join(self.link_src, 'vault'))
         self.first_query = True
 
@@ -102,11 +102,10 @@ class SubsetService(TaskServiceBase):
         custom_mapping.write_to_project(self.dest_prj)
         self.session.commit()
 
-
-    def _db_fetch(self, objids: List[int]) -> List[DBObjectTupleT]:
+    def _db_fetch(self, object_ids: ObjetIdListT) -> List[DBObjectTupleT]:
         """
             Do a DB read of given objects, with auxiliary objects.
-            :param objids:
+            :param object_ids: The list of IDs
             :return:
         """
         # TODO: Depending on filter, the joins could be plain (not outer)
@@ -115,7 +114,7 @@ class SubsetService(TaskServiceBase):
                                         Process)
         ret = ret.outerjoin(Image, ObjectHeader.all_images).outerjoin(ObjectCNNFeature).join(ObjectFields)
         ret = ret.outerjoin(Sample).outerjoin(Acquisition).outerjoin(Process)
-        ret = ret.filter(ObjectHeader.objid == any_(objids))  # type: ignore
+        ret = ret.filter(ObjectHeader.objid == any_(object_ids))  # type: ignore
         ret = ret.order_by(ObjectHeader.objid)
 
         if self.first_query:
@@ -124,24 +123,13 @@ class SubsetService(TaskServiceBase):
 
         return ret.all()
 
-    def _get_objectid_chunks(self) -> Iterator[List[int]]:
-        """
-            Yield successive n-sized chunks from l.
-            Adapted from
-            https://stackoverflow.com/questions/312443/how-do-you-split-a-list-into-evenly-sized-chunks/312464#312464
-        """
-        lst = self.to_clone
-        siz = self.CHUNK_SIZE
-        for idx in range(0, len(lst), siz):
-            yield lst[idx:idx + siz]
-
     def _clone_all(self, import_how, writer):
 
         # Bean counting init
         nb_objects = 0
         total_objects = len(self.to_clone)
         # Pick chunks of object ids
-        for a_chunk in self._get_objectid_chunks():
+        for a_chunk in self.to_clone.get_objectid_chunks(self.CHUNK_SIZE):
             # Fetch them using SQLAlchemy
             db_tuples = self._db_fetch(a_chunk)
             # Send each 'line'
@@ -256,4 +244,4 @@ class SubsetService(TaskServiceBase):
         ids = [r[0] for r in res]
         logger.info("There are %d IDs", len(ids))
 
-        self.to_clone = ids
+        self.to_clone = EnumeratedObjectSet(self.session, ids)

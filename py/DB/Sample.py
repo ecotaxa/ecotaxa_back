@@ -29,6 +29,7 @@ class Sample(Model):
     project: relationship
     all_objects: relationship
     all_acquisitions: relationship
+    ecopart_sample: relationship
 
     @staticmethod
     def pk_col():

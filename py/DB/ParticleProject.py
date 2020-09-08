@@ -7,7 +7,7 @@ from sqlalchemy import Column, ForeignKey, Sequence
 from sqlalchemy.dialects.postgresql import INTEGER
 from sqlalchemy.orm import relationship
 
-from DB.helpers.ORM import Model
+from .helpers.ORM import Model
 
 
 class ParticleProject(Model):
@@ -23,3 +23,34 @@ class ParticleProject(Model):
 
     def __str__(self):
         return "{0} ({1})".format(self.title, self.projid)
+
+
+class ParticleSample(Model):
+    """
+        A sample in particle module, just what's needed to know from EcoTaxa point of view.
+    """
+    __tablename__ = 'part_samples'
+    psampleid = Column(INTEGER, Sequence('part_samples_psampleid_seq'), primary_key=True)
+    pprojid = Column(INTEGER, ForeignKey('part_projects.pprojid'))
+    sampleid = Column(INTEGER, ForeignKey('samples.sampleid'))
+
+    # The relationships are created in Relations.py but the typing here helps IDE
+    ecotaxa_sample: relationship
+
+
+class ParticleCategoryHistogram(Model):
+    __tablename__ = 'part_histocat'
+    psampleid = Column(INTEGER, ForeignKey('part_samples.psampleid'), primary_key=True)
+    classif_id = Column(INTEGER, primary_key=True)
+    lineno = Column(INTEGER, primary_key=True)
+
+
+class ParticleCategoryHistogramList(Model):
+    __tablename__ = 'part_histocat_lst'
+    psampleid = Column(INTEGER, ForeignKey('part_samples.psampleid'), primary_key=True)
+    classif_id = Column(INTEGER, primary_key=True)
+
+
+class ParticleCTD(Model):
+    __tablename__ = 'part_ctd'
+    psampleid = Column(INTEGER, ForeignKey('part_samples.psampleid'), primary_key=True)

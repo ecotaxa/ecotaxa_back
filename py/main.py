@@ -211,6 +211,22 @@ def simple_import(project_id: int, params: SimpleImportReq, current_user: int = 
         return sce.run(current_user)
 
 
+@app.delete("/projects/{project_id}", tags=['projects'])
+def erase_project(project_id: int, only_objects: Optional[bool] = False,
+                  current_user: int = Depends(get_current_user)) -> Tuple[int, int, int, int]:
+    """
+        Delete the project.
+            Optionally, if "only_objects" is set, the project structure is kept,
+                but emptied from any object/sample/acquisition/process
+            Otherwise, no trace of the project will remain in the database.
+    """
+    sce = ProjectsService()
+    if only_objects is None:
+        only_objects = False
+    with RightsThrower():
+        return sce.delete(current_user, project_id, only_objects)
+
+
 # TODO: Should be app.get, but for this we need a way to express
 #  that each field in ProjectFilter is part of the params
 @app.post("/object_set/{project_id}/query", tags=['objects'])
@@ -225,8 +241,8 @@ def get_object_set(project_id: int, filters: ProjectFiltersModel,
 
 
 @app.delete("/object_set/", tags=['objects'])
-def erase_object_list(object_ids: List[int], current_user: int = Depends(get_current_user)) -> Tuple[
-    int, int, int, int]:
+def erase_object_list(object_ids: List[int],
+                      current_user: int = Depends(get_current_user)) -> Tuple[int, int, int, int]:
     """
         Delete the objects with given object ids.
         Current user needs Manage right on all projects of specified objects.

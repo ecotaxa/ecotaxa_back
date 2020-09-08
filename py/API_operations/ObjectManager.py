@@ -18,6 +18,8 @@ class ObjectManager(Service):
     """
         Object manager, read, update, delete...
     """
+    # Delete this chunk of objects at a time
+    CHUNK_SIZE = 400
 
     def __init__(self):
         super().__init__()
@@ -52,8 +54,9 @@ class ObjectManager(Service):
         for a_prj_id in prj_ids:
             RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, a_prj_id)
         # Do the deletion itself.
-        nb_objs, nb_img_rows, img_files = obj_set.delete()
-        # TODO: We now have orphan files
+        nb_objs, nb_img_rows, img_files = obj_set.delete(self.CHUNK_SIZE)
+
+        # TODO: We now have orphan image files
         # Update stats on impacted project(s)
         for prj_id in prj_ids:
             ProjectBO.update_taxo_stats(self.session, prj_id)
