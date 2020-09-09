@@ -26,10 +26,10 @@ from API_operations.exports.EMODnet import EMODNetExport
 from API_operations.helpers.Service import Service
 from API_operations.imports.Import import ImportAnalysis, RealImport
 from API_operations.imports.SimpleImport import SimpleImport
+from BO.ObjectSet import ObjetIdListT
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower
 from helpers.starlette import PlainTextResponse
-# noinspection PyPackageRequirements
 from providers.WoRMS import WoRMSFinder
 
 logger = get_logger(__name__)
@@ -229,9 +229,9 @@ def erase_project(project_id: int, only_objects: Optional[bool] = False,
 
 # TODO: Should be app.get, but for this we need a way to express
 #  that each field in ProjectFilter is part of the params
-@app.post("/object_set/{project_id}/query", tags=['objects'])
+@app.post("/object_set/{project_id}/query", tags=['objects'], response_model=ObjetIdListT)
 def get_object_set(project_id: int, filters: ProjectFiltersModel,
-                   current_user: int = Depends(get_current_user)) -> List[int]:
+                   current_user: int = Depends(get_current_user)) -> ObjetIdListT:
     """
         Return object ids for the given project with the filters.
     """
@@ -240,8 +240,19 @@ def get_object_set(project_id: int, filters: ProjectFiltersModel,
         return sce.query(current_user, project_id, filters)
 
 
+@app.post("/object_set/{project_id}/reset_to_predicted", tags=['objects'], response_model=None)
+def reset_object_set_to_predicted(project_id: int, filters: ProjectFiltersModel,
+                   current_user: int = Depends(get_current_user)) -> None:
+    """
+        Reset to Predicted all objects for the given project with the filters.
+    """
+    sce = ObjectManager()
+    with RightsThrower():
+        return sce.reset_to_predicted(current_user, project_id, filters)
+
+
 @app.delete("/object_set/", tags=['objects'])
-def erase_object_set(object_ids: List[int],
+def erase_object_set(object_ids: ObjetIdListT,
                      current_user: int = Depends(get_current_user)) -> Tuple[int, int, int, int]:
     """
         Delete the objects with given object ids.
@@ -266,10 +277,13 @@ def emodnet_format_export(params: EMODNetExportReq, current_user: int = Depends(
 
 @app.get("/taxon/resolve/{our_id}", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)
 async def resolve_taxon(our_id: int, response: Response, text_response: bool = False,
-                        _current_user: int = Depends(get_current_user)) -> Union[
-    PlainTextResponse, Tuple]:
+                        _current_user: int = Depends(get_current_user)) \
+        -> Union[PlainTextResponse, Tuple]:
     """
         Resolve in WoRMs the given taxon.
+        :param our_id: The ID from taxonomy table.
+        :param response: the injected HTTP response.
+        :param _current_user: Not used, just to ensure that requester is authenticated.
         :param text_response: If set, response will be plain text. If not, JSON.
     """
     sce = WoRMSFinder(Service().session, our_id)
