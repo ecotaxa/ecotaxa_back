@@ -18,11 +18,15 @@ from .Sample import Sample
 from .Task import Task
 from .Taxonomy import Taxonomy
 from .User import User, Role
+from .UserPreferences import UserPreferences
 from .helpers.ORM import relationship
 
 # User
 User.roles = relationship(Role, secondary="users_roles")
 Role.users = relationship(User, secondary="users_roles")
+
+# User preferences
+User.preferences_for_projects = relationship(UserPreferences, lazy='dynamic')
 
 # Project
 Project.all_objects = relationship(ObjectHeader)

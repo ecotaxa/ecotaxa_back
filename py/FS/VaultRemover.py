@@ -25,6 +25,7 @@ class VaultRemover(Thread):
         super().__init__(name="Vault remover")
         self.vault = Vault(join(link_src, 'vault'))
         # TODO: a collection.deque is faster
+        # TODO: or store the file lists, e.g. in chunks of 10, instead of filling the queue with individual items
         self.files_queue: Queue[Optional[str]] = Queue()
         self.logger = logger
 

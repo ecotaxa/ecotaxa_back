@@ -2860,3 +2860,29 @@ COPY public.taxonomy (id, parent_id, name, id_source, nbrobj, nbrobjcum, creatio
 85078	1	egg	m129	142336	3465	\N	\N	egg<other	\N	2019-01-29 05:53:34	\N	\N	\N	A	M
 \.
 
+-- Table: public.user_preferences
+
+-- DROP TABLE public.user_preferences;
+
+CREATE TABLE public.user_preferences
+(
+    user_id integer NOT NULL,
+    project_id integer NOT NULL,
+    json_prefs character varying(4096) NOT NULL COLLATE pg_catalog."default",
+    CONSTRAINT user_preferences_pkey PRIMARY KEY (user_id, project_id),
+    CONSTRAINT user_preferences_project_id_fkey FOREIGN KEY (project_id)
+        REFERENCES public.projects (projid) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE,
+    CONSTRAINT user_preferences_user_id_fkey FOREIGN KEY (user_id)
+        REFERENCES public.users (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE
+)
+WITH (
+    OIDS = FALSE
+)
+TABLESPACE pg_default;
+
+ALTER TABLE public.user_preferences
+    OWNER to postgres;

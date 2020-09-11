@@ -76,6 +76,24 @@ def show_current_user(current_user: int = Depends(get_current_user)):
     return sce.search_by_id(current_user, current_user)
 
 
+@app.get("/users/my_preferences/{project_id}", tags=['users'], response_model=str)
+def get_current_user_prefs(project_id: int, key: str, current_user: int = Depends(get_current_user)) -> str:
+    """
+        Return preferences per project for currently authenticated user.
+    """
+    sce = UserService()
+    return sce.get_preferences_per_project(current_user, project_id, key)
+
+
+@app.put("/users/my_preferences/{project_id}", tags=['users'])
+def set_current_user_prefs(project_id: int, key: str, preference: str, current_user: int = Depends(get_current_user)):
+    """
+        Set preferences per project for currently authenticated user.
+    """
+    sce = UserService()
+    return sce.set_preferences_per_project(current_user, project_id, key, preference)
+
+
 # TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
 @app.get("/users/search", tags=['users'], response_model=List[UserModel])  # type:ignore
 def search_user(current_user: int = Depends(get_current_user),

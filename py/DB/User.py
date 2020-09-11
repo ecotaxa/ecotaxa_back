@@ -34,6 +34,8 @@ class User(Model):
     privs_on_projects: relationship
     # The objects of which _present_ classification was done by the user
     classified_objects: relationship
+    # Preferences, per project, the global ones kept in field above.
+    preferences_for_projects: relationship
 
 
     @staticmethod
