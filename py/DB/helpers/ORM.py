@@ -5,17 +5,19 @@
 from typing import Optional, Iterable, Tuple, List, Set, Dict, TypeVar, Type
 
 # noinspection PyUnresolvedReferences
-from sqlalchemy import Column, inspect, MetaData, Table, any_
+from sqlalchemy import Column, inspect, MetaData, Table, any_, and_
+# noinspection PyUnresolvedReferences
+from sqlalchemy.dialects import postgresql
+# noinspection PyUnresolvedReferences
+from sqlalchemy.engine.result import ResultProxy
 from sqlalchemy.ext.declarative import declarative_base
 # noinspection PyUnresolvedReferences
 from sqlalchemy.orm import Session, Query, make_transient
-# noinspection PyUnresolvedReferences
-from sqlalchemy.sql import Delete
 # For exporting
 # noinspection PyUnresolvedReferences
 from sqlalchemy.orm import relationship
 # noinspection PyUnresolvedReferences
-from sqlalchemy.engine.result import ResultProxy
+from sqlalchemy.sql import Insert, Update, Delete
 
 _Base = declarative_base()
 

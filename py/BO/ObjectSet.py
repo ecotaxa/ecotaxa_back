@@ -10,11 +10,14 @@
 #
 from typing import Tuple, Optional, List, Iterator, Callable
 
+from sqlalchemy import select, text
+
 from API_models.crud import ProjectFilters
 from BO.Project import ProjectIDListT
 from BO.Taxonomy import TaxonomyBO
-from DB import Project, ObjectHeader, Image
-from DB.helpers.ORM import Session, Query, Delete, any_
+from DB import Project, ObjectHeader, Image, and_
+from DB.Object import ObjectsClassifHisto
+from DB.helpers.ORM import Session, Query, Delete, Update, Insert, any_, postgresql
 from DB.helpers.SQL import WhereClause, SQLParamDict
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
@@ -110,7 +113,8 @@ class EnumeratedObjectSet(object):
         session.commit()
         return nb_objs, nb_img_rows, img_files
 
-    def delete(self, chunk_size: int, do_with_files: Optional[Callable[[List[str]], None]]) -> Tuple[int, int, List[str]]:
+    def delete(self, chunk_size: int, do_with_files: Optional[Callable[[List[str]], None]]) -> Tuple[
+        int, int, List[str]]:
         """
             Delete all objects in this set, in 'small' DB transactions.
         """
@@ -127,6 +131,42 @@ class EnumeratedObjectSet(object):
             img_files.extend(i)
 
         return nb_objs, nb_img_rows, img_files
+
+    def reset_to_predicted(self):
+        """
+            Reset to Predicted state, keeping log, i.e. history, of previous change.
+        """
+        # Light up a bit the SQLA expressions
+        oh = ObjectHeader
+        och = ObjectsClassifHisto
+
+        # What we want to historize, as a subquery
+        sel_subqry = select([oh.objid, oh.classif_when, text("'M'"), oh.classif_id,
+                             oh.classif_qual, oh.classif_who])
+        sel_subqry = sel_subqry.where(and_(oh.objid == any_(self.object_ids),  # type: ignore
+                                           (oh.classif_qual.in_(['V', 'D'])),
+                                           (oh.classif_when is not None)
+                                           )
+                                      )
+        # Insert into the log table
+        from sqlalchemy.dialects.postgresql import insert
+        ins_qry: Insert = insert(och.__table__)
+        ins_qry = ins_qry.from_select([och.objid, och.classif_date, och.classif_type, och.classif_id,
+                                       och.classif_qual, och.classif_who], sel_subqry)
+        ins_qry = ins_qry.on_conflict_do_nothing(constraint='objectsclassifhisto_pkey')
+        logger.info("Histo query: %s", ins_qry.compile(dialect=postgresql.dialect()))
+        nb_objs = self.session.execute(ins_qry).rowcount
+        logger.info(" %d out of %d rows copied to log", nb_objs, len(self.object_ids))
+
+        # Update objects table
+        obj_upd_qry: Update = oh.__table__.update()
+        obj_upd_qry = obj_upd_qry.where(and_(oh.objid == any_(self.object_ids),  # type: ignore
+                                             (oh.classif_qual.in_(['V', 'D']))))
+        obj_upd_qry = obj_upd_qry.values(classif_qual='P')
+        nb_objs = self.session.execute(obj_upd_qry).rowcount
+        logger.info(" %d out of %d rows reset to predicted", nb_objs, len(self.object_ids))
+
+        self.session.commit()
 
 
 class ObjectSetFilter(object):

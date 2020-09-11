@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List, Tuple
+from typing import Tuple
 
 from API_models.crud import ProjectFilters
 from BO.ObjectSet import DescribedObjectSet, ObjetIdListT, EnumeratedObjectSet
@@ -26,15 +26,15 @@ class ObjectManager(Service):
     def __init__(self):
         super().__init__()
 
-    def query(self, current_user_id: int, projid: int, filters: ProjectFilters) -> List[int]:
+    def query(self, current_user_id: int, proj_id: int, filters: ProjectFilters) -> ObjetIdListT:
         """
             Query the given project with given filters, return all IDs.
         """
         # Security check
-        user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, projid)
+        user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, proj_id)
 
         # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(self.session, projid, filters)
+        object_set: DescribedObjectSet = DescribedObjectSet(self.session, proj_id, filters)
         where, params = object_set.get_sql(user.id)
         selected_tables = "obj_head oh"
         if "of." in where.get_sql():  # TODO: Duplicated code
@@ -50,6 +50,7 @@ class ObjectManager(Service):
             Remove from DB all the objects with ID in given list.
         :return:
         """
+        # Security check
         obj_set = EnumeratedObjectSet(self.session, object_ids)
         # Get project IDs for the objects and verify rights
         prj_ids = obj_set.get_projects_ids()
@@ -71,3 +72,14 @@ class ObjectManager(Service):
         # Wait for the files handled
         remover.wait_for_done()
         return nb_objs, 0, nb_img_rows, len(img_files)
+
+    def reset_to_predicted(self, current_user_id: int, proj_id: int, filters: ProjectFilters) -> None:
+        """
+            Query the given project with given filters, reset the resulting objects to predicted.
+        """
+        # Security check
+        RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, proj_id)
+
+        impacted_objs = self.query(current_user_id, proj_id, filters)
+
+        EnumeratedObjectSet(self.session, impacted_objs).reset_to_predicted()
