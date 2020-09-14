@@ -16,7 +16,7 @@ from BO.Rights import RightsBO, Action
 from BO.TSVFile import TSVFile
 from BO.helpers.ImportHelpers import ImportHow
 from DB import Image, ObjectHeader, ObjectFields, Sample, Acquisition, Process, Project
-from DB import Query, any_, ResultProxy
+from DB.helpers.ORM import Query, any_, ResultProxy
 from DB.Object import ObjectCNNFeature
 from DB.helpers.Bean import bean_of
 from DB.helpers.DBWriter import DBWriter

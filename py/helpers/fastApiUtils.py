@@ -47,7 +47,7 @@ def dump_openapi(app: FastAPI, main_path: str): # pragma: no cover
     json_def = json.dumps(app.openapi(),
                           ensure_ascii=False,
                           allow_nan=False,
-                          indent=None,
+                          indent=2,
                           separators=(",", ":"))
     # Copy here for Git commit but also into another dev tree
     parent_dir = dirname(main_path)

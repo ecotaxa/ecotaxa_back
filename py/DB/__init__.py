@@ -3,8 +3,6 @@
 #
 # to avoid importing sqlalchemy everywhere
 #
-# noinspection PyUnresolvedReferences
-from sqlalchemy import any_
 # noinspection PyUnresolvedReferences,PyProtectedMember
 from sqlalchemy.engine import ResultProxy
 # noinspection PyUnresolvedReferences

@@ -6,9 +6,6 @@
 #
 from typing import Union, Tuple
 
-from fastapi import FastAPI, Response, status, Depends
-from fastapi_utils.timing import add_timing_middleware
-
 from API_models.crud import *
 from API_models.exports import EMODNetExportReq, EMODNetExportRsp
 from API_models.imports import *
@@ -28,6 +25,8 @@ from API_operations.imports.Import import ImportAnalysis, RealImport
 from API_operations.imports.SimpleImport import SimpleImport
 from BO.ObjectSet import ObjetIdListT
 from BO.Project import ProjectBO
+from fastapi import FastAPI, Response, status, Depends
+from fastapi_utils.timing import add_timing_middleware
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower
 from helpers.starlette import PlainTextResponse
@@ -38,7 +37,7 @@ logger = get_logger(__name__)
 # TODO: A nicer API doc, see https://github.com/tiangolo/fastapi/issues/1140
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.2",
+              version="0.0.3",
               # openapi URL as seen from navigator
               openapi_url="/api/openapi.json",
               # root_path="/API_models"
@@ -165,18 +164,6 @@ def project_query(project_id: int,
     with RightsThrower():
         ret = sce.query(current_user, project_id, for_managing)
         ProjectBO.enrich(ret)
-    return ret
-
-
-@app.post("/projects/{project_id}/structure", tags=['projects'], response_model=ProjectModel)
-def project_structure(project_id: int,
-                      current_user: int = Depends(get_current_user)):
-    """
-        Return the structure, i.e. fields and types, for DB sub-tables of _this_ project.
-    """
-    sce = ProjectsService()
-    with RightsThrower():
-        ret = sce.get_structure(current_user, project_id)
     return ret
 
 
@@ -352,15 +339,34 @@ def system_error(_current_user: int = Depends(get_current_user)):
         assert False
 
 
+@app.get("/samples/{sample_id}", tags=['samples'], response_model=SampleModel)
+def get_sample(sample_id: int, current_user: int = Depends(get_current_user)):
+    return None
+
+
+@app.get("/acquisitions/{acquisition_id}", tags=['acquisitions'], response_model=AcquisitionModel)
+def get_acquisition(acquisition_id: int, current_user: int = Depends(get_current_user)):
+    return None
+
+
+@app.get("/processings/{process_id}", tags=['processes'], response_model=ProcessModel)
+def get_processing(process_id: int, current_user: int = Depends(get_current_user)):
+    return None
+
+
+@app.get("/object/{object_id}", tags=['objects'], response_model=ObjectHeaderModel)
+def get_object(object_id: int, current_user: int = Depends(get_current_user)):
+    return None
+
+
 # TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
-# noinspection PyTypeChecker
-@app.get("/noop", tags=['misc'], response_model=Union[SampleModel, AcquisitionModel, ProcessModel,
-                                                      ObjectHeaderModel]) # type: ignore
-def system_error(_current_user: int = Depends(get_current_user)):
-    """
-        This entry point will just do nothing.
-            It's also used for exporting models we could need on client side.
-    """
+# @app.get("/noop", tags=['misc'], response_model=Optional[Union[, , ,
+#                                                       ObjectHeaderModel]])
+# def do_nothing(_current_user: int = Depends(get_current_user)):
+#     """
+#         This entry point will just do nothing.
+#             It's also used for exporting models we could need on client side.
+#     """
 
 
 # @app.get("/loadtest", tags=['WIP'], include_in_schema=False)

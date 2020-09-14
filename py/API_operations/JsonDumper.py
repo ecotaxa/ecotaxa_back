@@ -5,7 +5,6 @@
 import json
 from typing import IO, Dict, List, Any, Set
 
-from sqlalchemy import any_
 from sqlalchemy.engine import ResultProxy
 from sqlalchemy.orm import Query, contains_eager
 
@@ -14,7 +13,7 @@ from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet
 from DB import Sample, Acquisition, Process, Image, ObjectHeader, ObjectFields, and_
 from DB.Project import Project
-from DB.helpers.ORM import Model
+from DB.helpers.ORM import Model, any_
 from formats.JSONObjetSet import JSON_FIELDS, JSONDesc
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
