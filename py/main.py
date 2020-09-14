@@ -27,6 +27,7 @@ from API_operations.helpers.Service import Service
 from API_operations.imports.Import import ImportAnalysis, RealImport
 from API_operations.imports.SimpleImport import SimpleImport
 from BO.ObjectSet import ObjetIdListT
+from BO.Project import ProjectBO
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower
 from helpers.starlette import PlainTextResponse
@@ -79,19 +80,21 @@ def show_current_user(current_user: int = Depends(get_current_user)):
 @app.get("/users/my_preferences/{project_id}", tags=['users'], response_model=str)
 def get_current_user_prefs(project_id: int, key: str, current_user: int = Depends(get_current_user)) -> str:
     """
-        Return preferences per project for currently authenticated user.
+        Return one preference, for project and currently authenticated user.
     """
     sce = UserService()
     return sce.get_preferences_per_project(current_user, project_id, key)
 
 
 @app.put("/users/my_preferences/{project_id}", tags=['users'])
-def set_current_user_prefs(project_id: int, key: str, preference: str, current_user: int = Depends(get_current_user)):
+def set_current_user_prefs(project_id: int, key: str, value: str, current_user: int = Depends(get_current_user)):
     """
-        Set preferences per project for currently authenticated user.
+        Set one preference, for project and currently authenticated user.
+        
+        -`key`: The preference key
     """
     sce = UserService()
-    return sce.set_preferences_per_project(current_user, project_id, key, preference)
+    return sce.set_preferences_per_project(current_user, project_id, key, value)
 
 
 # TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
@@ -161,6 +164,19 @@ def project_query(project_id: int,
     for_managing = bool(for_managing)
     with RightsThrower():
         ret = sce.query(current_user, project_id, for_managing)
+        ProjectBO.enrich(ret)
+    return ret
+
+
+@app.post("/projects/{project_id}/structure", tags=['projects'], response_model=ProjectModel)
+def project_structure(project_id: int,
+                      current_user: int = Depends(get_current_user)):
+    """
+        Return the structure, i.e. fields and types, for DB sub-tables of _this_ project.
+    """
+    sce = ProjectsService()
+    with RightsThrower():
+        ret = sce.get_structure(current_user, project_id)
     return ret
 
 
@@ -260,7 +276,7 @@ def get_object_set(project_id: int, filters: ProjectFiltersModel,
 
 @app.post("/object_set/{project_id}/reset_to_predicted", tags=['objects'], response_model=None)
 def reset_object_set_to_predicted(project_id: int, filters: ProjectFiltersModel,
-                   current_user: int = Depends(get_current_user)) -> None:
+                                  current_user: int = Depends(get_current_user)) -> None:
     """
         Reset to Predicted all objects for the given project with the filters.
     """
@@ -334,6 +350,17 @@ def system_error(_current_user: int = Depends(get_current_user)):
     """
     with RightsThrower():
         assert False
+
+
+# TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
+# noinspection PyTypeChecker
+@app.get("/noop", tags=['misc'], response_model=Union[SampleModel, AcquisitionModel, ProcessModel,
+                                                      ObjectHeaderModel]) # type: ignore
+def system_error(_current_user: int = Depends(get_current_user)):
+    """
+        This entry point will just do nothing.
+            It's also used for exporting models we could need on client side.
+    """
 
 
 # @app.get("/loadtest", tags=['WIP'], include_in_schema=False)

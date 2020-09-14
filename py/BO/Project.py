@@ -5,7 +5,7 @@
 from datetime import datetime
 from typing import List, Dict, Any, Iterable
 
-from BO.Mappings import RemapOp, MappedTableTypeT
+from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping
 from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFields, Acquisition, Process, \
     ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram
 from DB import Session, ResultProxy
@@ -246,3 +246,12 @@ class ProjectBO(object):
         """
         qry: Query = session.query(ObjectHeader.objid).filter(ObjectHeader.projid == prj_id)
         return [an_id for an_id in qry.all()]
+
+    @classmethod
+    def enrich(cls, prj: Project):
+        """
+            Add mappings in serializable form.
+        """
+        mappings = ProjectMapping()
+        mappings.load_from_project(prj)
+        mappings.write_to_object(prj)

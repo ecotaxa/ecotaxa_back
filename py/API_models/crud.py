@@ -4,17 +4,58 @@
 #
 #  Models used in CRUD API_operations.
 #
-from typing import Optional
+from typing import Optional, Dict, Type
 
 from typing_extensions import TypedDict
 
-from DB import User, Project
+from DB import User, Project, Sample, Acquisition, Process, ObjectHeader
 from helpers.pydantic import BaseModel, Field
 from .helpers.DBtoModel import sqlalchemy_to_pydantic
 from .helpers.TypedDictToModel import parse_typed_dict
 
+# Direct mirror of DB models
 UserModel = sqlalchemy_to_pydantic(User)
-ProjectModel = sqlalchemy_to_pydantic(Project)
+SampleModel = sqlalchemy_to_pydantic(Sample)
+AcquisitionModel = sqlalchemy_to_pydantic(Acquisition)
+ProcessModel = sqlalchemy_to_pydantic(Process)
+ObjectHeaderModel = sqlalchemy_to_pydantic(ObjectHeader)
+# This one goes over the limit of 255 fields in OpenAPI generator
+#ObjectFieldsModel = sqlalchemy_to_pydantic(ObjectFields)
+
+# Enriched model
+FreeColT = Dict[str, str]
+
+
+class _AddedToProject(BaseModel):
+    obj_free_cols: FreeColT = Field(title="Object free columns",
+                                    default={})
+    sample_free_cols: FreeColT = Field(title="Sample free columns",
+                                       default={})
+    acquisition_free_cols: FreeColT = Field(title="Acquisition free columns",
+                                            default={})
+    process_free_cols: FreeColT = Field(title="Process free columns",
+                                        default={})
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "obj_free_cols": {"area": "n01", "esd": "n02"},
+                "sample_free_cols": {"barcode": "t01"},
+                "acquisition_free_cols": {"flash_delay": "t01"},
+                "process_free_cols": {"nb_images": "t01"},
+            }
+        }
+
+
+# TODO: Example for project fields
+_ProjectModelFromDB: Type = sqlalchemy_to_pydantic(Project)
+
+
+# TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
+class ProjectModel(_ProjectModelFromDB, _AddedToProject):  # type:ignore
+    """
+        Project + computed
+    """
 
 
 class CreateProjectReq(BaseModel):
@@ -49,7 +90,7 @@ class ProjectFilters(TypedDict, total=False):
           'NVM': Validated, but not by me 
           'VM': Validated by me 
           'U': Not classified
-           other: direct comparison with DB value """
+           other: direct equality comparison with DB value """
     MapN: Optional[str]
     MapW: Optional[str]
     MapE: Optional[str]

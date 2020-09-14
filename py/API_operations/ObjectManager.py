@@ -83,3 +83,8 @@ class ObjectManager(Service):
         impacted_objs = self.query(current_user_id, proj_id, filters)
 
         EnumeratedObjectSet(self.session, impacted_objs).reset_to_predicted()
+
+        # Update stats
+        ProjectBO.update_taxo_stats(self.session, proj_id)
+        # Stats depend on taxo stats
+        ProjectBO.update_stats(self.session, proj_id)

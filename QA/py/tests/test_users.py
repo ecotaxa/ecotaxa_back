@@ -18,7 +18,7 @@ def test_prefs_set_get(config, database, fastapi_noauth, caplog):
     prefs_for_test = "foo bar boo"
     # Set to something
     UserService().set_preferences_per_project(user_id=ADMIN_USER_ID, project_id=prj_id, key="tst",
-                                              preference=prefs_for_test)
+                                              value=prefs_for_test)
     # Check it's still there
     prefs = UserService().get_preferences_per_project(user_id=ADMIN_USER_ID, project_id=prj_id, key="tst")
     assert prefs == prefs_for_test
@@ -28,4 +28,4 @@ def test_prefs_set_get(config, database, fastapi_noauth, caplog):
     assert '' == UserService().get_preferences_per_project(user_id=ADMIN_USER_ID, project_id=prj_id, key="test")
     # Error in set if wrong project
     with pytest.raises(Exception):
-        UserService().set_preferences_per_project(user_id=ADMIN_USER_ID, project_id=-1, key="tst", preference="crash!")
+        UserService().set_preferences_per_project(user_id=ADMIN_USER_ID, project_id=-1, key="tst", value="crash!")

@@ -5,7 +5,7 @@
 from typing import Optional, Iterable, Tuple, List, Set, Dict, TypeVar, Type
 
 # noinspection PyUnresolvedReferences
-from sqlalchemy import Column, inspect, MetaData, Table, any_, and_
+from sqlalchemy import Column, inspect, MetaData, Table, any_ as _pg_any, and_
 # noinspection PyUnresolvedReferences
 from sqlalchemy.dialects import postgresql
 # noinspection PyUnresolvedReferences
@@ -149,3 +149,8 @@ def minimal_table_of(metadata: MetaData, clazz, to_keep: Set[str]) -> Table:
     args.extend(cols)
 
     return Table(*args)
+
+
+def any_(int_list: List[int]):
+    # TODO: Get proper mapping, it seems a bit too much for sqlalchemy-stubs
+    return _pg_any(int_list)  # type: ignore

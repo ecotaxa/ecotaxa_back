@@ -55,7 +55,7 @@ class UserService(Service):
             all_prefs_for_proj = dict()
         return all_prefs_for_proj.get(key, "")
 
-    def set_preferences_per_project(self, user_id: int, project_id: int, key: str, preference: str):
+    def set_preferences_per_project(self, user_id: int, project_id: int, key: str, value: str):
         """
             Set preference for a key, for given project and user. The key disappears if set to empty string.
         """
@@ -69,8 +69,8 @@ class UserService(Service):
             prefs_for_proj.user_id = user_id
             self.session.add(prefs_for_proj)
             all_prefs_for_proj = dict()
-        all_prefs_for_proj[key] = preference
-        if preference == '':
+        all_prefs_for_proj[key] = value
+        if value == '':
             del all_prefs_for_proj[key]
         prefs_for_proj.json_prefs = json.dumps(all_prefs_for_proj)
         self.session.commit()

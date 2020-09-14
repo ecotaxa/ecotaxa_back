@@ -157,7 +157,7 @@ class JsonDumper(Service):
         # Natural joins
         ret = ret.join(ObjectFields)
         ret = ret.join(Image, ObjectHeader.all_images).options(contains_eager(ObjectHeader.all_images))
-        ret = ret.filter(ObjectHeader.objid == any_(objids))  # type: ignore
+        ret = ret.filter(ObjectHeader.objid == any_(objids))
         ret = ret.order_by(ObjectHeader.objid)
         ret = ret.order_by(Image.imgrank)
 

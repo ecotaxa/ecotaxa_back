@@ -78,7 +78,7 @@ class EnumeratedObjectSet(object):
         """
         qry: Query = self.session.query(Project.projid).distinct(Project.projid)
         qry = qry.join(Project.all_objects)
-        qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))  # type: ignore
+        qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))
         with CodeTimer("Prjs for %d objs: " % len(self.object_ids), logger):
             return [an_id for an_id in qry.all()]
 
@@ -91,7 +91,7 @@ class EnumeratedObjectSet(object):
         # Start with images which are not deleted via a CASCADE on DB side
         # This is maybe due to relationship cycle b/w ObjectHeader and Images @See comment in Image class
         img_del_qry: Delete = Image.__table__.delete()
-        img_del_qry = img_del_qry.where(Image.objid == any_(a_chunk))  # type: ignore
+        img_del_qry = img_del_qry.where(Image.objid == any_(a_chunk))
         img_del_qry = img_del_qry.returning(Image.file_name, Image.thumb_file_name)
         with CodeTimer("DELETE for %d images: " % len(a_chunk), logger):
             files_res = session.execute(img_del_qry)
@@ -106,15 +106,15 @@ class EnumeratedObjectSet(object):
             logger.info("Removed: %d rows, to remove: %d files", nb_img_rows, len(img_files))
 
         obj_del_qry: Delete = ObjectHeader.__table__.delete()
-        obj_del_qry = obj_del_qry.where(ObjectHeader.objid == any_(a_chunk))  # type: ignore
+        obj_del_qry = obj_del_qry.where(ObjectHeader.objid == any_(a_chunk))
         with CodeTimer("DELETE for %d objs: " % len(a_chunk), logger):
             nb_objs = session.execute(obj_del_qry).rowcount
 
         session.commit()
         return nb_objs, nb_img_rows, img_files
 
-    def delete(self, chunk_size: int, do_with_files: Optional[Callable[[List[str]], None]]) -> Tuple[
-        int, int, List[str]]:
+    def delete(self, chunk_size: int, do_with_files: Optional[Callable[[List[str]], None]]) -> \
+            Tuple[int, int, List[str]]:
         """
             Delete all objects in this set, in 'small' DB transactions.
         """
@@ -143,7 +143,7 @@ class EnumeratedObjectSet(object):
         # What we want to historize, as a subquery
         sel_subqry = select([oh.objid, oh.classif_when, text("'M'"), oh.classif_id,
                              oh.classif_qual, oh.classif_who])
-        sel_subqry = sel_subqry.where(and_(oh.objid == any_(self.object_ids),  # type: ignore
+        sel_subqry = sel_subqry.where(and_(oh.objid == any_(self.object_ids),
                                            (oh.classif_qual.in_(['V', 'D'])),
                                            (oh.classif_when is not None)
                                            )
@@ -160,7 +160,7 @@ class EnumeratedObjectSet(object):
 
         # Update objects table
         obj_upd_qry: Update = oh.__table__.update()
-        obj_upd_qry = obj_upd_qry.where(and_(oh.objid == any_(self.object_ids),  # type: ignore
+        obj_upd_qry = obj_upd_qry.where(and_(oh.objid == any_(self.object_ids),
                                              (oh.classif_qual.in_(['V', 'D']))))
         obj_upd_qry = obj_upd_qry.values(classif_qual='P')
         nb_objs = self.session.execute(obj_upd_qry).rowcount
@@ -346,7 +346,7 @@ class ObjectSetFilter(object):
         if self.annotators:
             where_clause *= " (oh.classif_who = any (:filt_annot) " \
                             "  or exists (select classif_who " \
-                            "               from objectsclassifhisto och " \
+                            "               from " + ObjectsClassifHisto.__tablename__ + " och " + \
                             "              where och.objid = oh.objid " \
                             "                and classif_who = any (:filt_annot) ) ) "
             params['filt_annot'] = [int(x) for x in self.annotators.split(',')]
