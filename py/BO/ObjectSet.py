@@ -12,18 +12,21 @@ from typing import Tuple, Optional, List, Iterator, Callable
 
 from sqlalchemy import select, text
 
-from API_models.crud import ProjectFilters
+from API_models.crud import ProjectFilters, ColUpdateList
 from BO.Project import ProjectIDListT
 from BO.Taxonomy import TaxonomyBO
+from BO.helpers.MappedTable import MappedTable
 from DB import Project, ObjectHeader, Image, and_
-from DB.Object import ObjectsClassifHisto
+from DB.Object import ObjectsClassifHisto, ObjectFields
 from DB.helpers.ORM import Session, Query, Delete, Update, Insert, any_, postgresql
 from DB.helpers.SQL import WhereClause, SQLParamDict
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
 # Typings, to be clear that these are not e.g. project IDs
-ObjetIdListT = List[int]
+ObjectIDListT = List[int]
+# Object_id + parents
+ObjectIDWithParentsListT = List[Tuple[int, int, int, int]]
 
 logger = get_logger(__name__)
 
@@ -50,19 +53,19 @@ class DescribedObjectSet(object):
         return where, params
 
 
-class EnumeratedObjectSet(object):
+class EnumeratedObjectSet(MappedTable):
     """
         A set of objects, described by all their IDs.
     """
 
-    def __init__(self, session: Session, object_ids: ObjetIdListT):
-        self.session = session
+    def __init__(self, session: Session, object_ids: ObjectIDListT):
+        super().__init__(session)
         self.object_ids = object_ids
 
     def __len__(self):
         return len(self.object_ids)
 
-    def get_objectid_chunks(self, chunk_size: int) -> Iterator[ObjetIdListT]:
+    def get_objectid_chunks(self, chunk_size: int) -> Iterator[ObjectIDListT]:
         """
             Yield successive n-sized chunks from l.
             Adapted from
@@ -83,7 +86,7 @@ class EnumeratedObjectSet(object):
             return [an_id for an_id in qry.all()]
 
     @staticmethod
-    def _delete_chunk(session: Session, a_chunk: ObjetIdListT) -> Tuple[int, int, List[str]]:
+    def _delete_chunk(session: Session, a_chunk: ObjectIDListT) -> Tuple[int, int, List[str]]:
         """
             Delete a chunk from self's object list.
             Technical Note: We use SQLA Core as we don't want to fetch the rows
@@ -136,15 +139,30 @@ class EnumeratedObjectSet(object):
         """
             Reset to Predicted state, keeping log, i.e. history, of previous change.
         """
-        # Light up a bit the SQLA expressions
         oh = ObjectHeader
-        och = ObjectsClassifHisto
+        self.historize_classification(oh, ['V', 'D'])
 
+        # Update objects table
+        obj_upd_qry: Update = oh.__table__.update()
+        obj_upd_qry = obj_upd_qry.where(and_(oh.objid == any_(self.object_ids),
+                                             (oh.classif_qual.in_(['V', 'D']))))
+        obj_upd_qry = obj_upd_qry.values(classif_qual='P')
+        nb_objs = self.session.execute(obj_upd_qry).rowcount
+        logger.info(" %d out of %d rows reset to predicted", nb_objs, len(self.object_ids))
+
+        self.session.commit()
+
+    def historize_classification(self, oh, only_qual):
+        """
+           Copy current classification information into history table, for all rows in self.
+        """
+        # Light up a bit the SQLA expressions
+        och = ObjectsClassifHisto
         # What we want to historize, as a subquery
         sel_subqry = select([oh.objid, oh.classif_when, text("'M'"), oh.classif_id,
                              oh.classif_qual, oh.classif_who])
         sel_subqry = sel_subqry.where(and_(oh.objid == any_(self.object_ids),
-                                           (oh.classif_qual.in_(['V', 'D'])),
+                                           (oh.classif_qual.in_(only_qual)),
                                            (oh.classif_when is not None)
                                            )
                                       )
@@ -157,16 +175,26 @@ class EnumeratedObjectSet(object):
         logger.info("Histo query: %s", ins_qry.compile(dialect=postgresql.dialect()))
         nb_objs = self.session.execute(ins_qry).rowcount
         logger.info(" %d out of %d rows copied to log", nb_objs, len(self.object_ids))
+        return oh
 
-        # Update objects table
-        obj_upd_qry: Update = oh.__table__.update()
-        obj_upd_qry = obj_upd_qry.where(and_(oh.objid == any_(self.object_ids),
-                                             (oh.classif_qual.in_(['V', 'D']))))
-        obj_upd_qry = obj_upd_qry.values(classif_qual='P')
-        nb_objs = self.session.execute(obj_upd_qry).rowcount
-        logger.info(" %d out of %d rows reset to predicted", nb_objs, len(self.object_ids))
+    def apply_on_all(self, project: Project, updates: ColUpdateList) -> int:
+        """
+            Apply all updates on all processes pointed at by the list.
+        """
+        upd0 = updates[0]
+        if upd0["ucol"] in ObjectHeader.__dict__:
+            if upd0["ucol"] == "classif_id":
+                self.historize_classification(ObjectHeader, ['V', 'D', 'P', None])
+            return self._apply_on_all_non_mapped(ObjectHeader, updates)
+        else:
+            return self._apply_on_all(ObjectFields, project, updates)
 
-        self.session.commit()
+    def add_filter(self, upd):
+        if "obj_head." in str(upd):
+            ret = upd.filter(ObjectHeader.objid == any_(self.object_ids))
+        else:
+            ret = upd.filter(ObjectFields.objfid == any_(self.object_ids))
+        return ret
 
 
 class ObjectSetFilter(object):

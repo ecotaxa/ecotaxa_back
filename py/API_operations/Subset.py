@@ -10,7 +10,7 @@ from typing import List, Tuple
 from API_models.subset import SubsetReq, SubsetRsp, LimitMethods
 from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping
-from BO.ObjectSet import DescribedObjectSet, EnumeratedObjectSet, ObjetIdListT
+from BO.ObjectSet import DescribedObjectSet, EnumeratedObjectSet, ObjectIDListT
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from BO.TSVFile import TSVFile
@@ -102,7 +102,7 @@ class SubsetService(TaskServiceBase):
         custom_mapping.write_to_project(self.dest_prj)
         self.session.commit()
 
-    def _db_fetch(self, object_ids: ObjetIdListT) -> List[DBObjectTupleT]:
+    def _db_fetch(self, object_ids: ObjectIDListT) -> List[DBObjectTupleT]:
         """
             Do a DB read of given objects, with auxiliary objects.
             :param object_ids: The list of IDs

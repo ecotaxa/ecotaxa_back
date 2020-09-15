@@ -4,8 +4,9 @@
 #
 #  Models used in CRUD API_operations.
 #
-from typing import Optional, Dict, Type
+from typing import Optional, Dict, Type, Iterable, List
 
+from sqlalchemy.sql.functions import current_timestamp
 from typing_extensions import TypedDict
 
 from DB import User, Project, Sample, Acquisition, Process, ObjectHeader
@@ -20,7 +21,7 @@ AcquisitionModel = sqlalchemy_to_pydantic(Acquisition)
 ProcessModel = sqlalchemy_to_pydantic(Process)
 ObjectHeaderModel = sqlalchemy_to_pydantic(ObjectHeader)
 # This one goes over the limit of 255 fields in OpenAPI generator
-#ObjectFieldsModel = sqlalchemy_to_pydantic(ObjectFields)
+# ObjectFieldsModel = sqlalchemy_to_pydantic(ObjectFields)
 
 # Enriched model
 FreeColT = Dict[str, str]
@@ -143,3 +144,36 @@ class ProjectFilters(TypedDict, total=False):
 
 
 ProjectFiltersModel = parse_typed_dict(ProjectFilters)
+
+
+class ColUpdate(TypedDict):
+    ucol: str
+    """ A column name, pseudo-columns AKA free ones, are OK """
+    uval: str
+    """ The new value to set, always as a string """
+
+
+class ColUpdateList(list):
+    """
+        Formalized way of updating entities in the system.
+            It's on purpose not a Dict as we take provision for futures usage when we need an order.
+    """
+
+    def __init__(self, iterable: Iterable[ColUpdate]):
+        super().__init__(iterable)
+
+    def as_dict_for_db(self):
+        ret = {}
+        an_update: ColUpdate
+        for an_update in self:
+            upd_col = an_update["ucol"]
+            ret[upd_col] = an_update["uval"]
+            if ret[upd_col] == 'current_timestamp':
+                ret[upd_col] = current_timestamp()
+        return ret
+
+
+class BulkUpdateReq(BaseModel):
+    # TODO: A Union of possible types?
+    target_ids: List[int] = Field(title="The IDs of the target entities")
+    updates: ColUpdateList = Field(title="The updates, to do on all impacted entities")

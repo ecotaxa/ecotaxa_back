@@ -12,7 +12,7 @@ from ..helpers.Service import Service
 
 class TaskService(Service):
     """
-        Basic CRUD API_operations on Task
+        Basic CRUD API operations on Tasks
     """
 
     def create(self) -> int:

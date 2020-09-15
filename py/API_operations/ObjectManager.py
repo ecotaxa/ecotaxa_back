@@ -4,11 +4,12 @@
 #
 from typing import Tuple
 
-from API_models.crud import ProjectFilters
-from BO.ObjectSet import DescribedObjectSet, ObjetIdListT, EnumeratedObjectSet
+from API_models.crud import ProjectFilters, ColUpdateList
+from BO.ObjectSet import DescribedObjectSet, ObjectIDListT, EnumeratedObjectSet, ObjectIDWithParentsListT
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
-from DB.helpers.ORM import ResultProxy
+from DB import ObjectHeader
+from DB.helpers.ORM import ResultProxy, any_
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
 from .helpers.Service import Service
@@ -26,7 +27,7 @@ class ObjectManager(Service):
     def __init__(self):
         super().__init__()
 
-    def query(self, current_user_id: int, proj_id: int, filters: ProjectFilters) -> ObjetIdListT:
+    def query(self, current_user_id: int, proj_id: int, filters: ProjectFilters) -> ObjectIDWithParentsListT:
         """
             Query the given project with given filters, return all IDs.
         """
@@ -39,13 +40,14 @@ class ObjectManager(Service):
         selected_tables = "obj_head oh"
         if "of." in where.get_sql():  # TODO: Duplicated code
             selected_tables += " JOIN obj_field of ON of.objfid = oh.objid"
-        sql = "SELECT objid FROM " + selected_tables + " " + where.get_sql()
+        sql = "SELECT objid, processid, acquisid, sampleid FROM " + selected_tables + " " + where.get_sql()
 
         res: ResultProxy = self.session.execute(sql, params)
-        ids = [r[0] for r in res]
+        # TODO: Below is an obscure record
+        ids = [(r[0], r[1], r[2], r[3]) for r in res]
         return ids
 
-    def delete(self, current_user_id: int, object_ids: ObjetIdListT) -> Tuple[int, int, int, int]:
+    def delete(self, current_user_id: int, object_ids: ObjectIDListT) -> Tuple[int, int, int, int]:
         """
             Remove from DB all the objects with ID in given list.
         :return:
@@ -80,7 +82,7 @@ class ObjectManager(Service):
         # Security check
         RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, proj_id)
 
-        impacted_objs = self.query(current_user_id, proj_id, filters)
+        impacted_objs = [r[0] for r in self.query(current_user_id, proj_id, filters)]
 
         EnumeratedObjectSet(self.session, impacted_objs).reset_to_predicted()
 
@@ -88,3 +90,18 @@ class ObjectManager(Service):
         ProjectBO.update_taxo_stats(self.session, proj_id)
         # Stats depend on taxo stats
         ProjectBO.update_stats(self.session, proj_id)
+
+    def update_set(self, current_user_id: int, target_ids: ObjectIDListT, updates: ColUpdateList) -> int:
+        """
+            Update the given set using provided updates.
+        """
+        # Get project IDs for the processes and verify rights
+        object_set = EnumeratedObjectSet(self.session, target_ids)
+        prj_ids = object_set.get_projects_ids()
+        # All should be in same project, so far
+        assert len(prj_ids) == 1, "Too many or no projects for objects: %s" % target_ids
+        prj_id = prj_ids[0]
+        _user, project = RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, prj_id)
+        assert project  # for mypy
+        return object_set.apply_on_all(project, updates)
+

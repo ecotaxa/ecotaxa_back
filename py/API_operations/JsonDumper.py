@@ -167,7 +167,7 @@ class JsonDumper(Service):
         with CodeTimer("Get Objects:", logger):
             objs = [an_obj for an_obj in ret.all()]
 
-        # We get as manu lines as images
+        # We get as many lines as images
         logger.info("NB ROWS JOIN=%d", len(objs))
 
         return objs

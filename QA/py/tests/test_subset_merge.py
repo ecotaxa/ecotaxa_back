@@ -14,10 +14,10 @@ from API_models.subset import SubsetReq
 from API_operations.CRUD.Projects import ProjectsService
 # noinspection PyPackageRequirements
 from API_operations.CRUD.Tasks import TaskService
+from API_operations.Consistency import ProjectConsistencyChecker
 from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
 from API_operations.Subset import SubsetService
-from API_operations.Consistency import ProjectConsistencyChecker
 # noinspection PyPackageRequirements
 from BO.Mappings import ProjectMapping
 # OK we need a bit of direct DB access
@@ -39,6 +39,7 @@ OUT_SUBS_JSON = "out_subs.json"
 def check_project(prj_id: int):
     problems = ProjectConsistencyChecker(prj_id).run(ADMIN_USER_ID)
     assert problems == []
+
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
 # BUT DON'T COMMIT THE CHANGE

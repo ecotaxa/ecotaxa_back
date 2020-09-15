@@ -8,6 +8,7 @@ from API_models.crud import CreateProjectReq, ProjectSearchResult
 from BO.ObjectSet import EnumeratedObjectSet
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
+from DB import Sample
 from DB.Project import Project, ANNOTATE
 from DB.User import User
 from DB.helpers.ORM import clone_of
@@ -104,3 +105,9 @@ class ProjectsService(Service):
         # Wait for the files handled
         remover.wait_for_done()
         return nb_objs, 0, nb_img_rows, len(img_files)
+
+    def recompute_geo(self,  current_user_id: int,
+               prj_id: int):
+        # Security barrier
+        _current_user, _project = RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, prj_id)
+        Sample.propagate_geo(self.session, prj_id)

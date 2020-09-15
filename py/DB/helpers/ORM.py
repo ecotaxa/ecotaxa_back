@@ -12,7 +12,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.engine.result import ResultProxy
 from sqlalchemy.ext.declarative import declarative_base
 # noinspection PyUnresolvedReferences
-from sqlalchemy.orm import Session, Query, make_transient
+from sqlalchemy.orm import Session, Query, make_transient, contains_eager
 # For exporting
 # noinspection PyUnresolvedReferences
 from sqlalchemy.orm import relationship
@@ -104,10 +104,10 @@ def detach_all_from_session(session: Session, an_orm_collection: Iterable[Model]
 
 
 # key = table name
-_table_cache: Dict[str, Tuple[List[str], List[str]]] = {}
+_table_cache: Dict[Table, Tuple[List[str], List[str]]] = {}
 
 
-def _analyze_cols(orm_table) -> Tuple[List[str], List[str]]:
+def _analyze_cols(orm_table: Table) -> Tuple[List[str], List[str]]:
     """
         Cache of what to do for cloning, per ORM table.
         :param orm_table:
@@ -127,6 +127,14 @@ def _analyze_cols(orm_table) -> Tuple[List[str], List[str]]:
             to_copy.append(a_col.name)
     _table_cache[orm_table] = (to_copy, to_clear)
     return to_copy, to_clear
+
+
+def non_key_cols(orm_clazz: ModelT) -> Set[str]:
+    """
+        Return the columns which are NOT part of any key, thus updatable.
+    """
+    ok_to_update, _key_cols = _analyze_cols(orm_clazz.__table__)
+    return set(ok_to_update)
 
 
 def minimal_table_of(metadata: MetaData, clazz, to_keep: Set[str]) -> Table:

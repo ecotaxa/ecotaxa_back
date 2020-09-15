@@ -51,8 +51,8 @@ class Sample(Model):
     @staticmethod
     def propagate_geo(session: Session, prj_id):
         """
-            Create sample geo from object one.
-        :return:
+            Create sample geo from objects one.
+        TODO: Should be in a BO
         """
         session.execute("""
         UPDATE samples s 

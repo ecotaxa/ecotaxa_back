@@ -6,11 +6,16 @@
 #
 from typing import Union, Tuple
 
+from fastapi import FastAPI, Response, status, Depends
+from fastapi_utils.timing import add_timing_middleware
+
 from API_models.crud import *
 from API_models.exports import EMODNetExportReq, EMODNetExportRsp
 from API_models.imports import *
 from API_models.merge import MergeRsp
+from API_models.objects import ObjectSetQueryRsp
 from API_models.subset import SubsetReq, SubsetRsp
+from API_operations.CRUD.ObjectParents import SamplesService, AcquisitionsService, ProcessesService
 from API_operations.CRUD.Projects import ProjectsService, ProjectSearchResult
 from API_operations.CRUD.Users import UserService
 from API_operations.Consistency import ProjectConsistencyChecker
@@ -23,10 +28,8 @@ from API_operations.exports.EMODnet import EMODNetExport
 from API_operations.helpers.Service import Service
 from API_operations.imports.Import import ImportAnalysis, RealImport
 from API_operations.imports.SimpleImport import SimpleImport
-from BO.ObjectSet import ObjetIdListT
+from BO.ObjectSet import ObjectIDListT
 from BO.Project import ProjectBO
-from fastapi import FastAPI, Response, status, Depends
-from fastapi_utils.timing import add_timing_middleware
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower
 from helpers.starlette import PlainTextResponse
@@ -193,7 +196,8 @@ def project_merge(project_id: int, source_project_id: int, dry_run: bool,
 
 
 @app.get("/projects/{project_id}/check", tags=['projects'])
-def project_check(project_id: int, current_user: int = Depends(get_current_user)):
+def project_check(project_id: int,
+                  current_user: int = Depends(get_current_user)):
     """
         Check consistency of a project.
     """
@@ -202,8 +206,22 @@ def project_check(project_id: int, current_user: int = Depends(get_current_user)
         return sce.run(current_user)
 
 
+@app.post("/projects/{project_id}/recompute_geo", tags=['projects'])
+def project_recompute_geography(project_id: int,
+                                current_user: int = Depends(get_current_user)):
+    """
+        Recompute geography information for all samples in project.
+    """
+    sce = ProjectsService()
+    with RightsThrower():
+        ret = sce.recompute_geo(current_user, project_id)
+    return ret
+
+
 @app.post("/import_prep/{project_id}", tags=['projects'], response_model=ImportPrepRsp)
-def import_preparation(project_id: int, params: ImportPrepReq, current_user: int = Depends(get_current_user)):
+def import_preparation(project_id: int,
+                       params: ImportPrepReq,
+                       current_user: int = Depends(get_current_user)):
     """
         Prepare/validate the import of an EcoTaxa archive or directory.
     """
@@ -213,7 +231,9 @@ def import_preparation(project_id: int, params: ImportPrepReq, current_user: int
 
 
 @app.post("/import_real/{project_id}", tags=['projects'], response_model=ImportRealRsp)
-def real_import(project_id: int, params: ImportRealReq, current_user: int = Depends(get_current_user)):
+def real_import(project_id: int,
+                params: ImportRealReq,
+                current_user: int = Depends(get_current_user)):
     """
         Import an EcoTaxa archive or directory.
     """
@@ -223,7 +243,9 @@ def real_import(project_id: int, params: ImportRealReq, current_user: int = Depe
 
 
 @app.post("/simple_import/{project_id}", tags=['projects'], response_model=SimpleImportRsp)
-def simple_import(project_id: int, params: SimpleImportReq, current_user: int = Depends(get_current_user)):
+def simple_import(project_id: int,
+                  params: SimpleImportReq,
+                  current_user: int = Depends(get_current_user)):
     """
         Import images only, with same metadata for all.
     """
@@ -233,7 +255,8 @@ def simple_import(project_id: int, params: SimpleImportReq, current_user: int = 
 
 
 @app.delete("/projects/{project_id}", tags=['projects'])
-def erase_project(project_id: int, only_objects: Optional[bool] = False,
+def erase_project(project_id: int,
+                  only_objects: Optional[bool] = False,
                   current_user: int = Depends(get_current_user)) -> Tuple[int, int, int, int]:
     """
         Delete the project.
@@ -250,19 +273,27 @@ def erase_project(project_id: int, only_objects: Optional[bool] = False,
 
 # TODO: Should be app.get, but for this we need a way to express
 #  that each field in ProjectFilter is part of the params
-@app.post("/object_set/{project_id}/query", tags=['objects'], response_model=ObjetIdListT)
-def get_object_set(project_id: int, filters: ProjectFiltersModel,
-                   current_user: int = Depends(get_current_user)) -> ObjetIdListT:
+@app.post("/object_set/{project_id}/query", tags=['objects'], response_model=ObjectSetQueryRsp)
+def get_object_set(project_id: int,
+                   filters: ProjectFiltersModel,
+                   current_user: int = Depends(get_current_user)) -> ObjectSetQueryRsp:
     """
         Return object ids for the given project with the filters.
     """
     sce = ObjectManager()
     with RightsThrower():
-        return sce.query(current_user, project_id, filters)
+        rsp = ObjectSetQueryRsp()
+        obj_with_parents = sce.query(current_user, project_id, filters)
+        rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
+        rsp.process_ids = [with_p[1] for with_p in obj_with_parents]
+        rsp.acquisition_ids = [with_p[3] for with_p in obj_with_parents]
+        rsp.sample_ids = [with_p[3] for with_p in obj_with_parents]
+        return rsp
 
 
 @app.post("/object_set/{project_id}/reset_to_predicted", tags=['objects'], response_model=None)
-def reset_object_set_to_predicted(project_id: int, filters: ProjectFiltersModel,
+def reset_object_set_to_predicted(project_id: int,
+                                  filters: ProjectFiltersModel,
                                   current_user: int = Depends(get_current_user)) -> None:
     """
         Reset to Predicted all objects for the given project with the filters.
@@ -273,7 +304,7 @@ def reset_object_set_to_predicted(project_id: int, filters: ProjectFiltersModel,
 
 
 @app.delete("/object_set/", tags=['objects'])
-def erase_object_set(object_ids: ObjetIdListT,
+def erase_object_set(object_ids: ObjectIDListT,
                      current_user: int = Depends(get_current_user)) -> Tuple[int, int, int, int]:
     """
         Delete the objects with given object ids.
@@ -284,8 +315,21 @@ def erase_object_set(object_ids: ObjetIdListT,
         return sce.delete(current_user, object_ids)
 
 
+@app.post("/object_set/update", tags=['objects'])
+def update_object_set(req: BulkUpdateReq,
+                      current_user: int = Depends(get_current_user)) -> int:
+    """
+        Update all the objects with given IDs and values
+        Current user needs Manage right on all projects of specified objects.
+    """
+    sce = ObjectManager()
+    with RightsThrower():
+        return sce.update_set(current_user, req.target_ids, req.updates)
+
+
 @app.post("/export/emodnet", tags=['WIP'], include_in_schema=False, response_model=EMODNetExportRsp)
-def emodnet_format_export(params: EMODNetExportReq, current_user: int = Depends(get_current_user)):
+def emodnet_format_export(params: EMODNetExportReq,
+                          current_user: int = Depends(get_current_user)):
     """
         Export in EMODnet format, @see https://www.emodnet-ingestion.eu/
         Produces a DwC-A archive into a temporary directory, ready for download.
@@ -297,7 +341,9 @@ def emodnet_format_export(params: EMODNetExportReq, current_user: int = Depends(
 
 
 @app.get("/taxon/resolve/{our_id}", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)
-async def resolve_taxon(our_id: int, response: Response, text_response: bool = False,
+async def resolve_taxon(our_id: int,
+                        response: Response,
+                        text_response: bool = False,
                         _current_user: int = Depends(get_current_user)) \
         -> Union[PlainTextResponse, Tuple]:
     """
@@ -320,6 +366,43 @@ async def resolve_taxon(our_id: int, response: Response, text_response: bool = F
         return ret
 
 
+@app.post("/sample_set/update", tags=['samples'])
+def update_samples(req: BulkUpdateReq,
+                   current_user: int = Depends(get_current_user)) -> int:
+    """
+        Do the required update for each sample in the set. Any non-null field in the model is written to
+        every impacted sample.
+            Return the number of updated entities.
+    """
+    sce = SamplesService()
+    with RightsThrower():
+        return sce.update_set(current_user, req.target_ids, req.updates)
+
+
+@app.post("/acquisition_set/update", tags=['acquisitions'])
+def update_acquisitions(req: BulkUpdateReq,
+                        current_user: int = Depends(get_current_user)) -> int:
+    """
+        Do the required update for each acquisition in the set.
+            Return the number of updated entities.
+    """
+    sce = AcquisitionsService()
+    with RightsThrower():
+        return sce.update_set(current_user, req.target_ids, req.updates)
+
+
+@app.post("/process_set/update", tags=['processes'], response_model=int)
+def update_processes(req: BulkUpdateReq,
+                     current_user: int = Depends(get_current_user)) -> int:
+    """
+        Do the required update for each process in the set.
+            Return the number of updated entities.
+    """
+    sce = ProcessesService()
+    with RightsThrower():
+        return sce.update_set(current_user, req.target_ids, req.updates)
+
+
 @app.get("/status", tags=['WIP'])
 def system_status(_current_user: int = Depends(get_current_user)) -> Response:
     """
@@ -339,34 +422,12 @@ def system_error(_current_user: int = Depends(get_current_user)):
         assert False
 
 
-@app.get("/samples/{sample_id}", tags=['samples'], response_model=SampleModel)
-def get_sample(sample_id: int, current_user: int = Depends(get_current_user)):
-    return None
-
-
-@app.get("/acquisitions/{acquisition_id}", tags=['acquisitions'], response_model=AcquisitionModel)
-def get_acquisition(acquisition_id: int, current_user: int = Depends(get_current_user)):
-    return None
-
-
-@app.get("/processings/{process_id}", tags=['processes'], response_model=ProcessModel)
-def get_processing(process_id: int, current_user: int = Depends(get_current_user)):
-    return None
-
-
-@app.get("/object/{object_id}", tags=['objects'], response_model=ObjectHeaderModel)
-def get_object(object_id: int, current_user: int = Depends(get_current_user)):
-    return None
-
-
-# TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
-# @app.get("/noop", tags=['misc'], response_model=Optional[Union[, , ,
-#                                                       ObjectHeaderModel]])
-# def do_nothing(_current_user: int = Depends(get_current_user)):
-#     """
-#         This entry point will just do nothing.
-#             It's also used for exporting models we could need on client side.
-#     """
+@app.get("/noop", tags=['misc'], response_model=ObjectHeaderModel)
+def do_nothing(_current_user: int = Depends(get_current_user)):
+    """
+        This entry point will just do nothing.
+            It's also used for exporting models we could need on client side.
+    """
 
 
 # @app.get("/loadtest", tags=['WIP'], include_in_schema=False)
