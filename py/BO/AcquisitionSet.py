@@ -37,7 +37,7 @@ class EnumeratedAcquisitionSet(MappedTable):
         qry = qry.join(Project.all_acquisitions)
         qry = qry.filter(Acquisition.acquisid == any_(self.ids))
         with CodeTimer("Prjs for %d acquisitions: " % len(self.ids), logger):
-            return [an_id for an_id in qry.all()]
+            return [an_id[0] for an_id in qry.all()]
 
     def apply_on_all(self, project: Project, updates: ColUpdateList) -> int:
         """

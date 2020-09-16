@@ -83,7 +83,7 @@ class EnumeratedObjectSet(MappedTable):
         qry = qry.join(Project.all_objects)
         qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))
         with CodeTimer("Prjs for %d objs: " % len(self.object_ids), logger):
-            return [an_id for an_id in qry.all()]
+            return [an_id[0] for an_id in qry.all()]
 
     @staticmethod
     def _delete_chunk(session: Session, a_chunk: ObjectIDListT) -> Tuple[int, int, List[str]]:

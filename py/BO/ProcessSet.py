@@ -11,7 +11,7 @@ from API_models.crud import ColUpdateList
 from BO.Project import ProjectIDListT
 from BO.helpers.MappedTable import MappedTable
 from DB import Session, Query, Project, Process
-from DB.helpers.ORM import any_, contains_eager
+from DB.helpers.ORM import any_
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -37,7 +37,7 @@ class EnumeratedProcessSet(MappedTable):
         qry = qry.join(Project.all_processes)
         qry = qry.filter(Process.processid == any_(self.ids))
         with CodeTimer("Prjs for %d processes: " % len(self.ids), logger):
-            return [an_id for an_id in qry.all()]
+            return [an_id[0] for an_id in qry.all()]
 
     def apply_on_all(self, project: Project, updates: ColUpdateList) -> int:
         """

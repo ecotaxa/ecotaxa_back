@@ -38,7 +38,7 @@ class EnumeratedSampleSet(MappedTable):
         qry = qry.join(Sample, Project.all_samples)
         qry = qry.filter(Sample.sampleid == any_(self.ids))
         with CodeTimer("Prjs for %d samples: " % len(self.ids), logger):
-            return [an_id for an_id in qry.all()]
+            return [an_id[0] for an_id in qry.all()]
 
     def apply_on_all(self, project: Project, updates: ColUpdateList) -> int:
         """
