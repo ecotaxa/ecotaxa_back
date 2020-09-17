@@ -19,6 +19,8 @@ from .Task import Task
 from .Taxonomy import Taxonomy
 from .User import User, Role
 from .UserPreferences import UserPreferences
+# noinspection PyUnresolvedReferences
+from .WoRMs import WoRMS
 from .helpers.ORM import relationship
 
 # User

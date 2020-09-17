@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Optional, Iterable, Tuple, List, Set, Dict, TypeVar, Type
+from typing import Optional, Iterable, Tuple, List, Set, Dict, TypeVar, Type, Any
 
 # noinspection PyUnresolvedReferences
 from sqlalchemy import Column, inspect, MetaData, Table, any_ as _pg_any, and_
@@ -162,3 +162,10 @@ def minimal_table_of(metadata: MetaData, clazz, to_keep: Set[str]) -> Table:
 def any_(int_list: List[int]):
     # TODO: Get proper mapping, it seems a bit too much for sqlalchemy-stubs
     return _pg_any(int_list)  # type: ignore
+
+
+def only_res(res: List[Tuple[Any]]):
+    """
+        SQLAlchemy or DBApi returns even single colum queries as lists of 1-element tuple :(
+    """
+    return [an_id for an_id, in res]

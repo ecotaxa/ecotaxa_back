@@ -24,6 +24,7 @@ from API_operations.Merge import MergeService
 from API_operations.ObjectManager import ObjectManager
 from API_operations.Status import StatusService
 from API_operations.Subset import SubsetService
+from API_operations.TaxoManager import TaxonomyService
 from API_operations.exports.EMODnet import EMODNetExport
 from API_operations.helpers.Service import Service
 from API_operations.imports.Import import ImportAnalysis, RealImport
@@ -364,6 +365,18 @@ async def resolve_taxon(our_id: int,
     else:
         ret = ok, ours, theirs
         return ret
+
+
+@app.get("/taxa/refresh", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)
+async def refresh_taxa_db(current_user: int = Depends(get_current_user)) -> PlainTextResponse:
+    """
+        Refresh local mirror of WoRMS database.
+    """
+    sce = TaxonomyService()
+    with RightsThrower():
+        ret = sce.db_refresh(current_user)
+    data = "\n".join(ret)
+    return PlainTextResponse(data, status_code=status.HTTP_200_OK)
 
 
 @app.post("/sample_set/update", tags=['samples'])

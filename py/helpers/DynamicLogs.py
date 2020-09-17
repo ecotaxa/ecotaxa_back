@@ -3,6 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import logging
+from typing import Union, TextIO
 
 
 class DynamicFileHandler(logging.FileHandler):
@@ -18,7 +19,7 @@ class DynamicFileHandler(logging.FileHandler):
         self.mode = mode
         self.encoding = encoding
 
-    def switch_to(self, new_filename):
+    def switch_to(self, new_filename_or_stream):
         """
             Move to another log file.
         """
@@ -26,13 +27,16 @@ class DynamicFileHandler(logging.FileHandler):
             self.stream.close()
             # noinspection PyTypeChecker
             self.stream = None
-        self.baseFilename = new_filename
-        self.stream = self._open()
-
+        if isinstance(new_filename_or_stream, str):
+            self.baseFilename = new_filename_or_stream
+            self.stream = self._open()
+        else:
+            self.stream = new_filename_or_stream
 
 logging_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 # TODO: It should be thread/request local
-_the_handler = DynamicFileHandler("API_models.log")
+DEFAULT_LOG_FILE = "API_models.log"
+_the_handler = DynamicFileHandler(DEFAULT_LOG_FILE)
 _the_handler.setFormatter(logging.Formatter(logging_format))
 
 
@@ -43,5 +47,8 @@ def get_logger(name) -> logging.Logger:
     return ret
 
 
-def switch_log_to_file(file_path: str):
-    _the_handler.switch_to(file_path)
+def switch_log_to_file(file_path_or_stream: Union[str, TextIO]):
+    _the_handler.switch_to(file_path_or_stream)
+
+def switch_log_back():
+    _the_handler.switch_to(DEFAULT_LOG_FILE)

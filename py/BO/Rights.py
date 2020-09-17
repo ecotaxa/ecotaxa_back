@@ -70,6 +70,17 @@ class RightsBO(object):
         return user, project
 
     @staticmethod
+    def user_has_role(session: Session, user_id: int, role: str) -> User:
+        """
+            Check user role. Should be temporary until a proper action is defined, e.g. refresh taxo tree.
+        """
+        # Load ORM entity
+        user: User = session.query(User).get(user_id)
+        # Check
+        assert user.has_role(role), NOT_AUTHORIZED
+        return user
+
+    @staticmethod
     def grant(user: User, action: Action, prj: Project):
         """
             Grant the possibility to do this action on this project to this user.

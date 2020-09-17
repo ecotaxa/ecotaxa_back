@@ -68,7 +68,7 @@ class WoRMSFinder(object):
 
     @classmethod
     def aphia_records_by_name_sync(cls, name: str) -> List[Dict]:
-        ret: List[Dict]  = []
+        ret: List[Dict] = []
         session = cls.the_session
         if session is None:
             session = requests.Session()
@@ -124,3 +124,37 @@ class WoRMSFinder(object):
             parent = self.get_taxonomy(taxon.parent_id)
             assert parent is not None
             return "%s > %s" % (self.get_lineage(parent), taxon.name)
+
+    WoRMS_URL_ClassifChildrenByAphia = "/rest/AphiaChildrenByAphiaID/%d?marine_only=true&offset=%d"
+
+    CHUNK_SIZE = 50
+
+    @classmethod
+    def aphia_children_by_id(cls, aphia_id: int) -> List[Dict]:
+        ret: List[Dict] = []
+        page = 0
+        chunk_num = page * cls.CHUNK_SIZE + 1
+        req = cls.WoRMS_URL_ClassifChildrenByAphia % (aphia_id, chunk_num)
+        response = cls.get_session().get(cls.BASE_URL + req)
+        if not response.ok:
+            cls.invalidate_session()
+        else:
+            if response.status_code == 204:  # No content
+                pass
+            else:
+                ret = response.json()
+        return ret
+
+    @classmethod
+    def get_session(cls):
+        """ Cache the session to marinespecies.org, for speed and saving resources """
+        session = cls.the_session
+        if session is None:
+            session = requests.Session()
+            cls.the_session = session
+        return cls.the_session
+
+    @classmethod
+    def invalidate_session(cls):
+        cls.the_session = None
+
