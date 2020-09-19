@@ -130,19 +130,19 @@ class WoRMSFinder(object):
     CHUNK_SIZE = 50
 
     @classmethod
-    def aphia_children_by_id(cls, aphia_id: int) -> List[Dict]:
+    async def aphia_children_by_id(cls, aphia_id: int) -> List[Dict]:
         ret: List[Dict] = []
         page = 0
         chunk_num = page * cls.CHUNK_SIZE + 1
         req = cls.WoRMS_URL_ClassifChildrenByAphia % (aphia_id, chunk_num)
-        response = cls.get_session().get(cls.BASE_URL + req)
-        if not response.ok:
-            cls.invalidate_session()
+        response = await cls.client.get(cls.BASE_URL + req)
+        if response.status_code == 204:
+            # No content
+            pass
+        elif response.status_code == 200:
+            ret = response.json()
         else:
-            if response.status_code == 204:  # No content
-                pass
-            else:
-                ret = response.json()
+            raise Exception("Unexpected %s" % response)
         return ret
 
     @classmethod
@@ -157,4 +157,3 @@ class WoRMSFinder(object):
     @classmethod
     def invalidate_session(cls):
         cls.the_session = None
-

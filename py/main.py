@@ -7,6 +7,7 @@
 from typing import Union, Tuple
 
 from fastapi import FastAPI, Response, status, Depends
+from fastapi.responses import StreamingResponse
 from fastapi_utils.timing import add_timing_middleware
 
 from API_models.crud import *
@@ -31,6 +32,7 @@ from API_operations.imports.Import import ImportAnalysis, RealImport
 from API_operations.imports.SimpleImport import SimpleImport
 from BO.ObjectSet import ObjectIDListT
 from BO.Project import ProjectBO
+from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower
 from helpers.starlette import PlainTextResponse
@@ -368,15 +370,19 @@ async def resolve_taxon(our_id: int,
 
 
 @app.get("/taxa/refresh", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)
-async def refresh_taxa_db(current_user: int = Depends(get_current_user)) -> PlainTextResponse:
+async def refresh_taxa_db(max_requests: int = None,
+                          current_user: int = Depends(get_current_user)) -> StreamingResponse:
     """
         Refresh local mirror of WoRMS database.
     """
-    sce = TaxonomyService()
+    sce = TaxonomyService(max_requests)
+    tmp_log = sce.log_to_temp()
+    logger.info("logging to %s", tmp_log)
     with RightsThrower():
-        ret = sce.db_refresh(current_user)
-    data = "\n".join(ret)
-    return PlainTextResponse(data, status_code=status.HTTP_200_OK)
+        tsk = sce.db_refresh(current_user)
+        async_bg_run(tsk)  # Run in bg while streaming logs
+    # Below produces a chunked HTTP encoding, which is officially only HTTP 1.1 protocol
+    return StreamingResponse(log_streamer(tmp_log, "Done,"), media_type="text/plain")
 
 
 @app.post("/sample_set/update", tags=['samples'])

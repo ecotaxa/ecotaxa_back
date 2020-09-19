@@ -24,11 +24,11 @@ class WoRMS(Model):
         Additional technical statuses are (1) quarantined: hidden from public interface after decision from an editor 
         and (2) deleted: AphiaID should NOT be used anymore, please replace it by the valid_AphiaID
         Also seen: 'alternate representation' """
-    unacceptreason = Column(String(150))
+    unacceptreason = Column(String(512))
     """ the reason why a scientificname is unaccepted """
     taxon_rank_id = Column(SmallInteger)
     """ the taxonomic rank identifier of the most specific name in the scientificname """
-    rank = Column(String(18))
+    rank = Column(String(24))
     """ the taxonomic rank of the most specific name in the scientificname """
     valid_aphia_id = Column(Integer)
     """ the AphiaID (for the scientificname) of the currently accepted taxon. NULL if 

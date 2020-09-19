@@ -2,11 +2,12 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-import io
-from typing import List, Dict
+import tempfile
+from collections import deque
+from typing import Dict
 
-from BO.Rights import RightsBO
-from DB import Role
+from httpx import ReadTimeout
+
 from DB.WoRMs import WoRMS
 from DB.helpers.ORM import only_res
 from helpers.DynamicLogs import get_logger, switch_log_to_file, switch_log_back
@@ -20,49 +21,70 @@ class TaxonomyService(Service):
     """
         Merge operation, move everything from source into destination project.
     """
+    MAX_QUERIES = 500
 
-    def __init__(self):
+    def __init__(self, max_requests: int):
         super().__init__()
+        self.temp_log = ""
+        # aphia_id -> all_fetched
+        self.existing_id: Dict[int, bool] = {}
+        self.to_fetch: deque = deque()
+        self.nb_queries = 0
+        if max_requests is not None:
+            self.max_queries = max_requests
+        else:
+            self.max_queries = self.MAX_QUERIES
 
-    def db_refresh(self, current_user_id: int) -> List[str]:
+    def log_to_temp(self) -> str:
+        self.temp_log = tempfile.NamedTemporaryFile(suffix=".log", delete=True).name
+        switch_log_to_file(self.temp_log)
+        return self.temp_log
+
+    async def db_refresh(self, current_user_id: int):
         """
             Refresh the local taxonomy DB.
         """
         # Security check
-        user = RightsBO.user_has_role(self.session, current_user_id, Role.APP_ADMINISTRATOR)
-        # OK
-        # Temporary: stream logs for debugging in a navigator
-        output = io.StringIO()
-        switch_log_to_file(output)
-        self.existing_id: Dict[int, bool] = {}
-        self.nb_queries = 0
-        self._do_refresh(1)
-        ret = output.getvalue().split("\n")
+        # _user = RightsBO.user_has_role(self.session, current_user_id, Role.APP_ADMINISTRATOR)
+        await self._do_refresh(1)
         switch_log_back()
-        return ret
+
+    @staticmethod
+    def to_latin1_compat(a_str: str):
+        if a_str is None:
+            return a_str
+        try:
+            str_lat1 = a_str.encode("latin-1")
+        except UnicodeEncodeError:
+            return a_str.encode("latin-1", errors='xmlcharrefreplace')
+        return a_str
 
     def json_to_ORM(self, a_child: Dict) -> WoRMS:
+        """
+            Prepare a DB record from the JSON structure returned by WoRMS REST API.
+        """
+        to_lat1 = self.to_latin1_compat
         ret = WoRMS()
         ret.aphia_id = a_child["AphiaID"]
         ret.kingdom = a_child["kingdom"]
         ret.url = a_child["url"]
-        ret.scientificname = a_child["scientificname"]
-        ret.authority = a_child["authority"]
+        ret.scientificname = to_lat1(a_child["scientificname"])
+        ret.authority = to_lat1(a_child["authority"])
         ret.status = a_child["status"]
-        ret.unacceptreason = a_child["unacceptreason"]
+        ret.unacceptreason = to_lat1(a_child["unacceptreason"])
         ret.taxon_rank_id = a_child["taxonRankID"]
         ret.rank = a_child["rank"]
         ret.valid_aphia_id = a_child["valid_AphiaID"]
         ret.valid_name = a_child["valid_name"]
-        ret.valid_authority = a_child["valid_authority"]
+        ret.valid_authority = to_lat1(a_child["valid_authority"])
         ret.parent_name_usage_id = a_child["parentNameUsageID"]
         ret.kingdom = a_child["kingdom"]
         ret.phylum = a_child["phylum"]
         ret.class_ = a_child["class"]
         ret.order = a_child["order"]
         ret.family = a_child["family"]
-        ret.genus = a_child["genus"]
-        ret.citation = a_child["citation"]
+        ret.genus = to_lat1(a_child["genus"])
+        ret.citation = to_lat1(a_child["citation"])
         ret.lsid = a_child["lsid"]
         ret.is_marine = a_child["isMarine"]
         ret.is_brackish = a_child["isBrackish"]
@@ -73,62 +95,72 @@ class TaxonomyService(Service):
         ret.modified = a_child["modified"]
         return ret
 
-    def _do_refresh(self, starting_id: int):
+    async def _do_refresh(self, starting_id: int):
         """
             Do the real job.
         """
         logger.info("Starting...")
+        # Query all for fast existence testing
         qry = self.session.query(WoRMS.aphia_id, WoRMS.all_fetched)
         self.existing_ids = {rec[0]: rec[1] for rec in qry.all()}
         logger.info("Existing: %d entries", len(self.existing_ids))
+        # What was not fetched needs to be
+        self.to_fetch.extend([an_id for an_id in self.existing_ids if not self.existing_ids[an_id]])
+        # Loop until all was refreshed
+        while True:
+            id_to_fetch = self.to_fetch.popleft()
+            try:
+                await self._add_children_of(id_to_fetch)
+            except ResourceWarning as e:
+                break
+        logger.info("Done, %d items remaining to fetch.", len(self.to_fetch))
 
-        self._add_children_of(starting_id)
-
-        logger.info("Done.")
-
-    def _add_children_of(self, starting_aphia_id: int):
+    async def _add_children_of(self, parent_aphia_id: int):
         """
             Add in DB (recursively) the children of given taxon by its aphia_id.
         """
-        if starting_aphia_id in self.existing_ids and self.existing_ids[starting_aphia_id]:
-            children_qry = self.session.query(WoRMS.aphia_id)
-            children_qry = children_qry.filter(WoRMS.parent_name_usage_id == starting_aphia_id)
-            children_ids = set(only_res(children_qry.all()))
-            logger.info("For %d DB says %s", starting_aphia_id, children_ids)
-        else:
-            # REST calls limit
-            if self.nb_queries > 50000:
+        # REST calls limit
+        if self.nb_queries > self.max_queries:
+            raise ResourceWarning("Not making more than %d queries", self.max_queries)
+        self.nb_queries += 1
+        # It looks like the parent is returned with its children
+        try:
+            children = await WoRMSFinder.aphia_children_by_id(parent_aphia_id)
+        except ReadTimeout:
+            return
+        children_ids = set()
+        for a_child in children:
+            to_add = self.json_to_ORM(a_child)
+            to_add.all_fetched = False
+            children_ids.add(to_add.aphia_id)
+            if to_add.aphia_id in self.existing_ids:
+                # TODO: Update
+                pass
+            else:
+                self.session.add(to_add)
+                self.existing_ids[to_add.aphia_id] = False
+        # DB persist
+        if len(children_ids) > 0:
+            try:
+                self.session.commit()
+            except Exception as e:
+                logger.error("For parent %d and child %s : %s", parent_aphia_id, children_ids, e)
+                self.session.rollback()
                 return
-            # It lloks like the parent is returned with its children
-            children = WoRMSFinder.aphia_children_by_id(starting_aphia_id)
-            self.nb_queries += 1
-            children_ids = set()
-            added = 0
-            for a_child in children:
-                to_add = self.json_to_ORM(a_child)
-                children_ids.add(to_add.aphia_id)
-                if to_add.aphia_id not in self.existing_ids:
-                    logger.info("Adding to DB %d", to_add.aphia_id)
-                    self.session.add(to_add)
-                    self.existing_ids[to_add.aphia_id] = False
-                    added += 1
-            # if added > 0:
-                    try:
-                        self.session.commit()
-                    except Exception as e:
-                        logger.error("For parent %d and child %s : %s", starting_aphia_id, to_add.aphia_id,e)
-                        self.session.rollback()
-                        return
-        # Recurse
-        for a_child_id in children_ids:
-            if a_child_id == starting_aphia_id:
-                continue
-            # if self.existing_ids[a_child_id]:
-            #     continue
-            self._add_children_of(a_child_id)
+            #
+            logger.info("Added to DB %s", children_ids)
         # Signal done
-        self.session.query(WoRMS).get(starting_aphia_id).all_fetched = True
+        self.session.query(WoRMS).get(parent_aphia_id).all_fetched = True
         self.session.commit()
+
+    async def _get_db_children(self, aphia_id: int):
+        """
+            Return the known list of children for this aphia_id 
+        """
+        children_qry = self.session.query(WoRMS.aphia_id)
+        children_qry = children_qry.filter(WoRMS.parent_name_usage_id == aphia_id)
+        children_ids = set(only_res(children_qry.all()))
+        return children_ids
 
     # TODO: /AphiaRecordsByDate Lists all AphiaRecords (taxa) that have their last edit action (modified or added)
     #  during the specified period
