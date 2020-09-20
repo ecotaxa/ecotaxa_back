@@ -4,7 +4,7 @@
 #
 import tempfile
 from collections import deque
-from typing import Dict
+from typing import Dict, Set
 
 from httpx import ReadTimeout
 
@@ -108,14 +108,26 @@ class TaxonomyService(Service):
         self.to_fetch.extend([an_id for an_id in self.existing_ids if not self.existing_ids[an_id]])
         # Loop until all was refreshed
         while True:
-            id_to_fetch = self.to_fetch.popleft()
             try:
-                await self._add_children_of(id_to_fetch)
-            except ResourceWarning as e:
+                id_to_fetch = self.to_fetch.popleft()
+            except IndexError:
                 break
+            try:
+                children_ids = await self._add_children_of(id_to_fetch)
+            except ResourceWarning as e:
+                logger.warning("Limit of %d queries reached.", self.max_queries)
+                break
+            except ReadTimeout:
+                logger.warning("Timeout for %d.", id_to_fetch)
+                continue
+            # Report progress
+            if len(children_ids) > 0:
+                logger.info("Added to DB: %s, %d queries done.", children_ids, self.nb_queries)
+            # Add the children to the explore
+            self.to_fetch.extend(children_ids)
         logger.info("Done, %d items remaining to fetch.", len(self.to_fetch))
 
-    async def _add_children_of(self, parent_aphia_id: int):
+    async def _add_children_of(self, parent_aphia_id: int) -> Set[int]:
         """
             Add in DB (recursively) the children of given taxon by its aphia_id.
         """
@@ -124,10 +136,7 @@ class TaxonomyService(Service):
             raise ResourceWarning("Not making more than %d queries", self.max_queries)
         self.nb_queries += 1
         # It looks like the parent is returned with its children
-        try:
-            children = await WoRMSFinder.aphia_children_by_id(parent_aphia_id)
-        except ReadTimeout:
-            return
+        children = await WoRMSFinder.aphia_children_by_id(parent_aphia_id)
         children_ids = set()
         for a_child in children:
             to_add = self.json_to_ORM(a_child)
@@ -146,12 +155,11 @@ class TaxonomyService(Service):
             except Exception as e:
                 logger.error("For parent %d and child %s : %s", parent_aphia_id, children_ids, e)
                 self.session.rollback()
-                return
-            #
-            logger.info("Added to DB %s", children_ids)
+                return set()
         # Signal done
         self.session.query(WoRMS).get(parent_aphia_id).all_fetched = True
         self.session.commit()
+        return children_ids
 
     async def _get_db_children(self, aphia_id: int):
         """
