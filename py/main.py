@@ -385,6 +385,21 @@ async def refresh_taxa_db(max_requests: int = None,
     return StreamingResponse(log_streamer(tmp_log, "Done,"), media_type="text/plain")
 
 
+@app.get("/taxa/matches", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)
+async def matching_with_worms(current_user: int = 0  # Depends(get_current_user)
+                              ) -> PlainTextResponse:
+    """
+        Show current state of matches.
+    """
+    sce = TaxonomyService(0)
+    with RightsThrower():
+        data = sce.matching(current_user)
+    txt = "%d case-insensitive matches on name with WoRMS scientificname\n" % len(data)
+    txt += "[worms.aphia_id, worms.status, taxo.id, taxo.name, taxo.taxotype, taxo.taxostatus]\n"
+    txt += "\n".join([str(a_res) for a_res in data])
+    return PlainTextResponse(txt, status_code=status.HTTP_200_OK)
+
+
 @app.post("/sample_set/update", tags=['samples'])
 def update_samples(req: BulkUpdateReq,
                    current_user: int = Depends(get_current_user)) -> int:

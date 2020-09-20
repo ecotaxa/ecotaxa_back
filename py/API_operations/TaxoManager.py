@@ -4,12 +4,16 @@
 #
 import tempfile
 from collections import deque
-from typing import Dict, Set
+from typing import Dict, Set, List
 
 from httpx import ReadTimeout
 
+from BO.Rights import RightsBO
+from DB import Taxonomy, Role
+from DB.Project import ProjectTaxoStat
 from DB.WoRMs import WoRMS
-from DB.helpers.ORM import only_res
+from DB.helpers.ORM import Query
+from DB.helpers.ORM import only_res, func
 from helpers.DynamicLogs import get_logger, switch_log_to_file, switch_log_back
 from providers.WoRMS import WoRMSFinder
 from .helpers.Service import Service
@@ -45,8 +49,8 @@ class TaxonomyService(Service):
             Refresh the local taxonomy DB.
         """
         # Security check
-        # _user = RightsBO.user_has_role(self.session, current_user_id, Role.APP_ADMINISTRATOR)
-        await self._do_refresh(1)
+        _user = RightsBO.user_has_role(self.session, current_user_id, Role.APP_ADMINISTRATOR)
+        await self._do_refresh()
         switch_log_back()
 
     @staticmethod
@@ -54,11 +58,12 @@ class TaxonomyService(Service):
         if a_str is None:
             return a_str
         try:
-            str_lat1 = a_str.encode("latin-1")
+            _str_lat1 = a_str.encode("latin-1")
         except UnicodeEncodeError:
             return a_str.encode("latin-1", errors='xmlcharrefreplace')
         return a_str
 
+    # noinspection PyPep8Naming
     def json_to_ORM(self, a_child: Dict) -> WoRMS:
         """
             Prepare a DB record from the JSON structure returned by WoRMS REST API.
@@ -95,7 +100,7 @@ class TaxonomyService(Service):
         ret.modified = a_child["modified"]
         return ret
 
-    async def _do_refresh(self, starting_id: int):
+    async def _do_refresh(self):
         """
             Do the real job.
         """
@@ -114,7 +119,7 @@ class TaxonomyService(Service):
                 break
             try:
                 children_ids = await self._add_children_of(id_to_fetch)
-            except ResourceWarning as e:
+            except ResourceWarning:
                 logger.warning("Limit of %d queries reached.", self.max_queries)
                 break
             except ReadTimeout:
@@ -173,3 +178,24 @@ class TaxonomyService(Service):
     # TODO: /AphiaRecordsByDate Lists all AphiaRecords (taxa) that have their last edit action (modified or added)
     #  during the specified period
     # Get max of dates in our DB as start of range
+
+    def matching(self, _current_user_id: int) -> List[List]:
+        """
+            Return the list of matching entries b/w Taxonomy and WoRMS.
+        """
+        # No security check. TODO?
+        used_taxo_ids: Query = self.session.query(ProjectTaxoStat.id).distinct()
+        used_taxo_ids = used_taxo_ids.filter(ProjectTaxoStat.nbr > 0)
+
+        qry: Query = self.session.query(Taxonomy, WoRMS)
+        qry = qry.join(WoRMS, func.lower(WoRMS.scientificname) == func.lower(Taxonomy.name))
+        qry = qry.filter(Taxonomy.id.in_(used_taxo_ids))
+        qry = qry.order_by(func.lower(Taxonomy.name))
+        # Format result
+        ret = []
+        for a_res in qry.all():
+            taxo: Taxonomy = a_res[0]
+            worms: WoRMS = a_res[1]
+            line = [worms.aphia_id, worms.status, taxo.id, taxo.name, taxo.taxotype, taxo.taxostatus]
+            ret.append(line)
+        return ret
