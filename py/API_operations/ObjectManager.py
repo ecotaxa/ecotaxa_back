@@ -8,8 +8,7 @@ from API_models.crud import ProjectFilters, ColUpdateList
 from BO.ObjectSet import DescribedObjectSet, ObjectIDListT, EnumeratedObjectSet, ObjectIDWithParentsListT
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
-from DB import ObjectHeader
-from DB.helpers.ORM import ResultProxy, any_
+from DB.helpers.ORM import ResultProxy
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
 from .helpers.Service import Service
@@ -43,7 +42,7 @@ class ObjectManager(Service):
         sql = "SELECT objid, processid, acquisid, sampleid FROM " + selected_tables + " " + where.get_sql()
 
         res: ResultProxy = self.session.execute(sql, params)
-        # TODO: Below is an obscure record
+        # TODO: Below is an obscure record, and no use re-packing something just unpacked
         ids = [(r[0], r[1], r[2], r[3]) for r in res]
         return ids
 
@@ -105,3 +104,33 @@ class ObjectManager(Service):
         assert project  # for mypy
         return object_set.apply_on_all(project, updates)
 
+    def revert_to_history(self, current_user_id: int, proj_id: int,
+                          filters: ProjectFilters, dry_run: bool,
+                          target: int):
+        """
+            Revert to classification history the given set, if dry_run then only simulate.
+        """
+        # Security check
+        RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, proj_id)
+
+        # Get target objects
+        impacted_objs = [r[0] for r in self.query(current_user_id, proj_id, filters)]
+        obj_set = EnumeratedObjectSet(self.session, impacted_objs)
+
+        # We don't revert to a previous version in history from same annotator
+        try:
+            but_not_by = int(filters.get('filt_last_annot', None))
+        except (TypeError, ValueError):
+            but_not_by = None
+        if dry_run:
+            # Return information on what to do
+            ret = obj_set.evaluate_revert_to_history(target, but_not_by)
+        else:
+            # Do the real thing
+            ret = obj_set.revert_to_history(target, but_not_by)
+            # Update stats
+            ProjectBO.update_taxo_stats(self.session, proj_id)
+            # Stats depend on taxo stats
+            ProjectBO.update_stats(self.session, proj_id)
+        # Give feeback
+        return ret

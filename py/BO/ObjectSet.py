@@ -10,7 +10,7 @@
 #
 from typing import Tuple, Optional, List, Iterator, Callable
 
-from sqlalchemy import select, text
+from sqlalchemy import select, text, func
 
 from API_models.crud import ProjectFilters, ColUpdateList
 from BO.Project import ProjectIDListT
@@ -179,7 +179,8 @@ class EnumeratedObjectSet(MappedTable):
 
     def apply_on_all(self, project: Project, updates: ColUpdateList) -> int:
         """
-            Apply all updates on all processes pointed at by the list.
+            Apply all updates on all objects pointed at by the list.
+            Depending on the field it becomes an object_header or an object_fields update.
         """
         upd0 = updates[0]
         if upd0["ucol"] in ObjectHeader.__dict__:
@@ -195,6 +196,51 @@ class EnumeratedObjectSet(MappedTable):
         else:
             ret = upd.filter(ObjectFields.objfid == any_(self.object_ids))
         return ret
+
+    def _get_last_classif_history(self, from_user_id: Optional[int], but_not_from_user_id: Optional[int]) \
+            -> List[ObjectsClassifHisto]:
+        """
+            Query for classification history on all objects of self.
+        """
+        # Get the histo entries
+        subqry: Query = self.session.query(ObjectsClassifHisto,
+                                           func.rank().over(partition_by=ObjectsClassifHisto.objid,
+                                                            order_by=ObjectsClassifHisto.classif_date.desc()).
+                                           label("rnk"))
+        if from_user_id:
+            subqry = subqry.filter(ObjectsClassifHisto.classif_who == from_user_id)
+        if but_not_from_user_id:
+            subqry = subqry.filter(ObjectsClassifHisto.classif_who != but_not_from_user_id)
+        subqry = subqry.filter(ObjectsClassifHisto.classif_type == "M")
+        subqry = subqry.filter(ObjectsClassifHisto.objid == any_(self.object_ids)).subquery()
+
+        # Also get some fields from object and take care of filtering
+        qry = self.session.query(ObjectHeader.objid, ObjectHeader.classif_id,
+                                 subqry.c.classif_date, subqry.c.classif_type, subqry.c.classif_id,
+                                 subqry.c.classif_qual, subqry.c.classif_who)
+        qry = qry.join(subqry, ObjectHeader.objid == subqry.c.objid)
+        if from_user_id:
+            # If taking history from a user, don't apply to the objects he/she classsified
+            # in last already.
+            qry = qry.filter(ObjectHeader.classif_who != from_user_id)
+        qry = qry.filter(subqry.c.rnk == 1)
+        print(qry)
+        ret = qry.all()
+        print(len(ret), len(self.object_ids))
+        return ret
+
+    def evaluate_revert_to_history(self, from_user_id: Optional[int], but_not_from_user_id: Optional[int]):
+        """
+            Update self's objects so that current classification becomes the last one from hist_user_id,
+        :param hist_user_id: If set (!= None), the user_id to copy classification from. If unset then pick any recent.
+        :param but_not_by_user: If set (!= None), exclude this user from history picking.
+        """
+        histo = self._get_last_classif_history(from_user_id, but_not_from_user_id)
+        print("\n".join([str(h) for h in histo]))
+        return histo
+
+    def revert_to_history(self, target, but_not_by):
+        pass
 
 
 class ObjectSetFilter(object):
@@ -243,6 +289,8 @@ class ObjectSetFilter(object):
         self.free_text_val: Optional[str] = filters.get("freetxtval", "")
         # A coma-separated list of numerical user ids
         self.annotators: Optional[str] = filters.get('filt_annot', '')
+        # Only the last annotator, unlike "filt_annot" which digs in history
+        self.last_annotators: Optional[str] = filters.get('filt_last_annot', '')
 
     def get_sql_filter(self, where_clause: WhereClause,
                        params: SQLParamDict, user_id: int) -> None:
@@ -256,13 +304,12 @@ class ObjectSetFilter(object):
         """
 
         if self.taxo:
+            where_clause *= " oh.classif_id = any (:taxo) "
             if self.taxo_child:
-                where_clause *= " oh.classif_id = any (:taxo) "
                 # TODO: Cache if used
                 params['taxo'] = list(TaxonomyBO.children_of(self.session, [int(self.taxo)]))
             else:
-                where_clause *= " oh.classif_id = :taxo "
-                params['taxo'] = self.taxo
+                params['taxo'] = [int(x) for x in self.taxo.split(',')]
 
         if self.statusfilter:
             if self.statusfilter == "NV":
@@ -378,3 +425,6 @@ class ObjectSetFilter(object):
                             "              where och.objid = oh.objid " \
                             "                and classif_who = any (:filt_annot) ) ) "
             params['filt_annot'] = [int(x) for x in self.annotators.split(',')]
+        elif self.last_annotators:
+            where_clause *= " oh.classif_who = any (:filt_annot) "
+            params['filt_annot'] = [int(x) for x in self.last_annotators.split(',')]

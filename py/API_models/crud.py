@@ -81,9 +81,9 @@ class ProjectSearchResult(BaseModel):
 
 class ProjectFilters(TypedDict, total=False):
     taxo: Optional[str]
-    """ Only include object classified in taxonomy/category with given numeric id """
+    """ Coma-separated list of numeric taxonomy/category ids. Only include object classified with one of them """
     taxochild: Optional[str]
-    """ If 'Y' and taxo is set, also include children in taxonomy tree """
+    """ If 'Y' and taxo is set, also include children of each member of 'taxo' list in taxonomy tree """
     statusfilter: Optional[str]
     """ Include objects with given status:
           'NV': Not validated 
@@ -141,6 +141,9 @@ class ProjectFilters(TypedDict, total=False):
     filt_annot: Optional[str]
     """ Coma-separated list of annotator, i.e. person who validated the classification
         at any point in time. """
+    filt_last_annot: Optional[str]
+    """ Coma-separated list of annotator, i.e. person who validated the classification
+        in last. """
 
 
 ProjectFiltersModel = parse_typed_dict(ProjectFilters)

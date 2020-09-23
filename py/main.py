@@ -6,7 +6,7 @@
 #
 from typing import Union, Tuple
 
-from fastapi import FastAPI, Response, status, Depends
+from fastapi import FastAPI, Response, status, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi_utils.timing import add_timing_middleware
 
@@ -114,6 +114,20 @@ def search_user(current_user: int = Depends(get_current_user),
     return ret
 
 
+# TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
+@app.get("/users/{user_id}", tags=['users'], response_model=UserModel)  # type:ignore
+def get_user(user_id: int,
+             current_user: int = Depends(get_current_user)):
+    """
+        Return a single user by its id.
+    """
+    sce = UserService()
+    ret = sce.search_by_id(current_user, user_id)
+    if ret is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return ret
+
+
 @app.get("/projects/search", tags=['projects'], response_model=List[ProjectSearchResult])
 def search_projects(current_user: int = Depends(get_current_user),
                     also_others: bool = False,
@@ -174,7 +188,9 @@ def project_query(project_id: int,
 
 
 @app.post("/projects/{project_id}/dump", tags=['projects'], include_in_schema=False)
-def object_query(project_id: int, filters: ProjectFiltersModel, current_user: int = Depends(get_current_user)):
+def object_query(project_id: int,
+                 filters: ProjectFiltersModel,
+                 current_user: int = Depends(get_current_user)):
     """
         Query the project.
     """
@@ -186,7 +202,9 @@ def object_query(project_id: int, filters: ProjectFiltersModel, current_user: in
 
 
 @app.post("/projects/{project_id}/merge", tags=['projects'], response_model=MergeRsp)
-def project_merge(project_id: int, source_project_id: int, dry_run: bool,
+def project_merge(project_id: int,
+                  source_project_id: int,
+                  dry_run: bool,
                   current_user: int = Depends(get_current_user)) -> MergeRsp:
     """
         Merge another project into this one. It's more a phagocytosis than a merge, as the source will see
@@ -306,6 +324,23 @@ def reset_object_set_to_predicted(project_id: int,
         return sce.reset_to_predicted(current_user, project_id, filters)
 
 
+@app.post("/object_set/{project_id}/revert_to_history", tags=['objects'], response_model=None)
+def revert_object_set_to_history(project_id: int,
+                                 filters: ProjectFiltersModel,
+                                 dry_run: bool,
+                                 target: Optional[int] = None,
+                                 current_user: int = Depends(get_current_user)) -> None:
+    """
+        Revert all objects for the given project, with the filters, to the target.
+        - param `dry_run`: If set, then no real write but consequences of the revert will be replied.
+        - param `target`: Use null/None for reverting using the last annotation from anyone, or a user id
+            for the last annotation from this user.
+    """
+    sce = ObjectManager()
+    with RightsThrower():
+        return sce.revert_to_history(current_user, project_id, filters, dry_run, target)
+
+
 @app.delete("/object_set/", tags=['objects'])
 def erase_object_set(object_ids: ObjectIDListT,
                      current_user: int = Depends(get_current_user)) -> Tuple[int, int, int, int]:
@@ -370,7 +405,7 @@ async def resolve_taxon(our_id: int,
 
 
 @app.get("/taxa/refresh", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)
-async def refresh_taxa_db(max_requests: int = None,
+async def refresh_taxa_db(max_requests: int,
                           current_user: int = Depends(get_current_user)) -> StreamingResponse:
     """
         Refresh local mirror of WoRMS database.
