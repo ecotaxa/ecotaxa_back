@@ -4,10 +4,12 @@
 #
 # After SQL alchemy models are defined individually, setup the relations b/w them
 #
-from typing import List, Set
+from typing import List, Set, Dict, Tuple
 
+from BO.Classification import ClassifIDCollT, ClassifIDT
 from DB import ResultProxy, Session
 
+ClassifSetInfoT = Dict[ClassifIDT, Tuple[str, str]]
 
 class TaxonomyBO(object):
     """
@@ -58,11 +60,26 @@ class TaxonomyBO(object):
         res: ResultProxy = session.execute(
             """SELECT t.id, t.name
                 FROM taxonomy t
-                LEFT JOIN taxonomy p on t.parent_id = p.id
                 WHERE t.id = ANY(:ids) """,
             {"ids": id_list})
         for rec_taxon in res:
             ret[rec_taxon['id']] = rec_taxon['name']
+        return ret
+
+    @staticmethod
+    def names_with_parent_for(session: Session, id_coll: ClassifIDCollT) -> ClassifSetInfoT :
+        """
+            Get taxa names from id list.
+        """
+        ret = {}
+        res: ResultProxy = session.execute(
+            """SELECT t.id, t.name, p.name AS parent_name
+                FROM taxonomy t
+                LEFT JOIN taxonomy p ON t.parent_id = p.id
+                WHERE t.id = ANY(:ids) """,
+            {"ids": list(id_coll)})
+        for rec_taxon in res:
+            ret[rec_taxon['id']] = (rec_taxon['name'], rec_taxon['parent_name'])
         return ret
 
     @staticmethod

@@ -285,6 +285,54 @@
         ]
       }
     },
+    "/users/{user_id}":{
+      "get":{
+        "tags":[
+          "users"
+        ],
+        "summary":"Get User",
+        "description":"Return a single user by its id.",
+        "operationId":"get_user_users__user_id__get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"User Id",
+              "type":"integer"
+            },
+            "name":"user_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/UserModel"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
     "/projects/search":{
       "get":{
         "tags":[
@@ -1044,6 +1092,82 @@
         ]
       }
     },
+    "/object_set/{project_id}/revert_to_history":{
+      "post":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Revert Object Set To History",
+        "description":"Revert all objects for the given project, with the filters, to the target.\n- param `dry_run`: If set, then no real write but consequences of the revert will be replied.\n- param `target`: Use null/None for reverting using the last annotation from anyone, or a user id\n    for the last annotation from this user.",
+        "operationId":"revert_object_set_to_history_object_set__project_id__revert_to_history_post",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Project Id",
+              "type":"integer"
+            },
+            "name":"project_id",
+            "in":"path"
+          },
+          {
+            "required":true,
+            "schema":{
+              "title":"Dry Run",
+              "type":"boolean"
+            },
+            "name":"dry_run",
+            "in":"query"
+          },
+          {
+            "required":false,
+            "schema":{
+              "title":"Target",
+              "type":"integer"
+            },
+            "name":"target",
+            "in":"query"
+          }
+        ],
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/ProjectFilters"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/ObjectSetRevertToHistoryRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
     "/object_set/":{
       "delete":{
         "tags":[
@@ -1413,6 +1537,41 @@
           }
         }
       },
+      "HistoricalClassif":{
+        "title":"HistoricalClassif",
+        "type":"object",
+        "properties":{
+          "objid":{
+            "title":"Objid",
+            "type":"integer"
+          },
+          "classif_id":{
+            "title":"Classif Id",
+            "type":"integer"
+          },
+          "histo_classif_date":{
+            "title":"Histo Classif Date",
+            "type":"string",
+            "format":"date-time"
+          },
+          "histo_classif_type":{
+            "title":"Histo Classif Type",
+            "type":"string"
+          },
+          "histo_classif_id":{
+            "title":"Histo Classif Id",
+            "type":"integer"
+          },
+          "histo_classif_qual":{
+            "title":"Histo Classif Qual",
+            "type":"string"
+          },
+          "histo_classif_who":{
+            "title":"Histo Classif Who",
+            "type":"integer"
+          }
+        }
+      },
       "ImportPrepReq":{
         "title":"ImportPrepReq",
         "required":[
@@ -1768,6 +1927,25 @@
           }
         }
       },
+      "ObjectSetRevertToHistoryRsp":{
+        "title":"ObjectSetRevertToHistoryRsp",
+        "type":"object",
+        "properties":{
+          "last_entries":{
+            "title":"Object + last classification",
+            "type":"array",
+            "items":{
+              "$ref":"#/components/schemas/HistoricalClassif"
+            },
+            "default":[]
+          },
+          "classif_info":{
+            "title":"Classification names (self+parent) for involved IDs",
+            "type":"object",
+            "default":{}
+          }
+        }
+      },
       "ProjectFilters":{
         "title":"ProjectFilters",
         "type":"object",
@@ -1874,6 +2052,10 @@
           },
           "filt_annot":{
             "title":"Filt Annot",
+            "type":"string"
+          },
+          "filt_last_annot":{
+            "title":"Filt Last Annot",
             "type":"string"
           }
         }

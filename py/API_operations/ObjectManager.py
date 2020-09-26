@@ -2,12 +2,14 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Tuple
+from typing import Tuple, List, Optional, Set
 
 from API_models.crud import ProjectFilters, ColUpdateList
+from BO.Classification import HistoricalClassif, ClassifIDSetT
 from BO.ObjectSet import DescribedObjectSet, ObjectIDListT, EnumeratedObjectSet, ObjectIDWithParentsListT
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
+from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
 from DB.helpers.ORM import ResultProxy
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
@@ -106,7 +108,7 @@ class ObjectManager(Service):
 
     def revert_to_history(self, current_user_id: int, proj_id: int,
                           filters: ProjectFilters, dry_run: bool,
-                          target: int):
+                          target: Optional[int]) -> Tuple[List[HistoricalClassif], ClassifSetInfoT]:
         """
             Revert to classification history the given set, if dry_run then only simulate.
         """
@@ -118,19 +120,38 @@ class ObjectManager(Service):
         obj_set = EnumeratedObjectSet(self.session, impacted_objs)
 
         # We don't revert to a previous version in history from same annotator
-        try:
-            but_not_by = int(filters.get('filt_last_annot', None))
-        except (TypeError, ValueError):
-            but_not_by = None
+        but_not_by: Optional[int] = None
+        but_not_by_str = filters.get('filt_last_annot', None)
+        if but_not_by_str is not None:
+            try:
+                but_not_by = int(but_not_by_str)
+            except ValueError:
+                pass
         if dry_run:
             # Return information on what to do
-            ret = obj_set.evaluate_revert_to_history(target, but_not_by)
+            impact = obj_set.evaluate_revert_to_history(target, but_not_by)
+            # And names for display
+            classifs = TaxonomyBO.names_with_parent_for(self.session, self.collect_classif(impact))
         else:
             # Do the real thing
-            ret = obj_set.revert_to_history(target, but_not_by)
+            impact = obj_set.revert_to_history(target, but_not_by)
+            classifs = {}
             # Update stats
             ProjectBO.update_taxo_stats(self.session, proj_id)
             # Stats depend on taxo stats
             ProjectBO.update_stats(self.session, proj_id)
         # Give feeback
+        return impact, classifs
+
+    def collect_classif(self, histo: List[HistoricalClassif]) -> ClassifIDSetT:
+        """
+            Collect classification IDs from given list, for lookup & display.
+        """
+        ret: Set = set()
+        for an_histo in histo:
+            ret.add(an_histo.classif_id)
+            ret.add(an_histo.histo_classif_id)
+        # Eventually remove the None
+        if None in ret:
+            ret.remove(None)
         return ret

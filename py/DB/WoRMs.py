@@ -35,7 +35,7 @@ class WoRMS(Model):
         there is no currently accepted taxon."""
     valid_name = Column(String(128))
     """ the scientificname of the currently accepted taxon """
-    valid_authority = Column(String(128))
+    valid_authority = Column(String(255))
     """ the authorship information for the scientificname of the currently accepted taxon """
     parent_name_usage_id = Column(Integer)
     """ the AphiaID (for the scientificname) of the direct, most proximate higher-rank 

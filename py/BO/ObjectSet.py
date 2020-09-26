@@ -13,12 +13,13 @@ from typing import Tuple, Optional, List, Iterator, Callable
 from sqlalchemy import select, text, func
 
 from API_models.crud import ProjectFilters, ColUpdateList
+from BO.Classification import HistoricalClassif
 from BO.Project import ProjectIDListT
 from BO.Taxonomy import TaxonomyBO
 from BO.helpers.MappedTable import MappedTable
 from DB import Project, ObjectHeader, Image, and_
 from DB.Object import ObjectsClassifHisto, ObjectFields
-from DB.helpers.ORM import Session, Query, Delete, Update, Insert, any_, postgresql
+from DB.helpers.ORM import Session, Query, Delete, Update, Insert, any_, postgresql, or_, case, not_
 from DB.helpers.SQL import WhereClause, SQLParamDict
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
@@ -198,15 +199,15 @@ class EnumeratedObjectSet(MappedTable):
         return ret
 
     def _get_last_classif_history(self, from_user_id: Optional[int], but_not_from_user_id: Optional[int]) \
-            -> List[ObjectsClassifHisto]:
+            -> List[HistoricalClassif]:
         """
             Query for classification history on all objects of self.
         """
         # Get the histo entries
-        subqry: Query = self.session.query(ObjectsClassifHisto,
-                                           func.rank().over(partition_by=ObjectsClassifHisto.objid,
-                                                            order_by=ObjectsClassifHisto.classif_date.desc()).
-                                           label("rnk"))
+        subqry = self.session.query(ObjectsClassifHisto,
+                                    func.rank().over(partition_by=ObjectsClassifHisto.objid,
+                                                     order_by=ObjectsClassifHisto.classif_date.desc()).
+                                    label("rnk"))
         if from_user_id:
             subqry = subqry.filter(ObjectsClassifHisto.classif_who == from_user_id)
         if but_not_from_user_id:
@@ -214,33 +215,57 @@ class EnumeratedObjectSet(MappedTable):
         subqry = subqry.filter(ObjectsClassifHisto.classif_type == "M")
         subqry = subqry.filter(ObjectsClassifHisto.objid == any_(self.object_ids)).subquery()
 
-        # Also get some fields from object and take care of filtering
+        # Also get some fields from ObjectHeader for referencing, info, and fallback
         qry = self.session.query(ObjectHeader.objid, ObjectHeader.classif_id,
-                                 subqry.c.classif_date, subqry.c.classif_type, subqry.c.classif_id,
-                                 subqry.c.classif_qual, subqry.c.classif_who)
-        qry = qry.join(subqry, ObjectHeader.objid == subqry.c.objid)
-        if from_user_id:
+                                 func.coalesce(subqry.c.classif_date, ObjectHeader.classif_auto_when),
+                                 subqry.c.classif_type,
+                                 func.coalesce(subqry.c.classif_id, ObjectHeader.classif_auto_id).label("h_classif_id"),
+                                 func.coalesce(subqry.c.classif_qual,
+                                               case([(not_(ObjectHeader.classif_auto_id.is_(None)), 'P')])),
+                                 subqry.c.classif_who)
+        qry = qry.join(subqry, ObjectHeader.objid == subqry.c.objid, isouter=(from_user_id is None))
+        if from_user_id is not None:
             # If taking history from a user, don't apply to the objects he/she classsified
             # in last already.
             qry = qry.filter(ObjectHeader.classif_who != from_user_id)
-        qry = qry.filter(subqry.c.rnk == 1)
-        print(qry)
-        ret = qry.all()
-        print(len(ret), len(self.object_ids))
+            qry = qry.filter(subqry.c.rnk == 1)
+        else:
+            # Taking any history, including nothing, so emit blank history (see isouter above)
+            qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))
+            qry = qry.filter(or_(subqry.c.rnk == 1, subqry.c.rnk.is_(None)))
+        logger.info("_get_last_classif_history qry:%s", str(qry))
+        with CodeTimer("HISTORY for %d objs: " % len(self.object_ids), logger):
+            ret = [HistoricalClassif(rec) for rec in qry.all()]
+        logger.info("_get_last_classif_history qry: %d rows", len(ret))
         return ret
 
-    def evaluate_revert_to_history(self, from_user_id: Optional[int], but_not_from_user_id: Optional[int]):
+    def revert_to_history(self, from_user_id: Optional[int], but_not_from_user_id: Optional[int]) \
+            -> List[HistoricalClassif]:
         """
             Update self's objects so that current classification becomes the last one from hist_user_id,
-        :param hist_user_id: If set (!= None), the user_id to copy classification from. If unset then pick any recent.
-        :param but_not_by_user: If set (!= None), exclude this user from history picking.
+        :param from_user_id: If set (!= None), the user_id to copy classification from. If unset then pick any recent.
+        :param but_not_from_user_id: If set (!= None), exclude this user from history picking.
         """
         histo = self._get_last_classif_history(from_user_id, but_not_from_user_id)
-        print("\n".join([str(h) for h in histo]))
+        # Bulk update. It's less efficient than a plain update with criteria, but in the future we
+        # might be able to do some cherry picking on the history.
+        updates = [{ObjectHeader.objid.name: an_histo.objid,
+                    ObjectHeader.classif_id.name: an_histo.histo_classif_id,
+                    ObjectHeader.classif_who.name: an_histo.histo_classif_who,
+                    ObjectHeader.classif_when.name: an_histo.histo_classif_date,
+                    ObjectHeader.classif_qual.name: an_histo.histo_classif_qual}
+                   for an_histo in histo]
+        self.session.bulk_update_mappings(ObjectHeader, updates)
+        self.session.commit()
         return histo
 
-    def revert_to_history(self, target, but_not_by):
-        pass
+    def evaluate_revert_to_history(self, from_user_id: Optional[int], but_not_from_user_id: Optional[int]) \
+            -> List[HistoricalClassif]:
+        """
+            Same as @see revert_to_history but don't commit the changes, just return them.
+        """
+        histo = self._get_last_classif_history(from_user_id, but_not_from_user_id)
+        return histo
 
 
 class ObjectSetFilter(object):

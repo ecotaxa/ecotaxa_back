@@ -14,7 +14,7 @@ from API_models.crud import *
 from API_models.exports import EMODNetExportReq, EMODNetExportRsp
 from API_models.imports import *
 from API_models.merge import MergeRsp
-from API_models.objects import ObjectSetQueryRsp
+from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp
 from API_models.subset import SubsetReq, SubsetRsp
 from API_operations.CRUD.ObjectParents import SamplesService, AcquisitionsService, ProcessesService
 from API_operations.CRUD.Projects import ProjectsService, ProjectSearchResult
@@ -95,7 +95,7 @@ def get_current_user_prefs(project_id: int, key: str, current_user: int = Depend
 def set_current_user_prefs(project_id: int, key: str, value: str, current_user: int = Depends(get_current_user)):
     """
         Set one preference, for project and currently authenticated user.
-        
+
         -`key`: The preference key
     """
     sce = UserService()
@@ -324,12 +324,12 @@ def reset_object_set_to_predicted(project_id: int,
         return sce.reset_to_predicted(current_user, project_id, filters)
 
 
-@app.post("/object_set/{project_id}/revert_to_history", tags=['objects'], response_model=None)
+@app.post("/object_set/{project_id}/revert_to_history", tags=['objects'], response_model=ObjectSetRevertToHistoryRsp)
 def revert_object_set_to_history(project_id: int,
                                  filters: ProjectFiltersModel,
                                  dry_run: bool,
                                  target: Optional[int] = None,
-                                 current_user: int = Depends(get_current_user)) -> None:
+                                 current_user: int = Depends(get_current_user)) -> ObjectSetRevertToHistoryRsp:
     """
         Revert all objects for the given project, with the filters, to the target.
         - param `dry_run`: If set, then no real write but consequences of the revert will be replied.
@@ -338,7 +338,9 @@ def revert_object_set_to_history(project_id: int,
     """
     sce = ObjectManager()
     with RightsThrower():
-        return sce.revert_to_history(current_user, project_id, filters, dry_run, target)
+        obj_hist, classif_info = sce.revert_to_history(current_user, project_id, filters, dry_run, target)
+    return ObjectSetRevertToHistoryRsp(last_entries=obj_hist,
+                                       classif_info=classif_info)
 
 
 @app.delete("/object_set/", tags=['objects'])

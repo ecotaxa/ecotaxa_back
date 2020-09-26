@@ -12,7 +12,7 @@ from typing_extensions import TypedDict
 from DB import User, Project, Sample, Acquisition, Process, ObjectHeader
 from helpers.pydantic import BaseModel, Field
 from .helpers.DBtoModel import sqlalchemy_to_pydantic
-from .helpers.TypedDictToModel import parse_typed_dict
+from .helpers.TypedDictToModel import typed_dict_to_model
 
 # Direct mirror of DB models
 UserModel = sqlalchemy_to_pydantic(User)
@@ -146,7 +146,7 @@ class ProjectFilters(TypedDict, total=False):
         in last. """
 
 
-ProjectFiltersModel = parse_typed_dict(ProjectFilters)
+ProjectFiltersModel = typed_dict_to_model(ProjectFilters)
 
 
 class ColUpdate(TypedDict):

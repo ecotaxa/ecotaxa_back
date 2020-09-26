@@ -9,15 +9,13 @@ from typing import Type, TypeVar
 from sqlalchemy import inspect
 from sqlalchemy.orm import ColumnProperty
 
-from helpers.pydantic import BaseConfig, BaseModel, create_model
+from API_models.helpers import PydanticModelT
+from helpers.pydantic import BaseConfig, create_model
 
 
 class OrmConfig(BaseConfig):
     orm_mode = True
 
-
-# Typing alias as we have DB Model as well, which might be confusing
-PydanticModelT = Type[BaseModel]
 
 # Generify the def with input type
 T = TypeVar('T')

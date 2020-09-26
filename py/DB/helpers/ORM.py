@@ -5,7 +5,7 @@
 from typing import Optional, Iterable, Tuple, List, Set, Dict, TypeVar, Type, Any
 
 # noinspection PyUnresolvedReferences
-from sqlalchemy import Column, inspect, MetaData, Table, any_ as _pg_any, and_, func
+from sqlalchemy import Column, inspect, MetaData, Table, any_ as _pg_any, not_, and_, or_, func, case
 # noinspection PyUnresolvedReferences
 from sqlalchemy.dialects import postgresql
 # noinspection PyUnresolvedReferences

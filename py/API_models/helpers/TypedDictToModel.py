@@ -9,14 +9,16 @@
 #
 # https://github.com/samuelcolvin/pydantic/issues/760
 #
-from typing import Type, Optional
+from typing import Optional, TypeVar
 
-from pydantic import BaseModel, create_model
+# noinspection PyPackageRequirements
+from pydantic import create_model
 
-from typing_extensions import TypedDict
+# Generify the def with input type
+T = TypeVar('T')
 
 
-def parse_typed_dict(typed_dict):
+def typed_dict_to_model(typed_dict: T):  # TODO -> Type[BaseModel]:
     annotations = {}
     for name, field in typed_dict.__annotations__.items():
         if field == Optional[str]:
@@ -24,7 +26,10 @@ def parse_typed_dict(typed_dict):
         else:
             raise Exception("Not managed yet")
 
-    ret = create_model(typed_dict.__name__, **annotations)
+    ret = create_model(
+        typed_dict.__name__, **annotations  # type: ignore
+    )
     # Make the model get-able
-    ret.get = lambda self, k, d: getattr(self, k, d)
+    # noinspection PyTypeHints
+    ret.get = lambda self, k, d: getattr(self, k, d)  # type: ignore
     return ret
