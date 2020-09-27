@@ -402,7 +402,7 @@ class TSVFile(object):
                     # Use initial mapping
                     cached_field_value = how.taxo_found[none_to_empty(mapped_val).lower()]
                     # better crash than write bad value into the DB
-                    assert cached_field_value is not None, "Colmun %s: no classification of %s mapped as %s" % (
+                    assert cached_field_value is not None, "Column %s: no classification of %s mapped as %s" % (
                         a_field, csv_val, mapped_val)
                 elif field_name == 'classif_who':
                     # Eventually map to another user if asked so
