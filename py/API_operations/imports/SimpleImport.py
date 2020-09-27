@@ -28,6 +28,10 @@ class SimpleImport(ImportServiceBase):
 
     def __init__(self, prj_id: int, req: SimpleImportReq):
         super().__init__(prj_id, req)
+        # Generated IDs for the import
+        self.sample_id: str = ""
+        self.acq_id: str = ""
+        self.process_id: str = ""
 
     def run(self, current_user_id: int) -> SimpleImportRsp:
         # Security check
@@ -46,6 +50,7 @@ class SimpleImport(ImportServiceBase):
         """
             Do the real job, i.e. copy files while creating records.
         """
+        self.sample_id = self.acq_id = self.process_id = "__DUMMY_ID__"
         errors = []
         self.manage_uploaded()
         self.unzip_if_needed()
@@ -79,6 +84,7 @@ class SimpleImport(ImportServiceBase):
         return ret
 
     # Form fields to TSV values
+    # TODO: Repeated constants from Mappings.py
     FORM_TO_FIELD = {SimpleImportFields.imgdate: 'object_date',
                      SimpleImportFields.imgtime: 'object_time',
                      SimpleImportFields.latitude: 'object_lat',
@@ -94,9 +100,9 @@ class SimpleImport(ImportServiceBase):
 
     def make_header(self) -> str:
         """ TSV header lines """
-        names = ['object_id', 'img_file_name']
+        names = ['sample_id', 'acq_id', 'process_id', 'object_id', 'img_file_name']
         names.extend(self.TSV_FIELDS)
-        types = ['[t]', '[t]']
+        types = ['[t]', '[t]', '[t]', '[t]', '[t]']
         types.extend(map(lambda fld: '[t]' if fld in self.TEXT_FIELDS else '[n]', self.TSV_FIELDS))
         return "\t".join(names) + "\n" + "\t".join(types) + "\n"
 
@@ -107,7 +113,7 @@ class SimpleImport(ImportServiceBase):
         unq_id = hashlib.md5()
         unq_id.update(bytes(str(an_image), encoding="utf-8"))
         obj_id = unq_id.hexdigest()
-        tsv_vals: List[Optional[str]] = [obj_id, an_image]
+        tsv_vals: List[Optional[str]] = [self.sample_id, self.acq_id, self.process_id, obj_id, an_image]
         req_values = self.req.values
         tsv_vals.extend(map(lambda fld: req_values.get(self.FIELD_TO_FORM[fld], ""), self.TSV_FIELDS))
         tsv_vals_no_none = ['' if v is None else v for v in tsv_vals]
