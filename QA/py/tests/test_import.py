@@ -43,6 +43,8 @@ ISSUES_DIR = DATA_DIR / "import_issues" / "tsv_issues"
 ISSUES_DIR2 = DATA_DIR / "import_issues" / "no_classif_id"
 ISSUES_DIR3 = DATA_DIR / "import_issues" / "tsv_too_many_cols"
 EMPTY_DIR = DATA_DIR / "import_issues" / "no_relevant_file"
+EMPTY_TSV_DIR = DATA_DIR / "import_issues" / "empty_tsv"
+EMPTY_TSV_IN_UPD_DIR = DATA_DIR / "import_test_upd_empty"
 AMBIG_DIR = DATA_DIR / "import de categories ambigues"
 
 
@@ -104,6 +106,27 @@ def test_import_again_skipping(config, database, caplog):
     found_err = False
     for an_err in errs:
         if "all TSV files were imported before" in an_err:
+            found_err = True
+    assert found_err
+
+def test_import_again_irrelevant_skipping(config, database, caplog):
+    """ Re-import similar files into same project
+        CANNOT RUN BY ITSELF """
+    caplog.set_level(logging.DEBUG)
+    task_id = TaskService().create()
+    prj_id = ProjectsService().search(current_user_id=ADMIN_USER_ID,
+                                      title_filter="Test Create Update")[
+        0].projid  # <- need the project from first test
+    # Do preparation
+    params = ImportPrepReq(task_id=task_id,
+                           source_path=str(EMPTY_TSV_IN_UPD_DIR),
+                           skip_loaded_files=True,
+                           skip_existing_objects=True)
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
+    errs = prep_out.errors
+    found_err = False
+    for an_err in errs:
+        if "new TSV file(s) are not compliant" in an_err:
             found_err = True
     assert found_err
 
@@ -285,6 +308,18 @@ def test_import_empty(config, database, caplog):
 
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(EMPTY_DIR))
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
+    assert len(prep_out.errors) == 1
+
+
+def test_import_empty_tsv(config, database, caplog):
+    """ a TSV but no data """
+    caplog.set_level(logging.DEBUG)
+    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test LS 3"))
+    task_id = TaskService().create()
+
+    params = ImportPrepReq(task_id=task_id,
+                           source_path=str(EMPTY_TSV_DIR))
     prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
     assert len(prep_out.errors) == 1
 
