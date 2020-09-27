@@ -2842,6 +2842,7 @@ COPY public.users (id, email, password, name, organisation, active, preferences,
 1	admin	$6$	Application Administrator	\N	t	{"1": {"sortby": "", "ts": 1589266843.5535243, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}, "2": {"sortby": "", "ts": 1589267270.5538993, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}}	\N	2020-05-12 08:59:48.70106	\N
 2	user	$6$	Ordinary User	\N	t	{}	\N	2020-05-13 08:59:48.70106	\N
 3	creator	$6$	User Creating Projects	\N	t	{}	\N	2020-05-13 08:59:48.70106	\N
+4	user2	$6$	Ordinary User 2	\N	t	{}	\N	2020-09-27 06:39:48.70106	\N
 \.
 
 COPY public.users_roles (user_id, role_id) FROM stdin;

@@ -11,8 +11,10 @@ from API_operations.CRUD.ObjectParents import SamplesService, AcquisitionsServic
 from API_operations.JsonDumper import JsonDumper
 from API_operations.ObjectManager import ObjectManager
 from deepdiff import DeepDiff
+from starlette import status
 
-from tests.test_import import ADMIN_USER_ID, test_import_uvp6
+from tests.test_fastapi import client, ADMIN_AUTH
+from tests.test_import import ADMIN_USER_ID, test_import_uvp6, test_import_images
 from tests.test_subset_merge import check_project
 
 OUT_JSON_REF = "out_upd_tst.json"
@@ -27,17 +29,10 @@ def upd(col, val) -> ColUpdate:
 
 def test_updates(config, database, caplog):
     caplog.set_level(logging.ERROR)
-    prj_id = test_import_uvp6(config, database, caplog, "Test Subset Merge")
+    prj_id = test_import_uvp6(config, database, caplog, "Test Updates")
     check_project(prj_id)
 
-    # Dump the project before changes
-    with open(OUT_JSON_REF, "w") as fd:
-        JsonDumper(ADMIN_USER_ID, prj_id, {}).run(fd)
-    with open(OUT_JSON_REF) as fd:
-        json_prj = json.load(fd)
-    sample_id = json_prj["samples"][0]["id"]
-    acquis_id = json_prj["samples"][0]["acquisitions"][0]["id"]
-    process_id = json_prj["samples"][0]["acquisitions"][0]["processings"][0]["id"]
+    acquis_id, process_id, sample_id = _get_ids(prj_id)
 
     # Typo in column name
     nb_upd = SamplesService().update_set(ADMIN_USER_ID, [sample_id], ColUpdateList([upd("chip", "sagitta4")]))
@@ -168,3 +163,87 @@ def test_updates(config, database, caplog):
                                                                                                'old_value': 215.76},
         "root['samples'][0]['sampledatetime']": {'new_value': '20200208-111218', 'old_value': '20200205-111218'},
         "root['samples'][0]['ship']": {'new_value': 'sagitta4', 'old_value': 'sagitta3'}}
+
+
+def _get_ids(prj_id):
+    # Dump the project before changes
+    with open(OUT_JSON_REF, "w") as fd:
+        JsonDumper(ADMIN_USER_ID, prj_id, {}).run(fd)
+    with open(OUT_JSON_REF) as fd:
+        json_prj = json.load(fd)
+    sample_id = json_prj["samples"][0]["id"]
+    acquis_id = json_prj["samples"][0]["acquisitions"][0]["id"]
+    process_id = json_prj["samples"][0]["acquisitions"][0]["processings"][0]["id"]
+    return acquis_id, process_id, sample_id
+
+
+RECOMPUTE_GEO_URL = "/projects/{project_id}/recompute_geo"
+SAMPLE_SET_UPDATE_URL = "/sample_set/update"
+ACQUISITION_SET_UPDATE_URL = "/acquisition_set/update"
+PROCESS_SET_UPDATE_URL = "/process_set/update"
+OBJECT_SET_UPDATE_URL = "/object_set/update"
+
+
+def test_api_updates(config, database, fastapi, caplog):
+    prj_id = test_import_images(config, database, caplog, title="API updates test")
+
+    # Recompute geo, which is a kind of update
+    url = RECOMPUTE_GEO_URL.format(project_id=prj_id)
+    rsp = client.post(url, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+
+    acquis_id, process_id, sample_id = _get_ids(prj_id)
+
+    url = SAMPLE_SET_UPDATE_URL.format(project_id=prj_id)
+    # Typo in column name
+    req = {"target_ids": [sample_id],
+           "updates":
+               [{"ucol": "chip", "uval": "sagitta4"}]
+           }
+    rsp = client.post(url, headers=ADMIN_AUTH, json=req)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == 0
+
+    # Update latitude in the only sample
+    # Note: we cannot update a free column as there are 0 for simple import
+    req = {"target_ids": [sample_id],
+           "updates":
+               [{"ucol": "latitude", "uval": 52.6}]
+           }
+    rsp = client.post(url, headers=ADMIN_AUTH, json=req)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == 1
+
+    # Update the acquisition
+    url = ACQUISITION_SET_UPDATE_URL.format(project_id=prj_id)
+    req = {"target_ids": [acquis_id],
+           "updates":
+               [{"ucol": "instrument", "uval": "trompette"}]
+           }
+    rsp = client.post(url, headers=ADMIN_AUTH, json=req)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == 1
+
+    # Update the process
+    url = PROCESS_SET_UPDATE_URL.format(project_id=prj_id)
+    req = {"target_ids": [process_id],
+           "updates":
+               [{"ucol": "orig_id", "uval": "no more dummy"}]
+           }
+    rsp = client.post(url, headers=ADMIN_AUTH, json=req)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == 1
+
+    # Update firs 4 objects objects
+    # TODO: Use the API for querying
+    objs = ObjectManager().query(ADMIN_USER_ID, prj_id, {})
+    objs = [an_obj[0] for an_obj in objs]
+    assert len(objs) == 8
+    url = OBJECT_SET_UPDATE_URL.format(project_id=prj_id)
+    req = {"target_ids": objs[0:4],
+           "updates":
+               [{"ucol": "orig_id", "uval": "no more unique :("}]
+           }
+    rsp = client.post(url, headers=ADMIN_AUTH, json=req)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == 4

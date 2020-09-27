@@ -5,12 +5,13 @@ from fastapi import status
 
 from main import app
 
+from tests.credentials import ADMIN_AUTH, USER_AUTH, CREATOR_AUTH, ADMIN_USER_ID, USER2_AUTH
 from tests.test_import import test_import
 
 client = TestClient(app)
 
 
-def test_login(config, database, fastapi_noauth, caplog):
+def test_login(config, database, fastapi, caplog):
     caplog.set_level(logging.DEBUG)
     url = "/login"
     response = client.get(url)
@@ -21,13 +22,7 @@ def test_login(config, database, fastapi_noauth, caplog):
     assert response.status_code == status.HTTP_200_OK
 
 
-# These correspond to the rights in schema_prod.sql
-ADMIN_AUTH = {"Authorization": "Bearer 1"}
-USER_AUTH = {"Authorization": "Bearer 2"}
-CREATOR_AUTH = {"Authorization": "Bearer 3"}
-
-
-def test_users(config, database, fastapi_noauth):
+def test_users(config, database, fastapi):
     url = "/users"
     response = client.get(url)
     # Check that we cannot do without auth
@@ -37,7 +32,7 @@ def test_users(config, database, fastapi_noauth):
     assert response.status_code == status.HTTP_200_OK
 
 
-def test_user_me(config, database, fastapi_noauth):
+def test_user_me(config, database, fastapi):
     url = "/users/me"
     response = client.get(url)
     # Check that we cannot do without auth
@@ -48,7 +43,7 @@ def test_user_me(config, database, fastapi_noauth):
     assert response.json()["name"] == 'Application Administrator'
 
 
-def test_create_project(config, database, fastapi_noauth, caplog):
+def test_create_project(config, database, fastapi, caplog):
     caplog.set_level(logging.DEBUG)
     url = "/projects/create"
     # Check that we cannot do without auth
@@ -67,7 +62,7 @@ def test_create_project(config, database, fastapi_noauth, caplog):
     assert int(response.json()) > 0
 
 
-def test_clone_project(config, database, fastapi_noauth, caplog):
+def test_clone_project(config, database, fastapi, caplog):
     caplog.set_level(logging.CRITICAL)
     prj_id = test_import(config, database, caplog, "Clone source")
     caplog.set_level(logging.DEBUG)
@@ -79,18 +74,21 @@ def test_clone_project(config, database, fastapi_noauth, caplog):
     assert int(response.json()) > 0
 
 
-def test_query_project(config, database, fastapi_noauth, caplog):
-    url = "/projects/%d/query?for_managing=True"
-    response = client.get(url % 88888888)
+PROJECT_QUERY_URL = "/projects/{project_id}/query?for_managing={manage}"
+
+
+def test_query_project(config, database, fastapi, caplog):
+    url = PROJECT_QUERY_URL.format(project_id=88888888, manage=True)
+    response = client.get(url)
     assert response.status_code == status.HTTP_403_FORBIDDEN
-    response = client.get(url % 88888888, headers=USER_AUTH)
+    response = client.get(url, headers=USER_AUTH)
     assert response.status_code == status.HTTP_404_NOT_FOUND
     # Even admin cannot see a project which doesn't exist
-    response = client.get(url % 88888888, headers=ADMIN_AUTH)
+    response = client.get(url, headers=ADMIN_AUTH)
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-def test_user_search(config, database, fastapi_noauth, caplog):
+def test_user_search(config, database, fastapi, caplog):
     url = "/users/search?by_name=%s"
     response = client.get(url % "jo")
     assert response.status_code == status.HTTP_403_FORBIDDEN
@@ -101,7 +99,19 @@ def test_user_search(config, database, fastapi_noauth, caplog):
     assert rsp[0]["active"]
 
 
-def test_taxon_resolve(config, database, fastapi_noauth):
+def test_user_get(config, database, fastapi, caplog):
+    url = "/users/%d"
+    response = client.get(url % 1)
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    response = client.get(url % 1000000, headers=USER_AUTH)
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    response = client.get(url % ADMIN_USER_ID, headers=USER_AUTH)
+    assert response.status_code == status.HTTP_200_OK
+    rsp = response.json()
+    assert rsp["name"] == "Application Administrator"
+
+
+def test_taxon_resolve(config, database, fastapi):
     url = "/taxon/resolve/%d"
     taxon_id = 45072  # From schem_prod.sql
     response = client.get(url % taxon_id)
@@ -114,7 +124,7 @@ def test_taxon_resolve(config, database, fastapi_noauth):
                                'Copepoda > Neocopepoda > Podoplea > Cyclopoida']
 
 
-def test_project_search(config, database, fastapi_noauth):
+def test_project_search(config, database, fastapi):
     url = "/projects/search"
     # Ordinary user looking at all projects by curiosity
     response = client.get(url, headers=USER_AUTH, params={"also_others": True,
@@ -123,7 +133,7 @@ def test_project_search(config, database, fastapi_noauth):
     assert response.json() == []
 
 
-def test_error(fastapi_noauth):
+def test_error(fastapi):
     # We need a test client which does not catch exceptions
     client = TestClient(app, raise_server_exceptions=False)
     url = "/error"
@@ -132,10 +142,32 @@ def test_error(fastapi_noauth):
     # Check that our line is present
     assert "--- BACK-END ---" in response.content.decode("utf-8")
 
-def test_status(fastapi_noauth):
+
+def test_status(fastapi):
     # We need a test client which does not catch exceptions
     url = "/status"
     response = client.get(url, headers=USER_AUTH)
     assert response.status_code == status.HTTP_200_OK
     # Random check of one entry
     assert "ftpexportarea" in response.content.decode("utf-8")
+
+
+PRJ_CREATE_URL = "/projects/create"
+
+
+def test_user_prefs(config, database, fastapi, caplog):
+    # Create an empty project
+    url1 = PRJ_CREATE_URL
+    response = client.post(url1, headers=ADMIN_AUTH, json={"title": "Prefs test"})
+    prj_id = response.json()
+    # Play with prefs
+    get_url = "/users/my_preferences/%d?key=%s"
+    response = client.get(get_url % (prj_id, "usr2"))
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    response = client.get(get_url % (prj_id, "usr2"), headers=USER2_AUTH)
+    assert response.json() == ""
+    put_url = "/users/my_preferences/%d?key=%s&value=%s"
+    response = client.put(put_url % (prj_id, "usr2", "value456"), headers=USER2_AUTH)
+    assert response.json() is None
+    response = client.get(get_url % (prj_id, "usr2"), headers=USER2_AUTH)
+    assert response.json() == "value456"

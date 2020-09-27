@@ -5,6 +5,7 @@
 import json
 import logging
 
+import pytest
 from API_models.crud import *
 # noinspection PyPackageRequirements
 from API_models.merge import MergeRsp
@@ -27,7 +28,9 @@ from DB import Project, ObjectFields
 from deepdiff import DeepDiff
 # noinspection PyUnresolvedReferences
 from ordered_set import OrderedSet
+from starlette import status
 
+from tests.test_fastapi import PRJ_CREATE_URL, client, ADMIN_AUTH, PROJECT_QUERY_URL
 from tests.test_import import ADMIN_USER_ID, test_import_uvp6
 
 OUT_JSON = "out.json"
@@ -35,15 +38,30 @@ ORIGIN_AFTER_MERGE_JSON = "out_after_merge.json"
 SUBS_AFTER_MERGE_JSON = "out_subs_after_merge.json"
 OUT_SUBS_JSON = "out_subs.json"
 
+PROJECT_MERGE_URL = "/projects/{project_id}/merge?source_project_id={source_project_id}&dry_run={dry_run}"
+
 
 def check_project(prj_id: int):
     problems = ProjectConsistencyChecker(prj_id).run(ADMIN_USER_ID)
     assert problems == []
 
 
+PROJECT_CHECK_URL = "/projects/{project_id}/check"
+
+
+@pytest.mark.parametrize("prj_id", [-1])
+def test_check_project_via_api(prj_id: int, fastapi):
+    if prj_id == -1:  # Hack to avoid the test being marked as 'skipped'
+        return
+    url = PROJECT_CHECK_URL.format(project_id=prj_id)
+    response = client.get(url, headers=ADMIN_AUTH)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == []
+
+
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
 # BUT DON'T COMMIT THE CHANGE
-def test_subset_uvp6(config, database, caplog):
+def test_subset_uvp6(config, database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
     prj_id = test_import_uvp6(config, database, caplog, "Test Subset Merge")
     check_project(prj_id)
@@ -106,9 +124,11 @@ def test_subset_uvp6(config, database, caplog):
     session.commit()
 
     # Re-merge subset into origin project
-    # First a dry run to be sure
-    does_it_work: MergeRsp = MergeService(prj_id=prj_id, src_prj_id=subset_prj_id, dry_run=True).run(ADMIN_USER_ID)
-    assert does_it_work.errors == []
+    # First a dry run to be sure, via API for variety
+    url = PROJECT_MERGE_URL.format(project_id=prj_id, source_project_id=subset_prj_id, dry_run=True)
+    response = client.post(url, headers=ADMIN_AUTH)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["errors"] == []
     # Then for real
     does_it_work: MergeRsp = MergeService(prj_id=prj_id, src_prj_id=subset_prj_id, dry_run=False).run(ADMIN_USER_ID)
     assert does_it_work.errors == []
@@ -152,7 +172,7 @@ def test_subset_uvp6(config, database, caplog):
     assert added_values == {}
 
 
-def test_empty_subset_uvp6(config, database, caplog):
+def test_empty_subset_uvp6(config, database, fastapi, caplog):
     with caplog.at_level(logging.ERROR):
         prj_id = test_import_uvp6(config, database, caplog, "Test empty Subset")
 
@@ -194,3 +214,34 @@ def test_empty_subset_uvp6(config, database, caplog):
                        limit_value=100.0,
                        do_images=True)
     SubsetService(prj_id=prj_id, req=params).run(ADMIN_USER_ID)
+    # A bit of fastapi testing
+    # TODO for #484: Ensure it's a 200 for dst_prj_id and a non-admin user
+    url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
+    response = client.get(url, headers=ADMIN_AUTH)
+    assert response.status_code == status.HTTP_200_OK
+
+
+SUBSET_URL = "/projects/{project_id}/subset"
+
+
+def test_api_subset(config, database, fastapi, caplog):
+    # Subset a fresh project, why not?
+    # Create an empty project
+    url1 = PRJ_CREATE_URL
+    res = client.post(url1, headers=ADMIN_AUTH, json={"title": "API subset src test"})
+    src_prj_id = res.json()
+    res = client.post(url1, headers=ADMIN_AUTH, json={"title": "API subset tgt test"})
+    tgt_prj_id = res.json()
+    # Create a task for this run
+    task_id = TaskService().create()
+
+    url = SUBSET_URL.format(project_id=src_prj_id)
+    req = {"task_id": task_id,
+           "dest_prj_id": tgt_prj_id,
+           "limit_type": "P",
+           "limit_value": 10,
+           "do_images": True}
+    response = client.post(url, headers=ADMIN_AUTH, json=req)
+    assert response.json()["errors"] == ['No object found to clone into subset.']
+
+    test_check_project_via_api(tgt_prj_id, fastapi)

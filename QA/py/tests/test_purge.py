@@ -16,7 +16,7 @@ from tests.test_import import test_import, ADMIN_USER_ID
 from tests.test_subset_merge import check_project
 
 
-def test_purge_plain(config, database, fastapi_noauth, caplog):
+def test_purge_plain(config, database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
     prj_id = test_import(config, database, caplog, "Test Purge")
     # Delete full

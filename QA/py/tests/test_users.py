@@ -11,7 +11,7 @@ from API_operations.CRUD.Users import UserService
 from tests.test_import import ADMIN_USER_ID, CreateProjectReq
 
 
-def test_prefs_set_get(config, database, fastapi_noauth, caplog):
+def test_prefs_set_get(config, database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
     # Create a dest project
     prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Preferences test"))

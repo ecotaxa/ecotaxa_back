@@ -27,6 +27,9 @@ from API_operations.AsciiDump import AsciiDumper
 # from tests.config_fixture import config
 # # noinspection PyUnresolvedReferences
 # from tests.db_fixture import database
+from starlette import status
+
+from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID, CREATOR_AUTH, CREATOR_USER_ID
 
 DATA_DIR = (Path(dirname(realpath(__file__))) / ".." / "data").resolve()
 PLAIN_FILE = DATA_DIR / "import_test.zip"
@@ -48,12 +51,18 @@ def real_params_from_prep_out(task_id, prep_out: ImportPrepRsp) -> ImportRealReq
                          **prep_out.dict(exclude={'warnings', 'errors'}))
 
 
-ADMIN_USER_ID = 1
-ORDINARY_USER_USER_ID = 2
-CREATOR_USER_ID = 3
+def real_params_from_json_prep_out(task_id, prep_out: Dict) -> Dict:
+    ret = {"task_id": task_id}
+    ret.update(prep_out)
+    for exc in ('warnings', 'errors'):
+        try:
+            del ret[exc]
+        except KeyError:
+            pass
+    return ret
 
 
-@pytest.mark.parametrize("title", ["Test LS"])
+@pytest.mark.parametrize("title", ["Test Create Update"])
 def test_import(config, database, caplog, title):
     caplog.set_level(logging.DEBUG)
     # Create a dest project
@@ -82,7 +91,9 @@ def test_import_again_skipping(config, database, caplog):
         CANNOT RUN BY ITSELF """
     caplog.set_level(logging.DEBUG)
     task_id = TaskService().create()
-    prj_id = 1  # <- need the project from first test
+    prj_id = ProjectsService().search(current_user_id=ADMIN_USER_ID,
+                                      title_filter="Test Create Update")[
+        0].projid  # <- need the project from first test
     # Do preparation
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(PLAIN_FILE),
@@ -104,7 +115,9 @@ def test_import_a_bit_more_skipping(config, database, caplog):
         CANNOT RUN BY ITSELF """
     caplog.set_level(logging.DEBUG)
     task_id = TaskService().create()
-    prj_id = 1  # <- need the project from first test
+    prj_id = ProjectsService().search(current_user_id=ADMIN_USER_ID,
+                                      title_filter="Test Create Update")[
+        0].projid  # <- need the project from first test
     # Do preparation
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(PLUS_DIR),
@@ -134,7 +147,9 @@ def test_import_again_not_skipping_tsv_skipping_imgs(config, database, caplog):
         CANNOT RUN BY ITSELF """
     caplog.set_level(logging.DEBUG)
     task_id = TaskService().create()
-    prj_id = 1  # <- need the project from first test
+    prj_id = ProjectsService().search(current_user_id=ADMIN_USER_ID,
+                                      title_filter="Test Create Update")[
+        0].projid  # <- need the project from first test
     # Do preparation
     import_plain(prj_id, task_id)
     # Check that all went fine
@@ -167,7 +182,9 @@ def test_import_again_not_skipping_nor_imgs(config, database, caplog):
         CANNOT RUN BY ITSELF """
     caplog.set_level(logging.DEBUG)
     task_id = TaskService().create()
-    prj_id = 1  # <- need the project from first test
+    prj_id = ProjectsService().search(current_user_id=ADMIN_USER_ID,
+                                      title_filter="Test Create Update")[
+        0].projid  # <- need the project from first test
     # Do preparation
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(PLAIN_DIR))
@@ -331,20 +348,31 @@ def test_import_too_many_custom_columns(config, database, caplog):
                                'many custom fields, or bad type.']
 
 
-def test_import_ambiguous_classification(config, database, caplog):
-    """ See https://github.com/oceanomics/ecotaxa_dev/issues/87 """
+IMPORT_PREP_URL = "/import_prep/{project_id}"
+IMPORT_REAL_URL = "/import_real/{project_id}"
+
+
+def test_import_ambiguous_classification(config, database, fastapi, caplog):
+    """ See https://github.com/oceanomics/ecotaxa_dev/issues/87
+        Do it via API """
     caplog.set_level(logging.DEBUG)
     prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test LS 7"))
     task_id = TaskService().create()
 
-    params = ImportPrepReq(task_id=task_id,
-                           source_path=str(AMBIG_DIR))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
-    params = real_params_from_prep_out(task_id, prep_out)
-    assert len(prep_out.errors) == 0
-    with pytest.raises(Exception):
+    url = IMPORT_PREP_URL.format(project_id=prj_id)
+    req = {"task_id": task_id,
+           "source_path": str(AMBIG_DIR)}
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
+    assert rsp.status_code == status.HTTP_200_OK
+    prep_out = rsp.json()
+    assert len(prep_out["errors"]) == 0
+
+    url = IMPORT_REAL_URL.format(project_id=prj_id)
+    req = real_params_from_json_prep_out(task_id, prep_out)
+    with pytest.raises(Exception,
+                       match="Column object_annotation_category: no classification of part \(Annelida\) mapped as part \(Annelida\)"):
         # Do real import, this has to fail as we have unmapped taxonomy
-        RealImport(prj_id, params).run(ADMIN_USER_ID)
+        rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
 
 
 def test_import_uvp6_zip_in_dir(config, database, caplog):
@@ -384,7 +412,7 @@ def test_import_sparse(config, database, caplog):
            [
                "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field acq_id is mandatory as there are some acq columns: ['acq_hardware', 'acq_imgtype', 'acq_instrument'].",
                "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field sample_id is mandatory as there are some sample columns: ['sample_program', 'sample_ship', 'sample_stationid']."
-               ]
+           ]
     # Do real import, even if we had problems before.
     RealImport(prj_id, params).run(ADMIN_USER_ID)
     print("\n".join(caplog.messages))
@@ -392,12 +420,13 @@ def test_import_sparse(config, database, caplog):
     sce.run(projid=prj_id, out="chk.dmp")
 
 
-def test_import_images(config, database, caplog):
+@pytest.mark.parametrize("title", ["Test Import Images"])
+def test_import_images(config, database, caplog, title):
     """
         Simple import with fixed values.
     """
     caplog.set_level(logging.DEBUG)
-    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test Import Images"))
+    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title=title))
     task_id = TaskService().create()
 
     vals = {"latitude": "abcde"}
@@ -418,3 +447,25 @@ def test_import_images(config, database, caplog):
     # Check that all went fine
     for a_msg in caplog.records:
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
+    return prj_id
+
+
+IMPORT_IMAGES_URL = "/simple_import/{project_id}"
+
+
+@pytest.mark.parametrize("title", ["Simple via fastapi"])
+def test_api_import_images(config, database, fastapi, caplog, title):
+    """
+        Simple import with no fixed values at all.
+    """
+    caplog.set_level(logging.DEBUG)
+    prj_id = ProjectsService().create(CREATOR_USER_ID, CreateProjectReq(title=title))
+    task_id = TaskService().create()
+
+    url = IMPORT_IMAGES_URL.format(project_id=prj_id)
+    req = {"task_id": task_id,
+           "source_path": str(PLAIN_DIR),
+           "values": {}}
+    rsp = fastapi.post(url, headers=CREATOR_AUTH, json=req)
+    assert rsp.status_code == status.HTTP_200_OK
+    return prj_id

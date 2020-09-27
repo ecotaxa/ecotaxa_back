@@ -57,7 +57,7 @@ class Sample(Model):
         session.execute("""
         UPDATE samples s 
            SET latitude = sll.latitude, longitude = sll.longitude
-          FROM (SELECT o.sampleid, min(o.latitude) latitude, min(o.longitude) longitude
+          FROM (SELECT o.sampleid, MIN(o.latitude) latitude, MIN(o.longitude) longitude
                   FROM obj_head o
                  WHERE projid = :projid 
                    AND o.latitude IS NOT NULL 

@@ -83,8 +83,8 @@ class ProjectBO(object):
 
         # Default query: all projects, eventually with first manager information
         sql = """SELECT p.projid, p.title, p.status, 
-                        COALESCE(p.objcount,0) as objcount, COALESCE(p.pctvalidated,0) as pctvalidated,
-                        COALESCE(p.pctclassified,0) as pctclassified, fpm.email, fpm.name, p.visible
+                        COALESCE(p.objcount,0) AS objcount, COALESCE(p.pctvalidated,0) AS pctvalidated,
+                        COALESCE(p.pctclassified,0) AS pctclassified, fpm.email, fpm.name, p.visible
                    FROM projects p
                    LEFT JOIN ( """ + ProjectPrivilege.first_manager_by_project() + """ ) fpm 
                      ON fpm.projid = p.projid """

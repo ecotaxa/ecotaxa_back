@@ -25,7 +25,7 @@ from API_operations.Merge import MergeService
 from API_operations.ObjectManager import ObjectManager
 from API_operations.Status import StatusService
 from API_operations.Subset import SubsetService
-from API_operations.TaxoManager import TaxonomyService
+from API_operations.TaxoManager import TaxonomyChangeService
 from API_operations.exports.EMODnet import EMODNetExport
 from API_operations.helpers.Service import Service
 from API_operations.imports.Import import ImportAnalysis, RealImport
@@ -187,12 +187,12 @@ def project_query(project_id: int,
     return ret
 
 
-@app.post("/projects/{project_id}/dump", tags=['projects'], include_in_schema=False)
+@app.post("/projects/{project_id}/dump", tags=['projects'], include_in_schema=False)  # pragma:nocover
 def object_query(project_id: int,
                  filters: ProjectFiltersModel,
                  current_user: int = Depends(get_current_user)):
     """
-        Query the project.
+        Dump the project in JSON form. Internal so far.
     """
     # TODO: Use a StreamingResponse to avoid buffering
     sce = JsonDumper(current_user, project_id, filters)
@@ -277,7 +277,7 @@ def simple_import(project_id: int,
 
 @app.delete("/projects/{project_id}", tags=['projects'])
 def erase_project(project_id: int,
-                  only_objects: Optional[bool] = False,
+                  only_objects: bool = False,
                   current_user: int = Depends(get_current_user)) -> Tuple[int, int, int, int]:
     """
         Delete the project.
@@ -286,8 +286,6 @@ def erase_project(project_id: int,
             Otherwise, no trace of the project will remain in the database.
     """
     sce = ProjectsService()
-    if only_objects is None:
-        only_objects = False
     with RightsThrower():
         return sce.delete(current_user, project_id, only_objects)
 
@@ -367,7 +365,7 @@ def update_object_set(req: BulkUpdateReq,
         return sce.update_set(current_user, req.target_ids, req.updates)
 
 
-@app.post("/export/emodnet", tags=['WIP'], include_in_schema=False, response_model=EMODNetExportRsp)
+@app.post("/export/emodnet", tags=['WIP'], include_in_schema=False, response_model=EMODNetExportRsp)  # pragma:nocover
 def emodnet_format_export(params: EMODNetExportReq,
                           current_user: int = Depends(get_current_user)):
     """
@@ -380,7 +378,7 @@ def emodnet_format_export(params: EMODNetExportReq,
         return sce.run(current_user)
 
 
-@app.get("/taxon/resolve/{our_id}", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)
+@app.get("/taxon/resolve/{our_id}", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)  # pragma:nocover
 async def resolve_taxon(our_id: int,
                         response: Response,
                         text_response: bool = False,
@@ -406,13 +404,13 @@ async def resolve_taxon(our_id: int,
         return ret
 
 
-@app.get("/taxa/refresh", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)
+@app.get("/taxa/refresh", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)  # pragma:nocover
 async def refresh_taxa_db(max_requests: int,
                           current_user: int = Depends(get_current_user)) -> StreamingResponse:
     """
         Refresh local mirror of WoRMS database.
     """
-    sce = TaxonomyService(max_requests)
+    sce = TaxonomyChangeService(max_requests)
     tmp_log = sce.log_to_temp()
     logger.info("logging to %s", tmp_log)
     with RightsThrower():
@@ -422,13 +420,13 @@ async def refresh_taxa_db(max_requests: int,
     return StreamingResponse(log_streamer(tmp_log, "Done,"), media_type="text/plain")
 
 
-@app.get("/taxa/matches", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)
+@app.get("/taxa/matches", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)  # pragma:nocover
 async def matching_with_worms(current_user: int = 0  # Depends(get_current_user)
                               ) -> PlainTextResponse:
     """
         Show current state of matches.
     """
-    sce = TaxonomyService(0)
+    sce = TaxonomyChangeService(0)
     with RightsThrower():
         data = sce.matching(current_user)
     txt = "%d case-insensitive matches on name with WoRMS scientificname\n" % len(data)

@@ -48,11 +48,11 @@ class ProjectsService(Service):
         return prj.projid
 
     def search(self, current_user_id: int,
-               for_managing: bool,
-               also_others: bool,
-               title_filter: str,
-               instrument_filter: str,
-               filter_subset: bool) -> List[ProjectSearchResult]:
+               for_managing: bool = False,
+               also_others: bool = False,
+               title_filter: str = '',
+               instrument_filter: str = '',
+               filter_subset: bool = False) -> List[ProjectSearchResult]:
         # No rights checking as basically everyone can see all projects
         current_user: User = self.session.query(User).get(current_user_id)
         ret = []
@@ -106,8 +106,8 @@ class ProjectsService(Service):
         remover.wait_for_done()
         return nb_objs, 0, nb_img_rows, len(img_files)
 
-    def recompute_geo(self,  current_user_id: int,
-               prj_id: int):
+    def recompute_geo(self, current_user_id: int,
+                      prj_id: int):
         # Security barrier
         _current_user, _project = RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, prj_id)
         Sample.propagate_geo(self.session, prj_id)

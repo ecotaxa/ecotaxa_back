@@ -21,9 +21,10 @@ from .helpers.Service import Service
 logger = get_logger(__name__)
 
 
-class TaxonomyService(Service):
+class TaxonomyChangeService(Service):  # pragma:nocover
     """
-        Merge operation, move everything from source into destination project.
+        A service dedicated to the move from UniEUK taxonomy referential to WoRMS one.
+        Not exposed to any category of user in the app.
     """
     MAX_QUERIES = 500
 
