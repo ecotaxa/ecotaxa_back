@@ -449,10 +449,7 @@
             "description":"Successful Response",
             "content":{
               "application/json":{
-                "schema":{
-                  "title":"Response Create Project Projects Create Post",
-                  "type":"integer"
-                }
+                "schema":{}
               }
             }
           },
@@ -2391,10 +2388,6 @@
           },
           "email":{
             "title":"Email",
-            "type":"string"
-          },
-          "password":{
-            "title":"Password",
             "type":"string"
           },
           "name":{

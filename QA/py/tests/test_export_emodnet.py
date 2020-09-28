@@ -1,28 +1,27 @@
-# noinspection PyUnresolvedReferences
-# noinspection PyPackageRequirements
 import logging
-from os.path import dirname, realpath
-from pathlib import Path
 
 from API_models.exports import *
 # noinspection PyPackageRequirements
 from API_operations.exports.EMODnet import EMODNetExport
 from formats.EMODnet.models import *
+from starlette import status
 
-# noinspection PyUnresolvedReferences
-from tests.config_fixture import config
-# noinspection PyUnresolvedReferences
-from tests.db_fixture import database
-from tests.test_import import test_import, ADMIN_USER_ID
-
-DATA_DIR = (Path(dirname(realpath(__file__))) / ".." / "data").resolve()
-PLAIN_FILE = DATA_DIR / "import_test.zip"
+from tests.credentials import ADMIN_AUTH
+from tests.test_import import test_import, ADMIN_USER_ID, test_import_a_bit_more_skipping
+from tests.test_update import RECOMPUTE_GEO_URL
 
 
-def test_emodnet_export(config, database, caplog):
+def test_emodnet_export(config, database, fastapi, caplog):
     caplog.set_level(logging.DEBUG)
 
-    prj_ids = test_import(config, database, caplog, "EMODNET project")
+    prj_id = test_import(config, database, caplog, "EMODNET project")
+    # Add a sample spanning 2 days
+    test_import_a_bit_more_skipping(config, database, caplog, "EMODNET project")
+
+    # Recompute geo, which is a kind of update
+    url = RECOMPUTE_GEO_URL.format(project_id=prj_id)
+    rsp = fastapi.post(url, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
 
     person1 = EMLPerson(organizationName="IMEV",
                         givenName="Jean-Olivier",
@@ -87,6 +86,6 @@ We are grateful to the crew of the research boat at OOV that collected plankton 
                    maintenance="periodic review of origin data",
                    maintenanceUpdateFrequency="1M",
                    additionalMetadata=meta_plus)
-    req = EMODNetExportReq(meta=meta, project_ids=[prj_ids])
+    req = EMODNetExportReq(meta=meta, project_ids=[prj_id])
     rsp = EMODNetExport(req).run(ADMIN_USER_ID)
     print("\n".join(caplog.messages))

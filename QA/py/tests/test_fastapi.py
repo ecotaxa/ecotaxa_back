@@ -67,11 +67,15 @@ def test_clone_project(config, database, fastapi, caplog):
     prj_id = test_import(config, database, caplog, "Clone source")
     caplog.set_level(logging.DEBUG)
     url = "/projects/create"
-    # Check that the clone works
-    # TODO: a nice diff
+    # Failing attempt
+    response = client.post(url, headers=ADMIN_AUTH, json={"title": "Clone of 1", "clone_of_id": -1})
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    # Working attempt
     response = client.post(url, headers=ADMIN_AUTH, json={"title": "Clone of 1", "clone_of_id": prj_id})
     assert response.status_code == status.HTTP_200_OK
     assert int(response.json()) > 0
+    # TODO: Check that the clone works
+    # TODO: a nice diff
 
 
 PROJECT_QUERY_URL = "/projects/{project_id}/query?for_managing={manage}"

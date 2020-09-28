@@ -28,7 +28,8 @@ def dataclass_to_model(clazz: T) -> PydanticModelT:
         if a_field.type in (str, Optional[str], int, datetime.datetime):
             model_fields[a_field.name] = (a_field.type, None)
         else:
-            raise Exception("Not managed yet :", a_field.type)
+            # app doesn't even start if below is raised -> nocover
+            raise Exception("Not managed yet :", a_field.type)  # pragma:nocover
     ret = create_model(
         clazz.__name__, __config__=DataclassConfig, **model_fields  # type: ignore
     )

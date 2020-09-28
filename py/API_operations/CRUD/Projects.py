@@ -27,7 +27,7 @@ class ProjectsService(Service):
     def create(self, current_user_id: int,
                req: CreateProjectReq) -> Union[int, str]:
         """
-            Create a project, eventually as a clone of another.
+            Create a project, eventually as a shallow copy of another.
         """
         current_user, project = RightsBO.user_wants(self.session, current_user_id, Action.CREATE_PROJECT)
         if req.clone_of_id:

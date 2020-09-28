@@ -15,7 +15,7 @@ def async_bg_run(coro: Coroutine):
     """
     # Only starting 3.7 the def is officially exposed
     loop = asyncio.events._get_running_loop()
-    loop.create_task(coro)
+    return loop.create_task(coro)
 
 
 async def async_sleep(tim: float):
@@ -29,7 +29,12 @@ async def log_streamer(file_name: str, magic: str):
     """
         Return a file line by line, until the magic sentence is found.
     """
-    strm = open(file_name, "r")
+    while True:
+        try:
+            strm = open(file_name, "r")
+            break
+        except FileNotFoundError:
+            await async_sleep(0.1)
     while True:
         ret = strm.readline()
         while len(ret) == 0:
@@ -39,7 +44,8 @@ async def log_streamer(file_name: str, magic: str):
                 strm = open(file_name, "r")
                 strm.seek(pos)
                 ret = strm.readline()
-            except IOError:
+            except IOError:  # pragma:nocover
+                yield "IOERROR"
                 break
         yield ret
         if magic in ret:

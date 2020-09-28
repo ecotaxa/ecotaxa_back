@@ -4,9 +4,11 @@
 import logging
 
 from starlette import status
+from API_operations.JsonDumper import JsonDumper
 
-from tests.credentials import CREATOR_USER_ID, CREATOR_AUTH
+from tests.credentials import CREATOR_AUTH, ADMIN_USER_ID
 from tests.test_import import test_api_import_images
+import io
 
 PROJECT_DELETE_URL = "/projects/{project_id}?only_objects={only_objects}"
 
@@ -21,4 +23,8 @@ def test_api_project_delete(config, database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_403_FORBIDDEN
     rsp = fastapi.delete(url, headers=CREATOR_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
-    # TODO: Test emptyness
+    # Test emptyness
+    with io.StringIO() as fd:
+        JsonDumper(CREATOR_AUTH, prj_id, {}).run(fd)
+        buff = fd.getvalue()
+    assert buff == "{}"

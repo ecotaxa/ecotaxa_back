@@ -24,7 +24,8 @@ def typed_dict_to_model(typed_dict: T):  # TODO -> Type[BaseModel]:
         if field == Optional[str]:
             annotations[name] = (field, None)
         else:
-            raise Exception("Not managed yet")
+            # app doesn't even start if below is raised -> nocover
+            raise Exception("Not managed yet")  # pragma:nocover
 
     ret = create_model(
         typed_dict.__name__, **annotations  # type: ignore

@@ -14,7 +14,7 @@ from BO.ObjectSet import DescribedObjectSet
 from DB import Sample, Acquisition, Process, Image, ObjectHeader, ObjectFields, and_
 from DB.Project import Project
 from DB.helpers.ORM import Model, any_
-from formats.JSONObjetSet import JSON_FIELDS, JSONDesc
+from formats.JSONObjectSet import JSON_FIELDS, JSONDesc
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 from .Subset import DBObjectTupleT
@@ -26,10 +26,11 @@ logger = get_logger(__name__)
 class JsonDumper(Service):
     """
         Dump in JSON form a project content, with filters.
-            No numeric primary or foreign key is present so the output can be diff-ed.
-            The sub-entities are ordered by their 'natural' key, e.g. sample_id for samples.
             Mapped columns are rendered with their user-visible name (TSV one).
             The fields are reduced to 4(max)-letter names for saving bandwidth and DB fields independance.
+        TODO as an option:
+            No numeric primary or foreign key is present so the output can be diff-ed.
+            The sub-entities are ordered by their 'natural' key, e.g. sample_id for samples.
     """
 
     def __init__(self, current_user: int, prj_id: int, filters: ProjectFilters):
@@ -59,7 +60,7 @@ class JsonDumper(Service):
             _to_dump = self._db_fetch(self.ids_to_dump)
             # prj = to_dump[0][0]
             if len(self.ids_to_dump) == 0 or len(_to_dump) == 0:
-                to_stream= {}
+                to_stream = {}
             else:
                 to_stream = self.dump_row(out_stream, self.prj)
         json.dump(obj=to_stream, fp=out_stream, indent="  ")
@@ -84,7 +85,7 @@ class JsonDumper(Service):
         desc: JSONDesc = JSON_FIELDS[row_class]
         for a_field_or_relation, how in desc.items():
             fld_name = a_field_or_relation.key
-            # This is where SQLAlchemy does all its magic when it'a a relation
+            # This is where SQLAlchemy does all its magic when it's a relation
             attr = getattr(a_row, fld_name)
             if isinstance(attr, list):
                 # Serialize the list of child entities, ordinary relationship
@@ -138,6 +139,7 @@ class JsonDumper(Service):
     def _db_fetch(self, objids: List[int]) -> List[DBObjectTupleT]:
         """
             Do a DB read of given objects, with auxiliary objects.
+            Thanks to 'contains_eager' calls, the objects are loaded into SQLAlchemy session.
             :param objids:
             :return:
         """

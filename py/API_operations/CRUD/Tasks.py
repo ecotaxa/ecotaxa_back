@@ -23,3 +23,7 @@ class TaskService(Service):
         temp_for_task = TempDirForTasks(join(self.link_src, 'temptask')).base_dir_for(tsk.id)
         shutil.rmtree(temp_for_task)
         return tsk.id
+
+    def get_temp(self, task_id: int, inside: str) -> str:
+        temp_for_task = TempDirForTasks(join(self.link_src, 'temptask')).in_base_dir_for(task_id, inside)
+        return temp_for_task

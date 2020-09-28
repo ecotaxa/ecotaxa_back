@@ -15,7 +15,7 @@ from .helpers.DBtoModel import sqlalchemy_to_pydantic
 from .helpers.TypedDictToModel import typed_dict_to_model
 
 # Direct mirror of DB models
-UserModel = sqlalchemy_to_pydantic(User)
+UserModel = sqlalchemy_to_pydantic(User, exclude=[User.password.name])
 SampleModel = sqlalchemy_to_pydantic(Sample)
 AcquisitionModel = sqlalchemy_to_pydantic(Acquisition)
 ProcessModel = sqlalchemy_to_pydantic(Process)

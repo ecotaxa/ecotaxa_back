@@ -149,8 +149,8 @@ def search_projects(current_user: int = Depends(get_current_user),
     return ret
 
 
-@app.post("/projects/create", tags=['projects'], response_model=int)
-def create_project(params: CreateProjectReq, current_user: int = Depends(get_current_user)):
+@app.post("/projects/create", tags=['projects'])
+def create_project(params: CreateProjectReq, current_user: int = Depends(get_current_user)) -> Union[int, str]:
     """
         Create an empty project with only a title, and return its number.
         The project will be managed by current user.
@@ -159,6 +159,8 @@ def create_project(params: CreateProjectReq, current_user: int = Depends(get_cur
     sce = ProjectsService()
     with RightsThrower():
         ret = sce.create(current_user, params)
+    if isinstance(ret, str):
+        raise HTTPException(status_code=404, detail=ret)
     return ret
 
 
@@ -378,7 +380,8 @@ def emodnet_format_export(params: EMODNetExportReq,
         return sce.run(current_user)
 
 
-@app.get("/taxon/resolve/{our_id}", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)  # pragma:nocover
+@app.get("/taxon/resolve/{our_id}", tags=['WIP'], include_in_schema=False,
+         status_code=status.HTTP_200_OK)  # pragma:nocover
 async def resolve_taxon(our_id: int,
                         response: Response,
                         text_response: bool = False,

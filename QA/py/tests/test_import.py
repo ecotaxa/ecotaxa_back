@@ -5,6 +5,7 @@
 
 
 import logging
+import shutil
 from os.path import dirname, realpath
 from pathlib import Path
 
@@ -57,10 +58,8 @@ def real_params_from_json_prep_out(task_id, prep_out: Dict) -> Dict:
     ret = {"task_id": task_id}
     ret.update(prep_out)
     for exc in ('warnings', 'errors'):
-        try:
+        if exc in ret:
             del ret[exc]
-        except KeyError:
-            pass
     return ret
 
 
@@ -132,14 +131,15 @@ def test_import_again_irrelevant_skipping(config, database, caplog):
 
 
 # @pytest.mark.skip()
-def test_import_a_bit_more_skipping(config, database, caplog):
+@pytest.mark.parametrize("title", ["Test Create Update"])
+def test_import_a_bit_more_skipping(config, database, caplog, title):
     """ Re-import similar files into same project, with an extra one.
         The extra one has missing values in the TSV.
         CANNOT RUN BY ITSELF """
     caplog.set_level(logging.DEBUG)
     task_id = TaskService().create()
     prj_id = ProjectsService().search(current_user_id=ADMIN_USER_ID,
-                                      title_filter="Test Create Update")[
+                                      title_filter=title)[
         0].projid  # <- need the project from first test
     # Do preparation
     params = ImportPrepReq(task_id=task_id,
@@ -495,11 +495,13 @@ def test_api_import_images(config, database, fastapi, caplog, title):
     """
     caplog.set_level(logging.DEBUG)
     prj_id = ProjectsService().create(CREATOR_USER_ID, CreateProjectReq(title=title))
-    task_id = TaskService().create()
+    sce = TaskService()
+    task_id = sce.create()
+    shutil.copyfile(str(PLAIN_FILE), sce.get_temp(task_id, "uploaded.zip"))
 
     url = IMPORT_IMAGES_URL.format(project_id=prj_id)
     req = {"task_id": task_id,
-           "source_path": str(PLAIN_DIR),
+           "source_path": "uploaded.zip",
            "values": {}}
     rsp = fastapi.post(url, headers=CREATOR_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK

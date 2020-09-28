@@ -81,7 +81,9 @@ def test_subset_uvp6(config, database, fastapi, caplog):
                        limit_type='P',
                        limit_value=100.0,
                        do_images=True)
-    SubsetService(prj_id=prj_id, req=params).run(ADMIN_USER_ID)
+    sce = SubsetService(prj_id=prj_id, req=params)
+    sce.update_task(taskstate="Running", percent=0, message="Running")
+    sce.run(ADMIN_USER_ID)
     # Dump the subset
     with open(OUT_SUBS_JSON, "w") as fd:
         JsonDumper(ADMIN_USER_ID, subset_prj_id, {}).run(fd)
