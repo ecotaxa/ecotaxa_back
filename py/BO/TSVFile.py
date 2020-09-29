@@ -23,6 +23,7 @@ from DB.Object import classif_qual_revert, ObjectHeader, ObjectFields
 from DB.helpers.Bean import Bean
 from DB.helpers.ORM import detach_from_session_if, Model
 from helpers.DynamicLogs import get_logger
+from .Image import ImageBO
 from .helpers.TSVHelpers import clean_value, clean_value_and_none, to_float, none_to_empty, \
     convert_degree_minute_float_to_decimal_degree
 
@@ -497,34 +498,9 @@ class TSVFile(object):
         if image_to_write.get("imgrank") is None:
             image_to_write.imgrank = 0  # default value for missing field, and present with None
 
-        self.dimensions_and_resize(how, where, sub_path, image_to_write)
-
-    @staticmethod
-    def dimensions_and_resize(how, where, sub_path, image_to_write):
-        im = PIL_Image.open(where.vault.path_to(sub_path))
-        image_to_write.width = im.size[0]
-        image_to_write.height = im.size[1]
-        # Generate a thumbnail if image is too large
-        if (im.size[0] > how.max_dim) or (im.size[1] > how.max_dim):
-            im.thumbnail((how.max_dim, how.max_dim))
-            if im.mode == 'P':
-                # (8-bit pixels, mapped to any other mode using a color palette)
-                # from https://pillow.readthedocs.io/en/latest/handbook/concepts.html#modes
-                # Tested using a PNG with palette
-                im = im.convert("RGB")
-            thumb_relative_path, thumb_full_path = where.vault.thumbnail_paths(image_to_write.imgid)
-            im.save(thumb_full_path)
-            image_to_write.thumb_file_name = thumb_relative_path
-            image_to_write.thumb_width = im.size[0]
-            image_to_write.thumb_height = im.size[1]
-        else:
-            # Close the PIL image, when resized it was done during im.save
-            # Otherwise there is a FD exhaustion on PyPy
-            im.close()
-            # Need empty fields for bulk insert
-            image_to_write.thumb_file_name = None
-            image_to_write.thumb_width = None
-            image_to_write.thumb_height = None
+        err = ImageBO.dimensions_and_resize(how.max_dim, where.vault, sub_path, image_to_write)
+        if err:
+            logger.error(err+", not copied")
 
     def do_validate(self, how: ImportHow, diag: ImportDiagnostic):
         with self.open():

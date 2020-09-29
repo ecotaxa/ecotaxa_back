@@ -108,6 +108,7 @@ def test_import_again_skipping(config, database, caplog):
             found_err = True
     assert found_err
 
+
 def test_import_again_irrelevant_skipping(config, database, caplog):
     """ Re-import similar files into same project
         CANNOT RUN BY ITSELF """
@@ -491,7 +492,7 @@ IMPORT_IMAGES_URL = "/simple_import/{project_id}"
 @pytest.mark.parametrize("title", ["Simple via fastapi"])
 def test_api_import_images(config, database, fastapi, caplog, title):
     """
-        Simple import with no fixed values at all.
+        Simple import with no fixed values at all, but using the upload directory.
     """
     caplog.set_level(logging.DEBUG)
     prj_id = ProjectsService().create(CREATOR_USER_ID, CreateProjectReq(title=title))
@@ -506,3 +507,17 @@ def test_api_import_images(config, database, fastapi, caplog, title):
     rsp = fastapi.post(url, headers=CREATOR_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     return prj_id
+
+
+def test_issue_483(config, database, caplog):
+    """
+        Too large image.
+    """
+    # Inject a very small maximum size inside the library
+    from PIL import Image
+    sav = Image.MAX_IMAGE_PIXELS
+    Image.MAX_IMAGE_PIXELS= 512
+    try:
+        test_import(config, database, caplog, title="Too large import")
+    finally:
+        Image.MAX_IMAGE_PIXELS = sav
