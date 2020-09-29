@@ -15,6 +15,26 @@ class ProjectPrivilegeBO(object):
     VIEW = 'View'
 
     @classmethod
+    def managers_by_project(cls) -> str:
+        """
+            Return SQL chunk for all managers for all projects.
+        """
+        return """ SELECT u.email, u.name, pp.projid, rank() 
+                     OVER (PARTITION BY pp.projid ORDER BY pp.id) rang
+                     FROM projectspriv pp 
+                     JOIN users u ON pp.member = u.id
+                    WHERE pp.privilege = '""" + cls.MANAGE + """' 
+                      AND u.active = true """
+
+    @classmethod
+    def first_manager_by_project(cls) -> str:
+        """
+            Return SQL chunk for historically first manager for all projects.
+        """
+        return """ SELECT * from ( """ + cls.managers_by_project() + """ ) qpp 
+                    WHERE rang = 1 """
+
+    @classmethod
     def generous_merge_into(cls, session: Session, dest_prj_id: int, src_prj_id: int):
         """
             Merge privileges from source project into destination project.

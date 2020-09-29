@@ -16,10 +16,10 @@ from BO.Rights import RightsBO, Action
 from BO.TSVFile import TSVFile
 from BO.helpers.ImportHelpers import ImportHow
 from DB import Image, ObjectHeader, ObjectFields, Sample, Acquisition, Process, Project
-from DB.helpers.ORM import Query, any_, ResultProxy
 from DB.Object import ObjectCNNFeature
 from DB.helpers.Bean import bean_of
 from DB.helpers.DBWriter import DBWriter
+from DB.helpers.ORM import Query, any_, ResultProxy
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger
 from .helpers.TaskService import TaskServiceBase
@@ -53,7 +53,7 @@ class SubsetService(TaskServiceBase):
         self.first_query = True
 
     def run(self, current_user_id: int) -> SubsetRsp:
-        # Security check
+        # Security checks
         RightsBO.user_wants(self.session, current_user_id, Action.READ, self.prj_id)
         RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, self.dest_prj.projid)
         # OK

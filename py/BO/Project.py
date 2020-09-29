@@ -6,10 +6,10 @@ from datetime import datetime
 from typing import List, Dict, Any, Iterable
 
 from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping
+from BO.ProjectPrivilege import ProjectPrivilegeBO
 from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFields, Acquisition, Process, \
     ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram
 from DB import Session, ResultProxy
-from DB.ProjectPrivilege import MANAGE
 from DB.User import Role
 from DB.helpers.ORM import Delete, Query
 from helpers.DynamicLogs import get_logger
@@ -86,7 +86,7 @@ class ProjectBO(object):
                         COALESCE(p.objcount,0) AS objcount, COALESCE(p.pctvalidated,0) AS pctvalidated,
                         COALESCE(p.pctclassified,0) AS pctclassified, fpm.email, fpm.name, p.visible
                    FROM projects p
-                   LEFT JOIN ( """ + ProjectPrivilege.first_manager_by_project() + """ ) fpm 
+                   LEFT JOIN ( """ + ProjectPrivilegeBO.first_manager_by_project() + """ ) fpm 
                      ON fpm.projid = p.projid """
         if also_others:
             # Add the projects for which no entry is found in ProjectPrivilege
@@ -102,7 +102,7 @@ class ProjectBO(object):
                          AND pp.member = :user_id """
                 if for_managing:
                     sql += """
-                         AND pp.privilege = '%s' """ % MANAGE
+                         AND pp.privilege = '%s' """ % ProjectPrivilegeBO.MANAGE
             sql += " WHERE 1 = 1 "
 
         if title_filter != '':

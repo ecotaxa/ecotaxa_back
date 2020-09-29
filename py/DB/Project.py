@@ -13,7 +13,7 @@ from DB.helpers.ORM import Model
     Possible values for status field.
     TODO: Use an Enum, but it raises problems sending them as SQL values.
 """
-ANNOTATE = "Annotate"
+ANNOTATE_STATUS = "Annotate"
 ANNOTATE_NO_PREDICTION = "Annotate No Prediction"
 EXPLORE_ONLY = "ExploreOnly"
 
@@ -26,7 +26,7 @@ class Project(Model):
     projid = Column(INTEGER, Sequence('seq_projects'), primary_key=True)
     title = Column(VARCHAR(255), nullable=False)
     visible = Column(Boolean(), default=True)
-    status = Column(VARCHAR(40), default=ANNOTATE)  # Annotate, ExploreOnly, Annotate No Prediction
+    status = Column(VARCHAR(40), default=ANNOTATE_STATUS)  # Annotate, ExploreOnly, Annotate No Prediction
     # The mappings for this Project
     # TODO: What happens if there is a conflict from one import to another?
     mappingobj = Column(VARCHAR)

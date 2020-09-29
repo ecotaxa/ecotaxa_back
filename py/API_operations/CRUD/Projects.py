@@ -9,7 +9,7 @@ from BO.ObjectSet import EnumeratedObjectSet
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from DB import Sample
-from DB.Project import Project, ANNOTATE
+from DB.Project import Project, ANNOTATE_STATUS
 from DB.User import User
 from DB.helpers.ORM import clone_of
 from FS.VaultRemover import VaultRemover
@@ -38,7 +38,7 @@ class ProjectsService(Service):
         else:
             prj = Project()
         prj.title = req.title
-        prj.status = ANNOTATE
+        prj.status = ANNOTATE_STATUS
         prj.visible = req.visible
         self.session.add(prj)
         self.session.flush()  # to get the project ID

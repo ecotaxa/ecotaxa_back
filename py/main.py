@@ -150,7 +150,8 @@ def search_projects(current_user: int = Depends(get_current_user),
 
 
 @app.post("/projects/create", tags=['projects'])
-def create_project(params: CreateProjectReq, current_user: int = Depends(get_current_user)) -> Union[int, str]:
+def create_project(params: CreateProjectReq,
+                   current_user: int = Depends(get_current_user)) -> Union[int, str]:
     """
         Create an empty project with only a title, and return its number.
         The project will be managed by current user.
@@ -165,7 +166,9 @@ def create_project(params: CreateProjectReq, current_user: int = Depends(get_cur
 
 
 @app.post("/projects/{project_id}/subset", tags=['projects'], response_model=SubsetRsp)
-def project_subset(project_id: int, params: SubsetReq, current_user: int = Depends(get_current_user)):
+def project_subset(project_id: int,
+                   params: SubsetReq,
+                   current_user: int = Depends(get_current_user)):
     """
         Subset a project into another one.
     """

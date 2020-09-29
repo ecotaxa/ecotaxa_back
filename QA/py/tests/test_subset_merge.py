@@ -30,6 +30,7 @@ from deepdiff import DeepDiff
 from ordered_set import OrderedSet
 from starlette import status
 
+from tests.credentials import CREATOR_AUTH
 from tests.test_fastapi import PRJ_CREATE_URL, client, ADMIN_AUTH, PROJECT_QUERY_URL
 from tests.test_import import ADMIN_USER_ID, test_import_uvp6
 
@@ -245,5 +246,29 @@ def test_api_subset(config, database, fastapi, caplog):
            "do_images": True}
     response = client.post(url, headers=ADMIN_AUTH, json=req)
     assert response.json()["errors"] == ['No object found to clone into subset.']
+
+    test_check_project_via_api(tgt_prj_id, fastapi)
+
+
+def test_subset_of_no_visible_issue_484(config, database, fastapi, caplog):
+    # https://github.com/oceanomics/ecotaxa_dev/issues/484
+    # First found as a subset of subset failed
+    url1 = PRJ_CREATE_URL
+    res = fastapi.post(url1, headers=CREATOR_AUTH, json={"title": "API subset src test", "visible": False})
+    src_prj_id = res.json()
+    res = fastapi.post(url1, headers=CREATOR_AUTH, json={"title": "API subset tgt test", "visible": False})
+    tgt_prj_id = res.json()
+    # Create a task for this run
+    task_id = TaskService().create()
+
+    url = SUBSET_URL.format(project_id=src_prj_id)
+    req = {"task_id": task_id,
+           "dest_prj_id": tgt_prj_id,
+           "limit_type": "P",
+           "limit_value": 10,
+           "do_images": True}
+    rsp = fastapi.post(url, headers=CREATOR_AUTH, json=req)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json()["errors"] == ['No object found to clone into subset.']
 
     test_check_project_via_api(tgt_prj_id, fastapi)

@@ -6,9 +6,8 @@ from enum import IntEnum
 from typing import Optional, Tuple
 
 from DB import User, Role, Project, ProjectPrivilege
-from DB.Project import ANNOTATE
-from DB.ProjectPrivilege import MANAGE
 from DB.helpers.ORM import Session
+from .ProjectPrivilege import ProjectPrivilegeBO
 
 
 class Action(IntEnum):
@@ -20,7 +19,7 @@ class Action(IntEnum):
     ADMINISTRATE = 12  # Read/write/delete
 
 
-ACTION_TO_PRIV = {Action.ADMINISTRATE: MANAGE}
+ACTION_TO_PRIV = {Action.ADMINISTRATE: ProjectPrivilegeBO.MANAGE}
 
 NOT_AUTHORIZED = "Not authorized"
 NOT_FOUND = "Not found"
@@ -32,8 +31,8 @@ class RightsBO(object):
     """
 
     @staticmethod
-    def user_wants(session: Session, user_id: int, action: Action, prj_id: int = None) -> Tuple[
-        User, Optional[Project]]:
+    def user_wants(session: Session, user_id: int, action: Action, prj_id: int = None) \
+            -> Tuple[User, Optional[Project]]:
         """
             Check rights for the user to do this specific action, eventually onto this project.
         """
@@ -56,15 +55,21 @@ class RightsBO(object):
                 assert project is not None, NOT_FOUND
                 a_priv: ProjectPrivilege
                 # Collect privileges for user on project
+                # noinspection PyTypeChecker
                 rights_on_proj = {a_priv.privilege for a_priv in user.privs_on_projects
                                   if a_priv.projid == prj_id}
                 if action == Action.ADMINISTRATE:
-                    assert MANAGE in rights_on_proj, NOT_AUTHORIZED
+                    assert ProjectPrivilegeBO.MANAGE in rights_on_proj, NOT_AUTHORIZED
                 elif action == Action.ANNOTATE:
                     # TODO: Bah, not nice
-                    assert MANAGE in rights_on_proj or ANNOTATE in rights_on_proj, NOT_AUTHORIZED
+                    assert ProjectPrivilegeBO.ANNOTATE in rights_on_proj \
+                           or ProjectPrivilegeBO.MANAGE in rights_on_proj, NOT_AUTHORIZED
                 elif action == Action.READ:
-                    assert project.visible, NOT_AUTHORIZED
+                    # TODO: Bah, not nice either
+                    assert project.visible \
+                           or ProjectPrivilegeBO.VIEW in rights_on_proj \
+                           or ProjectPrivilegeBO.ANNOTATE in rights_on_proj \
+                           or ProjectPrivilegeBO.MANAGE in rights_on_proj, NOT_AUTHORIZED
                 else:
                     raise Exception("Not implemented")
         return user, project

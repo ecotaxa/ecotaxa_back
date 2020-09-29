@@ -11,8 +11,6 @@ from sqlalchemy.orm import relationship
 # from DB.Project import Project
 from .helpers.ORM import Model
 
-MANAGE = 'Manage'
-
 
 class ProjectPrivilege(Model):
     """
@@ -39,26 +37,6 @@ class ProjectPrivilege(Model):
 
     def __str__(self):
         return "{0} ({1})".format(self.member, self.privilege)
-
-    @classmethod
-    def managers_by_project(cls) -> str:
-        """
-            Return SQL chunk for all managers for all projects.
-        """
-        return """ SELECT u.email, u.name, pp.projid, rank() 
-                     OVER (PARTITION BY pp.projid ORDER BY pp.id) rang
-                     FROM projectspriv pp 
-                     JOIN users u ON pp.member = u.id
-                    WHERE pp.privilege = '""" + MANAGE + """' 
-                      AND u.active = true """
-
-    @classmethod
-    def first_manager_by_project(cls) -> str:
-        """
-            Return SQL chunk for historically first manager for all projects.
-        """
-        return """ SELECT * from ( """ + ProjectPrivilege.managers_by_project() + """ ) qpp 
-                    WHERE rang = 1 """
 
 
 Index('IS_ProjectsPriv', ProjectPrivilege.projid, ProjectPrivilege.member, unique=True)
