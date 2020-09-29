@@ -149,10 +149,11 @@ class TSVFile(object):
 
                 self.add_parent_objects(how, session, object_head_to_write, dicts_to_write)
 
-                key_exist_obj = "%s*%s" % (object_fields_to_write.orig_id, image_to_write.orig_file_name)
-                if key_exist_obj in how.objects_and_images_to_skip:
-                    logger.info("Image skipped: %s %s", object_fields_to_write.orig_id, image_to_write.orig_file_name)
-                    continue
+                if not how.can_update:
+                    key_exist_obj = "%s*%s" % (object_fields_to_write.orig_id, image_to_write.orig_file_name)
+                    if key_exist_obj in how.objects_and_images_to_skip:
+                        logger.info("Image skipped: %s %s", object_fields_to_write.orig_id, image_to_write.orig_file_name)
+                        continue
 
                 new_records = self.create_or_link_slaves(how, session, object_head_to_write, object_fields_to_write,
                                                          image_to_write)
