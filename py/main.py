@@ -4,10 +4,13 @@
 #
 # Based on https://fastapi.tiangolo.com/
 #
+import os
 from typing import Union, Tuple
 
-from fastapi import FastAPI, Response, status, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, Request, Response, status, Depends, HTTPException
+from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from fastapi_utils.timing import add_timing_middleware
 
 from API_models.crud import *
@@ -51,6 +54,16 @@ app = FastAPI(title="EcoTaxa",
 
 # Instrument a bit
 add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
+
+# HTML stuff
+# app.mount("/styles", StaticFiles(directory="pages/styles"), name="styles")
+templates = Jinja2Templates(directory=os.path.dirname(__file__)+"/pages/templates")
+# Below is useless if proxied by legacy app
+CDNs = " ".join(["cdn.datatables.net"])
+CRSF_header = {
+    'Content-Security-Policy': "default-src 'self' 'unsafe-inline' 'unsafe-eval' "
+                               f"blob: data: {CDNs};frame-ancestors 'self';form-action 'self';"
+}
 
 
 # noinspection PyUnusedLocal
@@ -439,6 +452,24 @@ async def matching_with_worms(current_user: int = 0  # Depends(get_current_user)
     txt += "[worms.aphia_id, worms.status, taxo.id, taxo.name, taxo.taxotype, taxo.taxostatus]\n"
     txt += "\n".join([str(a_res) for a_res in data])
     return PlainTextResponse(txt, status_code=status.HTTP_200_OK)
+
+
+@app.get("/taxa/matches2", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)  # pragma:nocover
+async def matching_with_worms_nice(request: Request,
+                                   current_user: int = 0  # Depends(get_current_user)
+                                   ) -> Response:
+    """
+        Show current state of matches - nice HTML version.
+    """
+    sce = TaxonomyChangeService(0)
+    with RightsThrower():
+        data = sce.matching(current_user)
+    txt = "%d case-insensitive matches on name with WoRMS scientificname\n" % len(data)
+    txt += "[worms.aphia_id, worms.status, taxo.id, taxo.name, taxo.taxotype, taxo.taxostatus]\n"
+    txt += "\n".join([str(a_res) for a_res in data])
+    return templates.TemplateResponse("worms.html",
+                                      {"request": request, "matches": data},
+                                      headers=CRSF_header)
 
 
 @app.post("/sample_set/update", tags=['samples'])

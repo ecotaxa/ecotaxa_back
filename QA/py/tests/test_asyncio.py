@@ -28,4 +28,4 @@ async def test_asyncio():
         except StopAsyncIteration:
             break
     await asyncio.gather(tsk)
-    assert len(out) == 1001
+    assert len(out) == 1000

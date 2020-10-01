@@ -4,7 +4,7 @@
 #
 import tempfile
 from collections import deque
-from typing import Dict, Set, List
+from typing import Dict, Set, List, Tuple
 
 from httpx import ReadTimeout
 
@@ -81,7 +81,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         ret.taxon_rank_id = a_child["taxonRankID"]
         ret.rank = a_child["rank"]
         ret.valid_aphia_id = a_child["valid_AphiaID"]
-        ret.valid_name = a_child["valid_name"]
+        ret.valid_name = to_lat1(a_child["valid_name"])
         ret.valid_authority = to_lat1(a_child["valid_authority"])
         ret.parent_name_usage_id = a_child["parentNameUsageID"]
         ret.kingdom = a_child["kingdom"]
@@ -144,6 +144,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         # It looks like the parent is returned with its children
         children = await WoRMSFinder.aphia_children_by_id(parent_aphia_id)
         children_ids = set()
+        added_children = []
         for a_child in children:
             to_add = self.json_to_ORM(a_child)
             to_add.all_fetched = False
@@ -153,15 +154,15 @@ class TaxonomyChangeService(Service):  # pragma:nocover
                 pass
             else:
                 self.session.add(to_add)
+                added_children.append(to_add)
                 self.existing_ids[to_add.aphia_id] = False
         # DB persist
         if len(children_ids) > 0:
             try:
                 self.session.commit()
             except Exception as e:
-                logger.error("For parent %d and child %s : %s", parent_aphia_id, children_ids, e)
                 self.session.rollback()
-                return set()
+                return self._do_one_by_one(added_children)
         # Signal done
         self.session.query(WoRMS).get(parent_aphia_id).all_fetched = True
         self.session.commit()
@@ -180,7 +181,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
     #  during the specified period
     # Get max of dates in our DB as start of range
 
-    def matching(self, _current_user_id: int) -> List[List]:
+    def matching(self, _current_user_id: int) -> List[Tuple[WoRMS, Taxonomy]]:
         """
             Return the list of matching entries b/w Taxonomy and WoRMS.
         """
@@ -195,8 +196,24 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         # Format result
         ret = []
         for a_res in qry.all():
-            taxo: Taxonomy = a_res[0]
-            worms: WoRMS = a_res[1]
-            line = [worms.aphia_id, worms.status, taxo.id, taxo.name, taxo.taxotype, taxo.taxostatus]
-            ret.append(line)
+            # taxo: Taxonomy = a_res[0]
+            # worms: WoRMS = a_res[1]
+            # line = [worms.aphia_id, worms.status, taxo.id, taxo.name, taxo.taxotype, taxo.taxostatus]
+            ret.append(a_res)
+        return ret
+
+    def _do_one_by_one(self, children):
+        """
+            There was an error inserting childre in bulk set. So do it one by one, and log
+            the problem each time.
+        """
+        ret = set()
+        for a_child in children:
+            self.session.add(a_child)
+            try:
+                self.session.commit()
+                ret.add(a_child.aphia_id)
+            except Exception as e:
+                self.session.rollback()
+                logger.error("For child %s : %s", a_child, e)
         return ret

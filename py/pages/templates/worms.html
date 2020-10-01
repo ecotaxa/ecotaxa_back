@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WoRMS match</title>
+    <link rel="stylesheet" href="/static/DataTables1.10.18/datatables.css">
+    <script src="/static/jquery.min.js"></script>
+    <script src="/static/DataTables1.10.18/datatables.js"></script>
+</head>
+<body>
+<table id="matches">
+    <thead>
+    <tr>
+        <th>worms.aphia_id</th>
+        <th>worms.status</th>
+        <th>taxo.id</th>
+        <th>taxo.name</th>
+        <th>#usage</th>
+        <th>taxo.taxotype</th>
+        <th>taxo.taxostatus</th>
+    </tr>
+    </thead>
+    {% for mtch_us, mtch_worms in matches %}
+    <tr>
+        <td><a href="http://www.marinespecies.org/aphia.php?p=taxdetails&amp;id={{mtch_worms.aphia_id}}">
+            {{mtch_worms.aphia_id}}</a>
+        </td>
+        <td>{{mtch_worms.status}}
+            {% if mtch_worms.status != "accepted" %}
+            {% if mtch_worms.unacceptreason %}
+            :&nbsp;{{mtch_worms.unacceptreason}}
+            {% else %}
+            ->&nbsp;{{mtch_worms.valid_name}}
+            {% endif %}
+            {% endif %}
+        </td>
+        <td>{{mtch_us.id}}</td>
+        <td>{{mtch_us.name}}</td>
+        <td>{{mtch_us.nbrobj}}</td>
+        <td>{{mtch_us.taxotype}}</td>
+        <td>{{mtch_us.taxostatus}}</td>
+    </tr>
+    {% endfor %}
+</table>
+
+</body>
+<script>
+$(document).ready( function () {
+    $('#matches').DataTable( {
+        "pageLength": 50
+    } );
+} );
+
+</script>
+</html>

@@ -1,4 +1,7 @@
-# Back-end reqs
+#
+# Note: Tox does not manage dependencies changes. Remove .tox directory after changes here.
+#
+# START OF BACK-END REQUIREMENTS
 SQLAlchemy==1.3.17
 sqlalchemy-stubs==0.3
 # Extra typings
@@ -16,7 +19,12 @@ gunicorn==20.0.4
 httpx==0.13.3
 lxml==4.5.1
 requests==2.24.0
+# Auth validation
 itsdangerous==1.1.0
+# A bit of html
+jinja2==2.11.2
+aiofiles==0.5.0
+# END OF BACK-END REQUIREMENTS
 # Testing & QA additions
 tox==3.19.0
 pytest==6.0.1
