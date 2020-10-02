@@ -8,6 +8,7 @@ from typing import Dict, Optional, Tuple, List
 
 import httpx
 import requests
+from httpx import HTTPError
 
 from DB import Session, Taxonomy
 
@@ -136,15 +137,15 @@ class WoRMSFinder(object):
         req = cls.WoRMS_URL_ClassifChildrenByAphia % (aphia_id, chunk_num)
         response = await cls.client.get(cls.BASE_URL + req)
         if response.status_code == 204:
-            # No  content
+            # No content
             pass
         elif response.status_code == 200:
             ret = response.json()
             if len(ret) == cls.CHUNK_SIZE:
-                next_page = await cls.aphia_children_by_id(aphia_id, page+1)
+                next_page = await cls.aphia_children_by_id(aphia_id, page + 1)
                 ret.extend(next_page)
         else:
-            raise Exception("Unexpected %s" % response)
+            raise HTTPError("%d trying %s" % (response.status_code, req))
         return ret
 
     @classmethod

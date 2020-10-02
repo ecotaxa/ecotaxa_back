@@ -6,7 +6,7 @@ import tempfile
 from collections import deque
 from typing import Dict, Set, List, Tuple
 
-from httpx import ReadTimeout
+from httpx import ReadTimeout, HTTPError
 
 from BO.Rights import RightsBO
 from DB import Taxonomy, Role
@@ -125,6 +125,9 @@ class TaxonomyChangeService(Service):  # pragma:nocover
                 break
             except ReadTimeout:
                 logger.warning("Timeout for %d.", id_to_fetch)
+                continue
+            except HTTPError as e:
+                logger.warning("HTTP exception %s for %d.", str(e), id_to_fetch)
                 continue
             # Report progress
             if len(children_ids) > 0:
