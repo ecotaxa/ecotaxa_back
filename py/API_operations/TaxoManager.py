@@ -143,9 +143,9 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         # REST calls limit
         if self.nb_queries > self.max_queries:
             raise ResourceWarning("Not making more than %d queries", self.max_queries)
-        self.nb_queries += 1
-        # It looks like the parent is returned with its children
-        children = await WoRMSFinder.aphia_children_by_id(parent_aphia_id)
+        # Note: It looks like the parent is returned with its children
+        children, nb_queries = await WoRMSFinder.aphia_children_by_id(parent_aphia_id)
+        self.nb_queries += nb_queries
         children_ids = set()
         added_children = []
         for a_child in children:

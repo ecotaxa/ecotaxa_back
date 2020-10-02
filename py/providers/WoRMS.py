@@ -11,6 +11,7 @@ import requests
 from httpx import HTTPError
 
 from DB import Session, Taxonomy
+from helpers.Asyncio import async_sleep
 
 
 class WoRMSFinder(object):
@@ -18,7 +19,7 @@ class WoRMSFinder(object):
         A utility for finding in WoRMS service the equivalent of a given entry in Taxonomy.
     """
     BASE_URL = "http://www.marinespecies.org"
-    client = httpx.AsyncClient(base_url=BASE_URL)
+    client = httpx.AsyncClient(base_url=BASE_URL, timeout=5)
 
     taxo_cache: Dict[int, Taxonomy] = {}
 
@@ -131,22 +132,26 @@ class WoRMSFinder(object):
     CHUNK_SIZE = 50
 
     @classmethod
-    async def aphia_children_by_id(cls, aphia_id: int, page=0) -> List[Dict]:
-        ret: List[Dict] = []
+    async def aphia_children_by_id(cls, aphia_id: int, page=0) -> Tuple[List[Dict], int]:
+        # Throttle to 1 req/s
+        await async_sleep(1)
+        res: List[Dict] = []
         chunk_num = page * cls.CHUNK_SIZE + 1
         req = cls.WoRMS_URL_ClassifChildrenByAphia % (aphia_id, chunk_num)
+        nb_queries = 1
         response = await cls.client.get(cls.BASE_URL + req)
         if response.status_code == 204:
             # No content
             pass
         elif response.status_code == 200:
-            ret = response.json()
-            if len(ret) == cls.CHUNK_SIZE:
-                next_page = await cls.aphia_children_by_id(aphia_id, page + 1)
-                ret.extend(next_page)
+            res = response.json()
+            if len(res) == cls.CHUNK_SIZE:
+                next_page, cont_queries = await cls.aphia_children_by_id(aphia_id, page + 1)
+                res.extend(next_page)
+                nb_queries += cont_queries
         else:
             raise HTTPError("%d trying %s" % (response.status_code, req))
-        return ret
+        return res, nb_queries
 
     @classmethod
     def get_session(cls):
