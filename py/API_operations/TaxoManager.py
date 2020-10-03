@@ -2,6 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import random
 import tempfile
 from collections import deque
 from typing import Dict, Set, List, Tuple
@@ -101,6 +102,10 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         ret.modified = a_child["modified"]
         return ret
 
+    def _random_add_to_fetch(self, to_add: List[int]):
+        random.shuffle(to_add)
+        self.to_fetch.extend(to_add)
+
     async def _do_refresh(self):
         """
             Do the real job.
@@ -111,7 +116,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         self.existing_ids = {rec[0]: rec[1] for rec in qry.all()}
         logger.info("Existing: %d entries", len(self.existing_ids))
         # What was not fetched needs to be
-        self.to_fetch.extend([an_id for an_id in self.existing_ids if not self.existing_ids[an_id]])
+        self._random_add_to_fetch([an_id for an_id in self.existing_ids if not self.existing_ids[an_id]])
         # Loop until all was refreshed
         while True:
             try:
@@ -131,9 +136,11 @@ class TaxonomyChangeService(Service):  # pragma:nocover
                 continue
             # Report progress
             if len(children_ids) > 0:
-                logger.info("Added to DB: %s, %d queries done.", children_ids, self.nb_queries)
-            # Add the children to the explore
-            self.to_fetch.extend(children_ids)
+                logger.info("Added to DB for %d: %s, %d queries done.", id_to_fetch, children_ids, self.nb_queries)
+            else:
+                logger.info("No child for {%d}, %d queries done.", id_to_fetch, self.nb_queries)
+            # Add the children to the explore, in a random way
+            self._random_add_to_fetch(list(children_ids))
         logger.info("Done, %d items remaining to fetch.", len(self.to_fetch))
 
     async def _add_children_of(self, parent_aphia_id: int) -> Set[int]:
