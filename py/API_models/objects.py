@@ -34,3 +34,9 @@ class ObjectSetRevertToHistoryRsp(BaseModel):
     # TODO: Below is ClassifSetInfoT but this defeats openapi generator
     classif_info: Dict[int, Any] = Field(title="Classification names (self+parent) for involved IDs",
                                           default={})
+
+class ClassifyReq(BaseModel):
+    target_ids: List[int] = Field(title="The IDs of the target objects")
+    classifications: List[int] = Field(title="The wanted new classifications, i.e. taxon ID, one for each object. "
+                                            " Use -1 to keep present one.")
+    wanted_qualification: str = Field(title="The wanted qualifications for all objects. 'V' and 'P'.")

@@ -8,23 +8,29 @@
 #
 # The set comprises all objects from a Project, except the ones filtered by a set of criteria.
 #
-from typing import Tuple, Optional, List, Iterator, Callable
+from collections import OrderedDict
+from typing import Tuple, Optional, List, Iterator, Callable, Dict
 
-from sqlalchemy import select, text, func
+from sqlalchemy import select, text, func, true
+# A Postgresl insert generator, needed for the key conflict clause
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.engine import ResultProxy
 
 from API_models.crud import ProjectFilters, ColUpdateList
-from BO.Classification import HistoricalClassif
+from BO.Classification import HistoricalClassif, ClassifIDListT
 from BO.Project import ProjectIDListT
 from BO.Taxonomy import TaxonomyBO
+from BO.User import UserIDT
 from BO.helpers.MappedTable import MappedTable
 from DB import Project, ObjectHeader, Image, and_
 from DB.Object import ObjectsClassifHisto, ObjectFields
-from DB.helpers.ORM import Session, Query, Delete, Update, Insert, any_, postgresql, or_, case, not_
+from DB.helpers.ORM import Session, Query, Delete, Update, Insert, any_, postgresql, or_, case
 from DB.helpers.SQL import WhereClause, SQLParamDict
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
 # Typings, to be clear that these are not e.g. project IDs
+ObjectIDT = int
 ObjectIDListT = List[int]
 # Object_id + parents
 ObjectIDWithParentsListT = List[Tuple[int, int, int, int]]
@@ -62,6 +68,9 @@ class EnumeratedObjectSet(MappedTable):
     def __init__(self, session: Session, object_ids: ObjectIDListT):
         super().__init__(session)
         self.object_ids = object_ids
+
+    def add(self, object_id: ObjectIDT):
+        self.object_ids.append(object_id)
 
     def __len__(self):
         return len(self.object_ids)
@@ -141,7 +150,7 @@ class EnumeratedObjectSet(MappedTable):
             Reset to Predicted state, keeping log, i.e. history, of previous change.
         """
         oh = ObjectHeader
-        self.historize_classification(oh, ['V', 'D'])
+        self.historize_classification(['V', 'D'])
 
         # Update objects table
         obj_upd_qry: Update = oh.__table__.update()
@@ -153,23 +162,39 @@ class EnumeratedObjectSet(MappedTable):
 
         self.session.commit()
 
-    def historize_classification(self, oh, only_qual):
+    def update(self, params: Dict) -> int:
+        """
+            Update self's objects using given parameters, dict of column names and values.
+        """
+        # Update objects table
+        obj_upd_qry: Update = ObjectHeader.__table__.update()
+        obj_upd_qry = obj_upd_qry.where(ObjectHeader.objid == any_(self.object_ids))
+        obj_upd_qry = obj_upd_qry.values(params)
+        updated_objs = self.session.execute(obj_upd_qry).rowcount
+        return updated_objs
+
+    def historize_classification(self, only_qual=None):
         """
            Copy current classification information into history table, for all rows in self.
+           :param only_qual: If set, only historize for current rows with this classification.
         """
         # Light up a bit the SQLA expressions
+        oh = ObjectHeader
         och = ObjectsClassifHisto
         # What we want to historize, as a subquery
         sel_subqry = select([oh.objid, oh.classif_when, text("'M'"), oh.classif_id,
                              oh.classif_qual, oh.classif_who])
+        if only_qual is not None:
+            qual_cond = oh.classif_qual.in_(only_qual)
+        else:
+            qual_cond = true()
         sel_subqry = sel_subqry.where(and_(oh.objid == any_(self.object_ids),
-                                           (oh.classif_qual.in_(only_qual)),
-                                           (oh.classif_when is not None)
+                                           oh.classif_when.isnot(None),
+                                           qual_cond
                                            )
                                       )
         # Insert into the log table
-        from sqlalchemy.dialects.postgresql import insert
-        ins_qry: Insert = insert(och.__table__)
+        ins_qry: Insert = pg_insert(och.__table__)
         ins_qry = ins_qry.from_select([och.objid, och.classif_date, och.classif_type, och.classif_id,
                                        och.classif_qual, och.classif_who], sel_subqry)
         ins_qry = ins_qry.on_conflict_do_nothing(constraint='objectsclassifhisto_pkey')
@@ -186,7 +211,7 @@ class EnumeratedObjectSet(MappedTable):
         upd0 = updates[0]
         if upd0["ucol"] in ObjectHeader.__dict__:
             if upd0["ucol"] == "classif_id":
-                self.historize_classification(ObjectHeader, ['V', 'D', 'P', None])
+                self.historize_classification()
             return self._apply_on_all_non_mapped(ObjectHeader, updates)
         else:
             return self._apply_on_all(ObjectFields, project, updates)
@@ -221,7 +246,7 @@ class EnumeratedObjectSet(MappedTable):
                                  subqry.c.classif_type,
                                  func.coalesce(subqry.c.classif_id, ObjectHeader.classif_auto_id).label("h_classif_id"),
                                  func.coalesce(subqry.c.classif_qual,
-                                               case([(not_(ObjectHeader.classif_auto_id.is_(None)), 'P')])),
+                                               case([(ObjectHeader.classif_auto_id.isnot(None), 'P')])),
                                  subqry.c.classif_who)
         qry = qry.join(subqry, ObjectHeader.objid == subqry.c.objid, isouter=(from_user_id is None))
         if from_user_id is not None:
@@ -266,6 +291,80 @@ class EnumeratedObjectSet(MappedTable):
         """
         histo = self._get_last_classif_history(from_user_id, but_not_from_user_id)
         return histo
+
+    def classify_validate(self, user_id: UserIDT, classif_ids: ClassifIDListT, wanted_qualif: str) \
+            -> Tuple[int, Dict[Tuple, ObjectIDListT]]:
+        """
+            Set current classifications in self and/or validate current classification.
+            :param user_id: The User who did these changes.
+            :param classif_ids: One category id for each of the object ids in self. -1 means "keep current".
+            :returns updated rows and a summary of changes, for MRU and logging.
+        """
+        # Gather state of classification, for impacted objects, before the change. Keep a lock on rows.
+        qry = select([ObjectHeader.objid,
+                      ObjectHeader.classif_auto_id, ObjectHeader.classif_auto_when, ObjectHeader.classif_auto_score,
+                      ObjectHeader.classif_id, ObjectHeader.classif_qual,
+                      ObjectHeader.classif_who, ObjectHeader.classif_when]).with_for_update(key_share=True)
+        qry = qry.where(ObjectHeader.objid == any_(self.object_ids))
+        logger.info("Fetch with lock: %s", qry)
+        res: ResultProxy = self.session.execute(qry)
+        prev = {rec['objid']: rec for rec in res.fetchall()}
+
+        # Cook a diff b/w present and wanted values, both for the update of obj_head and preparing the ones on _stat
+        # Group the updates as lots of them are identical
+        updates: Dict[Tuple, EnumeratedObjectSet] = {}
+        all_changes: OrderedDict[Tuple, List[int]] = OrderedDict()
+        # A bit of obsessive optimization
+        classif_id_col = ObjectHeader.classif_id.name
+        classif_qual_col = ObjectHeader.classif_qual.name
+        classif_who_col = ObjectHeader.classif_who.name
+        classif_when_col = ObjectHeader.classif_when.name
+        for obj_id, v in zip(self.object_ids, classif_ids):
+            prev_obj = prev[obj_id]
+            prev_classif_id: Optional[int] = prev_obj['classif_id']
+            new_classif_id: Optional[int]
+            if v == -1:  # special value from validate all
+                # Arrange that no change can happen for this field
+                # Note: prev_classif_id can be None
+                new_classif_id = prev_classif_id
+            else:
+                new_classif_id = v
+            prev_classif_qual = prev_obj['classif_qual']
+            if (prev_classif_id == new_classif_id
+                    and prev_classif_qual == wanted_qualif
+                    and prev_obj['classif_who'] == user_id):
+                continue
+            # There was at least 1 field change for this object
+            an_update = updates.setdefault((new_classif_id, wanted_qualif), EnumeratedObjectSet(self.session, []))
+            an_update.add(obj_id)
+            # Compact changes, grouped by operation
+            change_key = (prev_classif_id, prev_classif_qual, new_classif_id, wanted_qualif)
+            for_this_change = all_changes.setdefault(change_key, [])
+            for_this_change.append(obj_id)
+            # Keep the recently used in first
+            all_changes.move_to_end(change_key, last=False)
+
+        if len(updates) == 0:
+            # Nothing to do
+            return 0, all_changes
+
+        # Update of obj_head, grouped by simlar operations.
+        nb_updated = 0
+        sql_now = text("now()")
+        for (new_classif_id, wanted_qualif), an_obj_set in updates.items():
+            # Historize the updated rows (can be a lot!)
+            an_obj_set.historize_classification()
+            row_upd = {classif_id_col: new_classif_id,
+                       classif_qual_col: wanted_qualif,
+                       classif_who_col: user_id,
+                       classif_when_col: sql_now}
+            # Do the update itsef
+            nb_updated += an_obj_set.update(row_upd)
+
+        logger.info("%d rows updated in %d queries", nb_updated, len(updates))
+
+        # Return statuses
+        return nb_updated, all_changes
 
 
 class ObjectSetFilter(object):

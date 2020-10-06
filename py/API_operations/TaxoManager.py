@@ -2,6 +2,8 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+# Managing (i.e. not for end-user) services around taxonomy tree
+#
 import tempfile
 from collections import deque
 from typing import Dict, Set, List, Tuple

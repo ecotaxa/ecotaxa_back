@@ -2,14 +2,16 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Tuple, List, Optional, Set
+from typing import Tuple, List, Optional, Set, Dict
 
 from API_models.crud import ProjectFilters, ColUpdateList
-from BO.Classification import HistoricalClassif, ClassifIDSetT
+from BO.Classification import HistoricalClassif, ClassifIDSetT, ClassifIDListT
 from BO.ObjectSet import DescribedObjectSet, ObjectIDListT, EnumeratedObjectSet, ObjectIDWithParentsListT
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
+from BO.User import UserIDT
+from DB import Project
 from DB.helpers.ORM import ResultProxy
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
@@ -92,18 +94,26 @@ class ObjectManager(Service):
         # Stats depend on taxo stats
         ProjectBO.update_stats(self.session, proj_id)
 
-    def update_set(self, current_user_id: int, target_ids: ObjectIDListT, updates: ColUpdateList) -> int:
+    def _the_project_for(self, current_user_id: int, target_ids: ObjectIDListT, action: Action) \
+            -> Tuple[EnumeratedObjectSet, Project]:
         """
-            Update the given set using provided updates.
+            Check _the_ single project for an object set, with the given right.
         """
-        # Get project IDs for the processes and verify rights
+        # Get project IDs for the objects and verify rights
         object_set = EnumeratedObjectSet(self.session, target_ids)
         prj_ids = object_set.get_projects_ids()
         # All should be in same project, so far
         assert len(prj_ids) == 1, "Too many or no projects for objects: %s" % target_ids
         prj_id = prj_ids[0]
-        _user, project = RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, prj_id)
+        _user, project = RightsBO.user_wants(self.session, current_user_id, action, prj_id)
         assert project  # for mypy
+        return object_set, project
+
+    def update_set(self, current_user_id: int, target_ids: ObjectIDListT, updates: ColUpdateList) -> int:
+        """
+            Update the given set, using provided updates.
+        """
+        object_set, project = self._the_project_for(current_user_id, target_ids, Action.ADMINISTRATE)
         return object_set.apply_on_all(project, updates)
 
     def revert_to_history(self, current_user_id: int, proj_id: int,
@@ -140,7 +150,7 @@ class ObjectManager(Service):
             ProjectBO.update_taxo_stats(self.session, proj_id)
             # Stats depend on taxo stats
             ProjectBO.update_stats(self.session, proj_id)
-        # Give feeback
+        # Give feedback
         return impact, classifs
 
     def collect_classif(self, histo: List[HistoricalClassif]) -> ClassifIDSetT:
@@ -155,3 +165,43 @@ class ObjectManager(Service):
         if None in ret:
             ret.remove(None)
         return ret
+
+    def classify_set(self, current_user_id: UserIDT, target_ids: ObjectIDListT, classif_ids: ClassifIDListT,
+                     wanted_qualif: str) -> Tuple[int, int, Dict]:
+        """
+            Classify or validate/set to dubious a set of objects.
+        """
+        # Get the objects and project, checking rights at the same time.
+        object_set, project = self._the_project_for(current_user_id, target_ids, Action.ANNOTATE)
+        # Do the raw classification with history.
+        nb_upd, all_changes = object_set.classify_validate(current_user_id, classif_ids, wanted_qualif)
+        # Propagate changes to update projects_taxo_stat
+        if nb_upd > 0:
+            # Log a bit
+            for a_chg, impacted in all_changes.items():
+                logger.info("change %s for %s", a_chg, impacted)
+            # Collate changes
+            collated_changes: Dict[int, Dict] = {}
+            for (prev_classif_id, prev_classif_qual, new_classif_id, wanted_qualif), objects in all_changes.items():
+                # Decrement for what was before
+                self.count_in_and_out(collated_changes, prev_classif_id, prev_classif_qual, -len(objects))
+                # Increment for what arrives
+                self.count_in_and_out(collated_changes, new_classif_id, wanted_qualif, len(objects))
+            # Update the table
+            ProjectBO.incremental_update_taxo_stats(self.session, project.projid, collated_changes)
+            self.session.commit()
+        else:
+            self.session.rollback()
+        # Return status
+        return nb_upd, project.projid, all_changes
+
+    @staticmethod
+    def count_in_and_out(cumulated_changes, classif_id, qualif, inc_or_dec):
+        """ Cumulate change +/- for a given taxon """
+        if classif_id is None:
+            classif_id = -1  # Unclassified
+        changes_for_id = cumulated_changes.setdefault(classif_id, {'n': 0, 'V': 0, 'P': 0, 'D': 0})
+        changes_for_id['n'] += inc_or_dec
+        if qualif in ('V', 'P', 'D'):
+            changes_for_id[qualif] += inc_or_dec
+

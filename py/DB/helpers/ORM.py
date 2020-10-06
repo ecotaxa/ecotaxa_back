@@ -5,7 +5,7 @@
 from typing import Optional, Iterable, Tuple, List, Set, Dict, TypeVar, Type, Any
 
 # noinspection PyUnresolvedReferences
-from sqlalchemy import Column, inspect, MetaData, Table, any_ as _pg_any, not_, and_, or_, func, case
+from sqlalchemy import Column, inspect, MetaData, Table, any_ as _pg_any, not_, and_, or_, func, case, text, select
 # noinspection PyUnresolvedReferences
 from sqlalchemy.dialects import postgresql
 # noinspection PyUnresolvedReferences
@@ -18,6 +18,8 @@ from sqlalchemy.orm import Session, Query, make_transient, contains_eager
 from sqlalchemy.orm import relationship
 # noinspection PyUnresolvedReferences
 from sqlalchemy.sql import Insert, Update, Delete
+# noinspection PyUnresolvedReferences
+from sqlalchemy.sql.functions import concat
 
 _Base = declarative_base()
 

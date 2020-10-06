@@ -8,8 +8,7 @@ import os
 from typing import Union, Tuple
 
 from fastapi import FastAPI, Request, Response, status, Depends, HTTPException
-from fastapi.responses import StreamingResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import StreamingResponse
 from fastapi.templating import Jinja2Templates
 from fastapi_utils.timing import add_timing_middleware
 
@@ -17,8 +16,9 @@ from API_models.crud import *
 from API_models.exports import EMODNetExportReq, EMODNetExportRsp
 from API_models.imports import *
 from API_models.merge import MergeRsp
-from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp
+from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp, ClassifyReq
 from API_models.subset import SubsetReq, SubsetRsp
+from API_models.taxonomy import TaxaSearchRsp
 from API_operations.CRUD.ObjectParents import SamplesService, AcquisitionsService, ProcessesService
 from API_operations.CRUD.Projects import ProjectsService, ProjectSearchResult
 from API_operations.CRUD.Users import UserService
@@ -29,6 +29,7 @@ from API_operations.ObjectManager import ObjectManager
 from API_operations.Status import StatusService
 from API_operations.Subset import SubsetService
 from API_operations.TaxoManager import TaxonomyChangeService
+from API_operations.TaxonomyService import TaxonomyService
 from API_operations.exports.EMODnet import EMODNetExport
 from API_operations.helpers.Service import Service
 from API_operations.imports.Import import ImportAnalysis, RealImport
@@ -37,7 +38,8 @@ from BO.ObjectSet import ObjectIDListT
 from BO.Project import ProjectBO
 from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger
-from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower
+from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower, \
+    get_optional_current_user
 from helpers.starlette import PlainTextResponse
 from providers.WoRMS import WoRMSFinder
 
@@ -57,7 +59,7 @@ add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
 
 # HTML stuff
 # app.mount("/styles", StaticFiles(directory="pages/styles"), name="styles")
-templates = Jinja2Templates(directory=os.path.dirname(__file__)+"/pages/templates")
+templates = Jinja2Templates(directory=os.path.dirname(__file__) + "/pages/templates")
 # Below is useless if proxied by legacy app
 CDNs = " ".join(["cdn.datatables.net"])
 CRSF_header = {
@@ -96,7 +98,9 @@ def show_current_user(current_user: int = Depends(get_current_user)):
 
 
 @app.get("/users/my_preferences/{project_id}", tags=['users'], response_model=str)
-def get_current_user_prefs(project_id: int, key: str, current_user: int = Depends(get_current_user)) -> str:
+def get_current_user_prefs(project_id: int,
+                           key: str,
+                           current_user: int = Depends(get_current_user)) -> str:
     """
         Return one preference, for project and currently authenticated user.
     """
@@ -105,7 +109,10 @@ def get_current_user_prefs(project_id: int, key: str, current_user: int = Depend
 
 
 @app.put("/users/my_preferences/{project_id}", tags=['users'])
-def set_current_user_prefs(project_id: int, key: str, value: str, current_user: int = Depends(get_current_user)):
+def set_current_user_prefs(project_id: int,
+                           key: str,
+                           value: str,
+                           current_user: int = Depends(get_current_user)):
     """
         Set one preference, for project and currently authenticated user.
 
@@ -383,6 +390,23 @@ def update_object_set(req: BulkUpdateReq,
         return sce.update_set(current_user, req.target_ids, req.updates)
 
 
+@app.post("/object_set/classify", tags=['objects'])
+def classify_object_set(req: ClassifyReq,
+                        current_user: int = Depends(get_current_user)) -> int:
+    """
+        Change classification and/or qualification for a set of objects.
+        Current user needs at least Annotate right on all projects of specified objects.
+    """
+    sce = ObjectManager()
+    assert len(req.target_ids) == len(req.classifications), "Need the same number of objects and classifications"
+    with RightsThrower():
+        ret, prj_id, changes = sce.classify_set(current_user, req.target_ids, req.classifications,
+                                                req.wanted_qualification)
+    last_classif_ids = [change[2] for change in changes.keys()]  # Recently used are in first
+    UserService().update_classif_mru(current_user, prj_id, last_classif_ids)
+    return ret
+
+
 @app.post("/export/emodnet", tags=['WIP'], include_in_schema=False, response_model=EMODNetExportRsp)  # pragma:nocover
 def emodnet_format_export(params: EMODNetExportReq,
                           current_user: int = Depends(get_current_user)):
@@ -394,6 +418,29 @@ def emodnet_format_export(params: EMODNetExportReq,
     sce = EMODNetExport(params)
     with RightsThrower():
         return sce.run(current_user)
+
+
+@app.get("/taxa/search", tags=['Taxonomy Tree'], response_model=List[TaxaSearchRsp])
+async def search_taxa(query: str,
+                      project_id: Optional[int],
+                      current_user: Optional[int] = Depends(get_optional_current_user)):
+    """
+        Search for taxa by name.
+
+        Queries can be 'small', i.e. of length < 3 and even zero-length.
+        For a public, unauthenticated call:
+        - zero-length and small queries always return nothing.
+        - otherwise, a full search is done and results are returned in alphabetical order.
+
+        Behavior for an authenticated call:
+        - zero-length queries: return the MRU list in full.
+        - small queries: the MRU list is searched, so that taxa in the recent list are returned, if matching.
+        - otherwise, a full search is done. Results are ordered so that taxa in the project list are in first,
+            and are signalled as such in the response.
+    """
+    sce = TaxonomyService()
+    ret = sce.search(current_user_id=current_user, prj_id=project_id, query=query)
+    return ret
 
 
 @app.get("/taxon/resolve/{our_id}", tags=['WIP'], include_in_schema=False,

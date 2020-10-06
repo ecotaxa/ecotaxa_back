@@ -7,7 +7,7 @@
 import sys
 import traceback
 from os.path import dirname
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -38,7 +38,7 @@ async def internal_server_error_handler(_request: Any, exc: Exception) -> PlainT
 
 
 # In a development environment, dump the API definition at each run
-def dump_openapi(app: FastAPI, main_path: str): # pragma: no cover
+def dump_openapi(app: FastAPI, main_path: str):  # pragma: no cover
     import sys
     if "--reload" not in sys.argv:
         return  # It's not dev
@@ -59,6 +59,9 @@ def dump_openapi(app: FastAPI, main_path: str): # pragma: no cover
 
 
 secured_scheme = HTTPBearer()
+# The same but not throwing an exception if user is not authenticated.
+# used for cases when authentication is optional
+secured_scheme_nothrow = HTTPBearer(auto_error=False)
 
 _credentials_exception = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -102,6 +105,19 @@ def _get_current_user(scheme, credentials) -> int:  # pragma: no cover
     if ret < 0:
         raise _credentials_exception
     return ret
+
+
+async def get_optional_current_user(creds: HTTPAuthorizationCredentials = Depends(secured_scheme_nothrow)) \
+        -> Optional[int]:
+    """
+        There _can_ be a user in the request, get the id if the case.
+    """
+    if creds is None:
+        return None
+    try:
+        return _get_current_user(creds.scheme, creds.credentials)
+    except HTTPException:
+        return None
 
 
 async def get_current_user(creds: HTTPAuthorizationCredentials = Depends(secured_scheme)) -> int:

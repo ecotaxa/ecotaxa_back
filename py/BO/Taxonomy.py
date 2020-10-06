@@ -6,10 +6,15 @@
 #
 from typing import List, Set, Dict, Tuple
 
-from BO.Classification import ClassifIDCollT, ClassifIDT
-from DB import ResultProxy, Session
+from BO.Classification import ClassifIDCollT, ClassifIDT, ClassifIDListT
+from DB import ResultProxy, Taxonomy
+from DB.helpers.ORM import Session, any_, case, concat, func, text, select
+from helpers.DynamicLogs import get_logger
 
 ClassifSetInfoT = Dict[ClassifIDT, Tuple[str, str]]
+
+logger = get_logger(__name__)
+
 
 class TaxonomyBO(object):
     """
@@ -36,7 +41,7 @@ class TaxonomyBO(object):
         res: ResultProxy = session.execute(
             """SELECT t.id, lower(t.name) AS name, lower(t.display_name) AS display_name, 
                       lower(t.name)||'<'||lower(p.name) AS computedchevronname 
-                FROM taxonomy t
+                 FROM taxonomy t
                 LEFT JOIN taxonomy p on t.parent_id = p.id
                 WHERE lower(t.name) = ANY(:nms) OR lower(t.display_name) = ANY(:dms) 
                     OR lower(t.name)||'<'||lower(p.name) = ANY(:chv) """,
@@ -59,7 +64,7 @@ class TaxonomyBO(object):
         ret = {}
         res: ResultProxy = session.execute(
             """SELECT t.id, t.name
-                FROM taxonomy t
+                 FROM taxonomy t
                 WHERE t.id = ANY(:ids) """,
             {"ids": id_list})
         for rec_taxon in res:
@@ -67,14 +72,29 @@ class TaxonomyBO(object):
         return ret
 
     @staticmethod
-    def names_with_parent_for(session: Session, id_coll: ClassifIDCollT) -> ClassifSetInfoT :
+    def display_names_for(session: Session, id_list: ClassifIDListT) -> Dict:
+        """
+            Get taxa display_names from id list.
+        """
+        ret = {}
+        res: ResultProxy = session.execute(
+            """SELECT t.id, t.display_name
+                 FROM taxonomy t
+                WHERE t.id = ANY(:ids) """,
+            {"ids": id_list})
+        for rec_taxon in res:
+            ret[rec_taxon['id']] = rec_taxon['display_name']
+        return ret
+
+    @staticmethod
+    def names_with_parent_for(session: Session, id_coll: ClassifIDCollT) -> ClassifSetInfoT:
         """
             Get taxa names from id list.
         """
         ret = {}
         res: ResultProxy = session.execute(
             """SELECT t.id, t.name, p.name AS parent_name
-                FROM taxonomy t
+                 FROM taxonomy t
                 LEFT JOIN taxonomy p ON t.parent_id = p.id
                 WHERE t.id = ANY(:ids) """,
             {"ids": list(id_coll)})
@@ -99,3 +119,57 @@ class TaxonomyBO(object):
                SELECT id FROM rq """,
             {"ids": id_list})
         return {int(r['id']) for r in res}
+
+    MAX_MATCHES = 200
+    MAX_TAXONOMY_LEVELS = 15
+
+    @classmethod
+    def query(cls, session: Session,
+              restrict_to: ClassifIDListT, priority_set: ClassifIDListT,
+              display_name_filter: str, name_filters: List[str]):
+        """
+        :param restrict_to: If not None, limit the query to given IDs.
+        :param priority_set: Regardless of MAX_MATCHES, these IDs must appear in the result if they match.
+        :param name_filters:
+        :return:
+        """
+        tf = Taxonomy.__table__.alias('tf')
+        # bind = None  # For portable SQL, no 'ilike'
+        bind = session.get_bind()
+        priority = case([(tf.c.id == any_(priority_set), text('0'))], else_=text('1')).label('prio')
+        qry = select([tf.c.id, tf.c.display_name, priority], bind=bind)
+        if len(name_filters) > 0:
+            # Inject a query on names and hierarchy
+            # Produced SQL looks like:
+            #       left join taxonomy t1 on tf.parent_id=t1.id
+            #       left join taxonomy t2 on t1.parent_id=t2.id
+            # ...
+            #       left join taxonomy t14 on t13.parent_id=t14.id
+            lineage_sep = text("'<'")
+            lev_alias = Taxonomy.__table__.alias('t1')
+            # Chain outer joins on Taxonomy
+            # hook the first OJ to main select
+            chained_joins = tf.join(lev_alias, lev_alias.c.id == tf.c.parent_id, isouter=True)
+            concat_all = [tf.c.name, lineage_sep, lev_alias.c.name]
+            prev_alias = lev_alias
+            for level in range(2, cls.MAX_TAXONOMY_LEVELS):
+                lev_alias = Taxonomy.__table__.alias('t%d' % level)
+                # hook each following OJ to previous one
+                chained_joins = chained_joins.join(lev_alias, lev_alias.c.id == prev_alias.c.parent_id, isouter=True)
+                # Collect expressions
+                concat_all.extend([lineage_sep, lev_alias.c.name])
+                prev_alias = lev_alias
+            qry = qry.select_from(chained_joins)
+            # Below is quite expensive
+            taxo_lineage = func.concat(*concat_all)
+            name_filter = "%<" + "".join(name_filters)  # i.e. anywhere consecutively in the lineage
+            qry = qry.where(taxo_lineage.ilike(name_filter))
+        if restrict_to is not None:
+            qry = qry.where(tf.c.id == any_(restrict_to))
+        # We have index IS_TaxonomyDispNameLow so this lower() is for free
+        qry = qry.where(func.lower(tf.c.display_name).like(display_name_filter))
+        qry = qry.order_by(priority, func.lower(tf.c.display_name))
+        qry = qry.limit(cls.MAX_MATCHES)
+        logger.info("Taxo query: %s with params %s and %s ", qry, display_name_filter, name_filters)
+        res: ResultProxy = session.execute(qry)
+        return res.fetchall()

@@ -3,8 +3,9 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from datetime import datetime
-from typing import List, Dict, Any, Iterable
+from typing import List, Dict, Any, Iterable, Optional
 
+from BO.Classification import ClassifIDListT
 from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFields, Acquisition, Process, \
@@ -23,8 +24,22 @@ ProjectIDListT = List[int]
 
 class ProjectBO(object):
     """
-        A Project business object. So far just a container for static API_operations involving it.
+        A Project business object. So far mainly a container for static API_operations involving it.
     """
+
+    def __init__(self, session: Session, prj_id: int):
+        self.project: Optional[Project] = session.query(Project).get(prj_id)
+
+    def get_preset(self) -> ClassifIDListT:
+        """
+            Return the list of preset classification IDs.
+        """
+        if not self.project:
+            return []
+        init_list = self.project.initclassiflist
+        if not init_list:
+            return []
+        return [int(cl_id) for cl_id in init_list.split(",")]
 
     @staticmethod
     def update_stats(session: Session, projid: int):
@@ -76,7 +91,7 @@ class ProjectBO(object):
                                 or if set to a number, filter out the projects of which ID does not match.
         :param instrument_filter: If set, filter out the projects which do not have given instrument in at least
                                      one sample.
-        :param filter_subset: If set, filter out project of which title contains 'subset'.
+        :param filter_subset: If set, filter out any project of which title contains 'subset'.
         :return:
         """
         sql_params: Dict[str, Any] = {"user_id": user.id}
@@ -255,3 +270,59 @@ class ProjectBO(object):
         mappings = ProjectMapping()
         mappings.load_from_project(prj)
         mappings.write_to_object(prj)
+
+    @classmethod
+    def incremental_update_taxo_stats(cls, session: Session, prj_id: int, collated_changes: Dict):
+        """
+            Do not recompute the full stats for a project (which can be long).
+            Instead, apply deltas because in this context we know them.
+            TODO: All SQL to SQLAlchemy form
+        """
+        needed_ids = list(collated_changes.keys())
+        # Lock taxo lines to prevent re-entering, during validation it's often a handful of them.
+        pts_sql = """SELECT id
+                       FROM taxonomy
+                      WHERE id = ANY(:ids)
+                     FOR NO KEY UPDATE
+        """
+        session.execute(pts_sql, {"ids": needed_ids})
+        # Lock the rows we are going to update
+        pts_sql = """SELECT id
+                       FROM projects_taxo_stat 
+                      WHERE projid = :prj
+                        AND id = ANY(:ids) 
+                     FOR NO KEY UPDATE"""
+        res = session.execute(pts_sql, {"prj": prj_id, "ids": needed_ids})
+        ids_in_db = set([classif_id for (classif_id,) in res.fetchall()])
+        ids_not_in_db = set(needed_ids).difference(ids_in_db)
+        if len(ids_not_in_db) > 0:
+            pts_ins = """INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
+                         SELECT :prj, classif_id, count(*) nbr, 
+                                COUNT(CASE WHEN classif_qual = 'V' THEN 1 END) nbr_v,
+                                COUNT(CASE WHEN classif_qual = 'D' THEN 1 END) nbr_d,
+                                COUNT(CASE WHEN classif_qual = 'P' THEN 1 END) nbr_p
+                           FROM obj_head
+                          WHERE projid = :prj AND classif_id = ANY(:ids)
+                       GROUP BY classif_id"""
+            session.execute(pts_ins, {'prj': prj_id, 'ids': list(ids_not_in_db)})
+            if -1 in ids_not_in_db:
+                # I guess, special case for unclassified
+                pts_ins = """INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
+                             SELECT :prj, -1, count(*) nbr, 
+                                    COUNT(CASE WHEN classif_qual = 'V' THEN 1 END) nbr_v,
+                                    COUNT(CASE WHEN classif_qual = 'D' THEN 1 END) nbr_d,
+                                    COUNT(CASE WHEN classif_qual = 'P' THEN 1 END) nbr_p
+                               FROM obj_head
+                              WHERE projid = :prj AND classif_id IS NULL"""
+                session.execute(pts_ins, {'prj': prj_id})
+        # Apply delta
+        for classif_id, chg in collated_changes.items():
+            if classif_id in ids_not_in_db:
+                # The line was created with OK values
+                continue
+            sqlparam = {'prj': prj_id, 'cid': classif_id,
+                        'nul': chg['n'], 'val': chg['V'], 'dub': chg['D'], 'prd': chg['P']}
+            ts_sql = """UPDATE projects_taxo_stat 
+                           SET nbr=nbr+:nul, nbr_v=nbr_v+:val, nbr_d=nbr_d+:dub, nbr_p=nbr_p+:prd 
+                         where projid = :prj AND id = :cid"""
+            session.execute(ts_sql, sqlparam)
