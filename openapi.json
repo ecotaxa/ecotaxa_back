@@ -1095,7 +1095,7 @@
           "objects"
         ],
         "summary":"Revert Object Set To History",
-        "description":"Revert all objects for the given project, with the filters, to the target.\n- param `dry_run`: If set, then no real write but consequences of the revert will be replied.\n- param `target`: Use null/None for reverting using the last annotation from anyone, or a user id\n    for the last annotation from this user.",
+        "description":"Revert all objects for the given project, with the filters, to the target.\n- param `filters`: The set of filters to apply to get the target objects.\n- param `dry_run`: If set, then no real write but consequences of the revert will be replied.\n- param `target`: Use null/None for reverting using the last annotation from anyone, or a user id\n    for the last annotation from this user.",
         "operationId":"revert_object_set_to_history_object_set__project_id__revert_to_history_post",
         "parameters":[
           {
@@ -1238,6 +1238,112 @@
             "content":{
               "application/json":{
                 "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/object_set/classify":{
+      "post":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Classify Object Set",
+        "description":"Change classification and/or qualification for a set of objects.\nCurrent user needs at least Annotate right on all projects of specified objects.",
+        "operationId":"classify_object_set_object_set_classify_post",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/ClassifyReq"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/taxa/search":{
+      "get":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Search Taxa",
+        "description":"Search for taxa by name.\n\nQueries can be 'small', i.e. of length < 3 and even zero-length.\nFor a public, unauthenticated call:\n- zero-length and small queries always return nothing.\n- otherwise, a full search is done and results are returned in alphabetical order.\n\nBehavior for an authenticated call:\n- zero-length queries: return the MRU list in full.\n- small queries: the MRU list is searched, so that taxa in the recent list are returned, if matching.\n- otherwise, a full search is done. Results are ordered so that taxa in the project list are in first,\n    and are signalled as such in the response.",
+        "operationId":"search_taxa_taxa_search_get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Query",
+              "type":"string"
+            },
+            "name":"query",
+            "in":"query"
+          },
+          {
+            "required":true,
+            "schema":{
+              "title":"Project Id",
+              "type":"integer"
+            },
+            "name":"project_id",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Search Taxa Taxa Search Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/TaxaSearchRsp"
+                  }
+                }
               }
             }
           },
@@ -1496,6 +1602,35 @@
             "title":"The updates, to do on all impacted entities",
             "type":"array",
             "items":{}
+          }
+        }
+      },
+      "ClassifyReq":{
+        "title":"ClassifyReq",
+        "required":[
+          "target_ids",
+          "classifications",
+          "wanted_qualification"
+        ],
+        "type":"object",
+        "properties":{
+          "target_ids":{
+            "title":"The IDs of the target objects",
+            "type":"array",
+            "items":{
+              "type":"integer"
+            }
+          },
+          "classifications":{
+            "title":"The wanted new classifications, i.e. taxon ID, one for each object.  Use -1 to keep present one.",
+            "type":"array",
+            "items":{
+              "type":"integer"
+            }
+          },
+          "wanted_qualification":{
+            "title":"The wanted qualifications for all objects. 'V' and 'P'.",
+            "type":"string"
           }
         }
       },
@@ -2373,6 +2508,29 @@
           }
         },
         "description":"Subset response. "
+      },
+      "TaxaSearchRsp":{
+        "title":"TaxaSearchRsp",
+        "required":[
+          "id",
+          "text",
+          "pr"
+        ],
+        "type":"object",
+        "properties":{
+          "id":{
+            "title":"The taxon/category IDs",
+            "type":"integer"
+          },
+          "text":{
+            "title":"The taxon name, display one.",
+            "type":"string"
+          },
+          "pr":{
+            "title":"1 if the taxon is in project list, 0 otherwise.",
+            "type":"integer"
+          }
+        }
       },
       "UserModel":{
         "title":"UserModel",

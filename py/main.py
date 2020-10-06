@@ -355,6 +355,7 @@ def revert_object_set_to_history(project_id: int,
                                  current_user: int = Depends(get_current_user)) -> ObjectSetRevertToHistoryRsp:
     """
         Revert all objects for the given project, with the filters, to the target.
+        - param `filters`: The set of filters to apply to get the target objects.
         - param `dry_run`: If set, then no real write but consequences of the revert will be replied.
         - param `target`: Use null/None for reverting using the last annotation from anyone, or a user id
             for the last annotation from this user.
