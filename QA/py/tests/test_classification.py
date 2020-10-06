@@ -51,7 +51,7 @@ def test_classif(config, database, fastapi, caplog):
 
     # Admin (me!) thinks that all is a copepod :)
     url = OBJECT_SET_CLASSIFY_URL
-    copepod_id = 45072  # TODO: Not a copepod :( but in DB
+    copepod_id = 25828
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
                                                       "classifications": [copepod_id for _obj in obj_ids],
                                                       "wanted_qualification": "V"})
