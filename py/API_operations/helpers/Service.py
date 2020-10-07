@@ -25,7 +25,7 @@ class BaseService(object):
 #    host    all             all             172.17.0.2/32           md5 or peer or trust
 # as running docker processes are on 172.17.0.2
 #
-def _get_default_gateway():
+def _get_default_gateway():  # pragma: no cover
     # TODO: somewhere else
     for a_line in open('/proc/net/route').readlines():
         # Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT
@@ -40,7 +40,7 @@ def _get_default_gateway():
     return ""
 
 
-def _turn_localhost_for_docker(host: str, _port: str):
+def _turn_localhost_for_docker(host: str, _port: str):  # pragma: no cover
     """ Turn localhost to the address as seen from inside the container
         For win & mac0s there is a solution, environment var host.docker.internal
          but https://github.com/docker/for-linux/issues/264
@@ -77,7 +77,7 @@ class Service(BaseService):
                 port = '5432'
             host = _turn_localhost_for_docker(config['DB_HOST'], port)
             conn = Connection(host=host, port=port, db=config['DB_DATABASE'],
-                                                user=config['DB_USER'], password=config['DB_PASSWORD'])
+                              user=config['DB_USER'], password=config['DB_PASSWORD'])
             Service.the_connection = conn
         else:
             conn = Service.the_connection

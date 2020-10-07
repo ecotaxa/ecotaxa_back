@@ -132,7 +132,7 @@ class WoRMSFinder(object):
     CHUNK_SIZE = 50
 
     @classmethod
-    async def aphia_children_by_id(cls, aphia_id: int, page=0) -> Tuple[List[Dict], int]:
+    async def aphia_children_by_id(cls, aphia_id: int, page=0) -> Tuple[List[Dict], int]:  # pragma:nocover
         # Throttle to 1 req/s
         await async_sleep(1)
         res: List[Dict] = []

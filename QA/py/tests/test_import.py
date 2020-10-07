@@ -263,6 +263,9 @@ def test_import_update(config, database, caplog):
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
     print("\n".join(caplog.messages))
     assert nb_upds == 2
+    # 1 line corresponds to nothing, on purpose
+    nb_notfound = len([msg for msg in caplog.messages if "not found while updating" in msg])
+    assert nb_notfound == 1
     dump_sce.run(projid=prj_id, out='after_upd.txt')
     # Check that all went fine
     for a_msg in caplog.records:

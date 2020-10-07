@@ -108,7 +108,7 @@ def _get_current_user(scheme, credentials) -> int:  # pragma: no cover
 
 
 async def get_optional_current_user(creds: HTTPAuthorizationCredentials = Depends(secured_scheme_nothrow)) \
-        -> Optional[int]:
+        -> Optional[int]:  # pragma: no cover
     """
         There _can_ be a user in the request, get the id if the case.
     """

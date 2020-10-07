@@ -47,26 +47,22 @@ def orm_equals(an_obj: Model, another_obj: Model) -> bool:
     return True
 
 
-def clone_of(an_obj: Optional[M]) -> Optional[M]:
+def clone_of(an_obj: M) -> M:
     """
         Return a clone (same class, same plain values) of the ORM-mapped object.
         Keys are not copied, for safety.
-        None in, None out.
         :param an_obj:
         :return:
     """
-    if an_obj is None:
-        return None
     table = an_obj.__table__
     ret = an_obj.__class__()
     a_col: Column
     for a_col in table.columns:
-        col_name = a_col.name
         if a_col.primary_key or a_col.foreign_keys:
-            pass
-        else:
-            val = getattr(an_obj, col_name)
-            setattr(ret, col_name, val)
+            continue
+        col_name = a_col.name
+        val = getattr(an_obj, col_name)
+        setattr(ret, col_name, val)
     return ret
 
 
@@ -92,17 +88,6 @@ def detach_from_session_if(condition: bool, session: Session, an_orm: M) -> M:
         return detach_from_session(session, an_orm)
     else:
         return an_orm
-
-
-def detach_all_from_session(session: Session, an_orm_collection: Iterable[Model]) -> None:
-    """
-        Detach from the session all object in the given Container.
-        :param session:
-        :param an_orm_collection: An iterable of SQLAlchemy produced instance.
-        :return:
-    """
-    for an_orm in an_orm_collection:
-        detach_from_session(session, an_orm)
 
 
 # key = table name

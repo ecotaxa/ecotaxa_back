@@ -445,12 +445,12 @@ async def search_taxa(query: str,
 
 
 @app.get("/taxon/resolve/{our_id}", tags=['WIP'], include_in_schema=False,
-         status_code=status.HTTP_200_OK)  # pragma:nocover
+         status_code=status.HTTP_200_OK)
 async def resolve_taxon(our_id: int,
                         response: Response,
                         text_response: bool = False,
                         _current_user: int = Depends(get_current_user)) \
-        -> Union[PlainTextResponse, Tuple]:
+        -> Union[PlainTextResponse, Tuple]:  # pragma:nocover
     """
         Resolve in WoRMs the given taxon.
         :param our_id: The ID from taxonomy table.

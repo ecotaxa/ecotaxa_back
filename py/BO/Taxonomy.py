@@ -72,21 +72,6 @@ class TaxonomyBO(object):
         return ret
 
     @staticmethod
-    def display_names_for(session: Session, id_list: ClassifIDListT) -> Dict:
-        """
-            Get taxa display_names from id list.
-        """
-        ret = {}
-        res: ResultProxy = session.execute(
-            """SELECT t.id, t.display_name
-                 FROM taxonomy t
-                WHERE t.id = ANY(:ids) """,
-            {"ids": id_list})
-        for rec_taxon in res:
-            ret[rec_taxon['id']] = rec_taxon['display_name']
-        return ret
-
-    @staticmethod
     def names_with_parent_for(session: Session, id_coll: ClassifIDCollT) -> ClassifSetInfoT:
         """
             Get taxa names from id list.
