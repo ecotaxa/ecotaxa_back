@@ -348,7 +348,7 @@ class EnumeratedObjectSet(MappedTable):
             # Nothing to do
             return 0, all_changes
 
-        # Update of obj_head, grouped by simlar operations.
+        # Update of obj_head, grouped by similar operations.
         nb_updated = 0
         sql_now = text("now()")
         for (new_classif_id, wanted_qualif), an_obj_set in updates.items():

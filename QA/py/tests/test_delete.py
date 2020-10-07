@@ -5,6 +5,7 @@ import logging
 
 from starlette import status
 from API_operations.JsonDumper import JsonDumper
+from BO.Project import ProjectBO
 
 from tests.credentials import CREATOR_AUTH, ADMIN_USER_ID
 from tests.test_import import test_api_import_images

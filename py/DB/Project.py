@@ -72,7 +72,7 @@ class ProjectTaxoStat(Model):
     """
     __tablename__ = 'projects_taxo_stat'
     projid = Column(INTEGER, ForeignKey('projects.projid', ondelete="CASCADE"), primary_key=True)
-    # FK to Taxonomy
+    # FK to Taxonomy, but there is the special "-1" value (for unclassified) preventing an official FK
     id = Column(INTEGER, primary_key=True)
     nbr = Column(INTEGER)
     nbr_v = Column(INTEGER)

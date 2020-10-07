@@ -79,8 +79,7 @@ class MergeService(Service):
             mappings_for_src_tbl = src_mappings.by_table[a_tbl]
             # Compute the new mapping and eventual transformations to get there
             aug, remaps, errs = mappings_for_dest_tbl.augmented_with(mappings_for_src_tbl)
-            if len(errs) > 0:
-                ret.extend(errs)
+            ret.extend(errs)
             if len(remaps) > 0:
                 self.remap_operations[a_tbl] = remaps
             # Load future mapping

@@ -6,7 +6,6 @@ from fastapi import status
 from main import app
 
 from tests.credentials import ADMIN_AUTH, USER_AUTH, CREATOR_AUTH, ADMIN_USER_ID, USER2_AUTH
-from tests.test_import import test_import
 
 client = TestClient(app)
 
@@ -64,6 +63,7 @@ def test_create_project(config, database, fastapi, caplog):
 
 def test_clone_project(config, database, fastapi, caplog):
     caplog.set_level(logging.CRITICAL)
+    from tests.test_import import test_import
     prj_id = test_import(config, database, caplog, "Clone source")
     caplog.set_level(logging.DEBUG)
     url = "/projects/create"
@@ -130,10 +130,22 @@ def test_taxon_resolve(config, database, fastapi):
 
 def test_project_search(config, database, fastapi):
     url = "/projects/search"
+    # Ordinary user looking at own projects
+    response = client.get(url, headers=USER_AUTH, params={"also_others": False,
+                                                          "title_filter": "laur",
+                                                          "instrument_filter": "flow"})
+    assert response.json() == []
     # Ordinary user looking at all projects by curiosity
     response = client.get(url, headers=USER_AUTH, params={"also_others": True,
                                                           "title_filter": "laur",
                                                           "instrument_filter": "flow"})
+    assert response.json() == []
+    # Creator user looking at his subsets for removing them
+    response = client.get(url, headers=CREATOR_AUTH, params={"also_others": False,
+                                                             "title_filter": "tara",
+                                                             "instrument_filter": "flow",
+                                                             "filter_subset": True,
+                                                             "for_managing": True})
     assert response.json() == []
 
 

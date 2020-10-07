@@ -122,7 +122,7 @@ class ProjectBO(object):
 
         if title_filter != '':
             sql += """ 
-                    AND ( title ilike '%%'|| :title ||'%%'
+                    AND ( title ILIKE '%%'|| :title ||'%%'
                           OR TO_CHAR(p.projid,'999999') LIKE '%%'|| :title ) """
             sql_params["title"] = title_filter
 
@@ -178,8 +178,8 @@ class ProjectBO(object):
         # Stats depend on taxo stats
         ProjectBO.update_stats(session, prj_id)
 
-    @staticmethod
-    def delete_object_parents(session: Session, prj_id: int) -> List[int]:
+    @classmethod
+    def delete_object_parents(cls, session: Session, prj_id: int) -> List[int]:
         """
             Remove object parents, also project children entities, in the project.
         """
@@ -212,8 +212,6 @@ class ProjectBO(object):
             row_count = session.execute(sub_del).rowcount
             ret.append(row_count)
             logger.info("%d rows deleted", row_count)
-            if row_count > 1000:
-                session.commit()
         session.commit()
         return ret
 
@@ -226,8 +224,7 @@ class ProjectBO(object):
         # Unlink Particle project if any
         upd_qry = ParticleProject.__table__.update().where(ParticleProject.projid == prj_id).values(projid=None)
         row_count = session.execute(upd_qry).rowcount
-        if row_count:
-            logger.info("%d EcoPart project unlinked", row_count)
+        logger.info("%d EcoPart project unlinked", row_count)
         # Remove project
         session.query(Project). \
             filter(Project.projid == prj_id).delete()
@@ -287,35 +284,26 @@ class ProjectBO(object):
                      FOR NO KEY UPDATE
         """
         session.execute(pts_sql, {"ids": needed_ids})
-        # Lock the rows we are going to update
+        # Lock the rows we are going to update, including -1 for unclassified
         pts_sql = """SELECT id
                        FROM projects_taxo_stat 
                       WHERE projid = :prj
-                        AND id = ANY(:ids) 
+                        AND id = ANY(:ids)
                      FOR NO KEY UPDATE"""
         res = session.execute(pts_sql, {"prj": prj_id, "ids": needed_ids})
         ids_in_db = set([classif_id for (classif_id,) in res.fetchall()])
         ids_not_in_db = set(needed_ids).difference(ids_in_db)
         if len(ids_not_in_db) > 0:
+            # Insert rows for missing IDs
             pts_ins = """INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
-                         SELECT :prj, classif_id, count(*) nbr, 
+                         SELECT :prj, COALESCE(classif_id, -1), COUNT(*) nbr, 
                                 COUNT(CASE WHEN classif_qual = 'V' THEN 1 END) nbr_v,
                                 COUNT(CASE WHEN classif_qual = 'D' THEN 1 END) nbr_d,
                                 COUNT(CASE WHEN classif_qual = 'P' THEN 1 END) nbr_p
                            FROM obj_head
-                          WHERE projid = :prj AND classif_id = ANY(:ids)
+                          WHERE projid = :prj AND COALESCE(classif_id, -1) = ANY(:ids)
                        GROUP BY classif_id"""
             session.execute(pts_ins, {'prj': prj_id, 'ids': list(ids_not_in_db)})
-            if -1 in ids_not_in_db:
-                # I guess, special case for unclassified
-                pts_ins = """INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
-                             SELECT :prj, -1, count(*) nbr, 
-                                    COUNT(CASE WHEN classif_qual = 'V' THEN 1 END) nbr_v,
-                                    COUNT(CASE WHEN classif_qual = 'D' THEN 1 END) nbr_d,
-                                    COUNT(CASE WHEN classif_qual = 'P' THEN 1 END) nbr_p
-                               FROM obj_head
-                              WHERE projid = :prj AND classif_id IS NULL"""
-                session.execute(pts_ins, {'prj': prj_id})
         # Apply delta
         for classif_id, chg in collated_changes.items():
             if classif_id in ids_not_in_db:

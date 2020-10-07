@@ -223,9 +223,10 @@ def test_import_again_not_skipping_nor_imgs(config, database, caplog):
         CANNOT RUN BY ITSELF """
     caplog.set_level(logging.DEBUG)
     task_id = TaskService().create()
-    prj_id = ProjectsService().search(current_user_id=ADMIN_USER_ID,
-                                      title_filter="Test Create Update")[
-        0].projid  # <- need the project from first test
+    srch = ProjectsService().search(current_user_id=ADMIN_USER_ID,
+                                      title_filter="Test Create Update")
+    assert len(srch) == 1
+    prj_id = srch[0].projid  # <- need the project from first test
     # Do preparation
     params = ImportPrepReq(task_id=task_id,
                            source_path=str(PLAIN_DIR))

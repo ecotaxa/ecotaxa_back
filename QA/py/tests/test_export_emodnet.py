@@ -7,13 +7,14 @@ from formats.EMODnet.models import *
 from starlette import status
 
 from tests.credentials import ADMIN_AUTH
-from tests.test_import import test_import, ADMIN_USER_ID, test_import_a_bit_more_skipping
+from tests.test_import import ADMIN_USER_ID
 from tests.test_update import RECOMPUTE_GEO_URL
 
 
 def test_emodnet_export(config, database, fastapi, caplog):
     caplog.set_level(logging.DEBUG)
 
+    from tests.test_import import test_import, test_import_a_bit_more_skipping
     prj_id = test_import(config, database, caplog, "EMODNET project")
     # Add a sample spanning 2 days
     test_import_a_bit_more_skipping(config, database, caplog, "EMODNET project")

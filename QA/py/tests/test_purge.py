@@ -8,7 +8,7 @@ import pytest
 from API_operations.CRUD.Projects import ProjectsService
 from API_operations.ObjectManager import ObjectManager
 
-from tests.test_import import test_import, ADMIN_USER_ID
+from tests.test_import import ADMIN_USER_ID
 
 from tests.test_subset_merge import check_project
 
@@ -17,6 +17,7 @@ from tests.test_subset_merge import check_project
 # BUT DON'T COMMIT THE CHANGE
 def test_purge_plain(config, database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
+    from tests.test_import import test_import
     prj_id = test_import(config, database, caplog, "Test Purge")
     # Delete full
     ProjectsService().delete(current_user_id=ADMIN_USER_ID, prj_id=prj_id, only_objects=False)
@@ -27,6 +28,7 @@ def test_purge_plain(config, database, fastapi, caplog):
 
 def test_purge_partial(config, database, caplog):
     caplog.set_level(logging.ERROR)
+    from tests.test_import import test_import
     prj_id = test_import(config, database, caplog, "Test Purge partial")
     # Delete using wrong object IDs
     obj_ids = [500000 + i for i in range(15)]
