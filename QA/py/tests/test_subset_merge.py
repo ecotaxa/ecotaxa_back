@@ -30,14 +30,15 @@ from deepdiff import DeepDiff
 from ordered_set import OrderedSet
 from starlette import status
 
-from tests.credentials import CREATOR_AUTH
+from tests.credentials import CREATOR_AUTH, CREATOR_USER_ID
 from tests.test_fastapi import PRJ_CREATE_URL, client, ADMIN_AUTH, PROJECT_QUERY_URL
-from tests.test_import import ADMIN_USER_ID, test_import_uvp6
+from tests.test_import import ADMIN_USER_ID, test_import_uvp6, DATA_DIR, do_import
 
 OUT_JSON = "out.json"
 ORIGIN_AFTER_MERGE_JSON = "out_after_merge.json"
 SUBS_AFTER_MERGE_JSON = "out_subs_after_merge.json"
 OUT_SUBS_JSON = "out_subs.json"
+OUT_MERGE_REMAP_JSON = "out_merge_remap.json"
 
 PROJECT_MERGE_URL = "/projects/{project_id}/merge?source_project_id={source_project_id}&dry_run={dry_run}"
 
@@ -62,7 +63,7 @@ def test_check_project_via_api(prj_id: int, fastapi):
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
 # BUT DON'T COMMIT THE CHANGE
-def test_subset_uvp6(config, database, fastapi, caplog):
+def test_subset_merge_uvp6(config, database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
     prj_id = test_import_uvp6(config, database, caplog, "Test Subset Merge")
     check_project(prj_id)
@@ -136,7 +137,7 @@ def test_subset_uvp6(config, database, fastapi, caplog):
     does_it_work: MergeRsp = MergeService(prj_id=prj_id, src_prj_id=subset_prj_id, dry_run=False).run(ADMIN_USER_ID)
     assert does_it_work.errors == []
 
-    # The merge introduces duplicates, so below fails
+    # TODO:The merge introduces duplicates, so below fails
     # check_project(prj_id)
 
     # Dump the subset which should be just gone
@@ -173,6 +174,43 @@ def test_subset_uvp6(config, database, fastapi, caplog):
         key = "root['acquisitions'][0]['processings'][0]['objects'][%d]['foobar']" % obj
         added_values.remove(key)
     assert added_values == {}
+
+
+MERGE_DIR_1 = DATA_DIR / "merge_test" / "lots_of_cols"
+MERGE_DIR_2 = DATA_DIR / "merge_test" / "more_cols"
+
+
+def test_merge_remap(config, database, fastapi, caplog):
+    # Project 1, usual columns
+    prj_id = ProjectsService().create(CREATOR_USER_ID, CreateProjectReq(title="Dest project"))
+    do_import(prj_id, MERGE_DIR_1, CREATOR_USER_ID)
+    check_project(prj_id)
+    # Project 2, same columns but different order
+    # acq: remove acq_magnification and swap the 2 others
+    # process: remove process_stop_n_images & process_gamma_value, put process_software at the end
+    # sample: rename sample_volconc to sample_volconc2 and move it in last
+    # object: remove object_link object_cv and object_sr, move lat & lon near the end
+    prj_id2 = ProjectsService().create(CREATOR_USER_ID, CreateProjectReq(title="Src project"))
+    do_import(prj_id2, MERGE_DIR_2, CREATOR_USER_ID)
+    check_project(prj_id2)
+    # Merge
+    url = PROJECT_MERGE_URL.format(project_id=prj_id, source_project_id=prj_id2, dry_run=False)
+    response = client.post(url, headers=ADMIN_AUTH)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["errors"] == []
+    # Dump the dest
+    with open(OUT_MERGE_REMAP_JSON, "w") as fd:
+        JsonDumper(ADMIN_USER_ID, prj_id, {}).run(fd)
+    # Grab all median_mean free col values
+    all_lats = []
+    with open(OUT_MERGE_REMAP_JSON) as fd:
+        for a_line in fd.readlines():
+            if "median_mean" in a_line:
+                a_line = a_line.strip().strip(",")
+                all_lats.append(a_line)
+    expected = ['"median_mean": 5555.0' for n in range(11)]
+    assert len(all_lats) == len(expected)
+    assert all_lats == expected
 
 
 def test_empty_subset_uvp6(config, database, fastapi, caplog):

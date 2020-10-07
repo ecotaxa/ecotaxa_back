@@ -12,7 +12,7 @@ from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFiel
     ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram
 from DB import Session, ResultProxy
 from DB.User import Role
-from DB.helpers.ORM import Delete, Query
+from DB.helpers.ORM import Delete, Query, select, text
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -240,13 +240,14 @@ class ProjectBO(object):
         """
             Apply remapping operations onto the given table for given project.
         """
-        assert table != ObjectFields
         # Do the remapping, including blanking of unused columns
-        values = {a_remap.to: a_remap.frm for a_remap in remaps}
+        values = {a_remap.to: text(a_remap.frm) if a_remap.frm is not None else a_remap.frm
+                  for a_remap in remaps}
         qry: Query = session.query(table)
         if table == ObjectFields:
             # All tables have direct projid column except ObjectFields
-            qry = qry.join(ObjectHeader).filter(ObjectHeader.projid == prj_id)
+            qry = qry.filter(ObjectFields.objfid.in_(
+                select([ObjectHeader.objid]).where(ObjectHeader.projid == prj_id)))  # type: ignore
         else:
             qry = qry.filter(table.projid == prj_id)  # type: ignore
         qry = qry.update(values=values, synchronize_session=False)

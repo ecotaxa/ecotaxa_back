@@ -93,6 +93,7 @@ MappedTableTypeT = Type[MappedTableT]  # one of the 4 classes themselves
 MAPPED_TABLES: List[MappedTableTypeT] = [ObjectFields, Sample, Acquisition, Process]
 MAPPED_TABLES_SET = set(MAPPED_TABLES)
 
+
 class ProjectMapping(object):
     """
         In some DB tables, free fields are present at the end of the table. Their names are constant
@@ -170,16 +171,16 @@ class ProjectMapping(object):
         self.build_all_fields()
         return self
 
-    def add_column(self, target_table: str, tsv_table: str, tsv_field: str, sel_type) -> bool:
+    def add_column(self, target_table: str, tsv_table: str, tsv_field: str, sel_type) -> Tuple[bool, str]:
         """
             A new custom column was found, add it into the right bucket.
-            :return: True if the target column exists in target table.
+            :return: True if the target column exists in target table, i.e. if addition was possible.
         """
         for_table: TableMapping = self.by_table_name[target_table]
         ok_exists = for_table.add_column_for_table(tsv_field, sel_type)
         real_col = for_table.tsv_cols_to_real[tsv_field]
         self.all_fields["%s_%s" % (tsv_table, tsv_field)] = (for_table, real_col)
-        return ok_exists
+        return ok_exists, real_col
 
     def search_field(self, full_tsv_field: str) -> Optional[Dict]:
         """

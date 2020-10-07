@@ -559,15 +559,15 @@ class TSVFile(object):
                     continue
             # Add the new custom column
             target_col = split_col[1]
-            ok_added = how.custom_mapping.add_column(target_table, tsv_table_prfx, target_col, sel_type)
+            ok_added, real_name = how.custom_mapping.add_column(target_table, tsv_table_prfx, target_col, sel_type)
             if ok_added:
-                logger.info("New field %s found in file %s", a_field, self.relative_name)
+                logger.info("New field %s found in file %s -> %s", a_field, self.relative_name, real_name)
             else:
                 diag.error("Field %s, in file %s, cannot be mapped. Too many custom fields, or bad type."
                            % (a_field, self.relative_name))
             # Warn that project settings were extended, i.e. empty columns
             if not how.custom_mapping.was_empty:
-                diag.warn("New field %s found in file %s" % (a_field, self.relative_name))
+                diag.warn("New field %s found in file %s -> %s" % (a_field, self.relative_name, real_name))
         # Ensure we have ids for all objects, at least potentially as we're just checking the header
         for a_prfx, fields in fields_per_prfx.items():
             if a_prfx not in GlobalMapping.PREFIX_TO_TABLE:

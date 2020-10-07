@@ -63,6 +63,23 @@ def real_params_from_json_prep_out(task_id, prep_out: Dict) -> Dict:
     return ret
 
 
+def do_import(prj_id: int, source_path: str, user_id: int):
+    """ Import helper for tests """
+    # Create a task for this run
+    task_id = TaskService().create()
+    # Do preparation, preparation
+    params = ImportPrepReq(task_id=task_id,
+                           source_path=str(source_path))
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(user_id)
+    # Do real import, reusing prep output
+    params = real_params_from_prep_out(task_id, prep_out)
+    # Map any not found to admin
+    for usr in params.found_users.keys():
+        params.found_users[usr] = {'id': 1}
+    RealImport(prj_id, params).run(user_id)
+    return prj_id
+
+
 @pytest.mark.parametrize("title", ["Test Create Update"])
 def test_import(config, database, caplog, title):
     caplog.set_level(logging.DEBUG)
@@ -516,7 +533,7 @@ def test_issue_483(config, database, caplog):
     # Inject a very small maximum size inside the library
     from PIL import Image
     sav = Image.MAX_IMAGE_PIXELS
-    Image.MAX_IMAGE_PIXELS= 512
+    Image.MAX_IMAGE_PIXELS = 512
     try:
         test_import(config, database, caplog, title="Too large import")
     finally:

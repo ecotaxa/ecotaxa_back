@@ -36,6 +36,8 @@ JSON_FIELDS: Dict[ModelT, JSONDesc] = {
                    ObjectHeader.all_images: "images",
                    ObjectHeader.depth_min: "depth_min",
                    ObjectHeader.depth_max: "depth_max",
+                   ObjectHeader.latitude: "latitude",
+                   ObjectHeader.longitude: "longitude",
                    ObjectHeader.fields: "fields"  # 1-1 so should be joined right away and disappear
                    },
     ObjectFields: {ObjectFields.orig_id: "oid"
