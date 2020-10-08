@@ -369,12 +369,13 @@ class TSVFile(object):
                 assert m is not None
             field_table = m["table"]
             field_name = m["field"]
+            is_numeric = m['type'] == 'n'
             # Try to get the transformed value from the cache
             cache_key: Any = (a_field, raw_val)
             if cache_key in vals_cache:
                 cached_field_value = vals_cache.get(cache_key)
             else:
-                csv_val = clean_value(raw_val)
+                csv_val = clean_value(raw_val, is_numeric)
                 # If no relevant value, set field to NULL, i.e. None
                 if csv_val == '':
                     cached_field_value = None
@@ -384,7 +385,7 @@ class TSVFile(object):
                     cached_field_value = convert_degree_minute_float_to_decimal_degree(csv_val)
                 elif a_field == 'object_lon':
                     cached_field_value = convert_degree_minute_float_to_decimal_degree(csv_val)
-                elif m['type'] == 'n':
+                elif is_numeric:
                     cached_field_value = to_float(csv_val)
                 elif a_field == 'object_date':
                     cached_field_value = ObjectHeader.date_from_txt(csv_val)
@@ -646,8 +647,9 @@ class TSVFile(object):
                     latitude_was_seen = True
                 continue
             vals_cache[cache_key] = 1
+            is_numeric = m['type'] == 'n'
             # Same column with same value was not seen already, proceed
-            csv_val: str = clean_value_and_none(raw_val)
+            csv_val: str = clean_value_and_none(raw_val, is_numeric)
             diag.cols_seen.add(a_field)
             # From V1.1, if column is present then it's considered as seen.
             #  Before, the criterion was 'at least one value'.
@@ -669,7 +671,7 @@ class TSVFile(object):
                     diag.error("Invalid Long. value '%s' for Field '%s' in file %s. "
                                "Incorrect range -180/+180°."
                                % (csv_val, raw_field, self.relative_name))
-            elif m['type'] == 'n':
+            elif is_numeric:
                 vf = to_float(csv_val)
                 if vf is None:
                     diag.error("Invalid float value '%s' for Field '%s' in file %s."

@@ -1,37 +1,31 @@
 import datetime
 import re
-from typing import Union
+from typing import Optional
 
 from astral import LocationInfo, Depression
 from astral.sun import sun
 from pytz import utc
 
 
-def clean_value(value: str):
+def clean_value(value: str, is_numeric: bool = False):
     """
-    Remove spaces and map 2 special values to empty string, assuming the parameter is not None.
-    :param value:
-    :return:
+        Remove spaces and map 2 special values to empty string, which is _accepted_ like an empty column.
     """
     value = value.strip()
     #    if len(value) < 4 and value.lower() in ('nan', 'na'):
     # TODO: Use RE and benchmark
-    if value.lower() in ('nan', 'na'):
+    if is_numeric and value.lower() in ('nan', 'na'):
         return ''
     return value
 
 
-def clean_value_and_none(value: Union[str, None]):
+def clean_value_and_none(value: Optional[str], is_numeric: bool = False):
     """
-        Like previous but filter None as well
+        Like previous but accept None as well.
     """
     if value is None:
         return ''
-    value = value.strip()
-    #    if len(value) < 4 and value.lower() in ('nan', 'na'):
-    if value.lower() in ('nan', 'na'):
-        return ''
-    return value
+    return clean_value(value, is_numeric)
 
 
 _minus_inf = float("-inf")

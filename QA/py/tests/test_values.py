@@ -9,17 +9,20 @@ from BO.helpers.TSVHelpers import clean_value, clean_value_and_none, to_float
 def test_cleans():
     #
     assert clean_value(" rrrr t  YY ") == "rrrr t  YY"
-    assert clean_value("NaN") == ""
-    assert clean_value("na") == ""
+    assert clean_value("NaN") == "NaN"
+    assert clean_value("na") == "na"
+    assert clean_value("NaN", is_numeric=True) == ""
+    assert clean_value("na", is_numeric=True) == ""
     assert clean_value("NaNaNa") == "NaNaNa"
 
     #
     assert clean_value_and_none(None) == ''
-    assert clean_value_and_none("NaN") == ""
-    assert clean_value_and_none("na") == ""
+    assert clean_value_and_none("NaN", is_numeric=True) == ""
+    assert clean_value_and_none("na", is_numeric=True) == ""
     assert clean_value_and_none("NoNoNo \n") == "NoNoNo"
 
     #
     assert to_float('') is None
+    assert to_float('-inf') is None
     assert to_float("18.5")-0.5 == 18
     assert to_float("18,5") is None
