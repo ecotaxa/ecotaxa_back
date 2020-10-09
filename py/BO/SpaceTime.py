@@ -12,6 +12,9 @@ from DB.Object import ObjectHeader
 
 # TODO: Caching a single value is useful, but less than several of them
 # TODO: a TypedDict is more accurate for typing
+from DB.helpers.Bean import Bean
+
+
 class AstralCache(TypedDict, total=False):
     date: date
     time: Optional[time]
@@ -25,7 +28,7 @@ astral_cache: AstralCache = {'date': date(1, 1, 1), 'time': None, 'long': None, 
 USED_FIELDS_FOR_SUNPOS = {'objdate', 'objtime', 'longitude', 'latitude'}
 
 
-def compute_sun_position(object_head_to_write: ObjectHeader):
+def compute_sun_position(object_head_to_write: Bean):
     # Compute sun position if not already done
     global astral_cache
     if not (astral_cache['date'] == object_head_to_write.objdate

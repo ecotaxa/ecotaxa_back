@@ -8,7 +8,7 @@ import random
 import sys
 from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, Set, Any, Mapping
+from typing import Dict, Set, Any, Mapping, Union
 
 # noinspection PyPackageRequirements
 from PIL import Image as PIL_Image
@@ -129,30 +129,17 @@ class TSVFile(object):
                 # Parents are created the same way, _when needed_ (i.e. nearly never),
                 #  in @see add_parent_objects
 
-                # Default value, so there is something to write into the DB in case of Exception
-                object_head_to_write.sunpos = "?"
-                try:
-                    object_head_to_write.sunpos = compute_sun_position(object_head_to_write)
-                except Exception as e:  # pragma: no cover
-                    # See astral.py for cases
-                    # Astral error : Sun never reaches 12.0 degrees below the horizon, at this location.
-                    # for {'objtime': datetime.time(12, 29), 'latitude': -64.2, 'objdate': datetime.date(2011, 1, 9),
-                    # 'longitude': -52.59 }
-                    nb_fields = object_head_to_write.nb_fields_from(USED_FIELDS_FOR_SUNPOS)
-                    if nb_fields == 4:
-                        logger.error("Astral error : %s for %s", e, object_head_to_write)
-                    elif 0 < nb_fields <= 3:
-                        logger.warning("Not enough fields for computing sun position")
-                    else:
-                        # No field at all for computation
-                        pass
+                if not how.can_update:
+                    # Initial load attempt to compute sun position
+                    self.do_sun_position_field(object_head_to_write)
 
                 self.add_parent_objects(how, session, object_head_to_write, dicts_to_write)
 
                 if not how.can_update:
                     key_exist_obj = "%s*%s" % (object_fields_to_write.orig_id, image_to_write.orig_file_name)
                     if key_exist_obj in how.objects_and_images_to_skip:
-                        logger.info("Image skipped: %s %s", object_fields_to_write.orig_id, image_to_write.orig_file_name)
+                        logger.info("Image skipped: %s %s", object_fields_to_write.orig_id,
+                                    image_to_write.orig_file_name)
                         continue
 
                 new_records = self.create_or_link_slaves(how, session, object_head_to_write, object_fields_to_write,
@@ -200,6 +187,30 @@ class TSVFile(object):
                     stats.report(counter)
 
         return row_count_for_csv
+
+    @staticmethod
+    def do_sun_position_field(object_head_to_write: Bean):
+        """
+            Initial compute or update of sun position field.
+        """
+        # Default value, so there is something to write into the DB in case of problem
+        object_head_to_write.sunpos = "?"
+        # Is there enough data for computation?
+        nb_fields = object_head_to_write.nb_fields_from(USED_FIELDS_FOR_SUNPOS)
+        if nb_fields < len(USED_FIELDS_FOR_SUNPOS):
+            if nb_fields > 0:
+                # Warn if only a few fields, but not if 0
+                logger.warning("Not enough fields for computing sun position")
+            return
+        # All fields are in, so give it a try
+        try:
+            object_head_to_write.sunpos = compute_sun_position(object_head_to_write)
+        except Exception as e:
+            # See astral.py for cases
+            # Astral error : Sun never reaches 12.0 degrees below the horizon, at this location.
+            # for {'objtime': datetime.time(12, 29), 'latitude': -64.2, 'objdate': datetime.date(2011, 1, 9),
+            # 'longitude': -52.59 }
+            logger.error("Astral error : %s for %s", e, object_head_to_write)
 
     def path_for_image(self, image_path: str):
         """
@@ -445,16 +456,21 @@ class TSVFile(object):
             objid = how.existing_objects[object_fields_to_write.orig_id]
             object_head_to_write.objid = objid
             if how.can_update:
-                if object_head_to_write.sunpos == "?":
-                    # Don't damage sunpos if it could not be computed
-                    del object_head_to_write["sunpos"]
                 # noinspection DuplicatedCode
                 for a_cls, its_pk, an_upd in zip([ObjectHeader, ObjectFields],
                                                  ['objid', 'objfid'],
                                                  [object_head_to_write, object_fields_to_write]):
                     filter_for_id = text("%s=%d" % (its_pk, objid))
+                    # Fetch the record to update
                     obj = session.query(a_cls).filter(filter_for_id).first()
                     assert obj is not None
+                    if a_cls == ObjectHeader:
+                        # Eventually refresh sun position
+                        if an_upd.nb_fields_from(USED_FIELDS_FOR_SUNPOS) > 0:
+                            # Give the bean enough data for computation
+                            for a_field in USED_FIELDS_FOR_SUNPOS.difference(an_upd.keys()):
+                                an_upd[a_field] = getattr(obj, a_field)
+                            TSVFile.do_sun_position_field(an_upd)
                     updates = TSVFile.update_orm_object(obj, an_upd)
                     if len(updates) > 0:
                         logger.info("Updating '%s' using %s", filter_for_id, updates)
@@ -502,7 +518,7 @@ class TSVFile(object):
 
         err = ImageBO.dimensions_and_resize(how.max_dim, where.vault, sub_path, image_to_write)
         if err:
-            logger.error(err+", not copied")
+            logger.error(err + ", not copied")
 
     def do_validate(self, how: ImportHow, diag: ImportDiagnostic):
         with self.open():

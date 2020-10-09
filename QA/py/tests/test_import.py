@@ -257,7 +257,8 @@ def test_import_update(config, database, caplog):
     do_import_update(prj_id, caplog, 'Yes')
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
     print("\n".join(caplog.messages))
-    assert nb_upds == 9
+    # 9 fields + 7 derived sun positions
+    assert nb_upds == 16
     # Update classif, 2 cells, one classif ID and one classif quality
     do_import_update(prj_id, caplog, 'Cla')
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
