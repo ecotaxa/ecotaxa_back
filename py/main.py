@@ -315,6 +315,43 @@ def erase_project(project_id: int,
         return sce.delete(current_user, project_id, only_objects)
 
 
+@app.post("/sample_set/update", tags=['samples'])
+def update_samples(req: BulkUpdateReq,
+                   current_user: int = Depends(get_current_user)) -> int:
+    """
+        Do the required update for each sample in the set. Any non-null field in the model is written to
+        every impacted sample.
+            Return the number of updated entities.
+    """
+    sce = SamplesService()
+    with RightsThrower():
+        return sce.update_set(current_user, req.target_ids, req.updates)
+
+
+@app.post("/acquisition_set/update", tags=['acquisitions'])
+def update_acquisitions(req: BulkUpdateReq,
+                        current_user: int = Depends(get_current_user)) -> int:
+    """
+        Do the required update for each acquisition in the set.
+            Return the number of updated entities.
+    """
+    sce = AcquisitionsService()
+    with RightsThrower():
+        return sce.update_set(current_user, req.target_ids, req.updates)
+
+
+@app.post("/process_set/update", tags=['processes'], response_model=int)
+def update_processes(req: BulkUpdateReq,
+                     current_user: int = Depends(get_current_user)) -> int:
+    """
+        Do the required update for each process in the set.
+            Return the number of updated entities.
+    """
+    sce = ProcessesService()
+    with RightsThrower():
+        return sce.update_set(current_user, req.target_ids, req.updates)
+
+
 # TODO: Should be app.get, but for this we need a way to express
 #  that each field in ProjectFilter is part of the params
 @app.post("/object_set/{project_id}/query", tags=['objects'], response_model=ObjectSetQueryRsp)
@@ -367,18 +404,6 @@ def revert_object_set_to_history(project_id: int,
                                        classif_info=classif_info)
 
 
-@app.delete("/object_set/", tags=['objects'])
-def erase_object_set(object_ids: ObjectIDListT,
-                     current_user: int = Depends(get_current_user)) -> Tuple[int, int, int, int]:
-    """
-        Delete the objects with given object ids.
-        Current user needs Manage right on all projects of specified objects.
-    """
-    sce = ObjectManager()
-    with RightsThrower():
-        return sce.delete(current_user, object_ids)
-
-
 @app.post("/object_set/update", tags=['objects'])
 def update_object_set(req: BulkUpdateReq,
                       current_user: int = Depends(get_current_user)) -> int:
@@ -406,6 +431,18 @@ def classify_object_set(req: ClassifyReq,
     last_classif_ids = [change[2] for change in changes.keys()]  # Recently used are in first
     UserService().update_classif_mru(current_user, prj_id, last_classif_ids)
     return ret
+
+
+@app.delete("/object_set/", tags=['objects'])
+def erase_object_set(object_ids: ObjectIDListT,
+                     current_user: int = Depends(get_current_user)) -> Tuple[int, int, int, int]:
+    """
+        Delete the objects with given object ids.
+        Current user needs Manage right on all projects of specified objects.
+    """
+    sce = ObjectManager()
+    with RightsThrower():
+        return sce.delete(current_user, object_ids)
 
 
 @app.post("/export/emodnet", tags=['WIP'], include_in_schema=False, response_model=EMODNetExportRsp)  # pragma:nocover
@@ -518,43 +555,6 @@ async def matching_with_worms_nice(request: Request,
     return templates.TemplateResponse("worms.html",
                                       {"request": request, "matches": data},
                                       headers=CRSF_header)
-
-
-@app.post("/sample_set/update", tags=['samples'])
-def update_samples(req: BulkUpdateReq,
-                   current_user: int = Depends(get_current_user)) -> int:
-    """
-        Do the required update for each sample in the set. Any non-null field in the model is written to
-        every impacted sample.
-            Return the number of updated entities.
-    """
-    sce = SamplesService()
-    with RightsThrower():
-        return sce.update_set(current_user, req.target_ids, req.updates)
-
-
-@app.post("/acquisition_set/update", tags=['acquisitions'])
-def update_acquisitions(req: BulkUpdateReq,
-                        current_user: int = Depends(get_current_user)) -> int:
-    """
-        Do the required update for each acquisition in the set.
-            Return the number of updated entities.
-    """
-    sce = AcquisitionsService()
-    with RightsThrower():
-        return sce.update_set(current_user, req.target_ids, req.updates)
-
-
-@app.post("/process_set/update", tags=['processes'], response_model=int)
-def update_processes(req: BulkUpdateReq,
-                     current_user: int = Depends(get_current_user)) -> int:
-    """
-        Do the required update for each process in the set.
-            Return the number of updated entities.
-    """
-    sce = ProcessesService()
-    with RightsThrower():
-        return sce.update_set(current_user, req.target_ids, req.updates)
 
 
 @app.get("/status", tags=['WIP'])
