@@ -5,7 +5,7 @@
 from typing import Tuple, List, Optional, Set, Dict
 
 from API_models.crud import ProjectFilters, ColUpdateList
-from BO.Classification import HistoricalClassif, ClassifIDSetT, ClassifIDListT
+from BO.Classification import HistoricalLastClassif, ClassifIDSetT, ClassifIDListT
 from BO.ObjectSet import DescribedObjectSet, ObjectIDListT, EnumeratedObjectSet, ObjectIDWithParentsListT
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
@@ -118,7 +118,7 @@ class ObjectManager(Service):
 
     def revert_to_history(self, current_user_id: int, proj_id: int,
                           filters: ProjectFilters, dry_run: bool,
-                          target: Optional[int]) -> Tuple[List[HistoricalClassif], ClassifSetInfoT]:
+                          target: Optional[int]) -> Tuple[List[HistoricalLastClassif], ClassifSetInfoT]:
         """
             Revert to classification history the given set, if dry_run then only simulate.
         """
@@ -153,7 +153,7 @@ class ObjectManager(Service):
         # Give feedback
         return impact, classifs
 
-    def collect_classif(self, histo: List[HistoricalClassif]) -> ClassifIDSetT:
+    def collect_classif(self, histo: List[HistoricalLastClassif]) -> ClassifIDSetT:
         """
             Collect classification IDs from given list, for lookup & display.
         """

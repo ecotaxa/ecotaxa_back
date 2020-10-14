@@ -5,12 +5,15 @@
 #
 # The 3 (soon 2) entities under Project and grouping Objects
 #
+from typing import Optional
+
 from API_models.crud import ColUpdateList
 from API_operations.helpers.Service import Service
-from BO.AcquisitionSet import AcquisitionIDListT, EnumeratedAcquisitionSet
-from BO.ProcessSet import ProcessIDListT, EnumeratedProcessSet
+from BO.Acquisition import AcquisitionIDListT, EnumeratedAcquisitionSet, AcquisitionBO, AcquisitionIDT
+from BO.Mappings import ProjectMapping
+from BO.Process import ProcessIDListT, EnumeratedProcessSet, ProcessIDT, ProcessBO
 from BO.Rights import RightsBO, Action
-from BO.SampleSet import SampleIDListT, EnumeratedSampleSet
+from BO.Sample import SampleIDListT, EnumeratedSampleSet, SampleIDT, SampleBO
 
 
 class SamplesService(Service):
@@ -18,6 +21,19 @@ class SamplesService(Service):
         Basic CRUD operations on Sample.
             The creation is managed during import.
     """
+
+    def query(self, current_user_id: Optional[int], sample_id: SampleIDT) -> Optional[SampleBO]:
+        ret = SampleBO(self.session, sample_id)
+        if not ret.exists():
+            return None
+        # Security check
+        if current_user_id is None:
+            project = RightsBO.anonymous_wants(self.session, Action.READ, ret.sample.projid)
+        else:
+            _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, ret.sample.projid)
+        mappings = ProjectMapping().load_from_project(project)
+        ret.map_free_columns(mappings.sample_mappings)
+        return ret
 
     def update_set(self, current_user_id: int, sample_ids: SampleIDListT, updates: ColUpdateList):
         # Get project IDs for the samples and verify rights
@@ -37,6 +53,19 @@ class AcquisitionsService(Service):
             The creation is managed during import.
     """
 
+    def query(self, current_user_id: Optional[int], acquisition_id: AcquisitionIDT) -> Optional[AcquisitionBO]:
+        ret = AcquisitionBO(self.session, acquisition_id)
+        if not ret.exists():
+            return None
+        # Security check
+        if current_user_id is None:
+            project = RightsBO.anonymous_wants(self.session, Action.READ, ret.acquis.projid)
+        else:
+            _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, ret.acquis.projid)
+        mappings = ProjectMapping().load_from_project(project)
+        ret.map_free_columns(mappings.acquisition_mappings)
+        return ret
+
     def update_set(self, current_user_id: int, acquisition_ids: AcquisitionIDListT, updates: ColUpdateList):
         # Get project IDs for the acquisitions and verify rights
         acquisition_set = EnumeratedAcquisitionSet(self.session, acquisition_ids)
@@ -54,6 +83,19 @@ class ProcessesService(Service):
         Basic CRUD operations on Process.
             The creation is managed during import.
     """
+
+    def query(self, current_user_id: Optional[int], process_id: ProcessIDT) -> Optional[ProcessBO]:
+        ret = ProcessBO(self.session, process_id)
+        if not ret.exists():
+            return None
+        # Security check
+        if current_user_id is None:
+            project = RightsBO.anonymous_wants(self.session, Action.READ, ret.process.projid)
+        else:
+            _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, ret.process.projid)
+        mappings = ProjectMapping().load_from_project(project)
+        ret.map_free_columns(mappings.process_mappings)
+        return ret
 
     def update_set(self, current_user_id: int, process_ids: ProcessIDListT, updates: ColUpdateList):
         # Get project IDs for the processes and verify rights

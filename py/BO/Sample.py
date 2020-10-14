@@ -14,11 +14,29 @@ from DB import Session, Query, Project, Sample
 from DB.helpers.ORM import any_
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
+from .helpers.MappedEntity import MappedEntity
 from .helpers.MappedTable import MappedTable
 
+SampleIDT = int
 SampleIDListT = List[int]  # Typings, to be clear that these are not e.g. project IDs
 
 logger = get_logger(__name__)
+
+
+class SampleBO(MappedEntity):
+    """
+        A Sample.
+    """
+    FREE_COLUMNS_ATTRIBUTE = 'sample'
+
+    def __init__(self, session: Session, sample_id: SampleIDT):
+        super().__init__(session)
+        self.sample = session.query(Sample).get(sample_id)
+
+    def __getattr__(self, item):
+        """ Fallback for 'not found' field after the C getattr() call.
+            If we did not enrich a Sample field somehow then return it """
+        return getattr(self.sample, item)
 
 
 class EnumeratedSampleSet(MappedTable):

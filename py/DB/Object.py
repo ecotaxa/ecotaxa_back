@@ -90,6 +90,7 @@ class ObjectHeader(Model):
     sample: relationship
     acquisition: relationship
     process: relationship
+    history: relationship
 
     @classmethod
     def fetch_existing_objects(cls, session: Session, prj_id) -> Dict[str, int]:
@@ -219,3 +220,6 @@ class ObjectsClassifHisto(Model):
     classif_qual = Column(CHAR(1))
     classif_who = Column(Integer, ForeignKey('users.id'))
     classif_score = Column(DOUBLE_PRECISION)
+
+    # The relationships are created in Relations.py but the typing here helps the IDE
+    object: relationship

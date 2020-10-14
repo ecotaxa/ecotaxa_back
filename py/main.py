@@ -16,9 +16,11 @@ from API_models.crud import *
 from API_models.exports import EMODNetExportReq, EMODNetExportRsp
 from API_models.imports import *
 from API_models.merge import MergeRsp
-from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp, ClassifyReq
+from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp, ClassifyReq, ObjectModel, \
+    ObjectHeaderModel, HistoricalClassificationModel, ObjectHistoryRsp
 from API_models.subset import SubsetReq, SubsetRsp
-from API_models.taxonomy import TaxaSearchRsp
+from API_models.taxonomy import TaxaSearchRsp, TaxonModel
+from API_operations.CRUD.Object import ObjectService
 from API_operations.CRUD.ObjectParents import SamplesService, AcquisitionsService, ProcessesService
 from API_operations.CRUD.Projects import ProjectsService, ProjectSearchResult
 from API_operations.CRUD.Users import UserService
@@ -34,8 +36,13 @@ from API_operations.exports.EMODnet import EMODNetExport
 from API_operations.helpers.Service import Service
 from API_operations.imports.Import import ImportAnalysis, RealImport
 from API_operations.imports.SimpleImport import SimpleImport
+from BO.Acquisition import AcquisitionBO
+from BO.Object import ObjectBO
 from BO.ObjectSet import ObjectIDListT
+from BO.Process import ProcessBO
 from BO.Project import ProjectBO
+from BO.Sample import SampleBO
+from BO.Taxonomy import TaxonBO
 from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower, \
@@ -48,7 +55,7 @@ logger = get_logger(__name__)
 # TODO: A nicer API doc, see https://github.com/tiangolo/fastapi/issues/1140
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.3",
+              version="0.0.4",
               # openapi URL as seen from navigator
               openapi_url="/api/openapi.json",
               # root_path="/API_models"
@@ -81,7 +88,7 @@ async def login(username: str, password: str) -> str:
 @app.get("/users", tags=['users'], response_model=List[UserModel])  # type:ignore
 def get_users(current_user: int = Depends(get_current_user)):
     """
-        Return the list of users.
+        Return the list of users. For admins only.
     """
     sce = UserService()
     return sce.list(current_user)
@@ -148,6 +155,8 @@ def get_user(user_id: int,
     return ret
 
 
+# ######################## END OF USER
+
 @app.get("/projects/search", tags=['projects'], response_model=List[ProjectSearchResult])
 def search_projects(current_user: int = Depends(get_current_user),
                     also_others: bool = False,
@@ -197,10 +206,10 @@ def project_subset(project_id: int,
         return sce.run(current_user)
 
 
-@app.get("/projects/{project_id}/query", tags=['projects'], response_model=ProjectModel)
+@app.get("/projects/{project_id}", tags=['projects'], response_model=ProjectModel)
 def project_query(project_id: int,
                   for_managing: Optional[bool] = False,
-                  current_user: int = Depends(get_current_user)):
+                  current_user: int = Depends(get_current_user)) -> ProjectBO:
     """
         See if project exists for current user, eventually for managing it.
     """
@@ -208,12 +217,11 @@ def project_query(project_id: int,
     for_managing = bool(for_managing)
     with RightsThrower():
         ret = sce.query(current_user, project_id, for_managing)
-        ProjectBO.enrich(ret)
     return ret
 
 
 @app.post("/projects/{project_id}/dump", tags=['projects'], include_in_schema=False)  # pragma:nocover
-def object_query(project_id: int,
+def project_dump(project_id: int,
                  filters: ProjectFiltersModel,
                  current_user: int = Depends(get_current_user)):
     """
@@ -315,6 +323,8 @@ def erase_project(project_id: int,
         return sce.delete(current_user, project_id, only_objects)
 
 
+# ######################## END OF PROJECT
+
 @app.post("/sample_set/update", tags=['samples'])
 def update_samples(req: BulkUpdateReq,
                    current_user: int = Depends(get_current_user)) -> int:
@@ -328,6 +338,23 @@ def update_samples(req: BulkUpdateReq,
         return sce.update_set(current_user, req.target_ids, req.updates)
 
 
+@app.get("/sample/{sample_id}", tags=['samples'], response_model=SampleModel)
+def sample_query(sample_id: int,
+                 current_user: Optional[int] = Depends(get_optional_current_user)) \
+        -> SampleBO:
+    """
+        Read a single object.
+    """
+    sce = SamplesService()
+    with RightsThrower():
+        ret = sce.query(current_user, sample_id)
+    if ret is None:
+        raise HTTPException(status_code=404, detail="Sample not found")
+    return ret
+
+
+# ######################## END OF SAMPLE
+
 @app.post("/acquisition_set/update", tags=['acquisitions'])
 def update_acquisitions(req: BulkUpdateReq,
                         current_user: int = Depends(get_current_user)) -> int:
@@ -340,6 +367,23 @@ def update_acquisitions(req: BulkUpdateReq,
         return sce.update_set(current_user, req.target_ids, req.updates)
 
 
+@app.get("/acquisition/{acquisition_id}", tags=['acquisitions'], response_model=AcquisitionModel)
+def acquisition_query(acquisition_id: int,
+                      current_user: Optional[int] = Depends(get_optional_current_user)) \
+        -> AcquisitionBO:
+    """
+        Read a single object.
+    """
+    sce = AcquisitionsService()
+    with RightsThrower():
+        ret = sce.query(current_user, acquisition_id)
+    if ret is None:
+        raise HTTPException(status_code=404, detail="Acquisition not found")
+    return ret
+
+
+# ######################## END OF ACQUISITION
+
 @app.post("/process_set/update", tags=['processes'], response_model=int)
 def update_processes(req: BulkUpdateReq,
                      current_user: int = Depends(get_current_user)) -> int:
@@ -350,6 +394,24 @@ def update_processes(req: BulkUpdateReq,
     sce = ProcessesService()
     with RightsThrower():
         return sce.update_set(current_user, req.target_ids, req.updates)
+
+
+@app.get("/process/{process_id}", tags=['processes'], response_model=ProcessModel)
+def process_query(process_id: int,
+                  current_user: Optional[int] = Depends(get_optional_current_user)) \
+        -> ProcessBO:
+    """
+        Read a single object.
+    """
+    sce = ProcessesService()
+    with RightsThrower():
+        ret = sce.query(current_user, process_id)
+    if ret is None:
+        raise HTTPException(status_code=404, detail="Process not found")
+    return ret
+
+
+# ######################## END OF PROCESS
 
 
 # TODO: Should be app.get, but for this we need a way to express
@@ -445,6 +507,39 @@ def erase_object_set(object_ids: ObjectIDListT,
         return sce.delete(current_user, object_ids)
 
 
+@app.get("/object/{object_id}", tags=['object'], response_model=ObjectModel)
+def object_query(object_id: int,
+                 current_user: Optional[int] = Depends(get_optional_current_user)) \
+        -> ObjectBO:
+    """
+        Read a single object.
+    """
+    sce = ObjectService()
+    with RightsThrower():
+        ret = sce.query(current_user, object_id)
+    if ret is None:
+        raise HTTPException(status_code=404, detail="Object not found")
+    return ret
+
+
+# TODO: response_model should be simply List[HistoricalClassification], but pydantic fails to initiate the
+# structure, probably due to the fact that it's generated via dataclass_to_model()
+@app.get("/object/{object_id}/history", tags=['object'],
+         response_model=ObjectHistoryRsp)  # type: ignore
+def object_query_history(object_id: int,
+                         current_user: Optional[int] = Depends(get_optional_current_user)) \
+        -> ObjectHistoryRsp:
+    """
+        Read a single object's history.
+    """
+    sce = ObjectService()
+    with RightsThrower():
+        ret = sce.query_history(current_user, object_id)
+    if ret is None:
+        raise HTTPException(status_code=404, detail="Object not found")
+    return ObjectHistoryRsp(classif=ret)
+
+
 @app.post("/export/emodnet", tags=['WIP'], include_in_schema=False, response_model=EMODNetExportRsp)  # pragma:nocover
 def emodnet_format_export(params: EMODNetExportReq,
                           current_user: int = Depends(get_current_user)):
@@ -478,6 +573,18 @@ async def search_taxa(query: str,
     """
     sce = TaxonomyService()
     ret = sce.search(current_user_id=current_user, prj_id=project_id, query=query)
+    return ret
+
+
+@app.get("/taxa/{taxon_id}", tags=['Taxonomy Tree'], response_model=TaxonModel)
+async def query_taxa(taxon_id: int,
+                     _current_user: Optional[int] = Depends(get_optional_current_user)) \
+        -> TaxonBO:
+    """
+        Information about a taxon, including its lineage.
+    """
+    sce = TaxonomyService()
+    ret = sce.query(taxon_id)
     return ret
 
 
@@ -576,11 +683,12 @@ def system_error(_current_user: int = Depends(get_current_user)):
         assert False
 
 
-@app.get("/noop", tags=['misc'], response_model=ObjectHeaderModel)
+@app.get("/noop", tags=['misc'], response_model=Union[ObjectHeaderModel,  # type: ignore
+                                                      HistoricalClassificationModel])
 def do_nothing(_current_user: int = Depends(get_current_user)):
     """
         This entry point will just do nothing.
-            It's also used for exporting models we could need on client side.
+            It's also used for exporting models we need on client side.
     """
 
 

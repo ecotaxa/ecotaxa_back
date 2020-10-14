@@ -17,7 +17,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import ResultProxy
 
 from API_models.crud import ProjectFilters, ColUpdateList
-from BO.Classification import HistoricalClassif, ClassifIDListT
+from BO.Classification import HistoricalLastClassif, ClassifIDListT
+from BO.Object import ObjectIDT
 from BO.Project import ProjectIDListT
 from BO.Taxonomy import TaxonomyBO
 from BO.User import UserIDT
@@ -30,7 +31,6 @@ from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
 # Typings, to be clear that these are not e.g. project IDs
-ObjectIDT = int
 ObjectIDListT = List[int]
 # Object_id + parents
 ObjectIDWithParentsListT = List[Tuple[int, int, int, int]]
@@ -224,9 +224,10 @@ class EnumeratedObjectSet(MappedTable):
         return ret
 
     def _get_last_classif_history(self, from_user_id: Optional[int], but_not_from_user_id: Optional[int]) \
-            -> List[HistoricalClassif]:
+            -> List[HistoricalLastClassif]:
         """
-            Query for classification history on all objects of self.
+            Query for last classification history on all objects of self, mixed with present state in order
+            to have restore-able lines.
         """
         # Get the histo entries
         subqry = self.session.query(ObjectsClassifHisto,
@@ -260,12 +261,12 @@ class EnumeratedObjectSet(MappedTable):
             qry = qry.filter(or_(subqry.c.rnk == 1, subqry.c.rnk.is_(None)))
         logger.info("_get_last_classif_history qry:%s", str(qry))
         with CodeTimer("HISTORY for %d objs: " % len(self.object_ids), logger):
-            ret = [HistoricalClassif(rec) for rec in qry.all()]
+            ret = [HistoricalLastClassif(rec) for rec in qry.all()]
         logger.info("_get_last_classif_history qry: %d rows", len(ret))
         return ret
 
     def revert_to_history(self, from_user_id: Optional[int], but_not_from_user_id: Optional[int]) \
-            -> List[HistoricalClassif]:
+            -> List[HistoricalLastClassif]:
         """
             Update self's objects so that current classification becomes the last one from hist_user_id,
         :param from_user_id: If set (!= None), the user_id to copy classification from. If unset then pick any recent.
@@ -285,7 +286,7 @@ class EnumeratedObjectSet(MappedTable):
         return histo
 
     def evaluate_revert_to_history(self, from_user_id: Optional[int], but_not_from_user_id: Optional[int]) \
-            -> List[HistoricalClassif]:
+            -> List[HistoricalLastClassif]:
         """
             Same as @see revert_to_history but don't commit the changes, just return them.
         """

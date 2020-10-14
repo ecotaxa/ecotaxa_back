@@ -27,8 +27,9 @@ class DataclassAsDict(dict):
             setattr(self, a_field, a_val)
 
     def __iter__(self, *args, **kwargs):
-        """ In the protocol, first step, pretend that self cannot iterate """
-        pass
+        """ In the protocol, first step, pretend that self cannot iterate
+            So this overloaded def is empty on purpose. Removing it will make derived classes empty
+            when returned thru FastAPI. """
 
     def keys(self):
         """ In the protocol, second step, provide keys """

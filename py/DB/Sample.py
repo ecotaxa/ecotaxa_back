@@ -13,6 +13,8 @@ from sqlalchemy.orm import relationship, Session
 
 from DB.helpers.ORM import Model
 
+SAMPLE_FREE_COLUMNS = 31
+
 
 class Sample(Model):
     # Historical (plural) name of the table
@@ -79,10 +81,8 @@ class Sample(Model):
         assert the_res
         return [a_val for a_val in the_res.values()]
 
-
     def __str__(self):
         return "{0} ({1})".format(self.orig_id, self.sampleid)
-
 
     @classmethod
     def get_sums_by_taxon(cls, session, sample_id):
@@ -95,7 +95,7 @@ class Sample(Model):
         return res.fetchall()
 
 
-for i in range(1, 31):
+for i in range(1, SAMPLE_FREE_COLUMNS):
     setattr(Sample, "t%02d" % i, Column(VARCHAR(250)))
 
 Index('IS_SamplesProject', Sample.projid)

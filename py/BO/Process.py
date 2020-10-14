@@ -9,15 +9,33 @@ from typing import List
 
 from API_models.crud import ColUpdateList
 from BO.Project import ProjectIDListT
+from BO.helpers.MappedEntity import MappedEntity
 from BO.helpers.MappedTable import MappedTable
 from DB import Session, Query, Project, Process
 from DB.helpers.ORM import any_
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
+ProcessIDT = int
 ProcessIDListT = List[int]  # Typings, to be clear that these are not e.g. project IDs
 
 logger = get_logger(__name__)
+
+
+class ProcessBO(MappedEntity):
+    """
+        A Sample.
+    """
+    FREE_COLUMNS_ATTRIBUTE = 'process'
+
+    def __init__(self, session: Session, process_id: ProcessIDT):
+        super().__init__(session)
+        self.process = session.query(Process).get(process_id)
+
+    def __getattr__(self, item):
+        """ Fallback for 'not found' field after the C getattr() call.
+            If we did not enrich a Sample field somehow then return it """
+        return getattr(self.process, item)
 
 
 class EnumeratedProcessSet(MappedTable):

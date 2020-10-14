@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from collections import OrderedDict, namedtuple
-from typing import Dict, Tuple, List, Union, Type, Optional, Any
+from typing import Dict, Tuple, List, Union, Type, Optional
 
 from BO.helpers.TSVHelpers import encode_equal_list
 from DB.Acquisition import Acquisition
@@ -132,16 +132,6 @@ class ProjectMapping(object):
         prj.mappingsample = self.sample_mappings.as_equal_list()
         prj.mappingacq = self.acquisition_mappings.as_equal_list()
         prj.mappingprocess = self.process_mappings.as_equal_list()
-
-    def write_to_object(self, obj: Any) -> None:
-        """
-            Write the mappings into given object, as fields .
-            TODO: hardcoded names, linked with ProjectModel.
-        """
-        setattr(obj, "obj_free_cols", self.object_mappings.tsv_cols_to_real)
-        setattr(obj, "sample_free_cols", self.sample_mappings.tsv_cols_to_real)
-        setattr(obj, "acquisition_free_cols", self.acquisition_mappings.tsv_cols_to_real)
-        setattr(obj, "process_free_cols", self.process_mappings.tsv_cols_to_real)
 
     def load_from_project(self, prj: Project) -> 'ProjectMapping':
         """

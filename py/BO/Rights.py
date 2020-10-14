@@ -31,48 +31,72 @@ class RightsBO(object):
     """
 
     @staticmethod
-    def user_wants(session: Session, user_id: int, action: Action, prj_id: int = None) \
-            -> Tuple[User, Optional[Project]]:
+    def user_wants(session: Session, user_id: int, action: Action, prj_id: int) \
+            -> Tuple[User, Project]:
+        """
+            Check rights for the user to do this specific action onto this project.
+        """
+        # Load ORM entities
+        user: User = session.query(User).get(user_id)
+        project = session.query(Project).get(prj_id)
+        assert project is not None, NOT_FOUND
+        # Check
+        if user.has_role(Role.APP_ADMINISTRATOR):
+            # King of the world
+            pass
+        else:
+            a_priv: ProjectPrivilege
+            # Collect privileges for user on project
+            # noinspection PyTypeChecker
+            rights_on_proj = {a_priv.privilege for a_priv in user.privs_on_projects
+                              if a_priv.projid == prj_id}
+            if action == Action.ADMINISTRATE:
+                assert ProjectPrivilegeBO.MANAGE in rights_on_proj, NOT_AUTHORIZED
+            elif action == Action.ANNOTATE:
+                # TODO: Bah, not nice
+                assert ProjectPrivilegeBO.ANNOTATE in rights_on_proj \
+                       or ProjectPrivilegeBO.MANAGE in rights_on_proj, NOT_AUTHORIZED
+            elif action == Action.READ:
+                # TODO: Bah, not nice either
+                assert project.visible \
+                       or ProjectPrivilegeBO.VIEW in rights_on_proj \
+                       or ProjectPrivilegeBO.ANNOTATE in rights_on_proj \
+                       or ProjectPrivilegeBO.MANAGE in rights_on_proj, NOT_AUTHORIZED
+            else:
+                raise Exception("Not implemented")
+        return user, project
+
+    @staticmethod
+    def user_wants_create_project(session: Session, user_id: int) \
+            -> User:
         """
             Check rights for the user to do this specific action, eventually onto this project.
         """
         # Load ORM entities
         user: User = session.query(User).get(user_id)
-        project: Optional[Project] = None
-        if prj_id is not None:
-            project = session.query(Project).get(prj_id)
+        # action = Action.CREATE_PROJECT
         # Check
         if user.has_role(Role.APP_ADMINISTRATOR):
             # King of the world
-            if action == Action.CREATE_PROJECT:
-                pass
-            else:
-                assert project is not None, NOT_FOUND
+            pass
         else:
-            if action == Action.CREATE_PROJECT:
-                assert user.has_role(Role.PROJECT_CREATOR), NOT_AUTHORIZED
-            else:
-                assert project is not None, NOT_FOUND
-                a_priv: ProjectPrivilege
-                # Collect privileges for user on project
-                # noinspection PyTypeChecker
-                rights_on_proj = {a_priv.privilege for a_priv in user.privs_on_projects
-                                  if a_priv.projid == prj_id}
-                if action == Action.ADMINISTRATE:
-                    assert ProjectPrivilegeBO.MANAGE in rights_on_proj, NOT_AUTHORIZED
-                elif action == Action.ANNOTATE:
-                    # TODO: Bah, not nice
-                    assert ProjectPrivilegeBO.ANNOTATE in rights_on_proj \
-                           or ProjectPrivilegeBO.MANAGE in rights_on_proj, NOT_AUTHORIZED
-                elif action == Action.READ:
-                    # TODO: Bah, not nice either
-                    assert project.visible \
-                           or ProjectPrivilegeBO.VIEW in rights_on_proj \
-                           or ProjectPrivilegeBO.ANNOTATE in rights_on_proj \
-                           or ProjectPrivilegeBO.MANAGE in rights_on_proj, NOT_AUTHORIZED
-                else:
-                    raise Exception("Not implemented")
-        return user, project
+            assert user.has_role(Role.PROJECT_CREATOR), NOT_AUTHORIZED
+        return user
+
+    @staticmethod
+    def anonymous_wants(session: Session, action: Action, prj_id: int) \
+            -> Project:
+        """
+            Check rights for an anonymous user to do this action.
+        """
+        # Load ORM entities
+        project: Optional[Project] = session.query(Project).get(prj_id)
+        # Check
+        if project and action == Action.READ:
+            assert project.visible, NOT_AUTHORIZED
+        else:
+            assert False, NOT_AUTHORIZED
+        return project
 
     @staticmethod
     def user_has_role(session: Session, user_id: int, role: str) -> User:

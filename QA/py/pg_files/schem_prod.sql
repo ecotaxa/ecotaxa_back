@@ -10546,3 +10546,45 @@ TABLESPACE pg_default;
 
 ALTER TABLE public.user_preferences
     OWNER to postgres;
+
+-- Table: public.worms
+
+-- DROP TABLE public.worms;
+
+CREATE TABLE public.worms
+(
+    aphia_id integer NOT NULL,
+    url character varying(255) COLLATE pg_catalog."default",
+    scientificname character varying(128) COLLATE pg_catalog."default",
+    authority character varying(255) COLLATE pg_catalog."default",
+    status character varying(24) COLLATE pg_catalog."default",
+    unacceptreason character varying(150) COLLATE pg_catalog."default",
+    taxon_rank_id smallint,
+    rank character varying(18) COLLATE pg_catalog."default",
+    valid_aphia_id integer,
+    valid_name character varying(128) COLLATE pg_catalog."default",
+    valid_authority character varying(128) COLLATE pg_catalog."default",
+    parent_name_usage_id integer,
+    kingdom character varying(128) COLLATE pg_catalog."default",
+    phylum character varying(129) COLLATE pg_catalog."default",
+    class_ character varying(130) COLLATE pg_catalog."default",
+    "order" character varying(131) COLLATE pg_catalog."default",
+    family character varying(132) COLLATE pg_catalog."default",
+    genus character varying(133) COLLATE pg_catalog."default",
+    citation character varying(1024) COLLATE pg_catalog."default",
+    lsid character varying(257) COLLATE pg_catalog."default",
+    is_marine boolean,
+    is_brackish boolean,
+    is_freshwater boolean,
+    is_terrestrial boolean,
+    is_extinct boolean,
+    match_type character varying(16) COLLATE pg_catalog."default" NOT NULL,
+    modified timestamp without time zone,
+    all_fetched boolean,
+    CONSTRAINT worms_pkey PRIMARY KEY (aphia_id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE public.worms
+    OWNER to postgres;

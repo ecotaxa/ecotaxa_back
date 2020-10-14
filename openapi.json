@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.3"
+    "version":"0.0.4"
   },
   "paths":{
     "/login":{
@@ -61,7 +61,7 @@
           "users"
         ],
         "summary":"Get Users",
-        "description":"Return the list of users.",
+        "description":"Return the list of users. For admins only.",
         "operationId":"get_users_users_get",
         "responses":{
           "200":{
@@ -529,14 +529,14 @@
         ]
       }
     },
-    "/projects/{project_id}/query":{
+    "/projects/{project_id}":{
       "get":{
         "tags":[
           "projects"
         ],
         "summary":"Project Query",
         "description":"See if project exists for current user, eventually for managing it.",
-        "operationId":"project_query_projects__project_id__query_get",
+        "operationId":"project_query_projects__project_id__get",
         "parameters":[
           {
             "required":true,
@@ -566,6 +566,60 @@
                 "schema":{
                   "$ref":"#/components/schemas/ProjectModel"
                 }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      },
+      "delete":{
+        "tags":[
+          "projects"
+        ],
+        "summary":"Erase Project",
+        "description":"Delete the project.\n    Optionally, if \"only_objects\" is set, the project structure is kept,\n        but emptied from any object/sample/acquisition/process\n    Otherwise, no trace of the project will remain in the database.",
+        "operationId":"erase_project_projects__project_id__delete",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Project Id",
+              "type":"integer"
+            },
+            "name":"project_id",
+            "in":"path"
+          },
+          {
+            "required":false,
+            "schema":{
+              "title":"Only Objects",
+              "type":"boolean",
+              "default":false
+            },
+            "name":"only_objects",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
               }
             }
           },
@@ -919,33 +973,68 @@
         ]
       }
     },
-    "/projects/{project_id}":{
-      "delete":{
+    "/sample_set/update":{
+      "post":{
         "tags":[
-          "projects"
+          "samples"
         ],
-        "summary":"Erase Project",
-        "description":"Delete the project.\n    Optionally, if \"only_objects\" is set, the project structure is kept,\n        but emptied from any object/sample/acquisition/process\n    Otherwise, no trace of the project will remain in the database.",
-        "operationId":"erase_project_projects__project_id__delete",
+        "summary":"Update Samples",
+        "description":"Do the required update for each sample in the set. Any non-null field in the model is written to\nevery impacted sample.\n    Return the number of updated entities.",
+        "operationId":"update_samples_sample_set_update_post",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/BulkUpdateReq"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/sample/{sample_id}":{
+      "get":{
+        "tags":[
+          "samples"
+        ],
+        "summary":"Sample Query",
+        "description":"Read a single object.",
+        "operationId":"sample_query_sample__sample_id__get",
         "parameters":[
           {
             "required":true,
             "schema":{
-              "title":"Project Id",
+              "title":"Sample Id",
               "type":"integer"
             },
-            "name":"project_id",
+            "name":"sample_id",
             "in":"path"
-          },
-          {
-            "required":false,
-            "schema":{
-              "title":"Only Objects",
-              "type":"boolean",
-              "default":false
-            },
-            "name":"only_objects",
-            "in":"query"
           }
         ],
         "responses":{
@@ -953,7 +1042,198 @@
             "description":"Successful Response",
             "content":{
               "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/SampleModel"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/acquisition_set/update":{
+      "post":{
+        "tags":[
+          "acquisitions"
+        ],
+        "summary":"Update Acquisitions",
+        "description":"Do the required update for each acquisition in the set.\n    Return the number of updated entities.",
+        "operationId":"update_acquisitions_acquisition_set_update_post",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/BulkUpdateReq"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
                 "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/acquisition/{acquisition_id}":{
+      "get":{
+        "tags":[
+          "acquisitions"
+        ],
+        "summary":"Acquisition Query",
+        "description":"Read a single object.",
+        "operationId":"acquisition_query_acquisition__acquisition_id__get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Acquisition Id",
+              "type":"integer"
+            },
+            "name":"acquisition_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/AcquisitionModel"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/process_set/update":{
+      "post":{
+        "tags":[
+          "processes"
+        ],
+        "summary":"Update Processes",
+        "description":"Do the required update for each process in the set.\n    Return the number of updated entities.",
+        "operationId":"update_processes_process_set_update_post",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/BulkUpdateReq"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Update Processes Process Set Update Post",
+                  "type":"integer"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/process/{process_id}":{
+      "get":{
+        "tags":[
+          "processes"
+        ],
+        "summary":"Process Query",
+        "description":"Read a single object.",
+        "operationId":"process_query_process__process_id__get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Process Id",
+              "type":"integer"
+            },
+            "name":"process_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/ProcessModel"
+                }
               }
             }
           },
@@ -1165,55 +1445,6 @@
         ]
       }
     },
-    "/object_set/":{
-      "delete":{
-        "tags":[
-          "objects"
-        ],
-        "summary":"Erase Object Set",
-        "description":"Delete the objects with given object ids.\nCurrent user needs Manage right on all projects of specified objects.",
-        "operationId":"erase_object_set_object_set__delete",
-        "requestBody":{
-          "content":{
-            "application/json":{
-              "schema":{
-                "title":"Object Ids",
-                "type":"array",
-                "items":{
-                  "type":"integer"
-                }
-              }
-            }
-          },
-          "required":true
-        },
-        "responses":{
-          "200":{
-            "description":"Successful Response",
-            "content":{
-              "application/json":{
-                "schema":{}
-              }
-            }
-          },
-          "422":{
-            "description":"Validation Error",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security":[
-          {
-            "HTTPBearer":[]
-          }
-        ]
-      }
-    },
     "/object_set/update":{
       "post":{
         "tags":[
@@ -1304,6 +1535,151 @@
         ]
       }
     },
+    "/object_set/":{
+      "delete":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Erase Object Set",
+        "description":"Delete the objects with given object ids.\nCurrent user needs Manage right on all projects of specified objects.",
+        "operationId":"erase_object_set_object_set__delete",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "title":"Object Ids",
+                "type":"array",
+                "items":{
+                  "type":"integer"
+                }
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/object/{object_id}":{
+      "get":{
+        "tags":[
+          "object"
+        ],
+        "summary":"Object Query",
+        "description":"Read a single object.",
+        "operationId":"object_query_object__object_id__get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Object Id",
+              "type":"integer"
+            },
+            "name":"object_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/ObjectModel"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/object/{object_id}/history":{
+      "get":{
+        "tags":[
+          "object"
+        ],
+        "summary":"Object Query History",
+        "description":"Read a single object's history.",
+        "operationId":"object_query_history_object__object_id__history_get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Object Id",
+              "type":"integer"
+            },
+            "name":"object_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/ObjectHistoryRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
     "/taxa/search":{
       "get":{
         "tags":[
@@ -1365,122 +1741,32 @@
         ]
       }
     },
-    "/sample_set/update":{
-      "post":{
+    "/taxa/{taxon_id}":{
+      "get":{
         "tags":[
-          "samples"
+          "Taxonomy Tree"
         ],
-        "summary":"Update Samples",
-        "description":"Do the required update for each sample in the set. Any non-null field in the model is written to\nevery impacted sample.\n    Return the number of updated entities.",
-        "operationId":"update_samples_sample_set_update_post",
-        "requestBody":{
-          "content":{
-            "application/json":{
-              "schema":{
-                "$ref":"#/components/schemas/BulkUpdateReq"
-              }
-            }
-          },
-          "required":true
-        },
-        "responses":{
-          "200":{
-            "description":"Successful Response",
-            "content":{
-              "application/json":{
-                "schema":{}
-              }
-            }
-          },
-          "422":{
-            "description":"Validation Error",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security":[
+        "summary":"Query Taxa",
+        "description":"Information about a taxon, including its lineage.",
+        "operationId":"query_taxa_taxa__taxon_id__get",
+        "parameters":[
           {
-            "HTTPBearer":[]
+            "required":true,
+            "schema":{
+              "title":"Taxon Id",
+              "type":"integer"
+            },
+            "name":"taxon_id",
+            "in":"path"
           }
-        ]
-      }
-    },
-    "/acquisition_set/update":{
-      "post":{
-        "tags":[
-          "acquisitions"
         ],
-        "summary":"Update Acquisitions",
-        "description":"Do the required update for each acquisition in the set.\n    Return the number of updated entities.",
-        "operationId":"update_acquisitions_acquisition_set_update_post",
-        "requestBody":{
-          "content":{
-            "application/json":{
-              "schema":{
-                "$ref":"#/components/schemas/BulkUpdateReq"
-              }
-            }
-          },
-          "required":true
-        },
-        "responses":{
-          "200":{
-            "description":"Successful Response",
-            "content":{
-              "application/json":{
-                "schema":{}
-              }
-            }
-          },
-          "422":{
-            "description":"Validation Error",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security":[
-          {
-            "HTTPBearer":[]
-          }
-        ]
-      }
-    },
-    "/process_set/update":{
-      "post":{
-        "tags":[
-          "processes"
-        ],
-        "summary":"Update Processes",
-        "description":"Do the required update for each process in the set.\n    Return the number of updated entities.",
-        "operationId":"update_processes_process_set_update_post",
-        "requestBody":{
-          "content":{
-            "application/json":{
-              "schema":{
-                "$ref":"#/components/schemas/BulkUpdateReq"
-              }
-            }
-          },
-          "required":true
-        },
         "responses":{
           "200":{
             "description":"Successful Response",
             "content":{
               "application/json":{
                 "schema":{
-                  "title":"Response Update Processes Process Set Update Post",
-                  "type":"integer"
+                  "$ref":"#/components/schemas/TaxonModel"
                 }
               }
             }
@@ -1559,7 +1845,7 @@
           "misc"
         ],
         "summary":"Do Nothing",
-        "description":"This entry point will just do nothing.\n    It's also used for exporting models we could need on client side.",
+        "description":"This entry point will just do nothing.\n    It's also used for exporting models we need on client side.",
         "operationId":"do_nothing_noop_get",
         "responses":{
           "200":{
@@ -1567,7 +1853,15 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "$ref":"#/components/schemas/ObjectHeaderModel"
+                  "title":"Response Do Nothing Noop Get",
+                  "anyOf":[
+                    {
+                      "$ref":"#/components/schemas/ObjectHeaderModel"
+                    },
+                    {
+                      "$ref":"#/components/schemas/HistoricalClassification"
+                    }
+                  ]
                 }
               }
             }
@@ -1583,6 +1877,33 @@
   },
   "components":{
     "schemas":{
+      "AcquisitionModel":{
+        "title":"AcquisitionModel",
+        "type":"object",
+        "properties":{
+          "acquisid":{
+            "title":"Acquisid",
+            "type":"integer"
+          },
+          "projid":{
+            "title":"Projid",
+            "type":"integer"
+          },
+          "orig_id":{
+            "title":"Orig Id",
+            "type":"string"
+          },
+          "instrument":{
+            "title":"Instrument",
+            "type":"string"
+          },
+          "free_columns":{
+            "title":"Free columns from acquisition mapping in project",
+            "type":"object",
+            "default":{}
+          }
+        }
+      },
       "BulkUpdateReq":{
         "title":"BulkUpdateReq",
         "required":[
@@ -1669,8 +1990,51 @@
           }
         }
       },
-      "HistoricalClassif":{
-        "title":"HistoricalClassif",
+      "HistoricalClassification":{
+        "title":"HistoricalClassification",
+        "type":"object",
+        "properties":{
+          "objid":{
+            "title":"Objid",
+            "type":"integer"
+          },
+          "classif_id":{
+            "title":"Classif Id",
+            "type":"integer"
+          },
+          "classif_date":{
+            "title":"Classif Date",
+            "type":"string",
+            "format":"date-time"
+          },
+          "classif_who":{
+            "title":"Classif Who",
+            "type":"integer"
+          },
+          "classif_type":{
+            "title":"Classif Type",
+            "type":"string"
+          },
+          "classif_qual":{
+            "title":"Classif Qual",
+            "type":"string"
+          },
+          "classif_score":{
+            "title":"Classif Score",
+            "type":"number"
+          },
+          "user_name":{
+            "title":"User Name",
+            "type":"string"
+          },
+          "taxon_name":{
+            "title":"Taxon Name",
+            "type":"string"
+          }
+        }
+      },
+      "HistoricalLastClassif":{
+        "title":"HistoricalLastClassif",
         "type":"object",
         "properties":{
           "objid":{
@@ -1700,6 +2064,52 @@
           },
           "histo_classif_who":{
             "title":"Histo Classif Who",
+            "type":"integer"
+          }
+        }
+      },
+      "ImageModel":{
+        "title":"ImageModel",
+        "type":"object",
+        "properties":{
+          "imgid":{
+            "title":"Imgid",
+            "type":"integer"
+          },
+          "objid":{
+            "title":"Objid",
+            "type":"integer"
+          },
+          "imgrank":{
+            "title":"Imgrank",
+            "type":"integer"
+          },
+          "file_name":{
+            "title":"File Name",
+            "type":"string"
+          },
+          "orig_file_name":{
+            "title":"Orig File Name",
+            "type":"string"
+          },
+          "width":{
+            "title":"Width",
+            "type":"integer"
+          },
+          "height":{
+            "title":"Height",
+            "type":"integer"
+          },
+          "thumb_file_name":{
+            "title":"Thumb File Name",
+            "type":"string"
+          },
+          "thumb_width":{
+            "title":"Thumb Width",
+            "type":"integer"
+          },
+          "thumb_height":{
+            "title":"Thumb Height",
             "type":"integer"
           }
         }
@@ -2021,6 +2431,155 @@
           }
         }
       },
+      "ObjectHistoryRsp":{
+        "title":"ObjectHistoryRsp",
+        "type":"object",
+        "properties":{
+          "classif":{
+            "title":"The classification history",
+            "type":"array",
+            "items":{
+              "$ref":"#/components/schemas/HistoricalClassification"
+            },
+            "default":[]
+          }
+        }
+      },
+      "ObjectModel":{
+        "title":"ObjectModel",
+        "required":[
+          "orig_id",
+          "projid"
+        ],
+        "type":"object",
+        "properties":{
+          "orig_id":{
+            "title":"Original object ID from initial TSV load",
+            "type":"string"
+          },
+          "object_link":{
+            "title":"Object link",
+            "type":"string"
+          },
+          "objid":{
+            "title":"Objid",
+            "type":"integer"
+          },
+          "projid":{
+            "title":"Projid",
+            "type":"integer"
+          },
+          "objdate":{
+            "title":"Objdate",
+            "type":"string",
+            "format":"date"
+          },
+          "objtime":{
+            "title":"Objtime",
+            "type":"string",
+            "format":"time"
+          },
+          "latitude":{
+            "title":"Latitude",
+            "type":"number"
+          },
+          "longitude":{
+            "title":"Longitude",
+            "type":"number"
+          },
+          "depth_min":{
+            "title":"Depth Min",
+            "type":"number"
+          },
+          "depth_max":{
+            "title":"Depth Max",
+            "type":"number"
+          },
+          "sunpos":{
+            "title":"Sunpos",
+            "type":"string"
+          },
+          "classif_id":{
+            "title":"Classif Id",
+            "type":"integer"
+          },
+          "classif_qual":{
+            "title":"Classif Qual",
+            "type":"string"
+          },
+          "classif_who":{
+            "title":"Classif Who",
+            "type":"integer"
+          },
+          "classif_when":{
+            "title":"Classif When",
+            "type":"string",
+            "format":"date-time"
+          },
+          "classif_auto_id":{
+            "title":"Classif Auto Id",
+            "type":"integer"
+          },
+          "classif_auto_score":{
+            "title":"Classif Auto Score",
+            "type":"number"
+          },
+          "classif_auto_when":{
+            "title":"Classif Auto When",
+            "type":"string",
+            "format":"date-time"
+          },
+          "classif_crossvalidation_id":{
+            "title":"Classif Crossvalidation Id",
+            "type":"integer"
+          },
+          "img0id":{
+            "title":"Img0Id",
+            "type":"integer"
+          },
+          "imgcount":{
+            "title":"Imgcount",
+            "type":"integer"
+          },
+          "complement_info":{
+            "title":"Complement Info",
+            "type":"string"
+          },
+          "similarity":{
+            "title":"Similarity",
+            "type":"number"
+          },
+          "random_value":{
+            "title":"Random Value",
+            "type":"integer"
+          },
+          "sampleid":{
+            "title":"Sampleid",
+            "type":"integer"
+          },
+          "acquisid":{
+            "title":"Acquisid",
+            "type":"integer"
+          },
+          "processid":{
+            "title":"Processid",
+            "type":"integer"
+          },
+          "images":{
+            "title":"Images for this object",
+            "type":"array",
+            "items":{
+              "$ref":"#/components/schemas/ImageModel"
+            },
+            "default":[]
+          },
+          "free_columns":{
+            "title":"Free columns from object mapping in project",
+            "type":"object",
+            "default":{}
+          }
+        }
+      },
       "ObjectSetQueryRsp":{
         "title":"ObjectSetQueryRsp",
         "type":"object",
@@ -2067,12 +2626,35 @@
             "title":"Object + last classification",
             "type":"array",
             "items":{
-              "$ref":"#/components/schemas/HistoricalClassif"
+              "$ref":"#/components/schemas/HistoricalLastClassif"
             },
             "default":[]
           },
           "classif_info":{
             "title":"Classification names (self+parent) for involved IDs",
+            "type":"object",
+            "default":{}
+          }
+        }
+      },
+      "ProcessModel":{
+        "title":"ProcessModel",
+        "type":"object",
+        "properties":{
+          "processid":{
+            "title":"Processid",
+            "type":"integer"
+          },
+          "projid":{
+            "title":"Projid",
+            "type":"integer"
+          },
+          "orig_id":{
+            "title":"Orig Id",
+            "type":"string"
+          },
+          "free_columns":{
+            "title":"Free columns from process mapping in project",
             "type":"object",
             "default":{}
           }
@@ -2231,6 +2813,27 @@
             },
             "default":{}
           },
+          "managers":{
+            "title":"Managers of this project",
+            "type":"array",
+            "items":{
+              "$ref":"#/components/schemas/UserModel"
+            },
+            "default":[]
+          },
+          "annotators":{
+            "title":"Annotators of this project, if not manager",
+            "type":"array",
+            "items":{
+              "$ref":"#/components/schemas/UserModel"
+            },
+            "default":[]
+          },
+          "can_administrate":{
+            "title":"Requester can administrate the project",
+            "type":"boolean",
+            "default":false
+          },
           "projid":{
             "title":"Projid",
             "type":"integer"
@@ -2245,22 +2848,6 @@
           },
           "status":{
             "title":"Status",
-            "type":"string"
-          },
-          "mappingobj":{
-            "title":"Mappingobj",
-            "type":"string"
-          },
-          "mappingsample":{
-            "title":"Mappingsample",
-            "type":"string"
-          },
-          "mappingacq":{
-            "title":"Mappingacq",
-            "type":"string"
-          },
-          "mappingprocess":{
-            "title":"Mappingprocess",
             "type":"string"
           },
           "objcount":{
@@ -2377,6 +2964,41 @@
           "visible":{
             "title":"Visible",
             "type":"boolean"
+          }
+        }
+      },
+      "SampleModel":{
+        "title":"SampleModel",
+        "type":"object",
+        "properties":{
+          "sampleid":{
+            "title":"Sampleid",
+            "type":"integer"
+          },
+          "projid":{
+            "title":"Projid",
+            "type":"integer"
+          },
+          "orig_id":{
+            "title":"Orig Id",
+            "type":"string"
+          },
+          "latitude":{
+            "title":"Latitude",
+            "type":"number"
+          },
+          "longitude":{
+            "title":"Longitude",
+            "type":"number"
+          },
+          "dataportal_descriptor":{
+            "title":"Dataportal Descriptor",
+            "type":"string"
+          },
+          "free_columns":{
+            "title":"Free columns from sample mapping in project",
+            "type":"object",
+            "default":{}
           }
         }
       },
@@ -2532,6 +3154,32 @@
           }
         }
       },
+      "TaxonModel":{
+        "title":"TaxonModel",
+        "required":[
+          "id",
+          "display_name",
+          "lineage"
+        ],
+        "type":"object",
+        "properties":{
+          "id":{
+            "title":"The taxon/category IDs",
+            "type":"integer"
+          },
+          "display_name":{
+            "title":"The taxon/category full name",
+            "type":"string"
+          },
+          "lineage":{
+            "title":"The taxon/category name of ancestors",
+            "type":"array",
+            "items":{
+              "type":"string"
+            }
+          }
+        }
+      },
       "UserModel":{
         "title":"UserModel",
         "required":[
@@ -2559,10 +3207,6 @@
           "active":{
             "title":"Active",
             "type":"boolean"
-          },
-          "preferences":{
-            "title":"Preferences",
-            "type":"string"
           },
           "country":{
             "title":"Country",

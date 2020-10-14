@@ -8,7 +8,7 @@ from sqlalchemy import and_
 
 from .Acquisition import Acquisition
 from .Image import Image
-from .Object import ObjectHeader, ObjectFields, ObjectCNNFeature
+from .Object import ObjectHeader, ObjectFields, ObjectCNNFeature, ObjectsClassifHisto
 # Particle project
 from .ParticleProject import ParticleProject, ParticleSample
 from .Process import Process
@@ -93,6 +93,8 @@ Acquisition.all_objects = relationship(ObjectHeader)
 ObjectHeader.process = relationship(Process)
 Process.all_objects = relationship(ObjectHeader)
 
+ObjectHeader.history = relationship(ObjectsClassifHisto)
+ObjectsClassifHisto.object = relationship(ObjectHeader)
 # Task
 Task.owner = relationship(User)
 

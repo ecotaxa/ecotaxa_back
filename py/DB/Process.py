@@ -11,6 +11,8 @@ from sqlalchemy.orm import relationship, Session
 
 from DB.helpers.ORM import Model
 
+PROCESS_FREE_COLUMNS = 31
+
 
 class Process(Model):
     # DB table
@@ -46,6 +48,6 @@ class Process(Model):
         return "{0} ({1})".format(self.orig_id, self.processid)
 
 
-for i in range(1, 31):
+for i in range(1, PROCESS_FREE_COLUMNS):
     setattr(Process, "t%02d" % i, Column(VARCHAR(250)))
 Index('IS_ProcessProject', Process.projid)

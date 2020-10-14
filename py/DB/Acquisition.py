@@ -11,6 +11,7 @@ from sqlalchemy.orm import relationship, Session
 
 from DB.helpers.ORM import Model
 
+ACQUISITION_FREE_COLUMNS = 31
 
 class Acquisition(Model):
     # Historical (plural) name of the table
@@ -49,6 +50,6 @@ class Acquisition(Model):
         return "{0} ({1})".format(self.orig_id, self.acquisid)
 
 
-for i in range(1, 31):
+for i in range(1, ACQUISITION_FREE_COLUMNS):
     setattr(Acquisition, "t%02d" % i, Column(VARCHAR(250)))
 Index('IS_AcquisitionsProject', Acquisition.projid)

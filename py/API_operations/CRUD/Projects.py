@@ -10,7 +10,7 @@ from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from DB import Sample
 from DB.Project import Project, ANNOTATE_STATUS
-from DB.User import User
+from DB.User import User, Role
 from DB.helpers.ORM import clone_of
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
@@ -29,7 +29,7 @@ class ProjectsService(Service):
         """
             Create a project, eventually as a shallow copy of another.
         """
-        current_user, project = RightsBO.user_wants(self.session, current_user_id, Action.CREATE_PROJECT)
+        current_user = RightsBO.user_wants_create_project(self.session, current_user_id)
         if req.clone_of_id:
             prj = self.session.query(Project).get(req.clone_of_id)
             if prj is None:
@@ -64,15 +64,15 @@ class ProjectsService(Service):
 
     def query(self, current_user_id: int,
               prj_id: int,
-              for_managing: bool) -> Project:
+              for_managing: bool) -> ProjectBO:
         current_user, project = RightsBO.user_wants(self.session, current_user_id,
                                                     Action.ADMINISTRATE if for_managing else Action.READ,
                                                     prj_id)
-        # For mypy check. Explanation: should the project be not found, there has been an assertion which failed before,
-        # so we don't reach this line.
-        assert project is not None
-
-        return project
+        ret = ProjectBO(self.session, prj_id)
+        ret.enrich()
+        if current_user.has_role(Role.APP_ADMINISTRATOR):
+            ret.can_administrate = True
+        return ret
 
     DELETE_CHUNK_SIZE = 400
 

@@ -19,6 +19,7 @@ from helpers.Timer import CodeTimer
 logger = get_logger(__name__)
 
 # Typings, to be clear that these are not e.g. object IDs
+ProjectIDT = int
 ProjectIDListT = List[int]
 
 
@@ -28,7 +29,9 @@ class ProjectBO(object):
     """
 
     def __init__(self, session: Session, prj_id: int):
+        self._session = session
         self.project: Optional[Project] = session.query(Project).get(prj_id)
+        self.can_administrate = False
 
     def get_preset(self) -> ClassifIDListT:
         """
@@ -40,6 +43,29 @@ class ProjectBO(object):
         if not init_list:
             return []
         return [int(cl_id) for cl_id in init_list.split(",")]
+
+    def enrich(self):
+        """
+            Add DB fields and relations as (hopefully more) meaningful attributes
+        """
+        mappings = ProjectMapping()
+        mappings.load_from_project(self.project)
+        self.obj_free_cols = mappings.object_mappings.tsv_cols_to_real
+        self.sample_free_cols = mappings.sample_mappings.tsv_cols_to_real
+        self.acquisition_free_cols = mappings.acquisition_mappings.tsv_cols_to_real
+        self.process_free_cols = mappings.process_mappings.tsv_cols_to_real
+        a_priv: ProjectPrivilege
+        # noinspection PyTypeChecker
+        self.managers = [a_priv.user for a_priv in self.project.privs_for_members
+                         if a_priv.privilege == ProjectPrivilegeBO.MANAGE]
+        # noinspection PyTypeChecker
+        self.annotators = [a_priv.user for a_priv in self.project.privs_for_members
+                           if a_priv.privilege == ProjectPrivilegeBO.ANNOTATE]
+
+    def __getattr__(self, item):
+        """ Fallback for 'not found' field after the C getattr() call.
+            If we did not enrich a Project field somehow then return it """
+        return getattr(self.project, item)
 
     @staticmethod
     def update_stats(session: Session, projid: int):
@@ -259,15 +285,6 @@ class ProjectBO(object):
         """
         qry: Query = session.query(ObjectHeader.objid).filter(ObjectHeader.projid == prj_id)
         return [an_id for an_id in qry.all()]
-
-    @classmethod
-    def enrich(cls, prj: Project):
-        """
-            Add mappings in serializable form.
-        """
-        mappings = ProjectMapping()
-        mappings.load_from_project(prj)
-        mappings.write_to_object(prj)
 
     @classmethod
     def incremental_update_taxo_stats(cls, session: Session, prj_id: int, collated_changes: Dict):

@@ -13,7 +13,7 @@ from API_operations.ObjectManager import ObjectManager
 from deepdiff import DeepDiff
 from starlette import status
 
-from tests.test_fastapi import client, ADMIN_AUTH
+from tests.test_fastapi import ADMIN_AUTH
 from tests.test_import import ADMIN_USER_ID, test_import_uvp6, test_import_images
 from tests.test_subset_merge import check_project
 
@@ -189,7 +189,7 @@ def test_api_updates(config, database, fastapi, caplog):
 
     # Recompute geo, which is a kind of update
     url = RECOMPUTE_GEO_URL.format(project_id=prj_id)
-    rsp = client.post(url, headers=ADMIN_AUTH)
+    rsp = fastapi.post(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
 
     acquis_id, process_id, sample_id = _get_ids(prj_id)
@@ -200,7 +200,7 @@ def test_api_updates(config, database, fastapi, caplog):
            "updates":
                [{"ucol": "chip", "uval": "sagitta4"}]
            }
-    rsp = client.post(url, headers=ADMIN_AUTH, json=req)
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json() == 0
 
@@ -210,7 +210,7 @@ def test_api_updates(config, database, fastapi, caplog):
            "updates":
                [{"ucol": "latitude", "uval": 52.6}]
            }
-    rsp = client.post(url, headers=ADMIN_AUTH, json=req)
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json() == 1
 
@@ -220,7 +220,7 @@ def test_api_updates(config, database, fastapi, caplog):
            "updates":
                [{"ucol": "instrument", "uval": "trompette"}]
            }
-    rsp = client.post(url, headers=ADMIN_AUTH, json=req)
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json() == 1
 
@@ -230,7 +230,7 @@ def test_api_updates(config, database, fastapi, caplog):
            "updates":
                [{"ucol": "orig_id", "uval": "no more dummy"}]
            }
-    rsp = client.post(url, headers=ADMIN_AUTH, json=req)
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json() == 1
 
@@ -246,7 +246,7 @@ def test_api_updates(config, database, fastapi, caplog):
                 # magic but doesn't work as it's either ObjectHeader or ObjectFields
                 {"ucol": "classif_when", "uval": "current_timestamp"}]
            }
-    rsp = client.post(url, headers=ADMIN_AUTH, json=req)
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json() == 4
 
@@ -255,6 +255,6 @@ def test_api_updates(config, database, fastapi, caplog):
                [  # magic and works
                    {"ucol": "classif_when", "uval": "current_timestamp"}]
            }
-    rsp = client.post(url, headers=ADMIN_AUTH, json=req)
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json() == 4

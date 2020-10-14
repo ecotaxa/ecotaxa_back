@@ -25,7 +25,7 @@ def dataclass_to_model(clazz: T) -> PydanticModelT:
     model_fields = {}
     a_field: dataclasses.Field
     for a_field in dataclasses.fields(clazz):
-        if a_field.type in (str, Optional[str], int, datetime.datetime):
+        if a_field.type in (str, Optional[str], int, float, datetime.datetime):
             model_fields[a_field.name] = (a_field.type, None)
         else:
             # app doesn't even start if below is raised -> nocover

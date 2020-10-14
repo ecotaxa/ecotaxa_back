@@ -31,7 +31,7 @@ from ordered_set import OrderedSet
 from starlette import status
 
 from tests.credentials import CREATOR_AUTH, CREATOR_USER_ID
-from tests.test_fastapi import PRJ_CREATE_URL, client, ADMIN_AUTH, PROJECT_QUERY_URL
+from tests.test_fastapi import PRJ_CREATE_URL, ADMIN_AUTH, PROJECT_QUERY_URL
 from tests.test_import import ADMIN_USER_ID, test_import_uvp6, DATA_DIR, do_import
 
 OUT_JSON = "out.json"
@@ -56,7 +56,7 @@ def test_check_project_via_api(prj_id: int, fastapi):
     if prj_id == -1:  # Hack to avoid the test being marked as 'skipped'
         return
     url = PROJECT_CHECK_URL.format(project_id=prj_id)
-    response = client.get(url, headers=ADMIN_AUTH)
+    response = fastapi.get(url, headers=ADMIN_AUTH)
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == []
 
@@ -130,7 +130,7 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
     # Re-merge subset into origin project
     # First a dry run to be sure, via API for variety
     url = PROJECT_MERGE_URL.format(project_id=prj_id, source_project_id=subset_prj_id, dry_run=True)
-    response = client.post(url, headers=ADMIN_AUTH)
+    response = fastapi.post(url, headers=ADMIN_AUTH)
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["errors"] == []
     # Then for real
@@ -195,7 +195,7 @@ def test_merge_remap(config, database, fastapi, caplog):
     check_project(prj_id2)
     # Merge
     url = PROJECT_MERGE_URL.format(project_id=prj_id, source_project_id=prj_id2, dry_run=False)
-    response = client.post(url, headers=ADMIN_AUTH)
+    response = fastapi.post(url, headers=ADMIN_AUTH)
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["errors"] == []
     # Dump the dest
@@ -258,7 +258,7 @@ def test_empty_subset_uvp6(config, database, fastapi, caplog):
     # A bit of fastapi testing
     # TODO for #484: Ensure it's a 200 for dst_prj_id and a non-admin user
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
-    response = client.get(url, headers=ADMIN_AUTH)
+    response = fastapi.get(url, headers=ADMIN_AUTH)
     assert response.status_code == status.HTTP_200_OK
 
 
@@ -269,9 +269,9 @@ def test_api_subset(config, database, fastapi, caplog):
     # Subset a fresh project, why not?
     # Create an empty project
     url1 = PRJ_CREATE_URL
-    res = client.post(url1, headers=ADMIN_AUTH, json={"title": "API subset src test"})
+    res = fastapi.post(url1, headers=ADMIN_AUTH, json={"title": "API subset src test"})
     src_prj_id = res.json()
-    res = client.post(url1, headers=ADMIN_AUTH, json={"title": "API subset tgt test"})
+    res = fastapi.post(url1, headers=ADMIN_AUTH, json={"title": "API subset tgt test"})
     tgt_prj_id = res.json()
     # Create a task for this run
     task_id = TaskService().create()
@@ -282,7 +282,7 @@ def test_api_subset(config, database, fastapi, caplog):
            "limit_type": "P",
            "limit_value": 10,
            "do_images": True}
-    response = client.post(url, headers=ADMIN_AUTH, json=req)
+    response = fastapi.post(url, headers=ADMIN_AUTH, json=req)
     assert response.json()["errors"] == ['No object found to clone into subset.']
 
     test_check_project_via_api(tgt_prj_id, fastapi)

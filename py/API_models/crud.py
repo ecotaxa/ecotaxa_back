@@ -4,27 +4,40 @@
 #
 #  Models used in CRUD API_operations.
 #
-from typing import Optional, Dict, Type, Iterable, List
+from typing import Optional, Dict, Type, Iterable, List, Any
 
 from sqlalchemy.sql.functions import current_timestamp
 from typing_extensions import TypedDict
 
-from DB import User, Project, Sample, Acquisition, Process, ObjectHeader
+from DB import User, Project, Sample, Acquisition, Process
+from DB.Acquisition import ACQUISITION_FREE_COLUMNS
+from DB.Process import PROCESS_FREE_COLUMNS
+from DB.Sample import SAMPLE_FREE_COLUMNS
 from helpers.pydantic import BaseModel, Field
 from .helpers.DBtoModel import sqlalchemy_to_pydantic
 from .helpers.TypedDictToModel import typed_dict_to_model
 
-# Direct mirror of DB models
-UserModel = sqlalchemy_to_pydantic(User, exclude=[User.password.name])
-SampleModel = sqlalchemy_to_pydantic(Sample)
-AcquisitionModel = sqlalchemy_to_pydantic(Acquisition)
-ProcessModel = sqlalchemy_to_pydantic(Process)
-ObjectHeaderModel = sqlalchemy_to_pydantic(ObjectHeader)
-# This one goes over the limit of 255 fields in OpenAPI generator
-# ObjectFieldsModel = sqlalchemy_to_pydantic(ObjectFields)
-
 # Enriched model
 FreeColT = Dict[str, str]
+
+# Direct mirror of DB models
+_UserModelFromDB = sqlalchemy_to_pydantic(User, exclude=[User.password.name,
+                                                         User.preferences.name])
+_ProjectModelFromDB: Type = sqlalchemy_to_pydantic(Project, exclude=[Project.mappingobj.name,
+                                                                     Project.mappingacq.name,
+                                                                     Project.mappingprocess.name,
+                                                                     Project.mappingsample.name])
+# We exclude free columns from base model, they will be mapped in a dedicated sub-entity
+_SampleModelFromDB = sqlalchemy_to_pydantic(Sample,
+                                            exclude=["t%02d" % i for i in range(1, SAMPLE_FREE_COLUMNS)])
+_AcquisitionModelFromDB = sqlalchemy_to_pydantic(Acquisition,
+                                                 exclude=["t%02d" % i for i in range(1, ACQUISITION_FREE_COLUMNS)])
+_ProcessModelFromDB = sqlalchemy_to_pydantic(Process,
+                                             exclude=["t%02d" % i for i in range(1, PROCESS_FREE_COLUMNS)])
+
+
+class UserModel(_UserModelFromDB):  # type:ignore
+    pass
 
 
 class _AddedToProject(BaseModel):
@@ -36,6 +49,12 @@ class _AddedToProject(BaseModel):
                                             default={})
     process_free_cols: FreeColT = Field(title="Process free columns",
                                         default={})
+    managers: List[UserModel] = Field(title="Managers of this project",
+                                      default=[])
+    annotators: List[UserModel] = Field(title="Annotators of this project, if not manager",
+                                        default=[])
+    can_administrate: bool = Field(title="Requester can administrate the project",
+                                   default=False)
 
     class Config:
         schema_extra = {
@@ -48,15 +67,26 @@ class _AddedToProject(BaseModel):
         }
 
 
-# TODO: Example for project fields
-_ProjectModelFromDB: Type = sqlalchemy_to_pydantic(Project)
-
-
 # TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
 class ProjectModel(_ProjectModelFromDB, _AddedToProject):  # type:ignore
     """
         Project + computed
     """
+
+
+class SampleModel(_SampleModelFromDB):  # type:ignore
+    free_columns: Dict[str, Any] = Field(title="Free columns from sample mapping in project",
+                                         default={})
+
+
+class AcquisitionModel(_AcquisitionModelFromDB):  # type:ignore
+    free_columns: Dict[str, Any] = Field(title="Free columns from acquisition mapping in project",
+                                         default={})
+
+
+class ProcessModel(_ProcessModelFromDB):  # type:ignore
+    free_columns: Dict[str, Any] = Field(title="Free columns from process mapping in project",
+                                         default={})
 
 
 class CreateProjectReq(BaseModel):
