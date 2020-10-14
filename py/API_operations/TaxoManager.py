@@ -68,11 +68,12 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         return a_str
 
     # noinspection PyPep8Naming
-    def json_to_ORM(self, a_child: Dict) -> WoRMS:
+    @staticmethod
+    def json_to_ORM(a_child: Dict) -> WoRMS:
         """
             Prepare a DB record from the JSON structure returned by WoRMS REST API.
         """
-        to_lat1 = self.to_latin1_compat
+        to_lat1 = TaxonomyChangeService.to_latin1_compat
         ret = WoRMS()
         ret.aphia_id = a_child["AphiaID"]
         ret.kingdom = a_child["kingdom"]
@@ -172,7 +173,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         if len(children_ids) > 0:
             try:
                 self.session.commit()
-            except Exception as e:
+            except Exception as _e:
                 self.session.rollback()
                 return self._do_one_by_one(added_children)
         # Signal done

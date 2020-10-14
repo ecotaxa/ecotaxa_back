@@ -15,7 +15,7 @@ ClassifIDCollT = Iterable[int]
 
 
 @dataclass(init=False)
-class HistoricalClassif(DataclassAsDict):
+class HistoricalLastClassif(DataclassAsDict):
     """
         Association b/w an object and a former taxonomy entry.
     """
@@ -26,3 +26,22 @@ class HistoricalClassif(DataclassAsDict):
     histo_classif_id: ClassifIDT
     histo_classif_qual: str
     histo_classif_who: int
+
+
+HistoricalClassificationListT = List['HistoricalClassification']
+
+
+@dataclass(init=False)
+class HistoricalClassification(DataclassAsDict):
+    """
+        Former Taxonomy change operations onto an object, with names for display.
+    """
+    objid: int
+    classif_id: ClassifIDT
+    classif_date: datetime.datetime
+    classif_who: int  # 'UserIDT' makes a circular dependency issue
+    classif_type: str
+    classif_qual: str
+    classif_score: float
+    user_name: str
+    taxon_name:str

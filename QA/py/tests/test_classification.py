@@ -7,6 +7,7 @@ import logging
 from starlette import status
 
 from tests.credentials import CREATOR_AUTH, ORDINARY_USER2_USER_ID, ADMIN_AUTH
+from tests.test_subentities import OBJECT_HISTORY_QUERY_URL
 
 OBJECT_SET_QUERY_URL = "/object_set/{project_id}/query"
 
@@ -42,6 +43,13 @@ def test_classif(config, database, fastapi, caplog):
     # Security barrier
     assert rsp.status_code == status.HTTP_403_FORBIDDEN
 
+    # Working revert, erase all from import - dry first
+    url = OBJECT_SET_REVERT_URL.format(project_id=prj_id, dry_run=True, tgt_usr="")
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
+    assert rsp.status_code == status.HTTP_200_OK
+    stats = rsp.json()
+    assert len(stats['classif_info']) == 6
+    assert len(stats['last_entries']) == 8
     # Working revert, erase all from import
     url = OBJECT_SET_REVERT_URL.format(project_id=prj_id, dry_run=False, tgt_usr="")
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
@@ -55,13 +63,45 @@ def test_classif(config, database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
 
     # Admin (me!) thinks that all is a copepod :)
-    url = OBJECT_SET_CLASSIFY_URL
+    def classify_all(classif_id):
+        url = OBJECT_SET_CLASSIFY_URL
+        classifications = [classif_id for _obj in obj_ids]
+        rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
+                                                          "classifications": classifications,
+                                                          "wanted_qualification": "V"})
+        assert rsp.status_code == status.HTTP_200_OK
+
     copepod_id = 25828
-    classifications = [copepod_id for _obj in obj_ids]
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
-                                                      "classifications": classifications,
-                                                      "wanted_qualification": "V"})
-    assert rsp.status_code == status.HTTP_200_OK
+    classify_all(copepod_id)
+
+    # No history yet as the object was just created
+    def classif_history():
+        url = OBJECT_HISTORY_QUERY_URL.format(object_id=obj_ids[0])
+        response = fastapi.get(url, headers=ADMIN_AUTH)
+        assert response.status_code == status.HTTP_200_OK
+        return response.json()["classif"]
+
+    classif = classif_history()
+    assert classif is not None
+    assert len(classif) == 0
+
+    # Not a copepod :(
+    entomobryomorpha_id = 25835
+    classify_all(entomobryomorpha_id)
+
+    classif2 = classif_history()
+    assert classif2 is not None
+    # Date is not predictable
+    classif2[0]['classif_date'] = 'hopefully just now'
+    assert classif2 == [{'classif_date': 'hopefully just now',
+                         'classif_id': 25828,
+                         'classif_qual': 'V',
+                         'classif_score': None,
+                         'classif_type': 'M',
+                         'classif_who': 1,
+                         'objid': 1,
+                         'taxon_name': 'Copepoda',
+                         'user_name': 'Application Administrator'}]
 
     # There should be 0 predicted
     obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id, statusfilter='P')

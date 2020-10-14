@@ -8,12 +8,24 @@ from typing import List, Set, Dict, Tuple
 
 from BO.Classification import ClassifIDCollT, ClassifIDT, ClassifIDListT
 from DB import ResultProxy, Taxonomy
-from DB.helpers.ORM import Session, any_, case, concat, func, text, select
+from DB.helpers.ORM import Session, any_, case, func, text, select
 from helpers.DynamicLogs import get_logger
 
 ClassifSetInfoT = Dict[ClassifIDT, Tuple[str, str]]
 
 logger = get_logger(__name__)
+
+
+class TaxonBO(object):
+    """
+        Holder fo a leaf of the tree.
+    """
+
+    def __init__(self, session: Session, taxon_id: ClassifIDT):
+        self.id = taxon_id
+        db_taxo = session.query(Taxonomy).get(taxon_id)
+        self.display_name = db_taxo.display_name
+        self.lineage = [parent_name for (_id, parent_name) in TaxonomyBO.parents_of(session, taxon_id)]
 
 
 class TaxonomyBO(object):
@@ -57,7 +69,7 @@ class TaxonomyBO(object):
                     taxo_found[found_k]['id'] = rec_taxon['id']
 
     @staticmethod
-    def names_for(session: Session, id_list: List[int]):
+    def names_for(session: Session, id_list: List[int]) -> Dict[int, str]:
         """
             Get taxa names from id list.
         """
@@ -105,6 +117,24 @@ class TaxonomyBO(object):
             {"ids": id_list})
         return {int(r['id']) for r in res}
 
+    @staticmethod
+    def parents_of(session: Session, taxon_id: int) -> List[Tuple[int, str]]:
+        """
+            Get id parent taxa (id+name) for given id.
+        """
+        res: ResultProxy = session.execute(
+            """WITH RECURSIVE rq(id) 
+                AS (SELECT id, parent_id, name
+                      FROM taxonomy 
+                     WHERE id = :tid
+                     UNION
+                    SELECT t.id, t.parent_id, t.name
+                      FROM rq 
+                      JOIN taxonomy t ON t.id = rq.parent_id )
+               SELECT id, name FROM rq """,
+            {"tid": taxon_id})
+        return [(r['id'], r['name']) for r in res]
+
     MAX_MATCHES = 200
     MAX_TAXONOMY_LEVELS = 15
 
@@ -113,8 +143,10 @@ class TaxonomyBO(object):
               restrict_to: ClassifIDListT, priority_set: ClassifIDListT,
               display_name_filter: str, name_filters: List[str]):
         """
+        :param session:
         :param restrict_to: If not None, limit the query to given IDs.
         :param priority_set: Regardless of MAX_MATCHES, these IDs must appear in the result if they match.
+        :param display_name_filter:
         :param name_filters:
         :return:
         """

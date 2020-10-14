@@ -8,6 +8,7 @@ from typing import Dict
 from API_models.exports import EMODNetExportReq, EMODNetExportRsp
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
+from BO.Taxonomy import TaxonomyBO
 from DB.Project import Project
 from DB.Sample import Sample
 from DB.helpers.Postgres import timestamp_to_str
@@ -53,7 +54,6 @@ class EMODNetExport(Service):
         self.stats_per_rank: Dict[int, Dict] = {}
 
     DWC_ZIP_NAME = "dwca.zip"
-    taxa_cache = TaxaCache()
 
     def run(self, current_user_id: int) -> EMODNetExportRsp:
         # Security check
@@ -61,7 +61,6 @@ class EMODNetExport(Service):
         # OK
         logger.info("------------ starting --------------")
         ret = EMODNetExportRsp(task_id=0)
-        self.taxa_cache.load()
         # Load origin project
         prj_id = self.req.project_ids[0]
         prj = self.session.query(Project).filter_by(projid=prj_id).first()
@@ -74,7 +73,6 @@ class EMODNetExport(Service):
         self.add_events(prj, arch)
         # Produced the zip
         arch.build()
-        self.taxa_cache.save()
         self.log_stats()
         return ret
 
@@ -152,7 +150,8 @@ class EMODNetExport(Service):
         # Fetch data from DB
         db_per_taxon = Sample.get_sums_by_taxon(self.session, sample_id)
         # Build a dict taxon_id -> info
-        per_taxon: Dict[int, TaxonInfoForSample] = {a_sum[0]: TaxonInfoForSample(a_sum[1]) for a_sum in db_per_taxon}
+        per_taxon: Dict[int, TaxonInfoForSample] = {a_sum[0]: TaxonInfoForSample(a_sum[1])
+                                                    for a_sum in db_per_taxon}
         self.enrich_taxa(per_taxon)
         # Output
         for an_id, taxon_4_sample in per_taxon.items():
@@ -189,12 +188,13 @@ class EMODNetExport(Service):
         """
             For each taxon_id in taxa_dict keys, gather name & aphiaID
         """
-        taxa_cache = self.taxa_cache
-        taxa_cache.gather_names_for(self.session, taxa_dict.keys())
-        taxa_cache.collect_worms_for(taxa_dict.keys())
+        taxa_id_list = list(taxa_dict.keys())
+        names = TaxonomyBO.names_for(self.session, taxa_id_list)
+        assert len(names) == len(taxa_id_list)
+        taxo_infos = TaxaCache.collect_worms_for(self.session, names)
         # Link TaxonInfo after lookups
         for an_id, taxon_4_sample in taxa_dict.items():
-            taxon_4_sample.taxon_info = taxa_cache.get(an_id)
+            taxon_4_sample.taxon_info = taxo_infos.get(an_id)
 
     @staticmethod
     def event_date(min_date, max_date) -> str:
@@ -224,4 +224,4 @@ class EMODNetExport(Service):
     def log_stats(self):
         ranks_asc = sorted(self.stats_per_rank.keys())
         for a_rank in ranks_asc:
-            logger.info("rank '%s' stats %s", RANKS_BY_ID[a_rank], self.stats_per_rank[a_rank])
+            logger.info("rank '%s' stats %s", RANKS_BY_ID.get(a_rank), self.stats_per_rank.get(a_rank))

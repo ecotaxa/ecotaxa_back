@@ -8,8 +8,9 @@ from typing import List, Optional
 
 from API_models.taxonomy import TaxaSearchRsp
 from API_operations.helpers.Service import Service
+from BO.Classification import ClassifIDT
 from BO.Project import ProjectBO
-from BO.Taxonomy import TaxonomyBO
+from BO.Taxonomy import TaxonomyBO, TaxonBO
 from BO.User import UserIDT, UserBO
 
 
@@ -80,3 +81,7 @@ class TaxonomyService(Service):
                 others_ret.append(to_add)
         mru_ret.sort(key=lambda r: return_order[r.id])
         return mru_ret + preset_ret + others_ret
+
+    def query(self, taxon_id: ClassifIDT) -> TaxonBO:
+        ret = TaxonBO(self.session, taxon_id)
+        return ret
