@@ -29,7 +29,7 @@ class ProjectPrivilegeBO(object):
     @classmethod
     def first_manager_by_project(cls) -> str:
         """
-            Return SQL chunk for historically first manager for all projects.
+            Return SQL chunk for historically first manager for projects in this query.
         """
         return """ SELECT * from ( """ + cls.managers_by_project() + """ ) qpp 
                     WHERE rang = 1 """

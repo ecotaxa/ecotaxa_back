@@ -27,7 +27,7 @@ class JsonDumper(Service):
     """
         Dump in JSON form a project content, with filters.
             Mapped columns are rendered with their user-visible name (TSV one).
-            The fields are reduced to 4(max)-letter names for saving bandwidth and DB fields independance.
+            The fields are reduced to 4(max)-letter names for saving bandwidth and DB fields independence.
         TODO as an option:
             No numeric primary or foreign key is present so the output can be diff-ed.
             The sub-entities are ordered by their 'natural' key, e.g. sample_id for samples.

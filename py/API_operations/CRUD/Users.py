@@ -28,7 +28,7 @@ class UserService(Service):
         return usr.id
 
     def search_by_id(self, current_user_id: UserIDT, user_id: UserIDT) -> Optional[User]:
-        # TODO: Not consistent with othe e.g. project.query()
+        # TODO: Not consistent with others e.g. project.query()
         ret = self.session.query(User).get(user_id)
         return ret
 

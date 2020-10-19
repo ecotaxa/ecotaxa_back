@@ -31,7 +31,7 @@ Role.users = relationship(User, secondary="users_roles")
 User.preferences_for_projects = relationship(UserPreferences, lazy='dynamic')
 
 # Project
-Project.all_objects = relationship(ObjectHeader)
+Project.all_objects = relationship(ObjectHeader) # TODO: Add this as it's very expensive for ordinary datasets, lazy="raise_on_sql")
 ObjectHeader.project = relationship(Project)
 
 Project.all_samples = relationship(Sample, lazy="raise_on_sql")
