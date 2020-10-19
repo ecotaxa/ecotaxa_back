@@ -4,9 +4,9 @@
 #
 from typing import List, Union, Tuple
 
-from API_models.crud import CreateProjectReq, ProjectSearchResult
+from API_models.crud import CreateProjectReq
 from BO.ObjectSet import EnumeratedObjectSet
-from BO.Project import ProjectBO
+from BO.Project import ProjectBO, ProjectBOSet, ProjectIDListT, ProjectIDT, ProjectStats
 from BO.Rights import RightsBO, Action
 from DB import Sample
 from DB.Project import Project, ANNOTATE_STATUS
@@ -52,15 +52,13 @@ class ProjectsService(Service):
                also_others: bool = False,
                title_filter: str = '',
                instrument_filter: str = '',
-               filter_subset: bool = False) -> List[ProjectSearchResult]:
+               filter_subset: bool = False) -> List[ProjectBO]:
         # No rights checking as basically everyone can see all projects
         current_user: User = self.session.query(User).get(current_user_id)
-        ret = []
-        # TODO: Better perf by going thru the iterator instead of a list?
-        for prj in ProjectBO.projects_for_user(self.session, current_user, for_managing, also_others,
-                                               title_filter, instrument_filter, filter_subset):
-            ret.append(prj)
-        return ret
+        matching_ids = ProjectBO.projects_for_user(self.session, current_user, for_managing, also_others,
+                                                     title_filter, instrument_filter, filter_subset)
+        projects = ProjectBOSet(self.session, matching_ids)
+        return projects.as_list()
 
     def query(self, current_user_id: int,
               prj_id: int,
@@ -68,8 +66,8 @@ class ProjectsService(Service):
         current_user, project = RightsBO.user_wants(self.session, current_user_id,
                                                     Action.ADMINISTRATE if for_managing else Action.READ,
                                                     prj_id)
-        ret = ProjectBO(self.session, prj_id)
-        ret.enrich()
+        ret = ProjectBOSet.get_one(self.session, prj_id)
+        assert ret is not None
         if current_user.has_role(Role.APP_ADMINISTRATOR):
             ret.can_administrate = True
         return ret
@@ -107,7 +105,13 @@ class ProjectsService(Service):
         return nb_objs, 0, nb_img_rows, len(img_files)
 
     def recompute_geo(self, current_user_id: int,
-                      prj_id: int):
+                      prj_id: ProjectIDT) -> None:
         # Security barrier
         _current_user, _project = RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, prj_id)
         Sample.propagate_geo(self.session, prj_id)
+
+    def read_stats(self, current_user_id: int,
+                   prj_ids: ProjectIDListT) -> List[ProjectStats]:
+        # Security barrier
+        # TODO: Why protecting?
+        return ProjectBO.read_taxo_stats(self.session, prj_ids)

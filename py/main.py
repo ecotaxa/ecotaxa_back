@@ -17,12 +17,12 @@ from API_models.exports import EMODNetExportReq, EMODNetExportRsp
 from API_models.imports import *
 from API_models.merge import MergeRsp
 from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp, ClassifyReq, ObjectModel, \
-    ObjectHeaderModel, HistoricalClassificationModel, ObjectHistoryRsp
+    ObjectHeaderModel, HistoricalClassificationModel
 from API_models.subset import SubsetReq, SubsetRsp
 from API_models.taxonomy import TaxaSearchRsp, TaxonModel
 from API_operations.CRUD.Object import ObjectService
 from API_operations.CRUD.ObjectParents import SamplesService, AcquisitionsService, ProcessesService
-from API_operations.CRUD.Projects import ProjectsService, ProjectSearchResult
+from API_operations.CRUD.Projects import ProjectsService
 from API_operations.CRUD.Users import UserService
 from API_operations.Consistency import ProjectConsistencyChecker
 from API_operations.JsonDumper import JsonDumper
@@ -37,10 +37,11 @@ from API_operations.helpers.Service import Service
 from API_operations.imports.Import import ImportAnalysis, RealImport
 from API_operations.imports.SimpleImport import SimpleImport
 from BO.Acquisition import AcquisitionBO
+from BO.Classification import HistoricalClassification
 from BO.Object import ObjectBO
 from BO.ObjectSet import ObjectIDListT
 from BO.Process import ProcessBO
-from BO.Project import ProjectBO
+from BO.Project import ProjectBO, ProjectStats
 from BO.Sample import SampleBO
 from BO.Taxonomy import TaxonBO
 from helpers.Asyncio import async_bg_run, log_streamer
@@ -157,20 +158,20 @@ def get_user(user_id: int,
 
 # ######################## END OF USER
 
-@app.get("/projects/search", tags=['projects'], response_model=List[ProjectSearchResult])
+@app.get("/projects/search", tags=['projects'], response_model=List[ProjectModel])
 def search_projects(current_user: int = Depends(get_current_user),
                     also_others: bool = False,
                     for_managing: bool = False,
                     title_filter: str = '',
                     instrument_filter: str = '',
-                    filter_subset: bool = False):
+                    filter_subset: bool = False) -> List[ProjectBO]:
     """
-        Return projects summary for current user.
-        - @param also_others: Allows to return projects for which given user has no right
-        - @param for_managing: Allows to return project that can be written to (including erased) by the given user
-        - @param title_filter: Use this pattern for matching returned projects names
-        - @param instrument_filter: Only return projects where this instrument was used
-        - @param filter_subset: Only return projects having 'subset' in their names
+        Return projects for current user.
+        - `param` also_others: Allows to return projects for which given user has no right
+        - `param` for_managing: Allows to return project that can be written to (including erased) by the given user
+        - `param` title_filter: Use this pattern for matching returned projects names
+        - `param` instrument_filter: Only return projects where this instrument was used
+        - `param` filter_subset: Only return projects having 'subset' in their names
     """
     sce = ProjectsService()
     ret = sce.search(current_user_id=current_user, also_others=also_others, for_managing=for_managing,
@@ -211,12 +212,25 @@ def project_query(project_id: int,
                   for_managing: Optional[bool] = False,
                   current_user: int = Depends(get_current_user)) -> ProjectBO:
     """
-        See if project exists for current user, eventually for managing it.
+        Read project if it exists for current user, eventually for managing it.
     """
     sce = ProjectsService()
     for_managing = bool(for_managing)
     with RightsThrower():
         ret = sce.query(current_user, project_id, for_managing)
+    return ret
+
+
+@app.get("/project_set/stats", tags=['projects'], response_model=List[ProjectStatsModel])
+def project_stats(ids: str,
+                  current_user: int = Depends(get_current_user)) -> List[ProjectStats]:
+    """
+        Read projects statistics, i.e. used taxa and classification states.
+    """
+    sce = ProjectsService()
+    num_ids = _split_num_list(ids)
+    with RightsThrower():
+        ret = sce.read_stats(current_user, num_ids)
     return ret
 
 
@@ -262,14 +276,13 @@ def project_check(project_id: int,
 
 @app.post("/projects/{project_id}/recompute_geo", tags=['projects'])
 def project_recompute_geography(project_id: int,
-                                current_user: int = Depends(get_current_user)):
+                                current_user: int = Depends(get_current_user)) -> None:
     """
         Recompute geography information for all samples in project.
     """
     sce = ProjectsService()
     with RightsThrower():
-        ret = sce.recompute_geo(current_user, project_id)
-    return ret
+        sce.recompute_geo(current_user, project_id)
 
 
 @app.post("/import_prep/{project_id}", tags=['projects'], response_model=ImportPrepRsp)
@@ -321,6 +334,27 @@ def erase_project(project_id: int,
     sce = ProjectsService()
     with RightsThrower():
         return sce.delete(current_user, project_id, only_objects)
+
+
+@app.put("/projects/{project_id}", tags=['projects'])
+def update_project(project_id: int,
+                   project: ProjectModel,
+                   current_user: int = Depends(get_current_user)):
+    """
+        Update the project.
+        Note that some fields will NOT be updated and simply ignored, e.g. *free_cols.
+    """
+    sce = ProjectsService()
+    with RightsThrower():
+        present_project: ProjectBO = sce.query(current_user, project_id, for_managing=True)
+    # noinspection PyUnresolvedReferences
+    present_project.update(session=sce.session,
+                           title=project.title, visible=project.visible, status=project.status,
+                           projtype=project.projtype,
+                           init_classif_list=project.init_classif_list,
+                           classiffieldlist=project.classiffieldlist, popoverfieldlist=project.popoverfieldlist,
+                           cnn_network_id=project.cnn_network_id, comments=project.comments,
+                           managers=project.managers, annotators=project.annotators, viewers=project.viewers)
 
 
 # ######################## END OF PROJECT
@@ -522,13 +556,11 @@ def object_query(object_id: int,
     return ret
 
 
-# TODO: response_model should be simply List[HistoricalClassification], but pydantic fails to initiate the
-# structure, probably due to the fact that it's generated via dataclass_to_model()
 @app.get("/object/{object_id}/history", tags=['object'],
-         response_model=ObjectHistoryRsp)  # type: ignore
+         response_model=List[HistoricalClassificationModel])  # type:ignore
 def object_query_history(object_id: int,
                          current_user: Optional[int] = Depends(get_optional_current_user)) \
-        -> ObjectHistoryRsp:
+        -> List[HistoricalClassification]:
     """
         Read a single object's history.
     """
@@ -537,7 +569,7 @@ def object_query_history(object_id: int,
         ret = sce.query_history(current_user, object_id)
     if ret is None:
         raise HTTPException(status_code=404, detail="Object not found")
-    return ObjectHistoryRsp(classif=ret)
+    return ret
 
 
 @app.post("/export/emodnet", tags=['WIP'], include_in_schema=False, response_model=EMODNetExportRsp)  # pragma:nocover
@@ -579,12 +611,26 @@ async def search_taxa(query: str,
 @app.get("/taxa/{taxon_id}", tags=['Taxonomy Tree'], response_model=TaxonModel)
 async def query_taxa(taxon_id: int,
                      _current_user: Optional[int] = Depends(get_optional_current_user)) \
-        -> TaxonBO:
+        -> Optional[TaxonBO]:
     """
-        Information about a taxon, including its lineage.
+        Information about a single taxon, including its lineage.
     """
     sce = TaxonomyService()
     ret = sce.query(taxon_id)
+    return ret
+
+
+@app.get("/taxa_set/query", tags=['Taxonomy Tree'], response_model=List[TaxonModel])
+async def query_taxa_set(ids: str,
+                         _current_user: Optional[int] = Depends(get_optional_current_user)) \
+        -> List[TaxonBO]:
+    """
+        Information about several taxa, including their lineage.
+        The separator between numbers is arbitrary non-digit, e.g. ":", "|" or ","
+    """
+    sce = TaxonomyService()
+    num_ids = _split_num_list(ids)
+    ret = sce.query_set(num_ids)
     return ret
 
 
@@ -708,3 +754,15 @@ def do_nothing(_current_user: int = Depends(get_current_user)):
 app.add_exception_handler(status.HTTP_500_INTERNAL_SERVER_ERROR, internal_server_error_handler)
 
 dump_openapi(app, __file__)
+
+
+def _split_num_list(ids):
+    # Find first non-num char, decide it's a separator
+    for c in ids:
+        if c not in "0123456789":
+            sep = c
+            break
+    else:
+        sep = ","
+    num_ids = [int(x) for x in ids.split(sep) if x.isdigit()]
+    return num_ids

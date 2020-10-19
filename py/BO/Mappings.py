@@ -221,12 +221,24 @@ class TableMapping(object):
         if not str_mapping:
             # None or "" => nothing to do
             return
+        real_cols_to_tsv = self.real_cols_to_tsv
+        tsv_cols_to_real = self.tsv_cols_to_real
+        vals_by_type: Dict[str, List[int]] = {}
         for a_map in str_mapping.splitlines():
             if not a_map:
                 # Empty lines are tolerated
                 continue
             db_col, tsv_col_no_prfx = a_map.split('=', 1)
             self.add_association(db_col, tsv_col_no_prfx)
+            # Above is too slow for many (all!) projects, below is an equivalent rewrite
+            real_cols_to_tsv[db_col] = tsv_col_no_prfx
+            tsv_cols_to_real[tsv_col_no_prfx] = db_col
+            db_col_type = db_col[0]  # i.e. 't' or 'n'
+            db_col_ndx = int(db_col[1:])
+            # Store values instead of recomputing maximum for each addition
+            vals_by_type.setdefault(db_col_type, []).append(db_col_ndx)
+        for a_col_type, vals_for_type in vals_by_type.items():
+            self.max_by_type[a_col_type] = max(vals_for_type)
         return self
 
     def load_from_dict(self, dict_mapping: dict):
@@ -244,7 +256,7 @@ class TableMapping(object):
     @staticmethod
     def adjust_max(db_col, max_by_type):
         # Adjust maximum for type
-        db_col_type = db_col[0]
+        db_col_type = db_col[0]  # i.e. 't' or 'n'
         db_col_ndx = int(db_col[1:])
         if db_col_ndx > max_by_type[db_col_type]:
             max_by_type[db_col_type] = db_col_ndx

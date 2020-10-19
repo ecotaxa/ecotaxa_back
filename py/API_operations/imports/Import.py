@@ -219,8 +219,12 @@ class RealImport(ImportServiceBase):
         self.prj.fileloaded = "\n".join(set(import_how.loaded_files))
         self.session.commit()
 
+        # Recompute stats
         ProjectBO.do_after_load(self.session, self.prj_id)
+        self.session.commit()
+
         logger.info("Total of %d rows loaded" % row_count)
+
         # Prepare response
         ret = ImportRealRsp()
         return ret

@@ -21,11 +21,10 @@ class TaxonBO(object):
         Holder fo a leaf of the tree.
     """
 
-    def __init__(self, session: Session, taxon_id: ClassifIDT):
+    def __init__(self, taxon_id: ClassifIDT, display_name: str, lineage: List[str]):
         self.id = taxon_id
-        db_taxo = session.query(Taxonomy).get(taxon_id)
-        self.display_name = db_taxo.display_name
-        self.lineage = [parent_name for (_id, parent_name) in TaxonomyBO.parents_of(session, taxon_id)]
+        self.display_name = display_name
+        self.lineage = lineage
 
 
 class TaxonomyBO(object):
@@ -153,6 +152,7 @@ class TaxonomyBO(object):
         tf = Taxonomy.__table__.alias('tf')
         # bind = None  # For portable SQL, no 'ilike'
         bind = session.get_bind()
+        # noinspection PyTypeChecker
         priority = case([(tf.c.id == any_(priority_set), text('0'))], else_=text('1')).label('prio')
         qry = select([tf.c.id, tf.c.display_name, priority], bind=bind)
         if len(name_filters) > 0:
@@ -190,3 +190,48 @@ class TaxonomyBO(object):
         logger.info("Taxo query: %s with params %s and %s ", qry, display_name_filter, name_filters)
         res: ResultProxy = session.execute(qry)
         return res.fetchall()
+
+
+class TaxonBOSet(object):
+    """
+        Many taxa.
+    """
+
+    def __init__(self, session: Session, taxon_ids: ClassifIDListT):
+        tf = Taxonomy.__table__.alias('tf')
+        # bind = None  # For portable SQL, no 'ilike'
+        bind = session.get_bind()
+        select_list = [tf.c.id, tf.c.display_name, tf.c.name]
+        select_list.extend([text("t%d.name" % level)  # type:ignore
+                            for level in range(1, TaxonomyBO.MAX_TAXONOMY_LEVELS)])
+        qry = select(select_list, bind=bind)
+        # Inject a query on names and hierarchy
+        # Produced SQL looks like:
+        #       left join taxonomy t1 on tf.parent_id=t1.id
+        #       left join taxonomy t2 on t1.parent_id=t2.id
+        # ...
+        #       left join taxonomy t14 on t13.parent_id=t14.id
+        lev_alias = Taxonomy.__table__.alias('t1')
+        # Chain outer joins on Taxonomy, for parents
+        # hook the first OJ to main select
+        chained_joins = tf.join(lev_alias, lev_alias.c.id == tf.c.parent_id, isouter=True)
+        prev_alias = lev_alias
+        for level in range(2, TaxonomyBO.MAX_TAXONOMY_LEVELS):
+            lev_alias = Taxonomy.__table__.alias('t%d' % level)
+            # hook each following OJ to previous one
+            chained_joins = chained_joins.join(lev_alias, lev_alias.c.id == prev_alias.c.parent_id, isouter=True)
+            # Collect expressions
+            prev_alias = lev_alias
+        qry = qry.select_from(chained_joins)
+        qry = qry.where(tf.c.id == any_(taxon_ids))
+        logger.info("Taxo query: %s with IDs %s", qry, taxon_ids)
+        res: ResultProxy = session.execute(qry)
+        self.taxa = []
+        for a_rec in res.fetchall():
+            lst_rec = list(a_rec)
+            an_id, display_name = lst_rec.pop(0), lst_rec.pop(0)
+            lineage = [name for name in lst_rec if name]
+            self.taxa.append(TaxonBO(an_id, display_name, lineage))  # type:ignore
+
+    def as_list(self) -> List[TaxonBO]:
+        return self.taxa

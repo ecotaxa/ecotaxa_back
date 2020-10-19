@@ -5,14 +5,17 @@
 from datetime import datetime
 from typing import List, Dict, Any, Iterable, Optional
 
+from dataclasses import dataclass
+
 from BO.Classification import ClassifIDListT
 from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping
 from BO.ProjectPrivilege import ProjectPrivilegeBO
+from BO.helpers.DataclassAsDict import DataclassAsDict
 from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFields, Acquisition, Process, \
-    ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram
+    ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram, ObjectCNNFeature
 from DB import Session, ResultProxy
 from DB.User import Role
-from DB.helpers.ORM import Delete, Query, select, text
+from DB.helpers.ORM import Delete, Query, select, text, any_, contains_eager
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -23,23 +26,46 @@ ProjectIDT = int
 ProjectIDListT = List[int]
 
 
+@dataclass(init=False)
+class ProjectStats(DataclassAsDict):
+    """
+        Association b/w an object and a former taxonomy entry.
+    """
+    projid: ProjectIDT
+    used_taxa: ClassifIDListT
+    nb_unclassified: int
+    nb_validated: int
+    nb_dubious: int
+    nb_predicted: int
+
+
 class ProjectBO(object):
     """
-        A Project business object. So far mainly a container for static API_operations involving it.
+        A Project business object. So far (but less and less...) mainly a container
+        for static API_operations involving it.
     """
 
-    def __init__(self, session: Session, prj_id: int):
-        self._session = session
-        self.project: Optional[Project] = session.query(Project).get(prj_id)
+    def __init__(self, project: Project):
+        self._project = project
+        # Added values
         self.can_administrate = False
+        self.obj_free_cols: Dict[str, str] = {}
+        self.sample_free_cols: Dict[str, str] = {}
+        self.acquisition_free_cols: Dict[str, str] = {}
+        self.process_free_cols: Dict[str, str] = {}
+        self.init_classif_list: List[int] = []
+        # Involved members
+        self.viewers: List[User] = []
+        self.annotators: List[User] = []
+        self.managers: List[User] = []
 
     def get_preset(self) -> ClassifIDListT:
         """
             Return the list of preset classification IDs.
         """
-        if not self.project:
+        if not self._project:
             return []
-        init_list = self.project.initclassiflist
+        init_list = self._project.initclassiflist
         if not init_list:
             return []
         return [int(cl_id) for cl_id in init_list.split(",")]
@@ -48,24 +74,87 @@ class ProjectBO(object):
         """
             Add DB fields and relations as (hopefully more) meaningful attributes
         """
-        mappings = ProjectMapping()
-        mappings.load_from_project(self.project)
+        # Decode mappings to avoid exposing internal field
+        mappings = ProjectMapping().load_from_project(self._project)
         self.obj_free_cols = mappings.object_mappings.tsv_cols_to_real
         self.sample_free_cols = mappings.sample_mappings.tsv_cols_to_real
         self.acquisition_free_cols = mappings.acquisition_mappings.tsv_cols_to_real
         self.process_free_cols = mappings.process_mappings.tsv_cols_to_real
+        # Decode text list into numerical
+        db_list = self._project.initclassiflist
+        db_list = db_list if db_list else ""
+        self.init_classif_list = [int(x) for x in db_list.split(",") if x.isdigit()]
+        # Dispatch members by right
+        by_right = {ProjectPrivilegeBO.MANAGE: self.managers,
+                    ProjectPrivilegeBO.ANNOTATE: self.annotators,
+                    ProjectPrivilegeBO.VIEW: self.viewers}
         a_priv: ProjectPrivilege
         # noinspection PyTypeChecker
-        self.managers = [a_priv.user for a_priv in self.project.privs_for_members
-                         if a_priv.privilege == ProjectPrivilegeBO.MANAGE]
-        # noinspection PyTypeChecker
-        self.annotators = [a_priv.user for a_priv in self.project.privs_for_members
-                           if a_priv.privilege == ProjectPrivilegeBO.ANNOTATE]
+        for a_priv in self._project.privs_for_members:
+            if a_priv.user is None:  # TODO: There is a line with NULL somewhere in DB
+                continue
+            by_right[a_priv.privilege].append(a_priv.user)
+        return self
+
+    def update(self, session: Session, title: str, visible: bool, status: str, projtype: str,
+               init_classif_list: List[int],
+               classiffieldlist: str, popoverfieldlist: str,
+               cnn_network_id: str, comments: str,
+               managers: List[Any], annotators: List[Any], viewers: List[Any]):
+        proj_id = self._project.projid
+        # Field reflexes
+        if cnn_network_id != self._project.cnn_network_id:
+            sub_qry: Query = session.query(ObjectHeader.objid).filter(ObjectHeader.projid == proj_id)
+            # Delete CNN features which depend on the CNN network
+            qry: Query = session.query(ObjectCNNFeature)
+            qry = qry.filter(ObjectCNNFeature.objcnnid.in_(sub_qry.subquery()))
+            qry.delete(synchronize_session=False)
+        # Fields update
+        self._project.title = title
+        self._project.visible = visible
+        self._project.status = status
+        self._project.projtype = projtype
+        self._project.classiffieldlist = classiffieldlist
+        self._project.popoverfieldlist = popoverfieldlist
+        self._project.cnn_network_id = cnn_network_id
+        self._project.comments = comments
+        # Inverse for extracted values
+        self._project.initclassiflist = ",".join([str(cl_id) for cl_id in init_classif_list])
+        # Inverse for users by privilege
+        # Dispatch members by right
+        by_right = {ProjectPrivilegeBO.MANAGE: managers,
+                    ProjectPrivilegeBO.ANNOTATE: annotators,
+                    ProjectPrivilegeBO.VIEW: viewers}
+        # Remove all to avoid tricky diffs
+        session.query(ProjectPrivilege). \
+            filter(ProjectPrivilege.projid == proj_id).delete()
+        for a_right, a_user_list in by_right.items():
+            for a_user in a_user_list:
+                session.add(ProjectPrivilege(projid=proj_id,
+                                             member=a_user.id,
+                                             privilege=a_right))
+        session.commit()
 
     def __getattr__(self, item):
         """ Fallback for 'not found' field after the C getattr() call.
             If we did not enrich a Project field somehow then return it """
-        return getattr(self.project, item)
+        return getattr(self._project, item)
+
+    @staticmethod
+    def update_taxo_stats(session: Session, projid: int):
+        # TODO: There is a direct ref. to obj_head.projid. Problem in case of clean hierarchy.
+        session.execute("""
+        DELETE FROM projects_taxo_stat 
+         WHERE projid = :prjid;
+        INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
+        SELECT projid, COALESCE(classif_id, -1) id, COUNT(*) nbr, 
+               COUNT(CASE WHEN classif_qual = 'V' THEN 1 END) nbr_v,
+               COUNT(CASE WHEN classif_qual = 'D' THEN 1 END) nbr_d, 
+               COUNT(CASE WHEN classif_qual = 'P' THEN 1 END) nbr_p
+          FROM obj_head
+         WHERE projid = :prjid
+        GROUP BY projid, classif_id;""",
+                        {'prjid': projid})
 
     @staticmethod
     def update_stats(session: Session, projid: int):
@@ -74,7 +163,7 @@ class ProjectBO(object):
            SET objcount=q.nbr, pctclassified=100.0*nbrclassified/q.nbr, pctvalidated=100.0*nbrvalidated/q.nbr
           FROM projects p
           LEFT JOIN
-             (SELECT projid, SUM(nbr) nbr, SUM(case when id>0 THEN nbr end) nbrclassified, SUM(nbr_v) nbrvalidated
+             (SELECT projid, SUM(nbr) nbr, SUM(CASE WHEN id>0 THEN nbr END) nbrclassified, SUM(nbr_v) nbrvalidated
                 FROM projects_taxo_stat
                WHERE projid = :prjid
               GROUP BY projid) q ON p.projid = q.projid
@@ -83,22 +172,19 @@ class ProjectBO(object):
                         {'prjid': projid})
 
     @staticmethod
-    def update_taxo_stats(session: Session, projid: int):
-        # TODO: There is a direct ref. to obj_head.projid. Problem in case of clean hierarchy.
-        session.execute("""
-        BEGIN;
-        DELETE FROM projects_taxo_stat 
-         WHERE projid = :prjid;
-        INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
-        SELECT projid, COALESCE(classif_id, -1) id, COUNT(*) nbr, 
-               COUNT(case WHEN classif_qual = 'V' THEN 1 END) nbr_v,
-               COUNT(case WHEN classif_qual = 'D' THEN 1 END) nbr_d, 
-               COUNT(case WHEN classif_qual = 'P' THEN 1 END) nbr_p
-          FROM obj_head
-         WHERE projid = :prjid
-        GROUP BY projid, classif_id;
-        COMMIT;""",
-                        {'prjid': projid})
+    def read_taxo_stats(session: Session, prj_ids: ProjectIDListT) -> List[ProjectStats]:
+        res: ResultProxy = \
+            session.execute("""
+        SELECT projid, ARRAY_AGG(id) as ids, 
+               SUM(CASE WHEN id = -1 THEN nbr ELSE 0 END) as nb_u, 
+               SUM(nbr_v) as nb_v, SUM(nbr_d) as nb_d, SUM(nbr_p) as nb_p
+          FROM projects_taxo_stat
+         WHERE projid = ANY(:ids)
+      GROUP BY projid""",
+                            {'ids': prj_ids})
+        with CodeTimer("stats for %d projects:" % len(prj_ids), logger):
+            ret = [ProjectStats(rec) for rec in res.fetchall()]
+        return ret
 
     @staticmethod
     def projects_for_user(session: Session, user: User,
@@ -106,7 +192,7 @@ class ProjectBO(object):
                           also_others: bool = False,
                           title_filter: str = '',
                           instrument_filter: str = '',
-                          filter_subset: bool = False) -> List:
+                          filter_subset: bool = False) -> List[ProjectIDT]:
         """
         :param session:
         :param user: The user for which the list is needed.
@@ -118,14 +204,12 @@ class ProjectBO(object):
         :param instrument_filter: If set, filter out the projects which do not have given instrument in at least
                                      one sample.
         :param filter_subset: If set, filter out any project of which title contains 'subset'.
-        :return:
+        :return: The project IDs
         """
         sql_params: Dict[str, Any] = {"user_id": user.id}
 
         # Default query: all projects, eventually with first manager information
-        sql = """SELECT p.projid, p.title, p.status, 
-                        COALESCE(p.objcount,0) AS objcount, COALESCE(p.pctvalidated,0) AS pctvalidated,
-                        COALESCE(p.pctclassified,0) AS pctclassified, fpm.email, fpm.name, p.visible
+        sql = """SELECT p.projid
                    FROM projects p
                    LEFT JOIN ( """ + ProjectPrivilegeBO.first_manager_by_project() + """ ) fpm 
                      ON fpm.projid = p.projid """
@@ -136,7 +220,7 @@ class ProjectBO(object):
                   WHERE pp.member is null """
         else:
             if not user.has_role(Role.APP_ADMINISTRATOR):
-                # Not an admin, so restrict to projects which current user can work on
+                # Not an admin, so restrict to projects which current user can work on, or view
                 sql += """
                         JOIN projectspriv pp 
                           ON p.projid = pp.projid 
@@ -162,12 +246,11 @@ class ProjectBO(object):
             sql += """
                      AND NOT title ILIKE '%%subset%%'  """
 
-        sql += " ORDER BY LOWER(p.title)"  # pp.member nulls last,
-
         with CodeTimer("Projects query:", logger):
             res: ResultProxy = session.execute(sql, sql_params)
-            ret = res.fetchall()
-        return ret
+            # single-element tuple :( DBAPI
+            ret = [an_id for an_id, in res.fetchall()]
+        return ret  # type:ignore
 
     @classmethod
     def get_bounding_geo(cls, session: Session, proj_id: int) -> Iterable[float]:
@@ -246,7 +329,7 @@ class ProjectBO(object):
         """
             Completely remove the project. It is assumed that contained objects has been removed.
         """
-        # TODO: Remove for user prefs
+        # TODO: Remove from user preferences
         # Unlink Particle project if any
         upd_qry = ParticleProject.__table__.update().where(ParticleProject.projid == prj_id).values(projid=None)
         row_count = session.execute(upd_qry).rowcount
@@ -302,14 +385,14 @@ class ProjectBO(object):
         """
         session.execute(pts_sql, {"ids": needed_ids})
         # Lock the rows we are going to update, including -1 for unclassified
-        pts_sql = """SELECT id
+        pts_sql = """SELECT id, nbr
                        FROM projects_taxo_stat 
                       WHERE projid = :prj
                         AND id = ANY(:ids)
                      FOR NO KEY UPDATE"""
         res = session.execute(pts_sql, {"prj": prj_id, "ids": needed_ids})
-        ids_in_db = set([classif_id for (classif_id,) in res.fetchall()])
-        ids_not_in_db = set(needed_ids).difference(ids_in_db)
+        ids_in_db = {classif_id: nbr for (classif_id, nbr) in res.fetchall()}
+        ids_not_in_db = set(needed_ids).difference(ids_in_db.keys())
         if len(ids_not_in_db) > 0:
             # Insert rows for missing IDs
             pts_ins = """INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
@@ -324,11 +407,55 @@ class ProjectBO(object):
         # Apply delta
         for classif_id, chg in collated_changes.items():
             if classif_id in ids_not_in_db:
-                # The line was created with OK values
+                # The line was created just above, with OK values
                 continue
-            sqlparam = {'prj': prj_id, 'cid': classif_id,
-                        'nul': chg['n'], 'val': chg['V'], 'dub': chg['D'], 'prd': chg['P']}
-            ts_sql = """UPDATE projects_taxo_stat 
-                           SET nbr=nbr+:nul, nbr_v=nbr_v+:val, nbr_d=nbr_d+:dub, nbr_p=nbr_p+:prd 
-                         where projid = :prj AND id = :cid"""
+            if ids_in_db[classif_id] + chg['n'] == 0:
+                # The delta means 0 for this taxon in this project, delete the line
+                sqlparam = {'prj': prj_id, 'cid': classif_id}
+                ts_sql = """DELETE FROM projects_taxo_stat 
+                             WHERE projid = :prj AND id = :cid"""
+            else:
+                # General case
+                sqlparam = {'prj': prj_id, 'cid': classif_id,
+                            'nul': chg['n'], 'val': chg['V'], 'dub': chg['D'], 'prd': chg['P']}
+                ts_sql = """UPDATE projects_taxo_stat 
+                               SET nbr=nbr+:nul, nbr_v=nbr_v+:val, nbr_d=nbr_d+:dub, nbr_p=nbr_p+:prd 
+                             WHERE projid = :prj AND id = :cid"""
             session.execute(ts_sql, sqlparam)
+
+
+class ProjectBOSet(object):
+    """
+        Many projects...
+    """
+
+    def __init__(self, session: Session, prj_ids: ProjectIDListT):
+        # Query the project and load neighbours as well
+        qry: Query = session.query(Project, ProjectPrivilege)
+        qry = qry.outerjoin(ProjectPrivilege, Project.privs_for_members).options(
+            contains_eager(Project.privs_for_members))
+        qry = qry.outerjoin(User, ProjectPrivilege.user).options(
+            contains_eager(ProjectPrivilege.user))
+        qry = qry.filter(Project.projid == any_(prj_ids))
+        self.projects = []
+        done = set()
+        with CodeTimer("%s BO projects query & init:" % len(prj_ids), logger):
+            for a_proj, a_pp in qry.all():
+                # The query yields duplicates so we need to filter
+                if a_proj.projid not in done:
+                    self.projects.append(ProjectBO(a_proj).enrich())
+                    done.add(a_proj.projid)
+
+    def as_list(self) -> List[ProjectBO]:
+        return self.projects
+
+    @staticmethod
+    def get_one(session: Session, prj_ids: ProjectIDT) -> Optional[ProjectBO]:
+        """
+            Get a single BO per its id
+        """
+        mini_set = ProjectBOSet(session, [prj_ids])
+        if len(mini_set.projects) > 0:
+            return mini_set.projects[0]
+        else:
+            return None

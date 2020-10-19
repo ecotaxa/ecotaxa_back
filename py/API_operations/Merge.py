@@ -57,8 +57,11 @@ class MergeService(Service):
         # Go for real if not dry run AND len(errs) == 0
         logger.info("Starting Merge of '%s'", prj.title)
         self._do_merge(prj)
+        self.session.commit()
+
         # Recompute stats and so on
         ProjectBO.do_after_load(self.session, prj_id=self.prj_id)
+        self.session.commit()
         return ret
 
     def _verify_possible(self, dest_prj: Project, src_prj: Project) -> List[str]:
@@ -112,6 +115,3 @@ class MergeService(Service):
 
         # Completely erase the source project
         ProjectBO.delete(self.session, self.src_prj_id)
-
-        # Stats on destination project updated
-        ProjectBO.do_after_load(self.session, self.prj_id)

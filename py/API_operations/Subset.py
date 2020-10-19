@@ -71,9 +71,11 @@ class SubsetService(TaskServiceBase):
             return ret
 
         self._do_clone()
+        self.session.commit()
 
         # Recompute stats and so on
         ProjectBO.do_after_load(self.session, self.dest_prj.projid)
+        self.session.commit()
         return ret
 
     def _do_clone(self):
@@ -100,7 +102,6 @@ class SubsetService(TaskServiceBase):
         self._clone_all(import_how, writer)
         # Copy mappings to destination. We could narrow them to the minimum?
         custom_mapping.write_to_project(self.dest_prj)
-        self.session.commit()
 
     def _db_fetch(self, object_ids: ObjectIDListT) -> List[DBObjectTupleT]:
         """

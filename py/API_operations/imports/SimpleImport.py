@@ -77,8 +77,12 @@ class SimpleImport(ImportServiceBase):
         # Import
         nb_image_files = len(images)
         nb_images = source_bundle.do_import(import_where, import_how, nb_image_files, self.report_progress)
+        self.session.commit()
 
+        # Recompute stats and so on
         ProjectBO.do_after_load(self.session, self.prj_id)
+        self.session.commit()
+
         ret = SimpleImportRsp(errors=errors,
                               nb_images=nb_images)
         return ret

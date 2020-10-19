@@ -26,7 +26,12 @@ _UserModelFromDB = sqlalchemy_to_pydantic(User, exclude=[User.password.name,
 _ProjectModelFromDB: Type = sqlalchemy_to_pydantic(Project, exclude=[Project.mappingobj.name,
                                                                      Project.mappingacq.name,
                                                                      Project.mappingprocess.name,
-                                                                     Project.mappingsample.name])
+                                                                     Project.mappingsample.name,
+                                                                     Project.initclassiflist.name,
+                                                                     ] + [
+                                                                        # Not replaced yet but LOTS of data
+                                                                        Project.fileloaded.name
+                                                                    ])
 # We exclude free columns from base model, they will be mapped in a dedicated sub-entity
 _SampleModelFromDB = sqlalchemy_to_pydantic(Sample,
                                             exclude=["t%02d" % i for i in range(1, SAMPLE_FREE_COLUMNS)])
@@ -49,10 +54,14 @@ class _AddedToProject(BaseModel):
                                             default={})
     process_free_cols: FreeColT = Field(title="Process free columns",
                                         default={})
+    init_classif_list: List[int] = Field(title="Favorite taxa used in classification",
+                                         default=[])
     managers: List[UserModel] = Field(title="Managers of this project",
                                       default=[])
     annotators: List[UserModel] = Field(title="Annotators of this project, if not manager",
                                         default=[])
+    viewers: List[UserModel] = Field(title="Viewers of this project, if not manager nor annotator",
+                                     default=[])
     can_administrate: bool = Field(title="Requester can administrate the project",
                                    default=False)
 
@@ -95,18 +104,6 @@ class CreateProjectReq(BaseModel):
     title: str = Field(title="The project title")
     visible: bool = Field(title="The project is created visible",
                           default=True)
-
-
-class ProjectSearchResult(BaseModel):
-    projid: int
-    title: str
-    status: str
-    objcount: int
-    pctvalidated: float
-    pctclassified: float
-    email: Optional[str]
-    name: Optional[str]
-    visible: bool
 
 
 class ProjectFilters(TypedDict, total=False):
@@ -210,3 +207,13 @@ class BulkUpdateReq(BaseModel):
     # TODO: A Union of possible types?
     target_ids: List[int] = Field(title="The IDs of the target entities")
     updates: ColUpdateList = Field(title="The updates, to do on all impacted entities")
+
+
+# TODO: Derive from ProjectStats
+class ProjectStatsModel(BaseModel):
+    projid: int = Field(title="The project id")
+    used_taxa: List[int] = Field(title="The taxa/category ids used inside the project", default=[])
+    nb_unclassified: int = Field(title="The number of unclassified objects inside the project")
+    nb_validated: int = Field(title="The number of validated objects inside the project")
+    nb_dubious: int = Field(title="The number of dubious objects inside the project")
+    nb_predicted: int = Field(title="The number of predicted objects inside the project")

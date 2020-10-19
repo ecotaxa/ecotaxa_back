@@ -93,6 +93,7 @@ class ObjectManager(Service):
         ProjectBO.update_taxo_stats(self.session, proj_id)
         # Stats depend on taxo stats
         ProjectBO.update_stats(self.session, proj_id)
+        self.session.commit()
 
     def _the_project_for(self, current_user_id: int, target_ids: ObjectIDListT, action: Action) \
             -> Tuple[EnumeratedObjectSet, Project]:
@@ -150,6 +151,7 @@ class ObjectManager(Service):
             ProjectBO.update_taxo_stats(self.session, proj_id)
             # Stats depend on taxo stats
             ProjectBO.update_stats(self.session, proj_id)
+            self.session.commit()
         # Give feedback
         return impact, classifs
 

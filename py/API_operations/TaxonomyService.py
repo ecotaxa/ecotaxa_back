@@ -8,9 +8,9 @@ from typing import List, Optional
 
 from API_models.taxonomy import TaxaSearchRsp
 from API_operations.helpers.Service import Service
-from BO.Classification import ClassifIDT
-from BO.Project import ProjectBO
-from BO.Taxonomy import TaxonomyBO, TaxonBO
+from BO.Classification import ClassifIDT, ClassifIDListT
+from BO.Project import ProjectBOSet
+from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet
 from BO.User import UserIDT, UserBO
 
 
@@ -48,8 +48,10 @@ class TaxonomyService(Service):
         # Get preset list, to favor in result order
         preset = set()
         if prj_id is not None:
-            include_ids = ProjectBO(self.session, prj_id).get_preset()
-            preset = set(include_ids)
+            the_prj = ProjectBOSet.get_one(self.session, prj_id)
+            if the_prj is not None:
+                include_ids = the_prj.get_preset()
+                preset = set(include_ids)
         if current_user_id is None:
             # Unauthenticated call
             if query_len < 3:
@@ -82,6 +84,13 @@ class TaxonomyService(Service):
         mru_ret.sort(key=lambda r: return_order[r.id])
         return mru_ret + preset_ret + others_ret
 
-    def query(self, taxon_id: ClassifIDT) -> TaxonBO:
-        ret = TaxonBO(self.session, taxon_id)
-        return ret
+    def query(self, taxon_id: ClassifIDT) -> Optional[TaxonBO]:
+        ret = self.query_set([taxon_id])
+        if not ret:
+            return None
+        else:
+            return ret[0]
+
+    def query_set(self, taxon_ids: ClassifIDListT) -> List[TaxonBO]:
+        ret = TaxonBOSet(self.session, taxon_ids)
+        return ret.taxa
