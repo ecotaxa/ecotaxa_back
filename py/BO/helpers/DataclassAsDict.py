@@ -5,7 +5,6 @@
 #  Pretend a dataclass is a dict, for pydantic to loop over fields and serialize during API calls.
 #
 # Note: This breaks (a bit) isolation between layers, this is linked to Web layer
-import dataclasses
 # noinspection PyUnresolvedReferences
 from dataclasses import dataclass
 
@@ -19,24 +18,12 @@ class DataclassAsDict(dict):
         The below is enough to fool dict() into iterating over the dataclass fields.
     """
 
-    # noinspection PyMissingConstructor,PyUnresolvedReferences
     def __init__(self, rec):
+        # noinspection PyUnresolvedReferences
         flds = self.__dataclass_fields__
         assert len(flds) == len(rec)
-        for a_field, a_val in zip(flds, rec):
-            setattr(self, a_field, a_val)
+        super().__init__(zip(flds, rec))
 
-    def __iter__(self, *args, **kwargs):
-        """ In the protocol, first step, pretend that self cannot iterate
-            So this overloaded def is empty on purpose. Removing it will make derived classes empty
-            when returned thru FastAPI. """
-
-    def keys(self):
-        """ In the protocol, second step, provide keys """
-        # noinspection PyDataclass
-        dataclasses.asdict(self, dict_factory=super().__init__)
-        return super().keys()
-
-    # def __getitem__(self, y):
-    #     """ Third step, the caller asks for key values, they are (now) in our base class, i.e. dict """
-    #     return self.as_dict.__getitem__(y)
+    def __getattr__(self, item):
+        """ Redirect to dict for dataclass fields access """
+        return self[item]
