@@ -339,7 +339,7 @@
           "projects"
         ],
         "summary":"Search Projects",
-        "description":"Return projects summary for current user.\n- @param also_others: Allows to return projects for which given user has no right\n- @param for_managing: Allows to return project that can be written to (including erased) by the given user\n- @param title_filter: Use this pattern for matching returned projects names\n- @param instrument_filter: Only return projects where this instrument was used\n- @param filter_subset: Only return projects having 'subset' in their names",
+        "description":"Return projects for current user.\n- `param` also_others: Allows to return projects for which given user has no right\n- `param` for_managing: Allows to return project that can be written to (including erased) by the given user\n- `param` title_filter: Use this pattern for matching returned projects names\n- `param` instrument_filter: Only return projects where this instrument was used\n- `param` filter_subset: Only return projects having 'subset' in their names",
         "operationId":"search_projects_projects_search_get",
         "parameters":[
           {
@@ -402,7 +402,7 @@
                   "title":"Response Search Projects Projects Search Get",
                   "type":"array",
                   "items":{
-                    "$ref":"#/components/schemas/ProjectSearchResult"
+                    "$ref":"#/components/schemas/ProjectModel"
                   }
                 }
               }
@@ -535,7 +535,7 @@
           "projects"
         ],
         "summary":"Project Query",
-        "description":"See if project exists for current user, eventually for managing it.",
+        "description":"Read project if it exists for current user, eventually for managing it.",
         "operationId":"project_query_projects__project_id__get",
         "parameters":[
           {
@@ -566,6 +566,60 @@
                 "schema":{
                   "$ref":"#/components/schemas/ProjectModel"
                 }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      },
+      "put":{
+        "tags":[
+          "projects"
+        ],
+        "summary":"Update Project",
+        "description":"Update the project.\nNote that some fields will NOT be updated and simply ignored, e.g. *free_cols.",
+        "operationId":"update_project_projects__project_id__put",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Project Id",
+              "type":"integer"
+            },
+            "name":"project_id",
+            "in":"path"
+          }
+        ],
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/ProjectModel"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
               }
             }
           },
@@ -620,6 +674,58 @@
             "content":{
               "application/json":{
                 "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/project_set/stats":{
+      "get":{
+        "tags":[
+          "projects"
+        ],
+        "summary":"Project Stats",
+        "description":"Read projects statistics, i.e. used taxa and classification states.",
+        "operationId":"project_stats_project_set_stats_get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Ids",
+              "type":"string"
+            },
+            "name":"ids",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Project Stats Project Set Stats Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/ProjectStatsModel"
+                  }
+                }
               }
             }
           },
@@ -1657,7 +1763,11 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "$ref":"#/components/schemas/ObjectHistoryRsp"
+                  "title":"Response Object Query History Object  Object Id  History Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/HistoricalClassification"
+                  }
                 }
               }
             }
@@ -1747,7 +1857,7 @@
           "Taxonomy Tree"
         ],
         "summary":"Query Taxa",
-        "description":"Information about a taxon, including its lineage.",
+        "description":"Information about a single taxon, including its lineage.",
         "operationId":"query_taxa_taxa__taxon_id__get",
         "parameters":[
           {
@@ -1767,6 +1877,58 @@
               "application/json":{
                 "schema":{
                   "$ref":"#/components/schemas/TaxonModel"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/taxa_set/query":{
+      "get":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Query Taxa Set",
+        "description":"Information about several taxa, including their lineage.\nThe separator between numbers is arbitrary non-digit, e.g. \":\", \"|\" or \",\"",
+        "operationId":"query_taxa_set_taxa_set_query_get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Ids",
+              "type":"string"
+            },
+            "name":"ids",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Query Taxa Set Taxa Set Query Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/TaxonModel"
+                  }
                 }
               }
             }
@@ -2431,20 +2593,6 @@
           }
         }
       },
-      "ObjectHistoryRsp":{
-        "title":"ObjectHistoryRsp",
-        "type":"object",
-        "properties":{
-          "classif":{
-            "title":"The classification history",
-            "type":"array",
-            "items":{
-              "$ref":"#/components/schemas/HistoricalClassification"
-            },
-            "default":[]
-          }
-        }
-      },
       "ObjectModel":{
         "title":"ObjectModel",
         "required":[
@@ -2813,6 +2961,14 @@
             },
             "default":{}
           },
+          "init_classif_list":{
+            "title":"Favorite taxa used in classification",
+            "type":"array",
+            "items":{
+              "type":"integer"
+            },
+            "default":[]
+          },
           "managers":{
             "title":"Managers of this project",
             "type":"array",
@@ -2823,6 +2979,14 @@
           },
           "annotators":{
             "title":"Annotators of this project, if not manager",
+            "type":"array",
+            "items":{
+              "$ref":"#/components/schemas/UserModel"
+            },
+            "default":[]
+          },
+          "viewers":{
+            "title":"Viewers of this project, if not manager nor annotator",
             "type":"array",
             "items":{
               "$ref":"#/components/schemas/UserModel"
@@ -2866,10 +3030,6 @@
             "title":"Classifsettings",
             "type":"string"
           },
-          "initclassiflist":{
-            "title":"Initclassiflist",
-            "type":"string"
-          },
           "classiffieldlist":{
             "title":"Classiffieldlist",
             "type":"string"
@@ -2884,10 +3044,6 @@
           },
           "projtype":{
             "title":"Projtype",
-            "type":"string"
-          },
-          "fileloaded":{
-            "title":"Fileloaded",
             "type":"string"
           },
           "rf_models_used":{
@@ -2916,54 +3072,44 @@
           }
         }
       },
-      "ProjectSearchResult":{
-        "title":"ProjectSearchResult",
+      "ProjectStatsModel":{
+        "title":"ProjectStatsModel",
         "required":[
           "projid",
-          "title",
-          "status",
-          "objcount",
-          "pctvalidated",
-          "pctclassified",
-          "visible"
+          "nb_unclassified",
+          "nb_validated",
+          "nb_dubious",
+          "nb_predicted"
         ],
         "type":"object",
         "properties":{
           "projid":{
-            "title":"Projid",
+            "title":"The project id",
             "type":"integer"
           },
-          "title":{
-            "title":"Title",
-            "type":"string"
+          "used_taxa":{
+            "title":"The taxa/category ids used inside the project",
+            "type":"array",
+            "items":{
+              "type":"integer"
+            },
+            "default":[]
           },
-          "status":{
-            "title":"Status",
-            "type":"string"
-          },
-          "objcount":{
-            "title":"Objcount",
+          "nb_unclassified":{
+            "title":"The number of unclassified objects inside the project",
             "type":"integer"
           },
-          "pctvalidated":{
-            "title":"Pctvalidated",
-            "type":"number"
+          "nb_validated":{
+            "title":"The number of validated objects inside the project",
+            "type":"integer"
           },
-          "pctclassified":{
-            "title":"Pctclassified",
-            "type":"number"
+          "nb_dubious":{
+            "title":"The number of dubious objects inside the project",
+            "type":"integer"
           },
-          "email":{
-            "title":"Email",
-            "type":"string"
-          },
-          "name":{
-            "title":"Name",
-            "type":"string"
-          },
-          "visible":{
-            "title":"Visible",
-            "type":"boolean"
+          "nb_predicted":{
+            "title":"The number of predicted objects inside the project",
+            "type":"integer"
           }
         }
       },
@@ -3141,7 +3287,7 @@
         "type":"object",
         "properties":{
           "id":{
-            "title":"The taxon/category IDs",
+            "title":"The taxon/category IDs.",
             "type":"integer"
           },
           "text":{
@@ -3164,15 +3310,15 @@
         "type":"object",
         "properties":{
           "id":{
-            "title":"The taxon/category IDs",
+            "title":"The taxon/category IDs.",
             "type":"integer"
           },
           "display_name":{
-            "title":"The taxon/category full name",
+            "title":"The taxon/category display name.",
             "type":"string"
           },
           "lineage":{
-            "title":"The taxon/category name of ancestors",
+            "title":"The taxon/category name of ancestors, including self, in first.",
             "type":"array",
             "items":{
               "type":"string"

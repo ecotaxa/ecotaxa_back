@@ -105,7 +105,6 @@ def test_subentities(config, database, fastapi, caplog):
     url = OBJECT_HISTORY_QUERY_URL.format(object_id=first_objid)
     response = fastapi.get(url, headers=ADMIN_AUTH)
     assert response.status_code == status.HTTP_200_OK
-    obj = response.json()
-    classif = obj["classif"]
+    classif = response.json()
     assert classif is not None
     assert len(classif) == 0

@@ -117,13 +117,13 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
 
     # Add a numerical feature into the subset
     session = ProjectsService().session
-    prj_bo = session.query(Project).get(subset_prj_id)
-    mapg = ProjectMapping().load_from_project(prj_bo)
+    db_prj: Project = session.query(Project).get(subset_prj_id)
+    mapg = ProjectMapping().load_from_project(db_prj)
     mapg.add_column(ObjectFields.__tablename__, "object", "foobar", "n")
     db_col = mapg.search_field("object_foobar")
     assert db_col
-    mapg.write_to_project(prj_bo)
-    for an_obj in prj_bo.all_objects:
+    mapg.write_to_project(db_prj)
+    for an_obj in db_prj.all_objects:
         setattr(an_obj.fields, db_col["field"], 4567)
     session.commit()
 

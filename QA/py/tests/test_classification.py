@@ -24,6 +24,7 @@ OBJECT_SET_REVERT_URL = "/object_set/{project_id}/revert_to_history?dry_run={dry
 OBJECT_SET_RESET_PREDICTED_URL = "/object_set/{project_id}/reset_to_predicted"
 OBJECT_SET_CLASSIFY_URL = "/object_set/classify"
 OBJECT_SET_DELETE_URL = "/object_set/"
+PROJECT_STATS_URL = "/project_set/stats?ids={project_ids}"
 
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
@@ -35,6 +36,21 @@ def test_classif(config, database, fastapi, caplog):
 
     obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
     assert len(obj_ids) == 8
+
+    # Initial stats just after load
+    def get_stats():
+        stats_url = PROJECT_STATS_URL.format(project_ids="%s" % prj_id)
+        stats_rsp = fastapi.get(stats_url, headers=ADMIN_AUTH)
+        assert stats_rsp.status_code == status.HTTP_200_OK
+        return stats_rsp.json()[0]
+
+    # All is predicted, see source archive
+    assert get_stats() == {'nb_dubious': 0,
+                           'nb_predicted': 8,
+                           'nb_unclassified': 0,
+                           'nb_validated': 0,
+                           'projid': prj_id,
+                           'used_taxa': [45072, 78418, 84963, 85011, 85012, 85078]}
 
     # Try a revert on a fresh project
     url = OBJECT_SET_REVERT_URL.format(project_id=prj_id, dry_run=True,
@@ -57,6 +73,14 @@ def test_classif(config, database, fastapi, caplog):
     stats = rsp.json()
     # assert stats == {'classif_info': {}, 'last_entries': []}
 
+    # Same stats
+    assert get_stats() == {'nb_dubious': 0,
+                           'nb_predicted': 0,
+                           'nb_unclassified': 8,
+                           'nb_validated': 0,
+                           'projid': prj_id,
+                           'used_taxa': [-1]}
+
     # Reset all to predicted
     url = OBJECT_SET_RESET_PREDICTED_URL.format(project_id=prj_id)
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
@@ -74,12 +98,20 @@ def test_classif(config, database, fastapi, caplog):
     copepod_id = 25828
     classify_all(copepod_id)
 
+    # Same stats
+    assert get_stats() == {'nb_dubious': 0,
+                           'nb_predicted': 0,
+                           'nb_unclassified': 0,
+                           'nb_validated': 8,
+                           'projid': prj_id,
+                           'used_taxa': [25828]}  # No more Unclassified and Copepod is in +
+
     # No history yet as the object was just created
     def classif_history():
         url = OBJECT_HISTORY_QUERY_URL.format(object_id=obj_ids[0])
         response = fastapi.get(url, headers=ADMIN_AUTH)
         assert response.status_code == status.HTTP_200_OK
-        return response.json()["classif"]
+        return response.json()
 
     classif = classif_history()
     assert classif is not None
@@ -109,6 +141,17 @@ def test_classif(config, database, fastapi, caplog):
     # There should be 8 validated
     obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id, statusfilter='V')
     assert len(obj_ids) == 8
+
+    url = PROJECT_STATS_URL.format(project_ids="%s" % prj_id)
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == [{'nb_dubious': 0,
+                           'nb_predicted': 0,
+                           'nb_unclassified': 0,
+                           'nb_validated': 8,
+                           'projid': prj_id,
+                           'used_taxa': [
+                               25835]}]  # <- copepod is gone, unclassified as well, replaced with entomobryomorpha
 
     # Delete some object via API, why not?
     rsp = fastapi.delete(OBJECT_SET_DELETE_URL, headers=ADMIN_AUTH, json=obj_ids[:4])
