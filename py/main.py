@@ -661,7 +661,7 @@ async def resolve_taxon(our_id: int,
         return ret
 
 
-@app.get("/taxa/refresh", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)  # pragma:nocover
+@app.get("/taxa_ref_change/refresh", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)  # pragma:nocover
 async def refresh_taxa_db(max_requests: int,
                           current_user: int = Depends(get_current_user)) -> StreamingResponse:
     """
@@ -677,7 +677,7 @@ async def refresh_taxa_db(max_requests: int,
     return StreamingResponse(log_streamer(tmp_log, "Done,"), media_type="text/plain")
 
 
-@app.get("/taxa/matches", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)  # pragma:nocover
+@app.get("/taxa_ref_change/matches", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)  # pragma:nocover
 async def matching_with_worms(current_user: int = 0  # Depends(get_current_user)
                               ) -> PlainTextResponse:
     """
@@ -692,16 +692,17 @@ async def matching_with_worms(current_user: int = 0  # Depends(get_current_user)
     return PlainTextResponse(txt, status_code=status.HTTP_200_OK)
 
 
-@app.get("/taxa/matches2", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)  # pragma:nocover
+@app.get("/taxa_ref_change/matches2", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)  # pragma:nocover
 async def matching_with_worms_nice(request: Request,
                                    current_user: int = 0  # Depends(get_current_user)
                                    ) -> Response:
     """
         Show current state of matches - nice HTML version.
     """
+    params = request.query_params
     sce = TaxonomyChangeService(0)
     with RightsThrower():
-        data = sce.matching(current_user)
+        data = sce.matching(current_user, params)
     txt = "%d case-insensitive matches on name with WoRMS scientificname\n" % len(data)
     txt += "[worms.aphia_id, worms.status, taxo.id, taxo.name, taxo.taxotype, taxo.taxostatus]\n"
     txt += "\n".join([str(a_res) for a_res in data])

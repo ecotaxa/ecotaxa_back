@@ -1,55 +1,74 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="height:100%;">
 <head>
     <meta charset="UTF-8">
     <title>WoRMS match</title>
     <link rel="stylesheet" href="/static/DataTables1.10.18/datatables.css">
     <script src="/static/jquery.min.js"></script>
     <script src="/static/DataTables1.10.18/datatables.js"></script>
+    <script src="/static/dataTables.pageResize.js"></script>
 </head>
-<body>
-<table id="matches">
-    <thead>
-    <tr>
-        <th>worms.aphia_id</th>
-        <th>worms.status</th>
-        <th>taxo.id</th>
-        <th>taxo.name</th>
-        <th>#usage</th>
-        <th>taxo.taxotype</th>
-        <th>taxo.taxostatus</th>
-    </tr>
-    </thead>
-    {% for mtch_us, mtch_worms in matches %}
-    <tr>
-        <td><a href="http://www.marinespecies.org/aphia.php?p=taxdetails&amp;id={{mtch_worms.aphia_id}}">
-            {{mtch_worms.aphia_id}}</a>
-        </td>
-        <td>{{mtch_worms.status}}
-            {% if mtch_worms.status != "accepted" %}
-            {% if mtch_worms.unacceptreason %}
-            :&nbsp;{{mtch_worms.unacceptreason}}
-            {% else %}
-            ->&nbsp;{{mtch_worms.valid_name}}
-            {% endif %}
-            {% endif %}
-        </td>
-        <td>{{mtch_us.id}}</td>
-        <td>{{mtch_us.name}}</td>
-        <td>{{mtch_us.nbrobj}}</td>
-        <td>{{mtch_us.taxotype}}</td>
-        <td>{{mtch_us.taxostatus}}</td>
-    </tr>
-    {% endfor %}
-</table>
+<body style="height:100%;">
+<div style="height:5%;">
+    <form method="get">
+        <button name="case1" class="btn" title="Perfect match">OK:1<->1</button>
+        <button name="case2" class="btn" title="Match but Morpho">KO:1<->1(morpho)</button>
+        <button name="case3" class="btn" title="Match but unaccepted">KO:1(unacc)<->1</button>
+        <button name="case4" class="btn" title="Several accepted matches">KO:N<->N</button>
+        <button name="case5" class="btn" title="No match, Phylo">KO:0<->1(phylo)</button>
+        <button name="case6" class="btn" title="No match but Morpho">OK:0<->1(morpho)</button>
+    </form>
+</div>
+<div style="height:95%;">
+    <table id="matches">
+        <thead>
+        <tr>
+            <th>worms.aphia_id</th>
+            <th>worms.status</th>
+            <th>taxo.id</th>
+            <th>taxo.name</th>
+            <th>#usage</th>
+            <th>taxo.taxotype</th>
+            <th>taxo.taxostatus</th>
+        </tr>
+        </thead>
+        {% for mtch_us, mtch_worms in matches %}
+        <tr>
+            <td><a href="http://www.marinespecies.org/aphia.php?p=taxdetails&amp;id={{mtch_worms.aphia_id}}">
+                {{mtch_worms.aphia_id}}</a>
+            </td>
+            <td>{{mtch_worms.status}}
+                {% if mtch_worms.status != "accepted" %}
+                {% if mtch_worms.unacceptreason %}
+                :&nbsp;{{mtch_worms.unacceptreason}}
+                {% else %}
+                ->&nbsp;{{mtch_worms.valid_name}}
+                {% endif %}
+                {% endif %}
+            </td>
+            <td>{{mtch_us.id}}</td>
+            <td>{{mtch_us.name}}</td>
+            <td>{{mtch_us.nbrobj if mtch_us.nbrobj else ""}}</td>
+            <td>{{mtch_us.taxotype}}</td>
+            <td>{{mtch_us.taxostatus}}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
 
 </body>
 <script>
 $(document).ready( function () {
     $('#matches').DataTable( {
-        "pageLength": 50
+    //    "pageLength": 25,
+        "pageResize": true
     } );
 } );
+
+
+
+
+
 
 </script>
 </html>

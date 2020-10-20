@@ -7,7 +7,7 @@
 import random
 import tempfile
 from collections import deque
-from typing import Dict, Set, List, Tuple
+from typing import Dict, Set, List, Tuple, Any
 
 from httpx import ReadTimeout, HTTPError
 
@@ -15,8 +15,8 @@ from BO.Rights import RightsBO
 from DB import Taxonomy, Role
 from DB.Project import ProjectTaxoStat
 from DB.WoRMs import WoRMS
-from DB.helpers.ORM import Query
-from DB.helpers.ORM import only_res, func
+from DB.helpers.ORM import Query, any_
+from DB.helpers.ORM import only_res, func, or_, and_
 from helpers.DynamicLogs import get_logger, switch_log_to_file, switch_log_back
 from providers.WoRMS import WoRMSFinder
 from .helpers.Service import Service
@@ -194,30 +194,81 @@ class TaxonomyChangeService(Service):  # pragma:nocover
     #  during the specified period
     # Get max of dates in our DB as start of range
 
-    def matching(self, _current_user_id: int) -> List[Tuple[WoRMS, Taxonomy]]:
+    def matching(self, _current_user_id: int,
+                 params: Dict[str, Any]
+                 ) -> List[Tuple[WoRMS, Taxonomy]]:
         """
             Return the list of matching entries b/w Taxonomy and WoRMS.
         """
-        # No security check. TODO?
-        used_taxo_ids: Query = self.session.query(ProjectTaxoStat.id).distinct()
-        used_taxo_ids = used_taxo_ids.filter(ProjectTaxoStat.nbr > 0)
-
-        qry: Query = self.session.query(Taxonomy, WoRMS)
-        qry = qry.join(WoRMS, func.lower(WoRMS.scientificname) == func.lower(Taxonomy.name))
-        qry = qry.filter(Taxonomy.id.in_(used_taxo_ids))
-        qry = qry.order_by(func.lower(Taxonomy.name))
-        # Format result
         ret = []
-        for a_res in qry.all():
-            # taxo: Taxonomy = a_res[0]
-            # worms: WoRMS = a_res[1]
-            # line = [worms.aphia_id, worms.status, taxo.id, taxo.name, taxo.taxotype, taxo.taxostatus]
-            ret.append(a_res)
+        taxo_ids_qry: Query = self.session.query(ProjectTaxoStat.id).distinct()
+        taxo_ids_qry = taxo_ids_qry.filter(ProjectTaxoStat.nbr > 0)
+        used_taxo_ids = [an_id for (an_id,) in taxo_ids_qry.all()]
+
+        # No security check. TODO?
+        case1 = "case1" in params
+        """ Taxa with same name on both sides, Phylo in EcoTaxa and accepted in WoRMS """
+        case2 = "case2" in params
+        """ Taxa with same name on both sides, Morpho in EcoTaxa and accepted in WoRMS """
+        case3 = "case3" in params
+        case4 = "case4" in params
+        case5 = "case5" in params
+        case6 = "case6" in params
+
+        if case1 or case2 or case3 or case4:
+            subqry: Query = self.session.query(Taxonomy.id, WoRMS.aphia_id)
+            subqry = subqry.join(WoRMS, func.lower(WoRMS.scientificname) == func.lower(Taxonomy.name))
+            subqry = subqry.filter(Taxonomy.id == any_(used_taxo_ids))
+            # Group to exclude multiple matches
+            subqry = subqry.group_by(Taxonomy.id, WoRMS.aphia_id)
+            if case4:
+                subqry = subqry.having(or_(func.count(Taxonomy.id) > 1,
+                                           func.count(WoRMS.aphia_id) > 1))
+            else:
+                subqry = subqry.having(and_(func.count(Taxonomy.id) == 1,
+                                            func.count(WoRMS.aphia_id) == 1))
+            subqry = subqry.subquery().alias("ids")
+
+            qry: Query = self.session.query(Taxonomy, WoRMS)
+            qry = qry.join(subqry, subqry.c.id == Taxonomy.id)
+            qry = qry.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
+            if case2:
+                qry = qry.filter(Taxonomy.taxotype == 'M')
+            else:
+                qry = qry.filter(Taxonomy.taxotype == 'P')
+            if case3:
+                qry = qry.filter(WoRMS.status != 'accepted')
+            else:
+                qry = qry.filter(WoRMS.status == 'accepted')
+            logger.info("matching qry:%s", str(qry))
+            res = qry.all()
+            # Format result
+            for taxo, worms in res:
+                ret.append((taxo, worms))
+        elif case5 or case6:
+            subqry: Query = self.session.query(Taxonomy.id, WoRMS.aphia_id)
+            subqry = subqry.outerjoin(WoRMS, func.lower(WoRMS.scientificname) == func.lower(Taxonomy.name))
+            subqry = subqry.filter(Taxonomy.id == any_(used_taxo_ids))
+            subqry = subqry.filter(WoRMS.aphia_id == None)
+            subqry = subqry.subquery().alias("ids")
+
+            qry: Query = self.session.query(Taxonomy)
+            qry = qry.join(subqry, subqry.c.id == Taxonomy.id)
+            if case6:
+                qry = qry.filter(Taxonomy.taxotype == 'M')
+            else:
+                qry = qry.filter(Taxonomy.taxotype == 'P')
+            logger.info("matching qry:%s", str(qry))
+            res = qry.all()
+            # Format result
+            for taxo in res:
+                ret.append((taxo, None))
+
         return ret
 
     def _do_one_by_one(self, children):
         """
-            There was an error inserting childre in bulk set. So do it one by one, and log
+            There was an error inserting children in bulk set. So do it one by one, and log
             the problem each time.
         """
         ret = set()
