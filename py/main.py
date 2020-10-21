@@ -708,10 +708,10 @@ async def matching_with_worms_nice(request: Request,
         # noinspection PyProtectedMember
         data = sce.matching(current_user, params._dict)
     txt = "%d case-insensitive matches on name with WoRMS scientificname\n" % len(data)
-    txt += "[worms.aphia_id, worms.status, taxo.id, taxo.name, taxo.taxotype, taxo.taxostatus]\n"
+    txt += "[worms.aphia_id, worms.status, taxo.id, taxo.name, taxo.taxotype]\n"
     txt += "\n".join([str(a_res) for a_res in data])
     return templates.TemplateResponse("worms.html",
-                                      {"request": request, "matches": data},
+                                      {"request": request, "matches": data, "params": params},
                                       headers=CRSF_header)
 
 

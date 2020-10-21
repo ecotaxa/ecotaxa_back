@@ -12,11 +12,11 @@ from typing import Dict, Set, List, Tuple, Any
 from httpx import ReadTimeout, HTTPError
 
 from BO.Rights import RightsBO
-from DB import Taxonomy, Role
+from DB import Taxonomy, Role, Column
 from DB.Project import ProjectTaxoStat
 from DB.WoRMs import WoRMS
 from DB.helpers.ORM import Query, any_
-from DB.helpers.ORM import only_res, func, or_, and_
+from DB.helpers.ORM import only_res, func, not_, or_, and_, text
 from helpers.DynamicLogs import get_logger, switch_log_to_file, switch_log_back
 from providers.WoRMS import WoRMSFinder
 from .helpers.Service import Service
@@ -211,14 +211,21 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         case2 = "case2" in params
         """ Taxa with same name on both sides, Morpho in EcoTaxa and accepted in WoRMS """
         case3 = "case3" in params
+        """ Taxa with same name on both sides, Phylo in EcoTaxa and NOT accepted in WoRMS,
+         and there is no equivalent accepted match """
         case4 = "case4" in params
         case5 = "case5" in params
         case6 = "case6" in params
 
-        if case1 or case2 or case3 or case4:
+        if case1 or case2 or case4:
             subqry = self.session.query(Taxonomy.id, WoRMS.aphia_id)
             subqry = subqry.join(WoRMS, func.lower(WoRMS.scientificname) == func.lower(Taxonomy.name))
             subqry = subqry.filter(Taxonomy.id == any_(used_taxo_ids))
+            if case2:
+                subqry = subqry.filter(Taxonomy.taxotype == 'M')
+            else:
+                subqry = subqry.filter(Taxonomy.taxotype == 'P')
+            subqry = subqry.filter(WoRMS.status == 'accepted')
             # Group to exclude multiple matches
             subqry = subqry.group_by(Taxonomy.id, WoRMS.aphia_id)
             if case4:
@@ -232,16 +239,30 @@ class TaxonomyChangeService(Service):  # pragma:nocover
             qry: Query = self.session.query(Taxonomy, WoRMS)
             qry = qry.join(subqry, subqry.c.id == Taxonomy.id)
             qry = qry.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
-            if case2:
-                qry = qry.filter(Taxonomy.taxotype == 'M')
-            else:
-                qry = qry.filter(Taxonomy.taxotype == 'P')
-            if case3:
-                qry = qry.filter(WoRMS.status != 'accepted')
-            else:
-                qry = qry.filter(WoRMS.status == 'accepted')
             logger.info("matching qry:%s", str(qry))
             res = qry.all()
+            # Format result
+            for taxo, worms in res:
+                ret.append((taxo, worms))
+        elif case3:
+            subqry = self.session.query(Taxonomy.id,
+                                        WoRMS.aphia_id,
+                                        func.array_agg(WoRMS.status).over(
+                                            partition_by=(Taxonomy.id, WoRMS.aphia_id)).label("acc"),
+                                        func.count(WoRMS.aphia_id).over(
+                                            partition_by=(Taxonomy.id, WoRMS.aphia_id)).label("cnt"),
+                                        )
+            subqry = subqry.join(WoRMS, func.lower(WoRMS.scientificname) == func.lower(Taxonomy.name))
+            subqry = subqry.filter(Taxonomy.id == any_(used_taxo_ids))
+            subqry = subqry.filter(Taxonomy.taxotype == 'P')
+            subqry = subqry.subquery().alias("ids")
+
+            qry2: Query = self.session.query(Taxonomy, WoRMS)
+            qry2 = qry2.join(subqry, subqry.c.id == Taxonomy.id)
+            qry2 = qry2.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
+            qry2 = qry2.filter(not_(subqry.c.acc.op('@>')(text("ARRAY['accepted'::varchar]"))))
+            logger.info("matching qry:%s", str(qry2))
+            res = qry2.all()
             # Format result
             for taxo, worms in res:
                 ret.append((taxo, worms))
@@ -252,14 +273,14 @@ class TaxonomyChangeService(Service):  # pragma:nocover
             subqry2 = subqry2.filter(WoRMS.aphia_id.is_(None))
             subqry2 = subqry2.subquery().alias("ids")
 
-            qry2: Query = self.session.query(Taxonomy)
-            qry2 = qry2.join(subqry2, subqry2.c.id == Taxonomy.id)
+            qry3: Query = self.session.query(Taxonomy)
+            qry3 = qry3.join(subqry2, subqry2.c.id == Taxonomy.id)
             if case6:
-                qry2 = qry2.filter(Taxonomy.taxotype == 'M')
+                qry3 = qry3.filter(Taxonomy.taxotype == 'M')
             else:
-                qry2 = qry2.filter(Taxonomy.taxotype == 'P')
-            logger.info("matching qry:%s", str(qry2))
-            res = qry2.all()
+                qry3 = qry3.filter(Taxonomy.taxotype == 'P')
+            logger.info("matching qry:%s", str(qry3))
+            res = qry3.all()
             # Format result
             for taxo in res:
                 ret.append((taxo, None))

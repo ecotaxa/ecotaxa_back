@@ -11,12 +11,25 @@
 <body style="height:100%;">
 <div style="height:5%;">
     <form method="get">
-        <button name="case1" class="btn" title="Perfect match">OK:1<->1</button>
-        <button name="case2" class="btn" title="Match but Morpho">KO:1<->1(morpho)</button>
-        <button name="case3" class="btn" title="Match but unaccepted">KO:1(unacc)<->1</button>
-        <button name="case4" class="btn" title="Several accepted matches">KO:N<->N</button>
-        <button name="case5" class="btn" title="No match, Phylo">KO:0<->1(phylo)</button>
-        <button name="case6" class="btn" title="No match but Morpho">OK:0<->1(morpho)</button>
+        <button name="case1" class="btn {{ 'btn-primary' if 'case1' in params }}"
+                title="Perfect match">
+            OK:1<->1</button>
+        <button name="case2" class="btn {{ 'btn-primary' if 'case2' in params }}"
+                title="Match but Morpho">
+            KO:1<->1(morpho)</button>
+        <button name="case3" class="btn {{ 'btn-primary' if 'case3' in params }}"
+                title="Match but unaccepted, and no accepted match with same name">
+            KO:1(unacc)<->1
+        </button>
+        <button name="case4" class="btn {{ 'btn-primary' if 'case4' in params }}"
+                title="Several accepted matches">
+            KO:N<->N</button>
+        <button name="case5" class="btn {{ 'btn-primary' if 'case5' in params }}"
+                title="No match, Phylo">
+            KO:0<->1(phylo)</button>
+        <button name="case6" class="btn {{ 'btn-primary' if 'case6' in params }}"
+                title="No match but Morpho">
+            OK:0<->1(morpho)</button>
     </form>
 </div>
 <div style="height:95%;">
@@ -29,7 +42,6 @@
             <th>taxo.name</th>
             <th>#usage</th>
             <th>taxo.taxotype</th>
-            <th>taxo.taxostatus</th>
         </tr>
         </thead>
         {% for mtch_us, mtch_worms in matches %}
@@ -46,11 +58,17 @@
                 {% endif %}
                 {% endif %}
             </td>
-            <td>{{mtch_us.id}}</td>
+            <td><a href="http://ecotaxoserver.obs-vlfr.fr/browsetaxoviewpopup/{{mtch_us.id}}" title="View only">&nbsp;V&nbsp;</a>
+                <a href="http://ecotaxoserver.obs-vlfr.fr/browsetaxoeditpopup/{{mtch_us.id}}" title="Edit">{{mtch_us.id}}</a>
+            </td>
+            {% if not mtch_worms.aphia_id %}
+            <td><a href="http://www.marinespecies.org/aphia.php?p=taxlist&tName={{mtch_us.name}}"
+                   title="Search on WoRMS">{{mtch_us.name}}</a></td>
+            {% else %}
             <td>{{mtch_us.name}}</td>
+            {% endif %}
             <td>{{mtch_us.nbrobj if mtch_us.nbrobj else ""}}</td>
             <td>{{mtch_us.taxotype}}</td>
-            <td>{{mtch_us.taxostatus}}</td>
         </tr>
         {% endfor %}
     </table>
@@ -64,6 +82,9 @@ $(document).ready( function () {
         "pageResize": true
     } );
 } );
+
+
+
 
 
 
