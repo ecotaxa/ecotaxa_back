@@ -8,15 +8,15 @@ from formats.EMODnet.models import EMLMeta
 from helpers.pydantic import BaseModel, Field
 
 
-class EMODNetExportReq(BaseModel):
+class EMODnetExportReq(BaseModel):
     """
         EMODNet format export request.
     """
-    meta: EMLMeta
+    meta: EMLMeta = Field(title="EML meta for the produced archive")
     project_ids: List[int] = Field(title="The projects to export", min_items=1)
 
 
-class EMODNetExportRsp(BaseModel):
+class EMODnetExportRsp(BaseModel):
     """
         EMODNet format export response.
     """

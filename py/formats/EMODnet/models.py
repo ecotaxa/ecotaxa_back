@@ -287,7 +287,7 @@ class EMLMethod(BaseModel):
 
 class EMLProject(BaseModel):
     """
-        EML method - unused
+        EML project - unused
     """
 
     title: str

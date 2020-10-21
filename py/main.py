@@ -13,7 +13,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi_utils.timing import add_timing_middleware
 
 from API_models.crud import *
-from API_models.exports import EMODNetExportReq, EMODNetExportRsp
+from API_models.exports import EMODnetExportReq, EMODnetExportRsp
 from API_models.imports import *
 from API_models.merge import MergeRsp
 from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp, ClassifyReq, ObjectModel, \
@@ -32,7 +32,7 @@ from API_operations.Status import StatusService
 from API_operations.Subset import SubsetService
 from API_operations.TaxoManager import TaxonomyChangeService
 from API_operations.TaxonomyService import TaxonomyService
-from API_operations.exports.EMODnet import EMODNetExport
+from API_operations.exports.EMODnet import EMODnetExport
 from API_operations.helpers.Service import Service
 from API_operations.imports.Import import ImportAnalysis, RealImport
 from API_operations.imports.SimpleImport import SimpleImport
@@ -572,15 +572,15 @@ def object_query_history(object_id: int,
     return ret
 
 
-@app.post("/export/emodnet", tags=['WIP'], include_in_schema=False, response_model=EMODNetExportRsp)  # pragma:nocover
-def emodnet_format_export(params: EMODNetExportReq,
+@app.post("/export/emodnet", tags=['WIP'], include_in_schema=False, response_model=EMODnetExportRsp)  # pragma:nocover
+def emodnet_format_export(params: EMODnetExportReq,
                           current_user: int = Depends(get_current_user)):
     """
         Export in EMODnet format, @see https://www.emodnet-ingestion.eu/
         Produces a DwC-A archive into a temporary directory, ready for download.
         https://python-dwca-reader.readthedocs.io/en/latest/index.html
     """
-    sce = EMODNetExport(params)
+    sce = EMODnetExport(params)
     with RightsThrower():
         return sce.run(current_user)
 
@@ -661,7 +661,8 @@ async def resolve_taxon(our_id: int,
         return ret
 
 
-@app.get("/taxa_ref_change/refresh", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)  # pragma:nocover
+@app.get("/taxa_ref_change/refresh", tags=['WIP'], include_in_schema=False,
+         status_code=status.HTTP_200_OK)  # pragma:nocover
 async def refresh_taxa_db(max_requests: int,
                           current_user: int = Depends(get_current_user)) -> StreamingResponse:
     """
@@ -677,7 +678,8 @@ async def refresh_taxa_db(max_requests: int,
     return StreamingResponse(log_streamer(tmp_log, "Done,"), media_type="text/plain")
 
 
-@app.get("/taxa_ref_change/matches", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)  # pragma:nocover
+@app.get("/taxa_ref_change/matches", tags=['WIP'], include_in_schema=False,
+         status_code=status.HTTP_200_OK)  # pragma:nocover
 async def matching_with_worms(current_user: int = 0  # Depends(get_current_user)
                               ) -> PlainTextResponse:
     """
@@ -685,14 +687,15 @@ async def matching_with_worms(current_user: int = 0  # Depends(get_current_user)
     """
     sce = TaxonomyChangeService(0)
     with RightsThrower():
-        data = sce.matching(current_user)
+        data = sce.matching(current_user, {})
     txt = "%d case-insensitive matches on name with WoRMS scientificname\n" % len(data)
     txt += "[worms.aphia_id, worms.status, taxo.id, taxo.name, taxo.taxotype, taxo.taxostatus]\n"
     txt += "\n".join([str(a_res) for a_res in data])
     return PlainTextResponse(txt, status_code=status.HTTP_200_OK)
 
 
-@app.get("/taxa_ref_change/matches2", tags=['WIP'], include_in_schema=False, status_code=status.HTTP_200_OK)  # pragma:nocover
+@app.get("/taxa_ref_change/matches2", tags=['WIP'], include_in_schema=False,
+         status_code=status.HTTP_200_OK)  # pragma:nocover
 async def matching_with_worms_nice(request: Request,
                                    current_user: int = 0  # Depends(get_current_user)
                                    ) -> Response:
@@ -702,7 +705,8 @@ async def matching_with_worms_nice(request: Request,
     params = request.query_params
     sce = TaxonomyChangeService(0)
     with RightsThrower():
-        data = sce.matching(current_user, params)
+        # noinspection PyProtectedMember
+        data = sce.matching(current_user, params._dict)
     txt = "%d case-insensitive matches on name with WoRMS scientificname\n" % len(data)
     txt += "[worms.aphia_id, worms.status, taxo.id, taxo.name, taxo.taxotype, taxo.taxostatus]\n"
     txt += "\n".join([str(a_res) for a_res in data])

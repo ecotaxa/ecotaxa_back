@@ -5,7 +5,7 @@
 from os.path import join
 from typing import Dict
 
-from API_models.exports import EMODNetExportReq, EMODNetExportRsp
+from API_models.exports import EMODnetExportReq, EMODnetExportRsp
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
@@ -27,7 +27,7 @@ from ..helpers.Service import Service
 logger = get_logger(__name__)
 
 
-class EMODNetExport(Service):
+class EMODnetExport(Service):
     """
         EMODNet export.
         Help during development:
@@ -39,7 +39,7 @@ class EMODNetExport(Service):
                 http://rshiny.lifewatch.be/BioCheck/
     """
 
-    def __init__(self, req: EMODNetExportReq):
+    def __init__(self, req: EMODnetExportReq):
         super().__init__()
         self.req = req
         self.task_id = 9999
@@ -55,12 +55,12 @@ class EMODNetExport(Service):
 
     DWC_ZIP_NAME = "dwca.zip"
 
-    def run(self, current_user_id: int) -> EMODNetExportRsp:
+    def run(self, current_user_id: int) -> EMODnetExportRsp:
         # Security check
         RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, self.req.project_ids[0])
         # OK
         logger.info("------------ starting --------------")
-        ret = EMODNetExportRsp(task_id=0)
+        ret = EMODnetExportRsp(task_id=0)
         # Load origin project
         prj_id = self.req.project_ids[0]
         prj = self.session.query(Project).filter_by(projid=prj_id).first()

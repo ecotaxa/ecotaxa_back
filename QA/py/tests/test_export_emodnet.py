@@ -2,7 +2,7 @@ import logging
 
 from API_models.exports import *
 # noinspection PyPackageRequirements
-from API_operations.exports.EMODnet import EMODNetExport
+from API_operations.exports.EMODnet import EMODnetExport
 from formats.EMODnet.models import *
 from starlette import status
 
@@ -87,6 +87,6 @@ We are grateful to the crew of the research boat at OOV that collected plankton 
                    maintenance="periodic review of origin data",
                    maintenanceUpdateFrequency="1M",
                    additionalMetadata=meta_plus)
-    req = EMODNetExportReq(meta=meta, project_ids=[prj_id])
-    rsp = EMODNetExport(req).run(ADMIN_USER_ID)
+    req = EMODnetExportReq(meta=meta, project_ids=[prj_id])
+    rsp = EMODnetExport(req).run(ADMIN_USER_ID)
     print("\n".join(caplog.messages))

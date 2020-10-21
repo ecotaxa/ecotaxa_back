@@ -216,7 +216,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         case6 = "case6" in params
 
         if case1 or case2 or case3 or case4:
-            subqry: Query = self.session.query(Taxonomy.id, WoRMS.aphia_id)
+            subqry = self.session.query(Taxonomy.id, WoRMS.aphia_id)
             subqry = subqry.join(WoRMS, func.lower(WoRMS.scientificname) == func.lower(Taxonomy.name))
             subqry = subqry.filter(Taxonomy.id == any_(used_taxo_ids))
             # Group to exclude multiple matches
@@ -246,20 +246,20 @@ class TaxonomyChangeService(Service):  # pragma:nocover
             for taxo, worms in res:
                 ret.append((taxo, worms))
         elif case5 or case6:
-            subqry: Query = self.session.query(Taxonomy.id, WoRMS.aphia_id)
-            subqry = subqry.outerjoin(WoRMS, func.lower(WoRMS.scientificname) == func.lower(Taxonomy.name))
-            subqry = subqry.filter(Taxonomy.id == any_(used_taxo_ids))
-            subqry = subqry.filter(WoRMS.aphia_id == None)
-            subqry = subqry.subquery().alias("ids")
+            subqry2 = self.session.query(Taxonomy.id, WoRMS.aphia_id)
+            subqry2 = subqry2.outerjoin(WoRMS, func.lower(WoRMS.scientificname) == func.lower(Taxonomy.name))
+            subqry2 = subqry2.filter(Taxonomy.id == any_(used_taxo_ids))
+            subqry2 = subqry2.filter(WoRMS.aphia_id.is_(None))
+            subqry2 = subqry2.subquery().alias("ids")
 
-            qry: Query = self.session.query(Taxonomy)
-            qry = qry.join(subqry, subqry.c.id == Taxonomy.id)
+            qry2: Query = self.session.query(Taxonomy)
+            qry2 = qry2.join(subqry2, subqry2.c.id == Taxonomy.id)
             if case6:
-                qry = qry.filter(Taxonomy.taxotype == 'M')
+                qry2 = qry2.filter(Taxonomy.taxotype == 'M')
             else:
-                qry = qry.filter(Taxonomy.taxotype == 'P')
-            logger.info("matching qry:%s", str(qry))
-            res = qry.all()
+                qry2 = qry2.filter(Taxonomy.taxotype == 'P')
+            logger.info("matching qry:%s", str(qry2))
+            res = qry2.all()
             # Format result
             for taxo in res:
                 ret.append((taxo, None))
