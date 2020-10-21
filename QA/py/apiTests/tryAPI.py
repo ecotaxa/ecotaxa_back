@@ -8,11 +8,11 @@ import time
 
 import requests
 
-from ecotaxa_cli_py import DefaultApi, Configuration, ApiClient, ApiException, User
+# from ecotaxa_cli_py import DefaultApi, Configuration, ApiClient, ApiException, User
 
-BASE_URL = "http://localhost:5000"
+# BASE_URL = "http://localhost:5000"
 # prod
-# BASE_URL="https://ecotaxa.obs-vlfr.fr"
+BASE_URL = "https://ecotaxa.obs-vlfr.fr"
 API_URL = BASE_URL + "/api"
 
 
@@ -36,6 +36,7 @@ class EcoTaxaApiClient(object):
         session_tok = self._log_in(csrf_tok)
         self.token = session_tok
         assert self.token is not None, "Auth failed!"
+        print("token: %s" % self.token)
         configuration = Configuration(
             host=self.api_url
         )
@@ -63,7 +64,7 @@ class EcoTaxaApiClient(object):
         """
             Fetch the login page a first time, for extracting the CSRF token.
         """
-        rsp = self.session.get(self.login_url)
+        rsp = self.session.get(self.login_url, verify=False)
         return self._extract_csrf_token(rsp.text)
 
     LOGOUT_HTML = '<a href="/logout">log out</a>'
@@ -107,7 +108,6 @@ class EcoTaxaApiClient(object):
             Example API call for fetching allowed projects
         """
 
-
         # Enter a context with an instance of the API client
         with ApiClient(configuration) as api_client:
             # Create an instance of the API class
@@ -124,7 +124,7 @@ def main():
     # /!\ Don't hardcode credentials in source code, especially if it goes to GH /!\
     client = EcoTaxaApiClient(url=BASE_URL,
                               login="laurent.salinas@laposte.net",
-                              password="PouEcoT98;")
+                              password="no no no no")
     client.open()
     start = time.time()
     client.whoami()
