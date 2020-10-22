@@ -127,7 +127,7 @@ class WoRMSFinder(object):
             assert parent is not None
             return "%s > %s" % (self.get_lineage(parent), taxon.name)
 
-    WoRMS_URL_ClassifChildrenByAphia = "/rest/AphiaChildrenByAphiaID/%d?offset=%d"
+    WoRMS_URL_ClassifChildrenByAphia = "/rest/AphiaChildrenByAphiaID/%d?marine_only=false&offset=%d"
 
     CHUNK_SIZE = 50
 
