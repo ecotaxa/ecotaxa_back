@@ -100,7 +100,8 @@ class ProjectBO(object):
                init_classif_list: List[int],
                classiffieldlist: str, popoverfieldlist: str,
                cnn_network_id: str, comments: str,
-               managers: List[Any], annotators: List[Any], viewers: List[Any]):
+               managers: List[Any], annotators: List[Any], viewers: List[Any],
+               license: str):
         proj_id = self._project.projid
         # Field reflexes
         if cnn_network_id != self._project.cnn_network_id:
@@ -118,6 +119,7 @@ class ProjectBO(object):
         self._project.popoverfieldlist = popoverfieldlist
         self._project.cnn_network_id = cnn_network_id
         self._project.comments = comments
+        self._project.license = license
         # Inverse for extracted values
         self._project.initclassiflist = ",".join([str(cl_id) for cl_id in init_classif_list])
         # Inverse for users by privilege

@@ -9,6 +9,7 @@ from typing import Optional, Dict, Type, Iterable, List, Any
 from sqlalchemy.sql.functions import current_timestamp
 from typing_extensions import TypedDict
 
+from BO.DataLicense import LicenseEnum
 from DB import User, Project, Sample, Acquisition, Process
 from DB.Acquisition import ACQUISITION_FREE_COLUMNS
 from DB.Process import PROCESS_FREE_COLUMNS
@@ -64,6 +65,8 @@ class _AddedToProject(BaseModel):
                                      default=[])
     can_administrate: bool = Field(title="Requester can administrate the project",
                                    default=False)
+    license: LicenseEnum = Field(title="Data licence",
+                                 default=LicenseEnum.C)
 
     class Config:
         schema_extra = {

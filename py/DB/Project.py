@@ -7,6 +7,7 @@ from sqlalchemy import Column, Sequence, Boolean, ForeignKey
 from sqlalchemy.dialects.postgresql import VARCHAR, INTEGER, DOUBLE_PRECISION
 from sqlalchemy.orm import relationship
 
+from BO.DataLicense import LicenseEnum
 from DB.helpers.ORM import Model
 
 """
@@ -26,6 +27,7 @@ class Project(Model):
     projid = Column(INTEGER, Sequence('seq_projects'), primary_key=True)
     title = Column(VARCHAR(255), nullable=False)
     visible = Column(Boolean(), default=True)
+    license = Column(VARCHAR(16), default=LicenseEnum.C, nullable=False)
     status = Column(VARCHAR(40), default=ANNOTATE_STATUS)  # Annotate, ExploreOnly, Annotate No Prediction
     # The mappings for this Project
     # TODO: What happens if there is a conflict from one import to another?

@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.templating import Jinja2Templates
 from fastapi_utils.timing import add_timing_middleware
 
+from API_models.constants import Constants
 from API_models.crud import *
 from API_models.exports import EMODnetExportReq, EMODnetExportRsp
 from API_models.imports import *
@@ -354,7 +355,8 @@ def update_project(project_id: int,
                            init_classif_list=project.init_classif_list,
                            classiffieldlist=project.classiffieldlist, popoverfieldlist=project.popoverfieldlist,
                            cnn_network_id=project.cnn_network_id, comments=project.comments,
-                           managers=project.managers, annotators=project.annotators, viewers=project.viewers)
+                           managers=project.managers, annotators=project.annotators, viewers=project.viewers,
+                           license=project.license)
 
 
 # ######################## END OF PROJECT
@@ -741,6 +743,14 @@ def do_nothing(_current_user: int = Depends(get_current_user)):
         This entry point will just do nothing.
             It's also used for exporting models we need on client side.
     """
+
+
+@app.get("/constants", tags=['misc'], response_model=Constants)
+def used_constants() -> Constants:
+    """
+        This entry point will return useful strings for user dialog.
+    """
+    return Constants()
 
 
 # @app.get("/loadtest", tags=['WIP'], include_in_schema=False)

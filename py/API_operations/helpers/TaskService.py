@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 
 class TaskServiceBase(Service, ABC):
     """
-        Common methods and data for API_operations on a project.
+        Common methods and data for asynchronous and long API_operations on a project.
     """
     prj_id: int = 0
     task_id: int = -1
