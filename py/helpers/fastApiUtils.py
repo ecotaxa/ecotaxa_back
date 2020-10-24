@@ -74,7 +74,7 @@ MAX_TOKEN_AGE = 2678400  # max token age, 31 days
 _serializer = None
 
 
-def _build_serializer():
+def build_serializer():
     global _serializer
     if not _serializer:
         # Read from legacy app config
@@ -95,7 +95,7 @@ def _get_current_user(scheme, credentials) -> int:  # pragma: no cover
     try:
         if scheme != 'Bearer':
             raise _credentials_exception
-        payload = _build_serializer().loads(credentials, max_age=MAX_TOKEN_AGE)
+        payload = build_serializer().loads(credentials, max_age=MAX_TOKEN_AGE)
         try:
             ret: int = int(payload["user_id"])
         except (KeyError, ValueError):

@@ -16,6 +16,7 @@ from API_models.constants import Constants
 from API_models.crud import *
 from API_models.exports import EMODnetExportReq, EMODnetExportRsp
 from API_models.imports import *
+from API_models.login import LoginReq
 from API_models.merge import MergeRsp
 from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp, ClassifyReq, ObjectModel, \
     ObjectHeaderModel, HistoricalClassificationModel
@@ -49,6 +50,7 @@ from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower, \
     get_optional_current_user
+from helpers.login import LoginService
 from helpers.starlette import PlainTextResponse
 from providers.WoRMS import WoRMSFinder
 
@@ -79,11 +81,17 @@ CRSF_header = {
 
 # noinspection PyUnusedLocal
 @app.post("/login", tags=['authentification'])
-async def login(username: str, password: str) -> str:
+async def login(params: LoginReq) -> str:
     """
-        Just for description. The _real_ login is done in legacy code via flask.
+        Login barrier. If successful, the login will return a JWT which will have to be used
+        in Bearer authentication scheme for subsequent calls.
+
+        -`username`: User *email* which was used during registration
+
+        -`password`: User password
     """
-    return "Do not use. Use home site /login page instead."
+    with RightsThrower():
+        return LoginService().validate_login(params.username, params.password)
 
 
 # TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
