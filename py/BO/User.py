@@ -15,6 +15,12 @@ UserIDT = int
 
 logger = get_logger(__name__)
 
+MISSING_USER = {
+    "id": -1,
+    "name": "",
+    "email": ""
+}
+
 
 class UserBO(object):
     """
@@ -82,7 +88,7 @@ class UserBO(object):
         return ret
 
     @classmethod
-    def set_mru(cls, session: Session, user_id: int, project_id: int, mru:ClassifIDListT):
+    def set_mru(cls, session: Session, user_id: int, project_id: int, mru: ClassifIDListT):
         """
             Set classification MRU.
         """

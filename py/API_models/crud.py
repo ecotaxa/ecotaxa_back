@@ -66,7 +66,8 @@ class _AddedToProject(BaseModel):
     can_administrate: bool = Field(title="Requester can administrate the project",
                                    default=False)
     license: LicenseEnum = Field(title="Data licence",
-                                 default=LicenseEnum.C)
+                                 default=LicenseEnum.Copyright)
+    owner: UserModel = Field(title="Owner of this project")
 
     class Config:
         schema_extra = {

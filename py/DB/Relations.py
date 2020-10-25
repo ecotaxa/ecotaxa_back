@@ -58,6 +58,9 @@ Acquisition.all_processes = relationship(Process, viewonly=True, lazy="raise_on_
                                                             ObjectHeader.processid == Process.processid))
 
 # Privileges
+Project.owner = relationship(User, primaryjoin="User.id==Project.owner_id",
+                             foreign_keys="User.id", uselist=False)
+
 ProjectPrivilege.project = relationship(Project, cascade="all, delete-orphan", single_parent=True)
 Project.privs_for_members = relationship(ProjectPrivilege)
 

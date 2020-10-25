@@ -27,7 +27,8 @@ class Project(Model):
     projid = Column(INTEGER, Sequence('seq_projects'), primary_key=True)
     title = Column(VARCHAR(255), nullable=False)
     visible = Column(Boolean(), default=True)
-    license = Column(VARCHAR(16), default=LicenseEnum.C, nullable=False)
+    owner_id = Column(INTEGER, default=0, nullable=False)  # TODO: FK to user
+    license = Column(VARCHAR(16), default=LicenseEnum.Copyright, nullable=False)
     status = Column(VARCHAR(40), default=ANNOTATE_STATUS)  # Annotate, ExploreOnly, Annotate No Prediction
     # The mappings for this Project
     # TODO: What happens if there is a conflict from one import to another?
@@ -61,6 +62,7 @@ class Project(Model):
     all_acquisitions: relationship
     # The users involved somehow in this project
     privs_for_members: relationship
+    owner: relationship
     # The twin EcoPart project
     ecopart_project: relationship
 
