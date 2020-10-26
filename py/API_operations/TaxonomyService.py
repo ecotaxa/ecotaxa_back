@@ -10,8 +10,9 @@ from API_models.taxonomy import TaxaSearchRsp
 from API_operations.helpers.Service import Service
 from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Project import ProjectBOSet
-from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet
+from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet, TaxonBOSetFromWoRMS
 from BO.User import UserIDT, UserBO
+from DB import WoRMS
 
 
 class TaxonomyService(Service):
@@ -94,3 +95,18 @@ class TaxonomyService(Service):
     def query_set(self, taxon_ids: ClassifIDListT) -> List[TaxonBO]:
         ret = TaxonBOSet(self.session, taxon_ids)
         return ret.taxa
+
+    def query_worms(self, aphia_id: ClassifIDT) -> Optional[TaxonBO]:
+        """
+            Return information about an entry in WoRMS table.
+        """
+        ret = self.query_worms_set([aphia_id])
+        if not ret:
+            return None
+        else:
+            return ret[0]
+
+    def query_worms_set(self, taxon_ids: ClassifIDListT) -> List[TaxonBO]:
+        ret = TaxonBOSetFromWoRMS(self.session, taxon_ids)
+        return ret.taxa
+

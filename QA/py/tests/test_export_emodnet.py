@@ -3,90 +3,41 @@ import logging
 from API_models.exports import *
 # noinspection PyPackageRequirements
 from API_operations.exports.EMODnet import EMODnetExport
-from formats.EMODnet.models import *
 from starlette import status
 
-from tests.credentials import ADMIN_AUTH
-from tests.test_import import ADMIN_USER_ID
-from tests.test_update import RECOMPUTE_GEO_URL
+from tests.credentials import REAL_USER_ID, ADMIN_AUTH
+from tests.test_fastapi import PROJECT_QUERY_URL
+from tests.test_update_prj import PROJECT_UPDATE_URL
 
 
 def test_emodnet_export(config, database, fastapi, caplog):
     caplog.set_level(logging.DEBUG)
 
+    # Admin imports the project
     from tests.test_import import test_import, test_import_a_bit_more_skipping
     prj_id = test_import(config, database, caplog, "EMODNET project")
     # Add a sample spanning 2 days
     test_import_a_bit_more_skipping(config, database, caplog, "EMODNET project")
 
-    # Recompute geo, which is a kind of update
-    url = RECOMPUTE_GEO_URL.format(project_id=prj_id)
-    rsp = fastapi.post(url, headers=ADMIN_AUTH)
-    assert rsp.status_code == status.HTTP_200_OK
+    # And grants ADMIN on the imported project to Real User
+    url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    read_json = rsp.json()
 
-    person1 = EMLPerson(organizationName="IMEV",
-                        givenName="Jean-Olivier",
-                        surName="Irisson",
-                        country="FR",
-                        positionName='professor'
-                        )
-    person2 = EMLAssociatedPerson(organizationName="IMEV",
-                                  givenName="Laurent",
-                                  surName="Salinas",
-                                  country="FR",
-                                  role='developer',
-                                  positionName='engineer'
-                                  )
-    title = EMLTitle(title="Point B, Juday-Bogorov net series, 2018")
-    abstract = """
-This series is part of the long term planktonic monitoring of
+    url = PROJECT_UPDATE_URL.format(project_id=prj_id)
+    minimal_real_user = {"id": REAL_USER_ID, "email": "unused", "name": "unused"}
+    read_json["managers"] = [minimal_real_user]
+    read_json["owner"] = minimal_real_user
+    read_json["comments"] = """ This series is part of the long term planktonic monitoring of
 Villefranche-sur-mer, which is one of the oldest and richest in the world.
 The data collection and processing has been funded by several projects
 over its lifetime. It is currently supported directly by the Institut de la Mer
-de Villefranche (IMEV), as part of its long term monitoring effort.
-    """
-    keywords = EMLKeywordSet(keywords=["Zooplankton",
-                                       "Mediterranean Sea",
-                                       "Ligurian sea"],
-                             keywordThesaurus="GBIF Dataset Type Vocabulary: http://rs.gbif.org/vocabulary/gbif/dataset_type.xml")
-    additional_info = """
-marine, harvested by iOBIS.
-The OOV supported the financial effort of the survey. 
-We are grateful to the crew of the research boat at OOV that collected plankton during the temporal survey."""
-    geo_cov = EMLGeoCoverage(geographicDescription="Entrance of Villefranche-sur-Mer Bay",
-                             westBoundingCoordinate="7.092",
-                             eastBoundingCoordinate="7.674",
-                             northBoundingCoordinate="43.823",
-                             southBoundingCoordinate="43.437")
-    time_cov = EMLTemporalCoverage(beginDate="1966-11-14",
-                                   endDate="1999-09-10")
-    taxo_cov = [EMLTaxonomicClassification(taxonRankName="phylum",
-                                           taxonRankValue="Arthropoda"),
-                EMLTaxonomicClassification(taxonRankName="phylum",
-                                           taxonRankValue="Chaetognatha"),
-                ]
-    licence = "This work is licensed under a <ulink url=\"http://creativecommons.org/licenses/by/4.0/legalcode\"> " \
-              "<citetitle>Creative Commons Attribution (CC-BY) 4.0 License</citetitle></ulink>."
-    project = EMLProject(title="EcoTaxa",
-                         personnel=[person2])
-    meta_plus = EMLAdditionalMeta(dateStamp="2021-06-24")
-    meta = EMLMeta(titles=[title],
-                   creators=[person1],
-                   contacts=[person1],
-                   metadataProviders=[person1],
-                   associatedParties=[person1],
-                   pubDate="2020-06-23",
-                   abstract=[abstract],
-                   keywordSet=keywords,
-                   additionalInfo=additional_info,
-                   geographicCoverage=geo_cov,
-                   temporalCoverage=time_cov,
-                   taxonomicCoverage=taxo_cov,
-                   intellectualRights=licence,
-                   project=project,
-                   maintenance="periodic review of origin data",
-                   maintenanceUpdateFrequency="1M",
-                   additionalMetadata=meta_plus)
-    req = EMODnetExportReq(meta=meta, project_ids=[prj_id])
-    rsp = EMODnetExport(req).run(ADMIN_USER_ID)
-    print("\n".join(caplog.messages))
+de Villefranche (IMEV), as part of its long term monitoring effort. """
+    read_json["license"] = "CC BY 4.0"
+    rsp = fastapi.put(url, headers=ADMIN_AUTH, json=read_json)
+    assert rsp.status_code == status.HTTP_200_OK
+
+    # Real User exports it
+    req = EMODnetExportReq(project_ids=[prj_id])
+    rsp = EMODnetExport(req, dry_run=True).run(REAL_USER_ID)
+    assert rsp.errors == []

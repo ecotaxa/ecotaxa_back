@@ -15,7 +15,7 @@ from BO.helpers.ImportHelpers import ImportWhere, ImportHow
 from DB.Object import ObjectHeader, classif_qual
 from DB.helpers.DBWriter import DBWriter
 from helpers.DynamicLogs import get_logger
-from .Import import ImportServiceBase
+from .ImportBase import ImportServiceBase
 
 logger = get_logger(__name__)
 

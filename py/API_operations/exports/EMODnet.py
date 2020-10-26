@@ -2,32 +2,36 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from os.path import join
-from typing import Dict
+from datetime import date
+from typing import Dict, List, Optional, Tuple
 
 from API_models.exports import EMODnetExportReq, EMODnetExportRsp
+from BO.DataLicense import LicenseEnum, DataLicense
 from BO.Project import ProjectBO
+from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
+from DB import User
 from DB.Project import Project
 from DB.Sample import Sample
 from DB.helpers.Postgres import timestamp_to_str
-from FS.TempDirForTasks import TempDirForTasks
 from formats.EMODnet.Archive import DwC_Archive
 from formats.EMODnet.DatasetMeta import DatasetMetadata
 from formats.EMODnet.MoF import SamplingSpeed, AbundancePerUnitAreaOfTheBed, SamplingInstrumentName, \
     SamplingNetMeshSize, SampleDeviceDiameter
 from formats.EMODnet.models import DwC_Event, RecordTypeEnum, DwC_Occurrence, OccurrenceStatusEnum, \
-    BasisOfRecordEnum, EMLGeoCoverage, EMLTemporalCoverage
-from helpers.DynamicLogs import get_logger, switch_log_to_file
+    BasisOfRecordEnum, EMLGeoCoverage, EMLTemporalCoverage, EMLMeta, EMLTitle, EMLPerson, EMLProject, EMLKeywordSet, \
+    EMLTaxonomicClassification, EMLAdditionalMeta
+from helpers.DynamicLogs import get_logger
+from .Countries import countries_by_name
+from .ExportBase import ExportServiceBase
 # TODO: Move somewhere else
 from .TaxaUtils import TaxaCache, TaxonInfoForSample, TaxonInfo, RANKS_BY_ID
-from ..helpers.Service import Service
 
 logger = get_logger(__name__)
 
 
-class EMODnetExport(Service):
+class EMODnetExport(ExportServiceBase):
     """
         EMODNet export.
         Help during development:
@@ -39,16 +43,13 @@ class EMODnetExport(Service):
                 http://rshiny.lifewatch.be/BioCheck/
     """
 
-    def __init__(self, req: EMODnetExportReq):
-        super().__init__()
-        self.req = req
-        self.task_id = 9999
-        # Get a temp directory
-        self.temp_for_task = TempDirForTasks(join(self.link_src, 'temptask'))
-        self.temp_dir = self.temp_for_task.base_dir_for(self.task_id)
-        # Redirect logging
-        log_file = self.temp_dir / 'TaskLogBack.txt'
-        switch_log_to_file(str(log_file))
+    def __init__(self, req: EMODnetExportReq, dry_run: bool):
+        super().__init__(req.project_ids)
+        # self.req = req
+        # Input
+        self.dry_run = dry_run
+        # Output
+        self.errors: List[str] = []
         # Summary for logging issues
         self.filtered_taxa: Dict[int, str]
         self.stats_per_rank: Dict[int, Dict] = {}
@@ -57,38 +58,187 @@ class EMODnetExport(Service):
 
     def run(self, current_user_id: int) -> EMODnetExportRsp:
         # Security check
-        RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, self.req.project_ids[0])
+        assert len(self.project_ids) == 1
+        prj_id = self.project_ids[0]
+        RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, prj_id)
+        # Load origin project
+        src_project = self.session.query(Project).get(prj_id)
+        assert src_project is not None, "Project %d not found" % prj_id
         # OK
         logger.info("------------ starting --------------")
-        ret = EMODnetExportRsp(task_id=0)
-        # Load origin project
-        prj_id = self.req.project_ids[0]
-        prj = self.session.query(Project).filter_by(projid=prj_id).first()
-        assert prj is not None, "Project %d not found" % prj_id
+        ret = EMODnetExportRsp()
+        # Build metadata with what comes from the project
+        meta = self.build_meta(src_project)
+        if meta is None:
+            # If we can't have meta there has to be reasons
+            assert len(self.errors) > 0
+            ret.errors = self.errors
+            return ret
         # Create a container
-        arch = DwC_Archive(DatasetMetadata(self.req.meta), self.temp_dir / self.DWC_ZIP_NAME)
-        # Complete metadata for what comes from the project
-        self.do_meta(prj)
+        arch = DwC_Archive(DatasetMetadata(meta), self.temp_dir / self.DWC_ZIP_NAME)
         # Add data from DB
-        self.add_events(prj, arch)
+        self.add_events(src_project, arch)
         # Produced the zip
         arch.build()
         self.log_stats()
         return ret
 
-    def do_meta(self, prj: Project):
+    @staticmethod
+    def user_to_eml_person(user: User, for_messages: str) -> Tuple[Optional[EMLPerson], List[str]]:
         """
-            Various queries on the project for getting metadata.
+            Build & return an EMLPerson entity from a DB User one.
         """
+        problems = []
+        ret = None
+
+        if not user.organisation:
+            problems.append(
+                "%s user '%s' has no organization (it should contain a - )." % (for_messages, user.name))
+        else:
+            try:
+                _dummy, organization = user.organisation.strip().split("-")
+            except ValueError:
+                problems.append(
+                    "Cannot determine short organization from %s org: '%s' (need a - )." % (
+                        for_messages, user.organisation))
+
+        # TODO: Organization should fit from https://edmo.seadatanet.org/search
+
+        try:
+            name, sur_name = user.name.strip().split(" ")
+        except ZeroDivisionError:
+            problems.append(
+                "Cannot determine name+surname from %s name: %s." % (for_messages, user.name))
+        else:
+            name, sur_name = name.capitalize(), sur_name.capitalize()
+
+        try:
+            country = countries_by_name[user.country]
+        except KeyError:
+            problems.append("Unknown country name for %s: %s." % (for_messages, user.country))
+        else:
+            country_name = country["alpha_2"]
+
+        if len(problems) == 0:
+            # noinspection PyUnboundLocalVariable
+            ret = EMLPerson(organizationName=organization,
+                            givenName=name,
+                            surName=sur_name,
+                            country=country_name)
+            # Optional but useful field
+            if "@" in user.email:
+                ret.electronicMailAddress = user.email
+        return ret, problems
+
+    MIN_ABSTRACT_CHARS = 256
+    """ Minimum size of a 'quality' abstract """
+
+    OK_LICENSES = {LicenseEnum.CC0, LicenseEnum.CC_BY, LicenseEnum.CC_BY_NC}
+
+    def build_meta(self, prj: Project) -> Optional[EMLMeta]:
+        """
+            Various queries/copies on/from the project for getting metadata.
+        """
+        ret = None
+        title = EMLTitle(title=prj.title)
+
+        # TODO: Pick project owner instead
+        first_manager: Optional[User] = None
+        for a_priv in list(prj.privs_for_members):
+            if a_priv.privilege == ProjectPrivilegeBO.MANAGE:
+                first_manager = a_priv.user
+        if first_manager is None:
+            self.errors.append("No manager in the project.")
+        else:
+            person1, errs = self.user_to_eml_person(first_manager, "first manager")
+            if errs:
+                self.errors.extend(errs)
+
+        # TODO if needed
+        # EMLAssociatedPerson = EMLPerson + specific role
+
+        # Ensure that the geography is OK propagated upwards from objects
+        Sample.propagate_geo(self.session, prj.projid)
         (min_lat, max_lat, min_lon, max_lon) = ProjectBO.get_bounding_geo(self.session, prj.projid)
-        self.req.meta.geographicCoverage = EMLGeoCoverage(geographicDescription="See coordinates",
-                                                          westBoundingCoordinate=self.geo_to_txt(min_lon),
-                                                          eastBoundingCoordinate=self.geo_to_txt(max_lon),
-                                                          northBoundingCoordinate=self.geo_to_txt(min_lat),
-                                                          southBoundingCoordinate=self.geo_to_txt(max_lat))
+        geo_cov = EMLGeoCoverage(geographicDescription="See coordinates",
+                                 westBoundingCoordinate=self.geo_to_txt(min_lon),
+                                 eastBoundingCoordinate=self.geo_to_txt(max_lon),
+                                 northBoundingCoordinate=self.geo_to_txt(min_lat),
+                                 southBoundingCoordinate=self.geo_to_txt(max_lat))
+
         (min_date, max_date) = ProjectBO.get_date_range(self.session, prj.projid)
-        self.req.meta.temporalCoverage = EMLTemporalCoverage(beginDate=timestamp_to_str(min_date),
-                                                             endDate=timestamp_to_str(max_date))
+        time_cov = EMLTemporalCoverage(beginDate=timestamp_to_str(min_date),
+                                       endDate=timestamp_to_str(max_date))
+
+        publication_date = date.today().strftime("%Y-%m-%d")
+
+        if not prj.comments:
+            self.errors.append(
+                "Project 'Comments' field must contain an abstract. Minimum length is %d"
+                % self.MIN_ABSTRACT_CHARS)
+        elif len(prj.comments) < self.MIN_ABSTRACT_CHARS:
+            self.errors.append(
+                "Project 'Comments' field is too short (%d chars) to make a good EMLMeta abstract. Minimum is %d"
+                % (len(prj.comments), self.MIN_ABSTRACT_CHARS))
+        else:
+            abstract = prj.comments
+
+        additional_info = None  # Just to see if it goes thru QC
+        # additional_info = """  marine, harvested by iOBIS.
+        # The OOV supported the financial effort of the survey.
+        # We are grateful to the crew of the research boat at OOV that collected plankton during the temporal survey."""
+
+        # TODO: Remove the ignore below
+        prj_license: LicenseEnum = prj.license  # type:ignore
+        if prj_license not in self.OK_LICENSES:
+            self.errors.append(
+                "Project license should be one of %s to be accepted, not %s."
+                % (self.OK_LICENSES, prj_license))
+        else:
+            lic_url = DataLicense.EXPLANATIONS[prj_license] + "legalcode"
+            lix_txt = DataLicense.NAMES[prj_license]
+            licence = "This work is licensed under a <ulink url=\"%s\"><citetitle>%s</citetitle></ulink>." % (
+                lic_url, lix_txt)
+
+        # Preferably one of https://www.emodnet-biology.eu/contribute?page=list&subject=thestdas&SpColID=552&showall=1#P
+        keywords = EMLKeywordSet(keywords=["Plankton",
+                                           "Imaging", "EcoTaxa"  # Not in list above
+                                           # "Ligurian sea" TODO: Geo area?
+                                           ],
+                                 keywordThesaurus="GBIF Dataset Type Vocabulary: http://rs.gbif.org/vocabulary/gbif/dataset_type.xml")
+
+        taxo_cov = [EMLTaxonomicClassification(taxonRankName="phylum",
+                                               taxonRankValue="Arthropoda"),
+                    EMLTaxonomicClassification(taxonRankName="phylum",
+                                               taxonRankValue="Chaetognatha"),
+                    ]
+
+        meta_plus = EMLAdditionalMeta(dateStamp="2021-06-24")
+
+        if len(self.errors) == 0:
+            # The research project
+            # noinspection PyUnboundLocalVariable
+            project = EMLProject(title=prj.title,
+                                 personnel=[person1])
+            # noinspection PyUnboundLocalVariable
+            ret = EMLMeta(titles=[title],
+                          creators=[person1],
+                          contacts=[person1],
+                          metadataProviders=[person1],
+                          associatedParties=[person1],
+                          pubDate=publication_date,
+                          abstract=[abstract],
+                          keywordSet=keywords,
+                          additionalInfo=additional_info,
+                          geographicCoverage=geo_cov,
+                          temporalCoverage=time_cov,
+                          taxonomicCoverage=taxo_cov,
+                          intellectualRights=licence,
+                          project=project,
+                          maintenance="periodic review of origin data",
+                          maintenanceUpdateFrequency="1M",
+                          additionalMetadata=meta_plus)
+        return ret
 
     @staticmethod
     def geo_to_txt(lat_or_lon: float) -> str:

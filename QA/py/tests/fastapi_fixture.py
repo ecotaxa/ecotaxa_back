@@ -12,11 +12,11 @@ HERE = Path(dirname(realpath(__file__)))
 client = TestClient(app)
 
 # noinspection PyProtectedMember
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def fastapi() -> TestClient:
     # Overwrite a method in URLSafeTimedSerializer
     from helpers import fastApiUtils
-    fastApiUtils._build_serializer()
+    fastApiUtils.build_serializer()
     sav_loads = fastApiUtils._serializer.loads
     fastApiUtils._serializer.loads = lambda s, max_age: {"user_id": s}
     yield client

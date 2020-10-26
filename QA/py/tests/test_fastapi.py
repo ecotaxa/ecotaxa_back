@@ -8,17 +8,6 @@ from main import app
 from tests.credentials import ADMIN_AUTH, USER_AUTH, CREATOR_AUTH, ADMIN_USER_ID, USER2_AUTH
 
 
-def test_login(config, database, fastapi, caplog):
-    caplog.set_level(logging.DEBUG)
-    url = "/login"
-    response = fastapi.get(url)
-    # Post needed
-    assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
-    response = fastapi.post(url, params={"username": "foo", "password": "bar"})
-    # Params needed
-    assert response.status_code == status.HTTP_200_OK
-
-
 def test_users(config, database, fastapi):
     url = "/users"
     response = fastapi.get(url)
@@ -29,8 +18,11 @@ def test_users(config, database, fastapi):
     assert response.status_code == status.HTTP_200_OK
 
 
+USER_ME_URL = "/users/me"
+
+
 def test_user_me(config, database, fastapi):
-    url = "/users/me"
+    url = USER_ME_URL
     response = fastapi.get(url)
     # Check that we cannot do without auth
     assert response.status_code == status.HTTP_403_FORBIDDEN
@@ -130,20 +122,20 @@ def test_project_search(config, database, fastapi):
     url = "/projects/search"
     # Ordinary user looking at own projects
     response = fastapi.get(url, headers=USER_AUTH, params={"also_others": False,
-                                                          "title_filter": "laur",
-                                                          "instrument_filter": "flow"})
+                                                           "title_filter": "laur",
+                                                           "instrument_filter": "flow"})
     assert response.json() == []
     # Ordinary user looking at all projects by curiosity
     response = fastapi.get(url, headers=USER_AUTH, params={"also_others": True,
-                                                          "title_filter": "laur",
-                                                          "instrument_filter": "flow"})
+                                                           "title_filter": "laur",
+                                                           "instrument_filter": "flow"})
     assert response.json() == []
     # Creator user looking at his subsets for removing them
     response = fastapi.get(url, headers=CREATOR_AUTH, params={"also_others": False,
-                                                             "title_filter": "tara",
-                                                             "instrument_filter": "flow",
-                                                             "filter_subset": True,
-                                                             "for_managing": True})
+                                                              "title_filter": "tara",
+                                                              "instrument_filter": "flow",
+                                                              "filter_subset": True,
+                                                              "for_managing": True})
     assert response.json() == []
 
 

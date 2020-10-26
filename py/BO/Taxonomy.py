@@ -7,7 +7,7 @@
 from typing import List, Set, Dict, Tuple
 
 from BO.Classification import ClassifIDCollT, ClassifIDT, ClassifIDListT
-from DB import ResultProxy, Taxonomy
+from DB import ResultProxy, Taxonomy, WoRMS
 from DB.helpers.ORM import Session, any_, case, func, text, select
 from helpers.DynamicLogs import get_logger
 
@@ -231,6 +231,55 @@ class TaxonBOSet(object):
             lst_rec = list(a_rec)
             an_id, display_name = lst_rec.pop(0), lst_rec.pop(0)
             lineage = [name for name in lst_rec if name]
+            self.taxa.append(TaxonBO(an_id, display_name, lineage))  # type:ignore
+
+    def as_list(self) -> List[TaxonBO]:
+        return self.taxa
+
+
+class TaxonBOSetFromWoRMS(object):
+    """
+        Many taxa from WoRMS table.
+    """
+    MAX_TAXONOMY_LEVELS = 15
+
+    def __init__(self, session: Session, taxon_ids: ClassifIDListT):
+        tf = WoRMS.__table__.alias('tf')
+        # bind = None  # For portable SQL, no 'ilike'
+        bind = session.get_bind()
+        select_list = [tf.c.aphia_id, tf.c.scientificname]
+        select_list.extend([text("t%d.scientificname" % level)  # type:ignore
+                            for level in range(1, TaxonomyBO.MAX_TAXONOMY_LEVELS)])
+        qry = select(select_list, bind=bind)
+        # Inject a query on names and hierarchy
+        # Produced SQL looks like:
+        #       left join worms t1 on tf.parent_name_usage_id=t1.aphia_id
+        #       left join worms t2 on t1.parent_name_usage_id=t2.aphia_id
+        # ...
+        #       left join worms t14 on t13.parent_name_usage_id=t14.aphia_id
+        lev_alias = WoRMS.__table__.alias('t1')
+        # Chain outer joins on Taxonomy, for parents
+        # hook the first OJ to main select
+        chained_joins = tf.join(lev_alias, lev_alias.c.aphia_id == tf.c.parent_name_usage_id, isouter=True)
+        prev_alias = lev_alias
+        for level in range(2, self.MAX_TAXONOMY_LEVELS):
+            lev_alias = WoRMS.__table__.alias('t%d' % level)
+            # hook each following OJ to previous one
+            chained_joins = chained_joins.join(lev_alias, lev_alias.c.aphia_id == prev_alias.c.parent_name_usage_id, isouter=True)
+            # Collect expressions
+            prev_alias = lev_alias
+        qry = qry.select_from(chained_joins)
+        qry = qry.where(tf.c.aphia_id == any_(taxon_ids))
+        logger.info("Taxo query: %s with IDs %s", qry, taxon_ids)
+        res: ResultProxy = session.execute(qry)
+        self.taxa = []
+        for a_rec in res.fetchall():
+            lst_rec = list(a_rec)
+            an_id, display_name = lst_rec.pop(0), lst_rec.pop(0)
+            lineage = [name for name in lst_rec if name]
+            # In WoRMS, the root is signaled by having itself as parent
+            while lineage[-1] == lineage[-2]:
+                lineage.pop(-1)
             self.taxa.append(TaxonBO(an_id, display_name, lineage))  # type:ignore
 
     def as_list(self) -> List[TaxonBO]:

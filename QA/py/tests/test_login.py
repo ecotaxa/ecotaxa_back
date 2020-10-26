@@ -19,7 +19,7 @@ client = TestClient(app)
 
 
 # Don't use fastapi fixture as it tweaks security
-def test_login(config, database, caplog):
+def test_plain_API_login(config, database, caplog):
     url = LOGIN_URL
     # Wrong params
     rsp = client.post(url, data={"usernazme": "foo",

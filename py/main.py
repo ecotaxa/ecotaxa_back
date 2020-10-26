@@ -585,13 +585,15 @@ def object_query_history(object_id: int,
 
 @app.post("/export/emodnet", tags=['WIP'], include_in_schema=False, response_model=EMODnetExportRsp)  # pragma:nocover
 def emodnet_format_export(params: EMODnetExportReq,
+                          dry_run: bool,
                           current_user: int = Depends(get_current_user)):
     """
         Export in EMODnet format, @see https://www.emodnet-ingestion.eu/
         Produces a DwC-A archive into a temporary directory, ready for download.
         https://python-dwca-reader.readthedocs.io/en/latest/index.html
+        - param `dry_run`: If set, then only a diagnostic of doability will be done.
     """
-    sce = EMODnetExport(params)
+    sce = EMODnetExport(params, dry_run)
     with RightsThrower():
         return sce.run(current_user)
 
@@ -628,6 +630,18 @@ async def query_taxa(taxon_id: int,
     """
     sce = TaxonomyService()
     ret = sce.query(taxon_id)
+    return ret
+
+
+@app.get("/worms/{aphia_id}", tags=['Taxonomy Tree'], include_in_schema=False, response_model=TaxonModel)
+async def query_taxa_in_worms(aphia_id: int,
+                     _current_user: Optional[int] = Depends(get_optional_current_user)) \
+        -> Optional[TaxonBO]:
+    """
+        Information about a single taxon in WoRMS reference, including its lineage.
+    """
+    sce = TaxonomyService()
+    ret = sce.query_worms(aphia_id)
     return ret
 
 

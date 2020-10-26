@@ -74,6 +74,7 @@ class RightsBO(object):
         """
         # Load ORM entities
         user: User = session.query(User).get(user_id)
+        assert user is not None, NOT_AUTHORIZED
         # action = Action.CREATE_PROJECT
         # Check
         if user.has_role(Role.APP_ADMINISTRATOR):

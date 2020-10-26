@@ -2844,11 +2844,13 @@ COPY public.users (id, email, password, name, organisation, active, preferences,
 3	creator	$6$rounds=656000$iPCU2dUnIQjcUnuW$JxMguozUT9nTun/N19yx.ugzTlUL4bZTRB9eOqECLx83kNSarP6uAMze1qu1ULjJ/OugQAMyAYxFI4EHy0yn9/	User Creating Projects	\N	t	{}	\N	2020-05-13 08:59:48.70106	\N
 4	user2	$6$	Ordinary User 2	\N	t	{}	\N	2020-09-27 06:39:48.70106	\N
 5	old_admin	nimda_dlo	Application Administrator Now Retired	\N	f	{"1": {"sortby": "", "ts": 1589266843.5535243, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}, "2": {"sortby": "", "ts": 1589267270.5538993, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}}	\N	2020-05-12 08:59:48.70106	\N
+6	real@users.com	fake_pwd	Real User	Institut de la Mer de Villefranche - IMEV	f	{"1": {"sortby": "", "ts": 1589266843.5535243, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}}	France	2020-10-26 08:59:48.70106	\N
 \.
 
 COPY public.users_roles (user_id, role_id) FROM stdin;
 1	1
 3	3
+6	3
 \.
 
 COPY public.taxonomy (id, parent_id, name, id_source, nbrobj, nbrobjcum, creation_datetime, creator_email, display_name, id_instance, lastupdate_datetime, rename_to, source_desc, source_url, taxostatus, taxotype) FROM stdin;
@@ -10589,3 +10591,9 @@ TABLESPACE pg_default;
 
 ALTER TABLE public.worms
     OWNER to postgres;
+
+ALTER TABLE public.projects
+    ADD COLUMN license character varying(16) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Copyright'::character varying;
+
+ALTER TABLE public.projects
+    ADD COLUMN owner_id integer NOT NULL DEFAULT 0;

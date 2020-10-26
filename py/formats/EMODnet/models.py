@@ -58,6 +58,9 @@ class DwcEvent(BaseModel):
     parentEventID: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/parentEventID")
 
     institutionCode: str = Field(term="http://rs.tdwg.org/dwc/terms/institutionCode")
+    """ The name (or acronym) in use by the institution having custody of the object(s) or 
+    information referred to in the record. Examples `MVZ`, `FMNH`, `CLO`, `UCMP`"""
+
     datasetName: str = Field(term="http://rs.tdwg.org/dwc/terms/datasetName")
     # Can be date, date+time or date range using "/"
     eventDate: str = Field(term="http://rs.tdwg.org/dwc/terms/eventDate")
@@ -176,6 +179,8 @@ DwC_ExtendedMeasurementOrFact = DwcExtendedMeasurementOrFact
 
 # Check tool http://rshiny.lifewatch.be/BioCheck/
 
+# Specs: https://eml.ecoinformatics.org/schema/index.html
+
 class EMLTitle(BaseModel):
     """
         EML title with optional lang.
@@ -188,13 +193,13 @@ class EMLTitle(BaseModel):
 
 class EMLPerson(BaseModel):
     """
-        A person for EML metadata.
+        A person for EML metadata. Can be, in fact, simply an organization.
     """
     givenName: Optional[str]
     surName: Optional[str]
 
     organizationName: str
-    positionName: str
+    positionName: Optional[str]
     """ To be used as alternative to persons names (leave individualName blank and use positionName 
     instead e.g. data manager). """
 
@@ -204,6 +209,7 @@ class EMLPerson(BaseModel):
     administrativeArea: Optional[str]
     postalCode: Optional[str]
     country: str
+    """ Looks like an alpha_2 ISO 3166 for country """
 
     phone: Optional[str]
     electronicMailAddress: Optional[str]
@@ -287,7 +293,7 @@ class EMLMethod(BaseModel):
 
 class EMLProject(BaseModel):
     """
-        EML project - unused
+        EML project
     """
 
     title: str

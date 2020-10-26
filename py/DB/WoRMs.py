@@ -16,7 +16,7 @@ class WoRMS(Model):
     """ HTTP URL to the AphiaRecord """
     scientificname = Column(String(128))
     """ the full scientific name without authorship """
-    authority = Column(String(255))
+    authority = Column(String(384))
     """ the authorship information for the scientificname formatted according to the conventions 
         of the applicable nomenclaturalCode """
     status = Column(String(24))
@@ -35,7 +35,7 @@ class WoRMS(Model):
         there is no currently accepted taxon."""
     valid_name = Column(String(128))
     """ the scientificname of the currently accepted taxon """
-    valid_authority = Column(String(255))
+    valid_authority = Column(String(385))
     """ the authorship information for the scientificname of the currently accepted taxon """
     parent_name_usage_id = Column(Integer)
     """ the AphiaID (for the scientificname) of the direct, most proximate higher-rank 

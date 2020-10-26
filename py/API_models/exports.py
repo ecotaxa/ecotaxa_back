@@ -12,7 +12,7 @@ class EMODnetExportReq(BaseModel):
     """
         EMODNet format export request.
     """
-    meta: EMLMeta = Field(title="EML meta for the produced archive")
+    # meta: EMLMeta = Field(title="EML meta for the produced archive")
     project_ids: List[int] = Field(title="The projects to export", min_items=1)
 
 
@@ -20,4 +20,7 @@ class EMODnetExportRsp(BaseModel):
     """
         EMODNet format export response.
     """
-    task_id: int = Field(title="The created task")
+    errors: List[str] = Field(title="Problems found while building the archive.",
+                              default=[])
+    task_id: int = Field(title="The created task, 0 if there were problems.",
+                         default=0)

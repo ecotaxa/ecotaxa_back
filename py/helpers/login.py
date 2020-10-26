@@ -8,7 +8,8 @@ import base64
 import hashlib
 import hmac
 
-from passlib.context import CryptContext
+# TODO: if it exists, find the stubs somewhere
+from passlib.context import CryptContext  # type: ignore
 
 from API_operations.helpers.Service import Service
 from BO.Rights import NOT_AUTHORIZED
