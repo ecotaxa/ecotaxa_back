@@ -145,6 +145,8 @@ THUMBSIZELIMIT=99
 SECRET_KEY = 'THIS KEY MUST BE CHANGED'
 serverloadarea = "/tmp"
 ftpexportarea = "H:\\"
+SECURITY_PASSWORD_HASH="sha512_crypt"
+SECURITY_PASSWORD_SALT="PePPER"
     """
 
     def write_config(self):
