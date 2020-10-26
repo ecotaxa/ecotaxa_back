@@ -88,6 +88,8 @@ class EMODnetExport(ExportServiceBase):
         self.log_stats()
         ret.errors = self.errors
         ret.warnings = self.warnings
+        if len(ret.errors) == 0:
+            ret.task_id = self.task_id
         return ret
 
     @staticmethod
@@ -252,7 +254,7 @@ class EMODnetExport(ExportServiceBase):
         # Ensure the stats are OK
         ProjectBO.update_taxo_stats(self.session, projid=project.projid)
         # Fetch the used taxa in the project
-        taxo_qry: Query = self.session.query(ProjectTaxoStat.id, Taxonomy.name)
+        taxo_qry: Query = self.session.query(ProjectTaxoStat.id, Taxonomy.name).distinct()
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.id == Taxonomy.id)
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.nbr > 0)
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid == project.projid)

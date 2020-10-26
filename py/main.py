@@ -583,15 +583,15 @@ def object_query_history(object_id: int,
     return ret
 
 
-@app.post("/export/emodnet", tags=['WIP'], include_in_schema=False, response_model=EMODnetExportRsp)  # pragma:nocover
+@app.post("/export/emodnet", tags=['exports'], response_model=EMODnetExportRsp)
 def emodnet_format_export(params: EMODnetExportReq,
                           dry_run: bool,
                           current_user: int = Depends(get_current_user)):
     """
         Export in EMODnet format, @see https://www.emodnet-ingestion.eu/
         Produces a DwC-A archive into a temporary directory, ready for download.
-        https://python-dwca-reader.readthedocs.io/en/latest/index.html
         - param `dry_run`: If set, then only a diagnostic of doability will be done.
+        Maybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html
     """
     sce = EMODnetExport(params, dry_run)
     with RightsThrower():
