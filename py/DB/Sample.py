@@ -84,16 +84,6 @@ class Sample(Model):
     def __str__(self):
         return "{0} ({1})".format(self.orig_id, self.sampleid)
 
-    @classmethod
-    def get_sums_by_taxon(cls, session, sample_id):
-        res: ResultProxy = session.execute(
-            "SELECT o.classif_id, count(1)"
-            "  FROM objects o "
-            " WHERE o.sampleid = :smp"
-            " GROUP BY o.classif_id",
-            {"smp": sample_id})
-        return res.fetchall()
-
 
 for i in range(1, SAMPLE_FREE_COLUMNS):
     setattr(Sample, "t%02d" % i, Column(VARCHAR(250)))

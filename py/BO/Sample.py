@@ -6,14 +6,15 @@
 #
 # An enumerated set of Sample(s)
 #
-from typing import List
+from typing import List, Dict
 
 from API_models.crud import ColUpdateList
 from BO.Project import ProjectIDListT
 from DB import Session, Query, Project, Sample
-from DB.helpers.ORM import any_
+from DB.helpers.ORM import any_, ResultProxy
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
+from .Classification import ClassifIDT
 from .helpers.MappedEntity import MappedEntity
 from .helpers.MappedTable import MappedTable
 
@@ -37,6 +38,17 @@ class SampleBO(MappedEntity):
         """ Fallback for 'not found' field after the C getattr() call.
             If we did not enrich a Sample field somehow then return it """
         return getattr(self.sample, item)
+
+    @classmethod
+    def get_sums_by_taxon(cls, session: Session, sample_id: SampleIDT) \
+            -> Dict[ClassifIDT, int]:
+        res: ResultProxy = session.execute(
+            "SELECT o.classif_id, count(1)"
+            "  FROM obj_head o "
+            " WHERE o.sampleid = :smp"
+            " GROUP BY o.classif_id",
+            {"smp": sample_id})
+        return {int(classif_id): int(cnt) for (classif_id, cnt) in res.fetchall()}
 
 
 class EnumeratedSampleSet(MappedTable):

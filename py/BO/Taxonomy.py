@@ -6,6 +6,7 @@
 #
 from typing import List, Set, Dict, Tuple
 
+from API_operations.TaxoManager import TaxonomyChangeService
 from BO.Classification import ClassifIDCollT, ClassifIDT, ClassifIDListT
 from DB import ResultProxy, Taxonomy, WoRMS
 from DB.helpers.ORM import Session, any_, case, func, text, select
@@ -18,7 +19,7 @@ logger = get_logger(__name__)
 
 class TaxonBO(object):
     """
-        Holder fo a leaf of the tree.
+        Holder of a node of the taxonomy tree.
     """
 
     def __init__(self, taxon_id: ClassifIDT, display_name: str, lineage: List[str]):
@@ -239,7 +240,7 @@ class TaxonBOSet(object):
 
 class TaxonBOSetFromWoRMS(object):
     """
-        Many taxa from WoRMS table.
+        Many taxa from WoRMS table, with lineage.
     """
     MAX_TAXONOMY_LEVELS = 15
 
@@ -265,7 +266,8 @@ class TaxonBOSetFromWoRMS(object):
         for level in range(2, self.MAX_TAXONOMY_LEVELS):
             lev_alias = WoRMS.__table__.alias('t%d' % level)
             # hook each following OJ to previous one
-            chained_joins = chained_joins.join(lev_alias, lev_alias.c.aphia_id == prev_alias.c.parent_name_usage_id, isouter=True)
+            chained_joins = chained_joins.join(lev_alias, lev_alias.c.aphia_id == prev_alias.c.parent_name_usage_id,
+                                               isouter=True)
             # Collect expressions
             prev_alias = lev_alias
         qry = qry.select_from(chained_joins)
@@ -284,3 +286,16 @@ class TaxonBOSetFromWoRMS(object):
 
     def as_list(self) -> List[TaxonBO]:
         return self.taxa
+
+
+class WoRMSSetFromTaxaSet(object):
+    """
+        Many taxa from WoRMS table, with lineage.
+    """
+    def __init__(self, session: Session, taxon_ids: ClassifIDListT):
+        # Do the matching right away, most strict way
+        match = TaxonomyChangeService.strict_match(session, taxon_ids)
+        # Format result
+        self.res = {}
+        for taxo, worms in match:
+            self.res[taxo.id] = worms

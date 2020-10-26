@@ -241,6 +241,7 @@ class EMLGeoCoverage(BaseModel):
         EML metadata coverage - geographic
     """
     geographicDescription: str
+    """ Better use http://www.marineregions.org/ """
     westBoundingCoordinate: str
     eastBoundingCoordinate: str
     northBoundingCoordinate: str
@@ -267,10 +268,12 @@ class EMLTemporalCoverage(BaseModel):
 class EMLTaxonomicClassification(BaseModel):
     """
         EML metadata coverage - taxonomic
+        https://eml.ecoinformatics.org/schema/eml-coverage_xsd.html
     """
     taxonRankName: str
     """ e.g. phylum """
     taxonRankValue: str
+    """ e.g. Copepoda  """
     commonName: Optional[str]
 
 

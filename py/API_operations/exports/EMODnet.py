@@ -10,10 +10,12 @@ from BO.DataLicense import LicenseEnum, DataLicense
 from BO.Project import ProjectBO
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.Rights import RightsBO, Action
-from BO.Taxonomy import TaxonomyBO
-from DB import User
-from DB.Project import Project
+from BO.Sample import SampleIDT, SampleBO
+from BO.Taxonomy import WoRMSSetFromTaxaSet
+from DB import User, Taxonomy, WoRMS
+from DB.Project import Project, ProjectTaxoStat
 from DB.Sample import Sample
+from DB.helpers.ORM import Query
 from DB.helpers.Postgres import timestamp_to_str
 from formats.EMODnet.Archive import DwC_Archive
 from formats.EMODnet.DatasetMeta import DatasetMetadata
@@ -26,7 +28,7 @@ from helpers.DynamicLogs import get_logger
 from .Countries import countries_by_name
 from .ExportBase import ExportServiceBase
 # TODO: Move somewhere else
-from .TaxaUtils import TaxaCache, TaxonInfoForSample, TaxonInfo, RANKS_BY_ID
+from .TaxaUtils import RANKS_BY_ID
 
 logger = get_logger(__name__)
 
@@ -48,11 +50,13 @@ class EMODnetExport(ExportServiceBase):
         # self.req = req
         # Input
         self.dry_run = dry_run
+        # During processing
+        self.mapping: Dict[int, WoRMS] = {}
         # Output
         self.errors: List[str] = []
+        self.warnings: List[str] = []
         # Summary for logging issues
-        self.filtered_taxa: Dict[int, str]
-        self.stats_per_rank: Dict[int, Dict] = {}
+        self.stats_per_rank: Dict[str, Dict] = {}
 
     DWC_ZIP_NAME = "dwca.zip"
 
@@ -73,6 +77,7 @@ class EMODnetExport(ExportServiceBase):
             # If we can't have meta there has to be reasons
             assert len(self.errors) > 0
             ret.errors = self.errors
+            ret.warnings = self.warnings
             return ret
         # Create a container
         arch = DwC_Archive(DatasetMetadata(meta), self.temp_dir / self.DWC_ZIP_NAME)
@@ -81,6 +86,8 @@ class EMODnetExport(ExportServiceBase):
         # Produced the zip
         arch.build()
         self.log_stats()
+        ret.errors = self.errors
+        ret.warnings = self.warnings
         return ret
 
     @staticmethod
@@ -188,7 +195,7 @@ class EMODnetExport(ExportServiceBase):
         # The OOV supported the financial effort of the survey.
         # We are grateful to the crew of the research boat at OOV that collected plankton during the temporal survey."""
 
-        # TODO: Remove the ignore below
+        # TODO: Remove the type:ignore below
         prj_license: LicenseEnum = prj.license  # type:ignore
         if prj_license not in self.OK_LICENSES:
             self.errors.append(
@@ -207,13 +214,9 @@ class EMODnetExport(ExportServiceBase):
                                            ],
                                  keywordThesaurus="GBIF Dataset Type Vocabulary: http://rs.gbif.org/vocabulary/gbif/dataset_type.xml")
 
-        taxo_cov = [EMLTaxonomicClassification(taxonRankName="phylum",
-                                               taxonRankValue="Arthropoda"),
-                    EMLTaxonomicClassification(taxonRankName="phylum",
-                                               taxonRankValue="Chaetognatha"),
-                    ]
+        taxo_cov = self.get_taxo_coverage(prj)
 
-        meta_plus = EMLAdditionalMeta(dateStamp="2021-06-24")
+        meta_plus = EMLAdditionalMeta(dateStamp=date.today().strftime("%Y-%m-%d"))
 
         if len(self.errors) == 0:
             # The research project
@@ -238,6 +241,40 @@ class EMODnetExport(ExportServiceBase):
                           maintenance="periodic review of origin data",
                           maintenanceUpdateFrequency="1M",
                           additionalMetadata=meta_plus)
+        return ret
+
+    def get_taxo_coverage(self, project: Project) -> List[EMLTaxonomicClassification]:
+        """
+            Taxonomic coverage is the list of taxa which can be found in the project.
+
+        """
+        ret = []
+        # Ensure the stats are OK
+        ProjectBO.update_taxo_stats(self.session, projid=project.projid)
+        # Fetch the used taxa in the project
+        taxo_qry: Query = self.session.query(ProjectTaxoStat.id, Taxonomy.name)
+        taxo_qry = taxo_qry.filter(ProjectTaxoStat.id == Taxonomy.id)
+        taxo_qry = taxo_qry.filter(ProjectTaxoStat.nbr > 0)
+        taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid == project.projid)
+        used_taxa = {an_id: a_name for (an_id, a_name) in taxo_qry.all()}
+        # Map them to WoRMS
+        mapping = WoRMSSetFromTaxaSet(self.session, list(used_taxa.keys()))
+        self.mapping = mapping.res
+        # Warnings for non-matches
+        for an_id, a_name in used_taxa.items():
+            if an_id not in self.mapping:
+                self.warnings.append("Classification %s (with id %d) could not be matched in WoRMS" %
+                                     (a_name, an_id))
+        # TODO: Temporary until the whole system has a WoRMS taxo tree
+        # Error out if nothing at all
+        if len(self.mapping) == 0:
+            self.errors.append("Could not match in WoRMS _any_ classification in this project")
+        # Produce the coverage
+        for _an_id, a_worms_entry in self.mapping.items():
+            rank = a_worms_entry.rank
+            value = a_worms_entry.scientificname
+            ret.append(EMLTaxonomicClassification(taxonRankName=rank,
+                                                  taxonRankValue=value))
         return ret
 
     @staticmethod
@@ -292,35 +329,28 @@ class EMODnetExport(ExportServiceBase):
         arch.emofs.add(SamplingNetMeshSize(event_id, "0.38"))
         arch.emofs.add(SampleDeviceDiameter(event_id, "0.5"))
 
-    def add_occurences(self, arch: DwC_Archive, event_id: str, sample_id: int):
+    def add_occurences(self, arch: DwC_Archive, event_id: str, sample_id: SampleIDT):
         """
             Add DwC occurences, for given sample, into the archive.
         """
         occurences = arch.occurences
         # Fetch data from DB
-        db_per_taxon = Sample.get_sums_by_taxon(self.session, sample_id)
-        # Build a dict taxon_id -> info
-        per_taxon: Dict[int, TaxonInfoForSample] = {a_sum[0]: TaxonInfoForSample(a_sum[1])
-                                                    for a_sum in db_per_taxon}
-        self.enrich_taxa(per_taxon)
+        count_per_taxon = SampleBO.get_sums_by_taxon(self.session, sample_id)
         # Output
-        for an_id, taxon_4_sample in per_taxon.items():
-            taxon_info = taxon_4_sample.taxon_info
-            assert taxon_info is not None
-            aphia_id = taxon_info.aphia_id
-            if not taxon_info.is_valid():
-                # TODO: Log problems during resolve
+        for an_id, count_4_sample in count_per_taxon.items():
+            try:
+                worms = self.mapping[an_id]
+            except KeyError:
+                # Mapping failed, it was signalled in warnings
                 continue
-            self.keep_stats(taxon_info, taxon_4_sample.count)
+            self.keep_stats(worms, count_4_sample)
             occurrence_id = event_id + "_" + str(an_id)
-            individual_count = str(taxon_4_sample.count)
-            scientific_name = taxon_info.name
-            scientific_name_id = "urn:lsid:marinespecies.org:taxname:" + str(aphia_id)
+            individual_count = str(count_4_sample)
             occ = DwC_Occurrence(eventID=event_id,
                                  occurrenceID=occurrence_id,
                                  individualCount=individual_count,
-                                 scientificName=scientific_name,
-                                 scientificNameID=scientific_name_id,
+                                 scientificName=worms.scientificname,
+                                 scientificNameID=worms.url,
                                  occurrenceStatus=OccurrenceStatusEnum.present,
                                  basisOfRecord=BasisOfRecordEnum.machineObservation)
             occurences.add(occ)
@@ -333,18 +363,6 @@ class EMODnetExport(ExportServiceBase):
         """
         emof = AbundancePerUnitAreaOfTheBed(event_id, occurrence_id, "452")
         arch.emofs.add(emof)
-
-    def enrich_taxa(self, taxa_dict: Dict[int, TaxonInfoForSample]):
-        """
-            For each taxon_id in taxa_dict keys, gather name & aphiaID
-        """
-        taxa_id_list = list(taxa_dict.keys())
-        names = TaxonomyBO.names_for(self.session, taxa_id_list)
-        assert len(names) == len(taxa_id_list)
-        taxo_infos = TaxaCache.collect_worms_for(self.session, names)
-        # Link TaxonInfo after lookups
-        for an_id, taxon_4_sample in taxa_dict.items():
-            taxon_4_sample.taxon_info = taxo_infos.get(an_id)
 
     @staticmethod
     def event_date(min_date, max_date) -> str:
@@ -363,13 +381,14 @@ class EMODnetExport(ExportServiceBase):
         """
         return title
 
-    def keep_stats(self, taxon_info: TaxonInfo, count: int):
+    def keep_stats(self, taxon_info: WoRMS, count: int):
         """
             Keep statistics per various entries.
         """
+        assert taxon_info.rank is not None
         stats = self.stats_per_rank.setdefault(taxon_info.rank, {"cnt": 0, "nms": set()})
         stats["cnt"] += count
-        stats["nms"].add(taxon_info.name)
+        stats["nms"].add(taxon_info.scientificname)
 
     def log_stats(self):
         ranks_asc = sorted(self.stats_per_rank.keys())

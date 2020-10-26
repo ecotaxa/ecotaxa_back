@@ -20,7 +20,9 @@ class EMODnetExportRsp(BaseModel):
     """
         EMODNet format export response.
     """
-    errors: List[str] = Field(title="Problems found while building the archive.",
+    errors: List[str] = Field(title="Showstopper problems found while building the archive.",
+                              default=[])
+    warnings: List[str] = Field(title="Problems found while building the archive, which do not prevent producing it.",
                               default=[])
     task_id: int = Field(title="The created task, 0 if there were problems.",
                          default=0)

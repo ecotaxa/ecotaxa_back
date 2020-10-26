@@ -11,7 +11,7 @@ from tests.test_update_prj import PROJECT_UPDATE_URL
 
 
 def test_emodnet_export(config, database, fastapi, caplog):
-    caplog.set_level(logging.DEBUG)
+    caplog.set_level(logging.FATAL)
 
     # Admin imports the project
     from tests.test_import import test_import, test_import_a_bit_more_skipping
@@ -37,7 +37,12 @@ de Villefranche (IMEV), as part of its long term monitoring effort. """
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=read_json)
     assert rsp.status_code == status.HTTP_200_OK
 
+    caplog.set_level(logging.DEBUG)
     # Real User exports it
     req = EMODnetExportReq(project_ids=[prj_id])
     rsp = EMODnetExport(req, dry_run=True).run(REAL_USER_ID)
     assert rsp.errors == []
+    assert rsp.warnings == ['Classification detritus (with id 84963) could not be matched in WoRMS',
+                            'Classification other (with id 85011) could not be matched in WoRMS',
+                            'Classification t001 (with id 85012) could not be matched in WoRMS',
+                            'Classification egg (with id 85078) could not be matched in WoRMS']

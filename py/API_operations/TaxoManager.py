@@ -7,15 +7,16 @@
 import random
 import tempfile
 from collections import deque
-from typing import Dict, Set, List, Tuple, Any
+from typing import Dict, Set, List, Tuple, Any, Optional
 
 from httpx import ReadTimeout, HTTPError
 
+from BO.Classification import ClassifIDListT
 from BO.Rights import RightsBO
-from DB import Taxonomy, Role, Column
+from DB import Taxonomy, Role
 from DB.Project import ProjectTaxoStat
 from DB.WoRMs import WoRMS
-from DB.helpers.ORM import Query, any_
+from DB.helpers.ORM import Query, any_, Session
 from DB.helpers.ORM import only_res, func, not_, or_, and_, text
 from helpers.DynamicLogs import get_logger, switch_log_to_file, switch_log_back
 from providers.WoRMS import WoRMSFinder
@@ -196,11 +197,11 @@ class TaxonomyChangeService(Service):  # pragma:nocover
 
     def matching(self, _current_user_id: int,
                  params: Dict[str, Any]
-                 ) -> List[Tuple[WoRMS, Taxonomy]]:
+                 ) -> List[Tuple[Taxonomy, Optional[WoRMS]]]:
         """
             Return the list of matching entries b/w Taxonomy and WoRMS.
         """
-        ret = []
+        ret: List[Tuple[Taxonomy, Optional[WoRMS]]] = []
         taxo_ids_qry: Query = self.session.query(ProjectTaxoStat.id).distinct()
         taxo_ids_qry = taxo_ids_qry.filter(ProjectTaxoStat.nbr > 0)
         used_taxo_ids = [an_id for (an_id,) in taxo_ids_qry.all()]
@@ -217,7 +218,12 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         case5 = "case5" in params
         case6 = "case6" in params
 
-        if case1 or case2 or case4:
+        if case1:
+            res = self.strict_match(self.session, used_taxo_ids)
+            # Format result
+            for taxo, worms in res:
+                ret.append((taxo, worms))
+        elif case2 or case4:
             subqry = self.session.query(Taxonomy.id, WoRMS.aphia_id)
             subqry = subqry.join(WoRMS, func.lower(WoRMS.scientificname) == func.lower(Taxonomy.name))
             subqry = subqry.filter(Taxonomy.id == any_(used_taxo_ids))
@@ -280,12 +286,37 @@ class TaxonomyChangeService(Service):  # pragma:nocover
             else:
                 qry3 = qry3.filter(Taxonomy.taxotype == 'P')
             logger.info("matching qry:%s", str(qry3))
-            res = qry3.all()
+            res2 = qry3.all()
             # Format result
-            for taxo in res:
+            for taxo in res2:
                 ret.append((taxo, None))
 
         return ret
+
+    @staticmethod
+    def strict_match(session: Session, used_taxo_ids: ClassifIDListT) -> List[Tuple[Taxonomy, WoRMS]]:
+        """
+            Candidate match until a better is found.
+                We match Phylo types taxa on one side.
+                    using name <-> scientificname, case insensitive
+                And a _single_ accepted taxon on the other.
+        """
+        subqry = session.query(Taxonomy.id, WoRMS.aphia_id)
+        subqry = subqry.join(WoRMS, func.lower(WoRMS.scientificname) == func.lower(Taxonomy.name))
+        subqry = subqry.filter(Taxonomy.id == any_(used_taxo_ids))
+        subqry = subqry.filter(Taxonomy.taxotype == 'P')
+        subqry = subqry.filter(WoRMS.status == 'accepted')
+        # Group to exclude multiple matches
+        subqry = subqry.group_by(Taxonomy.id, WoRMS.aphia_id)
+        subqry = subqry.having(and_(func.count(Taxonomy.id) == 1,
+                                    func.count(WoRMS.aphia_id) == 1))
+        subqry = subqry.subquery().alias("ids")
+        qry: Query = session.query(Taxonomy, WoRMS)
+        qry = qry.join(subqry, subqry.c.id == Taxonomy.id)
+        qry = qry.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
+        logger.info("matching qry:%s", str(qry))
+        res = qry.all()
+        return res
 
     def _do_one_by_one(self, children):
         """

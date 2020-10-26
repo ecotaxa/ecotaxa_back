@@ -10589,6 +10589,11 @@ CREATE TABLE public.worms
 
 TABLESPACE pg_default;
 
+COPY public.worms (aphia_id, url, scientificname, authority, status, unacceptreason, taxon_rank_id, rank, valid_aphia_id, valid_name, valid_authority, parent_name_usage_id, kingdom, phylum, class_, "order", family, genus, citation, lsid, is_marine, is_brackish, is_freshwater, is_terrestrial, is_extinct, match_type, modified, all_fetched) FROM stdin;
+1101	http://www.marinespecies.org/aphia.php?p=taxdetails&id=1101	Cyclopoida	Burmeister, 1834	accepted	\N	100	Order	1101	Cyclopoida	Burmeister, 1834	155879	Animalia	Arthropoda	Hexanauplia	Cyclopoida	\N	\N	Walter, T.C.; Boxshall, G. (2020). World of Copepods database. Cyclopoida. Accessed through: World Register of Marine Species at: http://www.marinespecies.org/aphia.php?p=taxdetails&id=1101 on 2020-09-20	urn:lsid:marinespecies.org:taxname:1101	t	t	t	\N	\N	exact	2016-03-21 09:41:01.793	t
+128586	http://www.marinespecies.org/aphia.php?p=taxdetails&id=128586	Oncaeidae	Giesbrecht, 1893	accepted	\N	140	Family	128586	Oncaeidae	Giesbrecht, 1893	1381349	Animalia	Arthropoda	Hexanauplia	Cyclopoida	Oncaeidae	\N	Walter, T.C.; Boxshall, G. (2020). World of Copepods database. Oncaeidae Giesbrecht, 1893. Accessed through: World Register of Marine Species at: http://www.marinespecies.org/aphia.php?p=taxdetails&id=128586 on 2020-09-20	urn:lsid:marinespecies.org:taxname:128586	t	\N	\N	\N	f	exact	2019-10-07 11:15:09.153	t
+\.
+
 ALTER TABLE public.worms
     OWNER to postgres;
 
