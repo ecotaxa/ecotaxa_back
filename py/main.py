@@ -25,6 +25,7 @@ from API_models.taxonomy import TaxaSearchRsp, TaxonModel
 from API_operations.CRUD.Object import ObjectService
 from API_operations.CRUD.ObjectParents import SamplesService, AcquisitionsService, ProcessesService
 from API_operations.CRUD.Projects import ProjectsService
+from API_operations.CRUD.Tasks import TaskService
 from API_operations.CRUD.Users import UserService
 from API_operations.Consistency import ProjectConsistencyChecker
 from API_operations.JsonDumper import JsonDumper
@@ -635,7 +636,7 @@ async def query_taxa(taxon_id: int,
 
 @app.get("/worms/{aphia_id}", tags=['Taxonomy Tree'], include_in_schema=False, response_model=TaxonModel)
 async def query_taxa_in_worms(aphia_id: int,
-                     _current_user: Optional[int] = Depends(get_optional_current_user)) \
+                              _current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> Optional[TaxonBO]:
     """
         Information about a single taxon in WoRMS reference, including its lineage.
@@ -747,6 +748,25 @@ def system_status(_current_user: int = Depends(get_current_user)) -> Response:
     """
     sce = StatusService()
     return Response(sce.run(), media_type="text/plain")
+
+
+@app.get("/tasks/{task_id}/file", tags=['task'], responses={
+    200: {
+        "content": {"application/zip": {}},
+        "description": "Return the file.",
+    }
+})
+def get_task_file(task_id: int,
+                  current_user: int = Depends(get_current_user)) -> StreamingResponse:
+    """
+        Return the file produced by given task.
+        The task must belong to requester.
+    """
+    sce = TaskService()
+    with RightsThrower():
+        file_like, file_name = sce.get_file_stream(current_user, task_id)
+    headers = {"content-disposition": "attachment; filename=\"" + file_name + "\""}
+    return StreamingResponse(file_like, headers=headers, media_type="application/zip")
 
 
 @app.get("/error", tags=['misc'])
