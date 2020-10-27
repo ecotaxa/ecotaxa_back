@@ -9,6 +9,7 @@ from typing import Dict, Optional, Tuple, List
 import httpx
 import requests
 from httpx import HTTPError
+from httpcore._exceptions import ProtocolError
 
 from DB import Session, Taxonomy
 from helpers.Asyncio import async_sleep
@@ -139,7 +140,11 @@ class WoRMSFinder(object):
         chunk_num = page * cls.CHUNK_SIZE + 1
         req = cls.WoRMS_URL_ClassifChildrenByAphia % (aphia_id, chunk_num)
         nb_queries = 1
-        response = await cls.client.get(cls.BASE_URL + req)
+        try:
+            response = await cls.client.get(cls.BASE_URL + req)
+        # httpcore._exceptions.ProtocolError: can't handle event type ConnectionClosed when role=SERVER and state=SEND_RESPONSE
+        except ProtocolError as e:
+            raise HTTPError("%s trying %s" % (e, req))
         if response.status_code == 204:
             # No content
             pass
