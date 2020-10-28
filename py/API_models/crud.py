@@ -67,7 +67,7 @@ class _AddedToProject(BaseModel):
                                    default=False)
     license: LicenseEnum = Field(title="Data licence",
                                  default=LicenseEnum.Copyright)
-    owner: UserModel = Field(title="Owner of this project")
+    # owner: UserModel = Field(title="Owner of this project")
 
     class Config:
         schema_extra = {

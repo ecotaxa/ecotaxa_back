@@ -27,7 +27,7 @@ def test_emodnet_export(config, database, fastapi, caplog):
     url = PROJECT_UPDATE_URL.format(project_id=prj_id)
     minimal_real_user = {"id": REAL_USER_ID, "email": "unused", "name": "unused"}
     read_json["managers"] = [minimal_real_user]
-    read_json["owner"] = minimal_real_user
+    # read_json["owner"] = minimal_real_user
     read_json["comments"] = """ This series is part of the long term planktonic monitoring of
 Villefranche-sur-mer, which is one of the oldest and richest in the world.
 The data collection and processing has been funded by several projects

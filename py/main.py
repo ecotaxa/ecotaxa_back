@@ -363,7 +363,7 @@ def update_project(project_id: int,
                            init_classif_list=project.init_classif_list,
                            classiffieldlist=project.classiffieldlist, popoverfieldlist=project.popoverfieldlist,
                            cnn_network_id=project.cnn_network_id, comments=project.comments,
-                           owner=project.owner,
+                           # owner=project.owner,
                            managers=project.managers, annotators=project.annotators, viewers=project.viewers,
                            license=project.license)
 

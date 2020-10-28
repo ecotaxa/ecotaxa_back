@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from BO.Classification import ClassifIDListT
 from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping
 from BO.ProjectPrivilege import ProjectPrivilegeBO
-from BO.User import MISSING_USER
 from BO.helpers.DataclassAsDict import DataclassAsDict
 from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFields, Acquisition, Process, \
     ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram, ObjectCNNFeature
@@ -97,22 +96,22 @@ class ProjectBO(object):
                 continue
             by_right[a_priv.privilege].append(a_priv.user)
         # Owner defaults to first historical manager
-        owner_id = self._project.owner_id
-        if owner_id == 0:
-            if len(self.managers) > 0:
-                self.owner = self.managers[0]
-            else:
-                # assert False, "No manager found for %s" % self._project.projid
-                self.owner = MISSING_USER
-        else:
-            self.owner = self._project.owner
+        # owner_id = self._project.owner_id
+        # if owner_id == 0:
+        #     if len(self.managers) > 0:
+        #         self.owner = self.managers[0]
+        #     else:
+        #         # assert False, "No manager found for %s" % self._project.projid
+        #         self.owner = MISSING_USER
+        # else:
+        #     self.owner = self._project.owner
         return self
 
     def update(self, session: Session, title: str, visible: bool, status: str, projtype: str,
                init_classif_list: List[int],
                classiffieldlist: str, popoverfieldlist: str,
                cnn_network_id: str, comments: str,
-               owner: Any,
+               # owner: Any,
                managers: List[Any], annotators: List[Any], viewers: List[Any],
                license: str):
         proj_id = self._project.projid
@@ -150,8 +149,8 @@ class ProjectBO(object):
                                              member=a_user.id,
                                              privilege=a_right))
         # Owner update
-        assert owner.id in [mgr.id for mgr in managers], "Owner must be a Manager"
-        self._project.owner_id = owner.id
+        # assert owner.id in [mgr.id for mgr in managers], "Owner must be a Manager"
+        # self._project.owner_id = owner.id
         session.commit()
 
     def __getattr__(self, item):
