@@ -23,6 +23,7 @@ class ExportServiceBase(Service, ABC):
     """
 
     def __init__(self, prj_ids: ProjectIDListT):
+        # TODO: Is duplicated with :ref: TaskService.py except that the task needs to exist there
         super().__init__()
         self.project_ids = prj_ids
         new_task = Task()

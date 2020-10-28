@@ -688,9 +688,9 @@ async def resolve_taxon(our_id: int,
 
 
 @app.get("/taxa_ref_change/refresh", tags=['WIP'], include_in_schema=False,
-         status_code=status.HTTP_200_OK)  # pragma:nocover
+         status_code=status.HTTP_200_OK)
 async def refresh_taxa_db(max_requests: int,
-                          current_user: int = Depends(get_current_user)) -> StreamingResponse:
+                          current_user: int = Depends(get_current_user)) -> StreamingResponse:  # pragma:nocover
     """
         Refresh local mirror of WoRMS database.
     """
@@ -705,37 +705,18 @@ async def refresh_taxa_db(max_requests: int,
 
 
 @app.get("/taxa_ref_change/matches", tags=['WIP'], include_in_schema=False,
-         status_code=status.HTTP_200_OK)  # pragma:nocover
-async def matching_with_worms(current_user: int = 0  # Depends(get_current_user)
-                              ) -> PlainTextResponse:
-    """
-        Show current state of matches.
-    """
-    sce = TaxonomyChangeService(0)
-    with RightsThrower():
-        data = sce.matching(current_user, {})
-    txt = "%d case-insensitive matches on name with WoRMS scientificname\n" % len(data)
-    txt += "[worms.aphia_id, worms.status, taxo.id, taxo.name, taxo.taxotype, taxo.taxostatus]\n"
-    txt += "\n".join([str(a_res) for a_res in data])
-    return PlainTextResponse(txt, status_code=status.HTTP_200_OK)
-
-
-@app.get("/taxa_ref_change/matches2", tags=['WIP'], include_in_schema=False,
-         status_code=status.HTTP_200_OK)  # pragma:nocover
+         status_code=status.HTTP_200_OK)
 async def matching_with_worms_nice(request: Request,
                                    current_user: int = 0  # Depends(get_current_user)
-                                   ) -> Response:
+                                   ) -> Response:  # pragma:nocover
     """
-        Show current state of matches - nice HTML version.
+        Show current state of matches - HTML version.
     """
     params = request.query_params
     sce = TaxonomyChangeService(0)
     with RightsThrower():
         # noinspection PyProtectedMember
         data = sce.matching(current_user, params._dict)
-    txt = "%d case-insensitive matches on name with WoRMS scientificname\n" % len(data)
-    txt += "[worms.aphia_id, worms.status, taxo.id, taxo.name, taxo.taxotype]\n"
-    txt += "\n".join([str(a_res) for a_res in data])
     return templates.TemplateResponse("worms.html",
                                       {"request": request, "matches": data, "params": params},
                                       headers=CRSF_header)

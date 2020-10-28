@@ -105,7 +105,7 @@ class LoginService(Service):
             raise RuntimeError(
                 'The configuration value `SECURITY_PASSWORD_SALT` must '
                 'not be None when the value of `SECURITY_PASSWORD_HASH` is '
-                'set to "%s"' % self.password_hash)
+                'set to "%s"' % self.password_hash)  # pragma:nocover
 
         h = hmac.new(self.encode_string(salt), self.encode_string(password), hashlib.sha512)
         return base64.b64encode(h.digest())
@@ -125,7 +125,7 @@ class LoginService(Service):
         single_hash = 'PASSWORD_SINGLE_HASH' in self.config  # Not the case in EcoTaxa config
         if single_hash and self.password_salt:
             raise RuntimeError('You may not specify a salt with '
-                               'SECURITY_PASSWORD_SINGLE_HASH')
+                               'SECURITY_PASSWORD_SINGLE_HASH')  # pragma:nocover
 
         if password_hash is None:
             is_plaintext = self.password_hash == 'plaintext'

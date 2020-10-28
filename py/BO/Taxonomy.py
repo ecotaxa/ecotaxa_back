@@ -280,7 +280,7 @@ class TaxonBOSetFromWoRMS(object):
             an_id, display_name = lst_rec.pop(0), lst_rec.pop(0)
             lineage = [name for name in lst_rec if name]
             # In WoRMS, the root is signaled by having itself as parent
-            while lineage[-1] == lineage[-2]:
+            while lineage and lineage[-1] == lineage[-2]:
                 lineage.pop(-1)
             self.taxa.append(TaxonBO(an_id, display_name, lineage))  # type:ignore
 

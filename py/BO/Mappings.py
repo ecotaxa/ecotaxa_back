@@ -283,9 +283,6 @@ class TableMapping(object):
     def as_equal_list(self):
         return encode_equal_list(self.real_cols_to_tsv, "\n")
 
-    def as_cs_equal_list(self):
-        return encode_equal_list(self.real_cols_to_tsv, ", ")
-
     def transforms_from(self, other):
         """
             Return what should be applied to other in order to stick to self.

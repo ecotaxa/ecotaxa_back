@@ -25,6 +25,7 @@ OBJECT_SET_RESET_PREDICTED_URL = "/object_set/{project_id}/reset_to_predicted"
 OBJECT_SET_CLASSIFY_URL = "/object_set/classify"
 OBJECT_SET_DELETE_URL = "/object_set/"
 PROJECT_STATS_URL = "/project_set/stats?ids={project_ids}"
+TAXA_SET_QUERY_URL = "/taxa_set/query?ids={taxa_ids}"
 
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
@@ -36,6 +37,18 @@ def test_classif(config, database, fastapi, caplog):
 
     obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
     assert len(obj_ids) == 8
+
+    copepod_id = 25828
+    entomobryomorpha_id = 25835
+    # See if the taxa we are going to use are OK
+    rsp = fastapi.get(TAXA_SET_QUERY_URL.format(taxa_ids="%d+%d" % (copepod_id, entomobryomorpha_id)))
+    # Note: There is no real lineage in test DB
+    assert rsp.json() == [{'display_name': 'Copepoda',
+                           'id': 25828,
+                           'lineage': ['Copepoda']},
+                          {'display_name': 'Entomobryomorpha',
+                           'id': 25835,
+                           'lineage': ['Entomobryomorpha']}]
 
     # Initial stats just after load
     def get_stats():
@@ -95,7 +108,6 @@ def test_classif(config, database, fastapi, caplog):
                                                           "wanted_qualification": "V"})
         assert rsp.status_code == status.HTTP_200_OK
 
-    copepod_id = 25828
     classify_all(copepod_id)
 
     # Same stats
@@ -118,7 +130,6 @@ def test_classif(config, database, fastapi, caplog):
     assert len(classif) == 0
 
     # Not a copepod :(
-    entomobryomorpha_id = 25835
     classify_all(entomobryomorpha_id)
 
     classif2 = classif_history()

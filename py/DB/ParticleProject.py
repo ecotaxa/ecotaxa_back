@@ -22,7 +22,7 @@ class ParticleProject(Model):
     ecotaxa_project: relationship
 
     def __str__(self):
-        return "{0} ({1})".format(self.title, self.projid)
+        return "({0})<->({1})".format(self.pprojid, self.projid)
 
 
 class ParticleSample(Model):

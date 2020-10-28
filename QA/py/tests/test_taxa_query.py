@@ -5,6 +5,7 @@ from starlette import status
 
 TAXA_SEARCH_URL = "/taxa/search?query={query}&project_id={project_id}"
 TAXA_QUERY_URL = "/taxa/{taxon_id}"
+WORMS_TAXA_QUERY_URL = "/worms/{aphia_id}"
 
 
 def test_taxotree_query(config, database, fastapi, caplog):
@@ -47,3 +48,10 @@ def test_taxo_query(config, database, fastapi, caplog):
     assert rsp.json() == {'display_name': 'Cyanobacteria<Proteobacteria',
                           'id': 849,
                           'lineage': ['Cyanobacteria', 'Proteobacteria', 'Bacteria', 'living']}
+
+
+def test_worms_query(config, database, fastapi, caplog):
+    url = WORMS_TAXA_QUERY_URL.format(aphia_id=128586)
+    # Unauthenticated call
+    rsp = fastapi.get(url)
+    assert rsp.json() == {'display_name': 'Oncaeidae', 'id': 128586, 'lineage': []}

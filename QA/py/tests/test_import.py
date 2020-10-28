@@ -110,7 +110,7 @@ def test_import_again_skipping(config, database, caplog):
     caplog.set_level(logging.DEBUG)
     task_id = TaskService().create()
     srch = ProjectsService().search(current_user_id=ADMIN_USER_ID,
-                                      title_filter="Test Create Update")
+                                    title_filter="Test Create Update")
     assert len(srch) == 1
     prj_id = srch[0].projid  # <- need the project from first test
     # Do preparation
@@ -133,7 +133,7 @@ def test_import_again_irrelevant_skipping(config, database, caplog):
     caplog.set_level(logging.DEBUG)
     task_id = TaskService().create()
     srch = ProjectsService().search(current_user_id=ADMIN_USER_ID,
-                                      title_filter="Test Create Update")
+                                    title_filter="Test Create Update")
     assert len(srch) == 1
     prj_id = srch[0].projid  # <- need the project from first test
     # Do preparation
@@ -159,7 +159,7 @@ def test_import_a_bit_more_skipping(config, database, caplog, title):
     caplog.set_level(logging.DEBUG)
     task_id = TaskService().create()
     srch = ProjectsService().search(current_user_id=ADMIN_USER_ID,
-                                      title_filter=title)
+                                    title_filter=title)
     assert len(srch) == 1
     prj_id = srch[0].projid  # <- need the project from first test
     # Do preparation
@@ -192,7 +192,7 @@ def test_import_again_not_skipping_tsv_skipping_imgs(config, database, caplog):
     caplog.set_level(logging.DEBUG)
     task_id = TaskService().create()
     srch = ProjectsService().search(current_user_id=ADMIN_USER_ID,
-                                      title_filter="Test Create Update")
+                                    title_filter="Test Create Update")
     assert len(srch) == 1
     prj_id = srch[0].projid  # <- need the project from first test
     # Do preparation
@@ -228,7 +228,7 @@ def test_import_again_not_skipping_nor_imgs(config, database, caplog):
     caplog.set_level(logging.DEBUG)
     task_id = TaskService().create()
     srch = ProjectsService().search(current_user_id=ADMIN_USER_ID,
-                                      title_filter="Test Create Update")
+                                    title_filter="Test Create Update")
     assert len(srch) == 1
     prj_id = srch[0].projid  # <- need the project from first test
     # Do preparation
@@ -491,15 +491,20 @@ def test_import_images(config, database, caplog, title):
     prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title=title))
     task_id = TaskService().create()
 
-    vals = {"latitude": "abcde"}
+    vals = {"latitude": "abcde",
+            "longitude": "456.5",
+            "depthmin": "very very low"}
     params = SimpleImportReq(task_id=task_id,
                              source_path=str(PLAIN_DIR),
                              values=vals)
     rsp = SimpleImport(prj_id, params).run(ADMIN_USER_ID)
-    assert rsp.errors == ["'abcde' is not a valid value for SimpleImportFields.latitude"]
+    assert rsp.errors == ["'abcde' is not a valid value for SimpleImportFields.latitude",
+                          "'456.5' is not a valid value for SimpleImportFields.longitude",
+                          "'very very low' is not a valid value for SimpleImportFields.depthmin"]
     # Do real import
     vals["latitude"] = "43.8802"
     vals["longitude"] = "7.2329"
+    vals["depthmin"] = "500"
     params.values = vals
     params.task_id = TaskService().create()
     rsp: SimpleImportRsp = SimpleImport(prj_id, params).run(ADMIN_USER_ID)

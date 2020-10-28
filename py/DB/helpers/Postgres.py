@@ -48,12 +48,10 @@ def timestamp_to_str(ts: datetime, fmt: int = DateFormat.ISO_8601_2004_E) -> str
         Convert a postgres timestamp to a string.
         As per DBAPI, it's mapped to a DateTime.
     """
-    if fmt == DateFormat.ISO_8601_2004_E:
-        # e.g. 2009-02-20T08:40Z as we have UTC dates
-        ret = ts.isoformat()
-        if len(ret) > 10:
-            return ret + "Z"
-        else:
-            return ret
+    assert fmt == DateFormat.ISO_8601_2004_E
+    # e.g. 2009-02-20T08:40Z as we have UTC dates
+    ret = ts.isoformat()
+    if len(ret) > 10:
+        return ret + "Z"
     else:
-        raise ValueError
+        return ret

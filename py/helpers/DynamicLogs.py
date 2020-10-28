@@ -33,6 +33,7 @@ class DynamicFileHandler(logging.FileHandler):
         else:
             self.stream = new_filename_or_stream
 
+
 logging_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 # TODO: It should be thread/request local
 DEFAULT_LOG_FILE = "API_models.log"
@@ -49,6 +50,7 @@ def get_logger(name) -> logging.Logger:
 
 def switch_log_to_file(file_path_or_stream: Union[str, TextIO]):
     _the_handler.switch_to(file_path_or_stream)
+
 
 def switch_log_back():
     _the_handler.switch_to(DEFAULT_LOG_FILE)

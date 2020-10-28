@@ -177,3 +177,8 @@ def test_user_prefs(config, database, fastapi, caplog):
     assert response.json() is None
     response = fastapi.get(get_url % (prj_id, "usr2"), headers=USER2_AUTH)
     assert response.json() == "value456"
+    erase_url = "/users/my_preferences/%d?key=%s&value="
+    response = fastapi.put(erase_url % (prj_id, "usr2"), headers=USER2_AUTH)
+    assert response.json() is None
+    response = fastapi.get(get_url % (prj_id, "usr2"), headers=USER2_AUTH)
+    assert response.json() == ""

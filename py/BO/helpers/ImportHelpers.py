@@ -99,7 +99,7 @@ class ImportStats(object):
         During an import, the statistics for reporting progress.
     """
 
-    def __init__(self, total_rows: int, report_def: Optional[Callable] = None):
+    def __init__(self, total_rows: int, report_def: Callable):
         self.start_time = time.time()
         self.total_row_count = total_rows
         self.current_row_count = 0
@@ -114,6 +114,4 @@ class ImportStats(object):
         return elapsed, rows_per_sec
 
     def report(self, current):
-        if not self.report_def:
-            return
         self.report_def(current, self.total_row_count)
