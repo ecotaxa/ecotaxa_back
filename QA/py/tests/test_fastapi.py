@@ -105,19 +105,6 @@ def test_user_get(config, database, fastapi, caplog):
     assert rsp["name"] == "Application Administrator"
 
 
-def test_taxon_resolve(config, database, fastapi):
-    url = "/taxon/resolve/%d"
-    taxon_id = 45072  # From schem_prod.sql
-    response = fastapi.get(url % taxon_id)
-    assert response.status_code == status.HTTP_403_FORBIDDEN
-
-    response = fastapi.get(url % taxon_id, headers=USER_AUTH)
-    assert response.json() == [0,
-                               'living > Cyclopoida',
-                               'Biota > Animalia > Arthropoda > Crustacea > Multicrustacea > Hexanauplia > '
-                               'Copepoda > Neocopepoda > Podoplea > Cyclopoida']
-
-
 def test_project_search(config, database, fastapi):
     url = "/projects/search"
     # Ordinary user looking at own projects

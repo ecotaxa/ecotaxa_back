@@ -261,6 +261,54 @@ def test_empty_subset_uvp6(config, database, fastapi, caplog):
     response = fastapi.get(url, headers=ADMIN_AUTH)
     assert response.status_code == status.HTTP_200_OK
 
+def test_empty_subset_uvp6_other(config, database, fastapi, caplog):
+    with caplog.at_level(logging.ERROR):
+        prj_id = test_import_uvp6(config, database, caplog, "Test empty Subset")
+
+    task_id = TaskService().create()
+    subset_prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Empty subset"))
+    # OK this test is just for covering (more) the code in filters
+    filters: ProjectFilters = {
+        "taxo": "23456",
+        "taxochild": "N",
+        "statusfilter": "NVW",
+        "MapN": "40",
+        "MapW": "45",
+        "MapE": "50",
+        "MapS": "55",
+        "depthmin": "10",
+        "depthmax": "40",
+        "samples": "1,3,4",
+        "instrum": "inst",
+        "daytime": "A",
+        "month": "5",
+        "fromdate": "2020-05-01",
+        "todate": "2020-05-31",
+        "fromtime": "14:34:01",
+        "totime": "15:34",
+        "inverttime": "0",
+        "validfromdate": "2020-05-01 12:00",
+        "validtodate": "2020-05-01 18:00",
+        "freenum": "n01",
+        "freenumst": "0",
+        "freenumend": "999999",
+        "freetxt": "s01",
+        "freetxtval": "zooprocess",
+        "filt_last_annot": "34,67"
+    }
+    params = SubsetReq(task_id=task_id,
+                       dest_prj_id=subset_prj_id,
+                       filters=filters,
+                       limit_type='P',
+                       limit_value=100.0,
+                       do_images=True)
+    SubsetService(prj_id=prj_id, req=params).run(ADMIN_USER_ID)
+    # A bit of fastapi testing
+    # TODO for #484: Ensure it's a 200 for dst_prj_id and a non-admin user
+    url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
+    response = fastapi.get(url, headers=ADMIN_AUTH)
+    assert response.status_code == status.HTTP_200_OK
+
 
 SUBSET_URL = "/projects/{project_id}/subset"
 

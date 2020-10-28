@@ -5,10 +5,13 @@ from API_models.exports import *
 from API_operations.exports.EMODnet import EMODnetExport
 from starlette import status
 
-from tests.credentials import REAL_USER_ID, ADMIN_AUTH
+from tests.credentials import REAL_USER_ID, ADMIN_AUTH, REAL_USER_AUTH
 from tests.test_fastapi import PROJECT_QUERY_URL
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
+PROJECT_EXPORT_EMODNET_URL = "/export/emodnet?dry_run=False"
+
+TASK_DOWNLOAD_URL = "/tasks/{task_id}/file"
 
 def test_emodnet_export(config, database, fastapi, caplog):
     caplog.set_level(logging.FATAL)
@@ -39,10 +42,24 @@ de Villefranche (IMEV), as part of its long term monitoring effort. """
 
     caplog.set_level(logging.DEBUG)
     # Real User exports it
-    req = EMODnetExportReq(project_ids=[prj_id])
-    rsp = EMODnetExport(req, dry_run=True).run(REAL_USER_ID)
-    assert rsp.errors == []
-    assert rsp.warnings == ['Classification detritus (with id 84963) could not be matched in WoRMS',
-                            'Classification other (with id 85011) could not be matched in WoRMS',
-                            'Classification t001 (with id 85012) could not be matched in WoRMS',
-                            'Classification egg (with id 85078) could not be matched in WoRMS']
+    # req = EMODnetExportReq(project_ids=[prj_id])
+    rsp = fastapi.post(PROJECT_EXPORT_EMODNET_URL, headers=REAL_USER_AUTH, json={"project_ids": [prj_id]})
+    # rsp = EMODnetExport(req, dry_run=True).run(REAL_USER_ID)
+    assert rsp.json()["errors"] == []
+    assert rsp.json()["warnings"] == ['Classification detritus (with id 84963) could not be matched in WoRMS',
+                                      'Classification other (with id 85011) could not be matched in WoRMS',
+                                      'Classification t001 (with id 85012) could not be matched in WoRMS',
+                                      'Classification egg (with id 85078) could not be matched in WoRMS']
+
+    task_id = rsp.json()["task_id"]
+    # Download the result zip
+    url = TASK_DOWNLOAD_URL.format(task_id=task_id)
+    # Ensure it's not public
+    rsp = fastapi.get(url)
+    assert rsp.status_code == status.HTTP_403_FORBIDDEN
+    # But the creator can get it
+    rsp = fastapi.get(url, headers=REAL_USER_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    # And an admin as well
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK

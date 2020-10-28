@@ -29,9 +29,6 @@ class DwcArchive(object):
         self.emofs = ExtendedMeasurementOrFacts()
         self.meta.add(self.emofs)
 
-    def write(self):
-        pass
-
     def build(self):
         """
             Build the produced archive file.

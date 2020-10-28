@@ -36,7 +36,6 @@ from API_operations.Subset import SubsetService
 from API_operations.TaxoManager import TaxonomyChangeService
 from API_operations.TaxonomyService import TaxonomyService
 from API_operations.exports.EMODnet import EMODnetExport
-from API_operations.helpers.Service import Service
 from API_operations.imports.Import import ImportAnalysis, RealImport
 from API_operations.imports.SimpleImport import SimpleImport
 from BO.Acquisition import AcquisitionBO
@@ -52,8 +51,6 @@ from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower, \
     get_optional_current_user
 from helpers.login import LoginService
-from helpers.starlette import PlainTextResponse
-from providers.WoRMS import WoRMSFinder
 
 logger = get_logger(__name__)
 
@@ -658,33 +655,6 @@ async def query_taxa_set(ids: str,
     num_ids = _split_num_list(ids)
     ret = sce.query_set(num_ids)
     return ret
-
-
-@app.get("/taxon/resolve/{our_id}", tags=['WIP'], include_in_schema=False,
-         status_code=status.HTTP_200_OK)
-async def resolve_taxon(our_id: int,
-                        response: Response,
-                        text_response: bool = False,
-                        _current_user: int = Depends(get_current_user)) \
-        -> Union[PlainTextResponse, Tuple]:  # pragma:nocover
-    """
-        Resolve in WoRMs the given taxon.
-        :param our_id: The ID from taxonomy table.
-        :param response: the injected HTTP response.
-        :param _current_user: Not used, just to ensure that requester is authenticated.
-        :param text_response: If set, response will be plain text. If not, JSON.
-    """
-    sce = WoRMSFinder(Service().session, our_id)
-    ok, ours, theirs = await sce.run()
-    if ok < 0:
-        response.status_code = status.HTTP_404_NOT_FOUND
-    if text_response:
-        data = "id:%s\nours : %s\ntheir : %s\n" % (our_id, ours, theirs)
-        response.body = bytes(data, 'utf-8')
-        return PlainTextResponse(data, status_code=status.HTTP_200_OK)
-    else:
-        ret = ok, ours, theirs
-        return ret
 
 
 @app.get("/taxa_ref_change/refresh", tags=['WIP'], include_in_schema=False,

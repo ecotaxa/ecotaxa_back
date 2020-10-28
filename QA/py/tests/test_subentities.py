@@ -101,9 +101,13 @@ def test_subentities(config, database, fastapi, caplog):
     process = response.json()
     assert process is not None
 
+    # Wrong ID
+    url = OBJECT_HISTORY_QUERY_URL.format(object_id=-1)
+    response = fastapi.get(url)
+    assert response.status_code == status.HTTP_404_NOT_FOUND
     # OK ID
     url = OBJECT_HISTORY_QUERY_URL.format(object_id=first_objid)
-    response = fastapi.get(url, headers=ADMIN_AUTH)
+    response = fastapi.get(url)  # The entry point is public and project as well, no need for: , headers=ADMIN_AUTH)
     assert response.status_code == status.HTTP_200_OK
     classif = response.json()
     assert classif is not None

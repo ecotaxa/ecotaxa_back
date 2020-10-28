@@ -2,14 +2,11 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-import logging
 
 from starlette import status
 from starlette.testclient import TestClient
 
-from tests.credentials import CREATOR_AUTH, ORDINARY_USER2_USER_ID, ADMIN_AUTH
 from tests.test_fastapi import USER_ME_URL
-from tests.test_subentities import OBJECT_HISTORY_QUERY_URL
 
 LOGIN_URL = "/login"
 

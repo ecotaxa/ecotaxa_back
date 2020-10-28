@@ -3,15 +3,8 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-from typing import Dict, Optional
-
-from sqlalchemy.orm import Session
-
-from API_operations.TaxoManager import TaxonomyChangeService
-from DB import WoRMS
-from DB.helpers.ORM import Query
+# TODO: Somewhere else.
 from helpers.DynamicLogs import get_logger
-from providers.WoRMS import WoRMSFinder
 
 logger = get_logger(__name__)
 

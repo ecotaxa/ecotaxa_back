@@ -4,14 +4,14 @@
 #
 # Wrapper for using http://www.marinespecies.org/index.php and its REST services
 #
-from typing import Dict, Optional, Tuple, List
+from typing import Dict, Tuple, List
 
 import httpx
 import requests
-from httpx import HTTPError
+# noinspection PyPackageRequirements,PyProtectedMember
 from httpcore._exceptions import ProtocolError
+from httpx import HTTPError
 
-from DB import Session, Taxonomy
 from helpers.Asyncio import async_sleep
 
 
@@ -21,65 +21,18 @@ class WoRMSFinder(object):
     """
     BASE_URL = "http://www.marinespecies.org"
     client = httpx.AsyncClient(base_url=BASE_URL, timeout=5)
-
-    taxo_cache: Dict[int, Taxonomy] = {}
-
-    def __init__(self, session: Session, taxo_id: int):
-        self.session = session
-        self.id_to_find: int = taxo_id
-
-    def get_taxonomy(self, our_id: int) -> Optional[Taxonomy]:
-        from_cache = self.taxo_cache.get(our_id)
-        if from_cache:
-            return from_cache
-        ret = self.session.query(Taxonomy).get(our_id)
-        if ret:
-            self.taxo_cache[our_id] = ret
-        return ret
-
-    async def run(self) -> Tuple[int, str, str]:
-        """
-            Do the real job using injected parameters.
-            :return:
-        """
-        taxon = self.get_taxonomy(self.id_to_find)
-        if taxon is None:
-            return -1, "", ""
-        our_lineage = self.get_lineage(taxon)
-        ret = await self.aphia_id_by_name(taxon.name)
-        if ret < 0:
-            return ret, our_lineage, ""
-        worms_lineage = await self.aphia_classif_by_id(ret)
-        return 0, our_lineage, worms_lineage
-
-    WoRMS_AphiaByName = "/rest/AphiaIDByName/%s?marine_only=true"
-
-    @classmethod
-    async def aphia_id_by_name(cls, name: str) -> int:
-        req = cls.WoRMS_AphiaByName % name
-        response = await cls.client.get(req)
-        if response.is_error:
-            print(name, "-> (ERR)", response)
-            ret = -2
-        else:
-            ret = response.json()
-        return ret
+    the_session = None
 
     WoRMS_AphiaRecordByName = "/rest/AphiaRecordsByName/%s?marine_only=true"
 
-    the_session = None
-
     @classmethod
-    def aphia_records_by_name_sync(cls, name: str) -> List[Dict]:
+    def aphia_records_by_name_sync(cls, name: str) -> List[Dict]:  # pragma:nocover
         ret: List[Dict] = []
-        session = cls.the_session
-        if session is None:
-            session = requests.Session()
-            cls.the_session = session
+        session = cls.get_session()
         req = cls.WoRMS_AphiaRecordByName % name
         response = session.get(cls.BASE_URL + req)
         if not response.ok:
-            cls.the_session = None
+            cls.invalidate_session()
         else:
             if response.status_code == 204:  # No content
                 pass
@@ -90,43 +43,14 @@ class WoRMSFinder(object):
     WoRMS_URL_ClassifByAphia = "/rest/AphiaClassificationByAphiaID/%d"
 
     @classmethod
-    async def aphia_classif_by_id(cls, aphia_id: int) -> str:
+    async def aphia_classif_by_id(cls, aphia_id: int) -> str:  # pragma:nocover
         req = cls.WoRMS_URL_ClassifByAphia % aphia_id
         response = await cls.client.get(req)
         if response.is_error:
             ret = ""
         else:
-            ret = cls.store_and_parse(response.json())
+            ret = response.json()
         return ret
-
-    @classmethod
-    def store_and_parse(cls, aphia_record) -> str:
-        """
-            E.g.: {"AphiaID":1,"rank":"Superdomain","scientificname":"Biota",
-                     "child":{"AphiaID":2,"rank":"Kingdom","scientificname":"Animalia",...
-        :param aphia_record:
-        :return:
-        """
-        ret = []
-        rec = aphia_record
-        while rec is not None:
-            # TODO: Store association AphiaID <-> scientificname somewhere e.g. in DB.
-            ret.append(rec["scientificname"])
-            rec = rec.get("child")
-        return " > ".join(ret)
-
-    def get_lineage(self, taxon: Taxonomy) -> str:
-        """
-            Rebuild lineage string for the given taxon.
-        :param taxon: 
-        :return: 
-        """
-        if taxon.parent_id is None:
-            return taxon.name
-        else:
-            parent = self.get_taxonomy(taxon.parent_id)
-            assert parent is not None
-            return "%s > %s" % (self.get_lineage(parent), taxon.name)
 
     WoRMS_URL_ClassifChildrenByAphia = "/rest/AphiaChildrenByAphiaID/%d?marine_only=false&offset=%d"
 
@@ -142,7 +66,8 @@ class WoRMSFinder(object):
         nb_queries = 1
         try:
             response = await cls.client.get(cls.BASE_URL + req)
-        # httpcore._exceptions.ProtocolError: can't handle event type ConnectionClosed when role=SERVER and state=SEND_RESPONSE
+        # httpcore._exceptions.ProtocolError: can't handle event type ConnectionClosed
+        # when role=SERVER and state=SEND_RESPONSE
         except ProtocolError as e:
             raise HTTPError("%s trying %s" % (e, req))
         if response.status_code == 204:

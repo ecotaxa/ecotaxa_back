@@ -132,6 +132,16 @@ def test_classif(config, database, fastapi, caplog):
     # Not a copepod :(
     classify_all(entomobryomorpha_id)
 
+    def classify_all_no_change(classif_id):
+        url = OBJECT_SET_CLASSIFY_URL
+        classifications = [-1 for _obj in obj_ids]
+        rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
+                                                          "classifications": classifications,
+                                                          "wanted_qualification": "V"})
+        assert rsp.status_code == status.HTTP_200_OK
+
+    classify_all_no_change(entomobryomorpha_id)
+
     classif2 = classif_history()
     assert classif2 is not None
     # Date is not predictable
