@@ -11,28 +11,18 @@
           "authentification"
         ],
         "summary":"Login",
-        "description":"Just for description. The _real_ login is done in legacy code via flask.",
+        "description":"Login barrier. If successful, the login will return a JWT which will have to be used\nin Bearer authentication scheme for subsequent calls.\n\n-`username`: User *email* which was used during registration\n\n-`password`: User password",
         "operationId":"login_login_post",
-        "parameters":[
-          {
-            "required":true,
-            "schema":{
-              "title":"Username",
-              "type":"string"
-            },
-            "name":"username",
-            "in":"query"
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/LoginReq"
+              }
+            }
           },
-          {
-            "required":true,
-            "schema":{
-              "title":"Password",
-              "type":"string"
-            },
-            "name":"password",
-            "in":"query"
-          }
-        ],
+          "required":true
+        },
         "responses":{
           "200":{
             "description":"Successful Response",
@@ -1790,6 +1780,64 @@
         ]
       }
     },
+    "/export/emodnet":{
+      "post":{
+        "tags":[
+          "exports"
+        ],
+        "summary":"Emodnet Format Export",
+        "description":"Export in EMODnet format, @see https://www.emodnet-ingestion.eu/\nProduces a DwC-A archive into a temporary directory, ready for download.\n- param `dry_run`: If set, then only a diagnostic of doability will be done.\nMaybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html",
+        "operationId":"emodnet_format_export_export_emodnet_post",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Dry Run",
+              "type":"boolean"
+            },
+            "name":"dry_run",
+            "in":"query"
+          }
+        ],
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/EMODnetExportReq"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/EMODnetExportRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
     "/taxa/search":{
       "get":{
         "tags":[
@@ -1976,6 +2024,53 @@
         ]
       }
     },
+    "/tasks/{task_id}/file":{
+      "get":{
+        "tags":[
+          "task"
+        ],
+        "summary":"Get Task File",
+        "description":"Return the file produced by given task.\nThe task must belong to requester.",
+        "operationId":"get_task_file_tasks__task_id__file_get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Task Id",
+              "type":"integer"
+            },
+            "name":"task_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Return the file.",
+            "content":{
+              "application/json":{
+                "schema":{}
+              },
+              "application/zip":{}
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
     "/error":{
       "get":{
         "tags":[
@@ -2034,6 +2129,28 @@
             "HTTPBearer":[]
           }
         ]
+      }
+    },
+    "/constants":{
+      "get":{
+        "tags":[
+          "misc"
+        ],
+        "summary":"Used Constants",
+        "description":"This entry point will return useful strings for user dialog.",
+        "operationId":"used_constants_constants_get",
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/Constants"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -2117,6 +2234,29 @@
           }
         }
       },
+      "Constants":{
+        "title":"Constants",
+        "type":"object",
+        "properties":{
+          "license_texts":{
+            "title":"The supported licenses and help text/links",
+            "type":"object",
+            "additionalProperties":{
+              "type":"string"
+            },
+            "default":{
+              "CC0 1.0":"https://creativecommons.org/publicdomain/zero/1.0/",
+              "CC BY 4.0":"https://creativecommons.org/licenses/by/4.0/",
+              "CC BY-SA 4.0":"https://creativecommons.org/licenses/by-sa/4.0/",
+              "CC BY-NC 4.0":"https://creativecommons.org/licenses/by-nc/4.0/",
+              "CC BY-NC-SA 4.0":"https://creativecommons.org/licenses/by-nc-sa/4.0/",
+              "CC BY-ND 4.0":"https://creativecommons.org/licenses/by-nd/4.0/",
+              "CC BY-NC-ND 4.0":"https://creativecommons.org/licenses/by-nc-nd/4.0/",
+              "Copyright":"All rights reserved"
+            }
+          }
+        }
+      },
       "CreateProjectReq":{
         "title":"CreateProjectReq",
         "required":[
@@ -2138,6 +2278,52 @@
             "default":true
           }
         }
+      },
+      "EMODnetExportReq":{
+        "title":"EMODnetExportReq",
+        "required":[
+          "project_ids"
+        ],
+        "type":"object",
+        "properties":{
+          "project_ids":{
+            "title":"The projects to export",
+            "minItems":1,
+            "type":"array",
+            "items":{
+              "type":"integer"
+            }
+          }
+        },
+        "description":"EMODNet format export request."
+      },
+      "EMODnetExportRsp":{
+        "title":"EMODnetExportRsp",
+        "type":"object",
+        "properties":{
+          "errors":{
+            "title":"Showstopper problems found while building the archive.",
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "default":[]
+          },
+          "warnings":{
+            "title":"Problems found while building the archive, which do not prevent producing it.",
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "default":[]
+          },
+          "task_id":{
+            "title":"The created task, 0 if there were problems.",
+            "type":"integer",
+            "default":0
+          }
+        },
+        "description":"EMODNet format export response."
       },
       "HTTPValidationError":{
         "title":"HTTPValidationError",
@@ -2464,6 +2650,22 @@
         "type":"object",
         "properties":{},
         "description":"Import for real, response. "
+      },
+      "LoginReq":{
+        "title":"LoginReq",
+        "type":"object",
+        "properties":{
+          "username":{
+            "title":"Username",
+            "type":"string",
+            "default":"User email, like in Web UI"
+          },
+          "password":{
+            "title":"Password",
+            "type":"string",
+            "default":"User password"
+          }
+        }
       },
       "MergeRsp":{
         "title":"MergeRsp",
@@ -2997,6 +3199,10 @@
             "title":"Requester can administrate the project",
             "type":"boolean",
             "default":false
+          },
+          "license":{
+            "title":"License",
+            "type":"string"
           },
           "projid":{
             "title":"Projid",
