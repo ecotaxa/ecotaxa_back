@@ -42,6 +42,7 @@
             <th>taxo.name</th>
             <th>#usage</th>
             <th>taxo.taxotype</th>
+            <th>taxo.source_url</th>
         </tr>
         </thead>
         {% for mtch_us, mtch_worms in matches %}
@@ -69,6 +70,7 @@
             {% endif %}
             <td>{{mtch_us.nbrobj if mtch_us.nbrobj else ""}}</td>
             <td>{{mtch_us.taxotype}}</td>
+            <td><a href="{{mtch_us.source_url}}">{{mtch_us.source_url}}</a></td>
         </tr>
         {% endfor %}
     </table>

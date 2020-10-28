@@ -68,7 +68,9 @@ class EMODnetExport(ExportServiceBase):
         # Load origin project
         src_project = self.session.query(Project).get(prj_id)
         assert src_project is not None, "Project %d not found" % prj_id
-        # OK
+        # OK, adjust the task
+        self.set_task_params(current_user_id, self.DWC_ZIP_NAME)
+        # Do the job
         logger.info("------------ starting --------------")
         ret = EMODnetExportRsp()
         # Build metadata with what comes from the project
