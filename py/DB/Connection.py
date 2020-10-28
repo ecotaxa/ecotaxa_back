@@ -26,6 +26,7 @@ class Connection(object):
     """
         A connection to the DB via SQLAlchemy.
     """
+
     def __init__(self, user, password, db, host, port=5432):
         """
             Open a SQLAlchemy connection, i.e. an engine.
@@ -38,7 +39,8 @@ class Connection(object):
                                           executemany_mode='batch',
                                           # Not needed anyway it's not async anywhere
                                           # pool_size=20, max_overflow=5,
-                                          pool_pre_ping=True)
+                                          pool_pre_ping=True,
+                                          connect_args={"application_name": "ecotaxa_back"})
         self.session_factory = sessionmaker(bind=engine)
         self._meta: MetaData = sqlalchemy.MetaData(bind=engine)
         self._meta.reflect()
