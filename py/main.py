@@ -217,7 +217,7 @@ def project_subset(project_id: int,
 @app.get("/projects/{project_id}", tags=['projects'], response_model=ProjectModel)
 def project_query(project_id: int,
                   for_managing: Optional[bool] = False,
-                  current_user: int = Depends(get_current_user)) -> ProjectBO:
+                  current_user: Optional[int] = Depends(get_optional_current_user)) -> ProjectBO:
     """
         Read project if it exists for current user, eventually for managing it.
     """

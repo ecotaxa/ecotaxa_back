@@ -2,12 +2,13 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List, Union, Tuple
+from typing import List, Union, Tuple, Optional
 
 from API_models.crud import CreateProjectReq
 from BO.ObjectSet import EnumeratedObjectSet
 from BO.Project import ProjectBO, ProjectBOSet, ProjectIDListT, ProjectIDT, ProjectStats
 from BO.Rights import RightsBO, Action
+from BO.User import UserIDT
 from DB import Sample
 from DB.Project import Project, ANNOTATE_STATUS
 from DB.User import User, Role
@@ -56,20 +57,25 @@ class ProjectsService(Service):
         # No rights checking as basically everyone can see all projects
         current_user: User = self.session.query(User).get(current_user_id)
         matching_ids = ProjectBO.projects_for_user(self.session, current_user, for_managing, also_others,
-                                                     title_filter, instrument_filter, filter_subset)
+                                                   title_filter, instrument_filter, filter_subset)
         projects = ProjectBOSet(self.session, matching_ids)
         return projects.as_list()
 
-    def query(self, current_user_id: int,
+    def query(self, current_user_id: Optional[UserIDT],
               prj_id: int,
               for_managing: bool) -> ProjectBO:
-        current_user, project = RightsBO.user_wants(self.session, current_user_id,
-                                                    Action.ADMINISTRATE if for_managing else Action.READ,
-                                                    prj_id)
+        can_administrate = False
+        if current_user_id is None:
+            RightsBO.anonymous_wants(self.session, Action.READ, prj_id)
+        else:
+            current_user, project = RightsBO.user_wants(self.session, current_user_id,
+                                                        Action.ADMINISTRATE if for_managing else Action.READ,
+                                                        prj_id)
+            if current_user.has_role(Role.APP_ADMINISTRATOR):
+                can_administrate = True
         ret = ProjectBOSet.get_one(self.session, prj_id)
         assert ret is not None
-        if current_user.has_role(Role.APP_ADMINISTRATOR):
-            ret.can_administrate = True
+        ret.can_administrate = can_administrate
         return ret
 
     DELETE_CHUNK_SIZE = 400
