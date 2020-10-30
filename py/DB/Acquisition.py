@@ -16,7 +16,7 @@ ACQUISITION_FREE_COLUMNS = 31
 class Acquisition(Model):
     # Historical (plural) name of the table
     __tablename__ = 'acquisitions'
-    acquisid = Column(BIGINT, Sequence('seq_acquisitions'), primary_key=True)
+    acquisid = Column(INTEGER, Sequence('seq_acquisitions'), primary_key=True)
     projid = Column(INTEGER, ForeignKey('projects.projid'))
     # i.e. acq_id from TSV
     orig_id = Column(VARCHAR(255))

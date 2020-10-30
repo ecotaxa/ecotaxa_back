@@ -10602,3 +10602,9 @@ ALTER TABLE public.projects
 
 ALTER TABLE public.projects
     ADD COLUMN owner_id integer NOT NULL DEFAULT 0;
+
+-- oceanomics/ecotaxa_dev#503
+
+ALTER TABLE public.samples ALTER COLUMN sampleid SET DATA TYPE integer;
+ALTER TABLE public.acquisitions ALTER COLUMN acquisid SET DATA TYPE integer;
+ALTER TABLE public.process ALTER COLUMN processid SET DATA TYPE integer;

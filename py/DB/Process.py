@@ -17,7 +17,7 @@ PROCESS_FREE_COLUMNS = 31
 class Process(Model):
     # DB table
     __tablename__ = 'process'
-    processid = Column(BIGINT, Sequence('seq_process'), primary_key=True)
+    processid = Column(INTEGER, Sequence('seq_process'), primary_key=True)
     projid = Column(INTEGER, ForeignKey('projects.projid'))
     # i.e. process_id from TSV
     orig_id = Column(VARCHAR(255))
