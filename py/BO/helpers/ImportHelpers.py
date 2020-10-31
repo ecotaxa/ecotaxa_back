@@ -56,7 +56,8 @@ class ImportHow(object):
                  loaded_files: List[str]):
         self.prj_id = prj_id
         # Update or create
-        self.can_update = update_mode in ('Yes', 'Cla')
+        # In this mode, no creation of anything, only update
+        self.can_update_only = update_mode in ('Yes', 'Cla')
         self.update_with_classif = update_mode == 'Cla'
         # From user choices
         self.files_not_to_import: Set[str] = set()

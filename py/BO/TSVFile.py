@@ -8,7 +8,7 @@ import random
 import sys
 from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, Set, Any, Mapping, Union
+from typing import Dict, Set, Any, Mapping
 
 # noinspection PyPackageRequirements
 from PIL import Image as PIL_Image
@@ -64,6 +64,7 @@ class TSVFile(object):
         # value: TSV type e.g. [f]
         self.type_line: Dict[str, str]
 
+    # noinspection PyAttributeOutsideInit
     def open(self):
         csv_file = open(self.path.as_posix(), encoding='latin_1')
         # Read as a dict, first line gives the format
@@ -129,13 +130,13 @@ class TSVFile(object):
                 # Parents are created the same way, _when needed_ (i.e. nearly never),
                 #  in @see add_parent_objects
 
-                if not how.can_update:
+                if not how.can_update_only:
                     # Initial load attempt to compute sun position
                     self.do_sun_position_field(object_head_to_write)
 
                 self.add_parent_objects(how, session, object_head_to_write, dicts_to_write)
 
-                if not how.can_update:
+                if not how.can_update_only:
                     key_exist_obj = "%s*%s" % (object_fields_to_write.orig_id, image_to_write.orig_file_name)
                     if key_exist_obj in how.objects_and_images_to_skip:
                         logger.info("Image skipped: %s %s", object_fields_to_write.orig_id,
@@ -233,7 +234,7 @@ class TSVFile(object):
                          or field in GlobalMapping.PREDEFINED_FIELDS
                          or field in self.ProgFields])
         # Remove classification fields if updating but not classification
-        if how.can_update and not how.update_with_classif:
+        if how.can_update_only and not how.update_with_classif:
             for fld in GlobalMapping.ANNOTATION_FIELDS.keys():
                 if fld in ok_fields:
                     ok_fields.remove(fld)
@@ -286,18 +287,20 @@ class TSVFile(object):
             else:
                 parent = None
             if parent is not None:
-                # noinspection DuplicatedCode
-                if how.can_update:
+                if how.can_update_only:
                     # Update the DB line using sqlalchemy
                     updates = TSVFile.update_orm_object(parent, dict_to_write)
                     if len(updates) > 0:
-                        logger.info("Updating '%s' using %s", parent.orig_id, updates)
+                        logger.info("Updating %s '%s' using %s", alias, parent.orig_id, updates)
                         session.flush()
                 else:
                     pass
                 # This parent object was known before, don't add it into the session (DB)
                 # but link the child object_head to it (like newly created ones below)
             else:
+                if how.can_update_only:
+                    # No creation of parent in update mode
+                    continue
                 # Create the SQLAlchemy wrapper
                 # noinspection PyCallingNonCallable
                 parent = parent_class(**dict_to_write)
@@ -311,7 +314,7 @@ class TSVFile(object):
                     parent_orig_id = parent.orig_id
                 # Store parent object for later reference. Detach it from ORM if we don't plan
                 # to update it, otherwise the simple parent.pk() below provokes a select :(
-                parents_for_obj[parent_orig_id] = detach_from_session_if(not how.can_update, session, parent)
+                parents_for_obj[parent_orig_id] = detach_from_session_if(not how.can_update_only, session, parent)
                 # Log the appeared parent
                 logger.info("++ ID %s %s %d", alias, parent_orig_id, parent.pk())
             # Columns in obj_head have same name as pk of corresponding entities
@@ -455,7 +458,7 @@ class TSVFile(object):
             # will not be stored due to returned value.
             objid = how.existing_objects[object_fields_to_write.orig_id]
             object_head_to_write.objid = objid
-            if how.can_update:
+            if how.can_update_only:
                 # noinspection DuplicatedCode
                 for a_cls, its_pk, an_upd in zip([ObjectHeader, ObjectFields],
                                                  ['objid', 'objfid'],
@@ -481,7 +484,7 @@ class TSVFile(object):
                 logger.info("One more image for %s:%s ", object_fields_to_write.orig_id, image_to_write)
                 ret = 1  # just a new image
         else:
-            if how.can_update:
+            if how.can_update_only:
                 # No objects creation while updating
                 logger.info("Object %s not found while updating ", object_fields_to_write.orig_id)
                 ret = 0
@@ -613,7 +616,7 @@ class TSVFile(object):
             # e.g. 'sub1/20200205-111823_3.png'
             img_file_path = self.path_for_image(img_file_name)
             if not img_file_path.exists():
-                if not how.can_update:
+                if not how.can_update_only:
                     # Images are not mandatory during update
                     diag.error("Missing Image '%s' in file %s. "
                                % (img_file_name, self.relative_name))
