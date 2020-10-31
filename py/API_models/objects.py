@@ -41,6 +41,7 @@ class ObjectSetQueryRsp(BaseModel):
     process_ids: List[Optional[int]] = Field(title="Parent (process) IDs", default=[])
     acquisition_ids: List[Optional[int]] = Field(title="Parent (acquisition) IDs", default=[])
     sample_ids: List[Optional[int]] = Field(title="Parent (sample) IDs", default=[])
+    project_ids: List[Optional[int]] = Field(title="Project IDs", default=[])
 
 
 HistoricalLastClassificationModel = dataclass_to_model(HistoricalLastClassif)

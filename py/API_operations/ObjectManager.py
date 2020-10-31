@@ -47,7 +47,27 @@ class ObjectManager(Service):
 
         res: ResultProxy = self.session.execute(sql, params)
         # TODO: Below is an obscure record, and no use re-packing something just unpacked
-        ids = [(r[0], r[1], r[2], r[3]) for r in res]
+        ids = [(r[0], r[1], r[2], r[3], proj_id) for r in res]
+        return ids
+
+    def parents_by_id(self, current_user_id: int, object_ids: ObjectIDListT) -> ObjectIDWithParentsListT:
+        """
+            Query the given IDs, return parents.
+        """
+        # Security check
+        obj_set = EnumeratedObjectSet(self.session, object_ids)
+        # Get project IDs for the objects and verify rights
+        prj_ids = obj_set.get_projects_ids()
+        for a_prj_id in prj_ids:
+            RightsBO.user_wants(self.session, current_user_id, Action.READ, a_prj_id)
+
+        sql = "SELECT objid, processid, acquisid, sampleid, projid " \
+              "  FROM obj_head oh WHERE oh.objid = any (:ids) "
+        params = {"ids": object_ids}
+
+        res: ResultProxy = self.session.execute(sql, params)
+        # TODO: Below is an obscure record, and no use re-packing something just unpacked
+        ids = [(r[0], r[1], r[2], r[3], r[4]) for r in res]
         return ids
 
     def delete(self, current_user_id: int, object_ids: ObjectIDListT) -> Tuple[int, int, int, int]:
@@ -206,4 +226,3 @@ class ObjectManager(Service):
         changes_for_id['n'] += inc_or_dec
         if qualif in ('V', 'P', 'D'):
             changes_for_id[qualif] += inc_or_dec
-

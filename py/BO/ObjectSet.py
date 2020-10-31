@@ -32,8 +32,8 @@ from helpers.Timer import CodeTimer
 
 # Typings, to be clear that these are not e.g. project IDs
 ObjectIDListT = List[int]
-# Object_id + parents
-ObjectIDWithParentsListT = List[Tuple[int, int, int, int]]
+# Object_id + parents + project
+ObjectIDWithParentsListT = List[Tuple[int, int, int, int, int]]
 
 logger = get_logger(__name__)
 

@@ -470,11 +470,11 @@ def get_object_set(project_id: int,
     with RightsThrower():
         rsp = ObjectSetQueryRsp()
         obj_with_parents = sce.query(current_user, project_id, filters)
-        rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
-        rsp.process_ids = [with_p[1] for with_p in obj_with_parents]
-        rsp.acquisition_ids = [with_p[3] for with_p in obj_with_parents]
-        rsp.sample_ids = [with_p[3] for with_p in obj_with_parents]
-        return rsp
+    rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
+    rsp.process_ids = [with_p[1] for with_p in obj_with_parents]
+    rsp.acquisition_ids = [with_p[2] for with_p in obj_with_parents]
+    rsp.sample_ids = [with_p[3] for with_p in obj_with_parents]
+    return rsp
 
 
 @app.post("/object_set/{project_id}/reset_to_predicted", tags=['objects'], response_model=None)
@@ -536,6 +536,25 @@ def classify_object_set(req: ClassifyReq,
     last_classif_ids = [change[2] for change in changes.keys()]  # Recently used are in first
     UserService().update_classif_mru(current_user, prj_id, last_classif_ids)
     return ret
+
+
+# TODO: For small lists we could have a GET
+@app.post("/object_set/parents", tags=['objects'], response_model=ObjectSetQueryRsp)
+def query_object_set_parents(object_ids: ObjectIDListT,
+                             current_user: int = Depends(get_current_user)) -> ObjectSetQueryRsp:
+    """
+        Return object ids, with parent ones and projects for the objects in given list.
+    """
+    sce = ObjectManager()
+    with RightsThrower():
+        rsp = ObjectSetQueryRsp()
+        obj_with_parents = sce.parents_by_id(current_user, object_ids)
+    rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
+    rsp.process_ids = [with_p[1] for with_p in obj_with_parents]
+    rsp.acquisition_ids = [with_p[2] for with_p in obj_with_parents]
+    rsp.sample_ids = [with_p[3] for with_p in obj_with_parents]
+    rsp.project_ids = [with_p[4] for with_p in obj_with_parents]
+    return rsp
 
 
 @app.delete("/object_set/", tags=['objects'])
