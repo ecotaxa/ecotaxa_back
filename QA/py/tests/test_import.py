@@ -270,7 +270,7 @@ def test_import_update(config, database, caplog):
     assert nb_upds == 2
     # 1 line corresponds to nothing, on purpose
     nb_notfound = len([msg for msg in caplog.messages if "not found while updating" in msg])
-    assert nb_notfound == 1
+    assert nb_notfound == 2
     dump_sce.run(projid=prj_id, out='after_upd.txt')
     # Check that all went fine
     for a_msg in caplog.records:
@@ -296,6 +296,10 @@ def do_import_update(prj_id, caplog, classif):
     # Check that all went fine
     for a_msg in caplog.records:
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
+    # #498: No extra parent should be created
+    for a_msg in caplog.records:
+        assert "++ ID" not in a_msg.getMessage()
+
 
 
 # @pytest.mark.skip()
