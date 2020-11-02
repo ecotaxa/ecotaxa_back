@@ -12,6 +12,7 @@ from typing_extensions import TypedDict
 from BO.DataLicense import LicenseEnum
 from DB import User, Project, Sample, Acquisition, Process
 from DB.Acquisition import ACQUISITION_FREE_COLUMNS
+from DB.Collection import Collection
 from DB.Process import PROCESS_FREE_COLUMNS
 from DB.Sample import SAMPLE_FREE_COLUMNS
 from helpers.pydantic import BaseModel, Field
@@ -40,6 +41,8 @@ _AcquisitionModelFromDB = sqlalchemy_to_pydantic(Acquisition,
                                                  exclude=["t%02d" % i for i in range(1, ACQUISITION_FREE_COLUMNS)])
 _ProcessModelFromDB = sqlalchemy_to_pydantic(Process,
                                              exclude=["t%02d" % i for i in range(1, PROCESS_FREE_COLUMNS)])
+_CollectionModelFromDB = sqlalchemy_to_pydantic(Collection,
+                                                exclude=[Collection.contact_user_id.name])
 
 
 class UserModel(_UserModelFromDB):  # type:ignore
@@ -67,6 +70,7 @@ class _AddedToProject(BaseModel):
                                    default=False)
     license: LicenseEnum = Field(title="Data licence",
                                  default=LicenseEnum.Copyright)
+
     # owner: UserModel = Field(title="Owner of this project")
 
     class Config:
@@ -221,3 +225,30 @@ class ProjectStatsModel(BaseModel):
     nb_validated: int = Field(title="The number of validated objects inside the project")
     nb_dubious: int = Field(title="The number of dubious objects inside the project")
     nb_predicted: int = Field(title="The number of predicted objects inside the project")
+
+
+class CreateCollectionReq(BaseModel):
+    title: str = Field(title="The collection title")
+    project_ids: List[int] = Field(title="The composing project IDs", min_items=1)
+
+
+class _AddedToCollection(BaseModel):
+    """
+        What's added to Collection comparing to the plain DB record.
+    """
+    project_ids: List[int] = Field(title="The composing project IDs", min_items=1)
+    contact_user: Optional[UserModel] = Field(title="""Is the person who should be contacted in cases of questions regarding the
+content of the dataset or any data restrictions. This is also the person who is most likely to
+stay involved in the dataset the longest.""")
+    creators: List[UserModel] = Field(title="""All people who are responsible for the creation of
+the collection. Data creators should receive credit for their work and should therefore be
+included in the citation.""",
+                                      default=[])
+    associates: List[UserModel] = Field(title="Other person(s) associated with the collection",
+                                        default=[])
+
+
+class CollectionModel(_CollectionModelFromDB, _AddedToCollection):  # type:ignore
+    """
+        Collection + computed
+    """

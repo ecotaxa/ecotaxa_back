@@ -13,6 +13,7 @@ from .Object import ObjectHeader, ObjectFields, ObjectCNNFeature, ObjectsClassif
 from .ParticleProject import ParticleProject, ParticleSample
 from .Process import Process
 from .Project import Project
+from .Collection import Collection, CollectionProject, CollectionUserRole
 from .ProjectPrivilege import ProjectPrivilege
 from .Sample import Sample
 from .Task import Task
@@ -30,8 +31,17 @@ Role.users = relationship(User, secondary="users_roles")
 # User preferences
 User.preferences_for_projects = relationship(UserPreferences, lazy='dynamic')
 
+# Collection
+Collection.projects = relationship(Project, secondary=CollectionProject.__tablename__)
+Collection.contact_user = relationship(User, uselist=False)
+Collection.users = relationship(User, secondary=CollectionUserRole.__tablename__)
+
+CollectionUserRole.collection = relationship(Collection, uselist=False)
+CollectionUserRole.user = relationship(User, uselist=False)
+
 # Project
-Project.all_objects = relationship(ObjectHeader) # TODO: Add this as it's very expensive for ordinary datasets, lazy="raise_on_sql")
+Project.all_objects = relationship(
+    ObjectHeader)  # TODO: Add this as it's very expensive for ordinary datasets, lazy="raise_on_sql")
 ObjectHeader.project = relationship(Project)
 
 Project.all_samples = relationship(Sample, lazy="raise_on_sql")

@@ -22,6 +22,7 @@ from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp, C
     ObjectHeaderModel, HistoricalClassificationModel
 from API_models.subset import SubsetReq, SubsetRsp
 from API_models.taxonomy import TaxaSearchRsp, TaxonModel
+from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Object import ObjectService
 from API_operations.CRUD.ObjectParents import SamplesService, AcquisitionsService, ProcessesService
 from API_operations.CRUD.Projects import ProjectsService
@@ -40,6 +41,7 @@ from API_operations.imports.Import import ImportAnalysis, RealImport
 from API_operations.imports.SimpleImport import SimpleImport
 from BO.Acquisition import AcquisitionBO
 from BO.Classification import HistoricalClassification
+from BO.Collection import CollectionBO
 from BO.Object import ObjectBO
 from BO.ObjectSet import ObjectIDListT
 from BO.Process import ProcessBO
@@ -164,6 +166,56 @@ def get_user(user_id: int,
 
 
 # ######################## END OF USER
+
+@app.post("/collections/create", tags=['collections'])
+def create_collection(params: CreateCollectionReq,
+                      current_user: int = Depends(get_current_user)) -> Union[int, str]:
+    """
+        Create a collection with at least one project inside.
+    """
+    sce = CollectionsService()
+    with RightsThrower():
+        ret = sce.create(current_user, params)
+    if isinstance(ret, str):
+        raise HTTPException(status_code=404, detail=ret)
+    return ret
+
+
+@app.put("/collections/{collection_id}", tags=['collections'])
+def update_create_collection(collection_id: int,
+                             collection: CollectionModel,
+                             current_user: int = Depends(get_current_user)):
+    """
+        Update the collection. Note that some updates are silently failing when not compatible
+        with the composing projects.
+    """
+    sce = CollectionsService()
+    with RightsThrower():
+        present_collection = sce.query(current_user, collection_id)
+    if present_collection is None:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    # noinspection PyUnresolvedReferences
+    present_collection.update(session=sce.session,
+                              title=collection.title,
+                              project_ids=collection.project_ids,
+                              contact_user=collection.contact_user,
+                              citation=collection.citation, abstract=collection.abstract,
+                              description=collection.description,
+                              creators=collection.creators, associates=collection.associates)
+
+
+@app.delete("/collections/{collection_id}", tags=['collections'])
+def erase_collection(collection_id: int,
+                  current_user: int = Depends(get_current_user)) -> int:
+    """
+        Delete the collection, i.e. the precious fields, as the projects are just unliked from the collection.
+    """
+    sce = CollectionsService()
+    with RightsThrower():
+        return sce.delete(current_user, collection_id)
+
+
+# ######################## END OF COLLECTION
 
 @app.get("/projects/search", tags=['projects'], response_model=List[ProjectModel])
 def search_projects(current_user: int = Depends(get_current_user),
