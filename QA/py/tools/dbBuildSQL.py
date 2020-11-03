@@ -62,6 +62,7 @@ class EcoTaxaDBFrom0(object):
         self.data_dir = self.db_dir / "Data"
         self.pwd_file = self.db_dir / "pg_pwd.txt"
         self.schema_creation_file = self.db_dir / "schem_prod.sql"
+        self.schema_upgrade_file = self.db_dir / "upgrade_prod.sql"
         self.conf_file = conffile
         self.host = None
 
@@ -119,10 +120,14 @@ class EcoTaxaDBFrom0(object):
         cre_opts = ['-c', CREATE_DB_SQL]
         cmd = [psql_bin] + pg_opts + cre_opts
         SyncSubProcess(cmd, env=env, out_file="db_create.log")
-        #
+        # Initial build
         schem_opts = ['-d', 'ecotaxa', '-f', self.schema_creation_file]
         cmd = [psql_bin] + pg_opts + schem_opts
         SyncSubProcess(cmd, env=env, out_file="db_build.log")
+        # Upgrade
+        schem_opts = ['-d', 'ecotaxa', '-f', self.schema_upgrade_file]
+        cmd = [psql_bin] + pg_opts + schem_opts
+        SyncSubProcess(cmd, env=env, out_file="db_upgrade.log")
 
     def create(self):
         if not (PG_HOST and PG_PORT):
