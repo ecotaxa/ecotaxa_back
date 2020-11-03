@@ -15,7 +15,7 @@ from DB.helpers.ORM import Model
 class Collection(Model):
     """ A set of projects see #82, #335, #519 """
     __tablename__ = 'collection'
-    id = Column(INTEGER, Sequence('seq_collection'), primary_key=True)
+    id = Column(INTEGER, Sequence('collection_id_seq'), primary_key=True)
     title = Column(VARCHAR, nullable=False)
     contact_user_id = Column(INTEGER, ForeignKey('users.id'))
     citation = Column(VARCHAR)

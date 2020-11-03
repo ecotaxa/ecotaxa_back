@@ -181,6 +181,20 @@ def create_collection(params: CreateCollectionReq,
     return ret
 
 
+@app.get("/collections/{collection_id}", tags=['collections'], response_model=CollectionModel)
+def get_collection(collection_id: int,
+                   current_user: int = Depends(get_current_user)):
+    """
+        Read a collection by its ID.
+    """
+    sce = CollectionsService()
+    with RightsThrower():
+        present_collection = sce.query(current_user, collection_id)
+    if present_collection is None:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    return present_collection
+
+
 @app.put("/collections/{collection_id}", tags=['collections'])
 def update_create_collection(collection_id: int,
                              collection: CollectionModel,
@@ -206,7 +220,7 @@ def update_create_collection(collection_id: int,
 
 @app.delete("/collections/{collection_id}", tags=['collections'])
 def erase_collection(collection_id: int,
-                  current_user: int = Depends(get_current_user)) -> int:
+                     current_user: int = Depends(get_current_user)) -> int:
     """
         Delete the collection, i.e. the precious fields, as the projects are just unliked from the collection.
     """

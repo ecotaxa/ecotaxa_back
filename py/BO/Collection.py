@@ -4,10 +4,10 @@
 #
 from typing import List, Any, Optional
 
-from BO.Project import ProjectIDT
-from DB import Collection, User, CollectionUserRole
-from DB import Session
-from DB.Collection import COLLECTION_ROLE_DATA_CREATOR, COLLECTION_ROLE_ASSOCIATED_PERSON
+from BO.Project import ProjectIDT, ProjectIDListT
+from DB import Collection, User, CollectionUserRole, Project
+from DB import Session, Query
+from DB.Collection import COLLECTION_ROLE_DATA_CREATOR, COLLECTION_ROLE_ASSOCIATED_PERSON, CollectionProject
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -25,7 +25,7 @@ class CollectionBO(object):
     def __init__(self, collection: Collection):
         self._collection = collection
         # Composing project IDs
-        self.project_ids: List[ProjectIDT] = []
+        self.project_ids: ProjectIDListT = []
         # Involved members
         self.contact_user: Optional[User] = None
         self.creators: List[User] = []
@@ -33,13 +33,14 @@ class CollectionBO(object):
 
     def enrich(self):
         """
-            Add DB fields and relations as (hopefully more) meaningful attributes
+            Add some DB fields and relations as (hopefully more) meaningful attributes.
         """
         # Fetch contact user
-        self.contact_user = self._collection.contact_user.all()[0]
+        self.contact_user = None
+        if self._collection.contact_user:
+            self.contact_user = self._collection.contact_user.all()[0]
         # Reconstitute project list
-        # noinspection PyTypeChecker
-        self.project_ids = [a_rec.project_id for a_rec in self._collection.projects]
+        self._read_composing_projects()
         # Dispatch members by role
         by_role = {COLLECTION_ROLE_DATA_CREATOR: self.creators,
                    COLLECTION_ROLE_ASSOCIATED_PERSON: self.associates}
@@ -49,8 +50,22 @@ class CollectionBO(object):
             by_role[a_user_and_role.role].append(a_user_and_role.user)
         return self
 
+    def _read_composing_projects(self):
+        # noinspection PyTypeChecker
+        self.project_ids = [a_rec.projid for a_rec in self._collection.projects]
+
+    def _add_composing_projects(self, session: Session, project_ids: ProjectIDListT):
+        """
+            Add the given projects into DB, doing sanity checks.
+        """
+        qry: Query = session.query(Project).filter(Project.projid.in_(project_ids))
+        db_projects = qry.all()
+        assert len(db_projects) == len(project_ids)
+        for a_db_project in db_projects:
+            self._collection.projects.append(a_db_project)
+
     def update(self, session: Session, title: str,
-               project_ids: List[int],
+               project_ids: ProjectIDListT,
                contact_user: Any,
                citation: str, abstract: str, description: str,
                creators: List[Any], associates: List[Any]):
@@ -63,7 +78,8 @@ class CollectionBO(object):
         self._collection.abstract = abstract
         self._collection.description = description
         # Copy contact user id
-        self._collection.contact_user_id = contact_user.user_id
+        if contact_user is not None:
+            self._collection.contact_user_id = contact_user.user_id
         # Dispatch members by role
         by_role = {COLLECTION_ROLE_DATA_CREATOR: creators,
                    COLLECTION_ROLE_ASSOCIATED_PERSON: associates}
@@ -78,22 +94,40 @@ class CollectionBO(object):
                                                role=a_role))
         session.commit()
 
+    def set_composing_projects(self, session: Session, project_ids: ProjectIDListT):
+        """
+            Core of the function: setting the composed projects.
+        """
+        # Read persisted side
+        self._read_composing_projects()
+        # Align with instructed list
+        to_add = [a_prj_id for a_prj_id in project_ids
+                  if a_prj_id not in self.project_ids]
+        to_remove = [a_prj_id for a_prj_id in self.project_ids
+                     if a_prj_id not in self.project_ids]
+        assert len(to_remove) == 0, "No removal yet"
+        self._add_composing_projects(session, to_add)
+
     def __getattr__(self, item):
         """ Fallback for 'not found' field after the C getattr() call.
             If we did not enrich a Collection field somehow then return it """
         return getattr(self._collection, item)
 
     @staticmethod
-    def delete(session: Session, coll_id: CollectionIDT):
+    def create(session: Session, title: str,
+               project_ids: ProjectIDListT) -> CollectionIDT:
         """
-            Completely remove the collection. 
-            Being just a set of project references, the pointed-at projects are not impacted.
+            Create using minimum fields.
         """
-        # Remove collection
-        session.query(Collection). \
-            filter(Collection.id == coll_id).delete()
-        # That should be all as PG delete cascade does the job
+        # Find the collection
+        db_coll = Collection()
+        db_coll.title = title
+        session.add(db_coll)
+        session.flush()  # to get the collection ID
+        bo_coll = CollectionBO(db_coll)
+        bo_coll.set_composing_projects(session, project_ids)
         session.commit()
+        return bo_coll.id
 
     @staticmethod
     def get_one(session: Session, coll_id: CollectionIDT) -> Optional['CollectionBO']:
@@ -106,3 +140,19 @@ class CollectionBO(object):
             return None
         else:
             return CollectionBO(ret).enrich()
+
+    @staticmethod
+    def delete(session: Session, coll_id: CollectionIDT):
+        """
+            Completely remove the collection. 
+            Being just a set of project references, the pointed-at projects are not impacted.
+        """
+        # Remove links first
+        session.query(CollectionProject). \
+            filter(CollectionProject.collection_id == coll_id).delete()
+        session.query(CollectionUserRole). \
+            filter(CollectionUserRole.collection_id == coll_id).delete()
+        # Remove collection
+        session.query(Collection). \
+            filter(Collection.id == coll_id).delete()
+        session.commit()

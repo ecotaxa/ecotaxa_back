@@ -32,12 +32,8 @@ class CollectionsService(Service):
         """
         # TODO, for now only admins
         _user = RightsBO.user_has_role(self.session, current_user_id, Role.APP_ADMINISTRATOR)
-        coll = Collection()
-        coll.title = req.title
-        self.session.add(coll)
-        self.session.flush()  # to get the collection ID
-        self.session.commit()
-        return coll.id
+        coll_id = CollectionBO.create(self.session, req.title, req.project_ids)
+        return coll_id
 
     def query(self, current_user_id: UserIDT,
               coll_id: CollectionIDT) -> Optional[CollectionBO]:
