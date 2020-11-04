@@ -35,6 +35,13 @@ class CollectionsService(Service):
         coll_id = CollectionBO.create(self.session, req.title, req.project_ids)
         return coll_id
 
+    def search(self, current_user_id: UserIDT, title: str):
+        # TODO, for now only admins
+        _user = RightsBO.user_has_role(self.session, current_user_id, Role.APP_ADMINISTRATOR)
+        qry = self.session.query(Collection).filter(Collection.title.ilike(title))
+        ret = [CollectionBO(a_rec).enrich() for a_rec in qry.all()]
+        return ret
+
     def query(self, current_user_id: UserIDT,
               coll_id: CollectionIDT) -> Optional[CollectionBO]:
         # TODO, for now only admins
@@ -49,3 +56,4 @@ class CollectionsService(Service):
         CollectionBO.delete(self.session, coll_id)
         self.session.commit()
         return 0
+

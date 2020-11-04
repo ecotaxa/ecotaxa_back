@@ -181,6 +181,18 @@ def create_collection(params: CreateCollectionReq,
     return ret
 
 
+@app.get("/collections/search", tags=['collections'], response_model=List[CollectionModel])
+def search_collection(title: str,
+                      current_user: int = Depends(get_current_user)):
+    """
+        Search for collections.
+    """
+    sce = CollectionsService()
+    with RightsThrower():
+        matching_collections = sce.search(current_user, title)
+    return matching_collections
+
+
 @app.get("/collections/{collection_id}", tags=['collections'], response_model=CollectionModel)
 def get_collection(collection_id: int,
                    current_user: int = Depends(get_current_user)):

@@ -194,7 +194,7 @@ class ColUpdate(TypedDict):
 class ColUpdateList(list):
     """
         Formalized way of updating entities in the system.
-            It's on purpose not a Dict as we take provision for futures usage when we need an order.
+            It's, on purpose, not a Dict as we take provision for futures usage when we need an order.
     """
 
     def __init__(self, iterable: Iterable[ColUpdate]):

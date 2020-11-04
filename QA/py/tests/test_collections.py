@@ -9,6 +9,7 @@ PROJECT_EXPORT_EMODNET_URL = "/export/emodnet?dry_run=False"
 
 COLLECTION_CREATE_URL = "/collections/create"
 COLLECTION_QUERY_URL = "/collections/{collection_id}"
+COLLECTION_SEARCH_URL = "/collections/search?title={title}"
 COLLECTION_UPDATE_URL = "/collections/{collection_id}"
 COLLECTION_DELETE_URL = "/collections/{collection_id}"
 
@@ -53,6 +54,29 @@ def test_create_collection(config, database, fastapi, caplog):
     """
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=the_coll)
     assert rsp.status_code == status.HTTP_200_OK
+
+    # Search for it
+    url = COLLECTION_SEARCH_URL.format(title="%coll%")
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == [{'abstract': """
+    A bit less abstract...
+    """,
+                           'associates': [],
+                           'citation': None,
+                           'contact_user': None,
+                           'creators': [],
+                           'description': None,
+                           'id': coll_id,
+                           'license': None,
+                           'project_ids': [prj_id],
+                           'title': 'Test collection'}]
+
+    # Empty search test
+    url = COLLECTION_SEARCH_URL.format(title="coll%")
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == []
 
     # Delete the collection
     url = COLLECTION_DELETE_URL.format(collection_id=coll_id)
