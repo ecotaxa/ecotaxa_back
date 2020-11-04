@@ -16,6 +16,7 @@ from BO.Rights import RightsBO
 from DB import Taxonomy, Role
 from DB.Project import ProjectTaxoStat
 from DB.WoRMs import WoRMS
+from DB.helpers.Charset import to_latin1_compat
 from DB.helpers.ORM import Query, any_, Session
 from DB.helpers.ORM import only_res, func, not_, or_, and_, text
 from helpers.DynamicLogs import get_logger, switch_log_to_file, switch_log_back
@@ -58,15 +59,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         await self._do_refresh()
         switch_log_back()
 
-    @staticmethod
-    def to_latin1_compat(a_str: str):
-        if a_str is None:
-            return a_str
-        try:
-            _str_lat1 = a_str.encode("latin-1")
-        except UnicodeEncodeError:
-            return a_str.encode("latin-1", errors='xmlcharrefreplace')
-        return a_str
+
 
     # noinspection PyPep8Naming
     @staticmethod
@@ -74,7 +67,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         """
             Prepare a DB record from the JSON structure returned by WoRMS REST API.
         """
-        to_lat1 = TaxonomyChangeService.to_latin1_compat
+        to_lat1 = to_latin1_compat
         ret = WoRMS()
         ret.aphia_id = a_child["AphiaID"]
         ret.kingdom = a_child["kingdom"]

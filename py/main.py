@@ -41,7 +41,6 @@ from API_operations.imports.Import import ImportAnalysis, RealImport
 from API_operations.imports.SimpleImport import SimpleImport
 from BO.Acquisition import AcquisitionBO
 from BO.Classification import HistoricalClassification
-from BO.Collection import CollectionBO
 from BO.Object import ObjectBO
 from BO.ObjectSet import ObjectIDListT
 from BO.Process import ProcessBO
@@ -208,9 +207,9 @@ def get_collection(collection_id: int,
 
 
 @app.put("/collections/{collection_id}", tags=['collections'])
-def update_create_collection(collection_id: int,
-                             collection: CollectionModel,
-                             current_user: int = Depends(get_current_user)):
+def update_collection(collection_id: int,
+                      collection: CollectionModel,
+                      current_user: int = Depends(get_current_user)):
     """
         Update the collection. Note that some updates are silently failing when not compatible
         with the composing projects.

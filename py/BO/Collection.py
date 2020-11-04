@@ -4,10 +4,11 @@
 #
 from typing import List, Any, Optional
 
-from BO.Project import ProjectIDT, ProjectIDListT
+from BO.Project import ProjectIDListT
 from DB import Collection, User, CollectionUserRole, Project
 from DB import Session, Query
 from DB.Collection import COLLECTION_ROLE_DATA_CREATOR, COLLECTION_ROLE_ASSOCIATED_PERSON, CollectionProject
+from DB.helpers.Charset import to_latin1_compat
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -38,7 +39,7 @@ class CollectionBO(object):
         # Fetch contact user
         self.contact_user = None
         if self._collection.contact_user:
-            self.contact_user = self._collection.contact_user.all()[0]
+            self.contact_user = self._collection.contact_user
         # Reconstitute project list
         self._read_composing_projects()
         # Dispatch members by role
@@ -73,13 +74,13 @@ class CollectionBO(object):
         # TODO: projects update using given list
         # TODO: license update using projects' ones
         # Simple fields update
-        self._collection.title = title
-        self._collection.citation = citation
-        self._collection.abstract = abstract
-        self._collection.description = description
+        self._collection.title = to_latin1_compat(title)
+        self._collection.citation = to_latin1_compat(citation)
+        self._collection.abstract = to_latin1_compat(abstract)
+        self._collection.description = to_latin1_compat(description)
         # Copy contact user id
         if contact_user is not None:
-            self._collection.contact_user_id = contact_user.user_id
+            self._collection.contact_user_id = contact_user.id
         # Dispatch members by role
         by_role = {COLLECTION_ROLE_DATA_CREATOR: creators,
                    COLLECTION_ROLE_ASSOCIATED_PERSON: associates}
