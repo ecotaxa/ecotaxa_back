@@ -102,6 +102,7 @@ CREATE TABLE public.collection
 (
     id integer NOT NULL DEFAULT nextval('collection_id_seq'::regclass),
     title character varying COLLATE pg_catalog."default" NOT NULL,
+    provider_user_id integer,
     contact_user_id integer,
     citation character varying COLLATE pg_catalog."default",
     license character varying(16) COLLATE pg_catalog."default",
@@ -175,4 +176,25 @@ CREATE TABLE public.collection_user_role
 TABLESPACE pg_default;
 
 ALTER TABLE public.collection_user_role
+    OWNER to postgres;
+
+-- Table: public.collection_orga_role
+
+-- DROP TABLE public.collection_orga_role;
+
+CREATE TABLE public.collection_orga_role
+(
+    collection_id integer NOT NULL,
+    organisation character varying(255) COLLATE pg_catalog."default" NOT NULL,
+    role character varying(1) COLLATE pg_catalog."default" NOT NULL,
+    CONSTRAINT collection_orga_role_pkey PRIMARY KEY (collection_id, organisation, role),
+    CONSTRAINT collection_orga_role_collection_id_fkey FOREIGN KEY (collection_id)
+        REFERENCES public.collection (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE public.collection_orga_role
     OWNER to postgres;

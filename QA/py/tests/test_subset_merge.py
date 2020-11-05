@@ -18,7 +18,7 @@ from API_operations.CRUD.Tasks import TaskService
 from API_operations.Consistency import ProjectConsistencyChecker
 from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
-from API_operations.Subset import SubsetService
+from API_operations.Subset import SubsetServiceOnProject
 # noinspection PyPackageRequirements
 from BO.Mappings import ProjectMapping
 # OK we need a bit of direct DB access
@@ -83,7 +83,7 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
                        limit_type='P',
                        limit_value=100.0,
                        do_images=True)
-    sce = SubsetService(prj_id=prj_id, req=params)
+    sce = SubsetServiceOnProject(prj_id=prj_id, req=params)
     sce.update_task(taskstate="Running", percent=0, message="Running")
     sce.run(ADMIN_USER_ID)
     # Dump the subset
@@ -254,7 +254,7 @@ def test_empty_subset_uvp6(config, database, fastapi, caplog):
                        limit_type='P',
                        limit_value=100.0,
                        do_images=True)
-    SubsetService(prj_id=prj_id, req=params).run(ADMIN_USER_ID)
+    SubsetServiceOnProject(prj_id=prj_id, req=params).run(ADMIN_USER_ID)
     # A bit of fastapi testing
     # TODO for #484: Ensure it's a 200 for dst_prj_id and a non-admin user
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
@@ -302,7 +302,7 @@ def test_empty_subset_uvp6_other(config, database, fastapi, caplog):
                        limit_type='P',
                        limit_value=100.0,
                        do_images=True)
-    SubsetService(prj_id=prj_id, req=params).run(ADMIN_USER_ID)
+    SubsetServiceOnProject(prj_id=prj_id, req=params).run(ADMIN_USER_ID)
     # A bit of fastapi testing
     # TODO for #484: Ensure it's a 200 for dst_prj_id and a non-admin user
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)

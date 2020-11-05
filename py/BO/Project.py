@@ -271,23 +271,23 @@ class ProjectBO(object):
         return ret  # type:ignore
 
     @classmethod
-    def get_bounding_geo(cls, session: Session, proj_id: int) -> Iterable[float]:
+    def get_bounding_geo(cls, session: Session, project_ids: ProjectIDListT) -> Iterable[float]:
         res: ResultProxy = session.execute(
             "SELECT min(o.latitude), max(o.latitude), min(o.longitude), max(o.longitude)"
             "  FROM objects o "
-            " WHERE o.projid = :prj",
-            {"prj": proj_id})
+            " WHERE o.projid = ANY(:prj)",
+            {"prj": project_ids})
         vals = res.first()
         assert vals
         return [a_val for a_val in vals]
 
     @classmethod
-    def get_date_range(cls, session: Session, proj_id: int) -> Iterable[datetime]:
+    def get_date_range(cls, session: Session, project_ids: ProjectIDListT) -> Iterable[datetime]:
         res: ResultProxy = session.execute(
             "SELECT min(o.objdate), max(o.objdate)"
             "  FROM objects o "
-            " WHERE o.projid = :prj",
-            {"prj": proj_id})
+            " WHERE o.projid = ANY(:prj)",
+            {"prj": project_ids})
         vals = res.first()
         assert vals
         return [a_val for a_val in vals]

@@ -22,7 +22,7 @@ from DB.helpers.DBWriter import DBWriter
 from DB.helpers.ORM import Query, any_, ResultProxy
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger
-from .helpers.TaskService import TaskServiceBase
+from .helpers.TaskService import TaskServiceOnProjectBase
 
 logger = get_logger(__name__)
 
@@ -32,7 +32,7 @@ DBObjectTupleT = Tuple[ObjectHeader, ObjectFields, ObjectCNNFeature, Image, Samp
 DBObjectTupleListT = List[DBObjectTupleT]
 
 
-class SubsetService(TaskServiceBase):
+class SubsetServiceOnProject(TaskServiceOnProjectBase):
     """
         A task doing the subset operation.
     """

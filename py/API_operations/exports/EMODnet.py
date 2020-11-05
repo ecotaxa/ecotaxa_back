@@ -3,17 +3,17 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from datetime import date
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, cast
 
-from API_models.exports import EMODnetExportReq, EMODnetExportRsp
+from API_models.exports import EMODnetExportRsp
+from BO.Collection import CollectionIDT, CollectionBO
 from BO.DataLicense import LicenseEnum, DataLicense
-from BO.Project import ProjectBO
-from BO.ProjectPrivilege import ProjectPrivilegeBO
-from BO.Rights import RightsBO, Action
+from BO.Project import ProjectBO, ProjectIDListT
+from BO.Rights import RightsBO
 from BO.Sample import SampleIDT, SampleBO
 from BO.Taxonomy import WoRMSSetFromTaxaSet
-from DB import User, Taxonomy, WoRMS
-from DB.Project import Project, ProjectTaxoStat
+from DB import User, Taxonomy, WoRMS, Collection, Role
+from DB.Project import ProjectTaxoStat
 from DB.Sample import Sample
 from DB.helpers.ORM import Query
 from DB.helpers.Postgres import timestamp_to_str
@@ -26,14 +26,14 @@ from formats.EMODnet.models import DwC_Event, RecordTypeEnum, DwC_Occurrence, Oc
     EMLTaxonomicClassification, EMLAdditionalMeta
 from helpers.DynamicLogs import get_logger
 from .Countries import countries_by_name
-from .ExportBase import ExportServiceBase
 # TODO: Move somewhere else
 from .TaxaUtils import RANKS_BY_ID
+from ..helpers.TaskService import TaskServiceBase
 
 logger = get_logger(__name__)
 
 
-class EMODnetExport(ExportServiceBase):
+class EMODnetExport(TaskServiceBase):
     """
         EMODNet export.
         Help during development:
@@ -45,11 +45,12 @@ class EMODnetExport(ExportServiceBase):
                 http://rshiny.lifewatch.be/BioCheck/
     """
 
-    def __init__(self, req: EMODnetExportReq, dry_run: bool):
-        super().__init__(req.project_ids)
-        # self.req = req
+    def __init__(self, collection_id: CollectionIDT, dry_run: bool):
+        super().__init__(task_type="TaskExportTxt")
         # Input
         self.dry_run = dry_run
+        self.collection = self.session.query(Collection).get(collection_id)
+        assert self.collection is not None, "Invalid collection ID"
         # During processing
         self.mapping: Dict[int, WoRMS] = {}
         # Output
@@ -62,19 +63,15 @@ class EMODnetExport(ExportServiceBase):
 
     def run(self, current_user_id: int) -> EMODnetExportRsp:
         # Security check
-        assert len(self.project_ids) == 1
-        prj_id = self.project_ids[0]
-        RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, prj_id)
-        # Load origin project
-        src_project = self.session.query(Project).get(prj_id)
-        assert src_project is not None, "Project %d not found" % prj_id
-        # OK, adjust the task
+        # TODO, for now only admins
+        _user = RightsBO.user_has_role(self.session, current_user_id, Role.APP_ADMINISTRATOR)
+        # Adjust the task
         self.set_task_params(current_user_id, self.DWC_ZIP_NAME)
         # Do the job
         logger.info("------------ starting --------------")
         ret = EMODnetExportRsp()
-        # Build metadata with what comes from the project
-        meta = self.build_meta(src_project)
+        # Build metadata with what comes from the collection
+        meta = self.build_meta()
         if meta is None:
             # If we can't have meta there has to be reasons
             assert len(self.errors) > 0
@@ -82,9 +79,9 @@ class EMODnetExport(ExportServiceBase):
             ret.warnings = self.warnings
             return ret
         # Create a container
-        arch = DwC_Archive(DatasetMetadata(meta), self.temp_dir / self.DWC_ZIP_NAME)
+        arch = DwC_Archive(DatasetMetadata(meta), self.temp_for_task.base_dir_for(self.task_id) / self.DWC_ZIP_NAME)
         # Add data from DB
-        self.add_events(src_project, arch)
+        self.add_events(arch)
         # Produced the zip
         arch.build()
         self.log_stats()
@@ -95,12 +92,16 @@ class EMODnetExport(ExportServiceBase):
         return ret
 
     @staticmethod
-    def user_to_eml_person(user: User, for_messages: str) -> Tuple[Optional[EMLPerson], List[str]]:
+    def user_to_eml_person(user: Optional[User], for_messages: str) -> Tuple[Optional[EMLPerson], List[str]]:
         """
             Build & return an EMLPerson entity from a DB User one.
         """
         problems = []
         ret = None
+
+        if user is None:
+            problems.append("No %s at all" % for_messages)
+            return ret, problems
 
         if not user.organisation:
             problems.append(
@@ -144,70 +145,85 @@ class EMODnetExport(ExportServiceBase):
     MIN_ABSTRACT_CHARS = 256
     """ Minimum size of a 'quality' abstract """
 
-    OK_LICENSES = {LicenseEnum.CC0, LicenseEnum.CC_BY, LicenseEnum.CC_BY_NC}
+    OK_LICENSES = [LicenseEnum.CC0, LicenseEnum.CC_BY, LicenseEnum.CC_BY_NC]
 
-    def build_meta(self, prj: Project) -> Optional[EMLMeta]:
+    def build_meta(self) -> Optional[EMLMeta]:
         """
-            Various queries/copies on/from the project for getting metadata.
+            Various queries/copies on/from the projects for getting metadata.
         """
         ret = None
-        title = EMLTitle(title=prj.title)
+        the_collection: CollectionBO = CollectionBO(self.collection).enrich()
 
-        # TODO: Pick project owner instead
-        first_manager: Optional[User] = None
-        for a_priv in list(prj.privs_for_members):
-            if a_priv.privilege == ProjectPrivilegeBO.MANAGE:
-                first_manager = a_priv.user
-        if first_manager is None:
-            self.errors.append("No manager in the project.")
-        else:
-            person1, errs = self.user_to_eml_person(first_manager, "first manager")
+        title = EMLTitle(title=the_collection.title)
+
+        creators: List[EMLPerson] = []
+        for a_user in the_collection.creator_users:
+            person, errs = self.user_to_eml_person(a_user, "creator %d" % a_user.id)
             if errs:
                 self.errors.extend(errs)
+            else:
+                assert person is not None
+                creators.append(person)
+        for an_org in the_collection.creator_organisations:
+            creators.append(EMLPerson(organizationName=an_org))
+
+        contact, errs = self.user_to_eml_person(the_collection.contact_user, "contact")
+
+        provider, errs = self.user_to_eml_person(the_collection.provider_user, "provider")
+
+        associates: List[EMLPerson] = []
+        for a_user in the_collection.associate_users:
+            person, errs = self.user_to_eml_person(a_user, "associated person %d" % a_user.id)
+            if errs:
+                self.errors.extend(errs)
+            else:
+                assert person is not None
+                associates.append(person)
+        for an_org in the_collection.associate_organisations:
+            associates.append(EMLPerson(organizationName=an_org))
 
         # TODO if needed
         # EMLAssociatedPerson = EMLPerson + specific role
 
-        # Ensure that the geography is OK propagated upwards from objects
-        Sample.propagate_geo(self.session, prj.projid)
-        (min_lat, max_lat, min_lon, max_lon) = ProjectBO.get_bounding_geo(self.session, prj.projid)
+        # Ensure that the geography is OK propagated upwards from objects, for all projects inside the collection
+        for a_prj_id in the_collection.project_ids:
+            Sample.propagate_geo(self.session, a_prj_id)
+
+        # TODO: a marine regions substitute
+        (min_lat, max_lat, min_lon, max_lon) = ProjectBO.get_bounding_geo(self.session, the_collection.project_ids)
         geo_cov = EMLGeoCoverage(geographicDescription="See coordinates",
                                  westBoundingCoordinate=self.geo_to_txt(min_lon),
                                  eastBoundingCoordinate=self.geo_to_txt(max_lon),
                                  northBoundingCoordinate=self.geo_to_txt(min_lat),
                                  southBoundingCoordinate=self.geo_to_txt(max_lat))
 
-        (min_date, max_date) = ProjectBO.get_date_range(self.session, prj.projid)
+        (min_date, max_date) = ProjectBO.get_date_range(self.session, the_collection.project_ids)
         time_cov = EMLTemporalCoverage(beginDate=timestamp_to_str(min_date),
                                        endDate=timestamp_to_str(max_date))
 
         publication_date = date.today().strftime("%Y-%m-%d")
 
-        if not prj.comments:
+        abstract = the_collection.abstract
+        if not abstract:
+            self.errors.append("Collection 'abstract' field is empty")
+        elif len(abstract) < self.MIN_ABSTRACT_CHARS:
             self.errors.append(
-                "Project 'Comments' field must contain an abstract. Minimum length is %d"
-                % self.MIN_ABSTRACT_CHARS)
-        elif len(prj.comments) < self.MIN_ABSTRACT_CHARS:
-            self.errors.append(
-                "Project 'Comments' field is too short (%d chars) to make a good EMLMeta abstract. Minimum is %d"
-                % (len(prj.comments), self.MIN_ABSTRACT_CHARS))
-        else:
-            abstract = prj.comments
+                "Collection 'abstract' field is too short (%d chars) to make a good EMLMeta abstract. Minimum is %d"
+                % (len(abstract), self.MIN_ABSTRACT_CHARS))
 
         additional_info = None  # Just to see if it goes thru QC
         # additional_info = """  marine, harvested by iOBIS.
         # The OOV supported the financial effort of the survey.
         # We are grateful to the crew of the research boat at OOV that collected plankton during the temporal survey."""
 
-        # TODO: Remove the type:ignore below
-        prj_license: LicenseEnum = prj.license  # type:ignore
-        if prj_license not in self.OK_LICENSES:
+        coll_license: LicenseEnum = cast(LicenseEnum, the_collection.license)
+        if coll_license not in self.OK_LICENSES:
             self.errors.append(
-                "Project license should be one of %s to be accepted, not %s."
-                % (self.OK_LICENSES, prj_license))
+                "Collection license should be one of %s to be accepted, not %s."
+                % (self.OK_LICENSES, coll_license))
         else:
-            lic_url = DataLicense.EXPLANATIONS[prj_license] + "legalcode"
-            lix_txt = DataLicense.NAMES[prj_license]
+            lic_url = DataLicense.EXPLANATIONS[coll_license] + "legalcode"
+            lix_txt = DataLicense.NAMES[coll_license]
             licence = "This work is licensed under a <ulink url=\"%s\"><citetitle>%s</citetitle></ulink>." % (
                 lic_url, lix_txt)
 
@@ -218,21 +234,21 @@ class EMODnetExport(ExportServiceBase):
                                            ],
                                  keywordThesaurus="GBIF Dataset Type Vocabulary: http://rs.gbif.org/vocabulary/gbif/dataset_type.xml")
 
-        taxo_cov = self.get_taxo_coverage(prj)
+        taxo_cov = self.get_taxo_coverage(the_collection.project_ids)
 
         meta_plus = EMLAdditionalMeta(dateStamp=date.today().strftime("%Y-%m-%d"))
 
         if len(self.errors) == 0:
             # The research project
             # noinspection PyUnboundLocalVariable
-            project = EMLProject(title=prj.title,
-                                 personnel=[person1])
+            project = EMLProject(title=the_collection.title,
+                                 personnel=[])  # TODO: Unsure about duplicated information with metadata
             # noinspection PyUnboundLocalVariable
             ret = EMLMeta(titles=[title],
-                          creators=[person1],
-                          contacts=[person1],
-                          metadataProviders=[person1],
-                          associatedParties=[person1],
+                          creators=creators,
+                          contacts=[contact],
+                          metadataProviders=[provider],
+                          associatedParties=associates,
                           pubDate=publication_date,
                           abstract=[abstract],
                           keywordSet=keywords,
@@ -247,19 +263,20 @@ class EMODnetExport(ExportServiceBase):
                           additionalMetadata=meta_plus)
         return ret
 
-    def get_taxo_coverage(self, project: Project) -> List[EMLTaxonomicClassification]:
+    def get_taxo_coverage(self, project_ids: ProjectIDListT) -> List[EMLTaxonomicClassification]:
         """
             Taxonomic coverage is the list of taxa which can be found in the project.
 
         """
         ret = []
         # Ensure the stats are OK
-        ProjectBO.update_taxo_stats(self.session, projid=project.projid)
+        for a_project_id in project_ids:
+            ProjectBO.update_taxo_stats(self.session, projid=a_project_id)
         # Fetch the used taxa in the project
         taxo_qry: Query = self.session.query(ProjectTaxoStat.id, Taxonomy.name).distinct()
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.id == Taxonomy.id)
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.nbr > 0)
-        taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid == project.projid)
+        taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid.in_(project_ids))
         used_taxa = {an_id: a_name for (an_id, a_name) in taxo_qry.all()}
         # Map them to WoRMS
         mapping = WoRMSSetFromTaxaSet(self.session, list(used_taxa.keys()))
@@ -286,37 +303,41 @@ class EMODnetExport(ExportServiceBase):
         # Round coordinates to ~ 110mm
         return "%.6f" % lat_or_lon
 
-    def add_events(self, prj: Project, arch: DwC_Archive):
+    def add_events(self, arch: DwC_Archive):
         """
             Add DwC events into the archive.
                 We produce sample-type events.
         """
+        # TODO: Dup code
+        the_collection: CollectionBO = CollectionBO(self.collection).enrich()
+
         institution_code = "IMEV"
-        ds_name = self.sanitize_title(prj.title)
-        samples = Sample.get_orig_id_and_model(self.session, prj_id=prj.projid)
-        a_sample: Sample
-        events = arch.events
-        for orig_id, a_sample in samples.items():
-            event_id = orig_id
-            evt_type = RecordTypeEnum.sample
-            summ = Sample.get_sample_summary(self.session, a_sample.sampleid)
-            assert a_sample.latitude is not None and a_sample.longitude is not None
-            evt_date = self.event_date(summ[0], summ[1])
-            latitude = self.geo_to_txt(a_sample.latitude)
-            longitude = self.geo_to_txt(a_sample.longitude)
-            evt = DwC_Event(eventID=event_id,
-                            type=evt_type,
-                            institutionCode=institution_code,
-                            datasetName=ds_name,
-                            eventDate=evt_date,
-                            decimalLatitude=latitude,
-                            decimalLongitude=longitude,
-                            minimumDepthInMeters=str(summ[2]),
-                            maximumDepthInMeters=str(summ[3])
-                            )
-            events.add(evt)
-            self.add_occurences(arch=arch, event_id=event_id, sample_id=a_sample.sampleid)
-            self.add_eMoFs_for_sample(arch=arch, event_id=event_id)
+        ds_name = self.sanitize_title(self.collection.title)
+        for a_prj_id in the_collection.project_ids:
+            samples = Sample.get_orig_id_and_model(self.session, prj_id=a_prj_id)
+            a_sample: Sample
+            events = arch.events
+            for orig_id, a_sample in samples.items():
+                event_id = orig_id
+                evt_type = RecordTypeEnum.sample
+                summ = Sample.get_sample_summary(self.session, a_sample.sampleid)
+                assert a_sample.latitude is not None and a_sample.longitude is not None
+                evt_date = self.event_date(summ[0], summ[1])
+                latitude = self.geo_to_txt(a_sample.latitude)
+                longitude = self.geo_to_txt(a_sample.longitude)
+                evt = DwC_Event(eventID=event_id,
+                                type=evt_type,
+                                institutionCode=institution_code,
+                                datasetName=ds_name,
+                                eventDate=evt_date,
+                                decimalLatitude=latitude,
+                                decimalLongitude=longitude,
+                                minimumDepthInMeters=str(summ[2]),
+                                maximumDepthInMeters=str(summ[3])
+                                )
+                events.add(evt)
+                self.add_occurences(arch=arch, event_id=event_id, sample_id=a_sample.sampleid)
+                self.add_eMoFs_for_sample(arch=arch, event_id=event_id)
 
     # noinspection PyPep8Naming
     @staticmethod
@@ -350,6 +371,17 @@ class EMODnetExport(ExportServiceBase):
             self.keep_stats(worms, count_4_sample)
             occurrence_id = event_id + "_" + str(an_id)
             individual_count = str(count_4_sample)
+            # tot_vol
+            # sub_part pour 497 (dans acquisition) -> homogène au niveau acq
+            """
+Pour chaque objet, unit_concentration = 1 * subsampling_rate / volume
+Puis, pour un subsample ou un sample, concentration = sum(unit_concentration)
+Donc il faut identifier les infos de subsampling (parfois inexistant) et de volume.
+
+Le volume c'est http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/
+
+-> EmOF
+            """
             occ = DwC_Occurrence(eventID=event_id,
                                  occurrenceID=occurrence_id,
                                  individualCount=individual_count,

@@ -26,26 +26,10 @@ class ExportServiceBase(Service, ABC):
         # TODO: Is duplicated with :ref: TaskService.py except that the task needs to exist there
         super().__init__()
         self.project_ids = prj_ids
-        new_task = Task()
-        new_task.taskclass = "TaskExportTxt"
-        self.session.add(new_task)
-        self.session.flush()
-        self.task_id = new_task.id
         # Get a temp directory
         self.temp_for_task = TempDirForTasks(join(self.link_src, 'temptask'))
         self.temp_dir = self.temp_for_task.base_dir_for(self.task_id)
         # Redirect logging
         log_file = self.temp_dir / 'ExportLogBack.txt'
         switch_log_to_file(str(log_file))
-
-    def set_task_params(self, owner_id: UserIDT, file_name: str):
-        """
-            Set export task features for this export.
-        """
-        task = self.session.query(Task).get(self.task_id)
-        assert task is not None
-        params = {"OutFile": file_name}
-        task.inputparam = json.dumps(params)
-        task.owner_id = owner_id
-        self.session.commit()
 

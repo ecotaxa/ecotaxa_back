@@ -42,7 +42,8 @@ _AcquisitionModelFromDB = sqlalchemy_to_pydantic(Acquisition,
 _ProcessModelFromDB = sqlalchemy_to_pydantic(Process,
                                              exclude=["t%02d" % i for i in range(1, PROCESS_FREE_COLUMNS)])
 _CollectionModelFromDB = sqlalchemy_to_pydantic(Collection,
-                                                exclude=[Collection.contact_user_id.name])
+                                                exclude=[Collection.contact_user_id.name,
+                                                         Collection.provider_user_id.name])
 
 
 class UserModel(_UserModelFromDB):  # type:ignore
@@ -237,15 +238,23 @@ class _AddedToCollection(BaseModel):
         What's added to Collection comparing to the plain DB record.
     """
     project_ids: List[int] = Field(title="The composing project IDs", min_items=1)
+    provider_user: Optional[UserModel] = Field(title="""Is the person Person who is responsible for the content of this metadata record. 
+Writer of the title and abstract.""")
     contact_user: Optional[UserModel] = Field(title="""Is the person who should be contacted in cases of questions regarding the
 content of the dataset or any data restrictions. This is also the person who is most likely to
 stay involved in the dataset the longest.""")
-    creators: List[UserModel] = Field(title="""All people who are responsible for the creation of
+    creator_users: List[UserModel] = Field(title="""All people who are responsible for the creation of
 the collection. Data creators should receive credit for their work and should therefore be
 included in the citation.""",
-                                      default=[])
-    associates: List[UserModel] = Field(title="Other person(s) associated with the collection",
-                                        default=[])
+                                           default=[])
+    creator_organisations: List[str] = Field(title="""All organisations who are responsible for the creation of
+    the collection. Data creators should receive credit for their work and should therefore be
+    included in the citation.""",
+                                                   default=[])
+    associate_users: List[UserModel] = Field(title="Other person(s) associated with the collection",
+                                             default=[])
+    associate_organisations: List[str] = Field(title="Other organisation(s) associated with the collection",
+                                                     default=[])
 
 
 class CollectionModel(_CollectionModelFromDB, _AddedToCollection):  # type:ignore

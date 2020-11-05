@@ -7,7 +7,7 @@
 from sqlalchemy import and_
 
 from .Acquisition import Acquisition
-from .Collection import Collection, CollectionProject, CollectionUserRole
+from .Collection import Collection, CollectionProject, CollectionUserRole, CollectionOrgaRole
 from .Image import Image
 from .Object import ObjectHeader, ObjectFields, ObjectCNNFeature, ObjectsClassifHisto
 # Particle project
@@ -33,9 +33,10 @@ User.preferences_for_projects = relationship(UserPreferences, lazy='dynamic')
 
 # Collection
 Collection.projects = relationship(Project, secondary=CollectionProject.__tablename__)
-Collection.contact_user = relationship(User, uselist=False)
-Collection.users = relationship(User, secondary=CollectionUserRole.__tablename__)
+Collection.contact_user = relationship(User, foreign_keys=[Collection.contact_user_id], uselist=False)
+Collection.provider_user = relationship(User, foreign_keys=[Collection.provider_user_id], uselist=False)
 Collection.users_by_role = relationship(CollectionUserRole)
+Collection.organisations_by_role = relationship(CollectionOrgaRole)
 
 CollectionUserRole.collection = relationship(Collection, uselist=False)
 CollectionUserRole.user = relationship(User, uselist=False)

@@ -33,7 +33,7 @@ from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
 from API_operations.ObjectManager import ObjectManager
 from API_operations.Status import StatusService
-from API_operations.Subset import SubsetService
+from API_operations.Subset import SubsetServiceOnProject
 from API_operations.TaxoManager import TaxonomyChangeService
 from API_operations.TaxonomyService import TaxonomyService
 from API_operations.exports.EMODnet import EMODnetExport
@@ -171,6 +171,8 @@ def create_collection(params: CreateCollectionReq,
                       current_user: int = Depends(get_current_user)) -> Union[int, str]:
     """
         Create a collection with at least one project inside.
+
+        *Currently only for admins*
     """
     sce = CollectionsService()
     with RightsThrower():
@@ -185,6 +187,8 @@ def search_collection(title: str,
                       current_user: int = Depends(get_current_user)):
     """
         Search for collections.
+
+        *Currently only for admins*
     """
     sce = CollectionsService()
     with RightsThrower():
@@ -197,6 +201,8 @@ def get_collection(collection_id: int,
                    current_user: int = Depends(get_current_user)):
     """
         Read a collection by its ID.
+
+        *Currently only for admins*
     """
     sce = CollectionsService()
     with RightsThrower():
@@ -213,6 +219,8 @@ def update_collection(collection_id: int,
     """
         Update the collection. Note that some updates are silently failing when not compatible
         with the composing projects.
+
+        *Currently only for admins*
     """
     sce = CollectionsService()
     with RightsThrower():
@@ -223,10 +231,29 @@ def update_collection(collection_id: int,
     present_collection.update(session=sce.session,
                               title=collection.title,
                               project_ids=collection.project_ids,
-                              contact_user=collection.contact_user,
+                              provider_user=collection.provider_user, contact_user=collection.contact_user,
                               citation=collection.citation, abstract=collection.abstract,
                               description=collection.description,
-                              creators=collection.creators, associates=collection.associates)
+                              creator_users=collection.creator_users, associate_users=collection.associate_users,
+                              creator_orgs=collection.creator_organisations,
+                              associate_orgs=collection.associate_organisations)
+
+
+@app.get("/collections/{collection_id}/export/emodnet", tags=['collections'], response_model=EMODnetExportRsp)
+def emodnet_format_export(collection_id: int,
+                          dry_run: bool,
+                          current_user: int = Depends(get_current_user)):
+    """
+        Export the collection in EMODnet format, @see https://www.emodnet-ingestion.eu/
+        Produces a DwC-A archive into a temporary directory, ready for download.
+        - param `dry_run`: If set, then only a diagnostic of doability will be done.
+        Maybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html
+
+        *Currently only for admins*
+    """
+    sce = EMODnetExport(collection_id, dry_run)
+    with RightsThrower():
+        return sce.run(current_user)
 
 
 @app.delete("/collections/{collection_id}", tags=['collections'])
@@ -286,7 +313,7 @@ def project_subset(project_id: int,
     """
         Subset a project into another one.
     """
-    sce = SubsetService(project_id, params)
+    sce = SubsetServiceOnProject(project_id, params)
     with RightsThrower():
         return sce.run(current_user)
 
@@ -536,6 +563,9 @@ def process_query(process_id: int,
 
 # TODO: Should be app.get, but for this we need a way to express
 #  that each field in ProjectFilter is part of the params
+
+# TODO /query pas bon!
+
 @app.post("/object_set/{project_id}/query", tags=['objects'], response_model=ObjectSetQueryRsp)
 def get_object_set(project_id: int,
                    filters: ProjectFiltersModel,
@@ -675,21 +705,6 @@ def object_query_history(object_id: int,
     if ret is None:
         raise HTTPException(status_code=404, detail="Object not found")
     return ret
-
-
-@app.post("/export/emodnet", tags=['exports'], response_model=EMODnetExportRsp)
-def emodnet_format_export(params: EMODnetExportReq,
-                          dry_run: bool,
-                          current_user: int = Depends(get_current_user)):
-    """
-        Export in EMODnet format, @see https://www.emodnet-ingestion.eu/
-        Produces a DwC-A archive into a temporary directory, ready for download.
-        - param `dry_run`: If set, then only a diagnostic of doability will be done.
-        Maybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html
-    """
-    sce = EMODnetExport(params, dry_run)
-    with RightsThrower():
-        return sce.run(current_user)
 
 
 @app.get("/taxa/search", tags=['Taxonomy Tree'], response_model=List[TaxaSearchRsp])

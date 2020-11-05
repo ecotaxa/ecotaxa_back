@@ -16,6 +16,7 @@ class Collection(Model):
     """ A set of projects see #82, #335, #519 """
     __tablename__ = 'collection'
     id = Column(INTEGER, Sequence('collection_id_seq'), primary_key=True)
+    provider_user_id = Column(INTEGER, ForeignKey('users.id'))
     title = Column(VARCHAR, nullable=False)
     contact_user_id = Column(INTEGER, ForeignKey('users.id'))
     citation = Column(VARCHAR)
@@ -26,8 +27,9 @@ class Collection(Model):
     # The relationships are created in Relations.py but the typing here helps IDE
     projects: relationship
     contact_user: relationship
-    users: relationship
+    provider_user: relationship
     users_by_role: relationship
+    organisations_by_role: relationship
 
     def __str__(self):
         return "{0} ({1})".format(self.id, self.title)
@@ -64,3 +66,15 @@ class CollectionUserRole(Model):
 
     def __str__(self):
         return "{0},{1}:{2}".format(self.collection_id, self.user_id, self.role)
+
+
+class CollectionOrgaRole(Model):
+    __tablename__ = 'collection_orga_role'
+    """ n<->n valued relationship b/w collection and organisations """
+    collection_id = Column(INTEGER, ForeignKey('collection.id'), primary_key=True)
+    organisation = Column(VARCHAR(255), primary_key=True)
+    role = Column(VARCHAR(1),  # 'C' for data Creator, 'A' for Associated 'person'
+                     nullable=False, primary_key=True)
+
+    def __str__(self):
+        return "{0},{1}:{2}".format(self.collection_id, self.organisation, self.role)

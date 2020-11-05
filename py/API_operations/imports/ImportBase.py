@@ -8,14 +8,14 @@ from os.path import join
 from typing import Union
 
 from API_models.imports import ImportPrepReq, ImportRealReq, SimpleImportReq
-from API_operations.helpers.TaskService import TaskServiceBase
+from API_operations.helpers.TaskService import TaskServiceOnProjectBase
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
 
 
-class ImportServiceBase(TaskServiceBase, ABC):
+class ImportServiceBase(TaskServiceOnProjectBase, ABC):
     """
         Common methods and data for import task steps.
     """

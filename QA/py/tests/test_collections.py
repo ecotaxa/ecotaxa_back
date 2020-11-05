@@ -38,14 +38,17 @@ def test_create_collection(config, database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
     the_coll = rsp.json()
     assert the_coll == {'abstract': None,
-                        'associates': [],
+                        'associate_organisations': [],
+                        'associate_users': [],
                         'citation': None,
                         'contact_user': None,
-                        'creators': [],
+                        'creator_organisations': [],
+                        'creator_users': [],
                         'description': None,
                         'id': coll_id,
                         'license': 'Copyright',
                         'project_ids': [prj_id],
+                        'provider_user': None,
                         'title': 'Test collection'}
 
     # Update the abstract
@@ -58,7 +61,7 @@ def test_create_collection(config, database, fastapi, caplog):
 
     # Fail updating the project list
     url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
-    the_coll["project_ids"] = [1,5,6]
+    the_coll["project_ids"] = [1, 5, 6]
     with pytest.raises(Exception):
         rsp = fastapi.put(url, headers=ADMIN_AUTH, json=the_coll)
 
@@ -69,14 +72,17 @@ def test_create_collection(config, database, fastapi, caplog):
     assert rsp.json() == [{'abstract': """
     A bit less abstract...
     """,
-                           'associates': [],
+                           'associate_organisations': [],
+                           'associate_users': [],
                            'citation': None,
                            'contact_user': None,
-                           'creators': [],
+                           'creator_organisations': [],
+                           'creator_users': [],
                            'description': None,
                            'id': coll_id,
                            'license': 'Copyright',
                            'project_ids': [prj_id],
+                           'provider_user': None,
                            'title': 'Test collection'}]
 
     # Empty search test
