@@ -2,8 +2,9 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List, Any, Optional
+from typing import List, Any, Optional, Set, cast
 
+from BO.DataLicense import DataLicense, LicenseEnum
 from BO.Project import ProjectIDListT
 from DB import Collection, User, CollectionUserRole, Project
 from DB import Session, Query
@@ -47,13 +48,13 @@ class CollectionBO(object):
                    COLLECTION_ROLE_ASSOCIATED_PERSON: self.associates}
         a_user_and_role: CollectionUserRole
         # noinspection PyTypeChecker
-        for a_user_and_role in self._collection.users:
+        for a_user_and_role in self._collection.users_by_role:
             by_role[a_user_and_role.role].append(a_user_and_role.user)
         return self
 
     def _read_composing_projects(self):
         # noinspection PyTypeChecker
-        self.project_ids = [a_rec.projid for a_rec in self._collection.projects]
+        self.project_ids = sorted([a_rec.projid for a_rec in self._collection.projects])
 
     def _add_composing_projects(self, session: Session, project_ids: ProjectIDListT):
         """
@@ -62,14 +63,22 @@ class CollectionBO(object):
         qry: Query = session.query(Project).filter(Project.projid.in_(project_ids))
         db_projects = qry.all()
         assert len(db_projects) == len(project_ids)
+        prj_licenses: Set[LicenseEnum] = set()
+        a_db_project: Project
         for a_db_project in db_projects:
             self._collection.projects.append(a_db_project)
+            prj_licenses.add(cast(LicenseEnum, a_db_project.license))
+        # Set self to most restrictive of all licenses
+        max_restrict = max([DataLicense.RESTRICTION[a_prj_lic] for a_prj_lic in prj_licenses])
+        self._collection.license = DataLicense.BY_RESTRICTION[max_restrict]
 
     def update(self, session: Session, title: str,
                project_ids: ProjectIDListT,
                contact_user: Any,
                citation: str, abstract: str, description: str,
                creators: List[Any], associates: List[Any]):
+        project_ids.sort()
+        assert project_ids == self.project_ids, "Cannot update composing projects yet"
         coll_id = self._collection.id
         # TODO: projects update using given list
         # TODO: license update using projects' ones
@@ -84,7 +93,7 @@ class CollectionBO(object):
         # Dispatch members by role
         by_role = {COLLECTION_ROLE_DATA_CREATOR: creators,
                    COLLECTION_ROLE_ASSOCIATED_PERSON: associates}
-        # Remove all to avoid tricky diffs
+        # Remove all to avoid diff-ing
         session.query(CollectionUserRole). \
             filter(CollectionUserRole.collection_id == coll_id).delete()
         # Add all
@@ -106,7 +115,7 @@ class CollectionBO(object):
                   if a_prj_id not in self.project_ids]
         to_remove = [a_prj_id for a_prj_id in self.project_ids
                      if a_prj_id not in self.project_ids]
-        assert len(to_remove) == 0, "No removal yet"
+        assert len(to_remove) == 0, "No removal in collection composition yet"
         self._add_composing_projects(session, to_add)
 
     def __getattr__(self, item):

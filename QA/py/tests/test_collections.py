@@ -1,6 +1,7 @@
 import logging
 
 # noinspection PyPackageRequirements
+import pytest
 from starlette import status
 
 from tests.credentials import ADMIN_AUTH
@@ -43,7 +44,7 @@ def test_create_collection(config, database, fastapi, caplog):
                         'creators': [],
                         'description': None,
                         'id': coll_id,
-                        'license': None,
+                        'license': 'Copyright',
                         'project_ids': [prj_id],
                         'title': 'Test collection'}
 
@@ -54,6 +55,12 @@ def test_create_collection(config, database, fastapi, caplog):
     """
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=the_coll)
     assert rsp.status_code == status.HTTP_200_OK
+
+    # Fail updating the project list
+    url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
+    the_coll["project_ids"] = [1,5,6]
+    with pytest.raises(Exception):
+        rsp = fastapi.put(url, headers=ADMIN_AUTH, json=the_coll)
 
     # Search for it
     url = COLLECTION_SEARCH_URL.format(title="%coll%")
@@ -68,7 +75,7 @@ def test_create_collection(config, database, fastapi, caplog):
                            'creators': [],
                            'description': None,
                            'id': coll_id,
-                           'license': None,
+                           'license': 'Copyright',
                            'project_ids': [prj_id],
                            'title': 'Test collection'}]
 

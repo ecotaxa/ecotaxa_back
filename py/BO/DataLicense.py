@@ -37,3 +37,14 @@ class DataLicense(object):
                     LicenseEnum.CC_BY_ND: "https://creativecommons.org/licenses/by-nd/4.0/",
                     LicenseEnum.CC_BY_NC_ND: "https://creativecommons.org/licenses/by-nc-nd/4.0/",
                     LicenseEnum.Copyright: "All rights reserved"}
+
+    RESTRICTION = {LicenseEnum.CC0: 0,
+                   LicenseEnum.CC_BY: 1,
+                   LicenseEnum.CC_BY_SA: 2,
+                   LicenseEnum.CC_BY_NC: 3,
+                   LicenseEnum.CC_BY_NC_SA: 4,
+                   LicenseEnum.CC_BY_ND: 5,
+                   LicenseEnum.CC_BY_NC_ND: 6,
+                   LicenseEnum.Copyright: 7}
+
+    BY_RESTRICTION = {lev: lic for lic, lev in RESTRICTION.items()}

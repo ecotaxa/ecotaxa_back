@@ -27,6 +27,7 @@ class Collection(Model):
     projects: relationship
     contact_user: relationship
     users: relationship
+    users_by_role: relationship
 
     def __str__(self):
         return "{0} ({1})".format(self.id, self.title)
