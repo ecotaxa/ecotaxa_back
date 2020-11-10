@@ -5,13 +5,9 @@
 from typing import List, Dict
 
 from sqlalchemy import Index, Sequence, Column, ForeignKey
-from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, DOUBLE_PRECISION, INTEGER
-# noinspection PyPackageRequirements,PyProtectedMember
-from sqlalchemy.engine import ResultProxy
-# noinspection PyProtectedMember
-from sqlalchemy.orm import relationship, Session
+from sqlalchemy.dialects.postgresql import VARCHAR, DOUBLE_PRECISION, INTEGER
 
-from DB.helpers.ORM import Model
+from DB.helpers.ORM import ResultProxy, Model, relationship, Session
 
 SAMPLE_FREE_COLUMNS = 31
 

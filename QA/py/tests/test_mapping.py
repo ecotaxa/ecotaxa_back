@@ -91,6 +91,7 @@ def test_mapping1():
     assert a_mapping.max_by_type['t'] == 2
     enc: str = a_mapping.as_equal_list()
     assert enc.split("=") == (MAPP + "\nt02=lol").split("=")
+    assert a_mapping.find_tsv_cols(["cdexc", "no", "toto"]) == ["n69", "t01"]
 
 
 MAPP2 = """n01=lat_end

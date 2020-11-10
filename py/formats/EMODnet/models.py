@@ -109,7 +109,7 @@ class DwcOccurrence(BaseModel):
     scientificNameID: str = Field(term="http://rs.tdwg.org/dwc/terms/scientificNameID")
 
     # Count field
-    individualCount: str = Field(term="http://rs.tdwg.org/dwc/terms/individualCount")
+    individualCount: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/individualCount")
 
     # Taxon fields
     kingdom: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/kingdom")
@@ -208,7 +208,7 @@ class EMLPerson(BaseModel):
     city: Optional[str]
     administrativeArea: Optional[str]
     postalCode: Optional[str]
-    country: str
+    country: Optional[str]
     """ Looks like an alpha_2 ISO 3166 for country """
 
     phone: Optional[str]
@@ -361,7 +361,7 @@ class EMLMeta(BaseModel):
     titles: List[EMLTitle] = Field(title="Titles, at least 1", min_items=1)
     creators: List[EMLPerson] = Field(title="Creators, at least 1", min_items=1)
     metadataProviders: List[EMLPerson] = Field(title="Metadata providers, at least 1", min_items=1)
-    associatedParties: List[EMLAssociatedPerson] = Field(title="Associated parties, at least 1", min_items=1)
+    associatedParties: List[EMLAssociatedPerson] = Field(title="Associated parties, at least 1", min_items=0)
     contacts: List[EMLPerson] = Field(title="Contacts, at least 1", min_items=1)
     pubDate: str
     """ The date that the resource was published. Use ISO 8601. """

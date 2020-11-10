@@ -336,3 +336,15 @@ class TableMapping(object):
         for a_col in sorted(src_cols.difference(dst_cols)):
             remaps.append(RemapOp(None, a_col))
         return ret, remaps, errs
+
+    def find_tsv_cols(self, tsv_cols: List[str]) -> List[str]:
+        """
+            Return the corresponding real column for each TSV column provided.
+            len(tsv_cols) !=  len(returned value) is an error condition.
+        """
+        ret = []
+        for a_tsv_col in tsv_cols:
+            real_col = self.tsv_cols_to_real.get(a_tsv_col)
+            if real_col is not None:
+                ret.append(real_col)
+        return ret

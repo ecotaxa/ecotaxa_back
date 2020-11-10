@@ -4,11 +4,22 @@
 #
 # Charset conversion waiting for all-to-UTF
 #
+import html
+
+
 def to_latin1_compat(a_str: str):
     if a_str is None:
         return a_str
     try:
         _str_lat1 = a_str.encode("latin-1")
     except UnicodeEncodeError:
-        return str(a_str.encode("latin-1", errors='xmlcharrefreplace'))
+        ret = a_str.encode("latin-1", errors='xmlcharrefreplace')
+        return ret
+    return a_str
+
+
+def from_xmlchar(a_str: str):
+    """ Convert back if a string was stored with latin1 due to no-utf8-in-DB """
+    if "&#" in a_str:
+        return html.unescape(a_str)
     return a_str

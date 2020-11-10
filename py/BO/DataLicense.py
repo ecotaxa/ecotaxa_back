@@ -29,6 +29,15 @@ class DataLicense(object):
              LicenseEnum.CC_BY_NC_ND: "Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International Public License",
              LicenseEnum.Copyright: "All rights reserved"}
 
+    SHORT_NAMES = {LicenseEnum.CC0: "",
+                   LicenseEnum.CC_BY: "CC-BY",
+                   LicenseEnum.CC_BY_SA: "CC-BY-SA",
+                   LicenseEnum.CC_BY_NC: "CC-BY-NC",
+                   LicenseEnum.CC_BY_NC_SA: "CC-BY-NC-SA",
+                   LicenseEnum.CC_BY_ND: "CC-BY-ND",
+                   LicenseEnum.CC_BY_NC_ND: "CC-BY-ND",
+                   LicenseEnum.Copyright: ""}
+
     EXPLANATIONS = {LicenseEnum.CC0: "https://creativecommons.org/publicdomain/zero/1.0/",
                     LicenseEnum.CC_BY: "https://creativecommons.org/licenses/by/4.0/",
                     LicenseEnum.CC_BY_SA: "https://creativecommons.org/licenses/by-sa/4.0/",

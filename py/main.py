@@ -14,7 +14,7 @@ from fastapi_utils.timing import add_timing_middleware
 
 from API_models.constants import Constants
 from API_models.crud import *
-from API_models.exports import EMODnetExportReq, EMODnetExportRsp
+from API_models.exports import EMODnetExportRsp
 from API_models.imports import *
 from API_models.login import LoginReq
 from API_models.merge import MergeRsp
@@ -58,7 +58,7 @@ logger = get_logger(__name__)
 # TODO: A nicer API doc, see https://github.com/tiangolo/fastapi/issues/1140
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.4",
+              version="0.0.5",
               # openapi URL as seen from navigator
               openapi_url="/api/openapi.json",
               # root_path="/API_models"
@@ -242,7 +242,7 @@ def update_collection(collection_id: int,
 @app.get("/collections/{collection_id}/export/emodnet", tags=['collections'], response_model=EMODnetExportRsp)
 def emodnet_format_export(collection_id: int,
                           dry_run: bool,
-                          current_user: int = Depends(get_current_user)):
+                          current_user: int = Depends(get_current_user)) -> EMODnetExportRsp:
     """
         Export the collection in EMODnet format, @see https://www.emodnet-ingestion.eu/
         Produces a DwC-A archive into a temporary directory, ready for download.
@@ -581,6 +581,7 @@ def get_object_set(project_id: int,
     rsp.process_ids = [with_p[1] for with_p in obj_with_parents]
     rsp.acquisition_ids = [with_p[2] for with_p in obj_with_parents]
     rsp.sample_ids = [with_p[3] for with_p in obj_with_parents]
+    rsp.project_ids = [with_p[4] for with_p in obj_with_parents]
     return rsp
 
 

@@ -4,17 +4,18 @@
 #
 
 #
-# An enumerated set of Sample(s)
+# A Sample BO + enumerated set of Sample(s)
 #
-from typing import List, Dict
+from typing import List, Dict, Any
 
 from API_models.crud import ColUpdateList
 from BO.Project import ProjectIDListT
-from DB import Session, Query, Project, Sample
-from DB.helpers.ORM import any_, ResultProxy
+from DB import Session, Query, Project, Sample, Acquisition, ObjectHeader
+from DB.helpers.ORM import any_, ResultProxy, and_
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 from .Classification import ClassifIDT
+from .Mappings import ProjectMapping
 from .helpers.MappedEntity import MappedEntity
 from .helpers.MappedTable import MappedTable
 
@@ -40,6 +41,16 @@ class SampleBO(MappedEntity):
         return getattr(self.sample, item)
 
     @classmethod
+    def get_free_fields(cls, sample: Sample, fields_list: List[str]) -> List[Any]:
+        """ Get free fields _value_ for the sample. """
+        # noinspection PyTypeChecker
+        mapping = ProjectMapping().load_from_project(sample.project)
+        real_cols = mapping.sample_mappings.find_tsv_cols(fields_list)
+        if len(real_cols) != len(fields_list):
+            raise TypeError("free column not found")
+        return [getattr(sample, real_col) for real_col in real_cols]
+
+    @classmethod
     def get_sums_by_taxon(cls, session: Session, sample_id: SampleIDT) \
             -> Dict[ClassifIDT, int]:
         res: ResultProxy = session.execute(
@@ -49,6 +60,27 @@ class SampleBO(MappedEntity):
             " GROUP BY o.classif_id",
             {"smp": sample_id})
         return {int(classif_id): int(cnt) for (classif_id, cnt) in res.fetchall()}
+
+    @classmethod
+    def get_sums_by_taxon_and_acquisition(cls, session: Session, sample_id: SampleIDT) \
+            -> Dict[ClassifIDT, int]:
+        res: ResultProxy = session.execute(
+            "SELECT o.classif_id, o.acquis_id, count(1)"
+            "  FROM obj_head o "
+            " WHERE o.sampleid = :smp"
+            " GROUP BY o.classif_id, o.acquis_id",
+            {"smp": sample_id})
+        return {int(classif_id): int(cnt) for (classif_id, cnt) in res.fetchall()}
+
+    @classmethod
+    def get_acquisitions(cls, session: Session, sample: Sample) -> List[Acquisition]:
+        """ Get acquisitions for the sample """
+        qry: Query = session.query(Acquisition)
+        # Fill the all_objects relation, we're done with the hierarchy
+        qry = qry.join(ObjectHeader, and_(ObjectHeader.projid == sample.projid,
+                                          ObjectHeader.sampleid == sample.sampleid,
+                                          ObjectHeader.acquisid == Acquisition.acquisid))
+        return qry.all()
 
 
 class EnumeratedSampleSet(MappedTable):

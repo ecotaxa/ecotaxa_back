@@ -53,4 +53,4 @@ class TaskService(Service):
         try:
             return open(out_file_path, mode="rb"), out_file_name
         except IOError:
-            return StringIO(""), out_file_name
+            return StringIO("NOT FOUND"), out_file_name

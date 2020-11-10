@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.4"
+    "version":"0.0.5"
   },
   "paths":{
     "/login":{
@@ -301,6 +301,306 @@
               "application/json":{
                 "schema":{
                   "$ref":"#/components/schemas/UserModel"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/collections/create":{
+      "post":{
+        "tags":[
+          "collections"
+        ],
+        "summary":"Create Collection",
+        "description":"Create a collection with at least one project inside.\n\n*Currently only for admins*",
+        "operationId":"create_collection_collections_create_post",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/CreateCollectionReq"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/collections/search":{
+      "get":{
+        "tags":[
+          "collections"
+        ],
+        "summary":"Search Collection",
+        "description":"Search for collections.\n\n*Currently only for admins*",
+        "operationId":"search_collection_collections_search_get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Title",
+              "type":"string"
+            },
+            "name":"title",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Search Collection Collections Search Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/CollectionModel"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/collections/{collection_id}":{
+      "get":{
+        "tags":[
+          "collections"
+        ],
+        "summary":"Get Collection",
+        "description":"Read a collection by its ID.\n\n*Currently only for admins*",
+        "operationId":"get_collection_collections__collection_id__get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Collection Id",
+              "type":"integer"
+            },
+            "name":"collection_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/CollectionModel"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      },
+      "put":{
+        "tags":[
+          "collections"
+        ],
+        "summary":"Update Collection",
+        "description":"Update the collection. Note that some updates are silently failing when not compatible\nwith the composing projects.\n\n*Currently only for admins*",
+        "operationId":"update_collection_collections__collection_id__put",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Collection Id",
+              "type":"integer"
+            },
+            "name":"collection_id",
+            "in":"path"
+          }
+        ],
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/CollectionModel"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      },
+      "delete":{
+        "tags":[
+          "collections"
+        ],
+        "summary":"Erase Collection",
+        "description":"Delete the collection, i.e. the precious fields, as the projects are just unliked from the collection.",
+        "operationId":"erase_collection_collections__collection_id__delete",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Collection Id",
+              "type":"integer"
+            },
+            "name":"collection_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/collections/{collection_id}/export/emodnet":{
+      "get":{
+        "tags":[
+          "collections"
+        ],
+        "summary":"Emodnet Format Export",
+        "description":"Export the collection in EMODnet format, @see https://www.emodnet-ingestion.eu/\nProduces a DwC-A archive into a temporary directory, ready for download.\n- param `dry_run`: If set, then only a diagnostic of doability will be done.\nMaybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html\n\n*Currently only for admins*",
+        "operationId":"emodnet_format_export_collections__collection_id__export_emodnet_get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Collection Id",
+              "type":"integer"
+            },
+            "name":"collection_id",
+            "in":"path"
+          },
+          {
+            "required":true,
+            "schema":{
+              "title":"Dry Run",
+              "type":"boolean"
+            },
+            "name":"dry_run",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/EMODnetExportRsp"
                 }
               }
             }
@@ -1631,6 +1931,57 @@
         ]
       }
     },
+    "/object_set/parents":{
+      "post":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Query Object Set Parents",
+        "description":"Return object ids, with parent ones and projects for the objects in given list.",
+        "operationId":"query_object_set_parents_object_set_parents_post",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "title":"Object Ids",
+                "type":"array",
+                "items":{
+                  "type":"integer"
+                }
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/ObjectSetQueryRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
     "/object_set/":{
       "delete":{
         "tags":[
@@ -1758,64 +2109,6 @@
                   "items":{
                     "$ref":"#/components/schemas/HistoricalClassification"
                   }
-                }
-              }
-            }
-          },
-          "422":{
-            "description":"Validation Error",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security":[
-          {
-            "HTTPBearer":[]
-          }
-        ]
-      }
-    },
-    "/export/emodnet":{
-      "post":{
-        "tags":[
-          "exports"
-        ],
-        "summary":"Emodnet Format Export",
-        "description":"Export in EMODnet format, @see https://www.emodnet-ingestion.eu/\nProduces a DwC-A archive into a temporary directory, ready for download.\n- param `dry_run`: If set, then only a diagnostic of doability will be done.\nMaybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html",
-        "operationId":"emodnet_format_export_export_emodnet_post",
-        "parameters":[
-          {
-            "required":true,
-            "schema":{
-              "title":"Dry Run",
-              "type":"boolean"
-            },
-            "name":"dry_run",
-            "in":"query"
-          }
-        ],
-        "requestBody":{
-          "content":{
-            "application/json":{
-              "schema":{
-                "$ref":"#/components/schemas/EMODnetExportReq"
-              }
-            }
-          },
-          "required":true
-        },
-        "responses":{
-          "200":{
-            "description":"Successful Response",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/EMODnetExportRsp"
                 }
               }
             }
@@ -2234,6 +2527,97 @@
           }
         }
       },
+      "CollectionModel":{
+        "title":"CollectionModel",
+        "required":[
+          "project_ids",
+          "title"
+        ],
+        "type":"object",
+        "properties":{
+          "project_ids":{
+            "title":"The composing project IDs",
+            "minItems":1,
+            "type":"array",
+            "items":{
+              "type":"integer"
+            }
+          },
+          "provider_user":{
+            "title":"Is the person Person who is responsible for the content of this metadata record. \nWriter of the title and abstract.",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/UserModel"
+              }
+            ]
+          },
+          "contact_user":{
+            "title":"Is the person who should be contacted in cases of questions regarding the\ncontent of the dataset or any data restrictions. This is also the person who is most likely to\nstay involved in the dataset the longest.",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/UserModel"
+              }
+            ]
+          },
+          "creator_users":{
+            "title":"All people who are responsible for the creation of\nthe collection. Data creators should receive credit for their work and should therefore be\nincluded in the citation.",
+            "type":"array",
+            "items":{
+              "$ref":"#/components/schemas/UserModel"
+            },
+            "default":[]
+          },
+          "creator_organisations":{
+            "title":"All organisations who are responsible for the creation of\n    the collection. Data creators should receive credit for their work and should therefore be\n    included in the citation.",
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "default":[]
+          },
+          "associate_users":{
+            "title":"Other person(s) associated with the collection",
+            "type":"array",
+            "items":{
+              "$ref":"#/components/schemas/UserModel"
+            },
+            "default":[]
+          },
+          "associate_organisations":{
+            "title":"Other organisation(s) associated with the collection",
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "default":[]
+          },
+          "id":{
+            "title":"Id",
+            "type":"integer"
+          },
+          "title":{
+            "title":"Title",
+            "type":"string"
+          },
+          "citation":{
+            "title":"Citation",
+            "type":"string"
+          },
+          "license":{
+            "title":"License",
+            "type":"string"
+          },
+          "abstract":{
+            "title":"Abstract",
+            "type":"string"
+          },
+          "description":{
+            "title":"Description",
+            "type":"string"
+          }
+        },
+        "description":"Collection + computed"
+      },
       "Constants":{
         "title":"Constants",
         "type":"object",
@@ -2253,6 +2637,28 @@
               "CC BY-ND 4.0":"https://creativecommons.org/licenses/by-nd/4.0/",
               "CC BY-NC-ND 4.0":"https://creativecommons.org/licenses/by-nc-nd/4.0/",
               "Copyright":"All rights reserved"
+            }
+          }
+        }
+      },
+      "CreateCollectionReq":{
+        "title":"CreateCollectionReq",
+        "required":[
+          "title",
+          "project_ids"
+        ],
+        "type":"object",
+        "properties":{
+          "title":{
+            "title":"The collection title",
+            "type":"string"
+          },
+          "project_ids":{
+            "title":"The composing project IDs",
+            "minItems":1,
+            "type":"array",
+            "items":{
+              "type":"integer"
             }
           }
         }
@@ -2278,24 +2684,6 @@
             "default":true
           }
         }
-      },
-      "EMODnetExportReq":{
-        "title":"EMODnetExportReq",
-        "required":[
-          "project_ids"
-        ],
-        "type":"object",
-        "properties":{
-          "project_ids":{
-            "title":"The projects to export",
-            "minItems":1,
-            "type":"array",
-            "items":{
-              "type":"integer"
-            }
-          }
-        },
-        "description":"EMODNet format export request."
       },
       "EMODnetExportRsp":{
         "title":"EMODnetExportRsp",
@@ -2960,6 +3348,14 @@
           },
           "sample_ids":{
             "title":"Parent (sample) IDs",
+            "type":"array",
+            "items":{
+              "type":"integer"
+            },
+            "default":[]
+          },
+          "project_ids":{
+            "title":"Project IDs",
             "type":"array",
             "items":{
               "type":"integer"

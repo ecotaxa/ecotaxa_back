@@ -84,8 +84,9 @@ class DatasetMetadata(object):
             # TODO: finish all fields
             xml_project = etree_sub_element(dataset, "project")
             etree_sub_element(xml_project, "title").text = meta.project.title
-            xml_person = etree_sub_element(xml_project, "personnel")
-            self.party_to_xml(xml_person, meta.project.personnel[0])
+            if len(meta.project.personnel) > 0:
+                xml_person = etree_sub_element(xml_project, "personnel")
+                self.party_to_xml(xml_person, meta.project.personnel[0])
         # Maintenance
         if meta.maintenance and meta.maintenanceUpdateFrequency:
             xml_maint = etree_sub_element(dataset, "maintenance")

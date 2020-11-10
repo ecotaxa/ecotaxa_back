@@ -8,10 +8,9 @@ from BO.DataLicense import DataLicense, LicenseEnum
 from BO.Project import ProjectIDListT
 from DB import Collection, User, CollectionUserRole, Project, Sample
 from DB import Session, Query
-from DB.helpers.ORM import contains_eager
 from DB.Collection import COLLECTION_ROLE_DATA_CREATOR, COLLECTION_ROLE_ASSOCIATED_PERSON, CollectionProject, \
     CollectionOrgaRole
-from DB.helpers.Charset import to_latin1_compat
+from DB.helpers.ORM import contains_eager
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -61,6 +60,7 @@ class CollectionBO(object):
         a_user_and_role: CollectionUserRole
         # noinspection PyTypeChecker
         for a_user_and_role in self._collection.users_by_role:
+            # noinspection PyTypeChecker
             by_role_usr[a_user_and_role.role].append(a_user_and_role.user)
         # Dispatch orgs by role
         by_role_org = {COLLECTION_ROLE_DATA_CREATOR: self.creator_organisations,
@@ -103,6 +103,7 @@ class CollectionBO(object):
         # Set self to most restrictive of all licenses
         max_restrict = max([DataLicense.RESTRICTION[a_prj_lic] for a_prj_lic in prj_licenses])
         self._collection.license = DataLicense.BY_RESTRICTION[max_restrict]
+        # TODO: Default creators using classification history in DB. Knowing that it's partial.
         # Report (brutally) problems
         assert len(problems) == 0, "\n".join(problems)
 
@@ -118,10 +119,10 @@ class CollectionBO(object):
         assert project_ids == self.project_ids, "Cannot update composing projects yet"
         coll_id = self._collection.id
         # Simple fields update
-        self._collection.title = to_latin1_compat(title)
-        self._collection.citation = to_latin1_compat(citation)
-        self._collection.abstract = to_latin1_compat(abstract)
-        self._collection.description = to_latin1_compat(description)
+        self._collection.title = title
+        self._collection.citation = citation
+        self._collection.abstract = abstract
+        self._collection.description = description
         # Copy provider user id
         if provider_user is not None:
             self._collection.provider_user_id = provider_user.id
@@ -212,6 +213,8 @@ class CollectionBO(object):
             filter(CollectionProject.collection_id == coll_id).delete()
         session.query(CollectionUserRole). \
             filter(CollectionUserRole.collection_id == coll_id).delete()
+        session.query(CollectionOrgaRole). \
+            filter(CollectionOrgaRole.collection_id == coll_id).delete()
         # Remove collection
         session.query(Collection). \
             filter(Collection.id == coll_id).delete()

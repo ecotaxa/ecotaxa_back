@@ -3,6 +3,8 @@ import logging
 # noinspection PyPackageRequirements
 from starlette import status
 
+from API_operations.exports.EMODnet import EMODnetExport
+
 from tests.credentials import ADMIN_AUTH
 from tests.test_collections import COLLECTION_CREATE_URL
 from tests.test_fastapi import PROJECT_QUERY_URL
@@ -76,3 +78,9 @@ def test_emodnet_export(config, database, fastapi, caplog):
     # Admin can get it
     # rsp = fastapi.get(url, headers=ADMIN_AUTH)
     # assert rsp.status_code == status.HTTP_200_OK
+
+def test_names():
+    assert EMODnetExport.capitalize_name("JEAN") == "Jean"
+    assert EMODnetExport.capitalize_name("JEAN-MARC") == "Jean-Marc"
+    assert EMODnetExport.capitalize_name("FOo--BAR") == "Foo--Bar"
+    assert EMODnetExport.capitalize_name("FOo-- 1 BAR") == "Foo-- 1 Bar"
