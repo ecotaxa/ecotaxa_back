@@ -387,6 +387,14 @@ class EMODnetExport(TaskServiceBase):
             ins = SamplingInstrumentName(event_id, "Bongo net",
                                          "http://vocab.nerc.ac.uk/collection/L22/current/NETT0176/")
             arch.emofs.add(ins)
+        elif net_type == "multinet":
+            # Not the right one if aperture != 1m
+            # ins = SamplingInstrumentName(event_id, "Hyrdo-Bios MultiNet Mammoth",
+            #                              "http://vocab.nerc.ac.uk/collection/L22/current/NETT0187/")
+            # arch.emofs.add(ins)
+            ins = SamplingInstrumentName(event_id, "multinet",
+                                         "http://vocab.nerc.ac.uk/collection/L05/current/68/")
+            arch.emofs.add(ins)
         else:
             self.errors.append("Net type '%s' in sample %s is not mapped to BODC vocabulary"
                                % (net_type, sample.orig_id))
