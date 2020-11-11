@@ -414,9 +414,9 @@ class EMODnetExport(TaskServiceBase):
         except TypeError:
             self.errors.append("Could not extract tot_vol feature from sample %s." % sample.orig_id)
             return -1
-        if tot_vol == 9999:
-            self.errors.append("tot_vol feature from sample %s has a 'missing data' value (9999)" % sample.orig_id)
-            return -1
+        # if tot_vol == 9999:
+        #     self.errors.append("tot_vol feature from sample %s has a 'missing data' value (9999)" % sample.orig_id)
+        #     return -1
         try:
             tot_vol = float(tot_vol)
         except ValueError:
