@@ -38,6 +38,9 @@ class TxtFileWithModel(object):
         self.fields.update(entity_dict.keys())
         self.all.append(entity_dict)
 
+    def count(self):
+        return len(self.all)
+
     def _sorted_fields(self):
         ret = sorted(self.fields)
         model_fields = self.model.__fields__

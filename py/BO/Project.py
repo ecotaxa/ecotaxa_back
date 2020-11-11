@@ -29,7 +29,7 @@ ProjectIDListT = List[int]
 @dataclass(init=False)
 class ProjectStats(DataclassAsDict):
     """
-        Association b/w an object and a former taxonomy entry.
+        Statistics for a project.
     """
     projid: ProjectIDT
     used_taxa: ClassifIDListT

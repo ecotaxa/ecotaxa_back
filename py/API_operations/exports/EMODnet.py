@@ -10,7 +10,7 @@ from API_models.exports import EMODnetExportRsp
 from BO.Acquisition import AcquisitionBO
 from BO.Collection import CollectionIDT, CollectionBO
 from BO.DataLicense import LicenseEnum, DataLicense
-from BO.Project import ProjectBO, ProjectIDListT
+from BO.Project import ProjectBO, ProjectIDListT, ProjectStats
 from BO.Rights import RightsBO
 from BO.Sample import SampleBO
 from BO.Taxonomy import WoRMSSetFromTaxaSet
@@ -59,6 +59,9 @@ class EMODnetExport(TaskServiceBase):
         self.errors: List[str] = []
         self.warnings: List[str] = []
         # Summary for logging issues
+        self.total_count = 0
+        self.produced_count = 0
+        self.ignored_count = 0
         self.stats_per_rank: Dict[str, Dict] = {}
 
     DWC_ZIP_NAME = "dwca.zip"
@@ -71,6 +74,8 @@ class EMODnetExport(TaskServiceBase):
         self.set_task_params(current_user_id, self.DWC_ZIP_NAME)
         # Do the job
         logger.info("------------ starting --------------")
+        # Update DB statistics
+        self.update_db_stats()
         ret = EMODnetExportRsp()
         # Build metadata with what comes from the collection
         meta = self.build_meta()
@@ -87,9 +92,15 @@ class EMODnetExport(TaskServiceBase):
         # But TODO: hardcoded, implement https://github.com/oceanomics/ecotaxa_dev/issues/514
         self.institution_code = "IMEV"
         self.add_events(arch)
-        # Produced the zip
-        arch.build()
-        self.log_stats()
+        # OK we issue warning in case of individual issue, but if no content at all
+        # then it's an error
+        if arch.events.count() == 0 or arch.occurences.count() == 0 or arch.emofs.count() == 0:
+            self.errors.append("No content produced."
+                               " See previous warnings or check the presence of samples in the projects")
+        else:
+            # Produce the zip
+            arch.build()
+            self.log_stats()
         ret.errors = self.errors
         ret.warnings = self.warnings
         if len(ret.errors) == 0:
@@ -205,10 +216,6 @@ class EMODnetExport(TaskServiceBase):
         # TODO if needed
         # EMLAssociatedPerson = EMLPerson + specific role
 
-        # Ensure that the geography is OK propagated upwards from objects, for all projects inside the collection
-        for a_prj_id in the_collection.project_ids:
-            Sample.propagate_geo(self.session, a_prj_id)
-
         # TODO: a marine regions substitute
         (min_lat, max_lat, min_lon, max_lon) = ProjectBO.get_bounding_geo(self.session, the_collection.project_ids)
         geo_cov = EMLGeoCoverage(geographicDescription="See coordinates",
@@ -256,6 +263,7 @@ class EMODnetExport(TaskServiceBase):
         keywords = EMLKeywordSet(keywords=["Plankton",
                                            "Imaging", "EcoTaxa"  # Not in list above
                                            # "Ligurian sea" TODO: Geo area?
+                                           # TODO: ZooProcess (from projects)
                                            ],
                                  keywordThesaurus="GBIF Dataset Type Vocabulary: http://rs.gbif.org/vocabulary/gbif/dataset_type.xml")
 
@@ -293,10 +301,7 @@ class EMODnetExport(TaskServiceBase):
             Taxonomic coverage is the list of taxa which can be found in the project.
 
         """
-        ret = []
-        # Ensure the stats are OK
-        for a_project_id in project_ids:
-            ProjectBO.update_taxo_stats(self.session, projid=a_project_id)
+        ret: List[EMLTaxonomicClassification] = []
         # Fetch the used taxa in the project
         taxo_qry: Query = self.session.query(ProjectTaxoStat.id, Taxonomy.name).distinct()
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.id == Taxonomy.id)
@@ -307,14 +312,17 @@ class EMODnetExport(TaskServiceBase):
         mapping = WoRMSSetFromTaxaSet(self.session, list(used_taxa.keys()))
         self.mapping = mapping.res
         # Warnings for non-matches
+        unmatched = []
         for an_id, a_name in used_taxa.items():
             if an_id not in self.mapping:
-                self.warnings.append("Classification %s (with id %d) could not be matched in WoRMS" %
-                                     (a_name, an_id))
+                unmatched.append("'%s' (%d)" % (a_name, an_id))
+        if len(unmatched) > 0:
+            self.warnings.append("Unmatched (in WoRMS) classifications: %s" % ", ".join(unmatched))
         # TODO: Temporary until the whole system has a WoRMS taxo tree
         # Error out if nothing at all
         if len(self.mapping) == 0:
             self.errors.append("Could not match in WoRMS _any_ classification in this project")
+            return ret
         # Produce the coverage
         for _an_id, a_worms_entry in self.mapping.items():
             rank = a_worms_entry.rank
@@ -378,8 +386,8 @@ class EMODnetExport(TaskServiceBase):
         try:
             net_type, net_mesh, net_surf = SampleBO.get_free_fields(sample, ["net_type", "net_mesh", "net_surf"])
         except TypeError:
-            self.errors.append("Could not extract sampling net features from sample %s."
-                               " 'net_type, net_mesh, net_surf' are all 3 expected to be present" % sample.orig_id)
+            self.warnings.append("Could not extract sampling net features from sample %s."
+                                 " 'net_type, net_mesh, net_surf' are all 3 expected to be present" % sample.orig_id)
             return
         if net_type == "bongo":
             # TODO: There could be more specific, a dozen of bongos are there:
@@ -396,8 +404,8 @@ class EMODnetExport(TaskServiceBase):
                                          "http://vocab.nerc.ac.uk/collection/L05/current/68/")
             arch.emofs.add(ins)
         else:
-            self.errors.append("Net type '%s' in sample %s is not mapped to BODC vocabulary"
-                               % (net_type, sample.orig_id))
+            self.warnings.append("Net type '%s' in sample %s is not mapped to BODC vocabulary"
+                                 % (net_type, sample.orig_id))
             return
         arch.emofs.add(SamplingNetMeshSizeInMicrons(event_id, str(net_mesh)))
         arch.emofs.add(SampleDeviceApertureAreaInSquareMeters(event_id, str(net_surf)))
@@ -412,15 +420,15 @@ class EMODnetExport(TaskServiceBase):
         try:
             tot_vol, = SampleBO.get_free_fields(sample, ["tot_vol"])
         except TypeError:
-            self.errors.append("Could not extract tot_vol feature from sample %s." % sample.orig_id)
+            self.warnings.append("Could not extract tot_vol feature from sample %s." % sample.orig_id)
             return -1
-        # if tot_vol == 9999:
-        #     self.errors.append("tot_vol feature from sample %s has a 'missing data' value (9999)" % sample.orig_id)
-        #     return -1
+        if tot_vol == 999999:
+            self.warnings.append("tot_vol feature from sample %s has a 'missing data' value (999999)" % sample.orig_id)
+            return -1
         try:
             tot_vol = float(tot_vol)
         except ValueError:
-            self.errors.append("tot_vol feature is not a float (%s) in sample %s " % (tot_vol, sample.orig_id))
+            self.warnings.append("tot_vol feature is not a float (%s) in sample %s " % (tot_vol, sample.orig_id))
             return -1
 
         # Proceed to data aggregation
@@ -433,12 +441,12 @@ class EMODnetExport(TaskServiceBase):
             try:
                 sub_part, = AcquisitionBO.get_free_fields(an_acquis, ["sub_part"])
             except TypeError:
-                self.errors.append("sub_part feature is not present in acquisition %s" % an_acquis.orig_id)
+                self.warnings.append("sub_part feature is not present in acquisition %s" % an_acquis.orig_id)
                 continue
             try:
                 sub_part = float(sub_part)
             except ValueError:
-                self.errors.append(
+                self.warnings.append(
                     "sub_part feature is not a float (%s) in acquisition %s" % (sub_part, an_acquis.orig_id))
                 continue
 
@@ -455,16 +463,18 @@ class EMODnetExport(TaskServiceBase):
         ids = list(concentration_per_taxon.keys())
         ids.sort(key=lambda i: concentration_per_taxon[i], reverse=True)
         for an_id in ids:
+            conc_per_taxon = concentration_per_taxon[an_id]
+            # print("%s conc %f" % (worms.scientificname, conc_per_taxon))
+            #     self.keep_stats(worms, count_4_sample)
+            individual_count = count_per_taxon[an_id]
             try:
                 worms = self.mapping[an_id]
             except KeyError:
                 # Mapping failed, it was signalled in warnings
+                self.ignored_count += individual_count
                 continue
-            conc_per_taxon = concentration_per_taxon[an_id]
-            # print("%s conc %f" % (worms.scientificname, conc_per_taxon))
-            #     self.keep_stats(worms, count_4_sample)
+            self.produced_count += individual_count
             occurrence_id = event_id + "_" + str(an_id)
-            individual_count = count_per_taxon[an_id]
             occ = DwC_Occurrence(eventID=event_id,
                                  occurrenceID=occurrence_id,
                                  individualCount=individual_count,
@@ -514,6 +524,22 @@ class EMODnetExport(TaskServiceBase):
         stats["nms"].add(taxon_info.scientificname)
 
     def log_stats(self):
+        self.warnings.append("Stats: total:%d produced to zip:%d not produced:%d"
+                             % (self.total_count, self.produced_count, self.ignored_count))
         ranks_asc = sorted(self.stats_per_rank.keys())
         for a_rank in ranks_asc:
             logger.info("rank '%s' stats %s", str(a_rank), self.stats_per_rank.get(a_rank))
+
+    def update_db_stats(self):
+        """
+            Refresh the database for aggregates.
+        """
+        project_ids = [a_project.projid for a_project in self.collection.projects]
+        for a_project_id in project_ids:
+            # Ensure the taxo stats are OK
+            ProjectBO.update_taxo_stats(self.session, projid=a_project_id)
+            # Ensure that the geography is OK propagated upwards from objects, for all projects inside the collection
+            Sample.propagate_geo(self.session, prj_id=a_project_id)
+        a_stat: ProjectStats
+        for a_stat in ProjectBO.read_taxo_stats(self.session, project_ids):
+            self.total_count += a_stat.nb_unclassified + a_stat.nb_predicted + a_stat.nb_dubious + a_stat.nb_validated
