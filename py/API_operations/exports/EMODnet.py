@@ -422,13 +422,13 @@ class EMODnetExport(TaskServiceBase):
         except TypeError:
             self.warnings.append("Could not extract tot_vol feature from sample %s." % sample.orig_id)
             return -1
-        if tot_vol == 999999:
-            self.warnings.append("tot_vol feature from sample %s has a 'missing data' value (999999)" % sample.orig_id)
-            return -1
         try:
             tot_vol = float(tot_vol)
         except ValueError:
             self.warnings.append("tot_vol feature is not a float (%s) in sample %s " % (tot_vol, sample.orig_id))
+            return -1
+        if tot_vol == 999999:
+            self.warnings.append("tot_vol feature from sample %s has a 'missing data' value (999999)" % sample.orig_id)
             return -1
 
         # Proceed to data aggregation
