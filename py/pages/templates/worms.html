@@ -59,8 +59,7 @@
                 {% endif %}
                 {% endif %}
             </td>
-            <td><a href="http://ecotaxoserver.obs-vlfr.fr/browsetaxoviewpopup/{{mtch_us.id}}" title="View only">&nbsp;V&nbsp;</a>
-                <a href="http://ecotaxoserver.obs-vlfr.fr/browsetaxoeditpopup/{{mtch_us.id}}" title="Edit">{{mtch_us.id}}</a>
+            <td><a href="http://ecotaxoserver.obs-vlfr.fr/browsetaxo/?id={{mtch_us.id}}" title="View/Edit">{{mtch_us.id}}</a>
             </td>
             {% if not mtch_worms.aphia_id %}
             <td><a href="http://www.marinespecies.org/aphia.php?p=taxlist&tName={{mtch_us.name}}"
