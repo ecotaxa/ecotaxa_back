@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Tuple, cast
 
 from API_models.exports import EMODnetExportRsp
 from BO.Acquisition import AcquisitionBO
+from BO.Classification import ClassifIDT
 from BO.Collection import CollectionIDT, CollectionBO
 from BO.DataLicense import LicenseEnum, DataLicense
 from BO.Project import ProjectBO, ProjectIDListT, ProjectStats
@@ -54,14 +55,15 @@ class EMODnetExport(TaskServiceBase):
         self.collection = self.session.query(Collection).get(collection_id)
         assert self.collection is not None, "Invalid collection ID"
         # During processing
-        self.mapping: Dict[int, WoRMS] = {}
+        self.mapping: Dict[ClassifIDT, WoRMS] = {}
         # Output
         self.errors: List[str] = []
         self.warnings: List[str] = []
         # Summary for logging issues
         self.total_count = 0
         self.produced_count = 0
-        self.ignored_count = 0
+        self.ignored_count: Dict[ClassifIDT, int] = {}
+        self.ignored_taxa:Dict[ClassifIDT, Tuple[str, ClassifIDT]] = {}
         self.stats_per_rank: Dict[str, Dict] = {}
 
     DWC_ZIP_NAME = "dwca.zip"
@@ -312,12 +314,10 @@ class EMODnetExport(TaskServiceBase):
         mapping = WoRMSSetFromTaxaSet(self.session, list(used_taxa.keys()))
         self.mapping = mapping.res
         # Warnings for non-matches
-        unmatched = []
         for an_id, a_name in used_taxa.items():
             if an_id not in self.mapping:
-                unmatched.append("'%s' (%d)" % (a_name, an_id))
-        if len(unmatched) > 0:
-            self.warnings.append("Unmatched (in WoRMS) classifications: %s" % ", ".join(unmatched))
+                self.ignored_taxa[an_id] = (a_name, an_id)
+                self.ignored_count[an_id] = 0
         # TODO: Temporary until the whole system has a WoRMS taxo tree
         # Error out if nothing at all
         if len(self.mapping) == 0:
@@ -420,16 +420,19 @@ class EMODnetExport(TaskServiceBase):
         try:
             tot_vol, = SampleBO.get_free_fields(sample, ["tot_vol"])
         except TypeError:
-            self.warnings.append("Could not extract tot_vol feature from sample %s." % sample.orig_id)
-            return -1
+            self.warnings.append("Could not extract tot_vol feature from sample %s,"
+                                 " no concentration will be computed." % sample.orig_id)
+            tot_vol = -1
         try:
             tot_vol = float(tot_vol)
         except ValueError:
-            self.warnings.append("tot_vol feature is not a float (%s) in sample %s " % (tot_vol, sample.orig_id))
-            return -1
+            self.warnings.append("tot_vol feature is not a float (%s) in sample %s,"
+                                 " no concentration will be computed" % (tot_vol, sample.orig_id))
+            tot_vol = -1
         if tot_vol == 999999:
-            self.warnings.append("tot_vol feature from sample %s has a 'missing data' value (999999)" % sample.orig_id)
-            return -1
+            self.warnings.append("tot_vol feature from sample %s has a 'missing data' value (999999),"
+                                 " no concentration will be computed" % sample.orig_id)
+            tot_vol = -1
 
         # Proceed to data aggregation
         concentration_per_taxon: Dict[int, float] = {}
@@ -441,14 +444,15 @@ class EMODnetExport(TaskServiceBase):
             try:
                 sub_part, = AcquisitionBO.get_free_fields(an_acquis, ["sub_part"])
             except TypeError:
-                self.warnings.append("sub_part feature is not present in acquisition %s" % an_acquis.orig_id)
-                continue
+                self.warnings.append("sub_part feature is not present in acquisition %s,"
+                                     " no concentration will be computed" % an_acquis.orig_id)
+                sub_part = 0
             try:
                 sub_part = float(sub_part)
             except ValueError:
-                self.warnings.append(
-                    "sub_part feature is not a float (%s) in acquisition %s" % (sub_part, an_acquis.orig_id))
-                continue
+                self.warnings.append("sub_part feature is not a float (%s) in acquisition %s,"
+                                     " no concentration will be computed" % (sub_part, an_acquis.orig_id))
+                sub_part = 0
 
             # Get counts for acquisition (sub-sample)
             count_per_taxon_for_acquis = AcquisitionBO.get_sums_by_taxon(self.session, an_acquis.acquisid)
@@ -470,8 +474,8 @@ class EMODnetExport(TaskServiceBase):
             try:
                 worms = self.mapping[an_id]
             except KeyError:
-                # Mapping failed, it was signalled in warnings
-                self.ignored_count += individual_count
+                # Mapping failed, count how many of them
+                self.ignored_count[an_id] += individual_count
                 continue
             self.produced_count += individual_count
             occurrence_id = event_id + "_" + str(an_id)
@@ -483,8 +487,9 @@ class EMODnetExport(TaskServiceBase):
                                  occurrenceStatus=OccurrenceStatusEnum.present,
                                  basisOfRecord=BasisOfRecordEnum.machineObservation)
             arch.occurences.add(occ)
-            self.add_eMoFs_for_occurence(arch=arch, event_id=event_id, occurrence_id=occurrence_id,
-                                         value=conc_per_taxon)
+            if conc_per_taxon > 0:
+                self.add_eMoFs_for_occurence(arch=arch, event_id=event_id, occurrence_id=occurrence_id,
+                                             value=conc_per_taxon)
         return tot_vol
 
     @staticmethod
@@ -524,8 +529,16 @@ class EMODnetExport(TaskServiceBase):
         stats["nms"].add(taxon_info.scientificname)
 
     def log_stats(self):
+        not_produced = sum(self.ignored_count.values())
         self.warnings.append("Stats: total:%d produced to zip:%d not produced:%d"
-                             % (self.total_count, self.produced_count, self.ignored_count))
+                             % (self.total_count, self.produced_count, not_produced))
+        if len(self.ignored_count) > 0:
+            unmatched = []
+            ids = list(self.ignored_count.keys())
+            ids.sort(key=lambda i: self.ignored_count[i], reverse=True)
+            for an_id in ids:
+                unmatched.append(str({self.ignored_count[an_id]:self.ignored_taxa[an_id]}))
+            self.warnings.append("Not produced due to non-match in WoRMS, format is {number:taxon}: %s" % ", ".join(unmatched))
         ranks_asc = sorted(self.stats_per_rank.keys())
         for a_rank in ranks_asc:
             logger.info("rank '%s' stats %s", str(a_rank), self.stats_per_rank.get(a_rank))

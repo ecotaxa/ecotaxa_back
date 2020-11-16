@@ -59,10 +59,7 @@ def test_emodnet_export(config, database, fastapi, caplog):
                                     "Collection license should be one of [<LicenseEnum.CC0: 'CC0 1.0'>, "
                                     "<LicenseEnum.CC_BY: 'CC BY 4.0'>, <LicenseEnum.CC_BY_NC: 'CC BY-NC 4.0'>] to be "
                                     "accepted, not Copyright."]
-    assert rsp.json()["warnings"] == ['Classification detritus (with id 84963) could not be matched in WoRMS',
-                                      'Classification other (with id 85011) could not be matched in WoRMS',
-                                      'Classification t001 (with id 85012) could not be matched in WoRMS',
-                                      'Classification egg (with id 85078) could not be matched in WoRMS']
+    assert rsp.json()["warnings"] == []
 
     task_id = rsp.json()["task_id"]
     assert task_id == 0  # No valid task as there were errors
