@@ -63,7 +63,7 @@ class EMODnetExport(TaskServiceBase):
         self.total_count = 0
         self.produced_count = 0
         self.ignored_count: Dict[ClassifIDT, int] = {}
-        self.ignored_taxa:Dict[ClassifIDT, Tuple[str, ClassifIDT]] = {}
+        self.ignored_taxa: Dict[ClassifIDT, Tuple[str, ClassifIDT]] = {}
         self.stats_per_rank: Dict[str, Dict] = {}
 
     DWC_ZIP_NAME = "dwca.zip"
@@ -368,10 +368,12 @@ class EMODnetExport(TaskServiceBase):
                                 maximumDepthInMeters=str(summ[3])
                                 )
                 events.add(evt)
-                sample_volume = self.add_occurences(sample=a_sample, arch=arch, event_id=event_id)
+                sample_volume, added = self.add_occurences(sample=a_sample, arch=arch, event_id=event_id)
                 if sample_volume > 0:
                     self.add_eMoFs_for_sample(sample=a_sample, arch=arch, event_id=event_id,
                                               sample_volume=sample_volume)
+                if added == 0:
+                    self.warnings.append("No occurence added for sample '%s'" % a_sample.orig_id)
 
     # noinspection PyPep8Naming
     def add_eMoFs_for_sample(self, sample: Sample, arch: DwC_Archive, event_id: str, sample_volume: float):
@@ -412,7 +414,7 @@ class EMODnetExport(TaskServiceBase):
         # Water volume
         arch.emofs.add(SampleVolumeInCubicMeters(event_id, str(sample_volume)))
 
-    def add_occurences(self, sample: Sample, arch: DwC_Archive, event_id: str) -> float:
+    def add_occurences(self, sample: Sample, arch: DwC_Archive, event_id: str) -> Tuple[float, int]:
         """
             Add DwC occurences, for given sample, into the archive.
         """
@@ -463,7 +465,8 @@ class EMODnetExport(TaskServiceBase):
 
         # To see
         # print()
-        # print("Concentrations in sample '%s'" % sample.orig_id)
+        print("Concentrations in sample '%s':%s" % (sample.orig_id, str(concentration_per_taxon)))
+        nb_added_occurences = 0
         ids = list(concentration_per_taxon.keys())
         ids.sort(key=lambda i: concentration_per_taxon[i], reverse=True)
         for an_id in ids:
@@ -487,10 +490,11 @@ class EMODnetExport(TaskServiceBase):
                                  occurrenceStatus=OccurrenceStatusEnum.present,
                                  basisOfRecord=BasisOfRecordEnum.machineObservation)
             arch.occurences.add(occ)
+            nb_added_occurences += 1
             if conc_per_taxon > 0:
                 self.add_eMoFs_for_occurence(arch=arch, event_id=event_id, occurrence_id=occurrence_id,
                                              value=conc_per_taxon)
-        return tot_vol
+        return tot_vol, nb_added_occurences
 
     @staticmethod
     def add_eMoFs_for_occurence(arch: DwC_Archive, event_id: str, occurrence_id: str, value: float):
@@ -537,8 +541,9 @@ class EMODnetExport(TaskServiceBase):
             ids = list(self.ignored_count.keys())
             ids.sort(key=lambda i: self.ignored_count[i], reverse=True)
             for an_id in ids:
-                unmatched.append(str({self.ignored_count[an_id]:self.ignored_taxa[an_id]}))
-            self.warnings.append("Not produced due to non-match in WoRMS, format is {number:taxon}: %s" % ", ".join(unmatched))
+                unmatched.append(str({self.ignored_count[an_id]: self.ignored_taxa[an_id]}))
+            self.warnings.append(
+                "Not produced due to non-match in WoRMS, format is {number:taxon}: %s" % ", ".join(unmatched))
         ranks_asc = sorted(self.stats_per_rank.keys())
         for a_rank in ranks_asc:
             logger.info("rank '%s' stats %s", str(a_rank), self.stats_per_rank.get(a_rank))
