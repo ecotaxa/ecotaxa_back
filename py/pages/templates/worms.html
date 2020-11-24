@@ -18,8 +18,12 @@
                 title="Match but Morpho">
             KO:1<->1(morpho)</button>
         <button name="case3" class="btn {{ 'btn-primary' if 'case3' in params }}"
-                title="Match but unaccepted, and no accepted match with same name">
-            KO:1(unacc)<->1
+                title="Match but unaccepted, no accepted match with same name, replacement provided">
+            KO:1(unacc,repl)<->1
+        </button>
+        <button name="case31" class="btn {{ 'btn-primary' if 'case31' in params }}"
+                title="Match but unaccepted, and no accepted match with same name, no replacement provided">
+            KO:1(unacc,norepl)<->1
         </button>
         <button name="case4" class="btn {{ 'btn-primary' if 'case4' in params }}"
                 title="Several accepted matches">
@@ -54,7 +58,8 @@
                 {% if mtch_worms.status != "accepted" %}
                 {% if mtch_worms.unacceptreason %}
                 :&nbsp;{{mtch_worms.unacceptreason}}
-                {% else %}
+                {% endif %}
+                {% if mtch_worms.valid_name %}
                 ->&nbsp;{{mtch_worms.valid_name}}
                 {% endif %}
                 {% endif %}
