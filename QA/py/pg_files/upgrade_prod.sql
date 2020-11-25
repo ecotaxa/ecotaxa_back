@@ -198,3 +198,22 @@ TABLESPACE pg_default;
 
 ALTER TABLE public.collection_orga_role
     OWNER to postgres;
+
+INSERT INTO public.alembic_version(version_num) VALUES ('15cad3c0948e');
+
+-- Generating line:
+-- ecotaxa_master$ python manage.py db upgrade --sql 36bb704b9fc5:4bb7276e86de >> ../ecotaxa_back/QA/py/pg_files/upgrade_prod.sql
+BEGIN;
+
+-- Running upgrade 36bb704b9fc5 -> 4bb7276e86de
+
+ALTER TABLE obj_head ALTER COLUMN acquisid SET NOT NULL;
+
+ALTER TABLE obj_head ALTER COLUMN sampleid SET NOT NULL;
+
+ALTER TABLE obj_head ALTER COLUMN processid SET NOT NULL;
+
+UPDATE alembic_version SET version_num='4bb7276e86de' WHERE alembic_version.version_num = '36bb704b9fc5';
+
+COMMIT;
+

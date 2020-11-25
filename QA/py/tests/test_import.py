@@ -518,6 +518,15 @@ def test_import_images(config, database, caplog, title):
     # Check that all went fine
     for a_msg in caplog.records:
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
+
+    # Second run, ensure we don't create dummy parents
+    caplog.clear()
+    rsp: SimpleImportRsp = SimpleImport(prj_id, params).run(ADMIN_USER_ID)
+    print("\n2:".join(caplog.messages))
+    for a_msg in caplog.records:
+        assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
+        assert "++ ID" not in a_msg.getMessage()
+
     return prj_id
 
 
