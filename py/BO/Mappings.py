@@ -53,9 +53,9 @@ class GlobalMapping(object):
     # C'est un set de table 😁
     POSSIBLE_TABLES = set([v['table'] for v in PREDEFINED_FIELDS.values()])
 
-    PARENT_CLASSES: Dict[str, ParentTableClassT] = {Acquisition.__tablename__: Acquisition,
-                                                    Sample.__tablename__: Sample,
-                                                    Process.__tablename__: Process}
+    PARENT_CLASSES: Dict[str, ParentTableClassT] = OrderedDict([(Sample.__tablename__, Sample),
+                                                                (Acquisition.__tablename__, Acquisition),
+                                                                (Process.__tablename__, Process)])
 
     TARGET_CLASSES = {**PARENT_CLASSES,
                       ObjectHeader.__tablename__: ObjectHeader,

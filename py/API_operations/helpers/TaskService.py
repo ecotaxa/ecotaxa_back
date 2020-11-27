@@ -22,23 +22,28 @@ class TaskServiceBase(Service, ABC):
     """
         Common methods and data for asynchronous and long operations.
     """
-    task_id: int = -1
 
     def __init__(self, task_id: Optional[int] = None, task_type: Optional[str] = None):
         super().__init__()
+        self.task_id: int
         if task_id is None:
             # Create a new task
             task = Task()
             task.taskclass = task_type
             self.session.add(task)
             self.session.flush()
+            self.task_id = task.id
         else:
             # Fetch existing task
             task = self.session.query(Task).get(task_id)
-            # SimpleImport calls with no task during verification
+            # SimpleImport calls with task_id = 0 during verification
             # assert task is not None
+            if task is None:
+                assert task_id is not None
+                self.task_id = task_id
+            else:
+                self.task_id = task.id
         self.task = task
-        self.task_id = task.id
         self.temp_for_task = TempDirForTasks(join(self.link_src, 'temptask'))
         # Redirect logging
         log_file = self.temp_for_task.base_dir_for(self.task_id) / 'TaskLogBack.txt'

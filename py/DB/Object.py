@@ -60,23 +60,23 @@ class ObjectHeader(Model):
     classif_auto_score = Column(DOUBLE_PRECISION)
     classif_auto_when = Column(TIMESTAMP)
 
-    classif_crossvalidation_id = Column(INTEGER)
+    classif_crossvalidation_id = Column(INTEGER)  # Always NULL in prod'
     #
     # The _first_ image
     # Relation b/w next images and present Object are in Image.objid
     # TODO: WTF, normalize.
     img0id = Column(BIGINT)
     imgcount = Column(INTEGER)
-    complement_info = Column(VARCHAR)
+    complement_info = Column(VARCHAR)  # e.g. "Part of ostracoda"
 
-    similarity = Column(DOUBLE_PRECISION)
+    similarity = Column(DOUBLE_PRECISION)  # Always NULL in prod'
 
     # TODO: Why random? It makes testing a bit more difficult
     random_value = Column(INTEGER)
 
-    sampleid = Column(INTEGER, ForeignKey('samples.sampleid'))
-    acquisid = Column(INTEGER, ForeignKey('acquisitions.acquisid'))
-    processid = Column(INTEGER, ForeignKey('process.processid'))
+    sampleid = Column(INTEGER, ForeignKey('samples.sampleid'), nullable=False)
+    acquisid = Column(INTEGER, ForeignKey('acquisitions.acquisid'), nullable=False)
+    processid = Column(INTEGER, ForeignKey('process.processid'), nullable=False)
 
     # The relationships are created in Relations.py but the typing here helps the IDE
     project: relationship
@@ -183,7 +183,6 @@ class ObjectCNNFeature(Model):
     objcnnid = Column(BIGINT, ForeignKey('obj_head.objid', ondelete="CASCADE"), primary_key=True)
     # The relationships are created in Relations.py but the typing here helps the IDE
     object: relationship
-
 
 
 # Ajout des colonnes numériques & textuelles libres

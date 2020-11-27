@@ -59,8 +59,6 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         await self._do_refresh()
         switch_log_back()
 
-
-
     # noinspection PyPep8Naming
     @staticmethod
     def json_to_ORM(a_child: Dict) -> WoRMS:
@@ -207,8 +205,10 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         case3 = "case3" in params
         """ Taxa with same name on both sides, Phylo in EcoTaxa and NOT accepted in WoRMS,
          and there is no equivalent accepted match """
+        case31 = "case31" in params
         case4 = "case4" in params
         case5 = "case5" in params
+        """ No match, phylo """
         case6 = "case6" in params
 
         if case1:
@@ -216,25 +216,8 @@ class TaxonomyChangeService(Service):  # pragma:nocover
             # Format result
             for taxo, worms in res:
                 ret.append((taxo, worms))
-        elif case2 or case4:
-            subqry = self.session.query(Taxonomy.id, WoRMS.aphia_id)
-            subqry = subqry.join(WoRMS, func.lower(WoRMS.scientificname) == func.lower(Taxonomy.name))
-            subqry = subqry.filter(Taxonomy.id == any_(used_taxo_ids))
-            if case2:
-                subqry = subqry.filter(Taxonomy.taxotype == 'M')
-            else:
-                subqry = subqry.filter(Taxonomy.taxotype == 'P')
-            subqry = subqry.filter(WoRMS.status == 'accepted')
-            # Group to exclude multiple matches
-            subqry = subqry.group_by(Taxonomy.id, WoRMS.aphia_id)
-            if case4:
-                subqry = subqry.having(or_(func.count(Taxonomy.id) > 1,
-                                           func.count(WoRMS.aphia_id) > 1))
-            else:
-                subqry = subqry.having(and_(func.count(Taxonomy.id) == 1,
-                                            func.count(WoRMS.aphia_id) == 1))
-            subqry = subqry.subquery().alias("ids")
-
+        elif case2:
+            subqry = TaxonomyChangeService.strict_match_subquery(self.session, used_taxo_ids, phylo_or_morpho="M")
             qry: Query = self.session.query(Taxonomy, WoRMS)
             qry = qry.join(subqry, subqry.c.id == Taxonomy.id)
             qry = qry.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
@@ -244,47 +227,110 @@ class TaxonomyChangeService(Service):  # pragma:nocover
             for taxo, worms in res:
                 ret.append((taxo, worms))
         elif case3:
-            subqry = self.session.query(Taxonomy.id,
-                                        WoRMS.aphia_id,
-                                        func.array_agg(WoRMS.status).over(
-                                            partition_by=(Taxonomy.id, WoRMS.aphia_id)).label("acc"),
-                                        func.count(WoRMS.aphia_id).over(
-                                            partition_by=(Taxonomy.id, WoRMS.aphia_id)).label("cnt"),
-                                        )
-            subqry = subqry.join(WoRMS, func.lower(WoRMS.scientificname) == func.lower(Taxonomy.name))
-            subqry = subqry.filter(Taxonomy.id == any_(used_taxo_ids))
-            subqry = subqry.filter(Taxonomy.taxotype == 'P')
-            subqry = subqry.subquery().alias("ids")
+            # statuses = ["temporary name", "nomen nudum", "interim unpublished",
+            #             "nomen dubium", "unaccepted", "taxon inquirendum",
+            #             "accepted", "uncertain", "alternate representation"]
+            # Match but the match/all matches are not accepted
+            subqry = self.full_match_aggregated(used_taxo_ids)
 
-            qry2: Query = self.session.query(Taxonomy, WoRMS)
-            qry2 = qry2.join(subqry, subqry.c.id == Taxonomy.id)
-            qry2 = qry2.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
-            qry2 = qry2.filter(not_(subqry.c.acc.op('@>')(text("ARRAY['accepted'::varchar]"))))
-            logger.info("matching qry:%s", str(qry2))
-            res = qry2.all()
+            qry3: Query = self.session.query(Taxonomy, WoRMS)
+            qry3 = qry3.join(subqry, subqry.c.id == Taxonomy.id)
+            qry3 = qry3.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
+            qry3 = qry3.filter(not_(subqry.c.acc.op('@>')(text("ARRAY['accepted'::varchar]"))))
+            qry3 = qry3.filter(WoRMS.valid_name != None)
+            # Status filter for clarity
+            # flt = statuses[4]
+            # status_filt = text("ARRAY['%s'::varchar]" % flt)
+            # qry3 = qry3.filter(subqry.c.acc.op('@>')(status_filt))
+            logger.info("matching qry:%s", str(qry3))
+            res3 = qry3.all()
+            # Format result
+            for taxo, worms in res3:
+                ret.append((taxo, worms))
+        elif case31:
+            # Match but the match/all matches are not accepted
+            subqry = self.full_match_aggregated(used_taxo_ids)
+
+            qry31: Query = self.session.query(Taxonomy, WoRMS)
+            qry31 = qry31.join(subqry, subqry.c.id == Taxonomy.id)
+            qry31 = qry31.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
+            qry31 = qry31.filter(not_(subqry.c.acc.op('@>')(text("ARRAY['accepted'::varchar]"))))
+            qry31 = qry31.filter(WoRMS.valid_name == None)
+            logger.info("matching qry:%s", str(qry31))
+            res31 = qry31.all()
+            # Format result
+            for taxo, worms in res31:
+                ret.append((taxo, worms))
+        elif case4:
+            subqry = self.full_match_aggregated(used_taxo_ids)
+
+            qry4: Query = self.session.query(Taxonomy, WoRMS)
+            qry4 = qry4.join(subqry, subqry.c.id == Taxonomy.id)
+            qry4 = qry4.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
+            qry4 = qry4.filter(subqry.c.cnt > 1)
+            # Several accepted matches
+            # subqry = self.session.query(Taxonomy.name, func.max(Taxonomy.id).label("id"), WoRMS.aphia_id)
+            # subqry = subqry.join(WoRMS, TaxonomyChangeService.match_with_extension())
+            # subqry = subqry.filter(Taxonomy.id == any_(used_taxo_ids))
+            # subqry = subqry.filter(Taxonomy.taxotype == 'P')
+            # subqry = subqry.filter(WoRMS.status == 'accepted')
+            # # Group to compute multiple matches
+            # subqry = subqry.group_by(Taxonomy.name, WoRMS.aphia_id)
+            # subqry = subqry.having(or_(func.count(Taxonomy.name) > 1,
+            #                            func.count(WoRMS.aphia_id) > 1))
+            # subqry = subqry.subquery().alias("ids")
+            #
+            # qry4: Query = self.session.query(Taxonomy, WoRMS)
+            # qry4 = qry4.join(subqry, subqry.c.id == Taxonomy.id)
+            # qry4 = qry4.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
+            logger.info("matching qry:%s", str(qry4))
+            res = qry4.all()
             # Format result
             for taxo, worms in res:
                 ret.append((taxo, worms))
-        elif case5 or case6:
-            subqry2 = self.session.query(Taxonomy.id, WoRMS.aphia_id)
-            subqry2 = subqry2.outerjoin(WoRMS, func.lower(WoRMS.scientificname) == func.lower(Taxonomy.name))
-            subqry2 = subqry2.filter(Taxonomy.id == any_(used_taxo_ids))
-            subqry2 = subqry2.filter(WoRMS.aphia_id.is_(None))
-            subqry2 = subqry2.subquery().alias("ids")
+        elif case5:
+            # No match, phylo
+            subqry = TaxonomyChangeService.strict_match_subquery(self.session, used_taxo_ids, phylo_or_morpho=None)
+            subqry2 = self.full_match_aggregated(used_taxo_ids)
 
-            qry3: Query = self.session.query(Taxonomy)
-            qry3 = qry3.join(subqry2, subqry2.c.id == Taxonomy.id)
-            if case6:
-                qry3 = qry3.filter(Taxonomy.taxotype == 'M')
-            else:
-                qry3 = qry3.filter(Taxonomy.taxotype == 'P')
-            logger.info("matching qry:%s", str(qry3))
-            res2 = qry3.all()
+            qry5: Query = self.session.query(Taxonomy)
+            qry5 = qry5.filter(Taxonomy.id == any_(used_taxo_ids))
+            qry5 = qry5.filter(Taxonomy.taxotype == 'P')
+            qry5 = qry5.filter(not_(Taxonomy.id.in_(self.session.query(subqry.c.id))))
+            qry5 = qry5.filter(not_(Taxonomy.id.in_(self.session.query(subqry2.c.id))))
+            logger.info("matching qry:%s", str(qry5))
+            res5 = qry5.all()
             # Format result
-            for taxo in res2:
+            for taxo in res5:
+                ret.append((taxo, None))
+        elif case6:
+            # No match, morpho
+            subqry = TaxonomyChangeService.strict_match_subquery(self.session, used_taxo_ids, phylo_or_morpho=None)
+            qry6: Query = self.session.query(Taxonomy)
+            qry6 = qry6.filter(Taxonomy.id == any_(used_taxo_ids))
+            qry6 = qry6.filter(Taxonomy.taxotype == 'M')
+            qry6 = qry6.filter(not_(Taxonomy.id.in_(self.session.query(subqry.c.id))))
+            logger.info("matching qry:%s", str(qry6))
+            res6 = qry6.all()
+            # Format result
+            for taxo in res6:
                 ret.append((taxo, None))
 
         return ret
+
+    def full_match_aggregated(self, used_taxo_ids):
+        subqry = self.session.query(Taxonomy.id,
+                                    WoRMS.aphia_id,
+                                    func.array_agg(WoRMS.status).over(
+                                        partition_by=(Taxonomy.id, WoRMS.aphia_id)).label("acc"),
+                                    func.count(Taxonomy.name).over(
+                                        partition_by=(WoRMS.aphia_id)).label("cnt"),
+                                    )
+        subqry = subqry.join(WoRMS, TaxonomyChangeService.match_with_extension())
+        subqry = subqry.filter(Taxonomy.id == any_(used_taxo_ids))
+        subqry = subqry.filter(Taxonomy.taxotype == 'P')
+        subqry = subqry.subquery().alias("ids")
+        return subqry
 
     @staticmethod
     def strict_match(session: Session, used_taxo_ids: ClassifIDListT) -> List[Tuple[Taxonomy, WoRMS]]:
@@ -294,22 +340,45 @@ class TaxonomyChangeService(Service):  # pragma:nocover
                     using name <-> scientificname, case insensitive
                 And a _single_ accepted taxon on the other.
         """
-        subqry = session.query(Taxonomy.id, WoRMS.aphia_id)
-        subqry = subqry.join(WoRMS, func.lower(WoRMS.scientificname) == func.lower(Taxonomy.name))
-        subqry = subqry.filter(Taxonomy.id == any_(used_taxo_ids))
-        subqry = subqry.filter(Taxonomy.taxotype == 'P')
-        subqry = subqry.filter(WoRMS.status == 'accepted')
-        # Group to exclude multiple matches
-        subqry = subqry.group_by(Taxonomy.id, WoRMS.aphia_id)
-        subqry = subqry.having(and_(func.count(Taxonomy.id) == 1,
-                                    func.count(WoRMS.aphia_id) == 1))
-        subqry = subqry.subquery().alias("ids")
+        subqry = TaxonomyChangeService.strict_match_subquery(session, used_taxo_ids, phylo_or_morpho="P")
+
         qry: Query = session.query(Taxonomy, WoRMS)
         qry = qry.join(subqry, subqry.c.id == Taxonomy.id)
         qry = qry.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
         logger.info("matching qry:%s", str(qry))
         res = qry.all()
         return res
+
+    @staticmethod
+    def strict_match_subquery(session, used_taxo_ids, phylo_or_morpho: Optional[str]):
+        subqry = session.query(Taxonomy.name, func.max(Taxonomy.id).label("id"), WoRMS.aphia_id)
+        subqry = subqry.join(WoRMS, TaxonomyChangeService.match_with_extension())
+        subqry = subqry.filter(Taxonomy.id == any_(used_taxo_ids))
+        if phylo_or_morpho is not None:
+            subqry = subqry.filter(Taxonomy.taxotype == text("'%s'" % phylo_or_morpho))
+        subqry = subqry.filter(WoRMS.status == text("'accepted'"))
+        # Group to exclude multiple matches
+        subqry = subqry.group_by(Taxonomy.name, WoRMS.aphia_id)
+        subqry = subqry.having(and_(func.count(Taxonomy.name) == 1,
+                                    func.count(WoRMS.aphia_id) == 1))
+        subqry = subqry.subquery().alias("ids")
+        return subqry
+
+    @staticmethod
+    def match_with_extension():
+        # We also match if these are trailing on EcoTaxa side
+        # ok_ext = [" X", " sp.", " X sp."]
+        # ok_ext_txt = [text("'" + ext.lower() + "'") for ext in ok_ext]
+        # match_name = [func.lower(WoRMS.scientificname)]
+        # match_name += [func.concat(func.lower(WoRMS.scientificname), ext) for ext in ok_ext_txt]
+        return or_(func.lower(Taxonomy.name) == func.lower(WoRMS.scientificname),
+                   and_(Taxonomy.name.like(text("'% X'")),
+                        func.lower(Taxonomy.name) == func.concat(func.lower(WoRMS.scientificname), text("' x'"))),
+                   and_(Taxonomy.name.like(text("'% sp.'")),
+                        func.lower(Taxonomy.name) == func.concat(func.lower(WoRMS.scientificname), text("' sp.'"))),
+                   and_(Taxonomy.name.like(text("'% X sp.'")),
+                        func.lower(Taxonomy.name) == func.concat(func.lower(WoRMS.scientificname), text("' x sp.'")))
+                   )
 
     def _do_one_by_one(self, children):
         """

@@ -165,14 +165,11 @@ class SubsetServiceOnProject(TaskServiceOnProjectBase):
         # Cut images if asked so
         if not self.req.do_images:
             image = None
-        # Write parent entities if needed
-        dict_of_parents = {}
-        if process:
-            dict_of_parents[Process.__tablename__] = process
-        if sample:
-            dict_of_parents[Sample.__tablename__] = sample
-        if acquisition:
-            dict_of_parents[Acquisition.__tablename__] = acquisition
+        # Write parent entities
+        assert sample and acquisition and process
+        dict_of_parents = {Sample.__tablename__: sample,
+                           Acquisition.__tablename__: acquisition,
+                           Process.__tablename__: process}
         TSVFile.add_parent_objects(import_how, self.session, obj, dict_of_parents)
         # Write object and children
         new_records = TSVFile.create_or_link_slaves(how=import_how,

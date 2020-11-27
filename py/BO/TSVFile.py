@@ -249,20 +249,29 @@ class TSVFile(object):
     def add_parent_objects(how: ImportHow, session: Session, object_head_to_write,
                            dicts_to_write: Mapping[str, Dict]):
         """
-            Assignment of Sample, Acquisition & Process ID, creating them if necessary
+            Assignment of Sample, Acquisition & Process ID, creating them if necessary.
             Due to amount of duplicated information in TSV, this happens for few % of rows
              so no real need to optimize here.
         """
         parent_class: ParentTableClassT
+        # addition_done = False
+        upper_level_pk = how.prj_id
+        # Loop up->down, i.e. Sample to Process
         for alias, parent_class in GlobalMapping.PARENT_CLASSES.items():
             try:
                 dict_to_write = dicts_to_write[alias]
             except KeyError:
-                continue
+                if how.can_update_only:
+                    # Allow the parent completely missing, if updating
+                    continue
+                else:
+                    raise
             parents_for_obj: Dict[str, ParentTableT] = how.existing_parents[alias]
             # Here we take advantage from consistent naming conventions
             # The 3 involved tables have "orig_id" column serving the same purpose
             parent_orig_id = dict_to_write.get("orig_id")
+            # The default, value, composed from upper-level ID
+            fallback_orig_id = '__DUMMY_ID__%d__' % upper_level_pk
             if parent_orig_id is None:
                 # No orig_id for parent object in provided dict
                 if len(dict_to_write) > 0:
@@ -275,13 +284,13 @@ class TSVFile(object):
                             # Replicate found
                             parent_orig_id = maybe_orig_id
                             break
+                if parent_orig_id is None:
+                    if fallback_orig_id in parents_for_obj:
+                        # If default parent exists then use it
+                        parent_orig_id = fallback_orig_id
                     else:
-                        # Keep parent_orig_id to None, there will be an automatic
-                        # generation of orig_id based on DB-generated sequence.
+                        # Keep parent_orig_id to None, fallback value will be used during generation
                         pass
-                else:
-                    # No data, do nothing.
-                    continue
             if parent_orig_id is not None:
                 parent = parents_for_obj.get(parent_orig_id)
             else:
@@ -294,9 +303,9 @@ class TSVFile(object):
                         logger.info("Updating %s '%s' using %s", alias, parent.orig_id, updates)
                         session.flush()
                 else:
+                    # This parent object was known before, don't add it into the session (DB)
+                    # but link the child object_head to it (like newly created ones below)
                     pass
-                # This parent object was known before, don't add it into the session (DB)
-                # but link the child object_head to it (like newly created ones below)
             else:
                 if how.can_update_only:
                     # No creation of parent in update mode
@@ -306,19 +315,30 @@ class TSVFile(object):
                 parent = parent_class(**dict_to_write)
                 # Link with project
                 parent.projid = how.prj_id
+                # Process will be a twin table of Acquisition
+                # if parent_class == Process:
+                #     assert isinstance(parent, Process)
+                #     assert upper_level_pk
+                #     parent.processid = upper_level_pk
+                # Default orig_id if needed
+                if parent_orig_id is None:
+                    parent.orig_id = fallback_orig_id
                 session.add(parent)
                 session.flush()
-                if parent_orig_id is None:
-                    # Generate an ID
-                    parent.orig_id = "GeN_%d" % parent.pk()
-                    parent_orig_id = parent.orig_id
+                # addition_done = True
                 # Store parent object for later reference. Detach it from ORM if we don't plan
                 # to update it, otherwise the simple parent.pk() below provokes a select :(
+                parent_orig_id = parent.orig_id
+                assert parent_orig_id
                 parents_for_obj[parent_orig_id] = detach_from_session_if(not how.can_update_only, session, parent)
                 # Log the appeared parent
                 logger.info("++ ID %s %s %d", alias, parent_orig_id, parent.pk())
             # Columns in obj_head have same name as pk of corresponding entities
-            setattr(object_head_to_write, parent.pk_col(), parent.pk())
+            upper_level_pk = parent.pk()
+            setattr(object_head_to_write, parent.pk_col(), upper_level_pk)
+        # DB commit as the objects need valid IDs for FK
+        # if addition_done:
+        #     session.commit()
 
     @staticmethod
     def update_orm_object(model: Model, update_dict: Dict[str, str]):

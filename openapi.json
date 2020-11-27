@@ -3073,7 +3073,10 @@
       "ObjectHeaderModel":{
         "title":"ObjectHeaderModel",
         "required":[
-          "projid"
+          "projid",
+          "sampleid",
+          "acquisid",
+          "processid"
         ],
         "type":"object",
         "properties":{
@@ -3187,7 +3190,10 @@
         "title":"ObjectModel",
         "required":[
           "orig_id",
-          "projid"
+          "projid",
+          "sampleid",
+          "acquisid",
+          "processid"
         ],
         "type":"object",
         "properties":{
