@@ -786,6 +786,20 @@ async def refresh_taxa_db(max_requests: int,
     return StreamingResponse(log_streamer(tmp_log, "Done,"), media_type="text/plain")
 
 
+@app.get("/taxa_ref_change/check/{aphia_id}", tags=['WIP'], include_in_schema=False,
+         status_code=status.HTTP_200_OK)
+async def check_taxa_db(aphia_id: int,
+                          current_user: int = Depends(get_current_user)) -> Response:  # pragma:nocover
+    """
+        Check that the given apiha_id is correctly stored.
+    """
+    sce = TaxonomyChangeService(1)
+    with RightsThrower():
+        msg = await sce.check_id(current_user, aphia_id)
+    # Below produces a chunked HTTP encoding, which is officially only HTTP 1.1 protocol
+    return Response(msg, media_type="text/plain")
+
+
 @app.get("/taxa_ref_change/matches", tags=['WIP'], include_in_schema=False,
          status_code=status.HTTP_200_OK)
 async def matching_with_worms_nice(request: Request,

@@ -4,7 +4,7 @@
 #
 # Wrapper for using http://www.marinespecies.org/index.php and its REST services
 #
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Any
 
 import httpx
 import requests
@@ -43,7 +43,7 @@ class WoRMSFinder(object):
     WoRMS_URL_ClassifByAphia = "/rest/AphiaClassificationByAphiaID/%d"
 
     @classmethod
-    async def aphia_classif_by_id(cls, aphia_id: int) -> str:  # pragma:nocover
+    async def aphia_classif_by_id(cls, aphia_id: int) -> Any:  # pragma:nocover
         req = cls.WoRMS_URL_ClassifByAphia % aphia_id
         response = await cls.client.get(req)
         if response.is_error:

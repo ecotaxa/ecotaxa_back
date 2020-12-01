@@ -395,3 +395,30 @@ class TaxonomyChangeService(Service):  # pragma:nocover
                 self.session.rollback()
                 logger.error("For child %s : %s", a_child, e)
         return ret
+
+    async def check_id(self, current_user_id, aphia_id) -> str:
+        """
+            Check the given aphia_id, adjust the DB if needed.
+        """
+        # Security check
+        _user = RightsBO.user_has_role(self.session, current_user_id, Role.APP_ADMINISTRATOR)
+        lineage = await WoRMSFinder.aphia_classif_by_id(aphia_id)
+        # Nested struct, e.g. : {'AphiaID': 1, 'rank': 'Superdomain', 'scientificname': 'Biota', 'child':
+        # {'AphiaID': 3, 'rank': 'Kingdom', 'scientificname': 'Plantae', 'child':
+        # {'AphiaID': 368663, 'rank': 'Subkingdom', 'scientificname': 'Viridiplantae', 'child':
+        # {'AphiaID': 536191, 'rank': 'Infrakingdom', 'scientificname': 'Streptophyta', 'child':
+        # ...
+        # }}}}}}}}}
+        prev_level = None
+        while lineage is not None:
+            aphia_id_for_level = lineage["AphiaID"]
+            db_entry = self.session.query(WoRMS).get(aphia_id_for_level)
+            if db_entry is None:
+                assert prev_level is not None
+                prev_level.all_fetched = False
+                self.session.commit()
+                return "%d was not found, so parent %d was marked as incomplete" % \
+                       (aphia_id_for_level, prev_level.aphia_id)
+            lineage = lineage["child"]
+            prev_level = db_entry
+        return "All OK"
