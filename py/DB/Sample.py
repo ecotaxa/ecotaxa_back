@@ -18,7 +18,7 @@ class Sample(Model):
     sampleid = Column(INTEGER, Sequence('seq_samples'), primary_key=True)
     projid = Column(INTEGER, ForeignKey('projects.projid'))
     # i.e. sample_id from TSV
-    orig_id = Column(VARCHAR(255))
+    orig_id = Column(VARCHAR(255), nullable=False)
     latitude = Column(DOUBLE_PRECISION)
     longitude = Column(DOUBLE_PRECISION)
     dataportal_descriptor = Column(VARCHAR(8000))

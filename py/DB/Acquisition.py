@@ -5,7 +5,7 @@
 from typing import Dict
 
 from sqlalchemy import Index, Column, ForeignKey, Sequence
-from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, INTEGER
+from sqlalchemy.dialects.postgresql import VARCHAR, INTEGER
 # noinspection PyProtectedMember
 from sqlalchemy.orm import relationship, Session
 
@@ -19,7 +19,7 @@ class Acquisition(Model):
     acquisid = Column(INTEGER, Sequence('seq_acquisitions'), primary_key=True)
     projid = Column(INTEGER, ForeignKey('projects.projid'))
     # i.e. acq_id from TSV
-    orig_id = Column(VARCHAR(255))
+    orig_id = Column(VARCHAR(255), nullable=False)
     # TODO: Put into a dedicated table
     instrument = Column(VARCHAR(255))
 

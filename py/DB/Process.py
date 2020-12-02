@@ -4,8 +4,8 @@
 #
 from typing import Dict
 
-from sqlalchemy import Sequence, Column, ForeignKey, Index
-from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, INTEGER
+from sqlalchemy import Column, ForeignKey, Index
+from sqlalchemy.dialects.postgresql import VARCHAR, INTEGER
 # noinspection PyProtectedMember
 from sqlalchemy.orm import relationship, Session
 
@@ -20,7 +20,7 @@ class Process(Model):
     processid = Column(INTEGER, Sequence('seq_process'), primary_key=True)
     projid = Column(INTEGER, ForeignKey('projects.projid'))
     # i.e. process_id from TSV
-    orig_id = Column(VARCHAR(255))
+    orig_id = Column(VARCHAR(255), nullable=False)
 
     # The relationships are created in Relations.py but the typing here helps IDE
     project: relationship

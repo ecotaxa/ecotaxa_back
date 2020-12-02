@@ -217,3 +217,21 @@ UPDATE alembic_version SET version_num='4bb7276e86de' WHERE alembic_version.vers
 
 COMMIT;
 
+BEGIN;
+
+BEGIN;
+
+-- Running upgrade 4bb7276e86de -> cee3a33476db
+
+ALTER TABLE acquisitions ALTER COLUMN orig_id SET NOT NULL;
+
+ALTER TABLE obj_field ALTER COLUMN orig_id SET NOT NULL;
+
+ALTER TABLE process ALTER COLUMN orig_id SET NOT NULL;
+
+ALTER TABLE samples ALTER COLUMN orig_id SET NOT NULL;
+
+UPDATE alembic_version SET version_num='cee3a33476db' WHERE alembic_version.version_num = '4bb7276e86de';
+
+COMMIT;
+

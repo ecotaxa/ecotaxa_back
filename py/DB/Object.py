@@ -163,7 +163,7 @@ class ObjectFields(Model):
     __tablename__ = 'obj_field'
     objfid = Column(BIGINT, ForeignKey(ObjectHeader.objid, ondelete="CASCADE"), primary_key=True)
     # TODO: Isn't this the natural PK for objects?, it looks unique per projet
-    orig_id = Column(VARCHAR(255))
+    orig_id = Column(VARCHAR(255), nullable=False)
     # TODO: Can't see any value in DB
     object_link = Column(VARCHAR(255))
     # The relationships are created in Relations.py but the typing here helps the IDE
