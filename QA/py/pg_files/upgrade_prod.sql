@@ -235,3 +235,19 @@ UPDATE alembic_version SET version_num='cee3a33476db' WHERE alembic_version.vers
 
 COMMIT;
 
+BEGIN;
+
+-- Running upgrade cee3a33476db -> 63d8b0d2196a
+
+CREATE UNIQUE INDEX "IS_AcquisitionsProjectOrigId" ON acquisitions (projid, orig_id);
+
+DROP INDEX "IS_AcquisitionsProject";
+
+CREATE UNIQUE INDEX "IS_SamplesProjectOrigId" ON samples (projid, orig_id);
+
+DROP INDEX "IS_SamplesProject";
+
+UPDATE alembic_version SET version_num='63d8b0d2196a' WHERE alembic_version.version_num = 'cee3a33476db';
+
+COMMIT;
+

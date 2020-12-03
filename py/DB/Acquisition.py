@@ -52,4 +52,5 @@ class Acquisition(Model):
 
 for i in range(1, ACQUISITION_FREE_COLUMNS):
     setattr(Acquisition, "t%02d" % i, Column(VARCHAR(250)))
-Index('IS_AcquisitionsProject', Acquisition.projid)
+
+Index('IS_AcquisitionsProjectOrigId', Acquisition.projid, Acquisition.orig_id, unique=True)

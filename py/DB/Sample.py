@@ -84,4 +84,4 @@ class Sample(Model):
 for i in range(1, SAMPLE_FREE_COLUMNS):
     setattr(Sample, "t%02d" % i, Column(VARCHAR(250)))
 
-Index('IS_SamplesProject', Sample.projid)
+Index('IS_SamplesProjectOrigId', Sample.projid, Sample.orig_id, unique=True)
