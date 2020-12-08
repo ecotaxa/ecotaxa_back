@@ -50,7 +50,7 @@ class DBWriter(object):
 
     # The properties used in code, not in mapping. If not listed here they are not persisted
     # TODO: Provoke a crash at runtime for tests if one is forgotten. Dropping data silently is bad.
-    obj_head_prog_cols = {'sunpos', 'random_value', 'acquisid', 'processid', 'sampleid'}
+    obj_head_prog_cols = {'sunpos', 'random_value', 'acquisid', 'sampleid'}
     obj_fields_prog_cols: Dict[str, str] = {}
 
     # noinspection PyPep8Naming

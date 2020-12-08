@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from BO.Mappings import GlobalMapping, ProjectMapping, ParentTableT, ParentTableClassT
 from BO.SpaceTime import compute_sun_position, USED_FIELDS_FOR_SUNPOS
 from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
+from DB import Process
 from DB.Object import classif_qual_revert, ObjectHeader, ObjectFields
 from DB.helpers.Bean import Bean
 from DB.helpers.ORM import detach_from_session_if, Model
@@ -316,10 +317,10 @@ class TSVFile(object):
                 # Link with project
                 parent.projid = how.prj_id
                 # Process will be a twin table of Acquisition
-                # if parent_class == Process:
-                #     assert isinstance(parent, Process)
-                #     assert upper_level_pk
-                #     parent.processid = upper_level_pk
+                if parent_class == Process:
+                    assert isinstance(parent, Process)
+                    assert upper_level_pk
+                    parent.processid = upper_level_pk
                 # Default orig_id if needed
                 if parent_orig_id is None:
                     parent.orig_id = fallback_orig_id

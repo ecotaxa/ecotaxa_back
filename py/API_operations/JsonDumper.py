@@ -153,7 +153,7 @@ class JsonDumper(Service):
         ret = ret.join(ObjectHeader, and_(ObjectHeader.projid == Project.projid,
                                           ObjectHeader.sampleid == Sample.sampleid,
                                           ObjectHeader.acquisid == Acquisition.acquisid,
-                                          ObjectHeader.processid == Process.processid)). \
+                                          ObjectHeader.acquisid == Process.processid)). \
             options(contains_eager(Process.all_objects))
         # Natural joins
         ret = ret.join(ObjectFields)

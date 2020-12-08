@@ -7,9 +7,9 @@
 #
 from datetime import datetime
 from enum import Enum
-from typing import List
+from typing import List, Tuple
 
-from sqlalchemy.orm import Session
+from .ORM import text, Session, column, Integer
 
 
 def populate(store1, sess, seq_name, size):
@@ -55,3 +55,29 @@ def timestamp_to_str(ts: datetime, fmt: int = DateFormat.ISO_8601_2004_E) -> str
         return ret + "Z"
     else:
         return ret
+
+
+def values_cte(name: str, cols: Tuple[str, str], values: List[Tuple[int, int]]):
+    """
+        Return a SQLAlchemy values CTE from given data.
+        Example CTE:
+            with upd_smp (src_id, dst_id) as (values (5,6), (7,8)),
+    :param cols: The column names in the CTE.
+    :param values: The constant values.
+    """
+    # Below generate a union all which is ugly
+    # sa=sqlalchemy
+    # first_values = sa.select([sa.cast(sa.literal(values[0][0]), sa.Integer).label(cols[0]),
+    #                           sa.cast(sa.literal(values[0][1]), sa.Integer).label(cols[1])])
+    # stmts = [first_values]
+    # stmts.extend([sa.select([sa.literal(a_val[0]), sa.literal(a_val[1])]) for a_val in values[1:]])
+    # cte = sa.union_all(*stmts).cte(name=name)
+    # return cte
+
+    cte_txt = "values " + ", ".join(["(%d,%d)" % a_val_pair for a_val_pair in values])
+    # Giving names to columns is OK in the text but does not propagate to the WITH statement:
+    #    vals_text = sa.text(cte_txt).columns(column(cols[0], Integer), column(cols[1], Integer))
+    # The columns are named "columnX" by PG
+    vals_text = text(cte_txt).columns(column("column1", Integer), column("column2", Integer))
+    ret = vals_text.cte(name=name)
+    return ret

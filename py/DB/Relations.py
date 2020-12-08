@@ -67,7 +67,7 @@ Sample.all_acquisitions = relationship(Acquisition, viewonly=True, lazy="raise_o
 Acquisition.all_processes = relationship(Process, viewonly=True, lazy="raise_on_sql",
                                          secondary=ObjectHeader.__tablename__,
                                          secondaryjoin=and_(ObjectHeader.projid == Process.projid,
-                                                            ObjectHeader.processid == Process.processid))
+                                                            ObjectHeader.acquisid == Process.processid))
 
 # Privileges
 # Project.owner = relationship(User, primaryjoin="User.id==Project.owner_id",
@@ -105,8 +105,8 @@ Sample.all_objects = relationship(ObjectHeader)
 ObjectHeader.acquisition = relationship(Acquisition)
 Acquisition.all_objects = relationship(ObjectHeader)
 
-ObjectHeader.process = relationship(Process)
-Process.all_objects = relationship(ObjectHeader)
+ObjectHeader.process = relationship(Process, primaryjoin="Process.processid==foreign(ObjectHeader.acquisid)")
+Process.all_objects = relationship(ObjectHeader, primaryjoin="Process.processid==foreign(ObjectHeader.acquisid)")
 
 ObjectHeader.history = relationship(ObjectsClassifHisto)
 ObjectsClassifHisto.object = relationship(ObjectHeader)

@@ -538,7 +538,7 @@ class ObjectSetFilter(object):
                                 "                  where " + criteria_col + " ilike :freetxtval " + \
                                 "                    and projid = :projid ) "
             elif criteria_tbl == 'p':
-                where_clause *= " oh.processid in (select processid from process s " \
+                where_clause *= " oh.acquisid in (select processid from process s " \
                                 "                   where " + criteria_col + " ilike :freetxtval " + \
                                 "                     and projid = :projid ) "
             params['freetxtval'] = '%' + self.free_text_val + '%'

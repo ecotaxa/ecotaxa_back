@@ -76,7 +76,6 @@ class ObjectHeader(Model):
 
     sampleid = Column(INTEGER, ForeignKey('samples.sampleid'), nullable=False)
     acquisid = Column(INTEGER, ForeignKey('acquisitions.acquisid'), nullable=False)
-    processid = Column(INTEGER, ForeignKey('process.processid'), nullable=False)
 
     # The relationships are created in Relations.py but the typing here helps the IDE
     project: relationship
@@ -207,7 +206,6 @@ Index('is_objectsprojrandom', ObjectHeader.projid, ObjectHeader.random_value,
 Index('is_objectfieldsorigid', ObjectFields.orig_id)
 # For FK checks during deletion
 Index('is_objectsacquisition', ObjectHeader.acquisid)
-Index('is_objectsprocess', ObjectHeader.processid)
 
 class ObjectsClassifHisto(Model):
     __tablename__ = 'objectsclassifhisto'

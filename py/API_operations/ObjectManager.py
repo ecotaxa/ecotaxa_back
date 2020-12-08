@@ -43,7 +43,7 @@ class ObjectManager(Service):
         selected_tables = "obj_head oh"
         if "of." in where.get_sql():  # TODO: Duplicated code
             selected_tables += " JOIN obj_field of ON of.objfid = oh.objid"
-        sql = "SELECT objid, processid, acquisid, sampleid FROM " + selected_tables + " " + where.get_sql()
+        sql = "SELECT objid, acquisid as processid, acquisid, sampleid FROM " + selected_tables + " " + where.get_sql()
 
         res: ResultProxy = self.session.execute(sql, params)
         # TODO: Below is an obscure record, and no use re-packing something just unpacked
@@ -61,7 +61,7 @@ class ObjectManager(Service):
         for a_prj_id in prj_ids:
             RightsBO.user_wants(self.session, current_user_id, Action.READ, a_prj_id)
 
-        sql = "SELECT objid, processid, acquisid, sampleid, projid " \
+        sql = "SELECT objid, acquisid as processid, acquisid, sampleid, projid " \
               "  FROM obj_head oh WHERE oh.objid = any (:ids) "
         params = {"ids": object_ids}
 

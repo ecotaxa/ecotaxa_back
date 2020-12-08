@@ -2,10 +2,11 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Optional, Iterable, Tuple, List, Set, Dict, TypeVar, Type, Any
+from typing import Tuple, List, Set, Dict, TypeVar, Type, Any, Union
 
 # noinspection PyUnresolvedReferences
-from sqlalchemy import Column, inspect, MetaData, Table, any_ as _pg_any, not_, and_, or_, func, case, text, select
+from sqlalchemy import Column, inspect, MetaData, Table, any_ as _pg_any, all_, not_, and_, or_, func, case, text, \
+    select, column, Integer
 # noinspection PyUnresolvedReferences
 from sqlalchemy.dialects import postgresql
 # noinspection PyUnresolvedReferences
@@ -36,15 +37,18 @@ ModelT = Type[Model]
 M = TypeVar('M', bound=Model)
 
 
-def orm_equals(an_obj: Model, another_obj: Model) -> bool:
+def orm_equals(an_obj: Model, another_obj: Model) -> List[str]:
     """
         Compare values of 2 ORM objects, excluding PK and FK.
     """
+    ret = []
     to_copy, to_clear = _analyze_cols(an_obj.__table__)
     for a_col in to_copy:
-        if getattr(an_obj, a_col) != getattr(another_obj, a_col):
-            return False
-    return True
+        a_val = getattr(an_obj, a_col)
+        another_val = getattr(another_obj, a_col)
+        if a_val != another_val:
+            ret.append("%s: %s<->%s" % (a_col, str(a_val), str(another_val)))
+    return ret
 
 
 def clone_of(an_obj: M) -> M:
@@ -146,13 +150,14 @@ def minimal_table_of(metadata: MetaData, clazz, to_keep: Set[str]) -> Table:
     return Table(*args)
 
 
-def any_(int_list: List[int]):
+def any_(items_list: Union[List[int], List[str]]):
     # TODO: Get proper mapping, it seems a bit too much for sqlalchemy-stubs
-    return _pg_any(int_list)  # type: ignore
+    # noinspection PyTypeChecker
+    return _pg_any(items_list)  # type: ignore
 
 
 def only_res(res: List[Tuple[Any]]):
     """
-        SQLAlchemy or DBApi returns even single colum queries as lists of 1-element tuple :(
+        SQLAlchemy or DBApi returns even single column queries as lists of 1-element tuple :(
     """
     return [an_id for an_id, in res]

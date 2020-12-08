@@ -114,7 +114,7 @@ class SubsetServiceOnProject(TaskServiceOnProjectBase):
         ret: Query = self.session.query(ObjectHeader, ObjectFields, ObjectCNNFeature, Image, Sample, Acquisition,
                                         Process)
         ret = ret.outerjoin(Image, ObjectHeader.all_images).outerjoin(ObjectCNNFeature).join(ObjectFields)
-        ret = ret.outerjoin(Sample).outerjoin(Acquisition).outerjoin(Process)
+        ret = ret.join(Sample).join(Acquisition).join(Process, Process.processid == ObjectHeader.acquisid)
         ret = ret.filter(ObjectHeader.objid == any_(object_ids))
         ret = ret.order_by(ObjectHeader.objid)
 
