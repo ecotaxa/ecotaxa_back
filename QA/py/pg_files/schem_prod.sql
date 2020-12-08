@@ -2570,6 +2570,9 @@ CREATE INDEX is_objectssample ON public.obj_head USING btree (sampleid);
 CREATE INDEX is_objectstime ON public.obj_head USING btree (objtime, projid);
 
 
+CREATE INDEX is_objectsprocess ON public.obj_head USING btree (processid);
+
+
 --
 -- Name: is_part_projects_projid; Type: INDEX; Schema: public; Owner: postgres
 --
