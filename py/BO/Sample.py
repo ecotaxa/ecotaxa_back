@@ -21,6 +21,7 @@ from .helpers.MappedTable import MappedTable
 
 SampleIDT = int
 SampleIDListT = List[int]  # Typings, to be clear that these are not e.g. project IDs
+SampleOrigIDT = str
 
 logger = get_logger(__name__)
 

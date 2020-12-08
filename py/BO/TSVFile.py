@@ -272,6 +272,7 @@ class TSVFile(object):
             # The 3 involved tables have "orig_id" column serving the same purpose
             parent_orig_id = dict_to_write.get("orig_id")
             # The default, value, composed from upper-level ID
+            # TODO: Not needed for Process
             fallback_orig_id = '__DUMMY_ID__%d__' % upper_level_pk
             if parent_orig_id is None:
                 # No orig_id for parent object in provided dict
@@ -657,6 +658,19 @@ class TSVFile(object):
                     diag.error("Duplicate object '%s' Image '%s' in file %s. "
                                % (object_id, img_file_name, self.relative_name))
             diag.existing_objects_and_image.add(key_exist_obj)
+
+            # Verify that we do not make the topology worse...
+            if not how.can_update_only:
+                sample_id = clean_value_and_none(lig.get('sample_id', ''))
+                acquis_id = clean_value_and_none(lig.get('acq_id', ''))
+                logger.info("sample: %s acquis: %s", sample_id, acquis_id)
+                if sample_id != '' and acquis_id != '':
+                    # Empty values are defaulted
+                    maybe_err = diag.topology.evaluate_add_association(sample_id, acquis_id)
+                    if maybe_err:
+                        diag.error(maybe_err)
+                # Add the association anyway, it will reduce the repetition of errors
+                diag.topology.add_association(sample_id, acquis_id)
 
         return row_count_for_csv
 

@@ -89,7 +89,7 @@ def test_subentities(config, database, fastapi, caplog):
     acquisition = response.json()
     assert acquisition is not None
 
-    process_id = obj["processid"]
+    process_id = obj["acquisid"]
     # Wrong ID
     url = PROCESS_QUERY_URL.format(process_id=-1)
     response = fastapi.get(url, headers=ADMIN_AUTH)

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import List, Set, Dict, Optional, Callable
 
 from BO.Mappings import ProjectMapping, ParentTableT
+from BO.ProjectTidying import ProjectTopology
 from BO.Vignette import VignetteMaker
 from DB.helpers.DBWriter import DBWriter
 from FS.Vault import Vault
@@ -25,7 +26,9 @@ class ImportDiagnostic(object):
         self.nb_objects_without_gps = 0
         self.messages: List[str] = []
         self.errors: List[str] = []
+        # existing objects for consistency checks
         self.existing_objects_and_image = set()
+        self.topology = ProjectTopology()
         # the files which were found but skipped
         self.skipped_files = []
 

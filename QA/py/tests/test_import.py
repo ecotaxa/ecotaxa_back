@@ -23,6 +23,7 @@ from API_operations.imports.Import import ImportAnalysis, RealImport
 # noinspection PyPackageRequirements
 from API_operations.imports.SimpleImport import SimpleImport
 from API_operations.AsciiDump import AsciiDumper
+from API_operations.Consistency import ProjectConsistencyChecker
 
 # # noinspection PyUnresolvedReferences
 # from tests.config_fixture import config
@@ -45,9 +46,14 @@ ISSUES_DIR2 = DATA_DIR / "import_issues" / "no_classif_id"
 ISSUES_DIR3 = DATA_DIR / "import_issues" / "tsv_too_many_cols"
 EMPTY_DIR = DATA_DIR / "import_issues" / "no_relevant_file"
 EMPTY_TSV_DIR = DATA_DIR / "import_issues" / "empty_tsv"
+BREAKING_HIERARCHY_DIR = DATA_DIR / "import_issues" / "breaking_hierarchy"
 EMPTY_TSV_IN_UPD_DIR = DATA_DIR / "import_test_upd_empty"
 AMBIG_DIR = DATA_DIR / "import de categories ambigues"
 
+
+def check_project(prj_id: int):
+    problems = ProjectConsistencyChecker(prj_id).run(ADMIN_USER_ID)
+    assert problems == []
 
 def real_params_from_prep_out(task_id, prep_out: ImportPrepRsp) -> ImportRealReq:
     return ImportRealReq(task_id=task_id,
@@ -485,6 +491,41 @@ def test_import_sparse(config, database, caplog):
     sce = AsciiDumper()
     sce.run(projid=prj_id, out="chk.dmp")
 
+
+def test_import_breaking_unicity(config, database, caplog):
+    """
+        Sample orig_id is unique per project
+        Acquisition orig_id is unique per project and belongs to a single Sample
+        Process orig_id is unique per acquisition
+        So, if:
+            S("a") -> A("b") -> P ("c")
+        Then:
+            S("a2") -> A("b") is illegal
+        Message should be 'Acquisition 'b' already belongs to sample 'a' so it cannot be created under 'a2'
+    """
+    caplog.set_level(logging.DEBUG)
+    task_id = TaskService().create()
+    srch = ProjectsService().search(current_user_id=ADMIN_USER_ID,
+                                    title_filter="Test Create Update")
+    assert len(srch) == 1
+    prj_id = srch[0].projid  # <- need the project from first test
+    # Do preparation
+    params = ImportPrepReq(task_id=task_id,
+                           source_path=str(BREAKING_HIERARCHY_DIR))
+
+    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
+    assert prep_out.errors == ["Acquisition 'generic_m106_mn01_n1_sml' is already associated with sample "
+ "'{'m106_mn01_n1_sml'}', it cannot be associated as well with "
+ "'m106_mn01_n1_sml_brk"]
+    # Do real import, even if we should not...
+    params = real_params_from_prep_out(task_id, prep_out)
+    RealImport(prj_id, params).run(ADMIN_USER_ID)
+    # Check that all went fine
+    for a_msg in caplog.records:
+        assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
+    # And that the project is NOT consistent
+    with pytest.raises(AssertionError) as e_info:
+        check_project(prj_id)
 
 @pytest.mark.parametrize("title", ["Test Import Images"])
 def test_import_images(config, database, caplog, title):

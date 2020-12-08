@@ -2451,6 +2451,9 @@
     "schemas":{
       "AcquisitionModel":{
         "title":"AcquisitionModel",
+        "required":[
+          "orig_id"
+        ],
         "type":"object",
         "properties":{
           "acquisid":{
@@ -3075,8 +3078,7 @@
         "required":[
           "projid",
           "sampleid",
-          "acquisid",
-          "processid"
+          "acquisid"
         ],
         "type":"object",
         "properties":{
@@ -3179,10 +3181,6 @@
           "acquisid":{
             "title":"Acquisid",
             "type":"integer"
-          },
-          "processid":{
-            "title":"Processid",
-            "type":"integer"
           }
         }
       },
@@ -3192,8 +3190,7 @@
           "orig_id",
           "projid",
           "sampleid",
-          "acquisid",
-          "processid"
+          "acquisid"
         ],
         "type":"object",
         "properties":{
@@ -3305,10 +3302,6 @@
             "title":"Acquisid",
             "type":"integer"
           },
-          "processid":{
-            "title":"Processid",
-            "type":"integer"
-          },
           "images":{
             "title":"Images for this object",
             "type":"array",
@@ -3391,6 +3384,10 @@
       },
       "ProcessModel":{
         "title":"ProcessModel",
+        "required":[
+          "processid",
+          "orig_id"
+        ],
         "type":"object",
         "properties":{
           "processid":{
@@ -3723,6 +3720,9 @@
       },
       "SampleModel":{
         "title":"SampleModel",
+        "required":[
+          "orig_id"
+        ],
         "type":"object",
         "properties":{
           "sampleid":{

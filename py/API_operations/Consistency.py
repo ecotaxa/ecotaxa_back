@@ -5,12 +5,13 @@
 #
 # A few services for verifying consistency (DB mainly)
 #
-from typing import List
+from typing import List, Dict, Set
 
 from sqlalchemy.orm import Query
 
+from BO.ProjectTidying import ProjectTopology
 from BO.Rights import RightsBO, Action
-from DB import Sample, Project, Acquisition, Process
+from DB import Sample, Project, Acquisition, Process, ObjectHeader
 from DB.helpers.ORM import orm_equals
 from .helpers.Service import Service
 
@@ -21,7 +22,7 @@ class ProjectConsistencyChecker(Service):
         This service aims at listing them.
     """
 
-    def __init__(self,  prj_id: int):
+    def __init__(self, prj_id: int):
         super().__init__()
         self.prj_id = prj_id
 
@@ -32,6 +33,7 @@ class ProjectConsistencyChecker(Service):
         ret = []
         # TODO: Permissions
         ret.extend(self.check_duplicate_parents())
+        ret.extend(self.check_paths_unicity())
         return ret
 
     def check_duplicate_parents(self) -> List[str]:
@@ -46,7 +48,7 @@ class ProjectConsistencyChecker(Service):
             tbl_name = a_tbl.__table__
             qry: Query = self.session.query(a_tbl).join(Project)
             qry = qry.filter(Project.projid == self.prj_id)
-            qry = qry.order_by(a_tbl.orig_id) # type: ignore
+            qry = qry.order_by(a_tbl.orig_id)  # type: ignore
             prev_parent = None
             for a_parent in qry.all():
                 if prev_parent and a_parent.orig_id == prev_parent.orig_id:
@@ -57,6 +59,23 @@ class ProjectConsistencyChecker(Service):
                         ret.append("In {} orig_id '{}' is equal, but other fields differ (pks {} and {})".
                                    format(tbl_name, a_parent.orig_id, prev_parent.pk(), a_parent.pk()))
                 prev_parent = a_parent
+        return ret
+
+    def check_paths_unicity(self) -> List[str]:
+        """
+            With S for sample, A for acquisition and P for process:
+            What happened:
+                Import of S1 -> A1 -> P1 -> O1
+                Import of S2 -> A1 -> P1 -> O2
+            Now there are 2 ways to "go to" P1 from the project
+            Since 2.5.0; A and P are merged, but still:
+                S1 -> A1+P1 -> O1
+                S2 -> A1+P1 -> O2
+        """
+        ret = []
+        topo = ProjectTopology()
+        topo.read_from_db(self.session, self.prj_id)
+        ret.extend(topo.get_inconsistencies())
         return ret
 
     def check_partial_time_space(self) -> List[str]:

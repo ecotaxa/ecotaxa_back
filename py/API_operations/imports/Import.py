@@ -78,6 +78,7 @@ class ImportAnalysis(ImportServiceBase):
         import_diag = ImportDiagnostic()
         if not self.req.skip_existing_objects:
             import_diag.existing_objects_and_image = Image.fetch_existing_images(self.session, self.prj_id)
+        import_diag.topology.read_from_db(self.session, prj_id=self.prj_id)
         # Do the bulk job of validation
         nb_rows = source_bundle.validate_import(import_how, import_diag, self.session, self.report_progress)
         return import_how, import_diag, nb_rows

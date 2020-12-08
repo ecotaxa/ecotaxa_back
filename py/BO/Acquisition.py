@@ -20,6 +20,7 @@ from helpers.Timer import CodeTimer
 
 AcquisitionIDT = int
 AcquisitionIDListT = List[int]  # Typings, to be clear that these are not e.g. project IDs
+AcquisitionOrigIDT = str
 
 logger = get_logger(__name__)
 
