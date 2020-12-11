@@ -8,9 +8,10 @@ from typing import Dict, Set, List, Optional
 
 from BO.Acquisition import AcquisitionOrigIDT
 from BO.Object import ObjectIDT
+from BO.Process import ProcessOrigIDT
 from BO.Project import ProjectIDT
 from BO.Sample import SampleOrigIDT
-from DB import Sample, Acquisition, ObjectHeader
+from DB import Sample, Acquisition, ObjectHeader, Process
 from DB import Session
 from DB.helpers.ORM import Query
 
@@ -36,20 +37,26 @@ class ProjectTopology(object):
         self.paths: Dict[SampleOrigIDT, Dict[AcquisitionOrigIDT, Set[ObjectIDT]]] = {}
         # Each acquisition (as identified by its orig_id) has a parent, but eventually several of them.
         self.acquisition_parents: Dict[AcquisitionOrigIDT, Set[SampleOrigIDT]] = {}
+        # Each acquisition has a child process.
+        self.acquisition_child: Dict[AcquisitionOrigIDT, ProcessOrigIDT] = {}
 
     def read_from_db(self, session: Session, prj_id: ProjectIDT):
         """
             Read the project topology from DB.
         """
-        qry: Query = session.query(Sample, Acquisition, ObjectHeader)
+        qry: Query = session.query(Sample, Acquisition, Process, ObjectHeader)
         qry = qry.filter(ObjectHeader.projid == prj_id)
-        qry = qry.join(Sample).join(Acquisition)
+        qry = qry.join(Sample).join(Acquisition).outerjoin(Process, Acquisition.acquisid == Process.processid)
         sam: Sample
         acq: Acquisition
+        prc: Process
         obj: ObjectHeader
-        for sam, acq, obj in qry.all():
+        for sam, acq, prc, obj in qry.all():
             # Get/create acquisitions for this sample
             objs_for_acquisition = self.add_association(sam.orig_id, acq.orig_id)
+            # Store twin process
+            if prc is not None:
+                self.acquisition_child[acq.orig_id] = prc.orig_id
             # Store objects for acquisition
             objs_for_acquisition.add(obj.objid)
 
@@ -91,4 +98,8 @@ class ProjectTopology(object):
             if len(parents) > 1:
                 ret.append("Acquisition '%s' is nested in several samples: %s "
                            % (acquis_user_id, parents))
+        for acquis_user_id in self.acquisition_parents.keys():
+            if acquis_user_id not in self.acquisition_child:
+                ret.append("Acquisition '%s' has no associated Process "
+                           % (acquis_user_id,))
         return ret

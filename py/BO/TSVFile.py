@@ -22,9 +22,10 @@ from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, I
 from DB import Process
 from DB.Object import classif_qual_revert, ObjectHeader, ObjectFields
 from DB.helpers.Bean import Bean
-from DB.helpers.ORM import detach_from_session_if, Model
+from DB.helpers.ORM import detach_from_session_if, Model, detach_from_session
 from helpers.DynamicLogs import get_logger
 from .Image import ImageBO
+from .Project import ProjectIDT
 from .helpers.TSVHelpers import clean_value, clean_value_and_none, to_float, none_to_empty, \
     convert_degree_minute_float_to_decimal_degree
 
@@ -131,13 +132,14 @@ class TSVFile(object):
                 # Parents are created the same way, _when needed_ (i.e. nearly never),
                 #  in @see add_parent_objects
 
-                if not how.can_update_only:
+                if how.can_update_only:
+                    self.update_parent_objects(how, session, dicts_to_write)
+                else:
                     # Initial load attempt to compute sun position
                     self.do_sun_position_field(object_head_to_write)
-
-                self.add_parent_objects(how, session, object_head_to_write, dicts_to_write)
-
-                if not how.can_update_only:
+                    # Add parents
+                    self.add_parent_objects(how, session, object_head_to_write, dicts_to_write)
+                    # Care for another line with another image
                     key_exist_obj = "%s*%s" % (object_fields_to_write.orig_id, image_to_write.orig_file_name)
                     if key_exist_obj in how.objects_and_images_to_skip:
                         logger.info("Image skipped: %s %s", object_fields_to_write.orig_id,
@@ -254,93 +256,120 @@ class TSVFile(object):
             Due to amount of duplicated information in TSV, this happens for few % of rows
              so no real need to optimize here.
         """
-        parent_class: ParentTableClassT
-        # addition_done = False
+        assert not how.can_update_only
+
         upper_level_pk = how.prj_id
+        upper_level_created = False
+
         # Loop up->down, i.e. Sample to Process
+        parent_class: ParentTableClassT
         for alias, parent_class in GlobalMapping.PARENT_CLASSES.items():
-            try:
-                dict_to_write = dicts_to_write[alias]
-            except KeyError:
-                if how.can_update_only:
-                    # Allow the parent completely missing, if updating
-                    continue
-                else:
-                    raise
-            parents_for_obj: Dict[str, ParentTableT] = how.existing_parents[alias]
-            # Here we take advantage from consistent naming conventions
-            # The 3 involved tables have "orig_id" column serving the same purpose
-            parent_orig_id = dict_to_write.get("orig_id")
-            # The default, value, composed from upper-level ID
-            # TODO: Not needed for Process
-            fallback_orig_id = '__DUMMY_ID__%d__' % upper_level_pk
-            if parent_orig_id is None:
-                # No orig_id for parent object in provided dict
-                if len(dict_to_write) > 0:
-                    # There is no orig_id but some data
-                    # See if we don't have the exact same parent
-                    maybe_orig_id: str
-                    for maybe_orig_id, maybe_parent in parents_for_obj.items():
-                        diff = TSVFile.diff_orm_object(maybe_parent, dict_to_write)
-                        if len(diff) == 0:
-                            # Replicate found
-                            parent_orig_id = maybe_orig_id
-                            break
+            # The data from TSV, to write. Eventually just an empty dict, but still a dict.
+            dict_to_write = dicts_to_write[alias]
+
+            if parent_class != Process:
+                # We care about Sample & Acquisition orig_id
+                parent_orig_id = dict_to_write.get("orig_id")
                 if parent_orig_id is None:
-                    if fallback_orig_id in parents_for_obj:
-                        # If default parent exists then use it
-                        parent_orig_id = fallback_orig_id
-                    else:
-                        # Keep parent_orig_id to None, fallback value will be used during generation
-                        pass
-            if parent_orig_id is not None:
+                    # No orig_id for parent object in provided dict
+                    # Default with present parent's parent technical ID
+                    parent_orig_id = '__DUMMY_ID__%d__' % upper_level_pk
+                    # And inject the value for creation if needed
+                    dict_to_write["orig_id"] = parent_orig_id
+                # Look for the parent by its (eventually amended) orig_id
+                parents_for_obj: Dict[str, ParentTableT] = how.existing_parents[alias]
                 parent = parents_for_obj.get(parent_orig_id)
-            else:
-                parent = None
-            if parent is not None:
-                if how.can_update_only:
-                    # Update the DB line using sqlalchemy
-                    updates = TSVFile.update_orm_object(parent, dict_to_write)
-                    if len(updates) > 0:
-                        logger.info("Updating %s '%s' using %s", alias, parent.orig_id, updates)
-                        session.flush()
-                else:
+
+                if parent is not None:
                     # This parent object was known before, don't add it into the session (DB)
                     # but link the child object_head to it (like newly created ones below)
-                    pass
+                    # Store current PK for next iteration
+                    upper_level_pk = parent.pk()
+                    upper_level_created = False
+                else:
+                    parent = TSVFile.create_parent(session, dict_to_write, how.prj_id, parent_class)
+                    # Store parent object for later reference.
+                    # Detach it from ORM otherwise the simple parent.pk() below provokes a select :(
+                    parents_for_obj[parent_orig_id] = detach_from_session(session, parent)
+                    # Store current PK for next iteration
+                    upper_level_pk = parent.pk()
+                    upper_level_created = True
+                    # Log the appeared parent
+                    logger.info("++ ID %s %s %d", alias, parent_orig_id, upper_level_pk)
+
+                # Columns in obj_head have same name as the pk column of corresponding entities
+                setattr(object_head_to_write, parent.pk_col(), upper_level_pk)
             else:
-                if how.can_update_only:
-                    # No creation of parent in update mode
+                # Process is a twin table of Acquisition, its orig_id can be anything so no check to do.
+                if not upper_level_created:
                     continue
-                # Create the SQLAlchemy wrapper
-                # noinspection PyCallingNonCallable
-                parent = parent_class(**dict_to_write)
-                # Link with project
-                parent.projid = how.prj_id
-                # Process will be a twin table of Acquisition
-                if parent_class == Process:
-                    assert isinstance(parent, Process)
-                    assert upper_level_pk
-                    parent.processid = upper_level_pk
-                # Default orig_id if needed
-                if parent_orig_id is None:
-                    parent.orig_id = fallback_orig_id
-                session.add(parent)
-                session.flush()
-                # addition_done = True
-                # Store parent object for later reference. Detach it from ORM if we don't plan
-                # to update it, otherwise the simple parent.pk() below provokes a select :(
-                parent_orig_id = parent.orig_id
-                assert parent_orig_id
-                parents_for_obj[parent_orig_id] = detach_from_session_if(not how.can_update_only, session, parent)
+                # If enclosing Acquisition was just created then create process
+                assert upper_level_pk
+                dict_to_write["processid"] = upper_level_pk
+                # Ensure an orig_id exists, as it's local we don't really need the composition but it doesn't hurt
+                if dict_to_write.get("orig_id") is None:
+                    dict_to_write["orig_id"] = '__DUMMY_ID__%d__' % upper_level_pk
+                parent = TSVFile.create_parent(session, dict_to_write, how.prj_id, parent_class)
+                assert parent is not None
                 # Log the appeared parent
-                logger.info("++ ID %s %s %d", alias, parent_orig_id, parent.pk())
-            # Columns in obj_head have same name as pk of corresponding entities
-            upper_level_pk = parent.pk()
-            setattr(object_head_to_write, parent.pk_col(), upper_level_pk)
-        # DB commit as the objects need valid IDs for FK
-        # if addition_done:
-        #     session.commit()
+                logger.info("++ ID %s %s %d", alias, parent.orig_id, upper_level_pk)
+
+
+    @staticmethod
+    def create_parent(session: Session, dict_to_write, prj_id: ProjectIDT, parent_class):
+        """
+            Create the SQLAlchemy wrapper for Sample, Acquisition or Process.
+        :return: The created DB wrapper.
+        """
+        # noinspection PyCallingNonCallable
+        parent = parent_class(**dict_to_write)
+        # Link with project
+        parent.projid = prj_id
+        session.add(parent)
+        session.flush()
+        return parent
+
+    @staticmethod
+    def update_parent_objects(how: ImportHow, session: Session, dicts_for_update: Mapping[str, Dict]):
+        """
+            Update of Sample, Acquisition & Process.
+            For locating the records, we tolerate the lack of orig_id like during creation.
+        """
+        assert how.can_update_only
+        upper_level_pk = how.prj_id
+        # Loop up->down, i.e. Sample to Process
+        parent_class: ParentTableClassT
+        for alias, parent_class in GlobalMapping.PARENT_CLASSES.items():
+            # The data from TSV, to update with. Eventually just an empty dict, but still a dict.
+            dict_for_update = dicts_for_update[alias]
+
+            if parent_class != Process:
+                # Locate using Sample & Acquisition orig_id
+                parent_orig_id = dict_for_update.get("orig_id")
+                if parent_orig_id is None:
+                    # No orig_id for parent object in provided dict
+                    # Default with present parent's parent technical ID
+                    parent_orig_id = '__DUMMY_ID__%d__' % upper_level_pk
+                # Look for the parent by its (eventually amended) orig_id
+                parents_for_obj: Dict[str, ParentTableT] = how.existing_parents[alias]
+                parent = parents_for_obj.get(parent_orig_id)
+                if parent is None:
+                    # No parent found to update, thus we cannot locate children, as there
+                    # is an implicit relationship just by the fact that the 3 are on the same line
+                    break
+                # Collect the PK for children in case we need to use a __DUMMY
+                upper_level_pk = parent.pk()
+            else:
+                # Fetch the process from DB
+                parent = session.query(Process).get(upper_level_pk)
+                assert parent is not None
+
+            # OK we have something to update
+            # Update the DB line using sqlalchemy
+            updates = TSVFile.update_orm_object(parent, dict_for_update)
+            if len(updates) > 0:
+                logger.info("Updating %s '%s' using %s", alias, parent.orig_id, updates)
+                session.flush()
 
     @staticmethod
     def update_orm_object(model: Model, update_dict: Dict[str, str]):
@@ -473,6 +502,7 @@ class TSVFile(object):
                               object_head_to_write, object_fields_to_write, image_to_write) -> int:
         """
             Create, link or update slave entities, i.e. head, fields, image.
+            Also update them... TODO: Split/fork the def
             :returns the number of new records
         """
         if object_fields_to_write.orig_id in how.existing_objects:

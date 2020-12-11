@@ -18,6 +18,7 @@ from helpers.Timer import CodeTimer
 
 ProcessIDT = int
 ProcessIDListT = List[int]  # Typings, to be clear that these are not e.g. project IDs
+ProcessOrigIDT = str
 
 logger = get_logger(__name__)
 

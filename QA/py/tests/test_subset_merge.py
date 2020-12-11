@@ -1479,3 +1479,34 @@ def test_subset_of_no_visible_issue_484(config, database, fastapi, caplog):
     assert rsp.json()["errors"] == ['No object found to clone into subset.']
 
     test_check_project_via_api(tgt_prj_id, fastapi)
+
+
+def test_subset_consistency(config, database, fastapi, caplog):
+    caplog.set_level(logging.ERROR)
+    from tests.test_import import import_plain
+    caplog.set_level(logging.DEBUG)
+    task_id = TaskService().create()
+    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test Import update"))
+    # Plain import first
+    import_plain(prj_id, task_id)
+    check_project(prj_id)
+    # Dump the project
+    caplog.set_level(logging.DEBUG)
+    with open(OUT_JSON, "w") as fd:
+        JsonDumper(ADMIN_USER_ID, prj_id, {}).run(fd)
+    print("\n".join(caplog.messages))
+
+    # Subset in full, i.e. clone
+    task_id = TaskService().create()
+    subset_prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Subset of"))
+    filters = {"freenum": "n01", "freenumst": "0"}
+    params = SubsetReq(task_id=task_id,
+                       dest_prj_id=subset_prj_id,
+                       filters=filters,
+                       limit_type='P',
+                       limit_value=100.0,
+                       do_images=True)
+    sce = SubsetServiceOnProject(prj_id=prj_id, req=params)
+    sce.update_task(taskstate="Running", percent=0, message="Running")
+    sce.run(ADMIN_USER_ID)
+    check_project(subset_prj_id)
