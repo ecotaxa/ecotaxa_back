@@ -94,15 +94,14 @@ class ObjectHeader(Model):
     @classmethod
     def fetch_existing_objects(cls, session: Session, prj_id) -> Dict[str, int]:
         ret = {}
-        # TODO: Why using the view? Why an outer join in the view?
+        # TODO: Why using the view? Also orig_id should be in plain object
         res: ResultProxy = session.execute(
             "SELECT o.orig_id, o.objid "
             "  FROM objects o "
             " WHERE o.projid = :prj",
             {"prj": prj_id})
-        for rec in res:
-            ret[rec[0]] = rec[1]
-        return ret
+        ret = {orig_id: objid for orig_id, objid in res}
+        return ret  # type: ignore
 
     @staticmethod
     def update_counts_and_img0(session: Session, prj_id):
@@ -206,6 +205,7 @@ Index('is_objectsprojrandom', ObjectHeader.projid, ObjectHeader.random_value,
 Index('is_objectfieldsorigid', ObjectFields.orig_id)
 # For FK checks during deletion
 Index('is_objectsacquisition', ObjectHeader.acquisid)
+
 
 class ObjectsClassifHisto(Model):
     __tablename__ = 'objectsclassifhisto'

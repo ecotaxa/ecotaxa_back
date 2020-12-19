@@ -78,6 +78,7 @@ class ImportHow(object):
         self.taxo_found: Dict[str, Optional[int]] = {}
         # Collected during RealImport
         # e.g. { 'samples': { 'm106_mn01_n2': <Sample object at xxxx> } }
+        # TODO: Process is not really needed anymore
         self.existing_parents: Dict[str, Dict[str, ParentTableT]] = {}
         # e.g. { 'm106_mn01_n1_sml_409': 1455263 }
         self.existing_objects: Dict[str, int] = {}

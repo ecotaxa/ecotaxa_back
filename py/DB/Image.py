@@ -34,7 +34,6 @@ class Image(Model):
         """
             Get all object/image pairs from the project
         """
-        ret = set()
         res: ResultProxy = session.execute(
             # Must be reloaded from DB, as phase 1 added all objects for duplicates checking
             "SELECT concat(o.orig_id,'*',i.orig_file_name) "
@@ -42,8 +41,7 @@ class Image(Model):
             "  JOIN objects o ON i.objid = o.objid "
             " WHERE o.projid = :prj",
             {"prj": prj_id})
-        for rec in res:
-            ret.add(rec[0])
+        ret = {img_id for img_id, in res}
         return ret
 
 

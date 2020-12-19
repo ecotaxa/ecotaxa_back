@@ -44,21 +44,21 @@ class ProjectTopology(object):
         """
             Read the project topology from DB.
         """
-        qry: Query = session.query(Sample, Acquisition, Process, ObjectHeader)
+        qry: Query = session.query(Sample.orig_id, Acquisition.orig_id, Process.orig_id, ObjectHeader.objid)
         qry = qry.filter(ObjectHeader.projid == prj_id)
         qry = qry.join(Sample).join(Acquisition).outerjoin(Process, Acquisition.acquisid == Process.processid)
-        sam: Sample
-        acq: Acquisition
-        prc: Process
-        obj: ObjectHeader
-        for sam, acq, prc, obj in qry.all():
+        sam_orig_id: str
+        acq_orig_id: str
+        prc_orig_id: str
+        objid: ObjectIDT
+        for sam_orig_id, acq_orig_id, prc_orig_id, objid in qry.all():
             # Get/create acquisitions for this sample
-            objs_for_acquisition = self.add_association(sam.orig_id, acq.orig_id)
+            objs_for_acquisition = self.add_association(sam_orig_id, acq_orig_id)
             # Store twin process
-            if prc is not None:
-                self.acquisition_child[acq.orig_id] = prc.orig_id
+            if prc_orig_id is not None:
+                self.acquisition_child[acq_orig_id] = prc_orig_id
             # Store objects for acquisition
-            objs_for_acquisition.add(obj.objid)
+            objs_for_acquisition.add(objid)
 
     def add_association(self, sample_orig_id: SampleOrigIDT, acquisition_orig_id: AcquisitionOrigIDT):
         """

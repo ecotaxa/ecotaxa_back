@@ -19,6 +19,7 @@ from DB.Image import Image
 from DB.User import User
 from DB.helpers.DBWriter import DBWriter
 from helpers.DynamicLogs import get_logger
+from helpers.Timer import CodeTimer
 
 logger = get_logger(__name__)
 
@@ -77,7 +78,8 @@ class ImportAnalysis(ImportServiceBase):
         # A structure to collect validation result
         import_diag = ImportDiagnostic()
         if not self.req.skip_existing_objects:
-            import_diag.existing_objects_and_image = Image.fetch_existing_images(self.session, self.prj_id)
+            with CodeTimer("do_intra_step_1: Existing images for %d: " % self.prj_id, logger):
+                import_diag.existing_objects_and_image = Image.fetch_existing_images(self.session, self.prj_id)
         import_diag.topology.read_from_db(self.session, prj_id=self.prj_id)
         # Do the bulk job of validation
         nb_rows = source_bundle.validate_import(import_how, import_diag, self.session, self.report_progress)
@@ -170,7 +172,8 @@ class RealImport(ImportServiceBase):
         if self.req.skip_loaded_files:
             import_how.compute_skipped(source_bundle, logger)
         if not self.req.skip_existing_objects:
-            import_how.objects_and_images_to_skip = Image.fetch_existing_images(self.session, self.prj_id)
+            with CodeTimer("run: Existing images for %d: " % self.prj_id, logger):
+                import_how.objects_and_images_to_skip = Image.fetch_existing_images(self.session, self.prj_id)
         import_how.do_thumbnail_above(int(self.config['THUMBSIZELIMIT']))
 
         # Do the bulk job of import

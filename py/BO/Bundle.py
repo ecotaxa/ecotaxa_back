@@ -20,6 +20,7 @@ from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, I
 from DB.Image import Image
 from DB.Object import ObjectHeader
 from helpers.DynamicLogs import get_logger
+from helpers.Timer import CodeTimer
 
 logger = get_logger(__name__)
 
@@ -123,7 +124,8 @@ class InBundle(object):
         """
             Get existing object IDs (orig_id AKA object_id in TSV) from the project
         """
-        return ObjectHeader.fetch_existing_objects(session, prj_id)
+        with CodeTimer("Existing objects for %d: " % prj_id, logger):
+            return ObjectHeader.fetch_existing_objects(session, prj_id)
 
     @staticmethod
     def fetch_existing_parents(session, prj_id) -> Dict[str, Dict[str, ParentTableT]]:
@@ -144,7 +146,8 @@ class InBundle(object):
             Validate the full bundle, i.e. every contained file.
             :return:
         """
-        how.objects_and_images_to_skip = Image.fetch_existing_images(session, how.prj_id)
+        with CodeTimer("validate_import: Existing images for %d: " % how.prj_id, logger):
+            how.objects_and_images_to_skip = Image.fetch_existing_images(session, how.prj_id)
 
         total_row_count = self.validate_each_file(how, diag, report_def)
 
