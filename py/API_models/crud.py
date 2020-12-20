@@ -50,6 +50,11 @@ class UserModel(_UserModelFromDB):  # type:ignore
     pass
 
 
+class UserModelWithRights(_UserModelFromDB):  # type:ignore
+    can_do: List[int] = Field(title="Actions allowed to this user, 1=create project",
+                              default=[])
+
+
 class _AddedToProject(BaseModel):
     obj_free_cols: FreeColT = Field(title="Object free columns",
                                     default={})
@@ -250,11 +255,11 @@ included in the citation.""",
     creator_organisations: List[str] = Field(title="""All organisations who are responsible for the creation of
     the collection. Data creators should receive credit for their work and should therefore be
     included in the citation.""",
-                                                   default=[])
+                                             default=[])
     associate_users: List[UserModel] = Field(title="Other person(s) associated with the collection",
                                              default=[])
     associate_organisations: List[str] = Field(title="Other organisation(s) associated with the collection",
-                                                     default=[])
+                                               default=[])
 
 
 class CollectionModel(_CollectionModelFromDB, _AddedToCollection):  # type:ignore

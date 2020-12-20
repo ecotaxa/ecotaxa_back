@@ -41,6 +41,9 @@ class UserService(Service):
         return [a_rec for a_rec in qry]
 
     def list(self, current_user_id: UserIDT) -> List[User]:
+        """
+            List all users, if requester is admin.
+        """
         current_user: User = self.session.query(User).get(current_user_id)
         ret = []
         if current_user.has_role(Role.APP_ADMINISTRATOR):

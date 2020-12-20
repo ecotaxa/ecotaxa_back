@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from enum import IntEnum
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 from DB import User, Role, Project, ProjectPrivilege
 from DB.helpers.ORM import Session
@@ -75,14 +75,20 @@ class RightsBO(object):
         # Load ORM entities
         user: User = session.query(User).get(user_id)
         assert user is not None, NOT_AUTHORIZED
-        # action = Action.CREATE_PROJECT
         # Check
+        assert Action.CREATE_PROJECT in RightsBO.allowed_actions(user), NOT_AUTHORIZED
+        return user
+
+    @staticmethod
+    def allowed_actions(user: User) -> List[Action]:
+        ret = []
         if user.has_role(Role.APP_ADMINISTRATOR):
             # King of the world
-            pass
+            ret.append(Action.CREATE_PROJECT)
         else:
-            assert user.has_role(Role.PROJECT_CREATOR), NOT_AUTHORIZED
-        return user
+            if user.has_role(Role.PROJECT_CREATOR):
+                ret.append(Action.CREATE_PROJECT)
+        return ret
 
     @staticmethod
     def anonymous_wants(session: Session, action: Action, prj_id: int) \

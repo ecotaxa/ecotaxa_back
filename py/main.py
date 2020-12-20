@@ -32,6 +32,7 @@ from API_operations.Consistency import ProjectConsistencyChecker
 from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
 from API_operations.ObjectManager import ObjectManager
+from API_operations.Stats import ProjectStatsFetcher
 from API_operations.Status import StatusService
 from API_operations.Subset import SubsetServiceOnProject
 from API_operations.TaxoManager import TaxonomyChangeService
@@ -45,6 +46,7 @@ from BO.Object import ObjectBO
 from BO.ObjectSet import ObjectIDListT
 from BO.Process import ProcessBO
 from BO.Project import ProjectBO, ProjectStats
+from BO.Rights import RightsBO
 from BO.Sample import SampleBO
 from BO.Taxonomy import TaxonBO
 from helpers.Asyncio import async_bg_run, log_streamer
@@ -104,13 +106,16 @@ def get_users(current_user: int = Depends(get_current_user)):
 
 
 # TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
-@app.get("/users/me", tags=['users'], response_model=UserModel)  # type:ignore
+@app.get("/users/me", tags=['users'], response_model=UserModelWithRights)  # type:ignore
 def show_current_user(current_user: int = Depends(get_current_user)):
     """
-        Return currently authenticated user.
+        Return currently authenticated user. On top of DB fields, 'can_do' lists the allowed system-wide actions.
     """
     sce = UserService()
-    return sce.search_by_id(current_user, current_user)
+    ret = sce.search_by_id(current_user, current_user)
+    assert ret is not None
+    setattr(ret, 'can_do', RightsBO.allowed_actions(ret))
+    return ret
 
 
 @app.get("/users/my_preferences/{project_id}", tags=['users'], response_model=str)
