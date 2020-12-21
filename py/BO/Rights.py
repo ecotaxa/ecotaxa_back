@@ -13,6 +13,7 @@ from .ProjectPrivilege import ProjectPrivilegeBO
 class Action(IntEnum):
     # Global actions
     CREATE_PROJECT = 1
+    ADMINISTRATE_APP = 2
     # Actions on project, by increasing value
     READ = 10
     ANNOTATE = 11  # Write of only certain fields
@@ -84,7 +85,7 @@ class RightsBO(object):
         ret = []
         if user.has_role(Role.APP_ADMINISTRATOR):
             # King of the world
-            ret.append(Action.CREATE_PROJECT)
+            ret.extend([Action.CREATE_PROJECT, Action.ADMINISTRATE_APP])
         else:
             if user.has_role(Role.PROJECT_CREATOR):
                 ret.append(Action.CREATE_PROJECT)

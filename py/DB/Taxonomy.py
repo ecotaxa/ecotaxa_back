@@ -12,6 +12,9 @@ from DB.helpers.ORM import Model
 
 
 class Taxonomy(Model):
+    """
+        A node in the taxonomy tree.
+    """
     __tablename__ = 'taxonomy'
     id = Column(INTEGER, Sequence('seq_taxonomy'), primary_key=True)
     parent_id = Column(INTEGER)
@@ -39,3 +42,12 @@ Index('IS_TaxonomySource', Taxonomy.id_source)
 Index('IS_TaxonomyNameLow', func.lower(Taxonomy.name))
 Index('IS_TaxonomyDispNameLow',
       func.lower(Taxonomy.display_name))  # create index IS_TaxonomyDispNameLow on taxonomy(lower(display_name));
+
+
+class TaxonomyTreeInfo(Model):
+    """
+        Information about the whole taxonomy table/tree. So far a single line.
+    """
+    __tablename__ = 'persistantdatatable'  # The most pleonasmic DB table name _ever_
+    id = Column(INTEGER, primary_key=True)
+    lastserverversioncheck_datetime = Column(TIMESTAMP(precision=0))

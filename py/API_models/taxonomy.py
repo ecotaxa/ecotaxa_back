@@ -4,7 +4,7 @@
 #
 #  Models used in Taxonomy API operations.
 #
-from typing import List
+from typing import List, Optional
 
 from pydantic import Field
 from pydantic.main import BaseModel
@@ -23,3 +23,8 @@ class TaxonModel(BaseModel):
     id: int = Field(title="The taxon/category IDs.")
     display_name: str = Field(title="The taxon/category display name.")
     lineage: List[str] = Field(title="The taxon/category name of ancestors, including self, in first.")
+
+
+class TaxonomyTreeStatus(BaseModel):
+    last_refresh: Optional[str] = Field(title="Taxonomy tree last refresh/sync from taxonomy server. "
+                                              "Date, with format YYYY-MM-DDThh:mm:ss.")

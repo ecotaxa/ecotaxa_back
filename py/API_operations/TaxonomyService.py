@@ -4,6 +4,7 @@
 #
 # End-user services around taxonomy tree.
 #
+from datetime import datetime
 from typing import List, Optional
 
 from API_models.taxonomy import TaxaSearchRsp
@@ -12,7 +13,7 @@ from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Project import ProjectBOSet
 from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet, TaxonBOSetFromWoRMS
 from BO.User import UserIDT, UserBO
-from DB import WoRMS
+from DB.Taxonomy import TaxonomyTreeInfo
 
 
 class TaxonomyService(Service):
@@ -22,6 +23,16 @@ class TaxonomyService(Service):
 
     def __init__(self):
         super().__init__()
+
+    def status(self, _current_user_id: UserIDT) -> Optional[datetime]:
+        """
+        """
+        tree_info = self.session.query(TaxonomyTreeInfo).first()
+        if tree_info is None:
+            return None
+        if tree_info.lastserverversioncheck_datetime is None:
+            return None
+        return tree_info.lastserverversioncheck_datetime
 
     def search(self, current_user_id: Optional[UserIDT],
                prj_id: Optional[int],

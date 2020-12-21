@@ -21,7 +21,7 @@ from API_models.merge import MergeRsp
 from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp, ClassifyReq, ObjectModel, \
     ObjectHeaderModel, HistoricalClassificationModel
 from API_models.subset import SubsetReq, SubsetRsp
-from API_models.taxonomy import TaxaSearchRsp, TaxonModel
+from API_models.taxonomy import TaxaSearchRsp, TaxonModel, TaxonomyTreeStatus
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Object import ObjectService
 from API_operations.CRUD.ObjectParents import SamplesService, AcquisitionsService, ProcessesService
@@ -114,7 +114,7 @@ def show_current_user(current_user: int = Depends(get_current_user)):
     sce = UserService()
     ret = sce.search_by_id(current_user, current_user)
     assert ret is not None
-    setattr(ret, 'can_do', RightsBO.allowed_actions(ret))
+    ret.can_do = RightsBO.allowed_actions(ret)  # type:ignore
     return ret
 
 
@@ -713,6 +713,16 @@ def object_query_history(object_id: int,
     return ret
 
 
+@app.get("/taxa/status", tags=['Taxonomy Tree'], response_model=TaxonomyTreeStatus)
+async def taxa_tree_status(current_user: int = Depends(get_current_user)):
+    """
+        Return the status of taxonomy tree w/r to freshness.
+    """
+    sce = TaxonomyService()
+    refresh_date = sce.status(_current_user_id=current_user)
+    return TaxonomyTreeStatus(last_refresh=refresh_date.isoformat() if refresh_date else None)
+
+
 @app.get("/taxa/search", tags=['Taxonomy Tree'], response_model=List[TaxaSearchRsp])
 async def search_taxa(query: str,
                       project_id: Optional[int],
@@ -796,7 +806,7 @@ async def refresh_taxa_db(max_requests: int,
 async def check_taxa_db(aphia_id: int,
                           current_user: int = Depends(get_current_user)) -> Response:  # pragma:nocover
     """
-        Check that the given apiha_id is correctly stored.
+        Check that the given aphia_id is correctly stored.
     """
     sce = TaxonomyChangeService(1)
     with RightsThrower():

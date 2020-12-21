@@ -51,7 +51,7 @@ class UserModel(_UserModelFromDB):  # type:ignore
 
 
 class UserModelWithRights(_UserModelFromDB):  # type:ignore
-    can_do: List[int] = Field(title="Actions allowed to this user, 1=create project",
+    can_do: List[int] = Field(title="Actions allowed to this user, 1=create project, 2=administrate the app",
                               default=[])
 
 
