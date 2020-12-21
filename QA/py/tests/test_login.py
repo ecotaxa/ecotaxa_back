@@ -61,4 +61,5 @@ def test_plain_API_login(config, database, caplog):
                           'name': 'User Creating Projects',
                           'organisation': None,
                           'usercreationdate': '2020-05-13T08:59:48.701060',
-                          'usercreationreason': None}
+                          'usercreationreason': None,
+                          'can_do': [1]}
