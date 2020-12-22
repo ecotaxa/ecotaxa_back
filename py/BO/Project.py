@@ -15,7 +15,7 @@ from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFiel
     ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram, ObjectCNNFeature
 from DB import Session, ResultProxy
 from DB.User import Role
-from DB.helpers.ORM import Delete, Query, select, text, any_, contains_eager
+from DB.helpers.ORM import Delete, Query, select, text, any_, contains_eager, minimal_table_of
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -157,6 +157,24 @@ class ProjectBO(object):
         """ Fallback for 'not found' field after the C getattr() call.
             If we did not enrich a Project field somehow then return it """
         return getattr(self._project, item)
+
+    def get_all_num_columns_values(self, session: Session):
+        """
+            Get all numerical free fields values for a project.
+        """
+        from sqlalchemy import MetaData
+        metadata = MetaData(bind=session.get_bind())
+        # TODO: Cache in a member
+        mappings = ProjectMapping().load_from_project(self._project)
+        num_fields_cols = set([col for col in mappings.object_mappings.tsv_cols_to_real.values()
+                               if col[0] == 'n'])
+        obj_fields_tbl = minimal_table_of(metadata, ObjectFields, num_fields_cols, exact_floats=True)
+        qry: Query = session.query(Acquisition.acquisid, obj_fields_tbl)
+        qry = qry.join(ObjectHeader, ObjectHeader.acquisid == Acquisition.acquisid)
+        qry = qry.join(obj_fields_tbl, ObjectHeader.objid == obj_fields_tbl.c.objfid)
+        qry = qry.filter(Acquisition.projid == self._project.projid)
+        qry = qry.order_by(Acquisition.acquisid)
+        return qry.all()
 
     @staticmethod
     def update_taxo_stats(session: Session, projid: int):

@@ -114,6 +114,7 @@ def show_current_user(current_user: int = Depends(get_current_user)):
     sce = UserService()
     ret = sce.search_by_id(current_user, current_user)
     assert ret is not None
+    # noinspection PyTypeHints
     ret.can_do = RightsBO.allowed_actions(ret)  # type:ignore
     return ret
 
@@ -338,8 +339,8 @@ def project_query(project_id: int,
 
 
 @app.get("/project_set/stats", tags=['projects'], response_model=List[ProjectStatsModel])
-def project_stats(ids: str,
-                  current_user: int = Depends(get_current_user)) -> List[ProjectStats]:
+def project_set_get_stats(ids: str,
+                          current_user: int = Depends(get_current_user)) -> List[ProjectStats]:
     """
         Read projects statistics, i.e. used taxa and classification states.
     """
@@ -386,6 +387,17 @@ def project_check(project_id: int,
         Check consistency of a project.
     """
     sce = ProjectConsistencyChecker(project_id)
+    with RightsThrower():
+        return sce.run(current_user)
+
+
+@app.get("/projects/{project_id}/stats", tags=['projects'])
+def project_stats(project_id: int,
+                  current_user: int = Depends(get_current_user)):
+    """
+        Check consistency of a project.
+    """
+    sce = ProjectStatsFetcher(project_id)
     with RightsThrower():
         return sce.run(current_user)
 
@@ -804,7 +816,7 @@ async def refresh_taxa_db(max_requests: int,
 @app.get("/taxa_ref_change/check/{aphia_id}", tags=['WIP'], include_in_schema=False,
          status_code=status.HTTP_200_OK)
 async def check_taxa_db(aphia_id: int,
-                          current_user: int = Depends(get_current_user)) -> Response:  # pragma:nocover
+                        current_user: int = Depends(get_current_user)) -> Response:  # pragma:nocover
     """
         Check that the given aphia_id is correctly stored.
     """

@@ -6,7 +6,7 @@ from typing import Tuple, List, Set, Dict, TypeVar, Type, Any, Union
 
 # noinspection PyUnresolvedReferences
 from sqlalchemy import Column, inspect, MetaData, Table, any_ as _pg_any, all_, not_, and_, or_, func, case, text, \
-    select, column, Integer
+    select, column, Integer, Float, FLOAT
 # noinspection PyUnresolvedReferences
 from sqlalchemy.dialects import postgresql
 # noinspection PyUnresolvedReferences
@@ -128,12 +128,13 @@ def non_key_cols(orm_clazz: ModelT) -> Set[str]:
     return set(ok_to_update)
 
 
-def minimal_table_of(metadata: MetaData, clazz, to_keep: Set[str]) -> Table:
+def minimal_table_of(metadata: MetaData, clazz, to_keep: Set[str], exact_floats=False) -> Table:
     """
         Return a Table, i.e. a SQLAlchemy mapper, with only the given fields.
     :param metadata: SQLAlchemy metadata repository.
     :param clazz: the base mapper class
     :param to_keep: the column (fields) names to keep
+    :param exact_floats: if set, FLOAT columns will be returned as Double (exact value)
     :return: new Table
     """
     # Create the ORM clone with PK + mandatory fields + wanted fields
@@ -143,6 +144,8 @@ def minimal_table_of(metadata: MetaData, clazz, to_keep: Set[str]) -> Table:
     for a_col in insp.columns:
         if a_col.primary_key or not a_col.nullable or a_col.name in to_keep:
             clone_col = a_col.copy()
+            if exact_floats and isinstance(clone_col.type, FLOAT):
+                clone_col.type = Float(asdecimal=True)
             cols.append(clone_col)
     args = [clazz.__tablename__, metadata]
     args.extend(cols)
