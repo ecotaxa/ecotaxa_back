@@ -5,15 +5,17 @@
 #
 # The 3 (soon 2) entities under Project and grouping Objects
 #
-from typing import Optional
+from typing import Optional, List
 
 from API_models.crud import ColUpdateList
 from API_operations.helpers.Service import Service
 from BO.Acquisition import AcquisitionIDListT, EnumeratedAcquisitionSet, AcquisitionBO, AcquisitionIDT
 from BO.Mappings import ProjectMapping
 from BO.Process import ProcessIDListT, EnumeratedProcessSet, ProcessIDT, ProcessBO
+from BO.Project import ProjectIDT
 from BO.Rights import RightsBO, Action
-from BO.Sample import SampleIDListT, EnumeratedSampleSet, SampleIDT, SampleBO
+from BO.Sample import SampleIDListT, EnumeratedSampleSet, SampleIDT, SampleBO, DescribedSampleSet
+from BO.User import UserIDT
 
 
 class SamplesService(Service):
@@ -22,7 +24,7 @@ class SamplesService(Service):
             The creation is managed during import.
     """
 
-    def query(self, current_user_id: Optional[int], sample_id: SampleIDT) -> Optional[SampleBO]:
+    def query(self, current_user_id: Optional[UserIDT], sample_id: SampleIDT) -> Optional[SampleBO]:
         ret = SampleBO(self.session, sample_id)
         if not ret.exists():
             return None
@@ -35,7 +37,7 @@ class SamplesService(Service):
         ret.map_free_columns(mappings.sample_mappings)
         return ret
 
-    def update_set(self, current_user_id: int, sample_ids: SampleIDListT, updates: ColUpdateList):
+    def update_set(self, current_user_id: UserIDT, sample_ids: SampleIDListT, updates: ColUpdateList):
         # Get project IDs for the samples and verify rights
         sample_set = EnumeratedSampleSet(self.session, sample_ids)
         prj_ids = sample_set.get_projects_ids()
@@ -45,6 +47,17 @@ class SamplesService(Service):
         _user, project = RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, prj_id)
         assert project  # for mypy
         return sample_set.apply_on_all(project, updates)
+
+    def search(self, current_user_id: Optional[UserIDT], project_id: ProjectIDT) -> List[SampleBO]:
+        # Security check
+        if current_user_id is None:
+            project = RightsBO.anonymous_wants(self.session, Action.READ, project_id)
+        else:
+            _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, project_id)
+        sample_set = DescribedSampleSet(self.session, project_id)
+        # mappings = ProjectMapping().load_from_project(project)
+        # ret.map_free_columns(mappings.sample_mappings)
+        return sample_set.list()
 
 
 class AcquisitionsService(Service):

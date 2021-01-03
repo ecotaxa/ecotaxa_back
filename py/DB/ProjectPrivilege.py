@@ -7,8 +7,6 @@ from sqlalchemy import Column, Sequence, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import VARCHAR, INTEGER
 from sqlalchemy.orm import relationship
 
-# Circular dependency
-# from DB.Project import Project
 from .helpers.ORM import Model
 
 

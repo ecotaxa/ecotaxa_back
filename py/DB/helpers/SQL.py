@@ -5,10 +5,11 @@
 #
 # A bit of SQL encapsulation.
 #
+from decimal import Decimal
 from typing import Union, List, Dict
 
 # A dict for sending parametrized SQL to the engine
-SQLParamDict = Dict[str, Union[int, float, str, List[int], List[str]]]
+SQLParamDict = Dict[str, Union[int, float, Decimal, str, List[int], List[str]]]
 
 
 class WhereClause(object):
@@ -24,4 +25,4 @@ class WhereClause(object):
         return self
 
     def get_sql(self):
-        return "where " + "and \n".join(self.ands)
+        return "\nWHERE" + "\n  AND".join(self.ands)

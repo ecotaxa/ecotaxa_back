@@ -11,7 +11,7 @@ from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
 from DB import Sample
 from DB.Project import Project, ANNOTATE_STATUS
-from DB.User import User, Role
+from DB.User import User
 from DB.helpers.ORM import clone_of
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
@@ -64,18 +64,17 @@ class ProjectsService(Service):
     def query(self, current_user_id: Optional[UserIDT],
               prj_id: int,
               for_managing: bool) -> ProjectBO:
-        can_administrate = False
         if current_user_id is None:
             RightsBO.anonymous_wants(self.session, Action.READ, prj_id)
+            highest_right = ""
         else:
             current_user, project = RightsBO.user_wants(self.session, current_user_id,
                                                         Action.ADMINISTRATE if for_managing else Action.READ,
                                                         prj_id)
-            if current_user.has_role(Role.APP_ADMINISTRATOR):
-                can_administrate = True
+            highest_right = RightsBO.highest_right_on(current_user, prj_id)
         ret = ProjectBOSet.get_one(self.session, prj_id)
         assert ret is not None
-        ret.can_administrate = can_administrate
+        ret.highest_right = highest_right
         return ret
 
     DELETE_CHUNK_SIZE = 400

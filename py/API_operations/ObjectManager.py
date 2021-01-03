@@ -7,14 +7,15 @@ from typing import Tuple, List, Optional, Set, Dict
 from API_models.crud import ProjectFilters, ColUpdateList
 from BO.Classification import HistoricalLastClassif, ClassifIDSetT, ClassifIDListT
 from BO.ObjectSet import DescribedObjectSet, ObjectIDListT, EnumeratedObjectSet, ObjectIDWithParentsListT
-from BO.Project import ProjectBO
+from BO.Project import ProjectBO, ProjectIDT
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
 from BO.User import UserIDT
-from DB import Project
+from DB import Project, ObjectHeader
 from DB.helpers.ORM import ResultProxy
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
+from helpers.Timer import CodeTimer
 from .helpers.Service import Service
 
 logger = get_logger(__name__)
@@ -30,27 +31,78 @@ class ObjectManager(Service):
     def __init__(self):
         super().__init__()
 
-    def query(self, current_user_id: int, proj_id: int, filters: ProjectFilters) -> ObjectIDWithParentsListT:
+    def query(self, current_user_id: Optional[UserIDT], proj_id: ProjectIDT,
+              filters: ProjectFilters,
+              order_field: Optional[str] = None,
+              window_start: Optional[int] = None,
+              window_size: Optional[int] = None) \
+            -> Tuple[ObjectIDWithParentsListT, int]:
         """
             Query the given project with given filters, return all IDs.
+            If provided order_field, the result is sorted by this field.
+            Ambiguity is solved in a stable (over calls) way.
+            window_start and window_size allow to select a window of data in the result.
         """
         # Security check
-        user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, proj_id)
+        if current_user_id is None:
+            RightsBO.anonymous_wants(self.session, Action.READ, proj_id)
+            # Anonymous can only see validated objects
+            filters["statusfilter"] = "V"
+            user_id = -1
+        else:
+            user, _project = RightsBO.user_wants(self.session, current_user_id, Action.READ, proj_id)
+            user_id = user.id
+
+        # The order field has an impact on the query
+        asc_desc = order_field_alias = None
+        if order_field is not None:
+            asc_desc = ""
+            if order_field[0] == "-":
+                asc_desc = " DESC"
+                order_field = order_field[1:]
+            if order_field == "classifname":
+                order_field_alias = "txo"
+                order_field = "name"
+            elif order_field in ObjectHeader.__dict__:
+                order_field_alias = "obh"
+            else:
+                order_field_alias = "obf"
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(self.session, proj_id, filters)
-        where, params = object_set.get_sql(user.id)
-        selected_tables = "obj_head oh"
-        if "of." in where.get_sql():  # TODO: Duplicated code
-            selected_tables += " JOIN obj_field of ON of.objfid = oh.objid"
-        sql = "SELECT objid, acquisid as processid, acquisid, sampleid FROM " + selected_tables + " " + where.get_sql()
+        selected_tables, where, params = object_set.get_sql(user_id, ensure_alias=order_field_alias)
 
-        res: ResultProxy = self.session.execute(sql, params)
-        # TODO: Below is an obscure record, and no use re-packing something just unpacked
-        ids = [(r[0], r[1], r[2], r[3], proj_id) for r in res]
-        return ids
+        sql = """
+    SET enable_seqscan=false;
+    SELECT obh.objid, obh.acquisid, obh.sampleid, count(objid) over() as total 
+      FROM """ + selected_tables + " " + where.get_sql()
 
-    def parents_by_id(self, current_user_id: int, object_ids: ObjectIDListT) -> ObjectIDWithParentsListT:
+        # Add order & window if relevant
+        if order_field is not None:
+            sql += " ORDER BY %s.%s%s, obh.objid%s" % (order_field_alias, order_field, asc_desc, asc_desc)
+        if window_start is not None:
+            sql += " OFFSET %d" % window_start
+        if window_size is not None:
+            sql += " LIMIT %d" % window_size
+
+        with CodeTimer("query: for %d using %s " % (proj_id, sql), logger):
+            res: ResultProxy = self.session.execute(sql, params)
+        ids = []
+        total = 0
+        objid: int
+        acquisid: int
+        sampleid: int
+        for objid, acquisid, sampleid, total in res:  # type:ignore
+            ids.append((objid, acquisid, acquisid, sampleid, proj_id))
+        else:
+            # No returned row, if it's due to the filter it's fine, but can be due to OFFSET too high as well.
+            # In such case we need to re-query just for the total.
+            if window_start is not None:
+                total, _nbr_v, _nbr_d, _nbr_p = self.summary(current_user_id, proj_id, filters, True)
+
+        return ids, total
+
+    def parents_by_id(self, current_user_id: UserIDT, object_ids: ObjectIDListT) -> ObjectIDWithParentsListT:
         """
             Query the given IDs, return parents.
         """
@@ -61,8 +113,10 @@ class ObjectManager(Service):
         for a_prj_id in prj_ids:
             RightsBO.user_wants(self.session, current_user_id, Action.READ, a_prj_id)
 
-        sql = "SELECT objid, acquisid as processid, acquisid, sampleid, projid " \
-              "  FROM obj_head oh WHERE oh.objid = any (:ids) "
+        sql = """
+    SELECT objid, acquisid as processid, acquisid, sampleid, projid
+      FROM obj_head obh 
+     WHERE obh.objid = any (:ids) """
         params = {"ids": object_ids}
 
         res: ResultProxy = self.session.execute(sql, params)
@@ -70,7 +124,51 @@ class ObjectManager(Service):
         ids = [(r[0], r[1], r[2], r[3], r[4]) for r in res]
         return ids
 
-    def delete(self, current_user_id: int, object_ids: ObjectIDListT) -> Tuple[int, int, int, int]:
+    def summary(self, current_user_id: Optional[UserIDT], proj_id: ProjectIDT, filters: ProjectFilters,
+                only_total: bool) -> Tuple[int, Optional[int], Optional[int], Optional[int]]:
+        """
+            Query the given project with given filters, return classification summary, or just grand total if
+            only_total is set.
+        """
+        # Security check
+        if current_user_id is None:
+            RightsBO.anonymous_wants(self.session, Action.READ, proj_id)
+            # Anonymous can only see validated objects
+            # TODO: Dup code
+            filters["statusfilter"] = "V"
+            user_id = -1
+        else:
+            user, _project = RightsBO.user_wants(self.session, current_user_id, Action.READ, proj_id)
+            user_id = user.id
+
+        # Prepare a where clause and parameters from filter
+        object_set: DescribedObjectSet = DescribedObjectSet(self.session, proj_id, filters)
+        selected_tables, where, params = object_set.get_sql(user_id)
+        # Plan says "Index Only Scan using is_objectssampleclassifqual on obj_head as oh"
+        sql = """
+    set enable_seqscan=false;
+    SELECT COUNT(*) nbr"""
+        if only_total:
+            sql += """, NULL nbr_v, NULL nbr_d, NULL nbr_p"""
+        else:
+            sql += """, 
+           COUNT(CASE WHEN obh.classif_qual = 'V' THEN 1 END) nbr_v,
+           COUNT(CASE WHEN obh.classif_qual = 'D' THEN 1 END) nbr_d, 
+           COUNT(CASE WHEN obh.classif_qual = 'P' THEN 1 END) nbr_p"""
+        sql += """
+      FROM """ + selected_tables + " " + where.get_sql()
+
+        with CodeTimer("summary: V/D/P for %d using %s " % (proj_id, sql), logger):
+            res: ResultProxy = self.session.execute(sql, params)
+
+        nbr: int
+        nbr_v: Optional[int]
+        nbr_d: Optional[int]
+        nbr_p: Optional[int]
+        nbr, nbr_v, nbr_d, nbr_p = res.first()  # type:ignore
+        return nbr, nbr_v, nbr_d, nbr_p
+
+    def delete(self, current_user_id: UserIDT, object_ids: ObjectIDListT) -> Tuple[int, int, int, int]:
         """
             Remove from DB all the objects with ID in given list.
         :return:
@@ -98,14 +196,14 @@ class ObjectManager(Service):
         remover.wait_for_done()
         return nb_objs, 0, nb_img_rows, len(img_files)
 
-    def reset_to_predicted(self, current_user_id: int, proj_id: int, filters: ProjectFilters) -> None:
+    def reset_to_predicted(self, current_user_id: UserIDT, proj_id: ProjectIDT, filters: ProjectFilters) -> None:
         """
             Query the given project with given filters, reset the resulting objects to predicted.
         """
         # Security check
         RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, proj_id)
 
-        impacted_objs = [r[0] for r in self.query(current_user_id, proj_id, filters)]
+        impacted_objs = [r[0] for r in self.query(current_user_id, proj_id, filters)[0]]
 
         EnumeratedObjectSet(self.session, impacted_objs).reset_to_predicted()
 
@@ -115,7 +213,7 @@ class ObjectManager(Service):
         ProjectBO.update_stats(self.session, proj_id)
         self.session.commit()
 
-    def _the_project_for(self, current_user_id: int, target_ids: ObjectIDListT, action: Action) \
+    def _the_project_for(self, current_user_id: UserIDT, target_ids: ObjectIDListT, action: Action) \
             -> Tuple[EnumeratedObjectSet, Project]:
         """
             Check _the_ single project for an object set, with the given right.
@@ -130,14 +228,14 @@ class ObjectManager(Service):
         assert project  # for mypy
         return object_set, project
 
-    def update_set(self, current_user_id: int, target_ids: ObjectIDListT, updates: ColUpdateList) -> int:
+    def update_set(self, current_user_id: UserIDT, target_ids: ObjectIDListT, updates: ColUpdateList) -> int:
         """
             Update the given set, using provided updates.
         """
         object_set, project = self._the_project_for(current_user_id, target_ids, Action.ADMINISTRATE)
         return object_set.apply_on_all(project, updates)
 
-    def revert_to_history(self, current_user_id: int, proj_id: int,
+    def revert_to_history(self, current_user_id: UserIDT, proj_id: ProjectIDT,
                           filters: ProjectFilters, dry_run: bool,
                           target: Optional[int]) -> Tuple[List[HistoricalLastClassif], ClassifSetInfoT]:
         """
@@ -147,7 +245,7 @@ class ObjectManager(Service):
         RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, proj_id)
 
         # Get target objects
-        impacted_objs = [r[0] for r in self.query(current_user_id, proj_id, filters)]
+        impacted_objs = [r[0] for r in self.query(current_user_id, proj_id, filters)[0]]
         obj_set = EnumeratedObjectSet(self.session, impacted_objs)
 
         # We don't revert to a previous version in history from same annotator

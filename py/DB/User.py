@@ -37,7 +37,6 @@ class User(Model):
     # Preferences, per project, the global ones kept in field above.
     preferences_for_projects: relationship
 
-
     @staticmethod
     def find_users(session: Session, names: List[str], emails: List[str], found_users: dict):
         """

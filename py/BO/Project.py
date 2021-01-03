@@ -48,7 +48,7 @@ class ProjectBO(object):
     def __init__(self, project: Project):
         self._project = project
         # Added values
-        self.can_administrate = False
+        self.highest_right = ""  # This field depends on the user asking for the information
         self.obj_free_cols: Dict[str, str] = {}
         self.sample_free_cols: Dict[str, str] = {}
         self.acquisition_free_cols: Dict[str, str] = {}

@@ -72,8 +72,8 @@ class _AddedToProject(BaseModel):
                                         default=[])
     viewers: List[UserModel] = Field(title="Viewers of this project, if not manager nor annotator",
                                      default=[])
-    can_administrate: bool = Field(title="Requester can administrate the project",
-                                   default=False)
+    highest_right: str = Field(title="The highest right for requester on this project. One of 'Manage', 'Annotate', 'View'.",
+                                   default="")
     license: LicenseEnum = Field(title="Data licence",
                                  default=LicenseEnum.Copyright)
 

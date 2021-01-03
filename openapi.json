@@ -82,7 +82,7 @@
           "users"
         ],
         "summary":"Show Current User",
-        "description":"Return currently authenticated user.",
+        "description":"Return currently authenticated user. On top of DB fields, 'can_do' lists the allowed system-wide actions.",
         "operationId":"show_current_user_users_me_get",
         "responses":{
           "200":{
@@ -90,7 +90,7 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "$ref":"#/components/schemas/UserModel"
+                  "$ref":"#/components/schemas/UserModelWithRights"
                 }
               }
             }
@@ -990,9 +990,9 @@
         "tags":[
           "projects"
         ],
-        "summary":"Project Stats",
+        "summary":"Project Set Get Stats",
         "description":"Read projects statistics, i.e. used taxa and classification states.",
-        "operationId":"project_stats_project_set_stats_get",
+        "operationId":"project_set_get_stats_project_set_stats_get",
         "parameters":[
           {
             "required":true,
@@ -1010,7 +1010,7 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "title":"Response Project Stats Project Set Stats Get",
+                  "title":"Response Project Set Get Stats Project Set Stats Get",
                   "type":"array",
                   "items":{
                     "$ref":"#/components/schemas/ProjectStatsModel"
@@ -1111,6 +1111,52 @@
         "summary":"Project Check",
         "description":"Check consistency of a project.",
         "operationId":"project_check_projects__project_id__check_get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Project Id",
+              "type":"integer"
+            },
+            "name":"project_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/projects/{project_id}/stats":{
+      "get":{
+        "tags":[
+          "projects"
+        ],
+        "summary":"Project Stats",
+        "description":"Check consistency of a project.",
+        "operationId":"project_stats_projects__project_id__stats_get",
         "parameters":[
           {
             "required":true,
@@ -1347,6 +1393,58 @@
               "application/json":{
                 "schema":{
                   "$ref":"#/components/schemas/SimpleImportRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/samples/search":{
+      "get":{
+        "tags":[
+          "samples"
+        ],
+        "summary":"Samples Search",
+        "description":"Read all samples for a project.",
+        "operationId":"samples_search_samples_search_get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Project Id",
+              "type":"integer"
+            },
+            "name":"project_id",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Samples Search Samples Search Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/SampleModel"
+                  }
                 }
               }
             }
@@ -1657,7 +1755,7 @@
           "objects"
         ],
         "summary":"Get Object Set",
-        "description":"Return object ids for the given project with the filters.",
+        "description":"Return object ids for the given project with the filters.\nOptionally:\n    - order_field will order the result using given field, If prefixed with \"-\" then it will be reversed.\n    - window_start & window_size allows to return only a slice of the result.",
         "operationId":"get_object_set_object_set__project_id__query_post",
         "parameters":[
           {
@@ -1668,6 +1766,33 @@
             },
             "name":"project_id",
             "in":"path"
+          },
+          {
+            "required":false,
+            "schema":{
+              "title":"Order Field",
+              "type":"string"
+            },
+            "name":"order_field",
+            "in":"query"
+          },
+          {
+            "required":false,
+            "schema":{
+              "title":"Window Start",
+              "type":"integer"
+            },
+            "name":"window_start",
+            "in":"query"
+          },
+          {
+            "required":false,
+            "schema":{
+              "title":"Window Size",
+              "type":"integer"
+            },
+            "name":"window_size",
+            "in":"query"
           }
         ],
         "requestBody":{
@@ -1687,6 +1812,73 @@
               "application/json":{
                 "schema":{
                   "$ref":"#/components/schemas/ObjectSetQueryRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/object_set/{project_id}/summary":{
+      "post":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Get Object Set Summary",
+        "description":"For the given project, with given filters, return the classification summary, i.e.:\n    - Total number of objects\nAlso if 'only_total' is not set:\n    - Number of Validated ones\n    - Number of Dubious ones\n    - Number of Predicted ones",
+        "operationId":"get_object_set_summary_object_set__project_id__summary_post",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Project Id",
+              "type":"integer"
+            },
+            "name":"project_id",
+            "in":"path"
+          },
+          {
+            "required":true,
+            "schema":{
+              "title":"Only Total",
+              "type":"boolean"
+            },
+            "name":"only_total",
+            "in":"query"
+          }
+        ],
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/ProjectFilters"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/ObjectSetSummaryRsp"
                 }
               }
             }
@@ -2119,6 +2311,33 @@
               "application/json":{
                 "schema":{
                   "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/taxa/status":{
+      "get":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Taxa Tree Status",
+        "description":"Return the status of taxonomy tree w/r to freshness.",
+        "operationId":"taxa_tree_status_taxa_status_get",
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/TaxonomyTreeStatus"
                 }
               }
             }
@@ -3360,6 +3579,11 @@
               "type":"integer"
             },
             "default":[]
+          },
+          "total_ids":{
+            "title":"Total rows returned by the query, even if it was window-ed",
+            "type":"integer",
+            "default":0
           }
         }
       },
@@ -3379,6 +3603,28 @@
             "title":"Classification names (self+parent) for involved IDs",
             "type":"object",
             "default":{}
+          }
+        }
+      },
+      "ObjectSetSummaryRsp":{
+        "title":"ObjectSetSummaryRsp",
+        "type":"object",
+        "properties":{
+          "total_objects":{
+            "title":"Total number of objects in the set",
+            "type":"integer"
+          },
+          "validated_objects":{
+            "title":"Number of validated objects in the set",
+            "type":"integer"
+          },
+          "dubious_objects":{
+            "title":"Number of dubious objects in the set",
+            "type":"integer"
+          },
+          "predicted_objects":{
+            "title":"Number of predicted objects in the set",
+            "type":"integer"
           }
         }
       },
@@ -3594,10 +3840,10 @@
             },
             "default":[]
           },
-          "can_administrate":{
-            "title":"Requester can administrate the project",
-            "type":"boolean",
-            "default":false
+          "highest_right":{
+            "title":"The highest right for requester on this project. One of 'Manage', 'Annotate', 'View'.",
+            "type":"string",
+            "default":""
           },
           "license":{
             "title":"License",
@@ -3934,6 +4180,16 @@
           }
         }
       },
+      "TaxonomyTreeStatus":{
+        "title":"TaxonomyTreeStatus",
+        "type":"object",
+        "properties":{
+          "last_refresh":{
+            "title":"Taxonomy tree last refresh/sync from taxonomy server. Date, with format YYYY-MM-DDThh:mm:ss.",
+            "type":"string"
+          }
+        }
+      },
       "UserModel":{
         "title":"UserModel",
         "required":[
@@ -3974,6 +4230,57 @@
           "usercreationreason":{
             "title":"Usercreationreason",
             "type":"string"
+          }
+        }
+      },
+      "UserModelWithRights":{
+        "title":"UserModelWithRights",
+        "required":[
+          "email",
+          "name"
+        ],
+        "type":"object",
+        "properties":{
+          "id":{
+            "title":"Id",
+            "type":"integer"
+          },
+          "email":{
+            "title":"Email",
+            "type":"string"
+          },
+          "name":{
+            "title":"Name",
+            "type":"string"
+          },
+          "organisation":{
+            "title":"Organisation",
+            "type":"string"
+          },
+          "active":{
+            "title":"Active",
+            "type":"boolean"
+          },
+          "country":{
+            "title":"Country",
+            "type":"string"
+          },
+          "usercreationdate":{
+            "title":"Usercreationdate",
+            "type":"string",
+            "format":"date-time"
+          },
+          "usercreationreason":{
+            "title":"Usercreationreason",
+            "type":"string"
+          },
+          "can_do":{
+            "title":"Actions allowed to this user, 1=create project, 2=administrate the app",
+            "type":"array",
+            "items":{
+              "type":"integer"
+            },
+            "default":[]
           }
         }
       },

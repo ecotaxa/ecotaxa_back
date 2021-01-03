@@ -42,6 +42,14 @@ class ObjectSetQueryRsp(BaseModel):
     acquisition_ids: List[Optional[int]] = Field(title="Parent (acquisition) IDs", default=[])
     sample_ids: List[Optional[int]] = Field(title="Parent (sample) IDs", default=[])
     project_ids: List[Optional[int]] = Field(title="Project IDs", default=[])
+    total_ids: int = Field(title="Total rows returned by the query, even if it was window-ed", default=0)
+
+
+class ObjectSetSummaryRsp(BaseModel):
+    total_objects: Optional[int] = Field(title="Total number of objects in the set", default=None)
+    validated_objects: Optional[int] = Field(title="Number of validated objects in the set", default=None)
+    dubious_objects: Optional[int] = Field(title="Number of dubious objects in the set", default=None)
+    predicted_objects: Optional[int] = Field(title="Number of predicted objects in the set", default=None)
 
 
 HistoricalLastClassificationModel = dataclass_to_model(HistoricalLastClassif)

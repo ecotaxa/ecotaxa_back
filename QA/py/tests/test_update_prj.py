@@ -26,7 +26,7 @@ def test_update_prj(config, database, fastapi, caplog):
                                           'threshold': 't07',
                                           'volimage': 't02'},
                 'annotators': [],
-                'can_administrate': True,
+                'highest_right': 'Manage',
                 'classiffieldlist': None,
                 'classifsettings': None,
                 'cnn_network_id': None,

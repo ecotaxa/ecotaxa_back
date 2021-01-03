@@ -116,14 +116,9 @@ class JsonDumper(Service):
         """
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(self.session, self.prj.projid, self.filters)
-        where, params = object_set.get_sql(self.requester_id)
+        selected_tables, where, params = object_set.get_sql(self.requester_id)
 
-        sql = """
-            SELECT objid 
-              FROM objects oh
-                """ + where.get_sql()
-
-        assert 'of.' not in sql
+        sql = """ SELECT objid FROM """ + selected_tables + where.get_sql()
 
         logger.info("SQL=%s", sql)
         logger.info("SQLParam=%s", params)

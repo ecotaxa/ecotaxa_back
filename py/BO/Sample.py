@@ -9,7 +9,7 @@
 from typing import List, Dict, Any
 
 from API_models.crud import ColUpdateList
-from BO.Project import ProjectIDListT
+from BO.Project import ProjectIDListT, ProjectIDT
 from DB import Session, Query, Project, Sample, Acquisition, ObjectHeader
 from DB.helpers.ORM import any_, ResultProxy, and_
 from helpers.DynamicLogs import get_logger
@@ -83,6 +83,26 @@ class SampleBO(MappedEntity):
                                           ObjectHeader.acquisid == Acquisition.acquisid))
         return qry.all()
 
+
+class DescribedSampleSet(object):
+    """
+        A set of samples, so far all of them for a project.
+    """
+
+    def __init__(self, session: Session, prj_id: ProjectIDT):
+        self._session = session
+        self.prj_id = prj_id
+
+    def list(self) -> List[SampleBO]:
+        """
+            Return all samples from description.
+            TODO: No free columns value so far.
+        """
+        qry: Query = self._session.query(Sample)
+        qry = qry.join(Sample, Project.all_samples)
+        qry = qry.filter(Project.projid == self.prj_id)
+        ret = [a_sample for a_sample in qry.all()]
+        return ret
 
 class EnumeratedSampleSet(MappedTable):
     """

@@ -19,7 +19,7 @@ from API_models.imports import *
 from API_models.login import LoginReq
 from API_models.merge import MergeRsp
 from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp, ClassifyReq, ObjectModel, \
-    ObjectHeaderModel, HistoricalClassificationModel
+    ObjectHeaderModel, HistoricalClassificationModel, ObjectSetSummaryRsp
 from API_models.subset import SubsetReq, SubsetRsp
 from API_models.taxonomy import TaxaSearchRsp, TaxonModel, TaxonomyTreeStatus
 from API_operations.CRUD.Collections import CollectionsService
@@ -489,6 +489,19 @@ def update_project(project_id: int,
 
 # ######################## END OF PROJECT
 
+@app.get("/samples/search", tags=['samples'], response_model=List[SampleModel])
+def samples_search(project_id: int,
+                   current_user: Optional[int] = Depends(get_optional_current_user)) \
+        -> List[SampleBO]:
+    """
+        Read all samples for a project.
+    """
+    sce = SamplesService()
+    with RightsThrower():
+        ret = sce.search(current_user, project_id)
+    return ret
+
+
 @app.post("/sample_set/update", tags=['samples'])
 def update_samples(req: BulkUpdateReq,
                    current_user: int = Depends(get_current_user)) -> int:
@@ -586,19 +599,49 @@ def process_query(process_id: int,
 @app.post("/object_set/{project_id}/query", tags=['objects'], response_model=ObjectSetQueryRsp)
 def get_object_set(project_id: int,
                    filters: ProjectFiltersModel,
-                   current_user: int = Depends(get_current_user)) -> ObjectSetQueryRsp:
+                   order_field: Optional[str] = None,
+                   # TODO: Should be a user-visible field name, not nXXX, in case of free field
+                   window_start: Optional[int] = None,
+                   window_size: Optional[int] = None,
+                   current_user: Optional[int] = Depends(get_optional_current_user)) -> ObjectSetQueryRsp:
     """
         Return object ids for the given project with the filters.
+        Optionally:
+            - order_field will order the result using given field, If prefixed with "-" then it will be reversed.
+            - window_start & window_size allows to return only a slice of the result.
     """
     sce = ObjectManager()
     with RightsThrower():
         rsp = ObjectSetQueryRsp()
-        obj_with_parents = sce.query(current_user, project_id, filters)
+        obj_with_parents, total = sce.query(current_user, project_id, filters, order_field, window_start, window_size)
+    rsp.total_ids = total
     rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
-    rsp.process_ids = [with_p[1] for with_p in obj_with_parents]
     rsp.acquisition_ids = [with_p[2] for with_p in obj_with_parents]
     rsp.sample_ids = [with_p[3] for with_p in obj_with_parents]
     rsp.project_ids = [with_p[4] for with_p in obj_with_parents]
+    # For compatibility with client code TODO:Remove
+    rsp.process_ids = rsp.acquisition_ids
+    return rsp
+
+
+@app.post("/object_set/{project_id}/summary", tags=['objects'], response_model=ObjectSetSummaryRsp)
+def get_object_set_summary(project_id: int,
+                           only_total: bool,
+                           filters: ProjectFiltersModel,
+                           current_user: Optional[int] = Depends(get_optional_current_user)) -> ObjectSetSummaryRsp:
+    """
+        For the given project, with given filters, return the classification summary, i.e.:
+            - Total number of objects
+        Also if 'only_total' is not set:
+            - Number of Validated ones
+            - Number of Dubious ones
+            - Number of Predicted ones
+    """
+    sce = ObjectManager()
+    with RightsThrower():
+        rsp = ObjectSetSummaryRsp()
+        rsp.total_objects, rsp.validated_objects, rsp.dubious_objects, rsp.predicted_objects \
+            = sce.summary(current_user, project_id, filters, only_total)
     return rsp
 
 

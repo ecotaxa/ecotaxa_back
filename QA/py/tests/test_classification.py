@@ -146,6 +146,8 @@ def test_classif(config, database, fastapi, caplog):
     assert classif2 is not None
     # Date is not predictable
     classif2[0]['classif_date'] = 'hopefully just now'
+    # nor object_id
+    classif2[0]['objid'] = 1
     assert classif2 == [{'classif_date': 'hopefully just now',
                          'classif_id': 25828,
                          'classif_qual': 'V',

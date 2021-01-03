@@ -9,6 +9,7 @@
 # The set comprises all objects from a Project, except the ones filtered by a set of criteria.
 #
 from collections import OrderedDict
+from decimal import Decimal
 from typing import Tuple, Optional, List, Iterator, Callable, Dict
 
 from sqlalchemy import select, text, func, true
@@ -48,16 +49,22 @@ class DescribedObjectSet(object):
         self.prj_id = prj_id
         self.filters = ObjectSetFilter(session, filters)
 
-    def get_sql(self, user_id: int) -> Tuple[WhereClause, SQLParamDict]:
+    def get_sql(self, user_id: int, ensure_alias: Optional[str] = None) -> Tuple[str, WhereClause, SQLParamDict]:
         """
             Construct SQL parts for getting the IDs of objects.
             :return:
         """
-        where = WhereClause()
-        where *= " oh.projid = :projid "
+        # The filters on objects
+        obj_where = WhereClause()
         params: SQLParamDict = {"projid": self.prj_id}
-        self.filters.get_sql_filter(where, params, user_id)
-        return where, params
+        self.filters.get_sql_filter(obj_where, params, user_id)
+        selected_tables = "obj_head obh"
+        selected_tables += "\n JOIN samples sam ON sam.sampleid = obh.sampleid"
+        if "obf." in obj_where.get_sql() or ensure_alias == "obf":
+            selected_tables += "\n JOIN obj_field obf ON obf.objfid = obh.objid"
+        if "txo." in obj_where.get_sql() or ensure_alias == "txo":
+            selected_tables += "\n LEFT JOIN taxonomy txo ON txo.id = obh.classif_id"
+        return selected_tables, obj_where, params
 
 
 class EnumeratedObjectSet(MappedTable):
@@ -382,12 +389,12 @@ class ObjectSetFilter(object):
         self.taxo: Optional[str] = filters.get("taxo", "")
         self.taxo_child: bool = filters.get("taxochild", "") == "Y"
         self.statusfilter: Optional[str] = filters.get("statusfilter", "")
-        self.MapN: Optional[str] = filters.get("MapN", '')
-        self.MapW: Optional[str] = filters.get("MapW", '')
-        self.MapE: Optional[str] = filters.get("MapE", '')
-        self.MapS: Optional[str] = filters.get("MapS", '')
-        self.depth_min: Optional[str] = filters.get("depthmin", '')
-        self.depth_max: Optional[str] = filters.get("depthmax", '')
+        self.MapN: Optional[Decimal] = self._str_to_decimal(filters, "MapN")
+        self.MapW: Optional[Decimal] = self._str_to_decimal(filters, "MapW")
+        self.MapE: Optional[Decimal] = self._str_to_decimal(filters, "MapE")
+        self.MapS: Optional[Decimal] = self._str_to_decimal(filters, "MapS")
+        self.depth_min: Optional[Decimal] = self._str_to_decimal(filters, "depthmin")
+        self.depth_max: Optional[Decimal] = self._str_to_decimal(filters, "depthmax")
         # A coma-separated list of numerical sample ids
         self.samples: Optional[str] = filters.get("samples", '')
         self.instrument: Optional[str] = filters.get("instrum", '')
@@ -407,8 +414,8 @@ class ObjectSetFilter(object):
         self.validated_to: Optional[str] = filters.get("validtodate", '')
         # Free fields AKA features filtering
         self.free_num: Optional[str] = filters.get("freenum", '')
-        self.free_num_start: Optional[str] = filters.get("freenumst", '')
-        self.free_num_end: Optional[str] = filters.get("freenumend", '')
+        self.free_num_start: Optional[Decimal] = self._str_to_decimal(filters, "freenumst")
+        self.free_num_end: Optional[Decimal] = self._str_to_decimal(filters, "freenumend")
         # Free text filtering
         self.free_text: Optional[str] = filters.get("freetxt", '')
         self.free_text_val: Optional[str] = filters.get("freetxtval", "")
@@ -417,19 +424,42 @@ class ObjectSetFilter(object):
         # Only the last annotator, unlike "filt_annot" which digs in history
         self.last_annotators: Optional[str] = filters.get('filt_last_annot', '')
 
-    def get_sql_filter(self, where_clause: WhereClause,
-                       params: SQLParamDict, user_id: int) -> None:
+    @staticmethod
+    def _str_to_decimal(a_dict: ProjectFilters, a_key: str) -> Optional[Decimal]:
+        # noinspection PyTypedDict
+        val = a_dict.get(a_key, '')
+        if val:
+            assert isinstance(val, str)  # for mypy
+            return Decimal(val)
+        else:
+            return None
+
+    def get_sql_filter(self, where_clause: WhereClause, params: SQLParamDict, user_id: int) -> None:
         """
-            The generated SQL assumes that, in the query, 'oh' is the alias for object_head aka ObjectHeader
-            and 'of' the alias for ObjectFields
+            The generated SQL assumes that, in the query:
+                'obh' is the alias for object_head aka ObjectHeader
+                'obf' the alias for ObjectFields
         :param user_id: For filtering validators.
-        :param where_clause: SQL filtering clauses will be added there.
+        :param where_clause: SQL filtering clauses on objects will be added there.
         :param params: SQL params will be added there.
         :return:
         """
 
+        # Hierarchy first
+        if self.samples:
+            samples_ids = [int(x) for x in self.samples.split(',')]
+            if samples_ids == [-1]:
+                # Special values, pick one
+                where_clause *= " sam.sampleid = (select max(sampleid) from samples sam2 where sam2.projid = :projid) "
+            else:
+                where_clause *= " sam.sampleid = any (:samples) "
+                params['samples'] = samples_ids
+        else:
+            # Pick all samples from project
+            where_clause *= " sam.projid = :projid "
+
         if self.taxo:
-            where_clause *= " oh.classif_id = any (:taxo) "
+            where_clause *= " obh.classif_id = any (:taxo) "
             if self.taxo_child:
                 # TODO: Cache if used
                 params['taxo'] = list(TaxonomyBO.children_of(self.session, [int(self.taxo)]))
@@ -438,118 +468,114 @@ class ObjectSetFilter(object):
 
         if self.statusfilter:
             if self.statusfilter == "NV":
-                where_clause *= " (oh.classif_qual != 'V' or oh.classif_qual is null) "
+                where_clause *= " (obh.classif_qual != 'V' or obh.classif_qual is null) "
             elif self.statusfilter == "PV":
-                where_clause *= " oh.classif_qual in ('V','P') "
+                where_clause *= " obh.classif_qual in ('V','P') "
             elif self.statusfilter == "NVM":
-                where_clause *= " oh.classif_qual = 'V' "
-                where_clause *= " oh.classif_who != " + str(user_id) + " "
+                where_clause *= " obh.classif_qual = 'V' "
+                where_clause *= " obh.classif_who != " + str(user_id) + " "
             elif self.statusfilter == "VM":
-                where_clause *= " oh.classif_qual= 'V' "
-                where_clause *= " oh.classif_who = " + str(user_id) + " "
+                where_clause *= " obh.classif_qual= 'V' "
+                where_clause *= " obh.classif_who = " + str(user_id) + " "
             elif self.statusfilter == "U":
-                where_clause *= " oh.classif_qual is null "
+                where_clause *= " obh.classif_qual is null "
             else:
-                where_clause *= " oh.classif_qual = '" + self.statusfilter + "' "
+                where_clause *= " obh.classif_qual = '" + self.statusfilter + "' "
 
         if self.MapN and self.MapW and self.MapE and self.MapS:
-            where_clause *= " oh.latitude between :MapS and :MapN "
-            where_clause *= " oh.longitude between :MapW and :MapE "
+            where_clause *= " obh.latitude between :MapS and :MapN "
+            where_clause *= " obh.longitude between :MapW and :MapE "
             params['MapN'] = self.MapN
             params['MapW'] = self.MapW
             params['MapE'] = self.MapE
             params['MapS'] = self.MapS
 
         if self.depth_min and self.depth_max:
-            where_clause *= " oh.depth_min between :depthmin and :depthmax "
-            where_clause *= " oh.depth_max between :depthmin and :depthmax "
+            where_clause *= " obh.depth_min between :depthmin and :depthmax "
+            where_clause *= " obh.depth_max between :depthmin and :depthmax "
             params['depthmin'] = self.depth_min
             params['depthmax'] = self.depth_max
 
-        if self.samples:
-            where_clause *= " oh.sampleid = any (:samples) "
-            params['samples'] = [int(x) for x in self.samples.split(',')]
-
         if self.instrument:
-            where_clause *= " oh.acquisid in (select acquisid " \
+            where_clause *= " obh.acquisid in (select acquisid " \
                             "                  from acquisitions " \
                             "                 where instrument ilike :instrum " \
                             "                   and projid = :projid ) "
             params['instrum'] = '%' + self.instrument + '%'
 
         if self.daytime:
-            where_clause *= " oh.sunpos = any (:daytime) "
+            where_clause *= " obh.sunpos = any (:daytime) "
             params['daytime'] = [x for x in self.daytime.split(',')]
 
         if self.months:
-            where_clause *= " extract(month from oh.objdate) = any (:month) "
+            where_clause *= " extract(month from obh.objdate) = any (:month) "
             params['month'] = [int(x) for x in self.months.split(',')]
 
         if self.from_date:
-            where_clause *= " oh.objdate >= to_date(:fromdate,'YYYY-MM-DD') "
+            where_clause *= " obh.objdate >= to_date(:fromdate,'YYYY-MM-DD') "
             params['fromdate'] = self.from_date
 
         if self.to_date:
-            where_clause *= " oh.objdate <= to_date(:todate,'YYYY-MM-DD') "
+            where_clause *= " obh.objdate <= to_date(:todate,'YYYY-MM-DD') "
             params['todate'] = self.to_date
 
         if self.invert_time:
             if self.from_time and self.to_time:
-                where_clause *= " (oh.objtime <= time :fromtime or oh.objtime >= time :totime) "
+                where_clause *= " (obh.objtime <= time :fromtime or obh.objtime >= time :totime) "
                 params['fromtime'] = self.from_time
                 params['totime'] = self.to_time
         else:
             if self.from_time:
-                where_clause *= " oh.objtime >= time :fromtime "
+                where_clause *= " obh.objtime >= time :fromtime "
                 params['fromtime'] = self.from_time
             if self.to_time:
-                where_clause *= " oh.objtime <= time :totime "
+                where_clause *= " obh.objtime <= time :totime "
                 params['totime'] = self.to_time
 
         if self.validated_from:
-            where_clause *= " oh.classif_when >= to_timestamp(:validfromdate,'YYYY-MM-DD HH24:MI') "
+            where_clause *= " obh.classif_when >= to_timestamp(:validfromdate,'YYYY-MM-DD HH24:MI') "
             params['validfromdate'] = self.validated_from
 
         if self.validated_to:
-            where_clause *= " oh.classif_when <= to_timestamp(:validtodate,'YYYY-MM-DD HH24:MI') "
+            where_clause *= " obh.classif_when <= to_timestamp(:validtodate,'YYYY-MM-DD HH24:MI') "
             params['validtodate'] = self.validated_to
 
         if self.free_num and self.free_num_start:
             criteria_col = "n%02d" % int(self.free_num[2:])
-            where_clause *= " of." + criteria_col + " >= :freenumst "
+            where_clause *= " obf." + criteria_col + " >= :freenumst "
             params['freenumst'] = self.free_num_start
 
         if self.free_num and self.free_num_end:
             criteria_col = "n%02d" % int(self.free_num[2:])
-            where_clause *= " of." + criteria_col + " <= :freenumend "
+            where_clause *= " obf." + criteria_col + " <= :freenumend "
             params['freenumend'] = self.free_num_end
 
         if self.free_text and self.free_text_val:
             criteria_tbl = self.free_text[0]
             criteria_col = "t%02d" % int(self.free_text[2:])
             if criteria_tbl == 'o':
-                where_clause *= " of." + criteria_col + " ilike :freetxtval "
+                where_clause *= " obf." + criteria_col + " ilike :freetxtval "
             elif criteria_tbl == 'a':
-                where_clause *= " oh.acquisid in (select acquisid from acquisitions s " \
+                where_clause *= " obh.acquisid in (select acquisid from acquisitions s " \
                                 "                  where " + criteria_col + " ilike :freetxtval " + \
                                 "                    and projid = :projid ) "
             elif criteria_tbl == 's':
-                where_clause *= " oh.sampleid in (select sampleid from samples s " \
+                where_clause *= " obh.sampleid in (select sampleid from samples s " \
                                 "                  where " + criteria_col + " ilike :freetxtval " + \
                                 "                    and projid = :projid ) "
             elif criteria_tbl == 'p':
-                where_clause *= " oh.acquisid in (select processid from process s " \
+                where_clause *= " obh.acquisid in (select processid from process s " \
                                 "                   where " + criteria_col + " ilike :freetxtval " + \
                                 "                     and projid = :projid ) "
             params['freetxtval'] = '%' + self.free_text_val + '%'
 
         if self.annotators:
-            where_clause *= " (oh.classif_who = any (:filt_annot) " \
+            where_clause *= " (obh.classif_who = any (:filt_annot) " \
                             "  or exists (select classif_who " \
                             "               from " + ObjectsClassifHisto.__tablename__ + " och " + \
-                            "              where och.objid = oh.objid " \
+                            "              where och.objid = obh.objid " \
                             "                and classif_who = any (:filt_annot) ) ) "
             params['filt_annot'] = [int(x) for x in self.annotators.split(',')]
         elif self.last_annotators:
-            where_clause *= " oh.classif_who = any (:filt_annot) "
+            where_clause *= " obh.classif_who = any (:filt_annot) "
             params['filt_annot'] = [int(x) for x in self.last_annotators.split(',')]

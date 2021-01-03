@@ -68,12 +68,35 @@ class RightsBO(object):
         return user, project
 
     @staticmethod
+    def highest_right_on(user: User, prj_id: int) -> str:
+        """
+            Return the highest right for this user onto this project.
+        """
+        # Check
+        if user.has_role(Role.APP_ADMINISTRATOR):
+            # King of the world
+            return ProjectPrivilegeBO.MANAGE
+        else:
+            a_priv: ProjectPrivilege
+            # Collect privileges for user on project
+            # noinspection PyTypeChecker
+            rights_on_proj = {a_priv.privilege for a_priv in user.privs_on_projects
+                              if a_priv.projid == prj_id}
+            if ProjectPrivilegeBO.MANAGE in rights_on_proj:
+                return ProjectPrivilegeBO.MANAGE
+            elif ProjectPrivilegeBO.ANNOTATE in rights_on_proj:
+                return ProjectPrivilegeBO.ANNOTATE
+            elif ProjectPrivilegeBO.VIEW in rights_on_proj:
+                return ProjectPrivilegeBO.VIEW
+        return ""
+
+    @staticmethod
     def user_wants_create_project(session: Session, user_id: int) \
             -> User:
         """
-            Check rights for the user to do this specific action, eventually onto this project.
+            Check rights for the user to do this specific action.
         """
-        # Load ORM entities
+        # Load ORM entity
         user: User = session.query(User).get(user_id)
         assert user is not None, NOT_AUTHORIZED
         # Check
