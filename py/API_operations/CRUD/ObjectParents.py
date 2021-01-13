@@ -9,7 +9,8 @@ from typing import Optional, List
 
 from API_models.crud import ColUpdateList
 from API_operations.helpers.Service import Service
-from BO.Acquisition import AcquisitionIDListT, EnumeratedAcquisitionSet, AcquisitionBO, AcquisitionIDT
+from BO.Acquisition import AcquisitionIDListT, EnumeratedAcquisitionSet, AcquisitionBO, AcquisitionIDT, \
+    DescribedAcquisitionSet
 from BO.Mappings import ProjectMapping
 from BO.Process import ProcessIDListT, EnumeratedProcessSet, ProcessIDT, ProcessBO
 from BO.Project import ProjectIDT
@@ -89,6 +90,17 @@ class AcquisitionsService(Service):
         _user, project = RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, prj_id)
         assert project  # for mypy
         return acquisition_set.apply_on_all(project, updates)
+
+    def search(self, current_user_id: Optional[UserIDT], project_id: ProjectIDT) -> List[AcquisitionBO]:
+        # Security check
+        if current_user_id is None:
+            project = RightsBO.anonymous_wants(self.session, Action.READ, project_id)
+        else:
+            _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, project_id)
+        acquisition_set = DescribedAcquisitionSet(self.session, project_id)
+        # mappings = ProjectMapping().load_from_project(project)
+        # ret.map_free_columns(mappings.sample_mappings)
+        return acquisition_set.list()
 
 
 class ProcessesService(Service):

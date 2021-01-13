@@ -10,7 +10,7 @@ from typing import List, Any, Dict
 from API_models.crud import ColUpdateList
 from BO.Classification import ClassifIDT
 from BO.Mappings import ProjectMapping
-from BO.Project import ProjectIDListT
+from BO.Project import ProjectIDListT, ProjectIDT
 from BO.helpers.MappedEntity import MappedEntity
 from BO.helpers.MappedTable import MappedTable
 from DB import Session, Query, Project, Acquisition
@@ -88,3 +88,24 @@ class EnumeratedAcquisitionSet(MappedTable):
 
     def add_filter(self, upd):
         return upd.filter(Acquisition.acquisid == any_(self.ids))
+
+
+class DescribedAcquisitionSet(object):
+    """
+        A set of acquisitions, so far all of them for a project.
+    """
+
+    def __init__(self, session: Session, prj_id: ProjectIDT):
+        self._session = session
+        self.prj_id = prj_id
+
+    def list(self) -> List[AcquisitionBO]:
+        """
+            Return all acquisitions from description.
+            TODO: No free columns value so far.
+        """
+        qry: Query = self._session.query(Acquisition)
+        qry = qry.join(Acquisition, Project.all_acquisitions)
+        qry = qry.filter(Project.projid == self.prj_id)
+        ret = [an_acquis for an_acquis in qry.all()]
+        return ret

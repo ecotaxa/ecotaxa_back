@@ -545,6 +545,19 @@ def update_acquisitions(req: BulkUpdateReq,
         return sce.update_set(current_user, req.target_ids, req.updates)
 
 
+@app.get("/acquisitions/search", tags=['acquisitions'], response_model=List[AcquisitionModel])
+def acquisitions_search(project_id: int,
+                        current_user: Optional[int] = Depends(get_optional_current_user)) \
+        -> List[AcquisitionBO]:
+    """
+        Read all acquisitions for a project.
+    """
+    sce = AcquisitionsService()
+    with RightsThrower():
+        ret = sce.search(current_user, project_id)
+    return ret
+
+
 @app.get("/acquisition/{acquisition_id}", tags=['acquisitions'], response_model=AcquisitionModel)
 def acquisition_query(acquisition_id: int,
                       current_user: Optional[int] = Depends(get_optional_current_user)) \
