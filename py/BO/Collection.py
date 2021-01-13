@@ -117,6 +117,8 @@ class CollectionBO(object):
         project_ids.sort()
         # TODO: projects update using given list
         assert project_ids == self.project_ids, "Cannot update composing projects yet"
+        # Redo sanity check & aggregation as underlying projects might have changed
+        self._add_composing_projects(session, project_ids)
         coll_id = self._collection.id
         # Simple fields update
         self._collection.title = title
@@ -129,6 +131,7 @@ class CollectionBO(object):
         # Copy contact user id
         if contact_user is not None:
             self._collection.contact_user_id = contact_user.id
+
         # Dispatch members by role
         by_role = {COLLECTION_ROLE_DATA_CREATOR: creator_users,
                    COLLECTION_ROLE_ASSOCIATED_PERSON: associate_users}
@@ -141,6 +144,7 @@ class CollectionBO(object):
                 session.add(CollectionUserRole(collection_id=coll_id,
                                                user_id=a_user.id,
                                                role=a_role))
+
         # Dispatch orgs by role
         by_role_org = {COLLECTION_ROLE_DATA_CREATOR: creator_orgs,
                        COLLECTION_ROLE_ASSOCIATED_PERSON: associate_orgs}

@@ -96,7 +96,7 @@ class EMODnetExport(TaskServiceBase):
         self.add_events(arch)
         # OK we issue warning in case of individual issue, but if no content at all
         # then it's an error
-        if arch.events.count() == 0 or arch.occurences.count() == 0 or arch.emofs.count() == 0:
+        if arch.events.count() == 0 and arch.occurences.count() == 0 and arch.emofs.count() == 0:
             self.errors.append("No content produced."
                                " See previous warnings or check the presence of samples in the projects")
         else:
@@ -199,10 +199,16 @@ class EMODnetExport(TaskServiceBase):
                 creators.append(person)
         for an_org in the_collection.creator_organisations:
             creators.append(self.organisation_to_eml_person(an_org))
+        if len(creators) == 0:
+            self.errors.append("No valid data creator (user or organisation) found for EML metadata.")
 
         contact, errs = self.user_to_eml_person(the_collection.contact_user, "contact")
+        if contact is None:
+            self.errors.append("No valid contact user found for EML metadata.")
 
         provider, errs = self.user_to_eml_person(the_collection.provider_user, "provider")
+        if provider is None:
+            self.errors.append("No valid metadata provider user found for EML metadata.")
 
         associates: List[EMLPerson] = []
         for a_user in the_collection.associate_users:
