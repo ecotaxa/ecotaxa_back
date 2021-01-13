@@ -13,6 +13,7 @@ from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
 from BO.User import UserIDT
 from DB import Project, ObjectHeader
 from DB.helpers.ORM import ResultProxy
+from DB.helpers.SQL import OrderClause
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
@@ -47,39 +48,38 @@ class ObjectManager(Service):
         if current_user_id is None:
             RightsBO.anonymous_wants(self.session, Action.READ, proj_id)
             # Anonymous can only see validated objects
-            filters["statusfilter"] = "V"
+            # noinspection PyTypeHints
+            filters.statusfilter = "V"  # type:ignore
             user_id = -1
         else:
             user, _project = RightsBO.user_wants(self.session, current_user_id, Action.READ, proj_id)
             user_id = user.id
 
         # The order field has an impact on the query
-        asc_desc = order_field_alias = None
-        if order_field is not None:
-            asc_desc = ""
-            if order_field[0] == "-":
-                asc_desc = " DESC"
-                order_field = order_field[1:]
-            if order_field == "classifname":
-                order_field_alias = "txo"
-                order_field = "name"
-            elif order_field in ObjectHeader.__dict__:
-                order_field_alias = "obh"
-            else:
-                order_field_alias = "obf"
+        order_clause = self.cook_order_clause(order_field)
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(self.session, proj_id, filters)
-        selected_tables, where, params = object_set.get_sql(user_id, ensure_alias=order_field_alias)
 
+        from_, where, params = object_set.get_sql(user_id, order_clause)
+
+        if "obf." in where.get_sql():
+            # If the filter needs obj_field data it's more efficient to count with a window function
+            # than issuing a second query.
+            extra_col = ", COUNT(objid) OVER() AS total"
+        else:
+            # Otherwise, no need for obj_field in count, less DB buffers
+            extra_col = ", 0 AS total"
+
+        # The following hint is needed until we sort out why, time to time, there is a FTS on obj_head
         sql = """
-    SET enable_seqscan=false;
-    SELECT obh.objid, obh.acquisid, obh.sampleid, count(objid) over() as total 
-      FROM """ + selected_tables + " " + where.get_sql()
+    SET LOCAL enable_seqscan=FALSE;
+    SELECT obh.objid, obh.acquisid, obh.sampleid %s
+      FROM """ % extra_col + from_.get_sql() + " " + where.get_sql()
 
         # Add order & window if relevant
-        if order_field is not None:
-            sql += " ORDER BY %s.%s%s, obh.objid%s" % (order_field_alias, order_field, asc_desc, asc_desc)
+        if order_clause is not None:
+            sql += order_clause.get_sql()
         if window_start is not None:
             sql += " OFFSET %d" % window_start
         if window_size is not None:
@@ -93,14 +93,37 @@ class ObjectManager(Service):
         acquisid: int
         sampleid: int
         for objid, acquisid, sampleid, total in res:  # type:ignore
-            ids.append((objid, acquisid, acquisid, sampleid, proj_id))
-        else:
-            # No returned row, if it's due to the filter it's fine, but can be due to OFFSET too high as well.
-            # In such case we need to re-query just for the total.
-            if window_start is not None:
-                total, _nbr_v, _nbr_d, _nbr_p = self.summary(current_user_id, proj_id, filters, True)
+            ids.append((objid, acquisid, sampleid, proj_id))
+
+        if total == 0:
+            # Total was not computed or left to 0
+            total, _nbr_v, _nbr_d, _nbr_p = self.summary(current_user_id, proj_id, filters, True)
 
         return ids, total
+
+    @staticmethod
+    def cook_order_clause(order_field: Optional[str]) -> Optional[OrderClause]:
+        """
+            Prepare a SQL "order by" clause from the required field.
+        """
+        ret = None
+        if order_field is not None:
+            ret = OrderClause()
+            asc_desc = None
+            if order_field[0] == "-":
+                asc_desc = "DESC"
+                order_field = order_field[1:]
+            if order_field == "classifname":
+                order_field_alias = "txo"
+                order_field = "name"
+            elif order_field in ObjectHeader.__dict__:
+                order_field_alias = "obh"
+            else:
+                order_field_alias = "obf"
+            ret.add_expression(order_field_alias, order_field, asc_desc)
+            # Disambiguate using obj_id
+            ret.add_expression("obh", "objid", asc_desc)
+        return ret
 
     def parents_by_id(self, current_user_id: UserIDT, object_ids: ObjectIDListT) -> ObjectIDWithParentsListT:
         """
@@ -114,15 +137,15 @@ class ObjectManager(Service):
             RightsBO.user_wants(self.session, current_user_id, Action.READ, a_prj_id)
 
         sql = """
-    SELECT objid, acquisid as processid, acquisid, sampleid, projid
+    SELECT objid, acquisid, sampleid, projid
       FROM obj_head obh 
      WHERE obh.objid = any (:ids) """
         params = {"ids": object_ids}
 
         res: ResultProxy = self.session.execute(sql, params)
-        # TODO: Below is an obscure record, and no use re-packing something just unpacked
-        ids = [(r[0], r[1], r[2], r[3], r[4]) for r in res]
-        return ids
+        ids = [(objid, acquisid, acquisid, sampleid, projid)
+               for objid, acquisid, sampleid, projid in res]
+        return ids  # type:ignore
 
     def summary(self, current_user_id: Optional[UserIDT], proj_id: ProjectIDT, filters: ProjectFilters,
                 only_total: bool) -> Tuple[int, Optional[int], Optional[int], Optional[int]]:
@@ -135,7 +158,8 @@ class ObjectManager(Service):
             RightsBO.anonymous_wants(self.session, Action.READ, proj_id)
             # Anonymous can only see validated objects
             # TODO: Dup code
-            filters["statusfilter"] = "V"
+            # noinspection PyTypeHints
+            filters.statusfilter = "V"  # type:ignore
             user_id = -1
         else:
             user, _project = RightsBO.user_wants(self.session, current_user_id, Action.READ, proj_id)
@@ -143,10 +167,9 @@ class ObjectManager(Service):
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(self.session, proj_id, filters)
-        selected_tables, where, params = object_set.get_sql(user_id)
-        # Plan says "Index Only Scan using is_objectssampleclassifqual on obj_head as oh"
+        from_, where, params = object_set.get_sql(user_id)
         sql = """
-    set enable_seqscan=false;
+    SET LOCAL enable_seqscan=FALSE;
     SELECT COUNT(*) nbr"""
         if only_total:
             sql += """, NULL nbr_v, NULL nbr_d, NULL nbr_p"""
@@ -156,7 +179,7 @@ class ObjectManager(Service):
            COUNT(CASE WHEN obh.classif_qual = 'D' THEN 1 END) nbr_d, 
            COUNT(CASE WHEN obh.classif_qual = 'P' THEN 1 END) nbr_p"""
         sql += """
-      FROM """ + selected_tables + " " + where.get_sql()
+      FROM """ + from_.get_sql() + " " + where.get_sql()
 
         with CodeTimer("summary: V/D/P for %d using %s " % (proj_id, sql), logger):
             res: ResultProxy = self.session.execute(sql, params)
@@ -171,7 +194,6 @@ class ObjectManager(Service):
     def delete(self, current_user_id: UserIDT, object_ids: ObjectIDListT) -> Tuple[int, int, int, int]:
         """
             Remove from DB all the objects with ID in given list.
-        :return:
         """
         # Security check
         obj_set = EnumeratedObjectSet(self.session, object_ids)

@@ -221,13 +221,13 @@ class SubsetServiceOnProject(TaskServiceOnProjectBase):
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(self.session, self.prj_id, self.req.filters)
-        selected_tables, where, params = object_set.get_sql(self.task.owner_id)
+        from_, where, params = object_set.get_sql(self.task.owner_id)
 
         sql = """
             SELECT objid FROM (
                 SELECT """ + rank_function + """() OVER (PARTITION BY classif_id ORDER BY RANDOM()) rang,
                        obh.objid
-                  FROM """ + selected_tables + """
+                  FROM """ + from_.get_sql() + """
                 """ + where.get_sql() + """ ) sr
             WHERE rang <= :ranklimit """
         params['ranklimit'] = self.req.limit_value

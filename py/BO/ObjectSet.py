@@ -19,7 +19,7 @@ from sqlalchemy.engine import ResultProxy
 
 from API_models.crud import ProjectFilters, ColUpdateList
 from BO.Classification import HistoricalLastClassif, ClassifIDListT
-from BO.Object import ObjectIDT
+from BO.Object import ObjectIDT, ObjectIDWithParentsT
 from BO.Project import ProjectIDListT
 from BO.Taxonomy import TaxonomyBO
 from BO.User import UserIDT
@@ -27,7 +27,7 @@ from BO.helpers.MappedTable import MappedTable
 from DB import Project, ObjectHeader, Image, and_
 from DB.Object import ObjectsClassifHisto, ObjectFields
 from DB.helpers.ORM import Session, Query, Delete, Update, Insert, any_, postgresql, or_, case
-from DB.helpers.SQL import WhereClause, SQLParamDict
+from DB.helpers.SQL import WhereClause, SQLParamDict, FromClause, OrderClause
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -49,21 +49,24 @@ class DescribedObjectSet(object):
         self.prj_id = prj_id
         self.filters = ObjectSetFilter(session, filters)
 
-    def get_sql(self, user_id: int, ensure_alias: Optional[str] = None) -> Tuple[str, WhereClause, SQLParamDict]:
+    def get_sql(self, user_id: int, order_clause: Optional[OrderClause] = None) \
+            -> Tuple[FromClause, WhereClause, SQLParamDict]:
         """
             Construct SQL parts for getting the IDs of objects.
             :return:
         """
+        if order_clause is None:
+            order_clause = OrderClause()
         # The filters on objects
         obj_where = WhereClause()
         params: SQLParamDict = {"projid": self.prj_id}
         self.filters.get_sql_filter(obj_where, params, user_id)
-        selected_tables = "obj_head obh"
-        selected_tables += "\n JOIN samples sam ON sam.sampleid = obh.sampleid"
-        if "obf." in obj_where.get_sql() or ensure_alias == "obf":
-            selected_tables += "\n JOIN obj_field obf ON obf.objfid = obh.objid"
-        if "txo." in obj_where.get_sql() or ensure_alias == "txo":
-            selected_tables += "\n LEFT JOIN taxonomy txo ON txo.id = obh.classif_id"
+        selected_tables = FromClause("obj_head obh")
+        selected_tables += "samples sam ON sam.sampleid = obh.sampleid"
+        if "obf." in obj_where.get_sql() + order_clause.get_sql():
+            selected_tables += "obj_field obf ON obf.objfid = obh.objid"
+        if "txo." in obj_where.get_sql() + order_clause.get_sql():
+            selected_tables += "taxonomy txo ON txo.id = obh.classif_id"
         return selected_tables, obj_where, params
 
 
@@ -388,7 +391,7 @@ class ObjectSetFilter(object):
         # Now to the filters
         self.taxo: Optional[str] = filters.get("taxo", "")
         self.taxo_child: bool = filters.get("taxochild", "") == "Y"
-        self.statusfilter: Optional[str] = filters.get("statusfilter", "")
+        self.status_filter: Optional[str] = filters.get("statusfilter", "")
         self.MapN: Optional[Decimal] = self._str_to_decimal(filters, "MapN")
         self.MapW: Optional[Decimal] = self._str_to_decimal(filters, "MapW")
         self.MapE: Optional[Decimal] = self._str_to_decimal(filters, "MapE")
@@ -466,21 +469,21 @@ class ObjectSetFilter(object):
             else:
                 params['taxo'] = [int(x) for x in self.taxo.split(',')]
 
-        if self.statusfilter:
-            if self.statusfilter == "NV":
-                where_clause *= " (obh.classif_qual != 'V' or obh.classif_qual is null) "
-            elif self.statusfilter == "PV":
-                where_clause *= " obh.classif_qual in ('V','P') "
-            elif self.statusfilter == "NVM":
-                where_clause *= " obh.classif_qual = 'V' "
-                where_clause *= " obh.classif_who != " + str(user_id) + " "
-            elif self.statusfilter == "VM":
-                where_clause *= " obh.classif_qual= 'V' "
-                where_clause *= " obh.classif_who = " + str(user_id) + " "
-            elif self.statusfilter == "U":
-                where_clause *= " obh.classif_qual is null "
+        if self.status_filter:
+            if self.status_filter == "NV":
+                where_clause *= "(obh.classif_qual != 'V' or obh.classif_qual is null)"
+            elif self.status_filter == "PV":
+                where_clause *= "obh.classif_qual in ('V','P')"
+            elif self.status_filter == "NVM":
+                where_clause *= "obh.classif_qual = 'V'"
+                where_clause *= "obh.classif_who != " + str(user_id)
+            elif self.status_filter == "VM":
+                where_clause *= "obh.classif_qual= 'V'"
+                where_clause *= "obh.classif_who = " + str(user_id)
+            elif self.status_filter == "U":
+                where_clause *= "obh.classif_qual is null"
             else:
-                where_clause *= " obh.classif_qual = '" + self.statusfilter + "' "
+                where_clause *= "obh.classif_qual = '" + self.status_filter + "'"
 
         if self.MapN and self.MapW and self.MapE and self.MapS:
             where_clause *= " obh.latitude between :MapS and :MapN "
