@@ -216,15 +216,19 @@ class EnumeratedObjectSet(MappedTable):
     def apply_on_all(self, project: Project, updates: ColUpdateList) -> int:
         """
             Apply all updates on all objects pointed at by the list.
-            Depending on the field it becomes an object_header or an object_fields update.
         """
-        upd0 = updates[0]
-        if upd0["ucol"] in ObjectHeader.__dict__:
-            if upd0["ucol"] == "classif_id":
-                self.historize_classification()
-            return self._apply_on_all_non_mapped(ObjectHeader, updates)
-        else:
-            return self._apply_on_all(ObjectFields, project, updates)
+        mapped_updates = []
+        direct_updates = []
+        for an_upd in updates:
+            if an_upd["ucol"] in ObjectHeader.__dict__:
+                if an_upd["ucol"] == "classif_id":
+                    self.historize_classification()
+                direct_updates.append(an_upd)
+            else:
+                mapped_updates.append(an_upd)
+        # Return
+        return max(self._apply_on_all_non_mapped(ObjectHeader, direct_updates),
+                   self._apply_on_all(ObjectFields, project, mapped_updates))
 
     def add_filter(self, upd):
         if "obj_head." in str(upd):

@@ -234,7 +234,7 @@ def test_api_updates(config, database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json() == 1
 
-    # Update first 4 objects objects
+    # Update first 4 objects
     # TODO: Use the API for querying
     objs, _total = ObjectManager().query(ADMIN_USER_ID, prj_id, {})
     objs = [an_obj[0] for an_obj in objs]
@@ -243,17 +243,7 @@ def test_api_updates(config, database, fastapi, caplog):
     req = {"target_ids": objs[0:4],
            "updates":
                [{"ucol": "orig_id", "uval": "no more unique :("},
-                # magic but doesn't work as it's either ObjectHeader or ObjectFields
                 {"ucol": "classif_when", "uval": "current_timestamp"}]
-           }
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
-    assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json() == 4
-
-    req = {"target_ids": objs[4:],
-           "updates":
-               [  # magic and works
-                   {"ucol": "classif_when", "uval": "current_timestamp"}]
            }
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
