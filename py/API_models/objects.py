@@ -13,6 +13,7 @@ from API_models.helpers.DataclassToModel import dataclass_to_model
 from BO.Classification import HistoricalLastClassif, HistoricalClassification
 from BO.ObjectSet import ObjectIDListT
 from DB import Image, ObjectHeader
+from .helpers.pydantic import ResponseModel
 
 ObjectHeaderModel = sqlalchemy_to_pydantic(ObjectHeader)
 
@@ -36,16 +37,15 @@ class ObjectModel(ObjectHeaderModel, ObjectFieldsModel):  # type:ignore
                                          default={})
 
 
-class ObjectSetQueryRsp(BaseModel):
+class ObjectSetQueryRsp(ResponseModel):
     object_ids: ObjectIDListT = Field(title="Matching object IDs", default=[])
-    process_ids: List[Optional[int]] = Field(title="Parent (process) IDs", default=[])
     acquisition_ids: List[Optional[int]] = Field(title="Parent (acquisition) IDs", default=[])
     sample_ids: List[Optional[int]] = Field(title="Parent (sample) IDs", default=[])
     project_ids: List[Optional[int]] = Field(title="Project IDs", default=[])
     total_ids: int = Field(title="Total rows returned by the query, even if it was window-ed", default=0)
 
 
-class ObjectSetSummaryRsp(BaseModel):
+class ObjectSetSummaryRsp(ResponseModel):
     total_objects: Optional[int] = Field(title="Total number of objects in the set", default=None)
     validated_objects: Optional[int] = Field(title="Number of validated objects in the set", default=None)
     dubious_objects: Optional[int] = Field(title="Number of dubious objects in the set", default=None)
@@ -75,6 +75,6 @@ class ClassifyReq(BaseModel):
 HistoricalClassificationModel = dataclass_to_model(HistoricalClassification)
 
 
-class ObjectHistoryRsp(BaseModel):
+class ObjectHistoryRsp(ResponseModel):
     classif: List[HistoricalClassificationModel] = Field(title="The classification history",  # type:ignore
                                                          default=[])

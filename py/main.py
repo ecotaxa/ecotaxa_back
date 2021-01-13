@@ -52,7 +52,7 @@ from BO.Taxonomy import TaxonBO
 from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower, \
-    get_optional_current_user
+    get_optional_current_user, MyORJSONResponse
 from helpers.login import LoginService
 
 logger = get_logger(__name__)
@@ -64,6 +64,7 @@ app = FastAPI(title="EcoTaxa",
               # openapi URL as seen from navigator
               openapi_url="/api/openapi.json",
               # root_path="/API_models"
+              default_response_class=MyORJSONResponse
               )
 
 # Instrument a bit
@@ -596,7 +597,9 @@ def process_query(process_id: int,
 
 # TODO /query pas bon!
 
-@app.post("/object_set/{project_id}/query", tags=['objects'], response_model=ObjectSetQueryRsp)
+@app.post("/object_set/{project_id}/query", tags=['objects'], response_model=ObjectSetQueryRsp,
+          response_class=MyORJSONResponse  # Force the ORJSON encoder
+          )
 def get_object_set(project_id: int,
                    filters: ProjectFiltersModel,
                    order_field: Optional[str] = None,
@@ -707,7 +710,9 @@ def classify_object_set(req: ClassifyReq,
 
 
 # TODO: For small lists we could have a GET
-@app.post("/object_set/parents", tags=['objects'], response_model=ObjectSetQueryRsp)
+@app.post("/object_set/parents", tags=['objects'], response_model=ObjectSetQueryRsp,
+          response_class=MyORJSONResponse  # Force the ORJSON encoder
+          )
 def query_object_set_parents(object_ids: ObjectIDListT,
                              current_user: int = Depends(get_current_user)) -> ObjectSetQueryRsp:
     """

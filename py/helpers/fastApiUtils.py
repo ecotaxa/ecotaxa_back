@@ -9,9 +9,11 @@ import traceback
 from os.path import dirname
 from typing import Any, Optional
 
+import orjson
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from itsdangerous import URLSafeTimedSerializer, TimestampSigner, SignatureExpired, BadSignature
+from starlette.responses import JSONResponse
 
 from helpers.link_to_legacy import read_config
 from .starlette import status, PlainTextResponse
@@ -157,3 +159,22 @@ class RightsThrower(object):
                         raise _not_found_exception
             # Re-raise
             raise Exception(str(exc_val)).with_traceback(exc_tb)
+
+
+class MyORJSONResponse(JSONResponse):
+    """
+        A copy/paste of ORJSONResponse but setting some permissive parameters on the 'dumps' call.
+    """
+    media_type = "application/json"
+
+    try:
+        import orjson
+
+        def render(self, content: Any) -> bytes:
+            return orjson.dumps(content, option=orjson.OPT_NON_STR_KEYS)
+
+    except ImportError:
+        def render(self, content: Any) -> bytes:
+            assert False, "orjson must be installed to use ORJSONResponse"
+            # noinspection PyUnreachableCode
+            return bytes()
