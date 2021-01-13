@@ -39,10 +39,11 @@ def test_queries(config, database, fastapi, caplog):
     # Add a sample spanning 2 days
     test_import_a_bit_more_skipping(config, database, caplog, "Queries test project")
 
-    ref = [1, 2, 3, 11, 12, 13, 4, 5, 6, 7, 8]
+    ref = [6, 7, 8, 11, 12, 13, 1, 2, 3, 4, 5]
     all = _prj_query(fastapi, CREATOR_AUTH, prj_id, order="depth_min")
     # we must offset expected by first actual objID as they vary, run to run
-    ref = [r + all[0] - 1 for r in ref]
+    min_objid = min(all)
+    ref = [r + min_objid - 1 for r in ref]
     assert all == ref
 
     all = _prj_query(fastapi, CREATOR_AUTH, prj_id, order="-depth_min")

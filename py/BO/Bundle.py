@@ -40,6 +40,7 @@ class InBundle(object):
         self.possible_files: List[Path] = []
         for a_filter in self.TSV_FILTERS:
             self.possible_files.extend(self.path.glob(a_filter))
+        self.possible_files.sort()
         self.sub_bundles: List[UVP6Bundle] = [UVP6Bundle(a_bundle, temp_dir)
                                               for a_bundle in self.path.glob(self.UVP6_FILTER)]
 
@@ -198,7 +199,7 @@ class InBundle(object):
             report_def(num_file, len(self.sub_bundles))
             total_row_count += rows_for_csv
 
-        for num_file, a_file in enumerate(sorted(self.possible_files)):
+        for num_file, a_file in enumerate(self.possible_files):
             # TSV file with attached images
             tsv_to_validate = TSVFile(a_file, self.path)
             relative_name = tsv_to_validate.relative_name
@@ -238,6 +239,7 @@ class InBundle(object):
             Add a TSV file for treatment.
         """
         self.possible_files.append(a_tsv_file)
+        self.possible_files.sort()
 
     IMAGE_FILTERS = ("**/*.jpg", "**/*.png", "**/*.tif")
 
