@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.5"
+    "version":"0.0.6"
   },
   "paths":{
     "/login":{
@@ -1584,6 +1584,58 @@
             "content":{
               "application/json":{
                 "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/acquisitions/search":{
+      "get":{
+        "tags":[
+          "acquisitions"
+        ],
+        "summary":"Acquisitions Search",
+        "description":"Read all acquisitions for a project.",
+        "operationId":"acquisitions_search_acquisitions_search_get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Project Id",
+              "type":"integer"
+            },
+            "name":"project_id",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Acquisitions Search Acquisitions Search Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/AcquisitionModel"
+                  }
+                }
               }
             }
           },
@@ -3548,14 +3600,6 @@
             },
             "default":[]
           },
-          "process_ids":{
-            "title":"Parent (process) IDs",
-            "type":"array",
-            "items":{
-              "type":"integer"
-            },
-            "default":[]
-          },
           "acquisition_ids":{
             "title":"Parent (acquisition) IDs",
             "type":"array",
@@ -3585,7 +3629,8 @@
             "type":"integer",
             "default":0
           }
-        }
+        },
+        "description":"Tuned model for faster serialization out.\nTODO: A bit useless in the context as FastAPI does _not_ use ser/deser from the model.\n      Instead, it produces what needs to be sent over the wire and calls a JSON encoder onto it.\n      So 1) It calls def jsonable_encoder (in FastAPI encoders.py)\n         2) It calls an encoder (presently ORJSONEncoder in main.py)"
       },
       "ObjectSetRevertToHistoryRsp":{
         "title":"ObjectSetRevertToHistoryRsp",
@@ -3626,7 +3671,8 @@
             "title":"Number of predicted objects in the set",
             "type":"integer"
           }
-        }
+        },
+        "description":"Tuned model for faster serialization out.\nTODO: A bit useless in the context as FastAPI does _not_ use ser/deser from the model.\n      Instead, it produces what needs to be sent over the wire and calls a JSON encoder onto it.\n      So 1) It calls def jsonable_encoder (in FastAPI encoders.py)\n         2) It calls an encoder (presently ORJSONEncoder in main.py)"
       },
       "ProcessModel":{
         "title":"ProcessModel",

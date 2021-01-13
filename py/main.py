@@ -60,7 +60,7 @@ logger = get_logger(__name__)
 # TODO: A nicer API doc, see https://github.com/tiangolo/fastapi/issues/1140
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.5",
+              version="0.0.6",
               # openapi URL as seen from navigator
               openapi_url="/api/openapi.json",
               # root_path="/API_models"
