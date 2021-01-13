@@ -198,7 +198,7 @@ class InBundle(object):
             report_def(num_file, len(self.sub_bundles))
             total_row_count += rows_for_csv
 
-        for num_file, a_file in enumerate(self.possible_files):
+        for num_file, a_file in enumerate(sorted(self.possible_files)):
             # TSV file with attached images
             tsv_to_validate = TSVFile(a_file, self.path)
             relative_name = tsv_to_validate.relative_name
