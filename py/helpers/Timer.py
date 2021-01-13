@@ -22,4 +22,5 @@ class CodeTimer(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         elapsed = time.time() - self.start
-        self.logger.info(self.msg + "%.02fms" % (elapsed*1000))
+        if exc_type is None:
+            self.logger.info(self.msg + "%.02fms" % (elapsed*1000))

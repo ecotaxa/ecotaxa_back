@@ -37,8 +37,8 @@ def config() -> EcoTaxaConfig:
     DBWriter.SEQUENCE_CACHE_SIZE = 5
     TSVFile.REPORT_EVERY = 5
     # Empty Vault
-    vault = Vault(join(link.read_link()[0], 'vault'))
-    shutil.rmtree(vault.path / "0000", ignore_errors=True)
+    vault = Vault(join(link.read_link(), 'vault'))
+    shutil.rmtree(vault.sub_path("0000"), ignore_errors=True)
     yield conf
     # Teardown
     conf.cleanup()

@@ -21,7 +21,8 @@ class AcquisitionStats(object):
         - distribution of != values
         - mode, i.e. freq of most frequent value
     """
-    def __init__(self, acquis_id: AcquisitionIDT):
+    def __init__(self, acquis_orig_id: str, acquis_id: AcquisitionIDT):
+        self.acquis_orig_id = acquis_orig_id
         self.acquis_id = acquis_id
         self.minima: List[Decimal] = []
         self.maxima: List[Decimal] = []
@@ -62,7 +63,7 @@ class AcquisitionStats(object):
         return self.nb_objs * len(self.minima), sum(self.modes)
 
     def __str__(self):
-        ret = "%d (%d): " % (self.acquis_id, self.nb_objs)
+        ret = "%s (%d): " % (self.acquis_orig_id, self.nb_objs)
         ret += ",".join(["[%s,%s,#%d,u%s]"
                          % (self.remove_exponent(min_val), self.remove_exponent(max_val), len(distrib), a_mode)
                          for min_val, max_val, distrib, a_mode in
@@ -88,9 +89,9 @@ class ProjectStatsFetcher(Service):
         from decimal import getcontext
         print(getcontext())
         free_cols_vals = proj_bo.get_all_num_columns_values(self.session)
-        acquis_stats: AcquisitionStats = AcquisitionStats(0)
+        acquis_stats: AcquisitionStats = AcquisitionStats("", 0)
         for a_row in free_cols_vals:
-            acquis_id, objid, orig_id, *free_vals = a_row
+            acquis_id, acquis_orig_id, objid, orig_id, *free_vals = a_row
             free_vals = [a_val if a_val is not None else Decimal('nan')
                          for a_val in free_vals]
             if acquis_id == acquis_stats.acquis_id:
@@ -101,5 +102,5 @@ class ProjectStatsFetcher(Service):
                 acquis_stats.aggregate()
                 ret.append(str(acquis_stats))
                 ret.append("Total: %d values, dup %d values" % acquis_stats.sums())
-                acquis_stats = AcquisitionStats(acquis_id)
+                acquis_stats = AcquisitionStats(acquis_orig_id, acquis_id)
         return ret

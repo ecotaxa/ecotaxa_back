@@ -12,6 +12,7 @@ from tests.test_import import test_api_import_images
 import io
 
 PROJECT_DELETE_URL = "/projects/{project_id}?only_objects={only_objects}"
+OBJECT_SET_DELETE_URL = "/object_set/"
 
 
 def test_api_project_delete(config, database, fastapi, caplog):

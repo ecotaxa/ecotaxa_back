@@ -8,11 +8,11 @@ from typing import Dict, Tuple, List, Any
 
 import httpx
 import requests
-# noinspection PyPackageRequirements,PyProtectedMember
-from httpcore._exceptions import ProtocolError
-from httpx import HTTPError
 
 from helpers.Asyncio import async_sleep
+
+
+# noinspection PyPackageRequirements,PyProtectedMember
 
 
 class WoRMSFinder(object):
@@ -64,12 +64,12 @@ class WoRMSFinder(object):
         chunk_num = page * cls.CHUNK_SIZE + 1
         req = cls.WoRMS_URL_ClassifChildrenByAphia % (aphia_id, chunk_num)
         nb_queries = 1
-        try:
-            response = await cls.client.get(cls.BASE_URL + req)
-        # httpcore._exceptions.ProtocolError: can't handle event type ConnectionClosed
+        # try:
+        response = await cls.client.get(cls.BASE_URL + req)
+        # Seen: httpcore._exceptions.ProtocolError: can't handle event type ConnectionClosed
         # when role=SERVER and state=SEND_RESPONSE
-        except ProtocolError as e:
-            raise HTTPError("%s trying %s" % (e, req))
+        # except ProtocolError as e:
+        #     raise HTTP_X_Error("%s trying %s" % (e, req), request=req)
         if response.status_code == 204:
             # No content
             pass
@@ -79,8 +79,8 @@ class WoRMSFinder(object):
                 next_page, cont_queries = await cls.aphia_children_by_id(aphia_id, page + 1)
                 res.extend(next_page)
                 nb_queries += cont_queries
-        else:
-            raise HTTPError("%d trying %s" % (response.status_code, req))
+        # else:
+        #     raise HTTP_X_Error("%d trying %s" % (response.status_code, req), request=req)
         return res, nb_queries
 
     @classmethod

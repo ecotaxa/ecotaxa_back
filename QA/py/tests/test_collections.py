@@ -29,6 +29,11 @@ def test_create_collection(config, database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
     coll_id = rsp.json()
 
+    # Faulty re-read
+    url = COLLECTION_QUERY_URL.format(collection_id=-1)
+    rsp = fastapi.get(url)
+    assert rsp.status_code == status.HTTP_403_FORBIDDEN
+
     # Re-read
     url = COLLECTION_QUERY_URL.format(collection_id=coll_id)
     rsp = fastapi.get(url)

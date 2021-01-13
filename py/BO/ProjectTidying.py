@@ -101,5 +101,5 @@ class ProjectTopology(object):
         for acquis_user_id in self.acquisition_parents.keys():
             if acquis_user_id not in self.acquisition_child:
                 ret.append("Acquisition '%s' has no associated Process "
-                           % (acquis_user_id,))
+                           % (acquis_user_id,))  # pragma: no cover
         return ret

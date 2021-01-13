@@ -7,9 +7,10 @@ import logging
 from starlette import status
 
 from tests.credentials import CREATOR_AUTH, ORDINARY_USER2_USER_ID, ADMIN_AUTH
+from tests.test_objectset_query import OBJECT_SET_QUERY_URL
 from tests.test_subentities import OBJECT_HISTORY_QUERY_URL
 
-OBJECT_SET_QUERY_URL = "/object_set/{project_id}/query"
+from API_models.crud import ProjectFilters
 
 
 def _prj_query(fastapi, auth, prj_id, **kwargs):
@@ -24,6 +25,8 @@ OBJECT_SET_REVERT_URL = "/object_set/{project_id}/revert_to_history?dry_run={dry
 OBJECT_SET_RESET_PREDICTED_URL = "/object_set/{project_id}/reset_to_predicted"
 OBJECT_SET_CLASSIFY_URL = "/object_set/classify"
 OBJECT_SET_DELETE_URL = "/object_set/"
+OBJECT_SET_SUMMARY_URL = "/object_set/{project_id}/summary?only_total=False"
+OBJECT_SET_PARENTS_URL = "/object_set/parents"
 PROJECT_STATS_URL = "/project_set/stats?ids={project_ids}"
 TAXA_SET_QUERY_URL = "/taxa_set/query?ids={taxa_ids}"
 
@@ -56,6 +59,13 @@ def test_classif(config, database, fastapi, caplog):
         stats_rsp = fastapi.get(stats_url, headers=ADMIN_AUTH)
         assert stats_rsp.status_code == status.HTTP_200_OK
         return stats_rsp.json()[0]
+
+    def get_object_set_stats():
+        stats_url = OBJECT_SET_SUMMARY_URL.format(project_id=prj_id)
+        filters = ProjectFilters()
+        stats_rsp = fastapi.post(stats_url, headers=ADMIN_AUTH, json=filters)
+        assert stats_rsp.status_code == status.HTTP_200_OK
+        return stats_rsp.json()
 
     # All is predicted, see source archive
     assert get_stats() == {'nb_dubious': 0,
@@ -93,6 +103,12 @@ def test_classif(config, database, fastapi, caplog):
                            'nb_validated': 0,
                            'projid': prj_id,
                            'used_taxa': [-1]}
+
+    obj_stats = get_object_set_stats()
+    assert obj_stats == {'dubious_objects': 0,
+                         'predicted_objects': 0,
+                         'total_objects': 8,
+                         'validated_objects': 0}
 
     # Reset all to predicted
     url = OBJECT_SET_RESET_PREDICTED_URL.format(project_id=prj_id)
@@ -179,3 +195,10 @@ def test_classif(config, database, fastapi, caplog):
     # Delete some object via API, why not?
     rsp = fastapi.delete(OBJECT_SET_DELETE_URL, headers=ADMIN_AUTH, json=obj_ids[:4])
     assert rsp.status_code == status.HTTP_200_OK
+
+    # Ensure they are gone
+    rsp = fastapi.post(OBJECT_SET_PARENTS_URL, headers=ADMIN_AUTH, json=obj_ids)
+    assert rsp.status_code == status.HTTP_200_OK
+    resp = rsp.json()
+    assert len(resp['acquisition_ids']) == 4
+    assert resp['total_ids'] == 4
