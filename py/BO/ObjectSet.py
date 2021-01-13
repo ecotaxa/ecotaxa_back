@@ -34,7 +34,7 @@ from helpers.Timer import CodeTimer
 # Typings, to be clear that these are not e.g. project IDs
 ObjectIDListT = List[int]
 # Object_id + parents + project
-ObjectIDWithParentsListT = List[Tuple[int, int, int, int, int]]
+ObjectIDWithParentsListT = List[ObjectIDWithParentsT]
 
 logger = get_logger(__name__)
 
@@ -451,18 +451,14 @@ class ObjectSetFilter(object):
         # Hierarchy first
         if self.samples:
             samples_ids = [int(x) for x in self.samples.split(',')]
-            if samples_ids == [-1]:
-                # Special values, pick one
-                where_clause *= " sam.sampleid = (select max(sampleid) from samples sam2 where sam2.projid = :projid) "
-            else:
-                where_clause *= " sam.sampleid = any (:samples) "
-                params['samples'] = samples_ids
+            where_clause *= "sam.sampleid = any (:samples)"
+            params['samples'] = samples_ids
         else:
             # Pick all samples from project
-            where_clause *= " sam.projid = :projid "
+            where_clause *= "sam.projid = :projid"
 
         if self.taxo:
-            where_clause *= " obh.classif_id = any (:taxo) "
+            where_clause *= "obh.classif_id = any (:taxo)"
             if self.taxo_child:
                 # TODO: Cache if used
                 params['taxo'] = list(TaxonomyBO.children_of(self.session, [int(self.taxo)]))
@@ -486,99 +482,99 @@ class ObjectSetFilter(object):
                 where_clause *= "obh.classif_qual = '" + self.status_filter + "'"
 
         if self.MapN and self.MapW and self.MapE and self.MapS:
-            where_clause *= " obh.latitude between :MapS and :MapN "
-            where_clause *= " obh.longitude between :MapW and :MapE "
+            where_clause *= "obh.latitude between :MapS and :MapN"
+            where_clause *= "obh.longitude between :MapW and :MapE"
             params['MapN'] = self.MapN
             params['MapW'] = self.MapW
             params['MapE'] = self.MapE
             params['MapS'] = self.MapS
 
         if self.depth_min and self.depth_max:
-            where_clause *= " obh.depth_min between :depthmin and :depthmax "
-            where_clause *= " obh.depth_max between :depthmin and :depthmax "
+            where_clause *= "obh.depth_min between :depthmin and :depthmax"
+            where_clause *= "obh.depth_max between :depthmin and :depthmax"
             params['depthmin'] = self.depth_min
             params['depthmax'] = self.depth_max
 
         if self.instrument:
-            where_clause *= " obh.acquisid in (select acquisid " \
-                            "                  from acquisitions " \
-                            "                 where instrument ilike :instrum " \
-                            "                   and projid = :projid ) "
+            where_clause *= "obh.acquisid in (select acquisid " \
+                            "                   from acquisitions " \
+                            "                  where instrument ilike :instrum " \
+                            "                    and projid = :projid )"
             params['instrum'] = '%' + self.instrument + '%'
 
         if self.daytime:
-            where_clause *= " obh.sunpos = any (:daytime) "
+            where_clause *= "obh.sunpos = any (:daytime)"
             params['daytime'] = [x for x in self.daytime.split(',')]
 
         if self.months:
-            where_clause *= " extract(month from obh.objdate) = any (:month) "
+            where_clause *= "extract(month from obh.objdate) = any (:month)"
             params['month'] = [int(x) for x in self.months.split(',')]
 
         if self.from_date:
-            where_clause *= " obh.objdate >= to_date(:fromdate,'YYYY-MM-DD') "
+            where_clause *= "obh.objdate >= to_date(:fromdate,'YYYY-MM-DD')"
             params['fromdate'] = self.from_date
 
         if self.to_date:
-            where_clause *= " obh.objdate <= to_date(:todate,'YYYY-MM-DD') "
+            where_clause *= "obh.objdate <= to_date(:todate,'YYYY-MM-DD')"
             params['todate'] = self.to_date
 
         if self.invert_time:
             if self.from_time and self.to_time:
-                where_clause *= " (obh.objtime <= time :fromtime or obh.objtime >= time :totime) "
+                where_clause *= "(obh.objtime <= time :fromtime or obh.objtime >= time :totime)"
                 params['fromtime'] = self.from_time
                 params['totime'] = self.to_time
         else:
             if self.from_time:
-                where_clause *= " obh.objtime >= time :fromtime "
+                where_clause *= "obh.objtime >= time :fromtime"
                 params['fromtime'] = self.from_time
             if self.to_time:
-                where_clause *= " obh.objtime <= time :totime "
+                where_clause *= "obh.objtime <= time :totime"
                 params['totime'] = self.to_time
 
         if self.validated_from:
-            where_clause *= " obh.classif_when >= to_timestamp(:validfromdate,'YYYY-MM-DD HH24:MI') "
+            where_clause *= "obh.classif_when >= to_timestamp(:validfromdate,'YYYY-MM-DD HH24:MI')"
             params['validfromdate'] = self.validated_from
 
         if self.validated_to:
-            where_clause *= " obh.classif_when <= to_timestamp(:validtodate,'YYYY-MM-DD HH24:MI') "
+            where_clause *= "obh.classif_when <= to_timestamp(:validtodate,'YYYY-MM-DD HH24:MI')"
             params['validtodate'] = self.validated_to
 
         if self.free_num and self.free_num_start:
             criteria_col = "n%02d" % int(self.free_num[2:])
-            where_clause *= " obf." + criteria_col + " >= :freenumst "
+            where_clause *= "obf." + criteria_col + " >= :freenumst"
             params['freenumst'] = self.free_num_start
 
         if self.free_num and self.free_num_end:
             criteria_col = "n%02d" % int(self.free_num[2:])
-            where_clause *= " obf." + criteria_col + " <= :freenumend "
+            where_clause *= "obf." + criteria_col + " <= :freenumend"
             params['freenumend'] = self.free_num_end
 
         if self.free_text and self.free_text_val:
             criteria_tbl = self.free_text[0]
             criteria_col = "t%02d" % int(self.free_text[2:])
             if criteria_tbl == 'o':
-                where_clause *= " obf." + criteria_col + " ilike :freetxtval "
+                where_clause *= "obf." + criteria_col + " ilike :freetxtval"
             elif criteria_tbl == 'a':
-                where_clause *= " obh.acquisid in (select acquisid from acquisitions s " \
-                                "                  where " + criteria_col + " ilike :freetxtval " + \
-                                "                    and projid = :projid ) "
+                where_clause *= "obh.acquisid in (select acquisid from acquisitions s " \
+                                "                 where " + criteria_col + " ilike :freetxtval " + \
+                                "                   and projid = :projid )"
             elif criteria_tbl == 's':
-                where_clause *= " obh.sampleid in (select sampleid from samples s " \
+                where_clause *= "obh.sampleid in (select sampleid from samples s " \
                                 "                  where " + criteria_col + " ilike :freetxtval " + \
-                                "                    and projid = :projid ) "
+                                "                    and projid = :projid )"
             elif criteria_tbl == 'p':
-                where_clause *= " obh.acquisid in (select processid from process s " \
-                                "                   where " + criteria_col + " ilike :freetxtval " + \
-                                "                     and projid = :projid ) "
+                where_clause *= "obh.acquisid in (select processid from process s " \
+                                "                  where " + criteria_col + " ilike :freetxtval " + \
+                                "                    and projid = :projid )"
             params['freetxtval'] = '%' + self.free_text_val + '%'
 
         if self.annotators:
-            where_clause *= " (obh.classif_who = any (:filt_annot) " \
-                            "  or exists (select classif_who " \
-                            "               from " + ObjectsClassifHisto.__tablename__ + " och " + \
-                            "              where och.objid = obh.objid " \
-                            "                and classif_who = any (:filt_annot) ) ) "
+            where_clause *= "(obh.classif_who = any (:filt_annot) " \
+                            " or exists (select classif_who " \
+                            "              from " + ObjectsClassifHisto.__tablename__ + " och " + \
+                            "             where och.objid = obh.objid " \
+                            "               and classif_who = any (:filt_annot) ) )"
             params['filt_annot'] = [int(x) for x in self.annotators.split(',')]
         elif self.last_annotators:
-            where_clause *= " obh.classif_who = any (:filt_annot) "
+            where_clause *= "obh.classif_who = any (:filt_annot)"
             params['filt_annot'] = [int(x) for x in self.last_annotators.split(',')]

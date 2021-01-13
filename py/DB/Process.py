@@ -28,7 +28,8 @@ class Process(Model):
     all_objects: relationship
 
     @staticmethod
-    def pk_col():
+    def pk_col():  # pragma: no cover
+        # TODO: Not needed anymore but mypy complains
         return "processid"
 
     def pk(self) -> int:

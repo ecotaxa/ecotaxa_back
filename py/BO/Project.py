@@ -169,7 +169,7 @@ class ProjectBO(object):
         num_fields_cols = set([col for col in mappings.object_mappings.tsv_cols_to_real.values()
                                if col[0] == 'n'])
         obj_fields_tbl = minimal_table_of(metadata, ObjectFields, num_fields_cols, exact_floats=True)
-        qry: Query = session.query(Acquisition.acquisid, obj_fields_tbl)
+        qry: Query = session.query(Acquisition.acquisid, Acquisition.orig_id, obj_fields_tbl)
         qry = qry.join(ObjectHeader, ObjectHeader.acquisid == Acquisition.acquisid)
         qry = qry.join(obj_fields_tbl, ObjectHeader.objid == obj_fields_tbl.c.objfid)
         qry = qry.filter(Acquisition.projid == self._project.projid)

@@ -8,7 +8,10 @@
 #
 from typing import Tuple, List, Optional
 
+from BO.Acquisition import AcquisitionIDT
 from BO.Classification import HistoricalClassificationListT, HistoricalClassification
+from BO.Project import ProjectIDT
+from BO.Sample import SampleIDT
 from BO.helpers.MappedEntity import MappedEntity
 from DB import ObjectHeader, ObjectFields, Image, ObjectsClassifHisto, User, Taxonomy
 from DB.helpers.ORM import Session, Query
@@ -16,7 +19,7 @@ from helpers.DynamicLogs import get_logger
 
 # Typings, to be clear that these are not e.g. project IDs
 ObjectIDT = int
-ObjectIDWithParentsListT = List[Tuple[int, int, int, int]]
+ObjectIDWithParentsT = Tuple[ObjectIDT, AcquisitionIDT, SampleIDT, ProjectIDT]
 
 logger = get_logger(__name__)
 

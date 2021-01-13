@@ -616,7 +616,7 @@ def process_query(process_id: int,
 def get_object_set(project_id: int,
                    filters: ProjectFiltersModel,
                    order_field: Optional[str] = None,
-                   # TODO: Should be a user-visible field name, not nXXX, in case of free field
+                   # TODO: order_field should be a user-visible field name, not nXXX, in case of free field
                    window_start: Optional[int] = None,
                    window_size: Optional[int] = None,
                    current_user: Optional[int] = Depends(get_optional_current_user)) -> ObjectSetQueryRsp:
@@ -632,11 +632,11 @@ def get_object_set(project_id: int,
         obj_with_parents, total = sce.query(current_user, project_id, filters, order_field, window_start, window_size)
     rsp.total_ids = total
     rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
-    rsp.acquisition_ids = [with_p[2] for with_p in obj_with_parents]
-    rsp.sample_ids = [with_p[3] for with_p in obj_with_parents]
-    rsp.project_ids = [with_p[4] for with_p in obj_with_parents]
-    # For compatibility with client code TODO:Remove
-    rsp.process_ids = rsp.acquisition_ids
+    rsp.acquisition_ids = [with_p[1] for with_p in obj_with_parents]
+    rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
+    rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
+    # TODO: Despite the ORJSON encode above, this response is still quite slow due to a call
+    # to def jsonable_encoder (in FastAPI encoders.py)
     return rsp
 
 
@@ -736,10 +736,10 @@ def query_object_set_parents(object_ids: ObjectIDListT,
         rsp = ObjectSetQueryRsp()
         obj_with_parents = sce.parents_by_id(current_user, object_ids)
     rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
-    rsp.process_ids = [with_p[1] for with_p in obj_with_parents]
-    rsp.acquisition_ids = [with_p[2] for with_p in obj_with_parents]
-    rsp.sample_ids = [with_p[3] for with_p in obj_with_parents]
-    rsp.project_ids = [with_p[4] for with_p in obj_with_parents]
+    rsp.acquisition_ids = [with_p[1] for with_p in obj_with_parents]
+    rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
+    rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
+    rsp.total_ids = len(rsp.object_ids)
     return rsp
 
 
