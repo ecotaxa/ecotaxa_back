@@ -86,8 +86,6 @@ class ProjectStatsFetcher(Service):
         # TODO: Permissions
         ret.append(proj_bo.title)
         ret.append(str(proj_bo.obj_free_cols))
-        from decimal import getcontext
-        print(getcontext())
         free_cols_vals = proj_bo.get_all_num_columns_values(self.session)
         acquis_stats: AcquisitionStats = AcquisitionStats("", 0)
         for a_row in free_cols_vals:
@@ -96,11 +94,17 @@ class ProjectStatsFetcher(Service):
                          for a_val in free_vals]
             if acquis_id == acquis_stats.acquis_id:
                 # Same acquisition
-                acquis_stats.add_values(free_vals)
+                pass
             else:
-                # New acquisition
-                acquis_stats.aggregate()
-                ret.append(str(acquis_stats))
-                ret.append("Total: %d values, dup %d values" % acquis_stats.sums())
+                # New acquisition, close previous one
+                self.output_acq(acquis_stats, ret)
+                # And start new one
                 acquis_stats = AcquisitionStats(acquis_orig_id, acquis_id)
+            acquis_stats.add_values(free_vals)
+        self.output_acq(acquis_stats, ret)
         return ret
+
+    def output_acq(self, acquis_stats, ret):
+        acquis_stats.aggregate()
+        ret.append(str(acquis_stats))
+        ret.append("Total: %d values, dup %d values" % acquis_stats.sums())
