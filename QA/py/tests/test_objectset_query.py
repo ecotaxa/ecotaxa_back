@@ -41,8 +41,8 @@ def test_queries(config, database, fastapi, caplog):
 
     ref = [1, 2, 3, 11, 12, 13, 4, 5, 6, 7, 8]
     all = _prj_query(fastapi, CREATOR_AUTH, prj_id, order="depth_min")
-    # we must offset by first ID as they vary, run to run
-    ref = [r + all[0] -1 for r in ref]
+    # we must offset expected by first actual objID as they vary, run to run
+    ref = [r + all[0] - 1 for r in ref]
     assert all == ref
 
     all = _prj_query(fastapi, CREATOR_AUTH, prj_id, order="-depth_min")
