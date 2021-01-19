@@ -83,6 +83,9 @@ class Sample(Model):
     def __str__(self):
         return "{0} ({1})".format(self.orig_id, self.sampleid)
 
+    def __lt__(self, other):
+        return self.sampleid < other.sampleid
+
 
 for i in range(1, SAMPLE_FREE_COLUMNS):
     setattr(Sample, "t%02d" % i, Column(VARCHAR(250)))

@@ -44,5 +44,8 @@ class Image(Model):
         ret = {img_id for img_id, in res}
         return ret
 
+    def __lt__(self, other):
+        return self.imgid < other.imgid
+
 
 Index('IS_ImagesObjects', Image.objid)

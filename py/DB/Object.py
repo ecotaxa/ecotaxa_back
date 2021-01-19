@@ -154,6 +154,9 @@ class ObjectHeader(Model):
             :raises ValueError """
         return datetime.date(int(txt[0:4]), int(txt[4:6]), int(txt[6:8]))
 
+    def __lt__(self, other):
+        return self.objid < other.objid
+
 
 class ObjectFields(Model):
     __tablename__ = 'obj_field'

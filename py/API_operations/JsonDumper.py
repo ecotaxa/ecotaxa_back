@@ -91,7 +91,7 @@ class JsonDumper(Service):
                 # Serialize the list of child entities, ordinary relationship
                 children: List[Dict] = []
                 tgt_dict[how] = children
-                for a_child_row in attr:
+                for a_child_row in sorted(attr):
                     child_obj = self.dump_row(out_stream, a_child_row)
                     children.append(child_obj)
             elif isinstance(attr, Model):

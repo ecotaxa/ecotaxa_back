@@ -15,6 +15,7 @@ from .helpers.ORM import Model, Query
 
 ACQUISITION_FREE_COLUMNS = 31
 
+
 class Acquisition(Model):
     # Historical (plural) name of the table
     __tablename__ = 'acquisitions'
@@ -50,6 +51,9 @@ class Acquisition(Model):
 
     def __str__(self):
         return "{0} ({1})".format(self.orig_id, self.acquisid)
+
+    def __lt__(self, other):
+        return self.acquisid < other.acquisid
 
 
 for i in range(1, ACQUISITION_FREE_COLUMNS):
