@@ -28,6 +28,7 @@ _Base = declarative_base()
 class Model(_Base):
     __abstract__ = True  # prevent SQLAlchemy from trying to map
     __tablename__: str
+    __table__: Any
 
 
 # Just forD fun :)

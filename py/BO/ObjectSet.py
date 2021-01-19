@@ -318,6 +318,7 @@ class EnumeratedObjectSet(MappedTable):
             Set current classifications in self and/or validate current classification.
             :param user_id: The User who did these changes.
             :param classif_ids: One category id for each of the object ids in self. -1 means "keep current".
+            :param wanted_qualif: Validate or Dubious
             :returns updated rows and a summary of changes, for MRU and logging.
         """
         # Gather state of classification, for impacted objects, before the change. Keep a lock on rows.
