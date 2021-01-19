@@ -73,9 +73,9 @@ class AcquisitionsService(Service):
             return None
         # Security check
         if current_user_id is None:
-            project = RightsBO.anonymous_wants(self.session, Action.READ, ret.acquis.projid)
+            project = RightsBO.anonymous_wants(self.session, Action.READ, ret.acquis.sample.projid)
         else:
-            _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, ret.acquis.projid)
+            _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, ret.acquis.sample.projid)
         mappings = ProjectMapping().load_from_project(project)
         ret.map_free_columns(mappings.acquisition_mappings)
         return ret
@@ -115,9 +115,11 @@ class ProcessesService(Service):
             return None
         # Security check
         if current_user_id is None:
-            project = RightsBO.anonymous_wants(self.session, Action.READ, ret.process.projid)
+            project = RightsBO.anonymous_wants(self.session, Action.READ,
+                                               ret.process.acquisition.sample.projid)
         else:
-            _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, ret.process.projid)
+            _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ,
+                                                 ret.process.acquisition.sample.projid)
         mappings = ProjectMapping().load_from_project(project)
         ret.map_free_columns(mappings.process_mappings)
         return ret

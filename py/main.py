@@ -138,8 +138,8 @@ def set_current_user_prefs(project_id: int,
                            current_user: int = Depends(get_current_user)):
     """
         Set one preference, for project and currently authenticated user.
-
         -`key`: The preference key
+        -`value`: The value to set this preference to
     """
     sce = UserService()
     return sce.set_preferences_per_project(current_user, project_id, key, value)

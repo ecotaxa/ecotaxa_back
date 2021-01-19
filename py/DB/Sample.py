@@ -7,7 +7,8 @@ from typing import List, Dict
 from sqlalchemy import Index, Sequence, Column, ForeignKey
 from sqlalchemy.dialects.postgresql import VARCHAR, DOUBLE_PRECISION, INTEGER
 
-from DB.helpers.ORM import ResultProxy, Model, relationship, Session
+from .Project import Project
+from .helpers.ORM import Query, ResultProxy, Model, relationship, Session
 
 SAMPLE_FREE_COLUMNS = 31
 
@@ -25,7 +26,6 @@ class Sample(Model):
 
     # The relationships are created in Relations.py but the typing here helps IDE
     project: relationship
-    all_objects: relationship
     all_acquisitions: relationship
     ecopart_sample: relationship
 
@@ -38,11 +38,9 @@ class Sample(Model):
 
     @classmethod
     def get_orig_id_and_model(cls, session: Session, prj_id) -> Dict[str, 'Sample']:
-        res = session.query(Sample).filter(Sample.projid == prj_id)
-        # sql = "SELECT orig_id, sampleid" + \
-        #       "  FROM " + cls.__tablename__ + \
-        #       " WHERE projid = :prj"
-        # res: ResultProxy = session.execute(sql, {"prj": prj_id})
+        res: Query = session.query(Sample)
+        res = res.join(Project)
+        res = res.filter(Project.projid == prj_id)
         ret = {r.orig_id: r for r in res}
         return ret
 
@@ -53,26 +51,31 @@ class Sample(Model):
         TODO: Should be in a BO
         """
         session.execute("""
-        UPDATE samples s 
+        UPDATE samples usam 
            SET latitude = sll.latitude, longitude = sll.longitude
-          FROM (SELECT o.sampleid, MIN(o.latitude) latitude, MIN(o.longitude) longitude
-                  FROM obj_head o
-                 WHERE projid = :projid 
-                   AND o.latitude IS NOT NULL 
-                   AND o.longitude IS NOT NULL
-              GROUP BY o.sampleid) sll 
-         WHERE s.sampleid = sll.sampleid 
+          FROM (SELECT sam.sampleid, MIN(obh.latitude) latitude, MIN(obh.longitude) longitude
+                  FROM obj_head obh
+                  JOIN acquisitions acq on acq.acquisid = obh.acquisid 
+                  JOIN samples sam on sam.sampleid = acq.acq_sample_id 
+                 WHERE sam.projid = :projid 
+                   AND obh.latitude IS NOT NULL 
+                   AND obh.longitude IS NOT NULL
+              GROUP BY sam.sampleid) sll               
+         WHERE usam.sampleid = sll.sampleid 
            AND projid = :projid """,
                         {'projid': prj_id})
         session.commit()
 
     @classmethod
     def get_sample_summary(cls, session: Session, sample_id: int) -> List:
-        res: ResultProxy = session.execute(
-            "SELECT MIN(o.objdate+o.objtime), MAX(o.objdate+o.objtime), MIN(o.depth_min), MAX(o.depth_max)"
-            "  FROM objects o "
-            " WHERE o.sampleid = :smp",
-            {"smp": sample_id})
+        res: ResultProxy = \
+            session.execute("""
+            SELECT MIN(obh.objdate+obh.objtime), MAX(obh.objdate+obh.objtime), MIN(obh.depth_min), MAX(obh.depth_max)
+              FROM obj_head obh 
+              JOIN acquisitions acq on acq.acquisid = obh.acquisid 
+              JOIN samples sam on sam.sampleid = acq.acq_sample_id 
+             WHERE sam.sampleid = :smp """,
+                            {"smp": sample_id})
         the_res = res.first()
         assert the_res
         return [a_val for a_val in the_res.values()]

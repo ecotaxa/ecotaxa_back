@@ -24,9 +24,9 @@ from BO.Project import ProjectIDListT
 from BO.Taxonomy import TaxonomyBO
 from BO.User import UserIDT
 from BO.helpers.MappedTable import MappedTable
-from DB import Project, ObjectHeader, Image, and_
+from DB import Project, ObjectHeader, Image, Sample, Acquisition
 from DB.Object import ObjectsClassifHisto, ObjectFields
-from DB.helpers.ORM import Session, Query, Delete, Update, Insert, any_, postgresql, or_, case
+from DB.helpers.ORM import Session, Query, Delete, Update, Insert, any_, and_, postgresql, or_, case
 from DB.helpers.SQL import WhereClause, SQLParamDict, FromClause, OrderClause
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
@@ -62,7 +62,10 @@ class DescribedObjectSet(object):
         params: SQLParamDict = {"projid": self.prj_id}
         self.filters.get_sql_filter(obj_where, params, user_id)
         selected_tables = FromClause("obj_head obh")
-        selected_tables += "samples sam ON sam.sampleid = obh.sampleid"
+        selected_tables += "samples sam ON sam.projid = :projid"
+        selected_tables += "acquisitions acq ON acq.acq_sample_id = sam.sampleid"
+        if "prc." in obj_where.get_sql() + order_clause.get_sql():
+            selected_tables += "process prc ON prc.processid = acq.acquisid"
         if "obf." in obj_where.get_sql() + order_clause.get_sql():
             selected_tables += "obj_field obf ON obf.objfid = obh.objid"
         if "txo." in obj_where.get_sql() + order_clause.get_sql():
@@ -100,7 +103,9 @@ class EnumeratedObjectSet(MappedTable):
             Return the project IDs for the owned objectsIDs.
         """
         qry: Query = self.session.query(Project.projid).distinct(Project.projid)
-        qry = qry.join(Project.all_objects)
+        qry = qry.join(Sample)
+        qry = qry.join(Acquisition)
+        qry = qry.join(ObjectHeader)
         qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))
         with CodeTimer("Prjs for %d objs: " % len(self.object_ids), logger):
             return [an_id[0] for an_id in qry.all()]
@@ -446,20 +451,22 @@ class ObjectSetFilter(object):
             The generated SQL assumes that, in the query:
                 'obh' is the alias for object_head aka ObjectHeader
                 'obf' the alias for ObjectFields
+                'acq' is the alias for Acquisition
+                'sam' is the alias for Sample
         :param user_id: For filtering validators.
         :param where_clause: SQL filtering clauses on objects will be added there.
         :param params: SQL params will be added there.
         :return:
         """
 
+        # Objects must belong to selected acquisition(s)
+        where_clause *= "obh.acquisid = acq.acquisid"
+
         # Hierarchy first
         if self.samples:
             samples_ids = [int(x) for x in self.samples.split(',')]
             where_clause *= "sam.sampleid = any (:samples)"
             params['samples'] = samples_ids
-        else:
-            # Pick all samples from project
-            where_clause *= "sam.projid = :projid"
 
         if self.taxo:
             where_clause *= "obh.classif_id = any (:taxo)"
@@ -500,10 +507,7 @@ class ObjectSetFilter(object):
             params['depthmax'] = self.depth_max
 
         if self.instrument:
-            where_clause *= "obh.acquisid in (select acquisid " \
-                            "                   from acquisitions " \
-                            "                  where instrument ilike :instrum " \
-                            "                    and projid = :projid )"
+            where_clause *= "acq.instrument ilike :instrum "
             params['instrum'] = '%' + self.instrument + '%'
 
         if self.daytime:
@@ -559,17 +563,11 @@ class ObjectSetFilter(object):
             if criteria_tbl == 'o':
                 where_clause *= "obf." + criteria_col + " ilike :freetxtval"
             elif criteria_tbl == 'a':
-                where_clause *= "obh.acquisid in (select acquisid from acquisitions s " \
-                                "                 where " + criteria_col + " ilike :freetxtval " + \
-                                "                   and projid = :projid )"
+                where_clause *= "acq." + criteria_col + " ilike :freetxtval"
             elif criteria_tbl == 's':
-                where_clause *= "obh.sampleid in (select sampleid from samples s " \
-                                "                  where " + criteria_col + " ilike :freetxtval " + \
-                                "                    and projid = :projid )"
+                where_clause *= "sam." + criteria_col + " ilike :freetxtval "
             elif criteria_tbl == 'p':
-                where_clause *= "obh.acquisid in (select processid from process s " \
-                                "                  where " + criteria_col + " ilike :freetxtval " + \
-                                "                    and projid = :projid )"
+                where_clause *= "prc." + criteria_col + " ilike :freetxtval "
             params['freetxtval'] = '%' + self.free_text_val + '%'
 
         if self.annotators:

@@ -13,7 +13,7 @@ from BO.Mappings import ProjectMapping
 from BO.Project import ProjectIDListT, ProjectIDT
 from BO.helpers.MappedEntity import MappedEntity
 from BO.helpers.MappedTable import MappedTable
-from DB import Session, Query, Project, Acquisition
+from DB import Session, Query, Project, Acquisition, Sample
 from DB.helpers.ORM import any_, ResultProxy
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
@@ -43,7 +43,7 @@ class AcquisitionBO(MappedEntity):
     @classmethod
     def get_free_fields(cls, acquis: Acquisition, fields_list: List[str]) -> List[Any]:
         """ Get free fields _value_ for the acquisition. """
-        mapping = ProjectMapping().load_from_project(acquis.project)
+        mapping = ProjectMapping().load_from_project(acquis.sample.project)
         real_cols = mapping.acquisition_mappings.find_tsv_cols(fields_list)
         if len(real_cols) != len(fields_list):
             raise TypeError("free column not found")
@@ -75,7 +75,8 @@ class EnumeratedAcquisitionSet(MappedTable):
             Return the project IDs for the held sample IDs.
         """
         qry: Query = self.session.query(Project.projid).distinct(Project.projid)
-        qry = qry.join(Project.all_acquisitions)
+        qry = qry.join(Sample)
+        qry = qry.join(Acquisition)
         qry = qry.filter(Acquisition.acquisid == any_(self.ids))
         with CodeTimer("Prjs for %d acquisitions: " % len(self.ids), logger):
             return [an_id[0] for an_id in qry.all()]
@@ -105,7 +106,8 @@ class DescribedAcquisitionSet(object):
             TODO: No free columns value so far.
         """
         qry: Query = self._session.query(Acquisition)
-        qry = qry.join(Acquisition, Project.all_acquisitions)
+        qry = qry.join(Sample)
+        qry = qry.join(Project)
         qry = qry.filter(Project.projid == self.prj_id)
         ret = [an_acquis for an_acquis in qry.all()]
         return ret

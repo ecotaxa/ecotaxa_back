@@ -4,29 +4,33 @@
 #
 from typing import Dict
 
-from sqlalchemy import Index, Column, ForeignKey, Sequence
+from sqlalchemy import Column, ForeignKey, Sequence
 from sqlalchemy.dialects.postgresql import VARCHAR, INTEGER
 # noinspection PyProtectedMember
 from sqlalchemy.orm import relationship, Session
 
-from DB.helpers.ORM import Model
+from .Project import Project
+from .Sample import Sample
+from .helpers.ORM import Model, Query
 
 ACQUISITION_FREE_COLUMNS = 31
 
 class Acquisition(Model):
     # Historical (plural) name of the table
     __tablename__ = 'acquisitions'
+    # Self ID
     acquisid = Column(INTEGER, Sequence('seq_acquisitions'), primary_key=True)
-    projid = Column(INTEGER, ForeignKey('projects.projid'))
+    # Parent ID
+    acq_sample_id = Column(INTEGER, ForeignKey('samples.sampleid'), nullable=False)
     # i.e. acq_id from TSV
     orig_id = Column(VARCHAR(255), nullable=False)
     # TODO: Put into a dedicated table
     instrument = Column(VARCHAR(255))
 
     # The relationships are created in Relations.py but the typing here helps IDE
-    project: relationship
+    sample: relationship
+    process: relationship
     all_objects: relationship
-    all_processes: relationship
 
     @staticmethod
     def pk_col():
@@ -37,12 +41,10 @@ class Acquisition(Model):
 
     @classmethod
     def get_orig_id_and_model(cls, session: Session, prj_id) -> Dict[str, 'Acquisition']:
-        res = session.query(Acquisition).filter(Acquisition.projid == prj_id)
-        # sql = "SELECT orig_id, acquisid" + \
-        #       "  FROM " + cls.__tablename__ + \
-        #       " WHERE projid = :prj"
-        # res: ResultProxy = session.execute(sql, {"prj": prj_id})
-        # ret = {r[0]: int(r[1]) for r in res}
+        res: Query = session.query(Acquisition)
+        res = res.join(Sample)
+        res = res.join(Project)
+        res = res.filter(Project.projid == prj_id)
         ret = {r.orig_id: r for r in res}
         return ret
 
@@ -52,5 +54,3 @@ class Acquisition(Model):
 
 for i in range(1, ACQUISITION_FREE_COLUMNS):
     setattr(Acquisition, "t%02d" % i, Column(VARCHAR(250)))
-
-Index('IS_AcquisitionsProjectOrigId', Acquisition.projid, Acquisition.orig_id, unique=True)

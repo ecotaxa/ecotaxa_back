@@ -75,7 +75,7 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
 
     # Subset in full, i.e. clone
     task_id = TaskService().create()
-    subset_prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Subset of"))
+    subset_prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Subset of UVP6"))
     filters = {"freenum": "n01", "freenumst": "0"}
     params = SubsetReq(task_id=task_id,
                        dest_prj_id=subset_prj_id,
@@ -110,7 +110,7 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
     del changed_values["root['samples'][0]['acquisitions'][0]['processings'][0]['id']"]
     for obj in range(0, 15):
         for img in range(0, 2):
-            key = "root['samples'][0]['acquisitions'][0]['processings'][0]['objects'][%d]['images'][%d]['fil']" % \
+            key = "root['samples'][0]['acquisitions'][0]['objects'][%d]['images'][%d]['fil']" % \
                   (obj, img)
             del changed_values[key]
     assert changed_values == {}
@@ -123,8 +123,10 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
     db_col = mapg.search_field("object_foobar")
     assert db_col
     mapg.write_to_project(db_prj)
-    for an_obj in db_prj.all_objects:
-        setattr(an_obj.fields, db_col["field"], 4567)
+    for a_sample in db_prj.all_samples:
+        for an_acquis in a_sample.all_acquisitions:
+            for an_obj in an_acquis.all_objects:
+                setattr(an_obj.fields, db_col["field"], 4567)
     session.commit()
 
     # Re-merge subset into origin project
@@ -162,11 +164,11 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
     items_added = diffs['iterable_item_added']
     # Remove image ids which change depending on the run
     for obj in range(15, 30):
-        obj_key = "root['acquisitions'][0]['processings'][0]['objects'][%d]"%obj
+        obj_key = "root['acquisitions'][0]['objects'][%d]"%obj
         for img in range(0, 2):
             del items_added[obj_key]['images'][img]['fil']
     # All objects from subset have been added to the same place
-    assert items_added == {"root['acquisitions'][0]['processings'][0]['objects'][15]": {'%area': 95.652,
+    assert items_added == {"root['acquisitions'][0]['objects'][15]": {'%area': 95.652,
                                                               'angle': 137.674,
                                                               'area': 207.0,
                                                               'area_exc': 9.0,
@@ -240,7 +242,7 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
                                                               'xm': 29.087,
                                                               'y': 27.08,
                                                               'ym': 26.58},
- "root['acquisitions'][0]['processings'][0]['objects'][16]": {'%area': 99.065,
+ "root['acquisitions'][0]['objects'][16]": {'%area': 99.065,
                                                               'angle': 16.895,
                                                               'area': 107.0,
                                                               'area_exc': 1.0,
@@ -314,7 +316,7 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
                                                               'xm': 25.159,
                                                               'y': 18.64,
                                                               'ym': 18.14},
- "root['acquisitions'][0]['processings'][0]['objects'][17]": {'%area': 95.902,
+ "root['acquisitions'][0]['objects'][17]": {'%area': 95.902,
                                                               'angle': 57.885,
                                                               'area': 122.0,
                                                               'area_exc': 5.0,
@@ -388,7 +390,7 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
                                                               'xm': 19.877,
                                                               'y': 27.689,
                                                               'ym': 27.189},
- "root['acquisitions'][0]['processings'][0]['objects'][18]": {'%area': 100.0,
+ "root['acquisitions'][0]['objects'][18]": {'%area': 100.0,
                                                               'angle': 104.396,
                                                               'area': 94.0,
                                                               'area_exc': 0.0,
@@ -462,7 +464,7 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
                                                               'xm': 14.745,
                                                               'y': 22.298,
                                                               'ym': 21.798},
- "root['acquisitions'][0]['processings'][0]['objects'][19]": {'%area': 100.0,
+ "root['acquisitions'][0]['objects'][19]": {'%area': 100.0,
                                                               'angle': 88.91,
                                                               'area': 199.0,
                                                               'area_exc': 0.0,
@@ -536,7 +538,7 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
                                                               'xm': 14.372,
                                                               'y': 50.962,
                                                               'ym': 50.462},
- "root['acquisitions'][0]['processings'][0]['objects'][20]": {'%area': 100.0,
+ "root['acquisitions'][0]['objects'][20]": {'%area': 100.0,
                                                               'angle': 38.856,
                                                               'area': 176.0,
                                                               'area_exc': 0.0,
@@ -610,7 +612,7 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
                                                               'xm': 23.92,
                                                               'y': 25.142,
                                                               'ym': 24.642},
- "root['acquisitions'][0]['processings'][0]['objects'][21]": {'%area': 92.715,
+ "root['acquisitions'][0]['objects'][21]": {'%area': 92.715,
                                                               'angle': 151.894,
                                                               'area': 151.0,
                                                               'area_exc': 11.0,
@@ -684,7 +686,7 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
                                                               'xm': 34.225,
                                                               'y': 22.719,
                                                               'ym': 22.219},
- "root['acquisitions'][0]['processings'][0]['objects'][22]": {'%area': 98.889,
+ "root['acquisitions'][0]['objects'][22]": {'%area': 98.889,
                                                               'angle': 98.964,
                                                               'area': 90.0,
                                                               'area_exc': 1.0,
@@ -758,7 +760,7 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
                                                               'xm': 12.756,
                                                               'y': 22.778,
                                                               'ym': 22.278},
- "root['acquisitions'][0]['processings'][0]['objects'][23]": {'%area': 100.0,
+ "root['acquisitions'][0]['objects'][23]": {'%area': 100.0,
                                                               'angle': 133.602,
                                                               'area': 158.0,
                                                               'area_exc': 0.0,
@@ -832,7 +834,7 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
                                                               'xm': 23.506,
                                                               'y': 23.842,
                                                               'ym': 23.342},
- "root['acquisitions'][0]['processings'][0]['objects'][24]": {'%area': 100.0,
+ "root['acquisitions'][0]['objects'][24]": {'%area': 100.0,
                                                               'angle': 51.174,
                                                               'area': 163.0,
                                                               'area_exc': 0.0,
@@ -906,7 +908,7 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
                                                               'xm': 24.626,
                                                               'y': 23.248,
                                                               'ym': 22.748},
- "root['acquisitions'][0]['processings'][0]['objects'][25]": {'%area': 100.0,
+ "root['acquisitions'][0]['objects'][25]": {'%area': 100.0,
                                                               'angle': 71.812,
                                                               'area': 119.0,
                                                               'area_exc': 0.0,
@@ -980,7 +982,7 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
                                                               'xm': 17.605,
                                                               'y': 23.996,
                                                               'ym': 23.496},
- "root['acquisitions'][0]['processings'][0]['objects'][26]": {'%area': 96.35,
+ "root['acquisitions'][0]['objects'][26]": {'%area': 96.35,
                                                               'angle': 92.031,
                                                               'area': 137.0,
                                                               'area_exc': 5.0,
@@ -1054,7 +1056,7 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
                                                               'xm': 23.81,
                                                               'y': 29.529,
                                                               'ym': 29.029},
- "root['acquisitions'][0]['processings'][0]['objects'][27]": {'%area': 100.0,
+ "root['acquisitions'][0]['objects'][27]": {'%area': 100.0,
                                                               'angle': 24.012,
                                                               'area': 93.0,
                                                               'area_exc': 0.0,
@@ -1128,7 +1130,7 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
                                                               'xm': 23.86,
                                                               'y': 16.274,
                                                               'ym': 15.774},
- "root['acquisitions'][0]['processings'][0]['objects'][28]": {'%area': 90.909,
+ "root['acquisitions'][0]['objects'][28]": {'%area': 90.909,
                                                               'angle': 69.209,
                                                               'area': 165.0,
                                                               'area_exc': 15.0,
@@ -1202,7 +1204,7 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
                                                               'xm': 22.212,
                                                               'y': 30.773,
                                                               'ym': 30.273},
- "root['acquisitions'][0]['processings'][0]['objects'][29]": {'%area': 100.0,
+ "root['acquisitions'][0]['objects'][29]": {'%area': 100.0,
                                                               'angle': 53.112,
                                                               'area': 360.0,
                                                               'area_exc': 0.0,
@@ -1282,17 +1284,17 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
     # IDs have changed
     # del changed_values["root['id']"]  # root is the sample
     # del changed_values["root['acquisitions'][0]['id']"]
-    # del changed_values["root['acquisitions'][0]['processings'][0]['id']"]
+    # del changed_values["root['acquisitions'][0]['id']"]
     # for obj in range(0, 15):
     #     for img in range(0, 2):
-    #         key = "root['acquisitions'][0]['processings'][0]['objects'][%d]['images'][%d]['fil']" % \
+    #         key = "root['acquisitions'][0]['objects'][%d]['images'][%d]['fil']" % \
     #               (obj, img)
     #         del changed_values[key]
     # assert changed_values == {}
     # # New feature appeared
     # added_values = diffs['dictionary_item_added']
     # for obj in range(0, 15):
-    #     key = "root['acquisitions'][0]['processings'][0]['objects'][%d]['foobar']" % obj
+    #     key = "root['acquisitions'][0]['objects'][%d]['foobar']" % obj
     #     added_values.remove(key)
     # assert added_values == {}
 

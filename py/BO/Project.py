@@ -169,11 +169,12 @@ class ProjectBO(object):
         num_fields_cols = set([col for col in mappings.object_mappings.tsv_cols_to_real.values()
                                if col[0] == 'n'])
         obj_fields_tbl = minimal_table_of(metadata, ObjectFields, num_fields_cols, exact_floats=True)
-        qry: Query = session.query(Acquisition.acquisid, Acquisition.orig_id, obj_fields_tbl)
-        qry = qry.join(ObjectHeader, ObjectHeader.acquisid == Acquisition.acquisid)
+        qry: Query = session.query(Project)
+        qry = qry.join(Sample).join(Acquisition).join(ObjectHeader)
         qry = qry.join(obj_fields_tbl, ObjectHeader.objid == obj_fields_tbl.c.objfid)
-        qry = qry.filter(Acquisition.projid == self._project.projid)
+        qry = qry.filter(Project.projid == self._project.projid)
         qry = qry.order_by(Acquisition.acquisid)
+        qry = qry.with_entities(Acquisition.acquisid, Acquisition.orig_id, obj_fields_tbl)
         return qry.all()
 
     @staticmethod
@@ -274,8 +275,9 @@ class ProjectBO(object):
 
         if instrument_filter != '':
             sql += """
-                     AND p.projid IN (SELECT DISTINCT projid FROM acquisitions 
-                                       WHERE instrument ILIKE '%%'|| :instrum ||'%%' ) """
+                     AND p.projid IN (SELECT DISTINCT sam.projid FROM samples sam, acquisitions acq
+                                       WHERE acq.acq_sample_id = sam.sampleid
+                                         AND acq.instrument ILIKE '%%'|| :instrum ||'%%' ) """
             sql_params["instrum"] = instrument_filter
 
         if filter_subset:
@@ -350,13 +352,21 @@ class ProjectBO(object):
         logger.info(" %d EcoPart samples unlinked and cleaned", row_count)
 
         ret = []
-        # Remove first-level children of project
-        for a_tbl in (Sample, Acquisition, Process):
-            sub_del: Delete = a_tbl.__table__.delete().where(a_tbl.projid == prj_id)  # type: ignore
-            logger.info("Del parent :%s", str(sub_del))
-            row_count = session.execute(sub_del).rowcount
-            ret.append(row_count)
-            logger.info("%d rows deleted", row_count)
+        del_acquis_qry: Delete = Acquisition.__table__. \
+            delete().where(Acquisition.acq_sample_id.in_(soon_deleted_samples))
+        logger.info("Del acquisitions :%s", str(del_acquis_qry))
+        gone_acqs = session.execute(del_acquis_qry).rowcount
+        ret.append(gone_acqs)
+        logger.info("%d rows deleted", gone_acqs)
+
+        del_sample_qry: Delete = Sample.__table__. \
+            delete().where(Sample.sampleid.in_(soon_deleted_samples))
+        logger.info("Del samples :%s", str(del_sample_qry))
+        gone_sams = session.execute(del_sample_qry).rowcount
+        ret.append(gone_sams)
+        logger.info("%d rows deleted", gone_sams)
+
+        ret.append(gone_acqs)
         session.commit()
         return ret
 
@@ -386,12 +396,19 @@ class ProjectBO(object):
         values = {a_remap.to: text(a_remap.frm) if a_remap.frm is not None else a_remap.frm
                   for a_remap in remaps}
         qry: Query = session.query(table)
-        if table == ObjectFields:
+        if table == Sample:
+            qry = qry.filter(Sample.projid == prj_id)  # type: ignore
+        elif table == Acquisition:
+            samples_4_prj = Query(Sample.sampleid).filter(Sample.projid == prj_id)
+            qry = qry.filter(Acquisition.acq_sample_id.in_(samples_4_prj))  # type: ignore
+        elif table == Process:
+            samples_4_prj = Query(Sample.sampleid).filter(Sample.projid == prj_id)
+            acqs_4_samples = Query(Acquisition.acquisid).filter(Acquisition.acq_sample_id.in_(samples_4_prj))
+            qry = qry.filter(Process.processid.in_(acqs_4_samples))  # type: ignore
+        elif table == ObjectFields:
             # All tables have direct projid column except ObjectFields
             qry = qry.filter(ObjectFields.objfid.in_(
                 select([ObjectHeader.objid]).where(ObjectHeader.projid == prj_id)))  # type: ignore
-        else:
-            qry = qry.filter(table.projid == prj_id)  # type: ignore
         qry = qry.update(values=values, synchronize_session=False)
 
         logger.info("Remap query for %s: %s", table.__tablename__, qry)

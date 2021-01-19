@@ -5,8 +5,8 @@
 from typing import Tuple, List, Set, Dict, TypeVar, Type, Any, Union
 
 # noinspection PyUnresolvedReferences
-from sqlalchemy import Column, inspect, MetaData, Table, any_ as _pg_any, all_, not_, and_, or_, func, case, text, \
-    select, column, Integer, Float, FLOAT
+from sqlalchemy import Column, inspect, MetaData, Table, any_ as _pg_any, all_ as _pg_all, not_, and_, or_, func, case, \
+    text, select, column, Integer, Float, FLOAT
 # noinspection PyUnresolvedReferences
 from sqlalchemy.dialects import postgresql
 # noinspection PyUnresolvedReferences
@@ -157,6 +157,12 @@ def any_(items_list: Union[List[int], List[str]]):
     # TODO: Get proper mapping, it seems a bit too much for sqlalchemy-stubs
     # noinspection PyTypeChecker
     return _pg_any(items_list)  # type: ignore
+
+
+def all_(items_list: Union[List[int], List[str]]):
+    # TODO: Get proper mapping, it seems a bit too much for sqlalchemy-stubs
+    # noinspection PyTypeChecker
+    return _pg_all(items_list)  # type: ignore
 
 
 def only_res(res: List[Tuple[Any]]):
