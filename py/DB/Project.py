@@ -56,10 +56,7 @@ class Project(Model):
     # taxo_stats = relationship("ProjectTaxoStat")
 
     # The relationships are created in Relations.py but the typing here helps IDE
-    all_objects: relationship
     all_samples: relationship
-    all_processes: relationship
-    all_acquisitions: relationship
     # The users involved somehow in this project
     privs_for_members: relationship
     # owner: relationship

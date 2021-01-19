@@ -6,15 +6,14 @@
 #
 # A Sample BO + enumerated set of Sample(s)
 #
-from typing import List, Dict, Any
+from typing import List, Any
 
 from API_models.crud import ColUpdateList
 from BO.Project import ProjectIDListT, ProjectIDT
-from DB import Session, Query, Project, Sample, Acquisition, ObjectHeader
-from DB.helpers.ORM import any_, ResultProxy, and_
+from DB import Session, Query, Project, Sample, Acquisition
+from DB.helpers.ORM import any_
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
-from .Classification import ClassifIDT
 from .Mappings import ProjectMapping
 from .helpers.MappedEntity import MappedEntity
 from .helpers.MappedTable import MappedTable
@@ -52,35 +51,11 @@ class SampleBO(MappedEntity):
         return [getattr(sample, real_col) for real_col in real_cols]
 
     @classmethod
-    def get_sums_by_taxon(cls, session: Session, sample_id: SampleIDT) \
-            -> Dict[ClassifIDT, int]:
-        res: ResultProxy = session.execute(
-            "SELECT o.classif_id, count(1)"
-            "  FROM obj_head o "
-            " WHERE o.sampleid = :smp"
-            " GROUP BY o.classif_id",
-            {"smp": sample_id})
-        return {int(classif_id): int(cnt) for (classif_id, cnt) in res.fetchall()}
-
-    @classmethod
-    def get_sums_by_taxon_and_acquisition(cls, session: Session, sample_id: SampleIDT) \
-            -> Dict[ClassifIDT, int]:
-        res: ResultProxy = session.execute(
-            "SELECT o.classif_id, o.acquis_id, count(1)"
-            "  FROM obj_head o "
-            " WHERE o.sampleid = :smp"
-            " GROUP BY o.classif_id, o.acquis_id",
-            {"smp": sample_id})
-        return {int(classif_id): int(cnt) for (classif_id, cnt) in res.fetchall()}
-
-    @classmethod
     def get_acquisitions(cls, session: Session, sample: Sample) -> List[Acquisition]:
         """ Get acquisitions for the sample """
         qry: Query = session.query(Acquisition)
-        # Fill the all_objects relation, we're done with the hierarchy
-        qry = qry.join(ObjectHeader, and_(ObjectHeader.projid == sample.projid,
-                                          ObjectHeader.sampleid == sample.sampleid,
-                                          ObjectHeader.acquisid == Acquisition.acquisid))
+        qry = qry.join(Sample)
+        qry = qry.filter(Sample.sampleid == sample.sampleid)
         return qry.all()
 
 
@@ -103,6 +78,7 @@ class DescribedSampleSet(object):
         qry = qry.filter(Project.projid == self.prj_id)
         ret = [a_sample for a_sample in qry.all()]
         return ret
+
 
 class EnumeratedSampleSet(MappedTable):
     """

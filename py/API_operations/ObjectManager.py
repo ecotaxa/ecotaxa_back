@@ -74,7 +74,7 @@ class ObjectManager(Service):
         # The following hint is needed until we sort out why, time to time, there is a FTS on obj_head
         sql = """
     SET LOCAL enable_seqscan=FALSE;
-    SELECT obh.objid, obh.acquisid, obh.sampleid %s
+    SELECT obh.objid, acq.acquisid, sam.sampleid %s
       FROM """ % extra_col + from_.get_sql() + " " + where.get_sql()
 
         # Add order & window if relevant
@@ -137,8 +137,10 @@ class ObjectManager(Service):
             RightsBO.user_wants(self.session, current_user_id, Action.READ, a_prj_id)
 
         sql = """
-    SELECT objid, acquisid, sampleid, projid
-      FROM obj_head obh 
+    SELECT obh.objid, acq.acquisid, sam.sampleid, sam.projid
+      FROM obj_head obh
+      JOIN acquisitions acq on acq.acquisid = obh.acquisid 
+      JOIN samples sam on sam.sampleid = acq.acq_sample_id 
      WHERE obh.objid = any (:ids) """
         params = {"ids": object_ids}
 

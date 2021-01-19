@@ -33,8 +33,10 @@ class AsciiDumper(Service):
         with open(out, "w") as fd:
             self.dump_table(fd, Project, "projid=%d" % projid)
             self.dump_table(fd, Sample, "projid=%d" % projid)
-            self.dump_table(fd, Process, "projid=%d" % projid)
-            self.dump_table(fd, Acquisition, "projid=%d" % projid)
+            self.dump_table(fd, Acquisition, "acq_sample_id in (select sampleid from samples where projid=%d)" % projid)
+            self.dump_table(fd, Process, "processid in (select acquisid from acquisitions "
+                                         "where acq_sample_id in "
+                                         "(select sampleid from samples where projid=%d))" % projid)
             self.dump_table(fd, ObjectHeader, "projid=%d" % projid)
             self.dump_table(fd, ObjectFields, "objfid in (select objid from obj_head where projid=%s)" % projid)
             self.dump_table(fd, Image, "objid in (select objid from obj_head where projid=%s)" % projid)

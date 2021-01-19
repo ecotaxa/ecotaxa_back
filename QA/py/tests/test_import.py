@@ -496,12 +496,12 @@ def test_import_breaking_unicity(config, database, caplog):
     """
         Sample orig_id is unique per project
         Acquisition orig_id is unique per project and belongs to a single Sample
-        Process orig_id is unique per acquisition
+        Process orig_id is unique per acquisition (structurally as it's 1<->1 relationship)
         So, if:
             S("a") -> A("b") -> P ("c")
         Then:
             S("a2") -> A("b") is illegal
-        Message should be 'Acquisition 'b' already belongs to sample 'a' so it cannot be created under 'a2'
+        Message should be like 'Acquisition 'b' already belongs to sample 'a' so it cannot be created under 'a2'
     """
     caplog.set_level(logging.DEBUG)
     task_id = TaskService().create()
@@ -519,13 +519,9 @@ def test_import_breaking_unicity(config, database, caplog):
  "'m106_mn01_n1_sml_brk"]
     # Do real import, even if we should not...
     params = real_params_from_prep_out(task_id, prep_out)
-    RealImport(prj_id, params).run(ADMIN_USER_ID)
-    # Check that all went fine
-    for a_msg in caplog.records:
-        assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
-    # And that the project is NOT consistent
+    # Boom
     with pytest.raises(AssertionError) as e_info:
-        check_project(prj_id)
+        RealImport(prj_id, params).run(ADMIN_USER_ID)
 
 @pytest.mark.parametrize("title", ["Test Import Images"])
 def test_import_images(config, database, caplog, title):

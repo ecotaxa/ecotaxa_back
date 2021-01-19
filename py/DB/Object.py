@@ -38,7 +38,7 @@ class ObjectHeader(Model):
     __tablename__ = 'obj_head'
     objid = Column(BIGINT, Sequence('seq_objects'), primary_key=True)
 
-    projid = Column(INTEGER, ForeignKey('projects.projid'), nullable=False)
+    projid = Column(INTEGER, nullable=False)  # LS: Dropped FK before dropping column
 
     #
     objdate = Column(DATE)
@@ -74,7 +74,7 @@ class ObjectHeader(Model):
     # TODO: Why random? It makes testing a bit more difficult
     random_value = Column(INTEGER)
 
-    sampleid = Column(INTEGER, ForeignKey('samples.sampleid'), nullable=False)
+    sampleid = Column(INTEGER, nullable=False)  # LS: Dropped FK before dropping column
     acquisid = Column(INTEGER, ForeignKey('acquisitions.acquisid'), nullable=False)
 
     # The relationships are created in Relations.py but the typing here helps the IDE
@@ -86,9 +86,7 @@ class ObjectHeader(Model):
     classifier: relationship
     img0: relationship
     all_images: relationship
-    sample: relationship
     acquisition: relationship
-    process: relationship
     history: relationship
 
     @classmethod

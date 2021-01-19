@@ -4,7 +4,6 @@
 #
 # After SQL alchemy models are defined individually, setup the relations b/w them
 #
-from sqlalchemy import and_
 
 from .Acquisition import Acquisition
 from .Collection import Collection, CollectionProject, CollectionUserRole, CollectionOrgaRole
@@ -42,32 +41,16 @@ CollectionUserRole.collection = relationship(Collection, uselist=False)
 CollectionUserRole.user = relationship(User, uselist=False)
 
 # Project
-Project.all_objects = relationship(
-    ObjectHeader)  # TODO: Add this as it's very expensive for ordinary datasets, lazy="raise_on_sql")
-ObjectHeader.project = relationship(Project)
-
-Project.all_samples = relationship(Sample, lazy="raise_on_sql")
+Project.all_samples = relationship(Sample)
 Sample.project = relationship(Project)
 
-Project.all_acquisitions = relationship(Acquisition, lazy="raise_on_sql")
-Acquisition.project = relationship(Project)
-
-Project.all_processes = relationship(Process, lazy="raise_on_sql")
-Process.project = relationship(Project)
-
 # Sample
-# This is a temporary join until the DB evolves
-Sample.all_acquisitions = relationship(Acquisition, viewonly=True, lazy="raise_on_sql",
-                                       secondary=ObjectHeader.__tablename__,
-                                       secondaryjoin=and_(ObjectHeader.projid == Acquisition.projid,
-                                                          ObjectHeader.acquisid == Acquisition.acquisid))
+Sample.all_acquisitions = relationship(Acquisition)
+Acquisition.sample = relationship(Sample)
 
-# Acquisition
-# This is a temporary join until the DB evolves
-Acquisition.all_processes = relationship(Process, viewonly=True, lazy="raise_on_sql",
-                                         secondary=ObjectHeader.__tablename__,
-                                         secondaryjoin=and_(ObjectHeader.projid == Process.projid,
-                                                            ObjectHeader.acquisid == Process.processid))
+# Acquisition to its only Process
+Acquisition.process = relationship(Process, uselist=False)
+Process.acquisition = relationship(Acquisition, uselist=False)
 
 # Privileges
 # Project.owner = relationship(User, primaryjoin="User.id==Project.owner_id",
@@ -99,14 +82,8 @@ ObjectHeader.cnn_features = relationship(ObjectCNNFeature, uselist=False)
 ObjectHeader.img0 = relationship(Image, foreign_keys=Image.objid)
 ObjectHeader.all_images = relationship(Image)
 
-ObjectHeader.sample = relationship(Sample)
-Sample.all_objects = relationship(ObjectHeader)
-
 ObjectHeader.acquisition = relationship(Acquisition)
 Acquisition.all_objects = relationship(ObjectHeader)
-
-ObjectHeader.process = relationship(Process, primaryjoin="Process.processid==foreign(ObjectHeader.acquisid)")
-Process.all_objects = relationship(ObjectHeader, primaryjoin="Process.processid==foreign(ObjectHeader.acquisid)")
 
 ObjectHeader.history = relationship(ObjectsClassifHisto)
 ObjectsClassifHisto.object = relationship(ObjectHeader)

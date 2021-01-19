@@ -25,11 +25,11 @@ JSON_FIELDS: Dict[ModelT, JSONDesc] = {
              },
     Acquisition: {Acquisition.acquisid: "id",
                   Acquisition.orig_id: "aid",
-                  Acquisition.all_processes: "processings"
+                  Acquisition.process: "processings",
+                  Acquisition.all_objects: "objects"
                   },
     Process: {Process.processid: "id",
               Process.orig_id: "pid",
-              Process.all_objects: "objects"
               },
     ObjectHeader: {ObjectHeader.classif_id: "mcat",
                    ObjectHeader.classif_auto_id: "acat",

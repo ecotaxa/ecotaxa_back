@@ -4,12 +4,15 @@
 #
 from typing import Dict
 
-from sqlalchemy import Column, ForeignKey, Index
+from sqlalchemy import Column, ForeignKey
 from sqlalchemy.dialects.postgresql import VARCHAR, INTEGER
 # noinspection PyProtectedMember
 from sqlalchemy.orm import relationship, Session
 
-from DB.helpers.ORM import Model
+from .Acquisition import Acquisition
+from .Project import Project
+from .Sample import Sample
+from .helpers.ORM import Model, Query
 
 PROCESS_FREE_COLUMNS = 31
 
@@ -18,14 +21,13 @@ class Process(Model):
     # DB table
     __tablename__ = 'process'
     # Twin table with Acquisitions
-    processid = Column(INTEGER, primary_key=True)
-    projid = Column(INTEGER, ForeignKey('projects.projid'))
+    processid = Column(INTEGER, ForeignKey(Acquisition.acquisid, onupdate="CASCADE", ondelete="CASCADE"),
+                       primary_key=True)
     # i.e. process_id from TSV
     orig_id = Column(VARCHAR(255), nullable=False)
 
     # The relationships are created in Relations.py but the typing here helps IDE
-    project: relationship
-    all_objects: relationship
+    acquisition: relationship
 
     @staticmethod
     def pk_col():  # pragma: no cover
@@ -37,12 +39,11 @@ class Process(Model):
 
     @classmethod
     def get_orig_id_and_model(cls, session: Session, prj_id) -> Dict[str, 'Process']:
-        res = session.query(Process).filter(Process.projid == prj_id)
-        # sql = "SELECT orig_id, processid" + \
-        #       "  FROM " + cls.__tablename__ + \
-        #       " WHERE projid = :prj"
-        # res: ResultProxy = session.execute(sql, {"prj": prj_id})
-        # ret = {r[0]: int(r[1]) for r in res}
+        res: Query = session.query(Process)
+        res = res.join(Acquisition)
+        res = res.join(Sample)
+        res = res.join(Project)
+        res = res.filter(Project.projid == prj_id)
         ret = {r.orig_id: r for r in res}
         return ret
 
@@ -52,4 +53,3 @@ class Process(Model):
 
 for i in range(1, PROCESS_FREE_COLUMNS):
     setattr(Process, "t%02d" % i, Column(VARCHAR(250)))
-Index('IS_ProcessProject', Process.projid)

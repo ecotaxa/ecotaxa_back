@@ -14,7 +14,7 @@ from BO.Project import ProjectBO
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.Rights import RightsBO, Action
 from BO.Sample import SampleIDT
-from DB import ObjectHeader, Sample, Acquisition, Process, Project, ParticleProject
+from DB import ObjectHeader, Sample, Acquisition, Project, ParticleProject
 from DB.helpers.ORM import orm_equals, any_, all_, Query
 from DB.helpers.Postgres import values_cte
 from helpers.DynamicLogs import get_logger
@@ -109,8 +109,8 @@ class MergeService(Service):
             for common_orig_id in common_orig_ids:
                 orm_diff = orm_equals(dest_orig_ids[common_orig_id], src_orig_ids[common_orig_id])
                 if orm_diff:
-                    msg = "Data loss: %s record with orig_id '%s' is different in destination project: %s" % (
-                        an_orig_id_container, common_orig_id, str(orm_diff))
+                    msg = ("Data conflict: %s record with orig_id '%s' is different in destination project: %s"
+                           % (an_orig_id_container, common_orig_id, str(orm_diff)))
                     # TODO: Should be an error?
                     logger.warning(msg)
         return ret
@@ -119,7 +119,7 @@ class MergeService(Service):
         """
             Real merge operation.
         """
-        # Loop over involved tables and remap
+        # Loop over involved tables and remap free columns
         for a_mapped_tbl in MAPPED_TABLES:
             remaps = self.remap_operations.get(a_mapped_tbl)
             # Do the remappings if any
@@ -130,67 +130,83 @@ class MergeService(Service):
         # Collect orig_id
         dest_parents = InBundle.fetch_existing_parents(self.session, prj_id=self.prj_id)
         src_parents = InBundle.fetch_existing_parents(self.session, prj_id=self.src_prj_id)
-        # Compute needed remappings in order to keep orig_id unicity
-        sample_remaps = self.get_remaps_for_orig_id(Sample, dest_parents, src_parents)
-        acquisition_remaps = self.get_remaps_for_orig_id(Acquisition, dest_parents, src_parents)
 
-        # Loop over tables with FK to project and move
-        for a_fk_to_proj_tbl in [Sample, Acquisition, Process, ObjectHeader, ParticleProject]:
+        # Compute needed projections in order to keep orig_id unicity
+        common_samples = self.get_ids_for_common_orig_id(Sample, dest_parents, src_parents)
+        common_acquisitions = self.get_ids_for_common_orig_id(Acquisition, dest_parents, src_parents)
+
+        # Align foreign keys, to Project, Sample and Acquisition
+        for a_fk_to_proj_tbl in [Sample, Acquisition, ObjectHeader, ParticleProject]:
             upd: Query = self.session.query(a_fk_to_proj_tbl)
-            upd_values = {'projid': self.prj_id}
-            upd = upd.filter(a_fk_to_proj_tbl.projid == self.src_prj_id)  # type: ignore
             if a_fk_to_proj_tbl == Sample:
-                # Don't move conflicting samples
-                # noinspection PyTypeChecker
-                upd = upd.filter(a_fk_to_proj_tbl.sampleid != all_(list(sample_remaps.keys())))  # type: ignore
+                # Move (i.e. change project) samples which are 'new' from merged project,
+                #    so take all of them from src project...
+                upd = upd.filter(a_fk_to_proj_tbl.projid == self.src_prj_id)  # type: ignore
+                # ...but not the ones with same orig_id, which are presumably equal.
+                upd = upd.filter(Sample.sampleid != all_(list(common_samples.keys())))
+                # And update the column
+                upd_values = {'projid': self.prj_id}
             elif a_fk_to_proj_tbl == Acquisition:
-                # Don't move conflicting acquisitions
-                # noinspection PyTypeChecker
-                upd = upd.filter(a_fk_to_proj_tbl.acquisid != all_(list(acquisition_remaps.keys())))  # type: ignore
-            elif a_fk_to_proj_tbl == Process:
-                # Process must follow its acquisition
-                # noinspection PyTypeChecker
-                upd = upd.filter(a_fk_to_proj_tbl.processid != all_(list(acquisition_remaps.keys())))  # type: ignore
+                # Acquisitions which were created, in source, under new samples, will 'follow'
+                #    them during above move, thanks to the FK on acq_sample_id.
+                # BUT some acquisitions were potentially created in source project, inside
+                #    forked samples. They need to be attached to the dest (self) corresponding sample.
+                if len(common_samples) > 0:
+                    # Build a CTE with values for the update
+                    smp_cte = values_cte("upd_smp", ("src_id", "dst_id"),
+                                         [(k, v) for k, v in common_samples.items()])
+                    smp_subqry = self.session.query(smp_cte.c.column2).filter(
+                        smp_cte.c.column1 == Acquisition.acq_sample_id)
+                    upd_values = {'acq_sample_id': func.coalesce(smp_subqry.as_scalar(), Acquisition.acq_sample_id)}
+                    upd = upd.filter(Acquisition.acq_sample_id == any_(list(common_samples.keys())))
+                    # upd = upd.filter(Acquisition.acquisid != all_(list(common_acquisitions.keys())))
+                else:
+                    # Nothing to do. There were only new samples, all of them moved to self.
+                    continue
             elif a_fk_to_proj_tbl == ObjectHeader:
                 # Generated SQL looks like:
                 # with upd_smp (src_id, dst_id) as (values (5,6), (7,8)),
-                # upd_acq (src_id, dst_id) as (values (5,6), (7,8))
+                #      upd_acq (src_id, dst_id) as (values (5,6), (7,8))
                 # update obj_head
                 #    set sampleid = coalesce((select dst_id from upd_smp where sampleid=src_id), sampleid),
                 #        acquisid = coalesce((select dst_id from upd_acq where acquisid=src_id), acquisid)
+                #        projid = 1234567
                 # where projid=3455
-                if len(sample_remaps) > 0:
+                upd_values = {'projid': self.prj_id}
+                upd = upd.filter(ObjectHeader.projid == self.src_prj_id)  # type: ignore
+                if len(common_samples) > 0:
                     # Object must follow its sample
                     smp_cte = values_cte("upd_smp", ("src_id", "dst_id"),
-                                         [(k, v) for k, v in sample_remaps.items()])
+                                         [(k, v) for k, v in common_samples.items()])
                     smp_subqry = self.session.query(smp_cte.c.column2).filter(
                         smp_cte.c.column1 == ObjectHeader.sampleid)
                     upd_values['sampleid'] = func.coalesce(smp_subqry.as_scalar(), ObjectHeader.sampleid)
-                if len(acquisition_remaps) > 0:
+                if len(common_acquisitions) > 0:
                     # Object must follow its acquisition
                     acq_cte = values_cte("upd_acq", ("src_id", "dst_id"),
-                                         [(k, v) for k, v in acquisition_remaps.items()])
+                                         [(k, v) for k, v in common_acquisitions.items()])
                     acq_subqry = self.session.query(acq_cte.c.column2).filter(
                         acq_cte.c.column1 == ObjectHeader.acquisid)
                     upd_values['acquisid'] = func.coalesce(acq_subqry.as_scalar(), ObjectHeader.acquisid)
+            else:
+                # For Particle project
+                upd_values = {'projid': self.prj_id}
             rowcount = upd.update(values=upd_values, synchronize_session=False)
             logger.info("Update in %s: %s rows", a_fk_to_proj_tbl.__tablename__, rowcount)
 
+        # Acquisition & twin Process have followed their enclosing Sample
+
         # Remove the parents which are duplicate from orig_id point of view
-        for a_fk_to_proj_tbl in [Sample, Acquisition, Process]:
+        for a_fk_to_proj_tbl in [Acquisition, Sample]:
             to_del: Query = self.session.query(a_fk_to_proj_tbl)
-            to_del = to_del.filter(a_fk_to_proj_tbl.projid == self.src_prj_id)  # type: ignore
-            if a_fk_to_proj_tbl == Sample:
+            if a_fk_to_proj_tbl == Acquisition:
+                # Remove conflicting acquisitions, they should be empty?
+                to_del = to_del.filter(
+                    Acquisition.acquisid == any_(list(common_acquisitions.keys())))  # type: ignore
+            elif a_fk_to_proj_tbl == Sample:
                 # Remove conflicting samples
-                to_del = to_del.filter(a_fk_to_proj_tbl.sampleid == any_(list(sample_remaps.keys())))  # type: ignore
-            elif a_fk_to_proj_tbl == Acquisition:
-                # Remove conflicting acquisitions
                 to_del = to_del.filter(
-                    a_fk_to_proj_tbl.acquisid == any_(list(acquisition_remaps.keys())))  # type: ignore
-            elif a_fk_to_proj_tbl == Process:
-                # Remove must follow its acquisition (to trash!)
-                to_del = to_del.filter(
-                    a_fk_to_proj_tbl.processid == any_(list(acquisition_remaps.keys())))  # type: ignore
+                    Sample.sampleid == any_(list(common_samples.keys())))  # type: ignore
             rowcount = to_del.delete(synchronize_session=False)
             logger.info("Delete in %s: %s rows", a_fk_to_proj_tbl.__tablename__, rowcount)
 
@@ -202,13 +218,13 @@ class MergeService(Service):
         ProjectBO.delete(self.session, self.src_prj_id)
 
     @staticmethod
-    def get_remaps_for_orig_id(a_parent_class, dest_parents, src_parents) -> \
+    def get_ids_for_common_orig_id(a_parent_class, dest_parents, src_parents) -> \
             Dict[Union[SampleIDT, AcquisitionIDT], Union[SampleIDT, AcquisitionIDT]]:
         """
-            Return a mapping between IDs for resolving colliding orig_id.
+            Return a link between IDs for resolving colliding orig_id.
             E.g. sample 'moose2015_ge_leg2_026' is present in source with ID 15482
                 and also in destination with ID 84678
-            -> return {15482:84678}
+            -> return {15482:84678}, to read 15482->84678
         :param a_parent_class: Sample/Acquisition
         :param dest_parents:
         :param src_parents:

@@ -111,12 +111,13 @@ class SubsetServiceOnProject(TaskServiceOnProjectBase):
         """
         # TODO: Depending on filter, the joins could be plain (not outer)
         # E.g. if asked for a set of samples
-        ret: Query = self.session.query(ObjectHeader, ObjectFields, ObjectCNNFeature, Image, Sample, Acquisition,
-                                        Process)
+        ret: Query = self.session.query(ObjectHeader)
+        ret = ret.join(Acquisition).join(Process).join(Sample)
         ret = ret.outerjoin(Image, ObjectHeader.all_images).outerjoin(ObjectCNNFeature).join(ObjectFields)
-        ret = ret.join(Sample).join(Acquisition).join(Process, Process.processid == ObjectHeader.acquisid)
         ret = ret.filter(ObjectHeader.objid == any_(object_ids))
         ret = ret.order_by(ObjectHeader.objid)
+        ret = ret.with_entities(ObjectHeader, ObjectFields, ObjectCNNFeature, Image, Sample, Acquisition,
+                                Process)
 
         if self.first_query:
             logger.info("Query: %s", str(ret))

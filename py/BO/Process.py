@@ -11,7 +11,7 @@ from API_models.crud import ColUpdateList
 from BO.Project import ProjectIDListT
 from BO.helpers.MappedEntity import MappedEntity
 from BO.helpers.MappedTable import MappedTable
-from DB import Session, Query, Project, Process
+from DB import Session, Query, Project, Process, Sample
 from DB.helpers.ORM import any_
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
@@ -53,7 +53,9 @@ class EnumeratedProcessSet(MappedTable):
             Return the project IDs for the held process IDs.
         """
         qry: Query = self.session.query(Project.projid).distinct(Project.projid)
-        qry = qry.join(Project.all_processes)
+        qry = qry.join(Project.all_samples)
+        qry = qry.join(Sample.all_acquisitions)
+        qry = qry.join(Process)
         qry = qry.filter(Process.processid == any_(self.ids))
         with CodeTimer("Prjs for %d processes: " % len(self.ids), logger):
             return [an_id[0] for an_id in qry.all()]

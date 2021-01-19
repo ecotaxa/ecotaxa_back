@@ -165,7 +165,7 @@
           "users"
         ],
         "summary":"Set Current User Prefs",
-        "description":"Set one preference, for project and currently authenticated user.\n\n-`key`: The preference key",
+        "description":"Set one preference, for project and currently authenticated user.\n-`key`: The preference key\n-`value`: The value to set this preference to",
         "operationId":"set_current_user_prefs_users_my_preferences__project_id__put",
         "parameters":[
           {
@@ -2723,6 +2723,7 @@
       "AcquisitionModel":{
         "title":"AcquisitionModel",
         "required":[
+          "acq_sample_id",
           "orig_id"
         ],
         "type":"object",
@@ -2731,8 +2732,8 @@
             "title":"Acquisid",
             "type":"integer"
           },
-          "projid":{
-            "title":"Projid",
+          "acq_sample_id":{
+            "title":"Acq Sample Id",
             "type":"integer"
           },
           "orig_id":{
@@ -3684,10 +3685,6 @@
         "properties":{
           "processid":{
             "title":"Processid",
-            "type":"integer"
-          },
-          "projid":{
-            "title":"Projid",
             "type":"integer"
           },
           "orig_id":{

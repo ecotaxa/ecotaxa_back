@@ -19,10 +19,10 @@ from sqlalchemy.orm import Session
 from BO.Mappings import GlobalMapping, ProjectMapping, ParentTableT, ParentTableClassT
 from BO.SpaceTime import compute_sun_position, USED_FIELDS_FOR_SUNPOS
 from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
-from DB import Process
+from DB import Process, Acquisition
 from DB.Object import classif_qual_revert, ObjectHeader, ObjectFields
 from DB.helpers.Bean import Bean
-from DB.helpers.ORM import detach_from_session_if, Model, detach_from_session
+from DB.helpers.ORM import Model, detach_from_session
 from helpers.DynamicLogs import get_logger
 from .Image import ImageBO
 from .Project import ProjectIDT
@@ -259,7 +259,7 @@ class TSVFile(object):
         assert not how.can_update_only
 
         upper_level_pk = how.prj_id
-        upper_level_created = False
+        upper_level_created = True
 
         # Loop up->down, i.e. Sample to Process
         parent_class: ParentTableClassT
@@ -281,12 +281,21 @@ class TSVFile(object):
                 parent = parents_for_obj.get(parent_orig_id)
 
                 if parent is not None:
+                    # If we create upper level e.g. Sample then we must create lower level Acquisition
+                    # Otherwise it means that unicity per orig_id is broken
+                    if parent_class == Acquisition:
+                        assert not upper_level_created, (
+                                    "Cannot add existing acquisition '%s' under just created sample %s."
+                                    "It would mean that the acquisition is shared between samples which is not physically possible"
+                                    % (parent_orig_id, upper_level_pk))
                     # This parent object was known before, don't add it into the session (DB)
                     # but link the child object_head to it (like newly created ones below)
                     # Store current PK for next iteration
                     upper_level_pk = parent.pk()
                     upper_level_created = False
                 else:
+                    if parent_class == Acquisition:
+                        dict_to_write["acq_sample_id"] = upper_level_pk
                     parent = TSVFile.create_parent(session, dict_to_write, how.prj_id, parent_class)
                     # Store parent object for later reference.
                     # Detach it from ORM otherwise the simple parent.pk() below provokes a select :(
@@ -313,7 +322,6 @@ class TSVFile(object):
                 assert parent is not None
                 # Log the appeared parent
                 logger.info("++ ID %s %s %d", alias, parent.orig_id, upper_level_pk)
-
 
     @staticmethod
     def create_parent(session: Session, dict_to_write, prj_id: ProjectIDT, parent_class):

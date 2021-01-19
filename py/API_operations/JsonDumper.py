@@ -11,7 +11,7 @@ from sqlalchemy.orm import Query, contains_eager
 from API_models.crud import ProjectFilters
 from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet
-from DB import Sample, Acquisition, Process, Image, ObjectHeader, ObjectFields, and_
+from DB import Sample, Acquisition, Process, Image, ObjectHeader, ObjectFields
 from DB.Project import Project
 from DB.helpers.ORM import Model, any_
 from formats.JSONObjectSet import JSON_FIELDS, JSONDesc
@@ -96,8 +96,13 @@ class JsonDumper(Service):
                     children.append(child_obj)
             elif isinstance(attr, Model):
                 # A twin object AKA 'uselist=False' relationship
-                # Dump into same output dict.
-                self._dump_into_dict(out_stream, attr, tgt_dict)
+                if isinstance(attr, Process):
+                    # Keep process in single-entity list for now
+                    child_obj = self.dump_row(out_stream, attr)
+                    tgt_dict[how] = [child_obj]
+                else:
+                    # Dump into same output dict.
+                    self._dump_into_dict(out_stream, attr, tgt_dict)
             else:
                 # Ordinary field
                 if attr is not None:
@@ -140,16 +145,9 @@ class JsonDumper(Service):
         """
         ret: Query = self.session.query(Project, Sample, Acquisition, Process, ObjectHeader, ObjectFields, Image)
         ret = ret.join(Sample, Project.all_samples).options(contains_eager(Project.all_samples))
-        # Fill the all_acquisitions relation
-        ret = ret.join(Acquisition, Project.all_acquisitions).options(contains_eager(Sample.all_acquisitions))
-        # Fill the all_processes relation
-        ret = ret.join(Process, Project.all_processes).options(contains_eager(Acquisition.all_processes))
-        # Fill the all_objects relation, we're done with the hierarchy
-        ret = ret.join(ObjectHeader, and_(ObjectHeader.projid == Project.projid,
-                                          ObjectHeader.sampleid == Sample.sampleid,
-                                          ObjectHeader.acquisid == Acquisition.acquisid,
-                                          ObjectHeader.acquisid == Process.processid)). \
-            options(contains_eager(Process.all_objects))
+        ret = ret.join(Acquisition, Sample.all_acquisitions)
+        ret = ret.join(Process, Acquisition.process)
+        ret = ret.join(ObjectHeader, Acquisition.all_objects)
         # Natural joins
         ret = ret.join(ObjectFields)
         ret = ret.join(Image, ObjectHeader.all_images).options(contains_eager(ObjectHeader.all_images))
