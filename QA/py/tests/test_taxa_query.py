@@ -3,8 +3,9 @@ from urllib.parse import urlencode, quote_plus
 
 from starlette import status
 
-TAXA_SEARCH_URL = "/taxa/search?query={query}&project_id={project_id}"
-TAXA_QUERY_URL = "/taxa/{taxon_id}"
+TAXA_SEARCH_URL = "/taxon_set/search?query={query}&project_id={project_id}"
+TAXA_QUERY_URL = "/taxon/{taxon_id}"
+TAXA_SET_QUERY_URL = "/taxon_set/query?ids={taxa_ids}"
 WORMS_TAXA_QUERY_URL = "/worms/{aphia_id}"
 
 

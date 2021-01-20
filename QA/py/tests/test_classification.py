@@ -12,6 +12,8 @@ from tests.test_subentities import OBJECT_HISTORY_QUERY_URL
 
 from API_models.crud import ProjectFilters
 
+from tests.test_taxa_query import TAXA_SET_QUERY_URL
+
 
 def _prj_query(fastapi, auth, prj_id, **kwargs):
     """ Query using the filters in kwargs """
@@ -28,7 +30,6 @@ OBJECT_SET_DELETE_URL = "/object_set/"
 OBJECT_SET_SUMMARY_URL = "/object_set/{project_id}/summary?only_total=False"
 OBJECT_SET_PARENTS_URL = "/object_set/parents"
 PROJECT_STATS_URL = "/project_set/stats?ids={project_ids}"
-TAXA_SET_QUERY_URL = "/taxa_set/query?ids={taxa_ids}"
 
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below

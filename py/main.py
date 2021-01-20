@@ -282,7 +282,7 @@ def search_projects(current_user: int = Depends(get_current_user),
                     for_managing: bool = False,
                     title_filter: str = '',
                     instrument_filter: str = '',
-                    filter_subset: bool = False) -> List[ProjectBO]:
+                    filter_subset: bool = False) -> List[ProjectBO]: # PABOPABOPABO
     """
         Return projects for current user.
         - `param` also_others: Allows to return projects for which given user has no right
@@ -796,7 +796,7 @@ async def taxa_tree_status(current_user: int = Depends(get_current_user)):
     return TaxonomyTreeStatus(last_refresh=refresh_date.isoformat() if refresh_date else None)
 
 
-@app.get("/taxa/search", tags=['Taxonomy Tree'], response_model=List[TaxaSearchRsp])
+@app.get("/taxon_set/search", tags=['Taxonomy Tree'], response_model=List[TaxaSearchRsp])
 async def search_taxa(query: str,
                       project_id: Optional[int],
                       current_user: Optional[int] = Depends(get_optional_current_user)):
@@ -819,7 +819,7 @@ async def search_taxa(query: str,
     return ret
 
 
-@app.get("/taxa/{taxon_id}", tags=['Taxonomy Tree'], response_model=TaxonModel)
+@app.get("/taxon/{taxon_id}", tags=['Taxonomy Tree'], response_model=TaxonModel)
 async def query_taxa(taxon_id: int,
                      _current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> Optional[TaxonBO]:
@@ -843,7 +843,7 @@ async def query_taxa_in_worms(aphia_id: int,
     return ret
 
 
-@app.get("/taxa_set/query", tags=['Taxonomy Tree'], response_model=List[TaxonModel])
+@app.get("/taxon_set/query", tags=['Taxonomy Tree'], response_model=List[TaxonModel])
 async def query_taxa_set(ids: str,
                          _current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> List[TaxonBO]:
