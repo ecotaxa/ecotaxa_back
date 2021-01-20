@@ -144,12 +144,16 @@ class RightsThrower(object):
     """
         Transform any AssertionError, during exit block of "with" syntax, into an HTTP error.
     """
+    def __init__(self, closable=None):
+        self.closable = closable
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type:
+            if self.closable is not None:
+                self.closable.close()
             # An exception was thrown
             if exc_type == AssertionError:
                 if exc_val.args:

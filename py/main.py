@@ -93,8 +93,9 @@ async def login(params: LoginReq) -> str:
 
         -`password`: User password
     """
-    with RightsThrower():
-        return LoginService().validate_login(params.username, params.password)
+    sce = LoginService()
+    with RightsThrower(sce):
+        return sce.validate_login(params.username, params.password)
 
 
 # TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
@@ -118,6 +119,7 @@ def show_current_user(current_user: int = Depends(get_current_user)):
     assert ret is not None
     # noinspection PyTypeHints
     ret.can_do = RightsBO.allowed_actions(ret)  # type:ignore
+    # noinspection PyTypeHints
     ret.last_used_projects = Preferences(ret).recent_projects(session=sce.session) # type:ignore
     return ret
 
@@ -184,7 +186,7 @@ def create_collection(params: CreateCollectionReq,
         *Currently only for admins*
     """
     sce = CollectionsService()
-    with RightsThrower():
+    with RightsThrower(sce):
         ret = sce.create(current_user, params)
     if isinstance(ret, str):
         raise HTTPException(status_code=404, detail=ret)
@@ -200,7 +202,7 @@ def search_collection(title: str,
         *Currently only for admins*
     """
     sce = CollectionsService()
-    with RightsThrower():
+    with RightsThrower(sce):
         matching_collections = sce.search(current_user, title)
     return matching_collections
 
@@ -214,7 +216,7 @@ def get_collection(collection_id: int,
         *Currently only for admins*
     """
     sce = CollectionsService()
-    with RightsThrower():
+    with RightsThrower(sce):
         present_collection = sce.query(current_user, collection_id)
     if present_collection is None:
         raise HTTPException(status_code=404, detail="Collection not found")
@@ -232,7 +234,7 @@ def update_collection(collection_id: int,
         *Currently only for admins*
     """
     sce = CollectionsService()
-    with RightsThrower():
+    with RightsThrower(sce):
         present_collection = sce.query(current_user, collection_id)
     if present_collection is None:
         raise HTTPException(status_code=404, detail="Collection not found")
@@ -261,7 +263,7 @@ def emodnet_format_export(collection_id: int,
         *Currently only for admins*
     """
     sce = EMODnetExport(collection_id, dry_run)
-    with RightsThrower():
+    with RightsThrower(sce):
         return sce.run(current_user)
 
 
@@ -272,7 +274,7 @@ def erase_collection(collection_id: int,
         Delete the collection, i.e. the precious fields, as the projects are just unliked from the collection.
     """
     sce = CollectionsService()
-    with RightsThrower():
+    with RightsThrower(sce):
         return sce.delete(current_user, collection_id)
 
 
@@ -308,7 +310,7 @@ def create_project(params: CreateProjectReq,
         The user has to be app administrator or project creator.
     """
     sce = ProjectsService()
-    with RightsThrower():
+    with RightsThrower(sce):
         ret = sce.create(current_user, params)
     if isinstance(ret, str):
         raise HTTPException(status_code=404, detail=ret)
@@ -323,7 +325,7 @@ def project_subset(project_id: int,
         Subset a project into another one.
     """
     sce = SubsetServiceOnProject(project_id, params)
-    with RightsThrower():
+    with RightsThrower(sce):
         return sce.run(current_user)
 
 
@@ -336,7 +338,7 @@ def project_query(project_id: int,
     """
     sce = ProjectsService()
     for_managing = bool(for_managing)
-    with RightsThrower():
+    with RightsThrower(sce):
         ret = sce.query(current_user, project_id, for_managing)
     return ret
 
@@ -349,7 +351,7 @@ def project_set_get_stats(ids: str,
     """
     sce = ProjectsService()
     num_ids = _split_num_list(ids)
-    with RightsThrower():
+    with RightsThrower(sce):
         ret = sce.read_stats(current_user, num_ids)
     return ret
 
@@ -379,7 +381,7 @@ def project_merge(project_id: int,
         - param `dry_run`: If set, then only a diagnostic of doability will be done.
     """
     sce = MergeService(project_id, source_project_id, dry_run)
-    with RightsThrower():
+    with RightsThrower(sce):
         return sce.run(current_user)
 
 
@@ -390,7 +392,7 @@ def project_check(project_id: int,
         Check consistency of a project.
     """
     sce = ProjectConsistencyChecker(project_id)
-    with RightsThrower():
+    with RightsThrower(sce):
         return sce.run(current_user)
 
 
@@ -401,7 +403,7 @@ def project_stats(project_id: int,
         Check consistency of a project.
     """
     sce = ProjectStatsFetcher(project_id)
-    with RightsThrower():
+    with RightsThrower(sce):
         return sce.run(current_user)
 
 
@@ -412,7 +414,7 @@ def project_recompute_geography(project_id: int,
         Recompute geography information for all samples in project.
     """
     sce = ProjectsService()
-    with RightsThrower():
+    with RightsThrower(sce):
         sce.recompute_geo(current_user, project_id)
 
 
@@ -424,7 +426,7 @@ def import_preparation(project_id: int,
         Prepare/validate the import of an EcoTaxa archive or directory.
     """
     sce = ImportAnalysis(project_id, params)
-    with RightsThrower():
+    with RightsThrower(sce):
         return sce.run(current_user)
 
 
@@ -436,7 +438,7 @@ def real_import(project_id: int,
         Import an EcoTaxa archive or directory.
     """
     sce = RealImport(project_id, params)
-    with RightsThrower():
+    with RightsThrower(sce):
         return sce.run(current_user)
 
 
@@ -448,7 +450,7 @@ def simple_import(project_id: int,
         Import images only, with same metadata for all.
     """
     sce = SimpleImport(project_id, params)
-    with RightsThrower():
+    with RightsThrower(sce):
         return sce.run(current_user)
 
 
@@ -463,7 +465,7 @@ def erase_project(project_id: int,
             Otherwise, no trace of the project will remain in the database.
     """
     sce = ProjectsService()
-    with RightsThrower():
+    with RightsThrower(sce):
         return sce.delete(current_user, project_id, only_objects)
 
 
@@ -476,7 +478,7 @@ def update_project(project_id: int,
         Note that some fields will NOT be updated and simply ignored, e.g. *free_cols.
     """
     sce = ProjectsService()
-    with RightsThrower():
+    with RightsThrower(sce):
         present_project: ProjectBO = sce.query(current_user, project_id, for_managing=True)
     # noinspection PyUnresolvedReferences
     present_project.update(session=sce.session,
@@ -500,7 +502,7 @@ def samples_search(project_id: int,
         Read all samples for a project.
     """
     sce = SamplesService()
-    with RightsThrower():
+    with RightsThrower(sce):
         ret = sce.search(current_user, project_id)
     return ret
 
@@ -514,7 +516,7 @@ def update_samples(req: BulkUpdateReq,
             Return the number of updated entities.
     """
     sce = SamplesService()
-    with RightsThrower():
+    with RightsThrower(sce):
         return sce.update_set(current_user, req.target_ids, req.updates)
 
 
@@ -526,7 +528,7 @@ def sample_query(sample_id: int,
         Read a single object.
     """
     sce = SamplesService()
-    with RightsThrower():
+    with RightsThrower(sce):
         ret = sce.query(current_user, sample_id)
     if ret is None:
         raise HTTPException(status_code=404, detail="Sample not found")
@@ -543,7 +545,7 @@ def update_acquisitions(req: BulkUpdateReq,
             Return the number of updated entities.
     """
     sce = AcquisitionsService()
-    with RightsThrower():
+    with RightsThrower(sce):
         return sce.update_set(current_user, req.target_ids, req.updates)
 
 
@@ -555,7 +557,7 @@ def acquisitions_search(project_id: int,
         Read all acquisitions for a project.
     """
     sce = AcquisitionsService()
-    with RightsThrower():
+    with RightsThrower(sce):
         ret = sce.search(current_user, project_id)
     return ret
 
@@ -568,7 +570,7 @@ def acquisition_query(acquisition_id: int,
         Read a single object.
     """
     sce = AcquisitionsService()
-    with RightsThrower():
+    with RightsThrower(sce):
         ret = sce.query(current_user, acquisition_id)
     if ret is None:
         raise HTTPException(status_code=404, detail="Acquisition not found")
@@ -585,7 +587,7 @@ def update_processes(req: BulkUpdateReq,
             Return the number of updated entities.
     """
     sce = ProcessesService()
-    with RightsThrower():
+    with RightsThrower(sce):
         return sce.update_set(current_user, req.target_ids, req.updates)
 
 
@@ -597,7 +599,7 @@ def process_query(process_id: int,
         Read a single object.
     """
     sce = ProcessesService()
-    with RightsThrower():
+    with RightsThrower(sce):
         ret = sce.query(current_user, process_id)
     if ret is None:
         raise HTTPException(status_code=404, detail="Process not found")
@@ -629,7 +631,7 @@ def get_object_set(project_id: int,
             - window_start & window_size allows to return only a slice of the result.
     """
     sce = ObjectManager()
-    with RightsThrower():
+    with RightsThrower(sce):
         rsp = ObjectSetQueryRsp()
         obj_with_parents, total = sce.query(current_user, project_id, filters, order_field, window_start, window_size)
     rsp.total_ids = total
@@ -656,7 +658,7 @@ def get_object_set_summary(project_id: int,
             - Number of Predicted ones
     """
     sce = ObjectManager()
-    with RightsThrower():
+    with RightsThrower(sce):
         rsp = ObjectSetSummaryRsp()
         rsp.total_objects, rsp.validated_objects, rsp.dubious_objects, rsp.predicted_objects \
             = sce.summary(current_user, project_id, filters, only_total)
@@ -671,7 +673,7 @@ def reset_object_set_to_predicted(project_id: int,
         Reset to Predicted all objects for the given project with the filters.
     """
     sce = ObjectManager()
-    with RightsThrower():
+    with RightsThrower(sce):
         return sce.reset_to_predicted(current_user, project_id, filters)
 
 
@@ -689,7 +691,7 @@ def revert_object_set_to_history(project_id: int,
             for the last annotation from this user.
     """
     sce = ObjectManager()
-    with RightsThrower():
+    with RightsThrower(sce):
         obj_hist, classif_info = sce.revert_to_history(current_user, project_id, filters, dry_run, target)
     return ObjectSetRevertToHistoryRsp(last_entries=obj_hist,
                                        classif_info=classif_info)
@@ -703,7 +705,7 @@ def update_object_set(req: BulkUpdateReq,
         Current user needs Manage right on all projects of specified objects.
     """
     sce = ObjectManager()
-    with RightsThrower():
+    with RightsThrower(sce):
         return sce.update_set(current_user, req.target_ids, req.updates)
 
 
@@ -716,7 +718,7 @@ def classify_object_set(req: ClassifyReq,
     """
     sce = ObjectManager()
     assert len(req.target_ids) == len(req.classifications), "Need the same number of objects and classifications"
-    with RightsThrower():
+    with RightsThrower(sce):
         ret, prj_id, changes = sce.classify_set(current_user, req.target_ids, req.classifications,
                                                 req.wanted_qualification)
     last_classif_ids = [change[2] for change in changes.keys()]  # Recently used are in first
@@ -734,7 +736,7 @@ def query_object_set_parents(object_ids: ObjectIDListT,
         Return object ids, with parent ones and projects for the objects in given list.
     """
     sce = ObjectManager()
-    with RightsThrower():
+    with RightsThrower(sce):
         rsp = ObjectSetQueryRsp()
         obj_with_parents = sce.parents_by_id(current_user, object_ids)
     rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
@@ -753,7 +755,7 @@ def erase_object_set(object_ids: ObjectIDListT,
         Current user needs Manage right on all projects of specified objects.
     """
     sce = ObjectManager()
-    with RightsThrower():
+    with RightsThrower(sce):
         return sce.delete(current_user, object_ids)
 
 
@@ -765,7 +767,7 @@ def object_query(object_id: int,
         Read a single object.
     """
     sce = ObjectService()
-    with RightsThrower():
+    with RightsThrower(sce):
         ret = sce.query(current_user, object_id)
     if ret is None:
         raise HTTPException(status_code=404, detail="Object not found")
@@ -781,7 +783,7 @@ def object_query_history(object_id: int,
         Read a single object's history.
     """
     sce = ObjectService()
-    with RightsThrower():
+    with RightsThrower(sce):
         ret = sce.query_history(current_user, object_id)
     if ret is None:
         raise HTTPException(status_code=404, detail="Object not found")
@@ -869,7 +871,7 @@ async def refresh_taxa_db(max_requests: int,
     sce = TaxonomyChangeService(max_requests)
     tmp_log = sce.log_to_temp()
     logger.info("logging to %s", tmp_log)
-    with RightsThrower():
+    with RightsThrower(sce):
         tsk = sce.db_refresh(current_user)
         async_bg_run(tsk)  # Run in bg while streaming logs
     # Below produces a chunked HTTP encoding, which is officially only HTTP 1.1 protocol
@@ -884,7 +886,7 @@ async def check_taxa_db(aphia_id: int,
         Check that the given aphia_id is correctly stored.
     """
     sce = TaxonomyChangeService(1)
-    with RightsThrower():
+    with RightsThrower(sce):
         msg = await sce.check_id(current_user, aphia_id)
     # Below produces a chunked HTTP encoding, which is officially only HTTP 1.1 protocol
     return Response(msg, media_type="text/plain")
@@ -900,7 +902,7 @@ async def matching_with_worms_nice(request: Request,
     """
     params = request.query_params
     sce = TaxonomyChangeService(0)
-    with RightsThrower():
+    with RightsThrower(sce):
         # noinspection PyProtectedMember
         data = sce.matching(current_user, params._dict)
     return templates.TemplateResponse("worms.html",
@@ -930,7 +932,7 @@ def get_task_file(task_id: int,
         The task must belong to requester.
     """
     sce = TaskService()
-    with RightsThrower():
+    with RightsThrower(sce):
         file_like, file_name = sce.get_file_stream(current_user, task_id)
     headers = {"content-disposition": "attachment; filename=\"" + file_name + "\""}
     return StreamingResponse(file_like, headers=headers, media_type="application/zip")

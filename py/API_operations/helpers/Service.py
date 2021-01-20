@@ -92,9 +92,20 @@ class Service(BaseService):
         self.config = config
         self.link_src = link_src
 
+    def close(self):
+        # Release DB session
+        if self.session is not None:
+            # noinspection PyBroadException
+            try:
+                self.session.close()
+            except Exception:
+                # In this context we want no stack trace.
+                pass
+            self.session = None
+
     def __del__(self):
         # Release DB session
-        self.session.close()
+        self.close()
 
 
 if __name__ == '__main__':

@@ -115,7 +115,7 @@ class SubsetServiceOnProject(TaskServiceOnProjectBase):
         ret = ret.join(Acquisition).join(Process).join(Sample)
         ret = ret.outerjoin(Image, ObjectHeader.all_images).outerjoin(ObjectCNNFeature).join(ObjectFields)
         ret = ret.filter(ObjectHeader.objid == any_(object_ids))
-        ret = ret.order_by(ObjectHeader.objid)
+        ret = ret.order_by(ObjectHeader.objid, Image.imgid)
         ret = ret.with_entities(ObjectHeader, ObjectFields, ObjectCNNFeature, Image, Sample, Acquisition,
                                 Process)
 
@@ -226,7 +226,7 @@ class SubsetServiceOnProject(TaskServiceOnProjectBase):
 
         sql = """
             SELECT objid FROM (
-                SELECT """ + rank_function + """() OVER (PARTITION BY classif_id ORDER BY RANDOM()) rang,
+                SELECT """ + rank_function + """() OVER (PARTITION BY obh.classif_id ORDER BY RANDOM()) rang,
                        obh.objid
                   FROM """ + from_.get_sql() + """
                 """ + where.get_sql() + """ ) sr
