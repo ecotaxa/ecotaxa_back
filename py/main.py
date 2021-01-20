@@ -44,6 +44,7 @@ from BO.Acquisition import AcquisitionBO
 from BO.Classification import HistoricalClassification
 from BO.Object import ObjectBO
 from BO.ObjectSet import ObjectIDListT
+from BO.Preferences import Preferences
 from BO.Process import ProcessBO
 from BO.Project import ProjectBO, ProjectStats
 from BO.Rights import RightsBO
@@ -117,6 +118,7 @@ def show_current_user(current_user: int = Depends(get_current_user)):
     assert ret is not None
     # noinspection PyTypeHints
     ret.can_do = RightsBO.allowed_actions(ret)  # type:ignore
+    ret.last_used_projects = Preferences(ret).recent_projects(session=sce.session) # type:ignore
     return ret
 
 

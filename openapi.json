@@ -2402,14 +2402,14 @@
         ]
       }
     },
-    "/taxa/search":{
+    "/taxon_set/search":{
       "get":{
         "tags":[
           "Taxonomy Tree"
         ],
         "summary":"Search Taxa",
         "description":"Search for taxa by name.\n\nQueries can be 'small', i.e. of length < 3 and even zero-length.\nFor a public, unauthenticated call:\n- zero-length and small queries always return nothing.\n- otherwise, a full search is done and results are returned in alphabetical order.\n\nBehavior for an authenticated call:\n- zero-length queries: return the MRU list in full.\n- small queries: the MRU list is searched, so that taxa in the recent list are returned, if matching.\n- otherwise, a full search is done. Results are ordered so that taxa in the project list are in first,\n    and are signalled as such in the response.",
-        "operationId":"search_taxa_taxa_search_get",
+        "operationId":"search_taxa_taxon_set_search_get",
         "parameters":[
           {
             "required":true,
@@ -2436,7 +2436,7 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "title":"Response Search Taxa Taxa Search Get",
+                  "title":"Response Search Taxa Taxon Set Search Get",
                   "type":"array",
                   "items":{
                     "$ref":"#/components/schemas/TaxaSearchRsp"
@@ -2463,14 +2463,14 @@
         ]
       }
     },
-    "/taxa/{taxon_id}":{
+    "/taxon/{taxon_id}":{
       "get":{
         "tags":[
           "Taxonomy Tree"
         ],
         "summary":"Query Taxa",
         "description":"Information about a single taxon, including its lineage.",
-        "operationId":"query_taxa_taxa__taxon_id__get",
+        "operationId":"query_taxa_taxon__taxon_id__get",
         "parameters":[
           {
             "required":true,
@@ -2511,14 +2511,14 @@
         ]
       }
     },
-    "/taxa_set/query":{
+    "/taxon_set/query":{
       "get":{
         "tags":[
           "Taxonomy Tree"
         ],
         "summary":"Query Taxa Set",
         "description":"Information about several taxa, including their lineage.\nThe separator between numbers is arbitrary non-digit, e.g. \":\", \"|\" or \",\"",
-        "operationId":"query_taxa_set_taxa_set_query_get",
+        "operationId":"query_taxa_set_taxon_set_query_get",
         "parameters":[
           {
             "required":true,
@@ -2536,7 +2536,7 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "title":"Response Query Taxa Set Taxa Set Query Get",
+                  "title":"Response Query Taxa Set Taxon Set Query Get",
                   "type":"array",
                   "items":{
                     "$ref":"#/components/schemas/TaxonModel"
@@ -4004,6 +4004,24 @@
           }
         }
       },
+      "ProjectSummaryModel":{
+        "title":"ProjectSummaryModel",
+        "required":[
+          "projid",
+          "title"
+        ],
+        "type":"object",
+        "properties":{
+          "projid":{
+            "title":"Project unique identifier",
+            "type":"integer"
+          },
+          "title":{
+            "title":"Project title",
+            "type":"string"
+          }
+        }
+      },
       "SampleModel":{
         "title":"SampleModel",
         "required":[
@@ -4319,6 +4337,14 @@
             "type":"array",
             "items":{
               "type":"integer"
+            },
+            "default":[]
+          },
+          "last_used_projects":{
+            "title":"The last used projects for this user",
+            "type":"array",
+            "items":{
+              "$ref":"#/components/schemas/ProjectSummaryModel"
             },
             "default":[]
           }

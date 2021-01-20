@@ -7,6 +7,7 @@ from typing import Optional, Tuple, List
 
 from DB import User, Role, Project, ProjectPrivilege
 from DB.helpers.ORM import Session
+from .Preferences import Preferences
 from .ProjectPrivilege import ProjectPrivilegeBO
 
 
@@ -14,6 +15,7 @@ class Action(IntEnum):
     # Global actions
     CREATE_PROJECT = 1
     ADMINISTRATE_APP = 2
+    ADMINISTRATE_USERS = 3
     # Actions on project, by increasing value
     READ = 10
     ANNOTATE = 11  # Write of only certain fields
@@ -65,6 +67,9 @@ class RightsBO(object):
                        or ProjectPrivilegeBO.MANAGE in rights_on_proj, NOT_AUTHORIZED
             else:
                 raise Exception("Not implemented")
+        # Keep the last accessed projects
+        if Preferences(user).add_recent_project(prj_id):
+            session.commit()
         return user, project
 
     @staticmethod
@@ -108,10 +113,12 @@ class RightsBO(object):
         ret = []
         if user.has_role(Role.APP_ADMINISTRATOR):
             # King of the world
-            ret.extend([Action.CREATE_PROJECT, Action.ADMINISTRATE_APP])
+            ret.extend([Action.CREATE_PROJECT, Action.ADMINISTRATE_APP, Action.ADMINISTRATE_USERS])
         else:
             if user.has_role(Role.PROJECT_CREATOR):
                 ret.append(Action.CREATE_PROJECT)
+            if user.has_role(Role.USERS_ADMINISTRATOR):
+                ret.append(Action.ADMINISTRATE_USERS)
         return ret
 
     @staticmethod

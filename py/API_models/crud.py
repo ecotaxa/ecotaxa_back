@@ -34,6 +34,13 @@ _ProjectModelFromDB: Type = sqlalchemy_to_pydantic(Project, exclude=[Project.map
                                                                         # Not replaced yet but LOTS of data
                                                                         Project.fileloaded.name
                                                                     ])
+
+
+class ProjectSummaryModel(BaseModel):
+    projid: int = Field(title="Project unique identifier")
+    title: str = Field(title="Project title")
+
+
 # We exclude free columns from base model, they will be mapped in a dedicated sub-entity
 _SampleModelFromDB = sqlalchemy_to_pydantic(Sample,
                                             exclude=["t%02d" % i for i in range(1, SAMPLE_FREE_COLUMNS)])
@@ -53,6 +60,8 @@ class UserModel(_UserModelFromDB):  # type:ignore
 class UserModelWithRights(_UserModelFromDB):  # type:ignore
     can_do: List[int] = Field(title="Actions allowed to this user, 1=create project, 2=administrate the app",
                               default=[])
+    last_used_projects: List[ProjectSummaryModel] = Field(title="The last used projects for this user",
+                                                          default=[])
 
 
 class _AddedToProject(BaseModel):
@@ -72,8 +81,9 @@ class _AddedToProject(BaseModel):
                                         default=[])
     viewers: List[UserModel] = Field(title="Viewers of this project, if not manager nor annotator",
                                      default=[])
-    highest_right: str = Field(title="The highest right for requester on this project. One of 'Manage', 'Annotate', 'View'.",
-                                   default="")
+    highest_right: str = Field(
+        title="The highest right for requester on this project. One of 'Manage', 'Annotate', 'View'.",
+        default="")
     license: LicenseEnum = Field(title="Data licence",
                                  default=LicenseEnum.Copyright)
 

@@ -54,7 +54,9 @@ def test_plain_API_login(config, database, caplog):
     # Try the token with an authenticated API call
     rsp = client.get(USER_ME_URL, headers={"Authorization": "Bearer " + token})
     assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json() == {'active': True,
+    me_as_user = rsp.json()
+    del me_as_user['last_used_projects']
+    assert me_as_user == {'active': True,
                           'country': None,
                           'email': 'creator',
                           'id': 3,
