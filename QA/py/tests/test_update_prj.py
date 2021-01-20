@@ -32,7 +32,7 @@ def test_update_prj(config, database, fastapi, caplog):
                 'cnn_network_id': None,
                 'comments': None,
                 'init_classif_list': [],
-                'license': 'Copyright',
+                'license': '',
                 'managers': [{'active': True,
                               'country': None,
                               'email': 'admin',

@@ -51,7 +51,7 @@ def test_create_collection(config, database, fastapi, caplog):
                         'creator_users': [],
                         'description': None,
                         'id': coll_id,
-                        'license': 'Copyright',
+                        'license': '',
                         'project_ids': [prj_id],
                         'provider_user': None,
                         'title': 'Test collection'}
@@ -85,7 +85,7 @@ def test_create_collection(config, database, fastapi, caplog):
                            'creator_users': [],
                            'description': None,
                            'id': coll_id,
-                           'license': 'Copyright',
+                           'license': '',
                            'project_ids': [prj_id],
                            'provider_user': None,
                            'title': 'Test collection'}]

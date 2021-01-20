@@ -28,7 +28,7 @@ class Project(Model):
     title = Column(VARCHAR(255), nullable=False)
     visible = Column(Boolean(), default=True)
     # owner_id = Column(INTEGER, default=0, nullable=False)  # TODO: FK to user
-    license = Column(VARCHAR(16), default=LicenseEnum.Copyright, nullable=False)
+    license = Column(VARCHAR(16), default=LicenseEnum.NO_LICENSE, nullable=False)
     status = Column(VARCHAR(40), default=ANNOTATE_STATUS)  # Annotate, ExploreOnly, Annotate No Prediction
     # The mappings for this Project
     # TODO: What happens if there is a conflict from one import to another?

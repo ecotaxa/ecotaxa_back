@@ -53,7 +53,7 @@ def test_emodnet_export(config, database, fastapi, caplog):
                                     "Collection 'abstract' field is empty",
                                     "Collection license should be one of [<LicenseEnum.CC0: 'CC0 1.0'>, "
                                     "<LicenseEnum.CC_BY: 'CC BY 4.0'>, <LicenseEnum.CC_BY_NC: 'CC BY-NC 4.0'>] to be "
-                                    "accepted, not Copyright."]
+                                    "accepted, not ."]
     assert rsp.json()["warnings"] == []
     task_id = rsp.json()["task_id"]
     assert task_id == 0  # No valid task as there were errors
