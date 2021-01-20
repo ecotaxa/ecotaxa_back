@@ -5,7 +5,7 @@ from starlette import status
 
 from API_operations.exports.EMODnet import EMODnetExport
 
-from tests.credentials import ADMIN_AUTH, CREATOR_USER_ID, REAL_USER_ID
+from tests.credentials import ADMIN_AUTH, CREATOR_USER_ID, REAL_USER_ID, ADMIN_USER_ID
 from tests.test_collections import COLLECTION_CREATE_URL, COLLECTION_UPDATE_URL, COLLECTION_QUERY_URL
 from tests.test_fastapi import PROJECT_QUERY_URL
 from tests.test_update import ACQUISITION_SET_UPDATE_URL, SAMPLE_SET_UPDATE_URL
@@ -61,6 +61,8 @@ def test_emodnet_export(config, database, fastapi, caplog):
     # Update underlying project license
     url = PROJECT_UPDATE_URL.format(project_id=prj_id)
     prj_json["license"] = "CC BY 4.0"
+    # And give a contact who is now mandatory
+    prj_json["contact"] = prj_json["managers"] [0]
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=prj_json)
     assert rsp.status_code == status.HTTP_200_OK
 

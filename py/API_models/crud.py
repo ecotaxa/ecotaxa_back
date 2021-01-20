@@ -75,12 +75,15 @@ class _AddedToProject(BaseModel):
                                         default={})
     init_classif_list: List[int] = Field(title="Favorite taxa used in classification",
                                          default=[])
+
     managers: List[UserModel] = Field(title="Managers of this project",
                                       default=[])
     annotators: List[UserModel] = Field(title="Annotators of this project, if not manager",
                                         default=[])
     viewers: List[UserModel] = Field(title="Viewers of this project, if not manager nor annotator",
                                      default=[])
+    contact: Optional[UserModel] = Field(title="The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.")
+
     highest_right: str = Field(
         title="The highest right for requester on this project. One of 'Manage', 'Annotate', 'View'.",
         default="")

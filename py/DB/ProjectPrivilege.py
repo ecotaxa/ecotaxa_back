@@ -27,6 +27,8 @@ class ProjectPrivilege(Model):
 
     # association value
     privilege = Column(VARCHAR(255), nullable=False)
+    # complement of the privilege, so far just 'C' for Contact who is a manager
+    extra = Column(VARCHAR(1), nullable=True)
 
     # relationships
     # The relationships are created in Relations.py but the typing here helps the IDE

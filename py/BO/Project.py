@@ -55,7 +55,7 @@ class ProjectBO(object):
         self.process_free_cols: Dict[str, str] = {}
         self.init_classif_list: List[int] = []
         # Involved members
-        self.owner: Optional[User] = None
+        self.contact: Optional[User] = None
         self.viewers: List[User] = []
         self.annotators: List[User] = []
         self.managers: List[User] = []
@@ -95,25 +95,18 @@ class ProjectBO(object):
             if a_priv.user is None:  # TODO: There is a line with NULL somewhere in DB
                 continue
             by_right[a_priv.privilege].append(a_priv.user)
-        # Owner defaults to first historical manager
-        # owner_id = self._project.owner_id
-        # if owner_id == 0:
-        #     if len(self.managers) > 0:
-        #         self.owner = self.managers[0]
-        #     else:
-        #         # assert False, "No manager found for %s" % self._project.projid
-        #         self.owner = MISSING_USER
-        # else:
-        #     self.owner = self._project.owner
+            if 'C' == a_priv.extra:
+                self.contact = a_priv.user
         return self
 
     def update(self, session: Session, title: str, visible: bool, status: str, projtype: str,
                init_classif_list: List[int],
                classiffieldlist: str, popoverfieldlist: str,
                cnn_network_id: str, comments: str,
-               # owner: Any,
+               contact: Any,
                managers: List[Any], annotators: List[Any], viewers: List[Any],
                license: str):
+        assert contact is not None, 'A valid contact is needed'
         proj_id = self._project.projid
         # Field reflexes
         if cnn_network_id != self._project.cnn_network_id:
@@ -145,12 +138,12 @@ class ProjectBO(object):
         # Add all
         for a_right, a_user_list in by_right.items():
             for a_user in a_user_list:
+                # Set flag for contact person
+                extra = 'C' if a_user.id == contact.id else None
                 session.add(ProjectPrivilege(projid=proj_id,
                                              member=a_user.id,
-                                             privilege=a_right))
-        # Owner update
-        # assert owner.id in [mgr.id for mgr in managers], "Owner must be a Manager"
-        # self._project.owner_id = owner.id
+                                             privilege=a_right,
+                                             extra=extra))
         session.commit()
 
     def __getattr__(self, item):
@@ -246,6 +239,7 @@ class ProjectBO(object):
         sql_params: Dict[str, Any] = {"user_id": user.id}
 
         # Default query: all projects, eventually with first manager information
+        # noinspection SqlResolve
         sql = """SELECT p.projid
                    FROM projects p
                    LEFT JOIN ( """ + ProjectPrivilegeBO.first_manager_by_project() + """ ) fpm 

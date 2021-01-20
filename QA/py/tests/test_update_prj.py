@@ -31,6 +31,7 @@ def test_update_prj(config, database, fastapi, caplog):
                 'classifsettings': None,
                 'cnn_network_id': None,
                 'comments': None,
+                'contact': None,
                 'init_classif_list': [],
                 'license': '',
                 'managers': [{'active': True,
@@ -164,6 +165,7 @@ def test_update_prj(config, database, fastapi, caplog):
 
     url = PROJECT_UPDATE_URL.format(project_id=prj_id)
     read_json["comments"] = "New comment"
+    read_json["contact"] = read_json["managers"][0]
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=read_json)
     assert rsp.status_code == status.HTTP_200_OK
 

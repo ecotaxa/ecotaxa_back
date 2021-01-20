@@ -754,3 +754,7 @@ UPDATE alembic_version SET version_num='6f57c8aa715d' WHERE alembic_version.vers
 
 COMMIT;
 
+-- Running upgrade c30b923293e9 -> f4ea49253597, Contact person
+ALTER TABLE projectspriv ADD COLUMN extra VARCHAR(1);
+
+COMMIT;
