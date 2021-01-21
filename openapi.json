@@ -3880,6 +3880,14 @@
             },
             "default":[]
           },
+          "contact":{
+            "title":"The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/UserModel"
+              }
+            ]
+          },
           "highest_right":{
             "title":"The highest right for requester on this project. One of 'Manage', 'Annotate', 'View'.",
             "type":"string",

@@ -139,7 +139,8 @@ class ProjectBO(object):
         for a_right, a_user_list in by_right.items():
             for a_user in a_user_list:
                 # Set flag for contact person
-                extra = 'C' if a_user.id == contact.id else None
+                # TODO: Check there was an extra and only one
+                extra = 'C' if a_user.id == contact.id and a_right == ProjectPrivilegeBO.MANAGE else None
                 session.add(ProjectPrivilege(projid=proj_id,
                                              member=a_user.id,
                                              privilege=a_right,
