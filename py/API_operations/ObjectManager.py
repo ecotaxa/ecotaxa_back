@@ -145,7 +145,7 @@ class ObjectManager(Service):
         params = {"ids": object_ids}
 
         res: ResultProxy = self.session.execute(sql, params)
-        ids = [(objid, acquisid, acquisid, sampleid, projid)
+        ids = [(objid, acquisid, sampleid, projid)
                for objid, acquisid, sampleid, projid in res]
         return ids  # type:ignore
 
@@ -297,7 +297,8 @@ class ObjectManager(Service):
         # Give feedback
         return impact, classifs
 
-    def collect_classif(self, histo: List[HistoricalLastClassif]) -> ClassifIDSetT:
+    @staticmethod
+    def collect_classif(histo: List[HistoricalLastClassif]) -> ClassifIDSetT:
         """
             Collect classification IDs from given list, for lookup & display.
         """

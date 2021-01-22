@@ -202,4 +202,6 @@ def test_classif(config, database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
     resp = rsp.json()
     assert len(resp['acquisition_ids']) == 4
+    for prj in resp['project_ids']:
+        assert prj == prj_id
     assert resp['total_ids'] == 4
