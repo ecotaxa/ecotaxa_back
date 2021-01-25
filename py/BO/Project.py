@@ -94,6 +94,8 @@ class ProjectBO(object):
         for a_priv in self._project.privs_for_members:
             if a_priv.user is None:  # TODO: There is a line with NULL somewhere in DB
                 continue
+            if not a_priv.user.active:
+                continue
             by_right[a_priv.privilege].append(a_priv.user)
             if 'C' == a_priv.extra:
                 self.contact = a_priv.user
