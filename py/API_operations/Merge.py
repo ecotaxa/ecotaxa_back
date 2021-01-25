@@ -190,6 +190,7 @@ class MergeService(Service):
                     upd_values['acquisid'] = func.coalesce(acq_subqry.as_scalar(), ObjectHeader.acquisid)
             else:
                 # For Particle project
+                upd = upd.filter(ParticleProject.projid == self.src_prj_id)  # type: ignore
                 upd_values = {'projid': self.prj_id}
             rowcount = upd.update(values=upd_values, synchronize_session=False)
             logger.info("Update in %s: %s rows", a_fk_to_proj_tbl.__tablename__, rowcount)
