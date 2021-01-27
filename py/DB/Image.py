@@ -36,6 +36,7 @@ class Image(Model):
         """
         res: ResultProxy = session.execute(
             # Must be reloaded from DB, as phase 1 added all objects for duplicates checking
+            # TODO: Why using the view?
             "SELECT concat(o.orig_id,'*',i.orig_file_name) "
             "  FROM images i "
             "  JOIN objects o ON i.objid = o.objid "
@@ -48,4 +49,5 @@ class Image(Model):
         return self.imgid < other.imgid
 
 
-Index('IS_ImagesObjects', Image.objid)
+# Covering index with rank
+Index('is_imageobjrank', Image.__table__.c.objid, Image.__table__.c.imgrank, unique=True)

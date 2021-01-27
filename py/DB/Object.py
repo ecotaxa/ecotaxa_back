@@ -4,7 +4,7 @@
 #
 # noinspection PyPackageRequirements
 import datetime
-from typing import Dict
+from typing import Dict, Set
 
 # noinspection PyPackageRequirements
 from sqlalchemy import Index, Column, ForeignKey, Sequence, Integer
@@ -17,11 +17,11 @@ from sqlalchemy.engine import ResultProxy
 from sqlalchemy.orm import relationship, Session
 
 from BO.helpers.TSVHelpers import convert_degree_minute_float_to_decimal_degree
-# noinspection PyUnresolvedReferences
-from .Taxonomy import Taxonomy
-# noinspection PyUnresolvedReferences
-from .User import User
-from .helpers.ORM import Model
+from .Acquisition import Acquisition
+from .Image import Image
+from .Project import Project
+from .Sample import Sample
+from .helpers.ORM import Model, Query
 
 # Classification qualification
 classif_qual = {'P': 'predicted', 'D': 'dubious', 'V': 'validated'}
@@ -61,12 +61,7 @@ class ObjectHeader(Model):
     classif_auto_when = Column(TIMESTAMP)
 
     classif_crossvalidation_id = Column(INTEGER)  # Always NULL in prod'
-    #
-    # The _first_ image
-    # Relation b/w next images and present Object are in Image.objid
-    # TODO: WTF, normalize.
-    img0id = Column(BIGINT)
-    imgcount = Column(INTEGER)
+
     complement_info = Column(VARCHAR)  # e.g. "Part of ostracoda"
 
     similarity = Column(DOUBLE_PRECISION)  # Always NULL in prod'
@@ -75,20 +70,17 @@ class ObjectHeader(Model):
     random_value = Column(INTEGER)
 
     # The relationships are created in Relations.py but the typing here helps the IDE
-    project: relationship
     fields: relationship
     cnn_features: relationship
     classif: relationship
     classif_auto: relationship
     classifier: relationship
-    img0: relationship
     all_images: relationship
     acquisition: relationship
     history: relationship
 
     @classmethod
     def fetch_existing_objects(cls, session: Session, prj_id) -> Dict[str, int]:
-        ret = {}
         # TODO: Why using the view? Also orig_id should be in plain object
         res: ResultProxy = session.execute(
             "SELECT o.orig_id, o.objid "
@@ -98,20 +90,15 @@ class ObjectHeader(Model):
         ret = {orig_id: objid for orig_id, objid in res}
         return ret  # type: ignore
 
-    @staticmethod
-    def update_counts_and_img0(session: Session, prj_id):
-        # noinspection SqlRedundantOrderingDirection
-        session.execute("""
-        UPDATE obj_head obh
-           SET imgcount = (SELECT count(*) FROM images img WHERE img.objid = obh.objid),
-               img0id = (SELECT imgid FROM images img WHERE img.objid = obh.objid ORDER BY img.imgrank ASC LIMIT 1)
-          FROM acquisitions acq 
-          JOIN samples sam ON sam.projid = :prj 
-         WHERE obh.acquisid = acq.acquisid
-           AND acq.acq_sample_id = sam.sampleid
-           AND (obh.imgcount IS NULL or obh.img0id IS NULL) """,
-                        {'prj': prj_id})
-        session.commit()
+    @classmethod
+    def fetch_existing_ranks(cls, session: Session, prj_id) -> Dict[int, Set[int]]:
+        ret: Dict[int, Set[int]] = {}
+        qry: Query = session.query(Image.objid, Image.imgrank)
+        qry = qry.join(ObjectHeader).join(Acquisition).join(Sample)
+        qry = qry.join(Project, Project.projid == prj_id)
+        for objid, imgrank in qry.all():
+            ret.setdefault(objid, set()).add(imgrank)
+        return ret
 
     @staticmethod
     def _geo_from_txt(txt: str, min_v: float, max_v: float) -> float:

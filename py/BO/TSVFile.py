@@ -155,6 +155,7 @@ class TSVFile(object):
                 if new_records > 1:
                     # We now have an Id from sequences, so reference it.
                     how.existing_objects[object_fields_to_write.orig_id] = object_head_to_write.objid
+                    how.image_ranks_per_obj[object_head_to_write.objid] = set()
                 else:
                     # The key already exists with same value, checked in @see self.create_or_link_slaves
                     pass
@@ -285,9 +286,9 @@ class TSVFile(object):
                     # Otherwise it means that unicity per orig_id is broken
                     if parent_class == Acquisition:
                         assert not upper_level_created, (
-                                    "Cannot add existing acquisition '%s' under just created sample %s."
-                                    "It would mean that the acquisition is shared between samples which is not physically possible"
-                                    % (parent_orig_id, upper_level_pk))
+                                "Cannot add existing acquisition '%s' under just created sample %s."
+                                "It would mean that the acquisition is shared between samples which is not physically possible"
+                                % (parent_orig_id, upper_level_pk))
                     # This parent object was known before, don't add it into the session (DB)
                     # but link the child object_head to it (like newly created ones below)
                     # Store current PK for next iteration
@@ -541,7 +542,7 @@ class TSVFile(object):
                         session.flush()
                 ret = 0  # nothing to write
             else:
-                # Simply a line with a complementary image
+                # 'Simply' a line with a complementary image
                 logger.info("One more image for %s:%s ", object_fields_to_write.orig_id, image_to_write)
                 ret = 1  # just a new image
         else:
@@ -551,7 +552,7 @@ class TSVFile(object):
                 ret = 0
             else:
                 # or create it
-                #object_head_to_write.projid = how.prj_id
+                # object_head_to_write.projid = how.prj_id
                 object_head_to_write.random_value = random.randint(1, 99999999)
                 # Below left NULL @see self.update_counts_and_img0
                 # object_head_to_write.img0id = XXXXX
@@ -577,12 +578,31 @@ class TSVFile(object):
 
         sub_path = where.vault.store_image(img_file_path, image_to_write.imgid)
         image_to_write.file_name = sub_path
+        present_ranks = how.image_ranks_per_obj.setdefault(image_to_write.objid, set())
         if image_to_write.get("imgrank") is None:
-            image_to_write.imgrank = 0  # default value for missing field, and present with None
+            self.compute_rank(image_to_write, present_ranks)
+        else:
+            # The TSV format is float
+            image_to_write.imgrank = int(image_to_write.imgrank)
+            if image_to_write.imgrank in present_ranks:
+                tsv_rank = image_to_write.imgrank
+                self.compute_rank(image_to_write, present_ranks)
+                logger.info('For %s, cannot use rank from TSV %d, using %d instead',
+                            image_to_write.file_name, tsv_rank, image_to_write.imgrank)
+        present_ranks.add(image_to_write.imgrank)
 
         err = ImageBO.dimensions_and_resize(how.max_dim, where.vault, sub_path, image_to_write)
         if err:
             logger.error(err + ", not copied")
+
+    @staticmethod
+    def compute_rank(image_to_write, present_ranks):
+        # No (more) duplicates, so pick next number from existing ones
+        ranks_to_use = [a_rank for a_rank in present_ranks if a_rank < 100]
+        if len(ranks_to_use) == 0:
+            image_to_write.imgrank = 0
+        else:
+            image_to_write.imgrank = max(ranks_to_use) + 1
 
     def do_validate(self, how: ImportHow, diag: ImportDiagnostic):
         with self.open():

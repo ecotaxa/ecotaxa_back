@@ -82,6 +82,9 @@ class ImportHow(object):
         self.existing_parents: Dict[str, Dict[str, ParentTableT]] = {}
         # e.g. { 'm106_mn01_n1_sml_409': 1455263 }
         self.existing_objects: Dict[str, int] = {}
+        # The generated/from TSV image ranks.
+        # e.g. { 1455263 : { 1, 2} }
+        self.image_ranks_per_obj: Dict[int, Set[int]] = {}
         # Updated during RealImport
         self.loaded_files = loaded_files
         # For UVP6 vignetting

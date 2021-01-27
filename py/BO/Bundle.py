@@ -73,6 +73,8 @@ class InBundle(object):
             logger.info("existing %s = %s", alias, log_line)
         # The created objects (unicity from object_id in TSV, orig_id in model)
         how.existing_objects = self.fetch_existing_objects(session, prj_id=how.prj_id)
+        # The stored images (unicity for object ID + rank)
+        how.image_ranks_per_obj = self.fetch_existing_ranks(session, prj_id=how.prj_id)
 
         ret = self.import_each_file(where, how, stats)
         return ret
@@ -127,6 +129,13 @@ class InBundle(object):
         """
         with CodeTimer("Existing objects for %d: " % prj_id, logger):
             return ObjectHeader.fetch_existing_objects(session, prj_id)
+
+    @staticmethod
+    def fetch_existing_ranks(session, prj_id):
+        """
+            Get existing image ranks from the project
+        """
+        return ObjectHeader.fetch_existing_ranks(session, prj_id)
 
     @staticmethod
     def fetch_existing_parents(session, prj_id) -> Dict[str, Dict[str, ParentTableT]]:

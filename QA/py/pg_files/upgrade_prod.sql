@@ -802,8 +802,53 @@ create view objects as
                     from obj_head obh
                     join acquisitions acq on obh.acquisid = acq.acquisid
                     join samples sam on acq.acq_sample_id = sam.sampleid
-                    left join obj_field ofi on obh.objid=ofi.objfid;
+                    left join obj_field ofi on obh.objid=ofi.objfid;;
 
 UPDATE alembic_version SET version_num='a74a857fe352' WHERE alembic_version.version_num = 'f4ea49253597';
 
 COMMIT;
+
+-- Running upgrade a74a857fe352 -> da78c15a7c21
+
+drop view objects;
+
+create temp table img_issues
+as select img.imgid, img.objid, img.imgrank, null::integer as nextrank
+from images img
+ where exists(select 1 from images img2 where
+              img2.objid=img.objid
+              and img2.imgrank=img.imgrank
+              and img2.imgid != img.imgid);
+
+update img_issues imi
+   set nextrank = imgrank + (select count(*)
+                    from images img2
+                   where img2.objid = imi.objid
+                     and img2.imgrank <= imi.imgrank
+                     and img2.imgid < imi.imgid);
+
+update images img
+   set imgrank = nextrank
+  from img_issues imi
+ where imi.imgid = img.imgid
+   and imi.nextrank != imi.imgrank;;
+
+DROP INDEX "IS_ImagesObjects";
+
+CREATE UNIQUE INDEX is_imageobjrank ON images (objid, imgrank);
+
+ALTER TABLE obj_head DROP COLUMN img0id;
+
+ALTER TABLE obj_head DROP COLUMN imgcount;
+
+create view objects as
+                  select sam.projid, sam.sampleid, obh.*, obh.acquisid as processid, ofi.*
+                    from obj_head obh
+                    join acquisitions acq on obh.acquisid = acq.acquisid
+                    join samples sam on acq.acq_sample_id = sam.sampleid
+                    left join obj_field ofi on obh.objid = ofi.objfid; -- allow elimination by planner;
+
+UPDATE alembic_version SET version_num='da78c15a7c21' WHERE alembic_version.version_num = 'a74a857fe352';
+
+COMMIT;
+

@@ -297,6 +297,7 @@ class ProjectBO(object):
 
     @classmethod
     def get_bounding_geo(cls, session: Session, project_ids: ProjectIDListT) -> Iterable[float]:
+        # TODO: Why using the view?
         res: ResultProxy = session.execute(
             "SELECT min(o.latitude), max(o.latitude), min(o.longitude), max(o.longitude)"
             "  FROM objects o "
@@ -308,6 +309,7 @@ class ProjectBO(object):
 
     @classmethod
     def get_date_range(cls, session: Session, project_ids: ProjectIDListT) -> Iterable[datetime]:
+        # TODO: Why using the view?
         res: ResultProxy = session.execute(
             "SELECT min(o.objdate), max(o.objdate)"
             "  FROM objects o "
@@ -324,7 +326,6 @@ class ProjectBO(object):
         """
         # Ensure the ORM has no shadow copy before going to plain SQL
         session.expunge_all()
-        ObjectHeader.update_counts_and_img0(session, prj_id)
         Sample.propagate_geo(session, prj_id)
         ProjectBO.update_taxo_stats(session, prj_id)
         # Stats depend on taxo stats

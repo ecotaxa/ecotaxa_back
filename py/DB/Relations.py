@@ -79,7 +79,6 @@ ObjectCNNFeature.object = relationship(ObjectHeader, foreign_keys="ObjectHeader.
                                        primaryjoin="ObjectCNNFeature.objcnnid==ObjectHeader.objid", uselist=False)
 ObjectHeader.cnn_features = relationship(ObjectCNNFeature, uselist=False)
 
-ObjectHeader.img0 = relationship(Image, foreign_keys=Image.objid)
 ObjectHeader.all_images = relationship(Image)
 
 ObjectHeader.acquisition = relationship(Acquisition)
