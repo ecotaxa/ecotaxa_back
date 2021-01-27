@@ -99,7 +99,7 @@ class DBWriter(object):
         # Bulk mode or Core do not create links (using ORM relationship), so we have to do manually
         if new_records > 1:
             # There is a new image and more
-            assert object_head_to_write.projid is not None
+            #assert object_head_to_write.projid is not None
             assert object_fields_to_write.orig_id is not None
             # Default value from sequences
             object_head_to_write.objid = self.obj_seq_cache.next()

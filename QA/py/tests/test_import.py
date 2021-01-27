@@ -109,7 +109,7 @@ def test_import(config, database, caplog, title):
     return prj_id
 
 
-@pytest.mark.skip()
+# @pytest.mark.skip()
 def test_import_again_skipping(config, database, caplog):
     """ Re-import similar files into same project
         CANNOT RUN BY ITSELF """
