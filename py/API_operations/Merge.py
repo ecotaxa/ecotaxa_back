@@ -165,29 +165,21 @@ class MergeService(Service):
                     continue
             elif a_fk_to_proj_tbl == ObjectHeader:
                 # Generated SQL looks like:
-                # with upd_smp (src_id, dst_id) as (values (5,6), (7,8)),
-                #      upd_acq (src_id, dst_id) as (values (5,6), (7,8))
+                # with upd_acq (src_id, dst_id) as (values (5,6), (7,8))
                 # update obj_head
-                #    set sampleid = coalesce((select dst_id from upd_smp where sampleid=src_id), sampleid),
-                #        acquisid = coalesce((select dst_id from upd_acq where acquisid=src_id), acquisid)
-                #        projid = 1234567
-                # where projid=3455
-                upd_values = {'projid': self.prj_id}
-                upd = upd.filter(ObjectHeader.projid == self.src_prj_id)  # type: ignore
-                if len(common_samples) > 0:
-                    # Object must follow its sample
-                    smp_cte = values_cte("upd_smp", ("src_id", "dst_id"),
-                                         [(k, v) for k, v in common_samples.items()])
-                    smp_subqry = self.session.query(smp_cte.c.column2).filter(
-                        smp_cte.c.column1 == ObjectHeader.sampleid)
-                    upd_values['sampleid'] = func.coalesce(smp_subqry.as_scalar(), ObjectHeader.sampleid)
+                #    set acquisid = coalesce((select dst_id from upd_acq where acquisid=src_id), acquisid)
+                #  where acquisid in (select src_id from upd_acq)
                 if len(common_acquisitions) > 0:
                     # Object must follow its acquisition
                     acq_cte = values_cte("upd_acq", ("src_id", "dst_id"),
                                          [(k, v) for k, v in common_acquisitions.items()])
                     acq_subqry = self.session.query(acq_cte.c.column2).filter(
                         acq_cte.c.column1 == ObjectHeader.acquisid)
-                    upd_values['acquisid'] = func.coalesce(acq_subqry.as_scalar(), ObjectHeader.acquisid)
+                    upd_values = {'acquisid': func.coalesce(acq_subqry.as_scalar(), ObjectHeader.acquisid)}
+                    upd = upd.filter(ObjectHeader.acquisid == any_(list(common_acquisitions.keys())))
+                else:
+                    # Nothing to do. There were only new acquisitions, all of them moved to self.
+                    continue
             else:
                 # For Particle project
                 upd = upd.filter(ParticleProject.projid == self.src_prj_id)  # type: ignore

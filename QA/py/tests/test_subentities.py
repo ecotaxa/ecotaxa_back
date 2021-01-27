@@ -53,7 +53,8 @@ def test_subentities(config, database, fastapi, caplog):
 
     # Pick the first object
     qry_rsp, _total = ObjectManager().query(ADMIN_USER_ID, prj_id, filters={})
-    first_objid = qry_rsp[0][0]  # obj ids list
+    first_obj = qry_rsp[0]
+    first_objid = first_obj[0]  # obj id
 
     # Wrong ID
     url = OBJECT_QUERY_URL.format(object_id=-1)
@@ -66,7 +67,8 @@ def test_subentities(config, database, fastapi, caplog):
     obj = response.json()
     assert obj is not None
 
-    sample_id = obj["sampleid"]
+    # Move up in hierarchy
+    sample_id = first_obj[2]
     # Wrong ID
     url = SAMPLE_QUERY_URL.format(sample_id=-1)
     response = fastapi.get(url, headers=ADMIN_AUTH)
@@ -78,7 +80,7 @@ def test_subentities(config, database, fastapi, caplog):
     sample = response.json()
     assert sample is not None
 
-    acquis_id = obj["acquisid"]
+    acquis_id = first_obj[1]
     # Wrong ID
     url = ACQUISITION_QUERY_URL.format(acquisition_id=-1)
     response = fastapi.get(url, headers=ADMIN_AUTH)
@@ -90,7 +92,7 @@ def test_subentities(config, database, fastapi, caplog):
     acquisition = response.json()
     assert acquisition is not None
 
-    process_id = obj["acquisid"]
+    process_id = acquis_id
     # Wrong ID
     url = PROCESS_QUERY_URL.format(process_id=-1)
     response = fastapi.get(url, headers=ADMIN_AUTH)

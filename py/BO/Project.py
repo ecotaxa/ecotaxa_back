@@ -15,7 +15,7 @@ from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFiel
     ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram, ObjectCNNFeature
 from DB import Session, ResultProxy
 from DB.User import Role
-from DB.helpers.ORM import Delete, Query, select, text, any_, contains_eager, minimal_table_of
+from DB.helpers.ORM import Delete, Query, text, any_, and_, contains_eager, minimal_table_of
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -96,6 +96,7 @@ class ProjectBO(object):
                 continue
             if not a_priv.user.active:
                 continue
+            # noinspection PyTypeChecker
             by_right[a_priv.privilege].append(a_priv.user)
             if 'C' == a_priv.extra:
                 self.contact = a_priv.user
@@ -107,12 +108,15 @@ class ProjectBO(object):
                cnn_network_id: str, comments: str,
                contact: Any,
                managers: List[Any], annotators: List[Any], viewers: List[Any],
-               license: str):
+               license_: str):
         assert contact is not None, 'A valid contact is needed'
         proj_id = self._project.projid
         # Field reflexes
         if cnn_network_id != self._project.cnn_network_id:
-            sub_qry: Query = session.query(ObjectHeader.objid).filter(ObjectHeader.projid == proj_id)
+            sub_qry: Query = session.query(ObjectHeader.objid)
+            sub_qry = sub_qry.join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
+            sub_qry = sub_qry.join(Sample, and_(Sample.sampleid == Acquisition.acq_sample_id,
+                                                Sample.projid == proj_id))
             # Delete CNN features which depend on the CNN network
             qry: Query = session.query(ObjectCNNFeature)
             qry = qry.filter(ObjectCNNFeature.objcnnid.in_(sub_qry.subquery()))
@@ -126,7 +130,7 @@ class ProjectBO(object):
         self._project.popoverfieldlist = popoverfieldlist
         self._project.cnn_network_id = cnn_network_id
         self._project.comments = comments
-        self._project.license = license
+        self._project.license = license_
         # Inverse for extracted values
         self._project.initclassiflist = ",".join([str(cl_id) for cl_id in init_classif_list])
         # Inverse for users by privilege
@@ -175,28 +179,30 @@ class ProjectBO(object):
 
     @staticmethod
     def update_taxo_stats(session: Session, projid: int):
-        # TODO: There is a direct ref. to obj_head.projid. Problem in case of clean hierarchy.
         session.execute("""
-        DELETE FROM projects_taxo_stat 
-         WHERE projid = :prjid;
+        DELETE FROM projects_taxo_stat pts
+         WHERE pts.projid = :prjid;
         INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
-        SELECT projid, COALESCE(classif_id, -1) id, COUNT(*) nbr, 
-               COUNT(CASE WHEN classif_qual = 'V' THEN 1 END) nbr_v,
-               COUNT(CASE WHEN classif_qual = 'D' THEN 1 END) nbr_d, 
-               COUNT(CASE WHEN classif_qual = 'P' THEN 1 END) nbr_p
-          FROM obj_head
-         WHERE projid = :prjid
-        GROUP BY projid, classif_id;""",
+        SELECT sam.projid, COALESCE(obh.classif_id, -1) id, COUNT(*) nbr, 
+               COUNT(CASE WHEN obh.classif_qual = 'V' THEN 1 END) nbr_v,
+               COUNT(CASE WHEN obh.classif_qual = 'D' THEN 1 END) nbr_d, 
+               COUNT(CASE WHEN obh.classif_qual = 'P' THEN 1 END) nbr_p
+          FROM obj_head obh
+          JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
+          JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prjid 
+        GROUP BY sam.projid, obh.classif_id;""",
                         {'prjid': projid})
 
     @staticmethod
     def update_stats(session: Session, projid: int):
         session.execute("""
         UPDATE projects
-           SET objcount=q.nbr, pctclassified=100.0*nbrclassified/q.nbr, pctvalidated=100.0*nbrvalidated/q.nbr
+           SET objcount=q.nbr_sum, 
+               pctclassified=100.0*nbrclassified/q.nbr_sum, 
+               pctvalidated=100.0*nbrvalidated/q.nbr_sum
           FROM projects p
           LEFT JOIN
-             (SELECT projid, SUM(nbr) nbr, SUM(CASE WHEN id>0 THEN nbr END) nbrclassified, SUM(nbr_v) nbrvalidated
+             (SELECT projid, SUM(nbr) nbr_sum, SUM(CASE WHEN id>0 THEN nbr END) nbrclassified, SUM(nbr_v) nbrvalidated
                 FROM projects_taxo_stat
                WHERE projid = :prjid
               GROUP BY projid) q ON p.projid = q.projid
@@ -208,15 +214,17 @@ class ProjectBO(object):
     def read_taxo_stats(session: Session, prj_ids: ProjectIDListT) -> List[ProjectStats]:
         res: ResultProxy = \
             session.execute("""
-        SELECT projid, ARRAY_AGG(id) as ids, 
-               SUM(CASE WHEN id = -1 THEN nbr ELSE 0 END) as nb_u, 
-               SUM(nbr_v) as nb_v, SUM(nbr_d) as nb_d, SUM(nbr_p) as nb_p
-          FROM projects_taxo_stat
-         WHERE projid = ANY(:ids)
-      GROUP BY projid""",
+        SELECT pts.projid, ARRAY_AGG(pts.id) as ids, 
+               SUM(CASE WHEN pts.id = -1 THEN pts.nbr ELSE 0 END) as nb_u, 
+               SUM(pts.nbr_v) as nb_v, SUM(pts.nbr_d) as nb_d, SUM(pts.nbr_p) as nb_p
+          FROM projects_taxo_stat pts
+         WHERE pts.projid = ANY(:ids)
+      GROUP BY pts.projid""",
                             {'ids': prj_ids})
         with CodeTimer("stats for %d projects:" % len(prj_ids), logger):
             ret = [ProjectStats(rec) for rec in res.fetchall()]
+        for a_stat in ret:
+            a_stat.used_taxa.sort()
         return ret
 
     @staticmethod
@@ -403,9 +411,10 @@ class ProjectBO(object):
             acqs_4_samples = Query(Acquisition.acquisid).filter(Acquisition.acq_sample_id.in_(samples_4_prj))
             qry = qry.filter(Process.processid.in_(acqs_4_samples))  # type: ignore
         elif table == ObjectFields:
-            # All tables have direct projid column except ObjectFields
-            qry = qry.filter(ObjectFields.objfid.in_(
-                select([ObjectHeader.objid]).where(ObjectHeader.projid == prj_id)))  # type: ignore
+            samples_4_prj = Query(Sample.sampleid).filter(Sample.projid == prj_id)
+            acqs_4_samples = Query(Acquisition.acquisid).filter(Acquisition.acq_sample_id.in_(samples_4_prj))
+            objs_for_acqs = Query(ObjectHeader.objid).filter(ObjectHeader.acquisid.in_(acqs_4_samples))
+            qry = qry.filter(ObjectFields.objfid.in_(objs_for_acqs))  # type: ignore
         qry = qry.update(values=values, synchronize_session=False)
 
         logger.info("Remap query for %s: %s", table.__tablename__, qry)
@@ -416,7 +425,10 @@ class ProjectBO(object):
             Return the full list of objects IDs inside a project.
             TODO: Maybe better in ObjectBO
         """
-        qry: Query = session.query(ObjectHeader.objid).filter(ObjectHeader.projid == prj_id)
+        qry: Query = session.query(ObjectHeader.objid)
+        qry = qry.join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
+        qry = qry.join(Sample, and_(Sample.sampleid == Acquisition.acq_sample_id,
+                                    Sample.projid == prj_id))
         return [an_id for an_id in qry.all()]
 
     @classmethod
@@ -446,13 +458,15 @@ class ProjectBO(object):
         if len(ids_not_in_db) > 0:
             # Insert rows for missing IDs
             pts_ins = """INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
-                         SELECT :prj, COALESCE(classif_id, -1), COUNT(*) nbr, 
-                                COUNT(CASE WHEN classif_qual = 'V' THEN 1 END) nbr_v,
-                                COUNT(CASE WHEN classif_qual = 'D' THEN 1 END) nbr_d,
-                                COUNT(CASE WHEN classif_qual = 'P' THEN 1 END) nbr_p
-                           FROM obj_head
-                          WHERE projid = :prj AND COALESCE(classif_id, -1) = ANY(:ids)
-                       GROUP BY classif_id"""
+                         SELECT :prj, COALESCE(obh.classif_id, -1), COUNT(*) nbr, 
+                                COUNT(CASE WHEN obh.classif_qual = 'V' THEN 1 END) nbr_v,
+                                COUNT(CASE WHEN obh.classif_qual = 'D' THEN 1 END) nbr_d,
+                                COUNT(CASE WHEN obh.classif_qual = 'P' THEN 1 END) nbr_p
+                           FROM obj_head obh
+                           JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
+                           JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prj 
+                          WHERE COALESCE(obh.classif_id, -1) = ANY(:ids)
+                       GROUP BY obh.classif_id"""
             session.execute(pts_ins, {'prj': prj_id, 'ids': list(ids_not_in_db)})
         # Apply delta
         for classif_id, chg in collated_changes.items():

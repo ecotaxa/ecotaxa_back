@@ -39,6 +39,8 @@ class ObjectBO(MappedEntity):
             return
         # noinspection PyTypeChecker
         self.fields = self.header.fields
+        self.sample_id = self.header.acquisition.acq_sample_id
+        self.project_id = self.header.acquisition.sample.projid
         # noinspection PyTypeChecker
         self.images: List[Image] = [an_img for an_img in self.header.all_images]
 

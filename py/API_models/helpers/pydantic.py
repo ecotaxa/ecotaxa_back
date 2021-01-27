@@ -9,6 +9,7 @@ import typing
 from pydantic import BaseModel
 
 try:
+    # noinspection PyUnresolvedReferences
     import orjson
 
 

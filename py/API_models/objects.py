@@ -31,6 +31,8 @@ class ImageModel(_ImageModelFromDB):  # type:ignore
 
 
 class ObjectModel(ObjectHeaderModel, ObjectFieldsModel):  # type:ignore
+    sample_id: int = Field(title="Sample (i.e. parent of parent acquisition) ID")
+    project_id: int = Field(title="Project (i.e. parent of sample) ID")
     images: List[ImageModel] = Field(title="Images for this object",
                                      default=[])
     free_columns: Dict[str, Any] = Field(title="Free columns from object mapping in project",

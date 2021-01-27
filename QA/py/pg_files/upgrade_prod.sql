@@ -758,3 +758,52 @@ COMMIT;
 ALTER TABLE projectspriv ADD COLUMN extra VARCHAR(1);
 
 COMMIT;
+
+-- Running upgrade f4ea49253597 -> a74a857fe352
+
+drop view objects;
+
+DROP INDEX is_objectsdate;
+
+DROP INDEX is_objectsdepth;
+
+DROP INDEX is_objectstime;
+
+DROP INDEX is_objectsampleclassif;
+
+DROP INDEX is_objectsprojclassifqual;
+
+DROP INDEX is_objectsprojectonly;
+
+DROP INDEX is_objectsprojrandom;
+
+CREATE INDEX is_objectsdate ON obj_head (objdate, acquisid);
+
+CREATE INDEX is_objectsdepth ON obj_head (depth_max, depth_min, acquisid);
+
+CREATE INDEX is_objectstime ON obj_head (objtime, acquisid);
+
+CREATE INDEX is_objectsacqclassifqual ON obj_head (acquisid, classif_id, classif_qual);
+
+CREATE INDEX is_objectsacqrandom ON obj_head (acquisid, random_value, classif_qual);
+
+CREATE INDEX is_objectfieldsorigid ON obj_field (orig_id);
+
+ALTER TABLE obj_head DROP CONSTRAINT obj_head_sampleid_fkey;
+
+ALTER TABLE obj_head DROP CONSTRAINT obj_head_projid_fkey;
+
+ALTER TABLE obj_head DROP COLUMN projid;
+
+ALTER TABLE obj_head DROP COLUMN sampleid;
+
+create view objects as
+                  select sam.projid, sam.sampleid, obh.*, obh.acquisid as processid, ofi.*
+                    from obj_head obh
+                    join acquisitions acq on obh.acquisid = acq.acquisid
+                    join samples sam on acq.acq_sample_id = sam.sampleid
+                    left join obj_field ofi on obh.objid=ofi.objfid;
+
+UPDATE alembic_version SET version_num='a74a857fe352' WHERE alembic_version.version_num = 'f4ea49253597';
+
+COMMIT;

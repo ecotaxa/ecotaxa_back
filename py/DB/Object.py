@@ -36,11 +36,11 @@ for (k, v) in classif_qual.items():
 #   Server-side: SERIAL/IDENTITY/Trigger?
 class ObjectHeader(Model):
     __tablename__ = 'obj_head'
+    # Self
     objid = Column(BIGINT, Sequence('seq_objects'), primary_key=True)
+    # Parent
+    acquisid = Column(INTEGER, ForeignKey('acquisitions.acquisid'), nullable=False)
 
-    projid = Column(INTEGER, nullable=False)  # LS: Dropped FK before dropping column
-
-    #
     objdate = Column(DATE)
     objtime = Column(TIME)
 
@@ -74,9 +74,6 @@ class ObjectHeader(Model):
     # TODO: Why random? It makes testing a bit more difficult
     random_value = Column(INTEGER)
 
-    sampleid = Column(INTEGER, nullable=False)  # LS: Dropped FK before dropping column
-    acquisid = Column(INTEGER, ForeignKey('acquisitions.acquisid'), nullable=False)
-
     # The relationships are created in Relations.py but the typing here helps the IDE
     project: relationship
     fields: relationship
@@ -105,11 +102,14 @@ class ObjectHeader(Model):
     def update_counts_and_img0(session: Session, prj_id):
         # noinspection SqlRedundantOrderingDirection
         session.execute("""
-        UPDATE obj_head o
-           SET imgcount = (SELECT count(*) FROM images WHERE objid = o.objid),
-               img0id = (SELECT imgid FROM images WHERE objid = o.objid ORDER BY imgrank ASC LIMIT 1)
-         WHERE projid = :prj
-           AND (imgcount IS NULL or img0id IS NULL) """,
+        UPDATE obj_head obh
+           SET imgcount = (SELECT count(*) FROM images img WHERE img.objid = obh.objid),
+               img0id = (SELECT imgid FROM images img WHERE img.objid = obh.objid ORDER BY img.imgrank ASC LIMIT 1)
+          FROM acquisitions acq 
+          JOIN samples sam ON sam.projid = :prj 
+         WHERE obh.acquisid = acq.acquisid
+           AND acq.acq_sample_id = sam.sampleid
+           AND (obh.imgcount IS NULL or obh.img0id IS NULL) """,
                         {'prj': prj_id})
         session.commit()
 
@@ -188,24 +188,18 @@ class ObjectCNNFeature(Model):
 for i in range(1, 51):
     setattr(ObjectCNNFeature, "cnn%02d" % i, Column(REAL))
 
-# Index('IS_ObjectsProject',Object.projid,Object.classif_qual)
-# utile pour home de  classif manu, car PG ne sait pas utiliser les Skip scan index.
-Index('is_objectsprojectonly', ObjectHeader.projid)
-Index('is_objectsprojclassifqual', ObjectHeader.projid, ObjectHeader.classif_id, ObjectHeader.classif_qual)
-Index('is_objectssample', ObjectHeader.sampleid)
-# TODO: This is sample attributes, indexing here is waste
-Index('is_objectslatlong', ObjectHeader.latitude, ObjectHeader.longitude)
-# TODO: This is sample attributes, indexing here is waste
-Index('is_objectsdepth', ObjectHeader.depth_max, ObjectHeader.depth_min, ObjectHeader.projid)
-# TODO: This is sample attributes, indexing here is waste
-Index('is_objectstime', ObjectHeader.objtime, ObjectHeader.projid)
-# TODO: This is sample attributes, indexing here is waste
-Index('is_objectsdate', ObjectHeader.objdate, ObjectHeader.projid)
-Index('is_objectsprojrandom', ObjectHeader.projid, ObjectHeader.random_value,
-      ObjectHeader.classif_qual)
-Index('is_objectfieldsorigid', ObjectFields.orig_id)
+Index('is_objectsacqclassifqual', ObjectHeader.__table__.c.acquisid, ObjectHeader.__table__.c.classif_id,
+      ObjectHeader.__table__.c.classif_qual)
+Index('is_objectsacqrandom', ObjectHeader.__table__.c.acquisid, ObjectHeader.__table__.c.random_value,
+      ObjectHeader.__table__.c.classif_qual)
+Index('is_objectsdepth', ObjectHeader.__table__.c.depth_max, ObjectHeader.__table__.c.depth_min,
+      ObjectHeader.__table__.c.acquisid)
+Index('is_objectslatlong', ObjectHeader.__table__.c.latitude, ObjectHeader.__table__.c.longitude)
+Index('is_objectstime', ObjectHeader.__table__.c.objtime, ObjectHeader.__table__.c.acquisid)
+Index('is_objectsdate', ObjectHeader.__table__.c.objdate, ObjectHeader.__table__.c.acquisid)
+Index('is_objectfieldsorigid', ObjectFields.__table__.c.orig_id)
 # For FK checks during deletion
-Index('is_objectsacquisition', ObjectHeader.acquisid)
+Index('is_objectsacquisition', ObjectHeader.__table__.c.acquisid)
 
 
 class ObjectsClassifHisto(Model):

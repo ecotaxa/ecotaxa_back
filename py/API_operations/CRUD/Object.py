@@ -23,10 +23,11 @@ class ObjectService(Service):
         if not ret.exists():
             return None
         # Security check
+        projid = ret.header.acquisition.sample.projid
         if current_user_id is None:
-            project = RightsBO.anonymous_wants(self.session, Action.READ, ret.header.projid)
+            project = RightsBO.anonymous_wants(self.session, Action.READ, projid)
         else:
-            _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, ret.header.projid)
+            _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, projid)
         assert project is not None
         mappings = ProjectMapping().load_from_project(project)
         ret.map_free_columns(mappings.object_mappings)
@@ -39,10 +40,11 @@ class ObjectService(Service):
             return []
         # Security check
         # TODO: dup code
+        projid = the_obj.header.acquisition.sample.projid
         if current_user_id is None:
-            RightsBO.anonymous_wants(self.session, Action.READ, the_obj.header.projid)
+            RightsBO.anonymous_wants(self.session, Action.READ, projid)
         else:
-            _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, the_obj.header.projid)
+            _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, projid)
             assert project is not None
         ret = the_obj.get_history()
         return ret

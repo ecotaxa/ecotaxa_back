@@ -307,7 +307,8 @@ class TSVFile(object):
                     logger.info("++ ID %s %s %d", alias, parent_orig_id, upper_level_pk)
 
                 # Columns in obj_head have same name as the pk column of corresponding entities
-                setattr(object_head_to_write, parent.pk_col(), upper_level_pk)
+                if parent_class == Acquisition:
+                    setattr(object_head_to_write, parent.pk_col(), upper_level_pk)
             else:
                 # Process is a twin table of Acquisition, its orig_id can be anything so no check to do.
                 if not upper_level_created:
@@ -550,7 +551,7 @@ class TSVFile(object):
                 ret = 0
             else:
                 # or create it
-                object_head_to_write.projid = how.prj_id
+                #object_head_to_write.projid = how.prj_id
                 object_head_to_write.random_value = random.randint(1, 99999999)
                 # Below left NULL @see self.update_counts_and_img0
                 # object_head_to_write.img0id = XXXXX

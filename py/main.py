@@ -489,7 +489,7 @@ def update_project(project_id: int,
                            cnn_network_id=project.cnn_network_id, comments=project.comments,
                            contact=project.contact,
                            managers=project.managers, annotators=project.annotators, viewers=project.viewers,
-                           license=project.license)
+                           license_=project.license)
 
 
 # ######################## END OF PROJECT

@@ -31,6 +31,7 @@ class ProjectPrivilegeBO(object):
         """
             Return SQL chunk for historically first manager for projects in this query.
         """
+        # noinspection SqlResolve
         return """ SELECT * from ( """ + cls.managers_by_project() + """ ) qpp 
                     WHERE rang = 1 """
 

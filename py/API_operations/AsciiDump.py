@@ -33,13 +33,22 @@ class AsciiDumper(Service):
         with open(out, "w") as fd:
             self.dump_table(fd, Project, "projid=%d" % projid)
             self.dump_table(fd, Sample, "projid=%d" % projid)
-            self.dump_table(fd, Acquisition, "acq_sample_id in (select sampleid from samples where projid=%d)" % projid)
+            self.dump_table(fd, Acquisition, "acq_sample_id in (select sampleid "
+                                             "from samples sam where sam.projid=%d)" % projid)
             self.dump_table(fd, Process, "processid in (select acquisid from acquisitions "
-                                         "where acq_sample_id in "
-                                         "(select sampleid from samples where projid=%d))" % projid)
-            self.dump_table(fd, ObjectHeader, "projid=%d" % projid)
-            self.dump_table(fd, ObjectFields, "objfid in (select objid from obj_head where projid=%s)" % projid)
-            self.dump_table(fd, Image, "objid in (select objid from obj_head where projid=%s)" % projid)
+                                         "where acq_sample_id in (select sampleid "
+                                         "from samples sam where sam.projid=%d))" % projid)
+            self.dump_table(fd, ObjectHeader, "acquisid in (select acquisid from acquisitions "
+                                              "where acq_sample_id in (select sampleid "
+                                              "from samples sam where sam.projid=%d))" % projid)
+            self.dump_table(fd, ObjectFields, "objfid in (select objid from obj_head "
+                                              "where acquisid in (select acquisid from acquisitions "
+                                              "where acq_sample_id in (select sampleid "
+                                              "from samples sam where sam.projid=%d)))" % projid)
+            self.dump_table(fd, Image, "objid in (select objid from obj_head "
+                                       "where acquisid in (select acquisid from acquisitions "
+                                       "where acq_sample_id in (select sampleid "
+                                       "from samples sam where sam.projid=%d)))" % projid)
 
     def dump_table(self, out, a_table: Model, where):
         base_table: Table = a_table.__table__

@@ -10,8 +10,6 @@ import abc
 from abc import ABCMeta
 from typing import Dict, List
 
-from sqlalchemy.sql.functions import current_timestamp
-
 from API_models.crud import ColUpdateList, ColUpdate
 from BO.Mappings import MappedTableTypeT, ProjectMapping
 from DB import Project, Session

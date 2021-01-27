@@ -4,12 +4,10 @@
 #
 from datetime import time, date
 from typing import Optional
+
 from typing_extensions import TypedDict
 
 from BO.helpers.TSVHelpers import calc_astral_day_time
-from DB.Object import ObjectHeader
-
-
 # TODO: Caching a single value is useful, but less than several of them
 # TODO: a TypedDict is more accurate for typing
 from DB.helpers.Bean import Bean

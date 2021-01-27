@@ -4,7 +4,6 @@
 #
 from typing import List
 
-from formats.EMODnet.models import EMLMeta
 from helpers.pydantic import BaseModel, Field
 
 
