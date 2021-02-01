@@ -284,14 +284,14 @@ def erase_collection(collection_id: int,
 # ######################## END OF COLLECTION
 
 @app.get("/projects/search", tags=['projects'], response_model=List[ProjectModel])
-def search_projects(current_user: int = Depends(get_current_user),
+def search_projects(current_user: Optional[int] = Depends(get_optional_current_user),
                     also_others: bool = False,
                     for_managing: bool = False,
                     title_filter: str = '',
                     instrument_filter: str = '',
                     filter_subset: bool = False) -> List[ProjectBO]:  # PABOPABOPABO
     """
-        Return projects for current user.
+        Return projects for current user, if any.
         - `param` also_others: Allows to return projects for which given user has no right
         - `param` for_managing: Allows to return project that can be written to (including erased) by the given user
         - `param` title_filter: Use this pattern for matching returned projects names

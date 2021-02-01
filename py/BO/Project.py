@@ -295,6 +295,21 @@ class ProjectBO(object):
             ret = [an_id for an_id, in res.fetchall()]
         return ret  # type:ignore
 
+    @staticmethod
+    def list_public_projects(session: Session,
+                             title_filter: str = '') -> List[ProjectIDT]:
+        """
+        :param session:
+        :param title_filter: If set, filter out the projects with title not matching the required string.
+        :return: The project IDs
+        """
+        pattern = '%' + title_filter + '%'
+        qry: Query = session.query(Project.projid)
+        qry = qry.filter(Project.visible)
+        qry = qry.filter(Project.title.ilike(pattern))
+        ret = [an_id for an_id, in qry.all()]
+        return ret
+
     @classmethod
     def get_bounding_geo(cls, session: Session, project_ids: ProjectIDListT) -> Iterable[float]:
         # TODO: Why using the view?
@@ -494,7 +509,7 @@ class ProjectBOSet(object):
         Many projects...
     """
 
-    def __init__(self, session: Session, prj_ids: ProjectIDListT):
+    def __init__(self, session: Session, prj_ids: ProjectIDListT, public: bool = False):
         # Query the project and load neighbours as well
         qry: Query = session.query(Project, ProjectPrivilege)
         qry = qry.outerjoin(ProjectPrivilege, Project.privs_for_members).options(
@@ -508,7 +523,10 @@ class ProjectBOSet(object):
             for a_proj, a_pp in qry.all():
                 # The query yields duplicates so we need to filter
                 if a_proj.projid not in done:
-                    self.projects.append(ProjectBO(a_proj).enrich())
+                    if public:
+                        self.projects.append(ProjectBO(a_proj))
+                    else:
+                        self.projects.append(ProjectBO(a_proj).enrich())
                     done.add(a_proj.projid)
 
     def as_list(self) -> List[ProjectBO]:

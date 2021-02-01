@@ -48,17 +48,24 @@ class ProjectsService(Service):
         self.session.commit()
         return prj.projid
 
-    def search(self, current_user_id: int,
+    def search(self, current_user_id: Optional[int],
                for_managing: bool = False,
                also_others: bool = False,
                title_filter: str = '',
                instrument_filter: str = '',
                filter_subset: bool = False) -> List[ProjectBO]:
-        # No rights checking as basically everyone can see all projects
-        current_user: User = self.session.query(User).get(current_user_id)
-        matching_ids = ProjectBO.projects_for_user(self.session, current_user, for_managing, also_others,
-                                                   title_filter, instrument_filter, filter_subset)
-        projects = ProjectBOSet(self.session, matching_ids)
+        current_user: Optional[User]
+        if current_user_id is None:
+            # For public
+            matching_ids = ProjectBO.list_public_projects(self.session, title_filter)
+            projects = ProjectBOSet(self.session, matching_ids, public=True)
+        else:
+            # No rights checking as basically everyone can see all projects
+            current_user = self.session.query(User).get(current_user_id)
+            assert current_user is not None
+            matching_ids = ProjectBO.projects_for_user(self.session, current_user, for_managing, also_others,
+                                                       title_filter, instrument_filter, filter_subset)
+            projects = ProjectBOSet(self.session, matching_ids, public=False)
         return projects.as_list()
 
     def query(self, current_user_id: Optional[UserIDT],
