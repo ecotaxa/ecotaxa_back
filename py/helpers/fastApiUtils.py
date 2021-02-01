@@ -42,7 +42,7 @@ async def internal_server_error_handler(_request: Any, exc: Exception) -> PlainT
 # In a development environment, dump the API definition at each run
 def dump_openapi(app: FastAPI, main_path: str):  # pragma: no cover
     import sys
-    if "--reload" not in sys.argv:
+    if "uvicorn" not in sys.argv:
         return  # It's not dev
     import json
     from pathlib import Path

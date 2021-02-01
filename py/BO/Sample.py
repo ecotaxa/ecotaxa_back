@@ -9,7 +9,7 @@
 from typing import List, Any
 
 from API_models.crud import ColUpdateList
-from BO.Project import ProjectIDListT, ProjectIDT
+from BO.Project import ProjectIDListT
 from DB import Session, Query, Project, Sample, Acquisition
 from DB.helpers.ORM import any_
 from helpers.DynamicLogs import get_logger
@@ -61,12 +61,13 @@ class SampleBO(MappedEntity):
 
 class DescribedSampleSet(object):
     """
-        A set of samples, so far all of them for a project.
+        A set of samples, so far all of them for a set of projects.
     """
 
-    def __init__(self, session: Session, prj_id: ProjectIDT):
+    def __init__(self, session: Session, prj_ids: ProjectIDListT, orig_id_pattern: str):
         self._session = session
-        self.prj_id = prj_id
+        self.prj_ids = prj_ids
+        self.pattern = '%' + orig_id_pattern.replace('*', '%') + '%'
 
     def list(self) -> List[SampleBO]:
         """
@@ -75,7 +76,8 @@ class DescribedSampleSet(object):
         """
         qry: Query = self._session.query(Sample)
         qry = qry.join(Sample, Project.all_samples)
-        qry = qry.filter(Project.projid == self.prj_id)
+        qry = qry.filter(Project.projid.in_(self.prj_ids))
+        qry = qry.filter(Sample.orig_id.ilike(self.pattern))
         ret = [a_sample for a_sample in qry.all()]
         return ret
 

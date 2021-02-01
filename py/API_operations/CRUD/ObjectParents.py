@@ -13,7 +13,7 @@ from BO.Acquisition import AcquisitionIDListT, EnumeratedAcquisitionSet, Acquisi
     DescribedAcquisitionSet
 from BO.Mappings import ProjectMapping
 from BO.Process import ProcessIDListT, EnumeratedProcessSet, ProcessIDT, ProcessBO
-from BO.Project import ProjectIDT
+from BO.Project import ProjectIDT, ProjectIDListT
 from BO.Rights import RightsBO, Action
 from BO.Sample import SampleIDListT, EnumeratedSampleSet, SampleIDT, SampleBO, DescribedSampleSet
 from BO.User import UserIDT
@@ -49,13 +49,17 @@ class SamplesService(Service):
         assert project  # for mypy
         return sample_set.apply_on_all(project, updates)
 
-    def search(self, current_user_id: Optional[UserIDT], project_id: ProjectIDT) -> List[SampleBO]:
+    def search(self, current_user_id: Optional[UserIDT],
+               project_ids: ProjectIDListT,
+               orig_id_pattern: str) -> List[SampleBO]:
         # Security check
         if current_user_id is None:
-            project = RightsBO.anonymous_wants(self.session, Action.READ, project_id)
+            [RightsBO.anonymous_wants(self.session, Action.READ, project_id)
+             for project_id in project_ids]
         else:
-            _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, project_id)
-        sample_set = DescribedSampleSet(self.session, project_id)
+            [RightsBO.user_wants(self.session, current_user_id, Action.READ, project_id)
+             for project_id in project_ids]
+        sample_set = DescribedSampleSet(self.session, project_ids, orig_id_pattern)
         # mappings = ProjectMapping().load_from_project(project)
         # ret.map_free_columns(mappings.sample_mappings)
         return sample_set.list()

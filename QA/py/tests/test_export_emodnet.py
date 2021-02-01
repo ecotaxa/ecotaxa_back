@@ -15,7 +15,7 @@ COLLECTION_EXPORT_EMODNET_URL = "/collections/{collection_id}/export/emodnet?dry
 
 TASK_DOWNLOAD_URL = "/tasks/{task_id}/file"
 
-PROJECT_SEARCH_SAMPLES_URL = "/samples/search?project_id={project_id}"
+PROJECT_SEARCH_SAMPLES_URL = "/samples/search?project_ids={project_id}&id_pattern="
 PROJECT_SEARCH_ACQUIS_URL = "/acquisitions/search?project_id={project_id}"
 
 

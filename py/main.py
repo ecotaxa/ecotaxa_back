@@ -498,15 +498,20 @@ def update_project(project_id: int,
 # ######################## END OF PROJECT
 
 @app.get("/samples/search", tags=['samples'], response_model=List[SampleModel])
-def samples_search(project_id: int,
+def samples_search(project_ids: str,
+                   id_pattern: str,
                    current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> List[SampleBO]:
     """
-        Read all samples for a project.
+        Read samples for a set of projects.
+
+        - project_ids: any(non number)-separated list of project numbers
+        - id_pattern: sample id textual pattern. Use * for 'any matches'. Match is case-insensitive.
     """
     sce = SamplesService()
+    proj_ids = _split_num_list(project_ids)
     with RightsThrower(sce):
-        ret = sce.search(current_user, project_id)
+        ret = sce.search(current_user, proj_ids, id_pattern)
     return ret
 
 
