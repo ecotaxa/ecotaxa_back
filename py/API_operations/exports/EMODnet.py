@@ -28,7 +28,7 @@ from formats.EMODnet.MoF import SamplingInstrumentName, \
 from formats.EMODnet.models import DwC_Event, RecordTypeEnum, DwC_Occurrence, OccurrenceStatusEnum, \
     BasisOfRecordEnum, EMLGeoCoverage, EMLTemporalCoverage, EMLMeta, EMLTitle, EMLPerson, EMLKeywordSet, \
     EMLTaxonomicClassification, EMLAdditionalMeta
-from helpers.DynamicLogs import get_logger
+from helpers.DynamicLogs import get_logger, LogsSwitcher
 from .Countries import countries_by_name
 # TODO: Move somewhere else
 from ..helpers.TaskService import TaskServiceBase
@@ -69,6 +69,10 @@ class EMODnetExport(TaskServiceBase):
     DWC_ZIP_NAME = "dwca.zip"
 
     def run(self, current_user_id: int) -> EMODnetExportRsp:
+        with LogsSwitcher(self):
+            return self.do_run(current_user_id)
+
+    def do_run(self, current_user_id: int) -> EMODnetExportRsp:
         # Security check
         # TODO, for now only admins
         _user = RightsBO.user_has_role(self.session, current_user_id, Role.APP_ADMINISTRATOR)

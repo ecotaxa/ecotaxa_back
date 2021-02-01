@@ -8,7 +8,7 @@ import random
 import sys
 from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, Set, Any, Mapping
+from typing import Dict, Set, Any, Mapping, Tuple
 
 # noinspection PyPackageRequirements
 from PIL import Image as PIL_Image
@@ -682,6 +682,7 @@ class TSVFile(object):
     def validate_content(self, how: ImportHow, diag: ImportDiagnostic):
         row_count_for_csv = 0
         vals_cache: Dict = {}
+        logged_parents: Set[Tuple[Any,Any]] = set()
         for lig in self.rdr:
             row_count_for_csv += 1
 
@@ -722,7 +723,9 @@ class TSVFile(object):
             if not how.can_update_only:
                 sample_id = clean_value_and_none(lig.get('sample_id', ''))
                 acquis_id = clean_value_and_none(lig.get('acq_id', ''))
-                logger.info("sample: %s acquis: %s", sample_id, acquis_id)
+                if not (sample_id, acquis_id) in logged_parents:
+                    logger.info("sample: %s acquis: %s", sample_id, acquis_id)
+                    logged_parents.add((sample_id, acquis_id))
                 if sample_id != '' and acquis_id != '':
                     # Empty values are defaulted
                     maybe_err = diag.topology.evaluate_add_association(sample_id, acquis_id)

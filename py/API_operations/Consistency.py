@@ -9,6 +9,7 @@ from typing import List
 
 from BO.ProjectTidying import ProjectTopology
 from BO.Rights import RightsBO, Action
+from helpers.DynamicLogs import LogsSwitcher
 from .helpers.Service import Service
 
 
@@ -23,6 +24,10 @@ class ProjectConsistencyChecker(Service):
         self.prj_id = prj_id
 
     def run(self, current_user_id: int) -> List[str]:
+        with LogsSwitcher(self):
+            return self.do_run(current_user_id)
+
+    def do_run(self, current_user_id: int) -> List[str]:
         # Security check
         RightsBO.user_wants(self.session, current_user_id, Action.READ, self.prj_id)
         # OK

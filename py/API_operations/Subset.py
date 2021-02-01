@@ -21,7 +21,7 @@ from DB.helpers.Bean import bean_of
 from DB.helpers.DBWriter import DBWriter
 from DB.helpers.ORM import Query, any_, ResultProxy
 from FS.Vault import Vault
-from helpers.DynamicLogs import get_logger
+from helpers.DynamicLogs import get_logger, LogsSwitcher
 from .helpers.TaskService import TaskServiceOnProjectBase
 
 logger = get_logger(__name__)
@@ -53,6 +53,10 @@ class SubsetServiceOnProject(TaskServiceOnProjectBase):
         self.first_query = True
 
     def run(self, current_user_id: int) -> SubsetRsp:
+        with LogsSwitcher(self):
+            return self.do_run(current_user_id)
+
+    def do_run(self, current_user_id: int) -> SubsetRsp:
         # Security checks
         RightsBO.user_wants(self.session, current_user_id, Action.READ, self.prj_id)
         RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, self.dest_prj.projid)

@@ -14,7 +14,7 @@ from BO.Rights import RightsBO, Action
 from BO.helpers.ImportHelpers import ImportWhere, ImportHow
 from DB.Object import ObjectHeader, classif_qual
 from DB.helpers.DBWriter import DBWriter
-from helpers.DynamicLogs import get_logger
+from helpers.DynamicLogs import get_logger, LogsSwitcher
 from .ImportBase import ImportServiceBase
 
 logger = get_logger(__name__)
@@ -30,6 +30,10 @@ class SimpleImport(ImportServiceBase):
         super().__init__(prj_id, req)
 
     def run(self, current_user_id: int) -> SimpleImportRsp:
+        with LogsSwitcher(self):
+            return self.do_run(current_user_id)
+
+    def do_run(self, current_user_id: int) -> SimpleImportRsp:
         # Security check
         RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, self.prj_id)
         # OK

@@ -17,7 +17,7 @@ from BO.Sample import SampleIDT
 from DB import ObjectHeader, Sample, Acquisition, Project, ParticleProject
 from DB.helpers.ORM import orm_equals, any_, all_, Query
 from DB.helpers.Postgres import values_cte
-from helpers.DynamicLogs import get_logger
+from helpers.DynamicLogs import get_logger, LogsSwitcher
 from .helpers.Service import Service
 
 # noinspection PyProtectedMember
@@ -41,6 +41,10 @@ class MergeService(Service):
         self.dest_augmented_mappings = ProjectMapping()
 
     def run(self, current_user_id: int) -> MergeRsp:
+        with LogsSwitcher(self):
+            return self.do_run(current_user_id)
+
+    def do_run(self, current_user_id: int) -> MergeRsp:
         """
             Run the service, merge the projects.
         :return:

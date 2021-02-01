@@ -5,9 +5,11 @@
 # Based on https://fastapi.tiangolo.com/
 #
 import os
+from logging import INFO
 from typing import Union, Tuple
 
 from fastapi import FastAPI, Request, Response, status, Depends, HTTPException
+from fastapi.logger import logger as fastapi_logger
 from fastapi.responses import StreamingResponse
 from fastapi.templating import Jinja2Templates
 from fastapi_utils.timing import add_timing_middleware
@@ -57,8 +59,9 @@ from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, ge
 from helpers.login import LoginService
 
 logger = get_logger(__name__)
-
 # TODO: A nicer API doc, see https://github.com/tiangolo/fastapi/issues/1140
+
+fastapi_logger.setLevel(INFO)
 
 app = FastAPI(title="EcoTaxa",
               version="0.0.6",
@@ -120,7 +123,7 @@ def show_current_user(current_user: int = Depends(get_current_user)):
     # noinspection PyTypeHints
     ret.can_do = RightsBO.allowed_actions(ret)  # type:ignore
     # noinspection PyTypeHints
-    ret.last_used_projects = Preferences(ret).recent_projects(session=sce.session) # type:ignore
+    ret.last_used_projects = Preferences(ret).recent_projects(session=sce.session)  # type:ignore
     return ret
 
 
@@ -286,7 +289,7 @@ def search_projects(current_user: int = Depends(get_current_user),
                     for_managing: bool = False,
                     title_filter: str = '',
                     instrument_filter: str = '',
-                    filter_subset: bool = False) -> List[ProjectBO]: # PABOPABOPABO
+                    filter_subset: bool = False) -> List[ProjectBO]:  # PABOPABOPABO
     """
         Return projects for current user.
         - `param` also_others: Allows to return projects for which given user has no right
@@ -869,13 +872,11 @@ async def refresh_taxa_db(max_requests: int,
         Refresh local mirror of WoRMS database.
     """
     sce = TaxonomyChangeService(max_requests)
-    tmp_log = sce.log_to_temp()
-    logger.info("logging to %s", tmp_log)
     with RightsThrower(sce):
         tsk = sce.db_refresh(current_user)
         async_bg_run(tsk)  # Run in bg while streaming logs
     # Below produces a chunked HTTP encoding, which is officially only HTTP 1.1 protocol
-    return StreamingResponse(log_streamer(tmp_log, "Done,"), media_type="text/plain")
+    return StreamingResponse(log_streamer(sce.temp_log, "Done,"), media_type="text/plain")
 
 
 @app.get("/taxa_ref_change/check/{aphia_id}", tags=['WIP'], include_in_schema=False,

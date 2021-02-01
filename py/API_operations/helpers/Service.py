@@ -4,7 +4,6 @@
 #
 import os
 
-# noinspection PyPackageRequirements
 from sqlalchemy.orm import Session
 
 from DB.Connection import Connection, check_sqlalchemy_version
@@ -56,7 +55,10 @@ def _turn_localhost_for_docker(host: str, _port: str):  # pragma: no cover
 
 class Service(BaseService):
     """
-        A service for EcoTaxa. Supplies common useful features like a DB session and filesystem conventions.
+        A service for EcoTaxa. Supplies common useful features like:
+            a DB session
+            filesystem conventions
+            logs redirection
     """
     the_config = None
     the_connection = None
@@ -106,6 +108,10 @@ class Service(BaseService):
     def __del__(self):
         # Release DB session
         self.close()
+
+    def log_file_path(self):
+        """ To overload in subclass """
+        return None
 
 
 if __name__ == '__main__':

@@ -94,8 +94,8 @@ class ObjectHeader(Model):
     def fetch_existing_ranks(cls, session: Session, prj_id) -> Dict[int, Set[int]]:
         ret: Dict[int, Set[int]] = {}
         qry: Query = session.query(Image.objid, Image.imgrank)
-        qry = qry.join(ObjectHeader).join(Acquisition).join(Sample)
-        qry = qry.join(Project, Project.projid == prj_id)
+        qry = qry.join(ObjectHeader).join(Acquisition).join(Sample).join(Project)
+        qry = qry.filter(Project.projid == prj_id)
         for objid, imgrank in qry.all():
             ret.setdefault(objid, set()).add(imgrank)
         return ret

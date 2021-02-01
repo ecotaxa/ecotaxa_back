@@ -12,7 +12,7 @@ from BO.User import UserIDT
 from DB.Project import Project
 from DB.Task import Task
 from FS.TempDirForTasks import TempDirForTasks
-from helpers.DynamicLogs import get_logger, switch_log_to_file
+from helpers.DynamicLogs import get_logger
 from .Service import Service
 
 logger = get_logger(__name__)
@@ -45,9 +45,13 @@ class TaskServiceBase(Service, ABC):
                 self.task_id = task.id
         self.task = task
         self.temp_for_task = TempDirForTasks(join(self.link_src, 'temptask'))
-        # Redirect logging
+
+    def log_file_path(self):
+        """
+            Ask for redirected logging.
+        """
         log_file = self.temp_for_task.base_dir_for(self.task_id) / 'TaskLogBack.txt'
-        switch_log_to_file(str(log_file))
+        return log_file.as_posix()
 
     def update_task(self, taskstate: Optional[str], percent: Optional[int], message: str):
         """

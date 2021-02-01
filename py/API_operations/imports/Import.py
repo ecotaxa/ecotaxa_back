@@ -18,7 +18,7 @@ from BO.helpers.TSVHelpers import none_to_empty
 from DB.Image import Image
 from DB.User import User
 from DB.helpers.DBWriter import DBWriter
-from helpers.DynamicLogs import get_logger
+from helpers.DynamicLogs import get_logger, LogsSwitcher
 from helpers.Timer import CodeTimer
 
 logger = get_logger(__name__)
@@ -146,6 +146,10 @@ class RealImport(ImportServiceBase):
         self.custom_mapping = ProjectMapping().load_from_dict(req.mappings)
 
     def run(self, current_user_id: int) -> ImportRealRsp:
+        with LogsSwitcher(self):
+            return self.do_run(current_user_id)
+
+    def do_run(self, current_user_id: int) -> ImportRealRsp:
         """
             Do the real job using injected parameters.
             :return:

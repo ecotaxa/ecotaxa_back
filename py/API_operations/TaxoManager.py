@@ -19,7 +19,7 @@ from DB.WoRMs import WoRMS
 from DB.helpers.Charset import to_latin1_compat
 from DB.helpers.ORM import Query, any_, Session
 from DB.helpers.ORM import only_res, func, not_, or_, and_, text
-from helpers.DynamicLogs import get_logger, switch_log_to_file, switch_log_back
+from helpers.DynamicLogs import get_logger
 from providers.WoRMS import WoRMSFinder
 from .helpers.Service import Service
 
@@ -45,9 +45,8 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         else:
             self.max_queries = self.MAX_QUERIES
 
-    def log_to_temp(self) -> str:
+    def log_file_path(self):
         self.temp_log = tempfile.NamedTemporaryFile(suffix=".log", delete=True).name
-        switch_log_to_file(self.temp_log)
         return self.temp_log
 
     async def db_refresh(self, current_user_id: int):
@@ -57,7 +56,6 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         # Security check
         _user = RightsBO.user_has_role(self.session, current_user_id, Role.APP_ADMINISTRATOR)
         await self._do_refresh()
-        switch_log_back()
 
     # noinspection PyPep8Naming
     @staticmethod

@@ -12,6 +12,7 @@ from API_operations.helpers.Service import Service
 from BO.Acquisition import AcquisitionIDT
 from BO.Project import ProjectBO
 from BO.Rights import Action, RightsBO
+from helpers.DynamicLogs import LogsSwitcher
 
 
 class AcquisitionStats(object):
@@ -21,6 +22,7 @@ class AcquisitionStats(object):
         - distribution of != values
         - mode, i.e. freq of most frequent value
     """
+
     def __init__(self, acquis_orig_id: str, acquis_id: AcquisitionIDT):
         self.acquis_orig_id = acquis_orig_id
         self.acquis_id = acquis_id
@@ -78,6 +80,10 @@ class ProjectStatsFetcher(Service):
         self.prj_id = prj_id
 
     def run(self, current_user_id: int) -> List[str]:
+        with LogsSwitcher(self):
+            return self.do_run(current_user_id)
+
+    def do_run(self, current_user_id: int) -> List[str]:
         # Security check
         _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, self.prj_id)
         # OK
