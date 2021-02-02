@@ -13,7 +13,8 @@ from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Project import ProjectBOSet
 from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet, TaxonBOSetFromWoRMS
 from BO.User import UserIDT, UserBO
-from DB.Taxonomy import TaxonomyTreeInfo
+from DB.Taxonomy import TaxonomyTreeInfo, Taxonomy
+from DB.helpers.ORM import Query
 
 
 class TaxonomyService(Service):
@@ -26,6 +27,8 @@ class TaxonomyService(Service):
 
     def status(self, _current_user_id: UserIDT) -> Optional[datetime]:
         """
+            Return the freshness status of the taxonomy tree.
+            Fresh == recently updated from the Taxonomy server.
         """
         tree_info = self.session.query(TaxonomyTreeInfo).first()
         if tree_info is None:
@@ -96,6 +99,13 @@ class TaxonomyService(Service):
         mru_ret.sort(key=lambda r: return_order[r.id])
         return mru_ret + preset_ret + others_ret
 
+    def query_roots(self) -> List[TaxonBO]:
+        qry: Query = self.session.query(Taxonomy.id, Taxonomy.display_name, Taxonomy.name)
+        qry = qry.filter(Taxonomy.parent_id.is_(None))
+        ret = [TaxonBO(taxon_id, display_name, name, [])
+               for taxon_id, display_name, name in qry.all()]
+        return ret
+
     def query(self, taxon_id: ClassifIDT) -> Optional[TaxonBO]:
         ret = self.query_set([taxon_id])
         if not ret:
@@ -120,4 +130,3 @@ class TaxonomyService(Service):
     def query_worms_set(self, taxon_ids: ClassifIDListT) -> List[TaxonBO]:
         ret = TaxonBOSetFromWoRMS(self.session, taxon_ids)
         return ret.taxa
-

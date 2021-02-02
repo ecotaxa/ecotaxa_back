@@ -21,6 +21,7 @@ class TaxaSearchRsp(BaseModel):
 class TaxonModel(BaseModel):
     __config__ = OrmConfig
     id: int = Field(title="The taxon/category IDs.")
+    name: str = Field(title="The taxon/category verbatim name.")
     display_name: str = Field(title="The taxon/category display name.")
     lineage: List[str] = Field(title="The taxon/category name of ancestors, including self, in first.")
 

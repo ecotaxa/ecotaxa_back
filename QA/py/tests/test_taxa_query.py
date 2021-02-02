@@ -47,6 +47,7 @@ def test_taxo_query(config, database, fastapi, caplog):
     # Unauthenticated call
     rsp = fastapi.get(url)
     assert rsp.json() == {'display_name': 'Cyanobacteria<Proteobacteria',
+                          'name': 'Cyanobacteria',
                           'id': 849,
                           'lineage': ['Cyanobacteria', 'Proteobacteria', 'Bacteria', 'living']}
 
@@ -55,4 +56,4 @@ def test_worms_query(config, database, fastapi, caplog):
     url = WORMS_TAXA_QUERY_URL.format(aphia_id=128586)
     # Unauthenticated call
     rsp = fastapi.get(url)
-    assert rsp.json() == {'display_name': 'Oncaeidae', 'id': 128586, 'lineage': []}
+    assert rsp.json() == {'display_name': 'Oncaeidae', 'name': 'Oncaeidae', 'id': 128586, 'lineage': []}

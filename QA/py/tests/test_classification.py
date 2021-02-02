@@ -48,9 +48,11 @@ def test_classif(config, database, fastapi, caplog):
     rsp = fastapi.get(TAXA_SET_QUERY_URL.format(taxa_ids="%d+%d" % (copepod_id, entomobryomorpha_id)))
     # Note: There is no real lineage in test DB
     assert rsp.json() == [{'display_name': 'Copepoda',
+                           'name': 'Copepoda',
                            'id': 25828,
                            'lineage': ['Copepoda']},
                           {'display_name': 'Entomobryomorpha',
+                           'name': 'Entomobryomorpha',
                            'id': 25835,
                            'lineage': ['Entomobryomorpha']}]
 

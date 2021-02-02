@@ -22,8 +22,9 @@ class TaxonBO(object):
         Holder of a node of the taxonomy tree.
     """
 
-    def __init__(self, taxon_id: ClassifIDT, display_name: str, lineage: List[str]):
+    def __init__(self, taxon_id: ClassifIDT, display_name: str, db_name: str, lineage: List[str]):
         self.id = taxon_id
+        self.name = db_name
         self.display_name = display_name
         self.lineage = lineage
 
@@ -230,9 +231,9 @@ class TaxonBOSet(object):
         self.taxa = []
         for a_rec in res.fetchall():
             lst_rec = list(a_rec)
-            an_id, display_name = lst_rec.pop(0), lst_rec.pop(0)
-            lineage = [name for name in lst_rec if name]
-            self.taxa.append(TaxonBO(an_id, display_name, lineage))  # type:ignore
+            an_id, display_name, db_name = lst_rec.pop(0), lst_rec.pop(0), lst_rec.pop(0)
+            lineage = [db_name] + [name for name in lst_rec if name]
+            self.taxa.append(TaxonBO(an_id, display_name, db_name, lineage))  # type:ignore
 
     def as_list(self) -> List[TaxonBO]:
         return self.taxa
@@ -282,7 +283,7 @@ class TaxonBOSetFromWoRMS(object):
             # In WoRMS, the root is signaled by having itself as parent
             while lineage and lineage[-1] == lineage[-2]:
                 lineage.pop(-1)
-            self.taxa.append(TaxonBO(an_id, display_name, lineage))  # type:ignore
+            self.taxa.append(TaxonBO(an_id, display_name, display_name, lineage))  # type:ignore
 
     def as_list(self) -> List[TaxonBO]:
         return self.taxa
@@ -292,6 +293,7 @@ class WoRMSSetFromTaxaSet(object):
     """
         Many taxa from WoRMS table, with lineage.
     """
+
     def __init__(self, session: Session, taxon_ids: ClassifIDListT):
         # Do the matching right away, most strict way
         match = TaxonomyChangeService.strict_match(session, taxon_ids)

@@ -826,6 +826,8 @@ def object_query_history(object_id: int,
         raise HTTPException(status_code=404, detail="Object not found")
     return ret
 
+# ######################## END OF OBJECT
+
 
 @app.get("/taxa/status", tags=['Taxonomy Tree'], response_model=TaxonomyTreeStatus)
 async def taxa_tree_status(current_user: int = Depends(get_current_user)):
@@ -859,6 +861,16 @@ async def search_taxa(query: str,
     ret = sce.search(current_user_id=current_user, prj_id=project_id, query=query)
     return ret
 
+
+@app.get("/taxa", tags=['Taxonomy Tree'], response_model=List[TaxonModel])
+async def query_root_taxa() \
+        -> List[TaxonBO]:
+    """
+        Return all taxa with no parent.
+    """
+    sce = TaxonomyService()
+    ret = sce.query_roots()
+    return ret
 
 @app.get("/taxon/{taxon_id}", tags=['Taxonomy Tree'], response_model=TaxonModel)
 async def query_taxa(taxon_id: int,
