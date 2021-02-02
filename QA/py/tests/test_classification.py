@@ -8,6 +8,7 @@ from starlette import status
 
 from tests.credentials import CREATOR_AUTH, ORDINARY_USER2_USER_ID, ADMIN_AUTH
 from tests.test_objectset_query import OBJECT_SET_QUERY_URL
+from tests.test_prj_admin import PROJECT_CLASSIF_STATS_URL
 from tests.test_subentities import OBJECT_HISTORY_QUERY_URL
 
 from API_models.crud import ProjectFilters
@@ -29,7 +30,6 @@ OBJECT_SET_CLASSIFY_URL = "/object_set/classify"
 OBJECT_SET_DELETE_URL = "/object_set/"
 OBJECT_SET_SUMMARY_URL = "/object_set/{project_id}/summary?only_total=False"
 OBJECT_SET_PARENTS_URL = "/object_set/parents"
-PROJECT_STATS_URL = "/project_set/stats?ids={project_ids}"
 
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
@@ -56,7 +56,7 @@ def test_classif(config, database, fastapi, caplog):
 
     # Initial stats just after load
     def get_stats():
-        stats_url = PROJECT_STATS_URL.format(project_ids="%s" % prj_id)
+        stats_url = PROJECT_CLASSIF_STATS_URL.format(prj_ids="%s" % prj_id)
         stats_rsp = fastapi.get(stats_url, headers=ADMIN_AUTH)
         assert stats_rsp.status_code == status.HTTP_200_OK
         return stats_rsp.json()[0]
@@ -182,7 +182,7 @@ def test_classif(config, database, fastapi, caplog):
     obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id, statusfilter='V')
     assert len(obj_ids) == 8
 
-    url = PROJECT_STATS_URL.format(project_ids="%s" % prj_id)
+    url = PROJECT_CLASSIF_STATS_URL.format(prj_ids="%s" % prj_id)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json() == [{'nb_dubious': 0,

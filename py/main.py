@@ -25,6 +25,7 @@ from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp, C
 from API_models.subset import SubsetReq, SubsetRsp
 from API_models.taxonomy import TaxaSearchRsp, TaxonModel, TaxonomyTreeStatus
 from API_operations.CRUD.Collections import CollectionsService
+from API_operations.CRUD.Instruments import InstrumentsService
 from API_operations.CRUD.Object import ObjectService
 from API_operations.CRUD.ObjectParents import SamplesService, AcquisitionsService, ProcessesService
 from API_operations.CRUD.Projects import ProjectsService
@@ -48,7 +49,7 @@ from BO.Object import ObjectBO
 from BO.ObjectSet import ObjectIDListT
 from BO.Preferences import Preferences
 from BO.Process import ProcessBO
-from BO.Project import ProjectBO, ProjectStats
+from BO.Project import ProjectBO, ProjectTaxoStats, ProjectUserStats
 from BO.Rights import RightsBO
 from BO.Sample import SampleBO
 from BO.Taxonomy import TaxonBO
@@ -346,9 +347,9 @@ def project_query(project_id: int,
     return ret
 
 
-@app.get("/project_set/stats", tags=['projects'], response_model=List[ProjectStatsModel])
+@app.get("/project_set/taxo_stats", tags=['projects'], response_model=List[ProjectTaxoStatsModel]) # type: ignore
 def project_set_get_stats(ids: str,
-                          current_user: int = Depends(get_current_user)) -> List[ProjectStats]:
+                          current_user: int = Depends(get_current_user)) -> List[ProjectTaxoStats]:
     """
         Read projects statistics, i.e. used taxa and classification states.
     """
@@ -356,6 +357,19 @@ def project_set_get_stats(ids: str,
     num_ids = _split_num_list(ids)
     with RightsThrower(sce):
         ret = sce.read_stats(current_user, num_ids)
+    return ret
+
+
+@app.get("/project_set/user_stats", tags=['projects'], response_model=List[ProjectUserStatsModel]) # type: ignore
+def project_set_get_user_stats(ids: str,
+                               current_user: int = Depends(get_current_user)) -> List[ProjectUserStats]:
+    """
+        Read projects user statistics.
+    """
+    sce = ProjectsService()
+    num_ids = _split_num_list(ids)
+    with RightsThrower(sce):
+        ret = sce.read_user_stats(current_user, num_ids)
     return ret
 
 
@@ -586,6 +600,21 @@ def acquisition_query(acquisition_id: int,
 
 
 # ######################## END OF ACQUISITION
+
+@app.get("/instruments/", tags=['instrument'], response_model=List[str])
+def instrument_query(project_ids: str) \
+        -> List[str]:
+    """
+        Query for instruments, either inside specific project(s) or globally.
+    """
+    sce = InstrumentsService()
+    proj_ids = _split_num_list(project_ids)
+    with RightsThrower(sce):
+        ret = sce.query(proj_ids)
+    return ret
+
+
+# ######################## END OF INSTRUMENT
 
 @app.post("/process_set/update", tags=['processes'], response_model=int)
 def update_processes(req: BulkUpdateReq,

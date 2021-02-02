@@ -6,7 +6,7 @@ from typing import List, Union, Tuple, Optional
 
 from API_models.crud import CreateProjectReq
 from BO.ObjectSet import EnumeratedObjectSet
-from BO.Project import ProjectBO, ProjectBOSet, ProjectIDListT, ProjectIDT, ProjectStats
+from BO.Project import ProjectBO, ProjectBOSet, ProjectIDListT, ProjectIDT, ProjectTaxoStats, ProjectUserStats
 from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
 from DB import Sample
@@ -123,7 +123,20 @@ class ProjectsService(Service):
         Sample.propagate_geo(self.session, prj_id)
 
     def read_stats(self, current_user_id: int,
-                   prj_ids: ProjectIDListT) -> List[ProjectStats]:
-        # Security barrier
-        # TODO: Why protecting?
+                   prj_ids: ProjectIDListT) -> List[ProjectTaxoStats]:
+        """
+            Read classification statistics for these projects.
+        """
+        # No security barrier because there is no private information inside
         return ProjectBO.read_taxo_stats(self.session, prj_ids)
+
+    def read_user_stats(self, current_user_id: int,
+                        prj_ids: ProjectIDListT) -> List[ProjectUserStats]:
+        """
+            Read user statistics for these projects.
+        """
+        # Security barrier
+        [RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, prj_id)
+         for prj_id in prj_ids]
+        ret = ProjectBO.read_user_stats(self.session, prj_ids)
+        return ret

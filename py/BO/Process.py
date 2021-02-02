@@ -25,7 +25,7 @@ logger = get_logger(__name__)
 
 class ProcessBO(MappedEntity):
     """
-        A Sample.
+        A processing, which is _how_ collected [sub]samples were treated to give images.
     """
     FREE_COLUMNS_ATTRIBUTE = 'process'
 

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from BO.Classification import ClassifIDListT
 from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping
 from BO.ProjectPrivilege import ProjectPrivilegeBO
+from BO.User import MinimalUserBO
 from BO.helpers.DataclassAsDict import DataclassAsDict
 from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFields, Acquisition, Process, \
     ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram, ObjectCNNFeature
@@ -27,9 +28,9 @@ ProjectIDListT = List[int]
 
 
 @dataclass(init=False)
-class ProjectStats(DataclassAsDict):
+class ProjectTaxoStats(DataclassAsDict):
     """
-        Statistics for a project.
+        Taxonomy statistics for a project.
     """
     projid: ProjectIDT
     used_taxa: ClassifIDListT
@@ -37,6 +38,15 @@ class ProjectStats(DataclassAsDict):
     nb_validated: int
     nb_dubious: int
     nb_predicted: int
+
+
+@dataclass(init=False)
+class ProjectUserStats(DataclassAsDict):
+    """
+        User statistics for a project.
+    """
+    projid: ProjectIDT
+    annotators: List[MinimalUserBO]
 
 
 class ProjectBO(object):
@@ -211,7 +221,7 @@ class ProjectBO(object):
                         {'prjid': projid})
 
     @staticmethod
-    def read_taxo_stats(session: Session, prj_ids: ProjectIDListT) -> List[ProjectStats]:
+    def read_taxo_stats(session: Session, prj_ids: ProjectIDListT) -> List[ProjectTaxoStats]:
         res: ResultProxy = \
             session.execute("""
         SELECT pts.projid, ARRAY_AGG(pts.id) as ids, 
@@ -222,9 +232,31 @@ class ProjectBO(object):
       GROUP BY pts.projid""",
                             {'ids': prj_ids})
         with CodeTimer("stats for %d projects:" % len(prj_ids), logger):
-            ret = [ProjectStats(rec) for rec in res.fetchall()]
+            ret = [ProjectTaxoStats(rec) for rec in res.fetchall()]
         for a_stat in ret:
             a_stat.used_taxa.sort()
+        return ret
+
+    @staticmethod
+    def read_user_stats(session: Session, prj_ids: ProjectIDListT) -> List[ProjectUserStats]:
+        """
+            Read the users (annotators) involved in each project.
+        """
+        qry: Query = session.query(Project.projid, User.id, User.name).distinct()
+        qry = qry.join(Sample).join(Acquisition).join(ObjectHeader)
+        qry = qry.filter(Project.projid == any_(prj_ids))
+        qry = qry.filter(ObjectHeader.classif_who == User.id)
+        qry = qry.order_by(Project.projid, User.name)
+        ret = []
+        with CodeTimer("user stats for %d projects, qry: %s:" % (len(prj_ids), str(qry)), logger):
+            last_prj = None
+            for projid, user_id, user_name in qry.all():
+                if projid != last_prj:
+                    prj_stat = ProjectUserStats((projid, []))
+                    ret.append(prj_stat)
+                    last_prj = projid
+                else:
+                    prj_stat.annotators.append(MinimalUserBO((user_id, user_name)))
         return ret
 
     @staticmethod

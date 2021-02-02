@@ -11,7 +11,7 @@ from BO.Acquisition import AcquisitionBO
 from BO.Classification import ClassifIDT
 from BO.Collection import CollectionIDT, CollectionBO
 from BO.DataLicense import LicenseEnum, DataLicense
-from BO.Project import ProjectBO, ProjectIDListT, ProjectStats
+from BO.Project import ProjectBO, ProjectIDListT, ProjectTaxoStats
 from BO.Rights import RightsBO
 from BO.Sample import SampleBO
 from BO.Taxonomy import WoRMSSetFromTaxaSet
@@ -568,6 +568,6 @@ class EMODnetExport(TaskServiceBase):
             ProjectBO.update_taxo_stats(self.session, projid=a_project_id)
             # Ensure that the geography is OK propagated upwards from objects, for all projects inside the collection
             Sample.propagate_geo(self.session, prj_id=a_project_id)
-        a_stat: ProjectStats
+        a_stat: ProjectTaxoStats
         for a_stat in ProjectBO.read_taxo_stats(self.session, project_ids):
             self.total_count += a_stat.nb_unclassified + a_stat.nb_predicted + a_stat.nb_dubious + a_stat.nb_validated

@@ -6,7 +6,10 @@
 import json
 from typing import Any
 
+from dataclasses import dataclass
+
 from BO.Classification import ClassifIDListT
+from BO.helpers.DataclassAsDict import DataclassAsDict
 from DB import User, UserPreferences, Session
 # Typings, to be clear that these are not e.g. object IDs
 from helpers.DynamicLogs import get_logger
@@ -93,3 +96,9 @@ class UserBO(object):
             Set classification MRU.
         """
         cls.set_preferences_per_project(session, user_id, project_id, cls.CLASSIF_MRU_KEY, mru)
+
+
+@dataclass(init=False)
+class MinimalUserBO(DataclassAsDict):
+    id: UserIDT
+    name: str

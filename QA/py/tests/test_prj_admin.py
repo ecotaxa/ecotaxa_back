@@ -5,7 +5,7 @@ from tests.credentials import ADMIN_AUTH
 # noinspection PyPackageRequirements
 
 
-PROJECT_CLASSIF_STATS_URL = "/project_set/stats?ids={prj_ids}"
+PROJECT_CLASSIF_STATS_URL = "/project_set/taxo_stats?ids={prj_ids}"
 
 PROJECT_FREE_COLS_STATS_URL = "/projects/{project_id}/stats"
 

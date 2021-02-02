@@ -10,6 +10,7 @@ from sqlalchemy.sql.functions import current_timestamp
 from typing_extensions import TypedDict
 
 from BO.DataLicense import LicenseEnum
+from BO.Project import ProjectUserStats
 from DB import User, Project, Sample, Acquisition, Process
 from DB.Acquisition import ACQUISITION_FREE_COLUMNS
 from DB.Collection import Collection
@@ -17,6 +18,7 @@ from DB.Process import PROCESS_FREE_COLUMNS
 from DB.Sample import SAMPLE_FREE_COLUMNS
 from helpers.pydantic import BaseModel, Field
 from .helpers.DBtoModel import sqlalchemy_to_pydantic
+from .helpers.DataclassToModel import dataclass_to_model
 from .helpers.TypedDictToModel import typed_dict_to_model
 
 # Enriched model
@@ -82,7 +84,8 @@ class _AddedToProject(BaseModel):
                                         default=[])
     viewers: List[UserModel] = Field(title="Viewers of this project, if not manager nor annotator",
                                      default=[])
-    contact: Optional[UserModel] = Field(title="The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.")
+    contact: Optional[UserModel] = Field(
+        title="The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.")
 
     highest_right: str = Field(
         title="The highest right for requester on this project. One of 'Manage', 'Annotate', 'View'.",
@@ -236,14 +239,19 @@ class BulkUpdateReq(BaseModel):
     updates: ColUpdateList = Field(title="The updates, to do on all impacted entities")
 
 
-# TODO: Derive from ProjectStats
-class ProjectStatsModel(BaseModel):
+# TODO: Derive from ProjectTaxoStats
+class ProjectTaxoStatsModel(BaseModel):
     projid: int = Field(title="The project id")
     used_taxa: List[int] = Field(title="The taxa/category ids used inside the project", default=[])
     nb_unclassified: int = Field(title="The number of unclassified objects inside the project")
     nb_validated: int = Field(title="The number of validated objects inside the project")
     nb_dubious: int = Field(title="The number of dubious objects inside the project")
     nb_predicted: int = Field(title="The number of predicted objects inside the project")
+
+
+ProjectUserStatsModel = dataclass_to_model(ProjectUserStats, add_suffix=True,
+                                           titles={'projid': "The project id",
+                                                   'annotators': "The users who decided on present classification of objects"})
 
 
 class CreateCollectionReq(BaseModel):
