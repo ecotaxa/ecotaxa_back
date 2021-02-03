@@ -629,7 +629,7 @@
           "projects"
         ],
         "summary":"Search Projects",
-        "description":"Return projects for current user.\n- `param` also_others: Allows to return projects for which given user has no right\n- `param` for_managing: Allows to return project that can be written to (including erased) by the given user\n- `param` title_filter: Use this pattern for matching returned projects names\n- `param` instrument_filter: Only return projects where this instrument was used\n- `param` filter_subset: Only return projects having 'subset' in their names",
+        "description":"Return projects for current user, if any.\n- `param` also_others: Allows to return projects for which given user has no right\n- `param` for_managing: Allows to return project that can be written to (including erased) by the given user\n- `param` title_filter: Use this pattern for matching returned projects names\n- `param` instrument_filter: Only return projects where this instrument was used\n- `param` filter_subset: Only return projects having 'subset' in their names",
         "operationId":"search_projects_projects_search_get",
         "parameters":[
           {
@@ -985,14 +985,14 @@
         ]
       }
     },
-    "/project_set/stats":{
+    "/project_set/taxo_stats":{
       "get":{
         "tags":[
           "projects"
         ],
         "summary":"Project Set Get Stats",
         "description":"Read projects statistics, i.e. used taxa and classification states.",
-        "operationId":"project_set_get_stats_project_set_stats_get",
+        "operationId":"project_set_get_stats_project_set_taxo_stats_get",
         "parameters":[
           {
             "required":true,
@@ -1010,10 +1010,62 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "title":"Response Project Set Get Stats Project Set Stats Get",
+                  "title":"Response Project Set Get Stats Project Set Taxo Stats Get",
                   "type":"array",
                   "items":{
-                    "$ref":"#/components/schemas/ProjectStatsModel"
+                    "$ref":"#/components/schemas/ProjectTaxoStatsModel"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/project_set/user_stats":{
+      "get":{
+        "tags":[
+          "projects"
+        ],
+        "summary":"Project Set Get User Stats",
+        "description":"Read projects user statistics.",
+        "operationId":"project_set_get_user_stats_project_set_user_stats_get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Ids",
+              "type":"string"
+            },
+            "name":"ids",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Project Set Get User Stats Project Set User Stats Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/ProjectUserStatsModel"
                   }
                 }
               }
@@ -1421,16 +1473,25 @@
           "samples"
         ],
         "summary":"Samples Search",
-        "description":"Read all samples for a project.",
+        "description":"Read samples for a set of projects.\n\n- project_ids: any(non number)-separated list of project numbers\n- id_pattern: sample id textual pattern. Use * for 'any matches'. Match is case-insensitive.",
         "operationId":"samples_search_samples_search_get",
         "parameters":[
           {
             "required":true,
             "schema":{
-              "title":"Project Id",
-              "type":"integer"
+              "title":"Project Ids",
+              "type":"string"
             },
-            "name":"project_id",
+            "name":"project_ids",
+            "in":"query"
+          },
+          {
+            "required":true,
+            "schema":{
+              "title":"Id Pattern",
+              "type":"string"
+            },
+            "name":"id_pattern",
             "in":"query"
           }
         ],
@@ -1703,6 +1764,53 @@
             "HTTPBearer":[]
           }
         ]
+      }
+    },
+    "/instruments/":{
+      "get":{
+        "tags":[
+          "instrument"
+        ],
+        "summary":"Instrument Query",
+        "description":"Query for instruments, either inside specific project(s) or globally.",
+        "operationId":"instrument_query_instruments__get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Project Ids",
+              "type":"string"
+            },
+            "name":"project_ids",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Instrument Query Instruments  Get",
+                  "type":"array",
+                  "items":{
+                    "type":"string"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/process_set/update":{
@@ -2463,6 +2571,32 @@
         ]
       }
     },
+    "/taxa":{
+      "get":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Query Root Taxa",
+        "description":"Return all taxa with no parent.",
+        "operationId":"query_root_taxa_taxa_get",
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Query Root Taxa Taxa Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/TaxonModel"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/taxon/{taxon_id}":{
       "get":{
         "tags":[
@@ -2701,7 +2835,7 @@
           "misc"
         ],
         "summary":"Used Constants",
-        "description":"This entry point will return useful strings for user dialog.",
+        "description":"This entry point will return useful strings for user dialog.\nNow also used for values extracted from Config.",
         "operationId":"used_constants_constants_get",
         "responses":{
           "200":{
@@ -2910,8 +3044,22 @@
               "Copyright":"<strong>Copyright</strong>: only contributors to this project have rights on this data. This prevents its distribution in any kind of database.",
               "":"Not chosen"
             }
+          },
+          "app_manager":{
+            "title":"The application manager identity (name, mail), from config file",
+            "maxItems":2,
+            "minItems":2,
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "default":[
+              "",
+              ""
+            ]
           }
-        }
+        },
+        "description":"Values which can be considered identical over the lifetime of the back-end "
       },
       "CreateCollectionReq":{
         "title":"CreateCollectionReq",
@@ -3342,10 +3490,25 @@
         },
         "description":"Merge response. "
       },
+      "MinimalUserBO":{
+        "title":"MinimalUserBO",
+        "type":"object",
+        "properties":{
+          "id":{
+            "title":"Id",
+            "type":"integer"
+          },
+          "name":{
+            "title":"Name",
+            "type":"string"
+          }
+        }
+      },
       "ObjectHeaderModel":{
         "title":"ObjectHeaderModel",
         "required":[
-          "acquisid"
+          "acquisid",
+          "orig_id"
         ],
         "type":"object",
         "properties":{
@@ -3356,6 +3519,10 @@
           "acquisid":{
             "title":"Acquisid",
             "type":"integer"
+          },
+          "orig_id":{
+            "title":"Orig Id",
+            "type":"string"
           },
           "objdate":{
             "title":"Objdate",
@@ -3432,27 +3599,23 @@
           "random_value":{
             "title":"Random Value",
             "type":"integer"
+          },
+          "object_link":{
+            "title":"Object Link",
+            "type":"string"
           }
         }
       },
       "ObjectModel":{
         "title":"ObjectModel",
         "required":[
-          "orig_id",
           "acquisid",
+          "orig_id",
           "sample_id",
           "project_id"
         ],
         "type":"object",
         "properties":{
-          "orig_id":{
-            "title":"Original object ID from initial TSV load",
-            "type":"string"
-          },
-          "object_link":{
-            "title":"Object link",
-            "type":"string"
-          },
           "objid":{
             "title":"Objid",
             "type":"integer"
@@ -3460,6 +3623,10 @@
           "acquisid":{
             "title":"Acquisid",
             "type":"integer"
+          },
+          "orig_id":{
+            "title":"Original object ID from initial TSV load",
+            "type":"string"
           },
           "objdate":{
             "title":"Objdate",
@@ -3536,6 +3703,10 @@
           "random_value":{
             "title":"Random Value",
             "type":"integer"
+          },
+          "object_link":{
+            "title":"Object link",
+            "type":"string"
           },
           "sample_id":{
             "title":"Sample (i.e. parent of parent acquisition) ID",
@@ -3945,8 +4116,26 @@
           }
         }
       },
-      "ProjectStatsModel":{
-        "title":"ProjectStatsModel",
+      "ProjectSummaryModel":{
+        "title":"ProjectSummaryModel",
+        "required":[
+          "projid",
+          "title"
+        ],
+        "type":"object",
+        "properties":{
+          "projid":{
+            "title":"Project unique identifier",
+            "type":"integer"
+          },
+          "title":{
+            "title":"Project title",
+            "type":"string"
+          }
+        }
+      },
+      "ProjectTaxoStatsModel":{
+        "title":"ProjectTaxoStatsModel",
         "required":[
           "projid",
           "nb_unclassified",
@@ -3986,21 +4175,20 @@
           }
         }
       },
-      "ProjectSummaryModel":{
-        "title":"ProjectSummaryModel",
-        "required":[
-          "projid",
-          "title"
-        ],
+      "ProjectUserStatsModel":{
+        "title":"ProjectUserStatsModel",
         "type":"object",
         "properties":{
           "projid":{
-            "title":"Project unique identifier",
+            "title":"The project id",
             "type":"integer"
           },
-          "title":{
-            "title":"Project title",
-            "type":"string"
+          "annotators":{
+            "title":"The users who decided on present classification of objects",
+            "type":"array",
+            "items":{
+              "$ref":"#/components/schemas/MinimalUserBO"
+            }
           }
         }
       },
@@ -4198,13 +4386,29 @@
         "title":"TaxonModel",
         "required":[
           "id",
+          "name",
+          "nb_objects",
+          "nb_children_objects",
           "display_name",
-          "lineage"
+          "lineage",
+          "children"
         ],
         "type":"object",
         "properties":{
           "id":{
             "title":"The taxon/category IDs.",
+            "type":"integer"
+          },
+          "name":{
+            "title":"The taxon/category verbatim name.",
+            "type":"string"
+          },
+          "nb_objects":{
+            "title":"How many objects are classified in this category.",
+            "type":"integer"
+          },
+          "nb_children_objects":{
+            "title":"How many objects are classified in this category and its subcategories.",
             "type":"integer"
           },
           "display_name":{
@@ -4216,6 +4420,13 @@
             "type":"array",
             "items":{
               "type":"string"
+            }
+          },
+          "children":{
+            "title":"The taxon/category IDs of children.",
+            "type":"array",
+            "items":{
+              "type":"integer"
             }
           }
         }
