@@ -100,11 +100,13 @@ class TaxonomyService(Service):
         return mru_ret + preset_ret + others_ret
 
     def query_roots(self) -> List[TaxonBO]:
-        qry: Query = self.session.query(Taxonomy.id, Taxonomy.display_name, Taxonomy.name)
+        """
+            Return root (no parents) categories/taxa.
+        """
+        qry: Query = self.session.query(Taxonomy.id)
         qry = qry.filter(Taxonomy.parent_id.is_(None))
-        ret = [TaxonBO(taxon_id, display_name, name, [])
-               for taxon_id, display_name, name in qry.all()]
-        return ret
+        root_ids = [ taxon_id for taxon_id, in qry.all()]
+        return self.query_set(root_ids)
 
     def query(self, taxon_id: ClassifIDT) -> Optional[TaxonBO]:
         ret = self.query_set([taxon_id])

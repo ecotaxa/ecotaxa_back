@@ -47,14 +47,20 @@ def test_classif(config, database, fastapi, caplog):
     # See if the taxa we are going to use are OK
     rsp = fastapi.get(TAXA_SET_QUERY_URL.format(taxa_ids="%d+%d" % (copepod_id, entomobryomorpha_id)))
     # Note: There is no real lineage in test DB
-    assert rsp.json() == [{'display_name': 'Copepoda',
-                           'name': 'Copepoda',
+    assert rsp.json() == [{'children': [84964],
+                           'display_name': 'Copepoda',
                            'id': 25828,
-                           'lineage': ['Copepoda']},
-                          {'display_name': 'Entomobryomorpha',
-                           'name': 'Entomobryomorpha',
+                           'lineage': ['Copepoda'],
+                           'name': 'Copepoda',
+                           'nb_children_objects': 0,
+                           'nb_objects': 0},
+                          {'children': [],
+                           'display_name': 'Entomobryomorpha',
                            'id': 25835,
-                           'lineage': ['Entomobryomorpha']}]
+                           'lineage': ['Entomobryomorpha'],
+                           'name': 'Entomobryomorpha',
+                           'nb_children_objects': 0,
+                           'nb_objects': 0}]
 
     # Initial stats just after load
     def get_stats():

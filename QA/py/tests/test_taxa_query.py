@@ -46,14 +46,23 @@ def test_taxo_query(config, database, fastapi, caplog):
     url = TAXA_QUERY_URL.format(taxon_id=849)
     # Unauthenticated call
     rsp = fastapi.get(url)
-    assert rsp.json() == {'display_name': 'Cyanobacteria<Proteobacteria',
-                          'name': 'Cyanobacteria',
+    assert rsp.json() == {'children': [5141],
+                          'display_name': 'Cyanobacteria<Proteobacteria',
                           'id': 849,
-                          'lineage': ['Cyanobacteria', 'Proteobacteria', 'Bacteria', 'living']}
+                          'lineage': ['Cyanobacteria', 'Proteobacteria', 'Bacteria', 'living'],
+                          'name': 'Cyanobacteria',
+                          'nb_children_objects': 0,
+                          'nb_objects': 0}
 
 
 def test_worms_query(config, database, fastapi, caplog):
     url = WORMS_TAXA_QUERY_URL.format(aphia_id=128586)
     # Unauthenticated call
     rsp = fastapi.get(url)
-    assert rsp.json() == {'display_name': 'Oncaeidae', 'name': 'Oncaeidae', 'id': 128586, 'lineage': []}
+    assert rsp.json() == {'children': [],
+                          'display_name': 'Oncaeidae',
+                          'id': 128586,
+                          'lineage': [],
+                          'name': 'Oncaeidae',
+                          'nb_children_objects': 0,
+                          'nb_objects': 0}
