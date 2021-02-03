@@ -25,6 +25,7 @@ from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp, C
 from API_models.subset import SubsetReq, SubsetRsp
 from API_models.taxonomy import TaxaSearchRsp, TaxonModel, TaxonomyTreeStatus
 from API_operations.CRUD.Collections import CollectionsService
+from API_operations.CRUD.Constants import ConstantsService
 from API_operations.CRUD.Instruments import InstrumentsService
 from API_operations.CRUD.Object import ObjectService
 from API_operations.CRUD.ObjectParents import SamplesService, AcquisitionsService, ProcessesService
@@ -1008,8 +1009,9 @@ def do_nothing(_current_user: int = Depends(get_current_user)):
 def used_constants() -> Constants:
     """
         This entry point will return useful strings for user dialog.
+        Now also used for values extracted from Config.
     """
-    return Constants()
+    return ConstantsService().get()
 
 
 # @app.get("/loadtest", tags=['WIP'], include_in_schema=False)
