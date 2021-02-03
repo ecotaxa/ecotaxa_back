@@ -33,7 +33,7 @@ class GlobalMapping(object):
     PREDEFINED_FIELDS = {
         **ANNOTATION_FIELDS,
         # A mapping from TSV columns to objects and fields
-        'object_id': {'table': ObjectFields.__tablename__, 'field': 'orig_id', 'type': 't'},
+        'object_id': {'table': ObjectHeader.__tablename__, 'field': 'orig_id', 'type': 't'},
         'sample_id': {'table': Sample.__tablename__, 'field': 'orig_id', 'type': 't'},
         'acq_id': {'table': Acquisition.__tablename__, 'field': 'orig_id', 'type': 't'},
         'process_id': {'table': Process.__tablename__, 'field': 'orig_id', 'type': 't'},
@@ -41,7 +41,7 @@ class GlobalMapping(object):
         'object_lon': {'table': ObjectHeader.__tablename__, 'field': 'longitude', 'type': 'n'},
         'object_date': {'table': ObjectHeader.__tablename__, 'field': 'objdate', 'type': 't'},
         'object_time': {'table': ObjectHeader.__tablename__, 'field': 'objtime', 'type': 't'},
-        'object_link': {'table': ObjectFields.__tablename__, 'field': 'object_link', 'type': 't'},
+        'object_link': {'table': ObjectHeader.__tablename__, 'field': 'object_link', 'type': 't'},
         'object_depth_min': {'table': ObjectHeader.__tablename__, 'field': 'depth_min', 'type': 'n'},
         'object_depth_max': {'table': ObjectHeader.__tablename__, 'field': 'depth_max', 'type': 'n'},
         'img_rank': {'table': Image.__tablename__, 'field': 'imgrank', 'type': 'n'},
@@ -51,7 +51,8 @@ class GlobalMapping(object):
     }
 
     # C'est un set de table 😁
-    POSSIBLE_TABLES = set([v['table'] for v in PREDEFINED_FIELDS.values()])
+    POSSIBLE_TABLES = set([v['table'] for v in PREDEFINED_FIELDS.values()] +
+                          [ObjectFields.__tablename__])  # No hard-coded mapping for this one anymore
 
     PARENT_CLASSES: Dict[str, ParentTableClassT] = OrderedDict([(Sample.__tablename__, Sample),
                                                                 (Acquisition.__tablename__, Acquisition),

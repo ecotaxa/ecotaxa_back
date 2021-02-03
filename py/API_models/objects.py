@@ -19,8 +19,7 @@ ObjectHeaderModel = sqlalchemy_to_pydantic(ObjectHeader)
 
 
 class ObjectFieldsModel(BaseModel):
-    orig_id: str = Field(title="Original object ID from initial TSV load")
-    object_link: Optional[str] = Field(title="Object link")
+    pass
 
 
 _ImageModelFromDB = sqlalchemy_to_pydantic(Image)
@@ -31,6 +30,8 @@ class ImageModel(_ImageModelFromDB):  # type:ignore
 
 
 class ObjectModel(ObjectHeaderModel, ObjectFieldsModel):  # type:ignore
+    orig_id: str = Field(title="Original object ID from initial TSV load")
+    object_link: Optional[str] = Field(title="Object link")
     sample_id: int = Field(title="Sample (i.e. parent of parent acquisition) ID")
     project_id: int = Field(title="Project (i.e. parent of sample) ID")
     images: List[ImageModel] = Field(title="Images for this object",

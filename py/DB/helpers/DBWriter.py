@@ -4,15 +4,10 @@
 #
 from typing import Dict, Tuple, List, Type, Optional
 
-# noinspection PyPackageRequirements
-from sqlalchemy import MetaData, Table
-# noinspection PyPackageRequirements
-from sqlalchemy.orm import Session
-
 from DB.Image import Image
 from DB.Object import ObjectHeader, ObjectFields, ObjectCNNFeature
 from DB.helpers.Bean import Bean
-from DB.helpers.ORM import minimal_table_of
+from DB.helpers.ORM import Session, Table, MetaData, minimal_table_of
 from DB.helpers.Postgres import SequenceCache
 from helpers.DynamicLogs import get_logger
 
@@ -87,11 +82,28 @@ class DBWriter(object):
         # TODO: SQLAlchemy compiled_cache?
         bulk_sets = [self.obj_bulks, self.obj_fields_bulks,
                      self.obj_cnn_bulks, self.img_bulks]
-        for a_bulk_set, an_insert in zip(bulk_sets, inserts):
-            if not a_bulk_set:
-                continue
-            self.session.execute(an_insert, a_bulk_set)
-            a_bulk_set.clear()
+        # noinspection PyUnreachableCode
+        if True:
+            for a_bulk_set, an_insert in zip(bulk_sets, inserts):
+                if not a_bulk_set:
+                    continue
+                self.session.execute(an_insert, a_bulk_set)
+                a_bulk_set.clear()
+        else:
+            # Experimental code. TODO: Get better or drop
+            db_cnx = self.session.bind.engine.raw_connection()
+            try:
+                for a_bulk_set, an_insert in zip(bulk_sets, inserts):
+                    if not a_bulk_set:
+                        continue
+                    import re
+                    an_insert = re.sub(r':([0-9a-z_]+)', r'%(\1)s', str(an_insert))
+                    with db_cnx.cursor() as cur:
+                        cur.executemany(an_insert, a_bulk_set)
+                        assert cur.rowcount == len(a_bulk_set), "bulk insert failed"
+                    a_bulk_set.clear()
+            finally:
+                db_cnx.close()
         logger.info("Batch save objects of %s", nb_bulks)
 
     def add_db_entities(self, object_head_to_write: Bean, object_fields_to_write: Bean,
@@ -100,7 +112,7 @@ class DBWriter(object):
         if new_records > 1:
             # There is a new image and more
             #assert object_head_to_write.projid is not None
-            assert object_fields_to_write.orig_id is not None
+            assert object_head_to_write.orig_id is not None
             # Default value from sequences
             object_head_to_write.objid = self.obj_seq_cache.next()
             object_fields_to_write.objfid = object_head_to_write.objid
@@ -130,59 +142,3 @@ class DBWriter(object):
 
     def eof_cleanup(self):
         self.session.commit()
-
-
-# noinspection PyUnreachableCode
-if False:  # pragma: no cover
-    class DBWriterPlain(object):
-        """
-        Database writer (without optimizations).
-        """
-        # noinspection PyPackageRequirements
-        from sqlalchemy.orm import Session
-
-        def __init__(self, session: Session):
-            self.session = session
-
-            self.obj_bulks = []
-            self.obj_tbl = None
-            self.obj_fields_bulks = []
-            self.obj_fields_tbl = None
-            self.img_bulks = []
-            self.img_tbl = None
-
-        @staticmethod
-        def generators():
-            # Small optimization, the below allows minimal SQLAlchemy SQL sent to DB
-            # Plain base objects with relations
-            ObjectView = ObjectHeader
-            ObjectFieldsView = ObjectFields
-            ImageView = Image
-
-            return ObjectView, ObjectFieldsView, ImageView
-
-        def do_bulk_save(self):
-            pass
-
-        def add_db_entities(self, object_head_to_write, object_fields_to_write, _image_to_write, _must_write_obj):
-            assert object_head_to_write.projid is not None
-            assert object_fields_to_write.orig_id is not None
-            self.session.add(object_head_to_write)
-            self.session.add(object_fields_to_write)
-
-        def add_vignette_backup(self, _object_head_to_write, backup_img_to_write):
-            self.session.add(backup_img_to_write)
-
-        def close_row(self):
-            self.session.flush()
-
-        def persist(self):
-            self.session.commit()
-
-        def eof_cleanup(self):
-            self.session.commit()
-
-        @staticmethod
-        def link(object_fields_to_write, object_head_to_write):
-            # Add, using ORM, the ObjectFields twin
-            object_fields_to_write.objhrel = object_head_to_write

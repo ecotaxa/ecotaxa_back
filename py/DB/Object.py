@@ -40,6 +40,8 @@ class ObjectHeader(Model):
     objid = Column(BIGINT, Sequence('seq_objects'), primary_key=True)
     # Parent
     acquisid = Column(INTEGER, ForeignKey('acquisitions.acquisid'), nullable=False)
+    # User-provided identifier
+    orig_id = Column(VARCHAR(255), nullable=False)
 
     objdate = Column(DATE)
     objtime = Column(TIME)
@@ -69,6 +71,9 @@ class ObjectHeader(Model):
     # TODO: Why random? It makes testing a bit more difficult
     random_value = Column(INTEGER)
 
+    # TODO: Can't see any value in DB
+    object_link = Column(VARCHAR(255))
+
     # The relationships are created in Relations.py but the typing here helps the IDE
     fields: relationship
     cnn_features: relationship
@@ -81,7 +86,7 @@ class ObjectHeader(Model):
 
     @classmethod
     def fetch_existing_objects(cls, session: Session, prj_id) -> Dict[str, int]:
-        # TODO: Why using the view? Also orig_id should be in plain object
+        # TODO: Why using the view?
         res: ResultProxy = session.execute(
             "SELECT o.orig_id, o.objid "
             "  FROM objects o "
@@ -148,10 +153,6 @@ class ObjectHeader(Model):
 class ObjectFields(Model):
     __tablename__ = 'obj_field'
     objfid = Column(BIGINT, ForeignKey(ObjectHeader.objid, ondelete="CASCADE"), primary_key=True)
-    # TODO: Isn't this the natural PK for objects?, it looks unique per projet
-    orig_id = Column(VARCHAR(255), nullable=False)
-    # TODO: Can't see any value in DB
-    object_link = Column(VARCHAR(255))
     # The relationships are created in Relations.py but the typing here helps the IDE
     object: relationship
 
@@ -184,7 +185,6 @@ Index('is_objectsdepth', ObjectHeader.__table__.c.depth_max, ObjectHeader.__tabl
 Index('is_objectslatlong', ObjectHeader.__table__.c.latitude, ObjectHeader.__table__.c.longitude)
 Index('is_objectstime', ObjectHeader.__table__.c.objtime, ObjectHeader.__table__.c.acquisid)
 Index('is_objectsdate', ObjectHeader.__table__.c.objdate, ObjectHeader.__table__.c.acquisid)
-Index('is_objectfieldsorigid', ObjectFields.__table__.c.orig_id)
 # For FK checks during deletion
 Index('is_objectsacquisition', ObjectHeader.__table__.c.acquisid)
 

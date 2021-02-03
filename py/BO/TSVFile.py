@@ -140,9 +140,9 @@ class TSVFile(object):
                     # Add parents
                     self.add_parent_objects(how, session, object_head_to_write, dicts_to_write)
                     # Care for another line with another image
-                    key_exist_obj = "%s*%s" % (object_fields_to_write.orig_id, image_to_write.orig_file_name)
+                    key_exist_obj = "%s*%s" % (object_head_to_write.orig_id, image_to_write.orig_file_name)
                     if key_exist_obj in how.objects_and_images_to_skip:
-                        logger.info("Image skipped: %s %s", object_fields_to_write.orig_id,
+                        logger.info("Image skipped: %s %s", object_head_to_write.orig_id,
                                     image_to_write.orig_file_name)
                         continue
 
@@ -154,7 +154,7 @@ class TSVFile(object):
 
                 if new_records > 1:
                     # We now have an Id from sequences, so reference it.
-                    how.existing_objects[object_fields_to_write.orig_id] = object_head_to_write.objid
+                    how.existing_objects[object_head_to_write.orig_id] = object_head_to_write.objid
                     how.image_ranks_per_obj[object_head_to_write.objid] = set()
                 else:
                     # The key already exists with same value, checked in @see self.create_or_link_slaves
@@ -515,10 +515,10 @@ class TSVFile(object):
             Also update them... TODO: Split/fork the def
             :returns the number of new records
         """
-        if object_fields_to_write.orig_id in how.existing_objects:
+        if object_head_to_write.orig_id in how.existing_objects:
             # Set the objid which will be copied for storing the image, the object itself
             # will not be stored due to returned value.
-            objid = how.existing_objects[object_fields_to_write.orig_id]
+            objid = how.existing_objects[object_head_to_write.orig_id]
             object_head_to_write.objid = objid
             if how.can_update_only:
                 # noinspection DuplicatedCode
@@ -543,12 +543,12 @@ class TSVFile(object):
                 ret = 0  # nothing to write
             else:
                 # 'Simply' a line with a complementary image
-                logger.info("One more image for %s:%s ", object_fields_to_write.orig_id, image_to_write)
+                logger.info("One more image for %s:%s ", object_head_to_write.orig_id, image_to_write)
                 ret = 1  # just a new image
         else:
             if how.can_update_only:
                 # No objects creation while updating
-                logger.info("Object %s not found while updating ", object_fields_to_write.orig_id)
+                logger.info("Object %s not found while updating ", object_head_to_write.orig_id)
                 ret = 0
             else:
                 # or create it

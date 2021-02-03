@@ -852,3 +852,36 @@ UPDATE alembic_version SET version_num='da78c15a7c21' WHERE alembic_version.vers
 
 COMMIT;
 
+-- Running upgrade da78c15a7c21 -> 271c5fddefbf
+
+drop view objects;
+
+ALTER TABLE obj_head ADD COLUMN object_link VARCHAR(255);
+
+ALTER TABLE obj_head ADD COLUMN orig_id VARCHAR(255);
+
+create temp table origs as select objfid, orig_id, object_link from obj_field ;
+create unique index origs_id on origs(objfid);
+update obj_head obh
+   set orig_id = obf.orig_id,
+       object_link = obf.object_link
+  from obj_field obf
+ where obf.objfid = obh.objid;
+
+ALTER TABLE obj_head ALTER COLUMN orig_id SET NOT NULL;
+
+ALTER TABLE obj_field DROP COLUMN orig_id;
+
+ALTER TABLE obj_field DROP COLUMN object_link;
+
+create view objects as
+                  select sam.projid, sam.sampleid, obh.*, obh.acquisid as processid, ofi.*
+                    from obj_head obh
+                    join acquisitions acq on obh.acquisid = acq.acquisid
+                    join samples sam on acq.acq_sample_id = sam.sampleid
+                    left join obj_field ofi on obh.objid = ofi.objfid; -- allow elimination by planner;
+
+UPDATE alembic_version SET version_num='271c5fddefbf' WHERE alembic_version.version_num = 'da78c15a7c21';
+
+COMMIT;
+

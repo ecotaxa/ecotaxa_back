@@ -186,7 +186,7 @@ class SubsetServiceOnProject(TaskServiceOnProjectBase):
         # Keep track of existing objects
         if new_records > 1:
             # We now have an Id from sequences, so ref. it.
-            import_how.existing_objects[fields.orig_id] = obj.objid
+            import_how.existing_objects[obj.orig_id] = obj.objid
             if cnn_features is not None:
                 writer.add_cnn_features(obj, cnn_features)
         # Do images

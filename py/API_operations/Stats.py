@@ -95,7 +95,7 @@ class ProjectStatsFetcher(Service):
         free_cols_vals = proj_bo.get_all_num_columns_values(self.session)
         acquis_stats: AcquisitionStats = AcquisitionStats("", 0)
         for a_row in free_cols_vals:
-            acquis_id, acquis_orig_id, objid, orig_id, *free_vals = a_row
+            acquis_id, acquis_orig_id, objid, *free_vals = a_row
             free_vals = [a_val if a_val is not None else Decimal('nan')
                          for a_val in free_vals]
             if acquis_id == acquis_stats.acquis_id:
