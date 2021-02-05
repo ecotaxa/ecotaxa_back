@@ -163,9 +163,19 @@ def test_update_prj(config, database, fastapi, caplog):
     read_json = rsp.json()
     assert read_json == ref_json
 
+    contact_usr = read_json["managers"][0]
+    # Attempt to reproduce ecotaxa/ecotaxa_dev#596
+    del contact_usr['usercreationdate']
+    contact_usr['usercreationdate'] = None
+    del contact_usr['usercreationreason']
+
+    # TODO
+    #del contact_usr['email']
+
     url = PROJECT_UPDATE_URL.format(project_id=prj_id)
     read_json["comments"] = "New comment"
-    read_json["contact"] = read_json["managers"][0]
+    read_json["contact"] = contact_usr
+    read_json["visible"] = False
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=read_json)
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -174,3 +184,4 @@ def test_update_prj(config, database, fastapi, caplog):
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.json() != ref_json
     assert rsp.json()["comments"] == "New comment"
+    assert rsp.json()["visible"] is False
