@@ -57,7 +57,7 @@ from BO.Taxonomy import TaxonBO
 from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower, \
-    get_optional_current_user, MyORJSONResponse
+    get_optional_current_user, MyORJSONResponse, ValidityThrower
 from helpers.login import LoginService
 
 logger = get_logger(__name__)
@@ -348,7 +348,7 @@ def project_query(project_id: int,
     return ret
 
 
-@app.get("/project_set/taxo_stats", tags=['projects'], response_model=List[ProjectTaxoStatsModel]) # type: ignore
+@app.get("/project_set/taxo_stats", tags=['projects'], response_model=List[ProjectTaxoStatsModel])  # type: ignore
 def project_set_get_stats(ids: str,
                           current_user: int = Depends(get_current_user)) -> List[ProjectTaxoStats]:
     """
@@ -361,7 +361,7 @@ def project_set_get_stats(ids: str,
     return ret
 
 
-@app.get("/project_set/user_stats", tags=['projects'], response_model=List[ProjectUserStatsModel]) # type: ignore
+@app.get("/project_set/user_stats", tags=['projects'], response_model=List[ProjectUserStatsModel])  # type: ignore
 def project_set_get_user_stats(ids: str,
                                current_user: int = Depends(get_current_user)) -> List[ProjectUserStats]:
     """
@@ -496,18 +496,21 @@ def update_project(project_id: int,
         Note that some fields will NOT be updated and simply ignored, e.g. *free_cols.
     """
     sce = ProjectsService()
+
     with RightsThrower(sce):
         present_project: ProjectBO = sce.query(current_user, project_id, for_managing=True)
-    # noinspection PyUnresolvedReferences
-    present_project.update(session=sce.session,
-                           title=project.title, visible=project.visible, status=project.status,
-                           projtype=project.projtype,
-                           init_classif_list=project.init_classif_list,
-                           classiffieldlist=project.classiffieldlist, popoverfieldlist=project.popoverfieldlist,
-                           cnn_network_id=project.cnn_network_id, comments=project.comments,
-                           contact=project.contact,
-                           managers=project.managers, annotators=project.annotators, viewers=project.viewers,
-                           license_=project.license)
+
+    with ValidityThrower():
+        # noinspection PyUnresolvedReferences
+        present_project.update(session=sce.session,
+                               title=project.title, visible=project.visible, status=project.status,
+                               projtype=project.projtype,
+                               init_classif_list=project.init_classif_list,
+                               classiffieldlist=project.classiffieldlist, popoverfieldlist=project.popoverfieldlist,
+                               cnn_network_id=project.cnn_network_id, comments=project.comments,
+                               contact=project.contact,
+                               managers=project.managers, annotators=project.annotators, viewers=project.viewers,
+                               license_=project.license)
 
 
 # ######################## END OF PROJECT
@@ -827,6 +830,7 @@ def object_query_history(object_id: int,
         raise HTTPException(status_code=404, detail="Object not found")
     return ret
 
+
 # ######################## END OF OBJECT
 
 
@@ -872,6 +876,7 @@ async def query_root_taxa() \
     sce = TaxonomyService()
     ret = sce.query_roots()
     return ret
+
 
 @app.get("/taxon/{taxon_id}", tags=['Taxonomy Tree'], response_model=TaxonModel)
 async def query_taxa(taxon_id: int,

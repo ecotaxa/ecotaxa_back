@@ -1,8 +1,9 @@
 import logging
+from copy import deepcopy
 
 from starlette import status
 
-from tests.credentials import ADMIN_AUTH
+from tests.credentials import ADMIN_AUTH, ORDINARY_USER_USER_ID, ORDINARY_USER2_USER_ID
 from tests.test_fastapi import PROJECT_QUERY_URL
 
 PROJECT_UPDATE_URL = "/projects/{project_id}"
@@ -163,20 +164,18 @@ def test_update_prj(config, database, fastapi, caplog):
     read_json = rsp.json()
     assert read_json == ref_json
 
-    contact_usr = read_json["managers"][0]
+    upd_json = deepcopy(read_json)
+    contact_usr = upd_json["managers"][0]
     # Attempt to reproduce ecotaxa/ecotaxa_dev#596
     del contact_usr['usercreationdate']
     contact_usr['usercreationdate'] = None
     del contact_usr['usercreationreason']
 
-    # TODO
-    #del contact_usr['email']
-
     url = PROJECT_UPDATE_URL.format(project_id=prj_id)
-    read_json["comments"] = "New comment"
-    read_json["contact"] = contact_usr
-    read_json["visible"] = False
-    rsp = fastapi.put(url, headers=ADMIN_AUTH, json=read_json)
+    upd_json["comments"] = "New comment"
+    upd_json["contact"] = contact_usr
+    upd_json["visible"] = False
+    rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
     assert rsp.status_code == status.HTTP_200_OK
 
     # Re-read
@@ -185,3 +184,22 @@ def test_update_prj(config, database, fastapi, caplog):
     assert rsp.json() != ref_json
     assert rsp.json()["comments"] == "New comment"
     assert rsp.json()["visible"] is False
+
+    # For ecotaxa/ecotaxa_dev#602
+    # Set no contact at all
+    no_contact_upd = deepcopy(read_json)
+    no_contact_upd["contact"] = None
+    url = PROJECT_UPDATE_URL.format(project_id=prj_id)
+    rsp = fastapi.put(url, headers=ADMIN_AUTH, json=no_contact_upd)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert rsp.text == '{"detail":"A valid Contact is needed."}'
+
+    # Set a contact with wrong id
+    wrong_contact_upd = deepcopy(read_json)
+    wrong_contact_upd["contact"] = {"id": ORDINARY_USER2_USER_ID,
+                                    "name": "name",
+                                    "email": "toto@titi.com"}
+    url = PROJECT_UPDATE_URL.format(project_id=prj_id)
+    rsp = fastapi.put(url, headers=ADMIN_AUTH, json=wrong_contact_upd)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert rsp.text == '{"detail":"Could not set Contact, the designated user is not in Managers list."}'

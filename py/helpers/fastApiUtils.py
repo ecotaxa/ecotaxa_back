@@ -144,6 +144,7 @@ class RightsThrower(object):
     """
         Transform any AssertionError, during exit block of "with" syntax, into an HTTP error.
     """
+
     def __init__(self, closable=None):
         self.closable = closable
 
@@ -161,6 +162,28 @@ class RightsThrower(object):
                         raise _forbidden_exception
                     elif exc_val.args[0] == "Not found":
                         raise _not_found_exception
+            # Re-raise
+            raise Exception(str(exc_val)).with_traceback(exc_tb)
+
+
+class ValidityThrower(object):
+    """
+        Transform any AssertionError, during exit block of "with" syntax,
+        into a HTTP 422 error.
+    """
+
+    def __init__(self):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type:
+            # An exception was thrown
+            if exc_type == AssertionError:
+                if exc_val.args:
+                    raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc_val.args[0])
             # Re-raise
             raise Exception(str(exc_val)).with_traceback(exc_tb)
 

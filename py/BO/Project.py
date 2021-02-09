@@ -119,7 +119,7 @@ class ProjectBO(object):
                contact: Any,
                managers: List[Any], annotators: List[Any], viewers: List[Any],
                license_: str):
-        assert contact is not None, 'A valid contact is needed'
+        assert contact is not None, "A valid Contact is needed."
         proj_id = self._project.projid
         # Field reflexes
         if cnn_network_id != self._project.cnn_network_id:
@@ -152,15 +152,20 @@ class ProjectBO(object):
         session.query(ProjectPrivilege). \
             filter(ProjectPrivilege.projid == proj_id).delete()
         # Add all
+        contact_used = False
         for a_right, a_user_list in by_right.items():
             for a_user in a_user_list:
                 # Set flag for contact person
-                # TODO: Check there was an extra and only one
-                extra = 'C' if a_user.id == contact.id and a_right == ProjectPrivilegeBO.MANAGE else None
+                extra = None
+                if a_user.id == contact.id and a_right == ProjectPrivilegeBO.MANAGE:
+                    extra = 'C'
+                    contact_used = True
                 session.add(ProjectPrivilege(projid=proj_id,
                                              member=a_user.id,
                                              privilege=a_right,
                                              extra=extra))
+        # Sanity check
+        assert contact_used, "Could not set Contact, the designated user is not in Managers list."
         session.commit()
 
     def __getattr__(self, item):
