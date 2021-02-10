@@ -2,6 +2,8 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from enum import Enum
+
 from sqlalchemy import Index, Column, ForeignKey, Sequence, CHAR
 from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, INTEGER, BYTEA
 # noinspection PyProtectedMember
@@ -53,6 +55,17 @@ class Image(Model):
 Index('is_imageobjrank', Image.__table__.c.objid, Image.__table__.c.imgrank, unique=True)
 # To track corresponding files
 Index('is_image_file', Image.__table__.c.file_name)
+
+
+class ImageFileStateEnum(Enum):
+    # Not known
+    UNKNOWN = "?"
+    # OK computed
+    OK = "O"
+    # Image referenced from DB but not in FS
+    MISSING = "M"
+    # There was an unexpected error trying to assert this image status
+    ERROR = "E"
 
 
 class ImageFile(Model):
