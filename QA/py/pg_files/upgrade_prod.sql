@@ -915,3 +915,24 @@ UPDATE alembic_version SET version_num='271c5fddefbf' WHERE alembic_version.vers
 
 COMMIT;
 
+-- Running upgrade 271c5fddefbf -> 21bb404620d5
+
+CREATE TABLE image_file (
+    path VARCHAR NOT NULL,
+    state CHAR DEFAULT '?' NOT NULL,
+    digest_type CHAR DEFAULT '?' NOT NULL,
+    digest BYTEA,
+    PRIMARY KEY (path)
+);
+
+CREATE INDEX is_phy_image_file ON image_file (digest_type, digest);
+
+CREATE INDEX is_image_file ON images (file_name);
+
+ALTER TABLE users ADD COLUMN mail_status CHAR DEFAULT ' ';
+
+ALTER TABLE users ADD COLUMN mail_status_date TIMESTAMP WITHOUT TIME ZONE;
+
+UPDATE alembic_version SET version_num='21bb404620d5' WHERE alembic_version.version_num = '271c5fddefbf';
+
+COMMIT;

@@ -2,13 +2,13 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from sqlalchemy import Index, Column, ForeignKey, Sequence
-from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, INTEGER
+from sqlalchemy import Index, Column, ForeignKey, Sequence, CHAR
+from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, INTEGER, BYTEA
 # noinspection PyProtectedMember
 from sqlalchemy.engine import ResultProxy
 from sqlalchemy.orm import Session
 
-from DB.helpers.ORM import Model
+from .helpers.ORM import Model
 
 
 # TODO: Why the ORM does not generate a DEFAULT?
@@ -51,3 +51,18 @@ class Image(Model):
 
 # Covering index with rank
 Index('is_imageobjrank', Image.__table__.c.objid, Image.__table__.c.imgrank, unique=True)
+# To track corresponding files
+Index('is_image_file', Image.__table__.c.file_name)
+
+
+class ImageFile(Model):
+    # An image on disk. Can be referenced (or not...) from the application
+    __tablename__ = 'image_file'
+    # Path inside the Vault
+    path = Column(VARCHAR, primary_key=True)
+    # State w/r to the application
+    state = Column(CHAR, default="?", server_default="?", nullable=False)
+    # What can be found in digest column
+    digest_type = Column(CHAR, default="?", server_default="?", nullable=False)
+    # A digital signature
+    digest = Column(BYTEA, nullable=True)

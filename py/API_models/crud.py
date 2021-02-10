@@ -26,7 +26,9 @@ FreeColT = Dict[str, str]
 
 # Direct mirror of DB models
 _UserModelFromDB = sqlalchemy_to_pydantic(User, exclude=[User.password.name,
-                                                         User.preferences.name])
+                                                         User.preferences.name,
+                                                         User.mail_status.name,
+                                                         User.mail_status_date.name])
 _ProjectModelFromDB: Type = sqlalchemy_to_pydantic(Project, exclude=[Project.mappingobj.name,
                                                                      Project.mappingacq.name,
                                                                      Project.mappingprocess.name,
@@ -264,7 +266,7 @@ class _AddedToCollection(BaseModel):
         What's added to Collection comparing to the plain DB record.
     """
     project_ids: List[int] = Field(title="The composing project IDs", min_items=1)
-    provider_user: Optional[UserModel] = Field(title="""Is the person Person who is responsible for the content of this metadata record. 
+    provider_user: Optional[UserModel] = Field(title="""Is the person who is responsible for the content of this metadata record. 
 Writer of the title and abstract.""")
     contact_user: Optional[UserModel] = Field(title="""Is the person who should be contacted in cases of questions regarding the
 content of the dataset or any data restrictions. This is also the person who is most likely to

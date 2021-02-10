@@ -5,7 +5,7 @@
 from typing import List
 
 from sqlalchemy import Column, ForeignKey, Sequence, Integer, String, Boolean, func
-from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.dialects.postgresql import TIMESTAMP, CHAR
 # noinspection PyProtectedMember
 from sqlalchemy.engine import ResultProxy
 from sqlalchemy.orm import Session, relationship
@@ -25,8 +25,14 @@ class User(Model):
 
     preferences = Column(String(40000))
     country = Column(String(50))
+
     usercreationdate = Column(TIMESTAMP, default=func.now())
     usercreationreason = Column(String(1000))
+
+    # Mail status: 'V' for verified, 'W' for wrong
+    mail_status = Column(CHAR, server_default=' ')
+    # Date the mail status was set
+    mail_status_date = Column(TIMESTAMP)
 
     # The relationships are created in Relations.py but the typing here helps the IDE
     roles: relationship
