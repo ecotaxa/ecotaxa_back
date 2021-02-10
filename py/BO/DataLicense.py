@@ -53,7 +53,18 @@ class DataLicense(object):
         # LicenseEnum.CC_BY_NC_ND: "https://creativecommons.org/licenses/by-nc-nd/4.0/",
         LicenseEnum.Copyright: r'<strong>Copyright</strong>: only contributors to this project have rights on this data. This prevents its distribution in any kind of database.',
         LicenseEnum.NO_LICENSE: "Not chosen",
-        }
+    }
+
+    EXPORT_EXPLANATIONS = {LicenseEnum.CC0: "https://creativecommons.org/publicdomain/zero/1.0/",
+                           LicenseEnum.CC_BY: "https://creativecommons.org/licenses/by/4.0/",
+                           # LicenseEnum.CC_BY_SA: "https://creativecommons.org/licenses/by-sa/4.0/",
+                           LicenseEnum.CC_BY_NC: "https://creativecommons.org/licenses/by-nc/4.0/",
+                           # LicenseEnum.CC_BY_NC_SA: "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+                           # LicenseEnum.CC_BY_ND: "https://creativecommons.org/licenses/by-nd/4.0/",
+                           # LicenseEnum.CC_BY_NC_ND: "https://creativecommons.org/licenses/by-nc-nd/4.0/",
+                           LicenseEnum.Copyright: "All rights reserved",
+                           LicenseEnum.NO_LICENSE: "Not chosen",
+                           }
 
     RESTRICTION = {LicenseEnum.CC0: 0,
                    LicenseEnum.CC_BY: 1,

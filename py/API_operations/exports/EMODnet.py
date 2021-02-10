@@ -4,7 +4,7 @@
 #
 import re
 from datetime import date
-from typing import Dict, List, Optional, Tuple, cast
+from typing import Dict, List, Optional, Tuple, cast, Set
 
 from API_models.exports import EMODnetExportRsp
 from BO.Acquisition import AcquisitionBO
@@ -48,14 +48,16 @@ class EMODnetExport(TaskServiceBase):
                 http://rshiny.lifewatch.be/BioCheck/
     """
 
-    def __init__(self, collection_id: CollectionIDT, dry_run: bool):
+    def __init__(self, collection_id: CollectionIDT, dry_run: bool, with_zeroes: bool):
         super().__init__(task_type="TaskExportTxt")
         # Input
         self.dry_run = dry_run
+        self.with_zeroes = with_zeroes
         self.collection = self.session.query(Collection).get(collection_id)
         assert self.collection is not None, "Invalid collection ID"
         # During processing
         self.mapping: Dict[ClassifIDT, WoRMS] = {}
+        self.taxa_per_sample: Dict[str, Set[ClassifIDT]] = {}
         # Output
         self.errors: List[str] = []
         self.warnings: List[str] = []
@@ -98,7 +100,12 @@ class EMODnetExport(TaskServiceBase):
         # But TODO: hardcoded, implement https://github.com/oceanomics/ecotaxa_dev/issues/514
         self.institution_code = "IMEV"
         self.add_events(arch)
-        # OK we issue warning in case of individual issue, but if no content at all
+        # Loop over _absent_ data
+        # For https://github.com/ecotaxa/ecotaxa_dev/issues/603
+        # Loop over taxa which are in the collection but not in present sample
+        if self.with_zeroes:
+            self.add_absent_occurrences(arch)
+        # OK we issue warning in case of individual issue, but if there is no content at all
         # then it's an error
         if arch.events.count() == 0 and arch.occurences.count() == 0 and arch.emofs.count() == 0:
             self.errors.append("No content produced."
@@ -112,6 +119,31 @@ class EMODnetExport(TaskServiceBase):
         if len(ret.errors) == 0:
             ret.task_id = self.task_id
         return ret
+
+    def add_absent_occurrences(self, arch):
+        """
+            Second pass, occurrence creations for absent taxa.
+        """
+        # Cumulate all categories
+        all_taxa: Set[ClassifIDT] = set()
+        for an_id_set in self.taxa_per_sample.values():
+            all_taxa.update(an_id_set)
+        # For what's missing, issue an 'absent' record
+        for an_event_id, an_id_set in self.taxa_per_sample.items():
+            missing_for_sample = all_taxa.difference(an_id_set)
+            for a_missing_id in missing_for_sample:
+                occurrence_id = an_event_id + "_" + str(a_missing_id)
+                # No need to catch any exception here, the lookup worked during the "present" record
+                # generation.
+                worms = self.mapping[a_missing_id]
+                occ = DwC_Occurrence(eventID=an_event_id,
+                                     occurrenceID=occurrence_id,
+                                     individualCount=0,
+                                     scientificName=worms.scientificname,
+                                     scientificNameID=worms.lsid,
+                                     occurrenceStatus=OccurrenceStatusEnum.absent,
+                                     basisOfRecord=BasisOfRecordEnum.machineObservation)
+                arch.occurences.add(occ)
 
     @staticmethod
     def organisation_to_eml_person(an_org):
@@ -261,7 +293,7 @@ class EMODnetExport(TaskServiceBase):
                 "Collection license should be one of %s to be accepted, not %s."
                 % (self.OK_LICENSES, coll_license))
         else:
-            lic_url = DataLicense.EXPLANATIONS[coll_license] + "legalcode"
+            lic_url = DataLicense.EXPORT_EXPLANATIONS[coll_license] + "legalcode"
             lic_txt = DataLicense.NAMES[coll_license]
             lic_txt = lic_txt.replace("International Public ", "")
             # ipt.gbif.org does not find the full license name, so adjust a bit
@@ -310,7 +342,7 @@ class EMODnetExport(TaskServiceBase):
 
     def get_taxo_coverage(self, project_ids: ProjectIDListT) -> List[EMLTaxonomicClassification]:
         """
-            Taxonomic coverage is the list of taxa which can be found in the project.
+            Taxonomic coverage is the list of taxa which can be found in the projects.
 
         """
         ret: List[EMLTaxonomicClassification] = []
@@ -447,8 +479,8 @@ class EMODnetExport(TaskServiceBase):
             tot_vol = -1
 
         # Proceed to data aggregation
-        concentration_per_taxon: Dict[int, float] = {}
-        count_per_taxon: Dict[int, int] = {}
+        concentration_per_taxon: Dict[ClassifIDT, float] = {}
+        count_per_taxon: Dict[ClassifIDT, int] = {}
 
         # Fetch calculation data at acquisition level
         acquis_for_sample = SampleBO.get_acquisitions(self.session, sample)
@@ -475,10 +507,13 @@ class EMODnetExport(TaskServiceBase):
 
         # To see
         # print()
-        print("Concentrations in sample '%s':%s" % (sample.orig_id, str(concentration_per_taxon)))
+        # print("Concentrations in sample '%s':%s" % (sample.orig_id, str(concentration_per_taxon)))
         nb_added_occurences = 0
         ids = list(concentration_per_taxon.keys())
         ids.sort(key=lambda i: concentration_per_taxon[i], reverse=True)
+        # Record production for this sample
+        self.taxa_per_sample[event_id] = set()
+        # Loop over _present_ taxa
         for an_id in ids:
             conc_per_taxon = concentration_per_taxon[an_id]
             # print("%s conc %f" % (worms.scientificname, conc_per_taxon))
@@ -502,8 +537,12 @@ class EMODnetExport(TaskServiceBase):
             arch.occurences.add(occ)
             nb_added_occurences += 1
             if conc_per_taxon > 0:
+                # So, if tot_vol == -1 or sub_part == 0, no concentration emitted
                 self.add_eMoFs_for_occurence(arch=arch, event_id=event_id, occurrence_id=occurrence_id,
                                              value=conc_per_taxon)
+            if self.with_zeroes:
+                # Record the production of an occurence 'present' for this taxon
+                self.taxa_per_sample[event_id].add(an_id)
         return tot_vol, nb_added_occurences
 
     @staticmethod

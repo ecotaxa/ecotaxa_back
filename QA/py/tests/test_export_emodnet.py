@@ -1,17 +1,21 @@
 import logging
 
 # noinspection PyPackageRequirements
+from io import BytesIO, StringIO
+from zipfile import ZipFile
+
 from starlette import status
 
 from API_operations.exports.EMODnet import EMODnetExport
 
 from tests.credentials import ADMIN_AUTH, CREATOR_USER_ID, REAL_USER_ID, ADMIN_USER_ID
+from tests.emodnet_ref import ref_zip, with_zeroes_zip
 from tests.test_collections import COLLECTION_CREATE_URL, COLLECTION_UPDATE_URL, COLLECTION_QUERY_URL
 from tests.test_fastapi import PROJECT_QUERY_URL
 from tests.test_update import ACQUISITION_SET_UPDATE_URL, SAMPLE_SET_UPDATE_URL
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
-COLLECTION_EXPORT_EMODNET_URL = "/collections/{collection_id}/export/emodnet?dry_run=False"
+COLLECTION_EXPORT_EMODNET_URL = "/collections/{collection_id}/export/emodnet?dry_run={dry}&with_zeroes={zeroes}"
 
 TASK_DOWNLOAD_URL = "/tasks/{task_id}/file"
 
@@ -44,7 +48,7 @@ def test_emodnet_export(config, database, fastapi, caplog):
 
     # Admin exports it
     # First attempt with LOTS of missing data
-    url = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id)
+    url = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=True)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json()["errors"] == ['No valid data creator (user or organisation) found for EML metadata.',
@@ -62,7 +66,7 @@ def test_emodnet_export(config, database, fastapi, caplog):
     url = PROJECT_UPDATE_URL.format(project_id=prj_id)
     prj_json["license"] = "CC BY 4.0"
     # And give a contact who is now mandatory
-    prj_json["contact"] = prj_json["managers"] [0]
+    prj_json["contact"] = prj_json["managers"][0]
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=prj_json)
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -93,11 +97,11 @@ This series is part of the long term planktonic monitoring of
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=the_coll)
     assert rsp.status_code == status.HTTP_200_OK
 
-    url = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id)
+    url = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=False)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     warns = rsp.json()["warnings"]
-    #assert warns == []
+    # assert warns == []
     assert rsp.json()["errors"] == []
     task_id = rsp.json()["task_id"]
 
@@ -109,9 +113,33 @@ This series is part of the long term planktonic monitoring of
     # But the creator can get it
     # rsp = fastapi.get(url, headers=REAL_USER_AUTH)
     # assert rsp.status_code == status.HTTP_200_OK
+
     # Admin can get it
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
+    unzip_and_check(rsp.content, ref_zip)
+
+    url_with_0s = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=True)
+    rsp = fastapi.get(url_with_0s, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    task_id = rsp.json()["task_id"]
+    dl_url = TASK_DOWNLOAD_URL.format(task_id=task_id)
+    rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
+    unzip_and_check(rsp.content, with_zeroes_zip)
+
+
+def unzip_and_check(zip_content, ref_content):
+    pseudo_file = BytesIO(zip_content)
+    zip = ZipFile(pseudo_file)
+    all_in_one = {}
+    for a_file in zip.filelist:
+        name = a_file.filename
+        with zip.open(name) as myfile:
+            content_bin = myfile.read()
+            file_content = content_bin.decode('utf-8')
+            # Add CRs before and after for readability of the py version
+            all_in_one[name] = "\n"+file_content+"\n"
+    assert all_in_one == ref_content
 
 
 def add_concentration_data(fastapi, prj_id):

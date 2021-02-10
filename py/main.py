@@ -259,16 +259,20 @@ def update_collection(collection_id: int,
 @app.get("/collections/{collection_id}/export/emodnet", tags=['collections'], response_model=EMODnetExportRsp)
 def emodnet_format_export(collection_id: int,
                           dry_run: bool,
+                          with_zeroes: bool,
                           current_user: int = Depends(get_current_user)) -> EMODnetExportRsp:
     """
         Export the collection in EMODnet format, @see https://www.emodnet-ingestion.eu/
         Produces a DwC-A archive into a temporary directory, ready for download.
         - param `dry_run`: If set, then only a diagnostic of doability will be done.
+        - param `with_zeroes`: If set, then *absent* records will be generated, in the relevant samples,
+         for categories present in other samples.
+
         Maybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html
 
         *Currently only for admins*
     """
-    sce = EMODnetExport(collection_id, dry_run)
+    sce = EMODnetExport(collection_id, dry_run, with_zeroes)
     with RightsThrower(sce):
         return sce.run(current_user)
 

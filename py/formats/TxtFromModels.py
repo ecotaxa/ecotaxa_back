@@ -25,7 +25,8 @@ class TxtFileWithModel(object):
         # All starts with "Dwc"
         self.model_name = model.__name__[3:]
         self.core_or_ext = "core" if self.model_name == "Event" else "extension"
-        self.namespace = "http://rs.iobis.org/obis/terms" if 'Measurement' in self.model_name \
+        self.namespace = "http://rs.iobis.org/obis/terms" \
+            if 'Measurement' in self.model_name \
             else "http://rs.tdwg.org/dwc/terms"
         self.fields: Set[str] = set()
         """ the set of fields for which we have at least one value """
