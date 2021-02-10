@@ -41,6 +41,7 @@ from API_operations.Status import StatusService
 from API_operations.Subset import SubsetServiceOnProject
 from API_operations.TaxoManager import TaxonomyChangeService
 from API_operations.TaxonomyService import TaxonomyService
+from API_operations.admin.ImageManager import ImageManagerService
 from API_operations.exports.EMODnet import EMODnetExport
 from API_operations.imports.Import import ImportAnalysis, RealImport
 from API_operations.imports.SimpleImport import SimpleImport
@@ -963,6 +964,35 @@ async def matching_with_worms_nice(request: Request,
                                       headers=CRSF_header)
 
 
+@app.get("/admin/images/{project_id}/digest", tags=['WIP'], include_in_schema=False,
+         response_model=str)
+def digest_project_images(project_id: int,
+                          max_digests: Optional[int],
+                          current_user: int = Depends(get_current_user)) -> str:
+    """
+        Compute digests for images referenced from a project.
+    """
+    max_digests = 1000 if max_digests is None else max_digests
+    sce = ImageManagerService()
+    with RightsThrower(sce):
+        data = sce.do_digests(current_user, project_id, max_digests)
+    return data
+
+
+@app.get("/admin/images/digest", tags=['WIP'], include_in_schema=False,
+         response_model=str)
+def digest_images(max_digests: Optional[int],
+                  current_user: int = Depends(get_current_user)) -> str:
+    """
+        Compute digests if they are not.
+    """
+    max_digests = 1000 if max_digests is None else max_digests
+    sce = ImageManagerService()
+    with RightsThrower(sce):
+        data = sce.do_digests(current_user, prj_id=None, max_digests=max_digests)
+    return data
+
+
 @app.get("/status", tags=['WIP'])
 def system_status(_current_user: int = Depends(get_current_user)) -> Response:
     """
@@ -1023,7 +1053,7 @@ def used_constants() -> Constants:
 # def load_test() -> Response:
 #     """
 #         Simulate load with various response time. The Service() gets a session from the DB pool.
-#         See if we just wait or fail to server:
+#         See if we just wait or fail to serve:
 #         httperf --server=localhost --port=8000 --uri=/loadtest --num-conns=1000 --num-calls=10
 #     """
 #     sce = StatusService()
