@@ -572,7 +572,7 @@
           "collections"
         ],
         "summary":"Emodnet Format Export",
-        "description":"Export the collection in EMODnet format, @see https://www.emodnet-ingestion.eu/\nProduces a DwC-A archive into a temporary directory, ready for download.\n- param `dry_run`: If set, then only a diagnostic of doability will be done.\nMaybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html\n\n*Currently only for admins*",
+        "description":"Export the collection in EMODnet format, @see https://www.emodnet-ingestion.eu/\nProduces a DwC-A archive into a temporary directory, ready for download.\n- param `dry_run`: If set, then only a diagnostic of doability will be done.\n- param `with_zeroes`: If set, then *absent* records will be generated, in the relevant samples,\n for categories present in other samples.\n\nMaybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html\n\n*Currently only for admins*",
         "operationId":"emodnet_format_export_collections__collection_id__export_emodnet_get",
         "parameters":[
           {
@@ -591,6 +591,15 @@
               "type":"boolean"
             },
             "name":"dry_run",
+            "in":"query"
+          },
+          {
+            "required":true,
+            "schema":{
+              "title":"With Zeroes",
+              "type":"boolean"
+            },
+            "name":"with_zeroes",
             "in":"query"
           }
         ],
@@ -2953,7 +2962,7 @@
             }
           },
           "provider_user":{
-            "title":"Is the person Person who is responsible for the content of this metadata record. \nWriter of the title and abstract.",
+            "title":"Is the person who is responsible for the content of this metadata record. \nWriter of the title and abstract.",
             "allOf":[
               {
                 "$ref":"#/components/schemas/UserModel"
