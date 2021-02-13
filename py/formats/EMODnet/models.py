@@ -54,7 +54,9 @@ class RecordTypeEnum(str, Enum):
 
 class DwcEvent(BaseModel):
     # Unicity
-    eventID: str = Field(term="http://rs.tdwg.org/dwc/terms/eventID", is_id=True)
+    eventID: str = Field(term="http://rs.tdwg.org/dwc/terms/eventID", is_id=True, dup_id=True)
+    # Record DwC field
+    type: RecordTypeEnum = Field(term="http://purl.org/dc/terms/type")
     parentEventID: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/parentEventID")
 
     institutionCode: str = Field(term="http://rs.tdwg.org/dwc/terms/institutionCode")
@@ -76,8 +78,7 @@ class DwcEvent(BaseModel):
     maximumDepthInMeters: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/maximumDepthInMeters")
     footprintWKT: Optional[str] = Field(term="http://purl.org/dc/terms/type")
 
-    # Record DwC fields
-    type: RecordTypeEnum = Field(term="http://purl.org/dc/terms/type")
+    # Record DwC field
     modified: Optional[str] = Field(term="http://purl.org/dc/terms/modified")
 
 
@@ -100,8 +101,11 @@ class OccurrenceStatusEnum(str, Enum):
 
 class DwcOccurrence(BaseModel):
     # Unicity
-    eventID: str = Field(term="http://rs.tdwg.org/dwc/terms/eventID", is_id=True)
+    eventID: str = Field(term="http://rs.tdwg.org/dwc/terms/eventID", is_id=True, dup_id=True)
     occurrenceID: str = Field(term="http://rs.tdwg.org/dwc/terms/occurrenceID")
+
+    # Record-level fields
+    basisOfRecord: BasisOfRecordEnum = Field(term="http://rs.tdwg.org/dwc/terms/basisOfRecord")
 
     # Identification fields
     scientificName: str = Field(term="http://rs.tdwg.org/dwc/terms/scientificName")
@@ -119,8 +123,6 @@ class DwcOccurrence(BaseModel):
     # Occurrence fields
     occurrenceStatus: OccurrenceStatusEnum = Field(term="http://rs.tdwg.org/dwc/terms/occurrenceStatus")
 
-    # Record-level fields
-    basisOfRecord: BasisOfRecordEnum = Field(term="http://rs.tdwg.org/dwc/terms/basisOfRecord")
     # For museum
     collectionCode: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/collectionCode")
     catalogNumber: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/catalogNumber")
@@ -140,9 +142,10 @@ class DwcExtendedMeasurementOrFact(BaseModel):
         In case of doubt, eMoF table is better as more precise.
         E.g. prefer eMoF for samplingProtocol rather than DwC field.
     """
-    # Unicity
-    eventID: str = Field(term="http://rs.tdwg.org/dwc/terms/eventID", is_id=True)
-    # If related to the whole event, occurrenceID must not be present
+    # Unicity is determined by the eventID alone if the EMOF is related to
+    # the whole event, or by the pair (eventID, occurrenceID) if related to an occurence, so...
+    eventID: str = Field(term="http://rs.tdwg.org/dwc/terms/eventID", is_id=True, dup_id=False)
+    # ...if related to the whole event, occurrenceID must not be present
     occurrenceID: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/occurrenceID")
 
     # Note: although measurementType, measurementValue and measurementUnit are free text fields,

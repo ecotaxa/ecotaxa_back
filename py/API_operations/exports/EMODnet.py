@@ -2,6 +2,10 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+# Useful links:
+#   - https://github.com/EMODnet/EMODnetBiocheck for doing quality control of DwCA archives
+#
+
 import re
 from datetime import date
 from typing import Dict, List, Optional, Tuple, cast, Set
@@ -467,6 +471,7 @@ class EMODnetExport(TaskServiceBase):
             self.warnings.append("Could not extract tot_vol feature from sample %s,"
                                  " no concentration will be computed." % sample.orig_id)
             tot_vol = -1
+        # TODO: If NaN ?
         try:
             tot_vol = float(tot_vol)
         except ValueError:
@@ -498,6 +503,7 @@ class EMODnetExport(TaskServiceBase):
                                      " no concentration will be computed" % (sub_part, an_acquis.orig_id))
                 sub_part = 0
 
+            # See #520 ->
             # Get counts for acquisition (sub-sample)
             count_per_taxon_for_acquis = AcquisitionBO.get_sums_by_taxon(self.session, an_acquis.acquisid)
             for an_id, count_4_acquis in count_per_taxon_for_acquis.items():
