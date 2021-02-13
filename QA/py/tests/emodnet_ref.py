@@ -41,7 +41,7 @@ _eml = r"""
     </address>
     <electronicMailAddress>real@users.com</electronicMailAddress>
   </metadataProvider>
-  <pubDate>2021-02-10</pubDate>
+  <pubDate>2021-02-13</pubDate>
   <language>eng</language>
   <abstract>
     <para>
@@ -102,7 +102,7 @@ This series is part of the long term planktonic monitoring of
   </maintenance>
   <additionalMetadata>
     <metadata>
-      <dateStamp>2021-02-10</dateStamp>
+      <dateStamp>2021-02-13</dateStamp>
     </metadata>
   </additionalMetadata>
 </dataset>
@@ -119,15 +119,15 @@ _meta = r"""
       <location>event.txt</location>
     </files> 
     <id index="0"/>
-    <field index="0" term="http://rs.tdwg.org/dwc/terms/eventID"/>
-    <field index="1" term="http://rs.tdwg.org/dwc/terms/datasetName"/>
-    <field index="2" term="http://rs.tdwg.org/dwc/terms/decimalLatitude"/>
-    <field index="3" term="http://rs.tdwg.org/dwc/terms/decimalLongitude"/>
-    <field index="4" term="http://rs.tdwg.org/dwc/terms/eventDate"/>
-    <field index="5" term="http://rs.tdwg.org/dwc/terms/institutionCode"/>
-    <field index="6" term="http://rs.tdwg.org/dwc/terms/maximumDepthInMeters"/>
-    <field index="7" term="http://rs.tdwg.org/dwc/terms/minimumDepthInMeters"/>
-    <field index="8" term="http://purl.org/dc/terms/type"/>
+    <field index="1" term="http://rs.tdwg.org/dwc/terms/eventID"/>
+    <field index="2" term="http://purl.org/dc/terms/type"/>
+    <field index="3" term="http://rs.tdwg.org/dwc/terms/institutionCode"/>
+    <field index="4" term="http://rs.tdwg.org/dwc/terms/datasetName"/>
+    <field index="5" term="http://rs.tdwg.org/dwc/terms/eventDate"/>
+    <field index="6" term="http://rs.tdwg.org/dwc/terms/decimalLatitude"/>
+    <field index="7" term="http://rs.tdwg.org/dwc/terms/decimalLongitude"/>
+    <field index="8" term="http://rs.tdwg.org/dwc/terms/minimumDepthInMeters"/>
+    <field index="9" term="http://rs.tdwg.org/dwc/terms/maximumDepthInMeters"/>
   </core>
 
   <extension encoding="UTF-8" fieldsTerminatedBy="\t" linesTerminatedBy="\n" fieldsEnclosedBy="" 
@@ -136,12 +136,13 @@ _meta = r"""
       <location>occurrence.txt</location>
     </files> 
     <coreid index="0"/>
-    <field index="1" term="http://rs.tdwg.org/dwc/terms/basisOfRecord"/>
-    <field index="2" term="http://rs.tdwg.org/dwc/terms/individualCount"/>
-    <field index="3" term="http://rs.tdwg.org/dwc/terms/occurrenceID"/>
-    <field index="4" term="http://rs.tdwg.org/dwc/terms/occurrenceStatus"/>
-    <field index="5" term="http://rs.tdwg.org/dwc/terms/scientificName"/>
-    <field index="6" term="http://rs.tdwg.org/dwc/terms/scientificNameID"/>
+    <field index="1" term="http://rs.tdwg.org/dwc/terms/eventID"/>
+    <field index="2" term="http://rs.tdwg.org/dwc/terms/occurrenceID"/>
+    <field index="3" term="http://rs.tdwg.org/dwc/terms/basisOfRecord"/>
+    <field index="4" term="http://rs.tdwg.org/dwc/terms/scientificName"/>
+    <field index="5" term="http://rs.tdwg.org/dwc/terms/scientificNameID"/>
+    <field index="6" term="http://rs.tdwg.org/dwc/terms/individualCount"/>
+    <field index="7" term="http://rs.tdwg.org/dwc/terms/occurrenceStatus"/>
   </extension>
 
   <extension encoding="UTF-8" fieldsTerminatedBy="\t" linesTerminatedBy="\n" fieldsEnclosedBy="" 
@@ -150,36 +151,36 @@ _meta = r"""
       <location>extendedmeasurementorfact.txt</location>
     </files> 
     <coreid index="0"/>
-    <field index="1" term="http://rs.tdwg.org/dwc/terms/measurementType"/>
-    <field index="2" term="http://rs.iobis.org/obis/terms/measurementTypeID"/>
-    <field index="3" term="http://rs.tdwg.org/dwc/terms/measurementUnit"/>
-    <field index="4" term="http://rs.iobis.org/obis/terms/measurementUnitID"/>
-    <field index="5" term="http://rs.tdwg.org/dwc/terms/measurementValue"/>
-    <field index="6" term="http://rs.tdwg.org/dwc/terms/occurrenceID"/>
+    <field index="1" term="http://rs.tdwg.org/dwc/terms/occurrenceID"/>
+    <field index="2" term="http://rs.tdwg.org/dwc/terms/measurementValue"/>
+    <field index="3" term="http://rs.tdwg.org/dwc/terms/measurementType"/>
+    <field index="4" term="http://rs.tdwg.org/dwc/terms/measurementUnit"/>
+    <field index="5" term="http://rs.iobis.org/obis/terms/measurementTypeID"/>
+    <field index="6" term="http://rs.iobis.org/obis/terms/measurementUnitID"/>
   </extension>
 </archive>
 
 """
 _event = r"""
-eventID	datasetName	decimalLatitude	decimalLongitude	eventDate	institutionCode	maximumDepthInMeters	minimumDepthInMeters	type
-m106_mn01_n1_sml	EMODNET test collection	18.000000	-24.416667	2014-04-20T04:20:00Z	IMEV	1000.0	600.0	sample
-m106_mn01_n2_sml	EMODNET test collection	18.000000	-24.416667	2014-04-20T04:20:00Z	IMEV	600.0	300.0	sample
-m106_mn01_n3_sml	EMODNET test collection	18.000000	-24.416667	2014-04-20T04:20:00Z/2014-04-21T04:20:00Z	IMEV	600.0	300.0	sample
+id	eventID	type	institutionCode	datasetName	eventDate	decimalLatitude	decimalLongitude	minimumDepthInMeters	maximumDepthInMeters
+m106_mn01_n1_sml	m106_mn01_n1_sml	sample	IMEV	EMODNET test collection	2014-04-20T04:20:00Z	18.000000	-24.416667	600.0	1000.0
+m106_mn01_n2_sml	m106_mn01_n2_sml	sample	IMEV	EMODNET test collection	2014-04-20T04:20:00Z	18.000000	-24.416667	300.0	600.0
+m106_mn01_n3_sml	m106_mn01_n3_sml	sample	IMEV	EMODNET test collection	2014-04-20T04:20:00Z/2014-04-21T04:20:00Z	18.000000	-24.416667	300.0	600.0
 """
 _occurence = r"""
-eventID	basisOfRecord	individualCount	occurrenceID	occurrenceStatus	scientificName	scientificNameID
-m106_mn01_n1_sml	machineObservation	2	m106_mn01_n1_sml_78418	present	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586
-m106_mn01_n1_sml	machineObservation	1	m106_mn01_n1_sml_45072	present	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101
+id	eventID	occurrenceID	basisOfRecord	scientificName	scientificNameID	individualCount	occurrenceStatus
+m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_78418	machineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	2	present
+m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_45072	machineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	1	present
 """
-_occurence_with_absent = r"""m106_mn01_n2_sml	machineObservation	0	m106_mn01_n2_sml_45072	absent	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101
-m106_mn01_n2_sml	machineObservation	0	m106_mn01_n2_sml_78418	absent	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586
-m106_mn01_n3_sml	machineObservation	0	m106_mn01_n3_sml_45072	absent	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101
-m106_mn01_n3_sml	machineObservation	0	m106_mn01_n3_sml_78418	absent	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586
+_occurence_with_absent = r"""m106_mn01_n2_sml	m106_mn01_n2_sml	m106_mn01_n2_sml_45072	machineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	0	absent
+m106_mn01_n2_sml	m106_mn01_n2_sml	m106_mn01_n2_sml_78418	machineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	0	absent
+m106_mn01_n3_sml	m106_mn01_n3_sml	m106_mn01_n3_sml_45072	machineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	0	absent
+m106_mn01_n3_sml	m106_mn01_n3_sml	m106_mn01_n3_sml_78418	machineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	0	absent
 """
 _emofs = r"""
-eventID	measurementType	measurementTypeID	measurementUnit	measurementUnitID	measurementValue	occurrenceID
-m106_mn01_n1_sml	Abundance of biological entity specified elsewhere per unit volume of the water body	http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	Number per cubic metre	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/	0.01	m106_mn01_n1_sml_78418
-m106_mn01_n1_sml	Abundance of biological entity specified elsewhere per unit volume of the water body	http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	Number per cubic metre	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/	0.005	m106_mn01_n1_sml_45072
+id	occurrenceID	measurementValue	measurementType	measurementUnit	measurementTypeID	measurementUnitID
+m106_mn01_n1_sml	m106_mn01_n1_sml_78418	0.01	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
+m106_mn01_n1_sml	m106_mn01_n1_sml_45072	0.005	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
 """
 ref_zip = {"event.txt": _event,
            "eml.xml": _eml,
