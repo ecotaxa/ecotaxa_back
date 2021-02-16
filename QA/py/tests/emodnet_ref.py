@@ -142,7 +142,8 @@ _meta = r"""
     <field index="4" term="http://rs.tdwg.org/dwc/terms/scientificName"/>
     <field index="5" term="http://rs.tdwg.org/dwc/terms/scientificNameID"/>
     <field index="6" term="http://rs.tdwg.org/dwc/terms/individualCount"/>
-    <field index="7" term="http://rs.tdwg.org/dwc/terms/occurrenceStatus"/>
+    <field index="7" term="http://rs.tdwg.org/dwc/terms/kingdom"/>
+    <field index="8" term="http://rs.tdwg.org/dwc/terms/occurrenceStatus"/>
   </extension>
 
   <extension encoding="UTF-8" fieldsTerminatedBy="\t" linesTerminatedBy="\n" fieldsEnclosedBy="" 
@@ -168,20 +169,24 @@ m106_mn01_n2_sml	m106_mn01_n2_sml	sample	IMEV	EMODNET test collection	2014-04-20
 m106_mn01_n3_sml	m106_mn01_n3_sml	sample	IMEV	EMODNET test collection	2014-04-20T04:20:00Z/2014-04-21T04:20:00Z	18.000000	-24.416667	300.0	600.0
 """
 _occurence = r"""
-id	eventID	occurrenceID	basisOfRecord	scientificName	scientificNameID	individualCount	occurrenceStatus
-m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_78418	machineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	2	present
-m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_45072	machineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	1	present
+id	eventID	occurrenceID	basisOfRecord	scientificName	scientificNameID	individualCount	kingdom	occurrenceStatus
+m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_78418	machineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	2	Animalia	present
+m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_45072	machineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	1	Animalia	present
 """
-_occurence_with_absent = r"""m106_mn01_n2_sml	m106_mn01_n2_sml	m106_mn01_n2_sml_45072	machineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	0	absent
-m106_mn01_n2_sml	m106_mn01_n2_sml	m106_mn01_n2_sml_78418	machineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	0	absent
-m106_mn01_n3_sml	m106_mn01_n3_sml	m106_mn01_n3_sml_45072	machineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	0	absent
-m106_mn01_n3_sml	m106_mn01_n3_sml	m106_mn01_n3_sml_78418	machineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	0	absent
+_occurence_with_absent = r"""m106_mn01_n2_sml	m106_mn01_n2_sml	m106_mn01_n2_sml_45072	machineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	0	Animalia	absent
+m106_mn01_n2_sml	m106_mn01_n2_sml	m106_mn01_n2_sml_78418	machineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	0	Animalia	absent
+m106_mn01_n3_sml	m106_mn01_n3_sml	m106_mn01_n3_sml_45072	machineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	0	Animalia	absent
+m106_mn01_n3_sml	m106_mn01_n3_sml	m106_mn01_n3_sml_78418	machineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	0	Animalia	absent
 """
 _emofs = r"""
 id	occurrenceID	measurementValue	measurementType	measurementUnit	measurementTypeID	measurementUnitID
 m106_mn01_n1_sml	m106_mn01_n1_sml_78418	0.01	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
 m106_mn01_n1_sml	m106_mn01_n1_sml_45072	0.005	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
 """
+# Adjust date to today
+from datetime import date
+today = date.today()
+_eml = _eml.replace("2021-02-13", today.strftime("%Y-%m-%d"))
 ref_zip = {"event.txt": _event,
            "eml.xml": _eml,
            "extendedmeasurementorfact.txt": _emofs,

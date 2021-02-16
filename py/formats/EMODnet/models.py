@@ -116,6 +116,8 @@ class DwcOccurrence(BaseModel):
     individualCount: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/individualCount")
 
     # Taxon fields
+    # Even if the LSID is not ambiguous from marinespecies.org, the GBIF backbone mixes several
+    # sources of taxonomy so setting the below helps in solving ambiguities.
     kingdom: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/kingdom")
     taxonRank: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/taxonRank")
     scientificNameAuthorship: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/scientificNameAuthorship")

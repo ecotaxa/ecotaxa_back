@@ -145,6 +145,7 @@ class EMODnetExport(TaskServiceBase):
                                      individualCount=0,
                                      scientificName=worms.scientificname,
                                      scientificNameID=worms.lsid,
+                                     kingdom=worms.kingdom,
                                      occurrenceStatus=OccurrenceStatusEnum.absent,
                                      basisOfRecord=BasisOfRecordEnum.machineObservation)
                 arch.occurences.add(occ)
@@ -538,6 +539,7 @@ class EMODnetExport(TaskServiceBase):
                                  individualCount=individual_count,
                                  scientificName=worms.scientificname,
                                  scientificNameID=worms.lsid,
+                                 kingdom=worms.kingdom,
                                  occurrenceStatus=OccurrenceStatusEnum.present,
                                  basisOfRecord=BasisOfRecordEnum.machineObservation)
             arch.occurences.add(occ)
