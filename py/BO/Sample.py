@@ -30,6 +30,9 @@ class SampleBO(MappedEntity):
         A Sample.
     """
     FREE_COLUMNS_ATTRIBUTE = 'sample'
+    PROJECT_ACCESSOR = lambda sam: sam.project
+    MAPPING_IN_PROJECT= 'sample_mappings'
+
 
     def __init__(self, session: Session, sample_id: SampleIDT):
         super().__init__(session)
@@ -39,16 +42,6 @@ class SampleBO(MappedEntity):
         """ Fallback for 'not found' field after the C getattr() call.
             If we did not enrich a Sample field somehow then return it """
         return getattr(self.sample, item)
-
-    @classmethod
-    def get_free_fields(cls, sample: Sample, fields_list: List[str]) -> List[Any]:
-        """ Get free fields _value_ for the sample. """
-        # noinspection PyTypeChecker
-        mapping = ProjectMapping().load_from_project(sample.project)
-        real_cols = mapping.sample_mappings.find_tsv_cols(fields_list)
-        if len(real_cols) != len(fields_list):
-            raise TypeError("free column not found")
-        return [getattr(sample, real_col) for real_col in real_cols]
 
     @classmethod
     def get_acquisitions(cls, session: Session, sample: Sample) -> List[Acquisition]:

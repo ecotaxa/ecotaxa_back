@@ -30,6 +30,8 @@ class AcquisitionBO(MappedEntity):
         An Acquisition.
     """
     FREE_COLUMNS_ATTRIBUTE = 'acquis'
+    PROJECT_ACCESSOR = lambda acq: acq.sample.project
+    MAPPING_IN_PROJECT = 'acquisition_mappings'
 
     def __init__(self, session: Session, acquisition_id: AcquisitionIDT):
         super().__init__(session)
@@ -39,15 +41,6 @@ class AcquisitionBO(MappedEntity):
         """ Fallback for 'not found' field after the C getattr() call.
             If we did not enrich a Sample field somehow then return it """
         return getattr(self.acquis, item)
-
-    @classmethod
-    def get_free_fields(cls, acquis: Acquisition, fields_list: List[str]) -> List[Any]:
-        """ Get free fields _value_ for the acquisition. """
-        mapping = ProjectMapping().load_from_project(acquis.sample.project)
-        real_cols = mapping.acquisition_mappings.find_tsv_cols(fields_list)
-        if len(real_cols) != len(fields_list):
-            raise TypeError("free column not found")
-        return [getattr(acquis, real_col) for real_col in real_cols]
 
     @classmethod
     def get_sums_by_taxon(cls, session: Session, acquis_id: AcquisitionIDT) \

@@ -5,10 +5,15 @@
 # Useful links:
 #   - https://github.com/EMODnet/EMODnetBiocheck for doing quality control of DwCA archives
 #
-
+# GBIF validator:
+#      ../../DwCA/gbif-data-validator/validator-ws/run-prod coll_6512_export.zip
+# EMODnet QC source code:
+#      https://github.com/EMODnet/EMODnetBiocheck
 import re
 from datetime import date
 from typing import Dict, List, Optional, Tuple, cast, Set
+
+from dataclasses import dataclass
 
 from API_models.exports import EMODnetExportRsp
 from BO.Acquisition import AcquisitionBO
@@ -26,8 +31,8 @@ from DB.helpers.ORM import Query
 from DB.helpers.Postgres import timestamp_to_str
 from formats.EMODnet.Archive import DwC_Archive
 from formats.EMODnet.DatasetMeta import DatasetMetadata
-from formats.EMODnet.MoF import SamplingInstrumentName, \
-    SamplingNetMeshSizeInMicrons, SampleDeviceApertureAreaInSquareMeters, AbundancePerUnitVolumeOfTheWaterBody, \
+from formats.EMODnet.MoF import SamplingNetMeshSizeInMicrons, SampleDeviceApertureAreaInSquareMeters, \
+    AbundancePerUnitVolumeOfTheWaterBody, \
     SampleVolumeInCubicMeters
 from formats.EMODnet.models import DwC_Event, RecordTypeEnum, DwC_Occurrence, OccurrenceStatusEnum, \
     BasisOfRecordEnum, EMLGeoCoverage, EMLTemporalCoverage, EMLMeta, EMLTitle, EMLPerson, EMLKeywordSet, \
@@ -128,17 +133,14 @@ class EMODnetExport(TaskServiceBase):
         """
             Second pass, occurrence creations for absent taxa.
         """
-        # Cumulate all categories
-        all_taxa: Set[ClassifIDT] = set()
-        for an_id_set in self.taxa_per_sample.values():
-            all_taxa.update(an_id_set)
+        all_taxa = self.compute_all_seen_taxa()
         # For what's missing, issue an 'absent' record
         for an_event_id, an_id_set in self.taxa_per_sample.items():
             missing_for_sample = all_taxa.difference(an_id_set)
             for a_missing_id in missing_for_sample:
                 occurrence_id = an_event_id + "_" + str(a_missing_id)
-                # No need to catch any exception here, the lookup worked during the "present" record
-                # generation.
+                # No need to catch any exception here, the lookup worked during the
+                # "present" records generation.
                 worms = self.mapping[a_missing_id]
                 occ = DwC_Occurrence(eventID=an_event_id,
                                      occurrenceID=occurrence_id,
@@ -149,6 +151,13 @@ class EMODnetExport(TaskServiceBase):
                                      occurrenceStatus=OccurrenceStatusEnum.absent,
                                      basisOfRecord=BasisOfRecordEnum.machineObservation)
                 arch.occurences.add(occ)
+
+    def compute_all_seen_taxa(self):
+        # Cumulate all categories
+        all_taxa: Set[ClassifIDT] = set()
+        for an_id_set in self.taxa_per_sample.values():
+            all_taxa.update(an_id_set)
+        return all_taxa
 
     @staticmethod
     def organisation_to_eml_person(an_org):
@@ -415,117 +424,151 @@ class EMODnetExport(TaskServiceBase):
                                 maximumDepthInMeters=str(summ[3])
                                 )
                 events.add(evt)
-                sample_volume, added = self.add_occurences(sample=a_sample, arch=arch, event_id=event_id)
-                if sample_volume > 0:
-                    self.add_eMoFs_for_sample(sample=a_sample, arch=arch, event_id=event_id,
-                                              sample_volume=sample_volume)
-                if added == 0:
+                nb_added = self.add_occurences(sample=a_sample, arch=arch, event_id=event_id)
+                self.add_eMoFs_for_sample(sample=a_sample, arch=arch, event_id=event_id)
+                if nb_added == 0:
                     self.warnings.append("No occurence added for sample '%s'" % a_sample.orig_id)
 
     # noinspection PyPep8Naming
-    def add_eMoFs_for_sample(self, sample: Sample, arch: DwC_Archive, event_id: str, sample_volume: float):
+    def add_eMoFs_for_sample(self, sample: Sample, arch: DwC_Archive, event_id: str):
         """
             Add eMoF instances, for given sample, i.e. event, into the archive.
         """
         # emof = SamplingSpeed(event_id, "2")
         # arch.emofs.add(emof)
-
-        # Get the net & its features from the sample
-        # e.g. net_type	bongo 	net_mesh	300 	net_surf 	0.283
         try:
-            net_type, net_mesh, net_surf = SampleBO.get_free_fields(sample, ["net_type", "net_mesh", "net_surf"])
-        except TypeError:
-            self.warnings.append("Could not extract sampling net features from sample %s."
-                                 " 'net_type, net_mesh, net_surf' are all 3 expected to be present" % sample.orig_id)
-            return
-        if net_type == "bongo":
-            # TODO: There could be more specific, a dozen of bongos are there:
-            #  http://vocab.nerc.ac.uk/collection/L22/current/
-            ins = SamplingInstrumentName(event_id, "Bongo net",
-                                         "http://vocab.nerc.ac.uk/collection/L22/current/NETT0176/")
-            arch.emofs.add(ins)
-        elif net_type == "multinet":
-            # Not the right one if aperture != 1m
-            # ins = SamplingInstrumentName(event_id, "Hyrdo-Bios MultiNet Mammoth",
-            #                              "http://vocab.nerc.ac.uk/collection/L22/current/NETT0187/")
-            # arch.emofs.add(ins)
-            ins = SamplingInstrumentName(event_id, "multinet",
-                                         "http://vocab.nerc.ac.uk/collection/L05/current/68/")
-            arch.emofs.add(ins)
+            sample_volume, = SampleBO.get_free_fields(sample, ["tot_vol"], [float], [999999])
+        except TypeError as e:
+            pass
         else:
-            self.warnings.append("Net type '%s' in sample %s is not mapped to BODC vocabulary"
-                                 % (net_type, sample.orig_id))
-            return
-        arch.emofs.add(SamplingNetMeshSizeInMicrons(event_id, str(net_mesh)))
-        arch.emofs.add(SampleDeviceApertureAreaInSquareMeters(event_id, str(net_surf)))
-        # Water volume
-        arch.emofs.add(SampleVolumeInCubicMeters(event_id, str(sample_volume)))
+            # Add sampled water volume
+            if sample_volume > 0:
+                arch.emofs.add(SampleVolumeInCubicMeters(event_id, str(sample_volume)))
 
-    def add_occurences(self, sample: Sample, arch: DwC_Archive, event_id: str) -> Tuple[float, int]:
+        # Get the net features from the sample
+        try:
+            net_mesh, net_surf = SampleBO.get_free_fields(sample, ["net_mesh", "net_surf"],
+                                                          [float, float],
+                                                          [-1, -1])
+        except TypeError as e:
+            self.warnings.append("Could not extract sampling net features from sample %s (%s)."
+                                 % (sample.orig_id, str(e)))
+        else:
+            arch.emofs.add(SamplingNetMeshSizeInMicrons(event_id, str(net_mesh)))
+            arch.emofs.add(SampleDeviceApertureAreaInSquareMeters(event_id, str(net_surf)))
+
+        # Get the net type from the sample
+        # e.g. net_type	bongo
+        # TODO: Not normalized yet, so better output nothing than misleading information
+        # try:
+        #     net_type, = SampleBO.get_free_fields(sample, ["net_type"],
+        #                                          [str],
+        #                                          [""])
+        # except TypeError:
+        #     self.warnings.append("Could not extract sampling net name from sample %s." % sample.orig_id)
+        # else:
+        #     if net_type == "bongo":
+        #         # TODO: There could be more specific, a dozen of bongos are there:
+        #         #  http://vocab.nerc.ac.uk/collection/L22/current/
+        #         ins = SamplingInstrumentName(event_id, "Bongo net",
+        #                                      "http://vocab.nerc.ac.uk/collection/L22/current/NETT0176/")
+        #         arch.emofs.add(ins)
+        #     elif net_type == "multinet":
+        #         # Not the right one if aperture != 1m
+        #         # ins = SamplingInstrumentName(event_id, "Hyrdo-Bios MultiNet Mammoth",
+        #         #                              "http://vocab.nerc.ac.uk/collection/L22/current/NETT0187/")
+        #         # arch.emofs.add(ins)
+        #         ins = SamplingInstrumentName(event_id, "multinet",
+        #                                      "http://vocab.nerc.ac.uk/collection/L05/current/68/")
+        #         arch.emofs.add(ins)
+        #     else:
+        #         self.warnings.append("Net type '%s' in sample %s is not mapped to BODC vocabulary"
+        #                              % (net_type, sample.orig_id))
+
+    # Simplest structure with literal names. No bloody dict.
+    @dataclass()
+    class AggregForTaxon:
+        abundance: int
+        concentration: Optional[float]
+        biovolume: Optional[float]
+
+    def aggregate_for_sample(self, sample: Sample) -> Dict[ClassifIDT, AggregForTaxon]:
+        """
+            Do the aggregations for the sample for each taxon and return them, they will become emofs
+                - 'Abundance' -> CountOfBiologicalEntity -> count of objects group by taxon
+                - 'Concentration' -> AbundancePerUnitVolumeOfTheWaterBody
+                    -> sum(individual_concentration) group by taxon
+                        with individual_concentration = 1 / subsample_coef / total_water_volume
+                - 'Biovolume' -> BiovolumeOfBiologicalEntity -> sum(individual_biovolume) group by taxon
+                    with individual_biovolume = individual_volume / subsample_coef / total_water_volume
+            The abundance can always be computed. The 2 other ones depend on availability of values
+            for the project.
+        """
+        ret: Dict[ClassifIDT, EMODnetExport.AggregForTaxon] = {}
+
+        # Start with abundances, simple count and giving its keys to the returned dict.
+        acquis_for_sample = SampleBO.get_acquisitions(self.session, sample)
+        for an_acquis in acquis_for_sample:
+            # Get counts for acquisition (subsample)
+            count_per_taxon_for_acquis = AcquisitionBO.get_sums_by_taxon(self.session, an_acquis.acquisid)
+            for an_id, count_4_acquis in count_per_taxon_for_acquis.items():
+                aggreg_for_taxon = ret.get(an_id)
+                if aggreg_for_taxon is None:
+                    ret[an_id] = self.AggregForTaxon(count_4_acquis, None, None)
+                else:
+                    aggreg_for_taxon.abundance += count_4_acquis
+
+        # Enrich with concentrations
+        # Fetch calculation data at sample level
+        try:
+            tot_vol, = SampleBO.get_free_fields(sample, ["tot_vol"], [float], [999999])
+        except TypeError as e:
+            self.warnings.append("Could not extract tot_vol feature from sample %s (%s),"
+                                 " no concentration will be computed." % (sample.orig_id, str(e)))
+            tot_vol = -1
+        if tot_vol > 0:
+            # Cumulate for subsamples AKA acquisitions
+            for an_acquis in acquis_for_sample:
+                try:
+                    sub_part, = AcquisitionBO.get_free_fields(an_acquis, ["sub_part"],
+                                                              [float], [None])
+                except TypeError as e:
+                    self.warnings.append("Could not extract sub_part feature from acquisition %s (%s),"
+                                         " no concentration will be computed" % (an_acquis.orig_id, str(e)))
+                    continue
+                # Get counts for acquisition (sub-sample)
+                # TODO: Same call as just above
+                count_per_taxon_for_acquis = AcquisitionBO.get_sums_by_taxon(self.session, an_acquis.acquisid)
+                for an_id, count_4_acquis in count_per_taxon_for_acquis.items():
+                    aggreg_for_taxon = ret[an_id]
+                    concentration_for_taxon = count_4_acquis * sub_part / tot_vol
+                    if aggreg_for_taxon.concentration is None:
+                        aggreg_for_taxon.concentration = 0
+                    aggreg_for_taxon.concentration += concentration_for_taxon
+
+        return ret
+
+    def add_occurences(self, sample: Sample, arch: DwC_Archive, event_id: str) -> int:
         """
             Add DwC occurences, for given sample, into the archive.
         """
-        # Fetch calculation data at sample level
-        try:
-            tot_vol, = SampleBO.get_free_fields(sample, ["tot_vol"])
-        except TypeError:
-            self.warnings.append("Could not extract tot_vol feature from sample %s,"
-                                 " no concentration will be computed." % sample.orig_id)
-            tot_vol = -1
-        # TODO: If NaN ?
-        try:
-            tot_vol = float(tot_vol)
-        except ValueError:
-            self.warnings.append("tot_vol feature is not a float (%s) in sample %s,"
-                                 " no concentration will be computed" % (tot_vol, sample.orig_id))
-            tot_vol = -1
-        if tot_vol == 999999:
-            self.warnings.append("tot_vol feature from sample %s has a 'missing data' value (999999),"
-                                 " no concentration will be computed" % sample.orig_id)
-            tot_vol = -1
-
-        # Proceed to data aggregation
-        concentration_per_taxon: Dict[ClassifIDT, float] = {}
-        count_per_taxon: Dict[ClassifIDT, int] = {}
-
-        # Fetch calculation data at acquisition level
-        acquis_for_sample = SampleBO.get_acquisitions(self.session, sample)
-        for an_acquis in acquis_for_sample:
-            try:
-                sub_part, = AcquisitionBO.get_free_fields(an_acquis, ["sub_part"])
-            except TypeError:
-                self.warnings.append("sub_part feature is not present in acquisition %s,"
-                                     " no concentration will be computed" % an_acquis.orig_id)
-                sub_part = 0
-            try:
-                sub_part = float(sub_part)
-            except ValueError:
-                self.warnings.append("sub_part feature is not a float (%s) in acquisition %s,"
-                                     " no concentration will be computed" % (sub_part, an_acquis.orig_id))
-                sub_part = 0
-
-            # See #520 ->
-            # Get counts for acquisition (sub-sample)
-            count_per_taxon_for_acquis = AcquisitionBO.get_sums_by_taxon(self.session, an_acquis.acquisid)
-            for an_id, count_4_acquis in count_per_taxon_for_acquis.items():
-                concentration_for_taxon = count_4_acquis * sub_part / tot_vol
-                concentration_per_taxon[an_id] = concentration_per_taxon.get(an_id, 0) + concentration_for_taxon
-                count_per_taxon[an_id] = count_per_taxon.get(an_id, 0) + count_4_acquis
+        aggregs = self.aggregate_for_sample(sample)
 
         # To see
         # print()
         # print("Concentrations in sample '%s':%s" % (sample.orig_id, str(concentration_per_taxon)))
         nb_added_occurences = 0
-        ids = list(concentration_per_taxon.keys())
-        ids.sort(key=lambda i: concentration_per_taxon[i], reverse=True)
+        ids = list(aggregs.keys())
+        # Sort per abundance desc
+        ids.sort(key=lambda i: aggregs[i].abundance, reverse=True)
         # Record production for this sample
         self.taxa_per_sample[event_id] = set()
         # Loop over _present_ taxa
         for an_id in ids:
-            conc_per_taxon = concentration_per_taxon[an_id]
-            # print("%s conc %f" % (worms.scientificname, conc_per_taxon))
+            aggreg_for_taxon = aggregs[an_id]
+            # print("%s conc %f" % (worms.scientificname, conc_for_taxon))
             #     self.keep_stats(worms, count_4_sample)
-            individual_count = count_per_taxon[an_id]
+            individual_count = aggreg_for_taxon.abundance
             try:
                 worms = self.mapping[an_id]
             except KeyError:
@@ -544,24 +587,27 @@ class EMODnetExport(TaskServiceBase):
                                  basisOfRecord=BasisOfRecordEnum.machineObservation)
             arch.occurences.add(occ)
             nb_added_occurences += 1
-            if conc_per_taxon > 0:
-                # So, if tot_vol == -1 or sub_part == 0, no concentration emitted
-                self.add_eMoFs_for_occurence(arch=arch, event_id=event_id, occurrence_id=occurrence_id,
-                                             value=conc_per_taxon)
+            # Add eMoFs if possible and required, but the decision is made inside the def
+            self.add_eMoFs_for_occurence(arch=arch,
+                                         event_id=event_id,
+                                         occurrence_id=occurrence_id,
+                                         values=aggreg_for_taxon)
             if self.with_zeroes:
                 # Record the production of an occurence 'present' for this taxon
                 self.taxa_per_sample[event_id].add(an_id)
-        return tot_vol, nb_added_occurences
+        return nb_added_occurences
 
     @staticmethod
-    def add_eMoFs_for_occurence(arch: DwC_Archive, event_id: str, occurrence_id: str, value: float):
+    def add_eMoFs_for_occurence(arch: DwC_Archive, event_id: str, occurrence_id: str, values: AggregForTaxon):
         """
             Add eMoF instances, for given occurence, into the archive.
+            Conditions are: - the value exists
+                            - the value was required by the call
         """
-        # emof = AbundancePerUnitVolumeOfTheWaterBody(event_id, occurrence_id, str(value))
-        value = round(value, 6)
-        emof = AbundancePerUnitVolumeOfTheWaterBody(event_id, occurrence_id, str(value))
-        arch.emofs.add(emof)
+        if values.concentration is not None:
+            value = round(values.concentration, 6)
+            emof = AbundancePerUnitVolumeOfTheWaterBody(event_id, occurrence_id, str(value))
+            arch.emofs.add(emof)
 
     @staticmethod
     def event_date(min_date, max_date) -> str:

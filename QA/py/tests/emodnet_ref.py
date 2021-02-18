@@ -182,6 +182,9 @@ _emofs = r"""
 id	occurrenceID	measurementValue	measurementType	measurementUnit	measurementTypeID	measurementUnitID
 m106_mn01_n1_sml	m106_mn01_n1_sml_78418	0.01	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
 m106_mn01_n1_sml	m106_mn01_n1_sml_45072	0.005	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
+m106_mn01_n1_sml		100.0	Volume sampled of the water body	Cubic metres	http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/	http://vocab.nerc.ac.uk/collection/P06/current/MCUB/
+m106_mn01_n2_sml		100.0	Volume sampled of the water body	Cubic metres	http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/	http://vocab.nerc.ac.uk/collection/P06/current/MCUB/
+m106_mn01_n3_sml		100.0	Volume sampled of the water body	Cubic metres	http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/	http://vocab.nerc.ac.uk/collection/P06/current/MCUB/
 """
 # Adjust date to today
 from datetime import date

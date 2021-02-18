@@ -29,6 +29,8 @@ class ObjectBO(MappedEntity):
         An object, as seen from user. No storage/DB-related distinction here.
     """
     FREE_COLUMNS_ATTRIBUTE = 'fields'
+    PROJECT_ACCESSOR = lambda obj: obj.acquisition.acq_sample_id.project
+    MAPPING_IN_PROJECT = 'object_mappings'
 
     def __init__(self, session: Session, object_id: ObjectIDT):
         super().__init__(session)

@@ -16,7 +16,7 @@
 from formats.EMODnet.models import DwC_ExtendedMeasurementOrFact
 
 
-class Count(DwC_ExtendedMeasurementOrFact):
+class CountOfBiologicalEntity(DwC_ExtendedMeasurementOrFact):
     def __init__(self, event_id: str, occurrence_id: str, value: str):
         super().__init__(
             eventID=event_id,
@@ -52,6 +52,20 @@ class AbundancePerUnitVolumeOfTheWaterBody(DwC_ExtendedMeasurementOrFact):
             measurementValue=value,
             measurementUnit="Number per cubic metre",
             measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/UPMM/"
+        )
+
+
+class BiovolumeOfBiologicalEntity(DwC_ExtendedMeasurementOrFact):
+    def __init__(self, event_id: str, occurrence_id: str, value: str):
+        assert occurrence_id is not None
+        super().__init__(
+            eventID=event_id,
+            occurrenceID=occurrence_id,
+            measurementType="Wet weight biomass of biological entity specified elsewhere per unit area of the bed",
+            measurementTypeID="http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/",
+            measurementValue=value,
+            measurementUnit="Cubic millimetres per cubic metre",
+            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/CMCM/"
         )
 
 
