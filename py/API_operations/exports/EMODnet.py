@@ -21,6 +21,7 @@ from BO.Classification import ClassifIDT
 from BO.Collection import CollectionIDT, CollectionBO
 from BO.DataLicense import LicenseEnum, DataLicense
 from BO.Project import ProjectBO, ProjectIDListT, ProjectTaxoStats
+from BO.ProjectVars import DefaultVars
 from BO.Rights import RightsBO
 from BO.Sample import SampleBO
 from BO.Taxonomy import WoRMSSetFromTaxaSet
@@ -437,7 +438,7 @@ class EMODnetExport(TaskServiceBase):
         # emof = SamplingSpeed(event_id, "2")
         # arch.emofs.add(emof)
         try:
-            sample_volume, = SampleBO.get_free_fields(sample, ["tot_vol"], [float], [999999])
+            sample_volume = SampleBO.get_computed_var(sample, DefaultVars.volume_sampled)
         except TypeError as e:
             pass
         else:
@@ -521,12 +522,12 @@ class EMODnetExport(TaskServiceBase):
         # Enrich with concentrations
         # Fetch calculation data at sample level
         try:
-            tot_vol, = SampleBO.get_free_fields(sample, ["tot_vol"], [float], [999999])
+            sample_volume = SampleBO.get_computed_var(sample, DefaultVars.volume_sampled)
         except TypeError as e:
             self.warnings.append("Could not extract tot_vol feature from sample %s (%s),"
                                  " no concentration will be computed." % (sample.orig_id, str(e)))
-            tot_vol = -1
-        if tot_vol > 0:
+            sample_volume = -1
+        if sample_volume > 0:
             # Cumulate for subsamples AKA acquisitions
             for an_acquis in acquis_for_sample:
                 try:
@@ -541,7 +542,7 @@ class EMODnetExport(TaskServiceBase):
                 count_per_taxon_for_acquis = AcquisitionBO.get_sums_by_taxon(self.session, an_acquis.acquisid)
                 for an_id, count_4_acquis in count_per_taxon_for_acquis.items():
                     aggreg_for_taxon = ret[an_id]
-                    concentration_for_taxon = count_4_acquis * sub_part / tot_vol
+                    concentration_for_taxon = count_4_acquis * sub_part / sample_volume
                     if aggreg_for_taxon.concentration is None:
                         aggreg_for_taxon.concentration = 0
                     aggreg_for_taxon.concentration += concentration_for_taxon

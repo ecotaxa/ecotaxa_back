@@ -338,14 +338,13 @@ class TableMapping(object):
             remaps.append(RemapOp(None, a_col))
         return ret, remaps, errs
 
-    def find_tsv_cols(self, tsv_cols: List[str]) -> List[str]:
+    def find_tsv_cols(self, tsv_cols: List[str]) -> Dict[str, str]:
         """
-            Return the corresponding real column for each TSV column provided.
-            len(tsv_cols) !=  len(returned value) is an error condition.
+            Return the corresponding real column for each TSV column provided and present.
         """
-        ret = []
+        ret = OrderedDict()
         for a_tsv_col in tsv_cols:
             real_col = self.tsv_cols_to_real.get(a_tsv_col)
             if real_col is not None:
-                ret.append(real_col)
+                ret[a_tsv_col] = real_col
         return ret
