@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.engine.result import ResultProxy
 from sqlalchemy.ext.declarative import declarative_base
 # noinspection PyUnresolvedReferences
-from sqlalchemy.orm import Session, Query, make_transient, contains_eager
+from sqlalchemy.orm import Session, Query, make_transient, contains_eager, joinedload, subqueryload
 # For exporting
 # noinspection PyUnresolvedReferences
 from sqlalchemy.orm import relationship

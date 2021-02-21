@@ -5,16 +5,16 @@
 #
 # An Acquisition business object
 #
-from typing import List, Any, Dict
+from typing import List, Any, Dict, Optional
 
 from API_models.crud import ColUpdateList
-from BO.Classification import ClassifIDT
+from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Mappings import ProjectMapping
 from BO.Project import ProjectIDListT, ProjectIDT
 from BO.helpers.MappedEntity import MappedEntity
 from BO.helpers.MappedTable import MappedTable
-from DB import Session, Query, Project, Acquisition, Sample
-from DB.helpers.ORM import any_, ResultProxy
+from DB import Session, Query, Project, Acquisition, Sample, ObjectHeader
+from DB.helpers.ORM import any_, and_, ResultProxy
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -52,6 +52,17 @@ class AcquisitionBO(MappedEntity):
             " GROUP BY o.classif_id",
             {"acq": acquis_id})
         return {int(classif_id): int(cnt) for (classif_id, cnt) in res.fetchall()}
+
+    @classmethod
+    def get_all_object_ids(cls, session: Session, acquis_id: AcquisitionIDT,
+                           classif_ids: Optional[ClassifIDListT] = None) \
+            -> List[int]:
+        qry: Query = session.query(ObjectHeader.objid)
+        qry = qry.join(Acquisition, and_(ObjectHeader.acquisid == Acquisition.acquisid,
+                                         Acquisition.acquisid == acquis_id))
+        if classif_ids is not None:
+            qry = qry.filter(ObjectHeader.classif_id.in_(classif_ids))
+        return [an_id for an_id in qry.all()]
 
 
 class EnumeratedAcquisitionSet(MappedTable):

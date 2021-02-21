@@ -6,7 +6,7 @@
 # An Object as seen by the user, i.e. the fields regardless of their storage.
 # An Object cannot exist outside of a project due to "free" columns.
 #
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Any
 
 from BO.Acquisition import AcquisitionIDT
 from BO.Classification import HistoricalClassificationListT, HistoricalClassification
@@ -14,7 +14,7 @@ from BO.Project import ProjectIDT
 from BO.Sample import SampleIDT
 from BO.helpers.MappedEntity import MappedEntity
 from DB import ObjectHeader, ObjectFields, Image, ObjectsClassifHisto, User, Taxonomy
-from DB.helpers.ORM import Session, Query
+from DB.helpers.ORM import Session, Query, joinedload, subqueryload
 from helpers.DynamicLogs import get_logger
 
 # Typings, to be clear that these are not e.g. project IDs
@@ -29,16 +29,24 @@ class ObjectBO(MappedEntity):
         An object, as seen from user. No storage/DB-related distinction here.
     """
     FREE_COLUMNS_ATTRIBUTE = 'fields'
-    PROJECT_ACCESSOR = lambda obj: obj.acquisition.acq_sample_id.project
+    PROJECT_ACCESSOR = lambda obj: obj.acquisition.sample.project
     MAPPING_IN_PROJECT = 'object_mappings'
 
-    def __init__(self, session: Session, object_id: ObjectIDT):
+    def __init__(self, session: Session, object_id: ObjectIDT, db_object: Optional[ObjectHeader] = None):
         super().__init__(session)
-        # Main object
-        self.header: ObjectHeader = self._session.query(ObjectHeader).get(object_id)
+        # Below is needed because validity test reads the attribute
         self.fields: Optional[ObjectFields] = None
-        if self.header is None:
-            return
+        self.header: ObjectHeader
+        if db_object is None:
+            # Initialize from the unique ID
+            qry: Query = self._session.query(ObjectHeader)
+            qry = qry.filter(ObjectHeader.objid == object_id)
+            qry = qry.options(joinedload(ObjectHeader.fields))
+            qry = qry.options(subqueryload(ObjectHeader.all_images))
+            db_object = qry.scalar()
+            if db_object is None:
+                return
+        self.header = db_object
         # noinspection PyTypeChecker
         self.fields = self.header.fields
         self.sample_id = self.header.acquisition.acq_sample_id
@@ -70,3 +78,17 @@ class ObjectBO(MappedEntity):
             return getattr(self.header, item)
         except AttributeError:
             return getattr(self.fields, item)
+
+
+class ObjectBOSet(object):
+    """
+        Lots of ObjectBOs, because working one by one is slow...
+        TODO: Apply calculations onto set.
+    """
+
+    def __init__(self, session: Session, object_ids: Any):
+        qry: Query = session.query(ObjectHeader)
+        qry = qry.filter(ObjectHeader.objid.in_(object_ids))
+        qry = qry.options(joinedload(ObjectHeader.fields))
+        qry = qry.options(subqueryload(ObjectHeader.all_images))
+        self.all = [ObjectBO(session, 0, an_obj) for an_obj in qry.all()]

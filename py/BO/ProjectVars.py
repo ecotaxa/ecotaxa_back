@@ -76,8 +76,13 @@ class DefaultVars(object):
                                 Vocabulary.volume_sampled,
                                 Units.cubic_metres)
 
-    # equivalent_spherical_volume = 4 / 3 * pi * (sqrt(area / pi) * pixel_size)
-    # equivalent_ellipsoidal_volume = 4 / 3 * pi * (major_axis * pixel_size) * (minor_axis * pixel_size) ^ 2
+    equivalent_ellipsoidal_volume = ProjectVar("4/3*math.pi*(major_axis*pixel_size)*(minor_axis*pixel_size)**2",
+                                               Vocabulary.biovolume,
+                                               Units.cubic_millimetres_per_cubic_metre)
+
+    equivalent_spherical_volume = ProjectVar("4/3*math.pi*(math.sqrt(area/math.pi)*pixel_size)",
+                                               Vocabulary.biovolume,
+                                               Units.cubic_millimetres_per_cubic_metre)
 
 # TODO:
 # Validity/special values for free columns AKA QC: "tot_vol": 999999

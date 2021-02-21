@@ -31,8 +31,7 @@ class SampleBO(MappedEntity):
     """
     FREE_COLUMNS_ATTRIBUTE = 'sample'
     PROJECT_ACCESSOR = lambda sam: sam.project
-    MAPPING_IN_PROJECT= 'sample_mappings'
-
+    MAPPING_IN_PROJECT = 'sample_mappings'
 
     def __init__(self, session: Session, sample_id: SampleIDT):
         super().__init__(session)

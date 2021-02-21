@@ -28,7 +28,7 @@ class ProcessBO(MappedEntity):
         A processing, which is _how_ collected [sub]samples were treated to give images.
     """
     FREE_COLUMNS_ATTRIBUTE = 'process'
-    PROJECT_ACCESSOR = lambda prc: prc.acquisition.acq_sample_id.project
+    PROJECT_ACCESSOR = lambda prc: prc.acquisition.sample.project
     MAPPING_IN_PROJECT = 'process_mappings'
 
     def __init__(self, session: Session, process_id: ProcessIDT):

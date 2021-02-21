@@ -12,7 +12,7 @@ from abc import ABCMeta
 from collections import OrderedDict
 # starting 3.7
 # from typing import OrderedDict as OrderedDictT
-from typing import Any, List, Callable, Tuple
+from typing import Any, List, Callable, Tuple, Optional, Dict
 
 from BO.Mappings import TableMapping, ProjectMapping
 from BO.ProjectVars import ProjectVar
@@ -65,13 +65,13 @@ class MappedEntity(metaclass=ABCMeta):
         if len(mapped_cols) != len(field_list):
             raise TypeError("at least one of %s free column is absent" % field_list)
         # OK we have the real columns, get the values
-        errs, ret = cls.get_values(mapped, mapped_cols, field_types, field_absent_vals)
+        errs, ret = cls._get_values(mapped, mapped_cols, field_types, field_absent_vals)
         if len(errs) > 0:
             raise TypeError(",".join(errs))
         return list(ret.values())
 
     @classmethod
-    def get_values(cls, mapped_obj, mapped_cols, field_types, field_absent_vals) \
+    def _get_values(cls, mapped_obj, mapped_cols, field_types, field_absent_vals) \
             -> Tuple[List, OrderedDict]:
         vals = [getattr(mapped_obj, real_col) for real_col in mapped_cols.values()]
         ret = OrderedDict()
@@ -95,9 +95,10 @@ class MappedEntity(metaclass=ABCMeta):
 
     @classmethod
     def get_computed_var(cls, mapped: Any,  # TODO: Should be 'MappedEntity'
-                         var: ProjectVar) -> Any:
+                         var: ProjectVar, constants: Optional[Dict] = None) -> Any:
         """
-            For given mapped entity, return the result of evaluating the variable, from project.
+            For given mapped entity, return the result of evaluating the formula, outputting a variable,
+            from project.
         """
         # Consider that every name inside the formula is potentially a free column
         # e.g. 1 / 5000 * area
@@ -107,10 +108,19 @@ class MappedEntity(metaclass=ABCMeta):
         mapped_cols = getattr(mapping, cls.MAPPING_IN_PROJECT).find_tsv_cols(names)
         types = [float] * len(mapped_cols)
         absent = [None] * len(mapped_cols)
-        _errs, var_vals = cls.get_values(mapped, mapped_cols,
-                                         field_types=types, field_absent_vals=absent)
         try:
-            ret = eval(var.formula, {}, var_vals)
+            code = compile(var.formula, '<formula>', 'eval')
+        except Exception as e:
+            # Basically anything can happen here
+            raise TypeError(str(e))
+        # Data extraction and formula evaluation
+        _errs, var_vals = cls._get_values(mapped, mapped_cols,
+                                          field_types=types, field_absent_vals=absent)
+        if constants is not None:
+            var_vals.update(constants)
+        try:
+            import math
+            ret = eval(code, {"math": math}, var_vals)
         except Exception as e:
             # Basically anything can happen here
             raise TypeError(str(e))

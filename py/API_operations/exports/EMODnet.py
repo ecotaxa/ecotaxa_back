@@ -16,10 +16,12 @@ from typing import Dict, List, Optional, Tuple, cast, Set
 from dataclasses import dataclass
 
 from API_models.exports import EMODnetExportRsp
-from BO.Acquisition import AcquisitionBO
+from BO.Acquisition import AcquisitionBO, AcquisitionIDT
 from BO.Classification import ClassifIDT
 from BO.Collection import CollectionIDT, CollectionBO
 from BO.DataLicense import LicenseEnum, DataLicense
+from BO.Object import ObjectBO, ObjectBOSet
+from BO.Process import ProcessBO
 from BO.Project import ProjectBO, ProjectIDListT, ProjectTaxoStats
 from BO.ProjectVars import DefaultVars
 from BO.Rights import RightsBO
@@ -34,7 +36,7 @@ from formats.EMODnet.Archive import DwC_Archive
 from formats.EMODnet.DatasetMeta import DatasetMetadata
 from formats.EMODnet.MoF import SamplingNetMeshSizeInMicrons, SampleDeviceApertureAreaInSquareMeters, \
     AbundancePerUnitVolumeOfTheWaterBody, \
-    SampleVolumeInCubicMeters
+    SampleVolumeInCubicMeters, BiovolumeOfBiologicalEntity
 from formats.EMODnet.models import DwC_Event, RecordTypeEnum, DwC_Occurrence, OccurrenceStatusEnum, \
     BasisOfRecordEnum, EMLGeoCoverage, EMLTemporalCoverage, EMLMeta, EMLTitle, EMLPerson, EMLKeywordSet, \
     EMLTaxonomicClassification, EMLAdditionalMeta
@@ -324,7 +326,8 @@ class EMODnetExport(TaskServiceBase):
                                            # "Ligurian sea" TODO: Geo area?
                                            # TODO: ZooProcess (from projects)
                                            ],
-                                 keywordThesaurus="GBIF Dataset Type Vocabulary: http://rs.gbif.org/vocabulary/gbif/dataset_type.xml")
+                                 keywordThesaurus="GBIF Dataset Type Vocabulary: "
+                                                  "http://rs.gbif.org/vocabulary/gbif/dataset_type.xml")
 
         taxo_cov = self.get_taxo_coverage(the_collection.project_ids)
 
@@ -428,7 +431,7 @@ class EMODnetExport(TaskServiceBase):
                 nb_added = self.add_occurences(sample=a_sample, arch=arch, event_id=event_id)
                 self.add_eMoFs_for_sample(sample=a_sample, arch=arch, event_id=event_id)
                 if nb_added == 0:
-                    self.warnings.append("No occurence added for sample '%s'" % a_sample.orig_id)
+                    self.warnings.append("No occurrence added for sample '%s'" % a_sample.orig_id)
 
     # noinspection PyPep8Naming
     def add_eMoFs_for_sample(self, sample: Sample, arch: DwC_Archive, event_id: str):
@@ -439,7 +442,7 @@ class EMODnetExport(TaskServiceBase):
         # arch.emofs.add(emof)
         try:
             sample_volume = SampleBO.get_computed_var(sample, DefaultVars.volume_sampled)
-        except TypeError as e:
+        except TypeError as _e:
             pass
         else:
             # Add sampled water volume
@@ -505,13 +508,18 @@ class EMODnetExport(TaskServiceBase):
             The abundance can always be computed. The 2 other ones depend on availability of values
             for the project.
         """
+        # We return all per taxon.
         ret: Dict[ClassifIDT, EMODnetExport.AggregForTaxon] = {}
+
+        count_per_taxon_per_acquis: Dict[AcquisitionIDT, Dict[ClassifIDT, int]] = {}
+        subsampling_coeff_per_acquis: Dict[AcquisitionIDT, float] = {}
 
         # Start with abundances, simple count and giving its keys to the returned dict.
         acquis_for_sample = SampleBO.get_acquisitions(self.session, sample)
         for an_acquis in acquis_for_sample:
             # Get counts for acquisition (subsample)
             count_per_taxon_for_acquis = AcquisitionBO.get_sums_by_taxon(self.session, an_acquis.acquisid)
+            count_per_taxon_per_acquis[an_acquis.acquisid] = count_per_taxon_for_acquis
             for an_id, count_4_acquis in count_per_taxon_for_acquis.items():
                 aggreg_for_taxon = ret.get(an_id)
                 if aggreg_for_taxon is None:
@@ -520,32 +528,81 @@ class EMODnetExport(TaskServiceBase):
                     aggreg_for_taxon.abundance += count_4_acquis
 
         # Enrich with concentrations
-        # Fetch calculation data at sample level
         try:
+            # Fetch calculation data at sample level
             sample_volume = SampleBO.get_computed_var(sample, DefaultVars.volume_sampled)
         except TypeError as e:
-            self.warnings.append("Could not extract tot_vol feature from sample %s (%s),"
-                                 " no concentration will be computed." % (sample.orig_id, str(e)))
+            self.warnings.append("Could not compute volume sampled from sample %s (%s),"
+                                 " no concentration or biovolume will be computed." % (sample.orig_id, str(e)))
             sample_volume = -1
         if sample_volume > 0:
             # Cumulate for subsamples AKA acquisitions
             for an_acquis in acquis_for_sample:
                 try:
-                    sub_part, = AcquisitionBO.get_free_fields(an_acquis, ["sub_part"],
-                                                              [float], [None])
+                    subsampling_coefficient = AcquisitionBO.get_computed_var(an_acquis, DefaultVars.subsample_coeff)
+                    subsampling_coeff_per_acquis[an_acquis.acquisid] = subsampling_coefficient
                 except TypeError as e:
-                    self.warnings.append("Could not extract sub_part feature from acquisition %s (%s),"
-                                         " no concentration will be computed" % (an_acquis.orig_id, str(e)))
+                    self.warnings.append("Could not compute subsampling coefficient from acquisition %s (%s),"
+                                         " no concentration or biovolume will be computed" %
+                                         (an_acquis.orig_id, str(e)))
+                    logger.info("concentrations: no subsample coeff for '%s'", an_acquis.orig_id)
                     continue
                 # Get counts for acquisition (sub-sample)
-                # TODO: Same call as just above
-                count_per_taxon_for_acquis = AcquisitionBO.get_sums_by_taxon(self.session, an_acquis.acquisid)
+                logger.info("computing concentrations for '%s'", an_acquis.orig_id)
+                count_per_taxon_for_acquis = count_per_taxon_per_acquis[an_acquis.acquisid]
                 for an_id, count_4_acquis in count_per_taxon_for_acquis.items():
                     aggreg_for_taxon = ret[an_id]
-                    concentration_for_taxon = count_4_acquis * sub_part / sample_volume
+                    concentration_for_taxon = count_4_acquis / subsampling_coefficient / sample_volume
                     if aggreg_for_taxon.concentration is None:
                         aggreg_for_taxon.concentration = 0
                     aggreg_for_taxon.concentration += concentration_for_taxon
+
+        # Enrich with biovolumes. This needs a computation for each object, so it's likely to be slow.
+        if sample_volume > 0:
+            # Cumulate for subsamples AKA acquisitions
+            for an_acquis in acquis_for_sample:
+                subsampling_coefficient = subsampling_coeff_per_acquis.get(an_acquis.acquisid)
+                if subsampling_coefficient is None:
+                    logger.info("biovolumes: no subsample coeff for '%s'", an_acquis.orig_id)
+                    continue
+                # Get pixel size from associated process, it a constant to individual biovol computations
+                try:
+                    pixel_size, = ProcessBO.get_free_fields(an_acquis.process, ["particle_pixel_size_mm"],
+                                                            [float],
+                                                            [None])
+                except TypeError as _e:
+                    logger.info("biovolumes: no pixel size for '%s'", an_acquis.orig_id)
+                    continue
+                constants = {"pixel_size": pixel_size}
+                # Get all objects for the acquisition. The filter on classif_id is useless for now.
+                acq_object_ids = AcquisitionBO.get_all_object_ids(session=self.session,
+                                                                  acquis_id=an_acquis.acquisid,
+                                                                  classif_ids=list(ret.keys()))
+                objects = ObjectBOSet(self.session, acq_object_ids)
+                nb_biovols = 0
+                for an_obj in objects.all:
+                    # Compute a biovol if possible
+                    try:
+                        biovol = ObjectBO.get_computed_var(an_obj, DefaultVars.equivalent_ellipsoidal_volume, constants)
+                    except TypeError as e:
+                        biovol = -1
+                    if biovol == -1:
+                        try:
+                            biovol = ObjectBO.get_computed_var(an_obj, DefaultVars.equivalent_spherical_volume,
+                                                               constants)
+                        except TypeError as e:
+                            continue
+                    # Aggregate by category/taxon
+                    aggreg_for_taxon = ret[an_obj.classif_id]
+                    individual_biovolume = biovol / subsampling_coefficient / sample_volume
+                    if aggreg_for_taxon.biovolume is None:
+                        aggreg_for_taxon.biovolume = 0
+                    aggreg_for_taxon.biovolume += individual_biovolume
+                    # Update stats
+                    nb_biovols += 1
+                # A bit of display
+                logger.info("%d biovolumes computed for '%s' out of %d objects", nb_biovols, an_acquis.orig_id,
+                            len(acq_object_ids))
 
         return ret
 
@@ -609,6 +666,10 @@ class EMODnetExport(TaskServiceBase):
             value = round(values.concentration, 6)
             emof = AbundancePerUnitVolumeOfTheWaterBody(event_id, occurrence_id, str(value))
             arch.emofs.add(emof)
+        if values.biovolume is not None:
+            value = round(values.biovolume, 6)
+            emof2 = BiovolumeOfBiologicalEntity(event_id, occurrence_id, str(value))
+            arch.emofs.add(emof2)
 
     @staticmethod
     def event_date(min_date, max_date) -> str:
