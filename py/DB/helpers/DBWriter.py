@@ -48,6 +48,8 @@ class DBWriter(object):
     obj_head_prog_cols = {'sunpos', 'random_value', 'acquisid', 'sampleid'}
     obj_fields_prog_cols: Dict[str, str] = {}
 
+    # The generated classes are objects of course, but classes as well, so the variable names
+    # follow the classes naming convention.
     # noinspection PyPep8Naming
     def generators(self, target_fields: Dict[str, set]) -> Tuple[Type, Type, Type]:
         # Small optimization, the below allows minimal SQLAlchemy SQL sent to DB

@@ -73,6 +73,7 @@ class MappedEntity(metaclass=ABCMeta):
     @classmethod
     def _get_values(cls, mapped_obj, mapped_cols, field_types, field_absent_vals) \
             -> Tuple[List, OrderedDict]:
+        # Fetch the raw values from the mapped entity. No distinction between types text and numeric
         vals = [getattr(mapped_obj, real_col) for real_col in mapped_cols.values()]
         ret = OrderedDict()
         errs = []
@@ -95,32 +96,27 @@ class MappedEntity(metaclass=ABCMeta):
 
     @classmethod
     def get_computed_var(cls, mapped: Any,  # TODO: Should be 'MappedEntity'
-                         var: ProjectVar, constants: Optional[Dict] = None) -> Any:
+                         var: ProjectVar,
+                         mapping: Optional[ProjectMapping] = None,
+                         constants: Optional[Dict] = None) -> Any:
         """
-            For given mapped entity, return the result of evaluating the formula, outputting a variable,
-            from project.
+            For given mapped entity, return the result of evaluating the formula (which returns a variable).
         """
-        # Consider that every name inside the formula is potentially a free column
-        # e.g. 1 / 5000 * area
-        names = var.extract_variable_names()
-        mapping = ProjectMapping().load_from_project(cls.PROJECT_ACCESSOR(mapped))
+        if mapping is None:
+            mapping = ProjectMapping().load_from_project(cls.PROJECT_ACCESSOR(mapped))
         # Filter what is known in mapping.
-        mapped_cols = getattr(mapping, cls.MAPPING_IN_PROJECT).find_tsv_cols(names)
+        mapped_cols = getattr(mapping, cls.MAPPING_IN_PROJECT).find_tsv_cols(var.variable_names)
         types = [float] * len(mapped_cols)
         absent = [None] * len(mapped_cols)
-        try:
-            code = compile(var.formula, '<formula>', 'eval')
-        except Exception as e:
-            # Basically anything can happen here
-            raise TypeError(str(e))
         # Data extraction and formula evaluation
         _errs, var_vals = cls._get_values(mapped, mapped_cols,
-                                          field_types=types, field_absent_vals=absent)
+                                          field_types=types,
+                                          field_absent_vals=absent)
         if constants is not None:
             var_vals.update(constants)
         try:
             import math
-            ret = eval(code, {"math": math}, var_vals)
+            ret = eval(var.code, {"math": math}, var_vals)
         except Exception as e:
             # Basically anything can happen here
             raise TypeError(str(e))

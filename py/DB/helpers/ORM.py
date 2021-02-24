@@ -154,6 +154,18 @@ def minimal_table_of(metadata: MetaData, clazz, to_keep: Set[str], exact_floats=
     return Table(*args)
 
 
+def minimal_model_of(metadata: MetaData, clazz, to_keep: Set[str], exact_floats=False) -> Type[Model]:
+    """
+        Same as just above, but return a proper Model.
+    """
+    min_tbl = minimal_table_of(metadata, clazz, to_keep, exact_floats)
+
+    class Ret(Model):
+        __table__ = min_tbl
+
+    return Ret
+
+
 def any_(items_list: Union[List[int], List[str]]):
     # TODO: Get proper mapping, it seems a bit too much for sqlalchemy-stubs
     # noinspection PyTypeChecker

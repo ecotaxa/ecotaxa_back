@@ -20,9 +20,10 @@ from BO.Acquisition import AcquisitionBO, AcquisitionIDT
 from BO.Classification import ClassifIDT
 from BO.Collection import CollectionIDT, CollectionBO
 from BO.DataLicense import LicenseEnum, DataLicense
+from BO.Mappings import ProjectMapping
 from BO.Object import ObjectBO, ObjectBOSet
 from BO.Process import ProcessBO
-from BO.Project import ProjectBO, ProjectIDListT, ProjectTaxoStats
+from BO.Project import ProjectBO, ProjectIDListT, ProjectTaxoStats, ProjectIDT
 from BO.ProjectVars import DefaultVars
 from BO.Rights import RightsBO
 from BO.Sample import SampleBO
@@ -36,11 +37,12 @@ from formats.EMODnet.Archive import DwC_Archive
 from formats.EMODnet.DatasetMeta import DatasetMetadata
 from formats.EMODnet.MoF import SamplingNetMeshSizeInMicrons, SampleDeviceApertureAreaInSquareMeters, \
     AbundancePerUnitVolumeOfTheWaterBody, \
-    SampleVolumeInCubicMeters, BiovolumeOfBiologicalEntity
+    SampleVolumeInCubicMeters, BiovolumeOfBiologicalEntity, SamplingInstrumentName
 from formats.EMODnet.models import DwC_Event, RecordTypeEnum, DwC_Occurrence, OccurrenceStatusEnum, \
     BasisOfRecordEnum, EMLGeoCoverage, EMLTemporalCoverage, EMLMeta, EMLTitle, EMLPerson, EMLKeywordSet, \
     EMLTaxonomicClassification, EMLAdditionalMeta
 from helpers.DynamicLogs import get_logger, LogsSwitcher
+from helpers.Timer import CodeTimer
 from .Countries import countries_by_name
 # TODO: Move somewhere else
 from ..helpers.TaskService import TaskServiceBase
@@ -78,6 +80,8 @@ class EMODnetExport(TaskServiceBase):
         self.produced_count = 0
         self.ignored_count: Dict[ClassifIDT, int] = {}
         self.ignored_taxa: Dict[ClassifIDT, Tuple[str, ClassifIDT]] = {}
+        self.unknown_nets: Dict[str, List[str]] = {}
+        self.empty_samples: List[Tuple[ProjectIDT, str]] = []
         self.stats_per_rank: Dict[str, Dict] = {}
 
     DWC_ZIP_NAME = "dwca.zip"
@@ -410,10 +414,13 @@ class EMODnetExport(TaskServiceBase):
             a_sample: Sample
             events = arch.events
             for orig_id, a_sample in samples.items():
+                assert a_sample.latitude is not None and a_sample.longitude is not None
                 event_id = orig_id
                 evt_type = RecordTypeEnum.sample
                 summ = Sample.get_sample_summary(self.session, a_sample.sampleid)
-                assert a_sample.latitude is not None and a_sample.longitude is not None
+                if summ[0] is None or summ[1] is None:
+                    self.empty_samples.append((a_prj_id, a_sample.orig_id))
+                    continue
                 evt_date = self.event_date(summ[0], summ[1])
                 latitude = self.geo_to_txt(a_sample.latitude)
                 longitude = self.geo_to_txt(a_sample.longitude)
@@ -431,7 +438,7 @@ class EMODnetExport(TaskServiceBase):
                 nb_added = self.add_occurences(sample=a_sample, arch=arch, event_id=event_id)
                 self.add_eMoFs_for_sample(sample=a_sample, arch=arch, event_id=event_id)
                 if nb_added == 0:
-                    self.warnings.append("No occurrence added for sample '%s'" % a_sample.orig_id)
+                    self.warnings.append("No occurrence added for sample '%s' in %d" % (a_sample.orig_id, a_prj_id))
 
     # noinspection PyPep8Naming
     def add_eMoFs_for_sample(self, sample: Sample, arch: DwC_Archive, event_id: str):
@@ -451,43 +458,32 @@ class EMODnetExport(TaskServiceBase):
 
         # Get the net features from the sample
         try:
-            net_mesh, net_surf = SampleBO.get_free_fields(sample, ["net_mesh", "net_surf"],
-                                                          [float, float],
-                                                          [-1, -1])
+            net_type, net_mesh, net_surf = SampleBO.get_free_fields(sample, ["net_type", "net_mesh", "net_surf"],
+                                                                    [str, float, float],
+                                                                    ["", -1, -1])
         except TypeError as e:
-            self.warnings.append("Could not extract sampling net features from sample %s (%s)."
+            self.warnings.append("Could not extract sampling net name and features from sample %s (%s)."
                                  % (sample.orig_id, str(e)))
         else:
-            arch.emofs.add(SamplingNetMeshSizeInMicrons(event_id, str(net_mesh)))
-            arch.emofs.add(SampleDeviceApertureAreaInSquareMeters(event_id, str(net_surf)))
-
-        # Get the net type from the sample
-        # e.g. net_type	bongo
-        # TODO: Not normalized yet, so better output nothing than misleading information
-        # try:
-        #     net_type, = SampleBO.get_free_fields(sample, ["net_type"],
-        #                                          [str],
-        #                                          [""])
-        # except TypeError:
-        #     self.warnings.append("Could not extract sampling net name from sample %s." % sample.orig_id)
-        # else:
-        #     if net_type == "bongo":
-        #         # TODO: There could be more specific, a dozen of bongos are there:
-        #         #  http://vocab.nerc.ac.uk/collection/L22/current/
-        #         ins = SamplingInstrumentName(event_id, "Bongo net",
-        #                                      "http://vocab.nerc.ac.uk/collection/L22/current/NETT0176/")
-        #         arch.emofs.add(ins)
-        #     elif net_type == "multinet":
-        #         # Not the right one if aperture != 1m
-        #         # ins = SamplingInstrumentName(event_id, "Hyrdo-Bios MultiNet Mammoth",
-        #         #                              "http://vocab.nerc.ac.uk/collection/L22/current/NETT0187/")
-        #         # arch.emofs.add(ins)
-        #         ins = SamplingInstrumentName(event_id, "multinet",
-        #                                      "http://vocab.nerc.ac.uk/collection/L05/current/68/")
-        #         arch.emofs.add(ins)
-        #     else:
-        #         self.warnings.append("Net type '%s' in sample %s is not mapped to BODC vocabulary"
-        #                              % (net_type, sample.orig_id))
+            if net_type == "bongo":
+                # TODO: There could be more specific, a dozen of bongos are there:
+                #  http://vocab.nerc.ac.uk/collection/L22/current/
+                ins = SamplingInstrumentName(event_id, "Bongo net",
+                                             "http://vocab.nerc.ac.uk/collection/L22/current/NETT0176/")
+                arch.emofs.add(ins)
+                arch.emofs.add(SamplingNetMeshSizeInMicrons(event_id, str(net_mesh)))
+                arch.emofs.add(SampleDeviceApertureAreaInSquareMeters(event_id, str(net_surf)))
+            elif net_type in ("wp2",  # There are several species of this one
+                              "jb",  # Juday-bogorov
+                              "regent"
+                              ):
+                ins = SamplingInstrumentName(event_id, "plankton nets",
+                                             "http://vocab.nerc.ac.uk/collection/L05/current/22/")
+                arch.emofs.add(ins)
+                arch.emofs.add(SamplingNetMeshSizeInMicrons(event_id, str(net_mesh)))
+                arch.emofs.add(SampleDeviceApertureAreaInSquareMeters(event_id, str(net_surf)))
+            else:
+                self.unknown_nets.setdefault(net_type, []).append(sample.orig_id)
 
     # Simplest structure with literal names. No bloody dict.
     @dataclass()
@@ -559,6 +555,8 @@ class EMODnetExport(TaskServiceBase):
 
         # Enrich with biovolumes. This needs a computation for each object, so it's likely to be slow.
         if sample_volume > 0:
+            # Mappings are constant for the sample
+            mapping = ProjectMapping().load_from_project(sample.project)
             # Cumulate for subsamples AKA acquisitions
             for an_acquis in acquis_for_sample:
                 subsampling_coefficient = subsampling_coeff_per_acquis.get(an_acquis.acquisid)
@@ -575,21 +573,25 @@ class EMODnetExport(TaskServiceBase):
                     continue
                 constants = {"pixel_size": pixel_size}
                 # Get all objects for the acquisition. The filter on classif_id is useless for now.
-                acq_object_ids = AcquisitionBO.get_all_object_ids(session=self.session,
-                                                                  acquis_id=an_acquis.acquisid,
-                                                                  classif_ids=list(ret.keys()))
-                objects = ObjectBOSet(self.session, acq_object_ids)
+                with CodeTimer("Objects IDs for '%s': " % an_acquis.orig_id, logger):
+                    acq_object_ids = AcquisitionBO.get_all_object_ids(session=self.session,
+                                                                      acquis_id=an_acquis.acquisid,
+                                                                      classif_ids=list(ret.keys()))
+                with CodeTimer("Objects for '%s': " % an_acquis.orig_id, logger):
+                    objects = ObjectBOSet(self.session, acq_object_ids, mapping.object_mappings)
                 nb_biovols = 0
                 for an_obj in objects.all:
                     # Compute a biovol if possible
                     try:
-                        biovol = ObjectBO.get_computed_var(an_obj, DefaultVars.equivalent_ellipsoidal_volume, constants)
+                        biovol = ObjectBO.get_computed_var(an_obj, DefaultVars.equivalent_ellipsoidal_volume,
+                                                           mapping, constants)
+                        biovol = -1
                     except TypeError as e:
                         biovol = -1
                     if biovol == -1:
                         try:
                             biovol = ObjectBO.get_computed_var(an_obj, DefaultVars.equivalent_spherical_volume,
-                                                               constants)
+                                                               mapping, constants)
                         except TypeError as e:
                             continue
                     # Aggregate by category/taxon
@@ -709,6 +711,12 @@ class EMODnetExport(TaskServiceBase):
                 unmatched.append(str({self.ignored_count[an_id]: self.ignored_taxa[an_id]}))
             self.warnings.append(
                 "Not produced due to non-match in WoRMS, format is {number:taxon}: %s" % ", ".join(unmatched))
+        if len(self.unknown_nets) > 0:
+            for a_net, sample_ids in self.unknown_nets.items():
+                self.warnings.append(
+                    "Net type '%s' is not mapped to a BODC term. It is used in %s" % (a_net, str(sample_ids)))
+        if len(self.empty_samples) > 0:
+            self.warnings.append("Empty samples found, format is (project ID, sample ID): %s" % str(self.empty_samples))
         ranks_asc = sorted(self.stats_per_rank.keys())
         for a_rank in ranks_asc:
             logger.info("rank '%s' stats %s", str(a_rank), self.stats_per_rank.get(a_rank))

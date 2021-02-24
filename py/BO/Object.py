@@ -8,13 +8,16 @@
 #
 from typing import Tuple, List, Optional, Any
 
+from sqlalchemy import MetaData
+
 from BO.Acquisition import AcquisitionIDT
 from BO.Classification import HistoricalClassificationListT, HistoricalClassification
+from BO.Mappings import TableMapping
 from BO.Project import ProjectIDT
 from BO.Sample import SampleIDT
 from BO.helpers.MappedEntity import MappedEntity
 from DB import ObjectHeader, ObjectFields, Image, ObjectsClassifHisto, User, Taxonomy
-from DB.helpers.ORM import Session, Query, joinedload, subqueryload
+from DB.helpers.ORM import Session, Query, joinedload, subqueryload, Model, minimal_model_of
 from helpers.DynamicLogs import get_logger
 
 # Typings, to be clear that these are not e.g. project IDs
@@ -32,7 +35,8 @@ class ObjectBO(MappedEntity):
     PROJECT_ACCESSOR = lambda obj: obj.acquisition.sample.project
     MAPPING_IN_PROJECT = 'object_mappings'
 
-    def __init__(self, session: Session, object_id: ObjectIDT, db_object: Optional[ObjectHeader] = None):
+    def __init__(self, session: Session, object_id: ObjectIDT,
+                 db_object: Optional[ObjectHeader] = None, db_fields: Optional[Model] = None):
         super().__init__(session)
         # Below is needed because validity test reads the attribute
         self.fields: Optional[ObjectFields] = None
@@ -43,12 +47,14 @@ class ObjectBO(MappedEntity):
             qry = qry.filter(ObjectHeader.objid == object_id)
             qry = qry.options(joinedload(ObjectHeader.fields))
             qry = qry.options(subqueryload(ObjectHeader.all_images))
-            db_object = qry.scalar()
-            if db_object is None:
+            self.header = qry.scalar()
+            if self.header is None:
                 return
-        self.header = db_object
-        # noinspection PyTypeChecker
-        self.fields = self.header.fields
+            self.fields = self.header.fields
+        else:
+            # Initialize from provided models
+            self.header = db_object
+            self.fields = db_fields  # type:ignore
         self.sample_id = self.header.acquisition.acq_sample_id
         self.project_id = self.header.acquisition.sample.projid
         # noinspection PyTypeChecker
@@ -83,12 +89,17 @@ class ObjectBO(MappedEntity):
 class ObjectBOSet(object):
     """
         Lots of ObjectBOs, because working one by one is slow...
+        Also cook a view on the fields in use
         TODO: Apply calculations onto set.
     """
 
-    def __init__(self, session: Session, object_ids: Any):
-        qry: Query = session.query(ObjectHeader)
+    def __init__(self, session: Session, object_ids: Any, obj_mapping: TableMapping):
+        needed_cols = obj_mapping.real_cols_to_tsv.keys()
+        # noinspection PyPep8Naming
+        ReducedObjectFields = minimal_model_of(MetaData(), ObjectFields, set(needed_cols))
+        qry: Query = session.query(ObjectHeader, ReducedObjectFields)
         qry = qry.filter(ObjectHeader.objid.in_(object_ids))
-        qry = qry.options(joinedload(ObjectHeader.fields))
-        qry = qry.options(subqueryload(ObjectHeader.all_images))
-        self.all = [ObjectBO(session, 0, an_obj) for an_obj in qry.all()]
+        # noinspection PyUnresolvedReferences
+        qry = qry.join(ReducedObjectFields, ObjectHeader.objid == ReducedObjectFields.objfid)  # type:ignore
+        qry = qry.options(joinedload(ObjectHeader.all_images))
+        self.all = [ObjectBO(session, 0, an_obj, its_fields) for an_obj, its_fields in qry.all()]

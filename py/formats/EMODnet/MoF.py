@@ -61,7 +61,7 @@ class BiovolumeOfBiologicalEntity(DwC_ExtendedMeasurementOrFact):
         super().__init__(
             eventID=event_id,
             occurrenceID=occurrence_id,
-            measurementType="Wet weight biomass of biological entity specified elsewhere per unit area of the bed",
+            measurementType="Biovolume of biological entity specified elsewhere per unit volume of the water body",
             measurementTypeID="http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/",
             measurementValue=value,
             measurementUnit="Cubic millimetres per cubic metre",

@@ -30,7 +30,7 @@ class VariableValidity(object):
 class ProjectVar(object):
     """
         Examples:
-
+            "4.0/3.0*math.pi*(major/2*pixel_size)*(minor/2*pixel_size)**2"
     """
 
     def __init__(self, var_formula: str, term: Term, unit: Term,
@@ -45,8 +45,10 @@ class ProjectVar(object):
         self.term = term
         self.unit = unit
         self.validator: Optional[VariableValidity] = valid_if
+        self.variable_names = self._extract_variable_names()
+        self.code = self._compile()
 
-    def extract_variable_names(self) -> List[str]:
+    def _extract_variable_names(self) -> List[str]:
         """
             Analyze the formula from syntactic point of view and extract variables.
         """
@@ -56,6 +58,14 @@ class ProjectVar(object):
             if isinstance(node, ast.Name):
                 ret.append(node.id)
         return ret
+
+    def _compile(self):
+        try:
+            return compile(self.formula, '<formula>', 'eval')
+        except Exception as e:
+            # Basically anything can happen here
+            raise TypeError(str(e))
+
 
 
 class DefaultVars(object):
@@ -76,11 +86,11 @@ class DefaultVars(object):
                                 Vocabulary.volume_sampled,
                                 Units.cubic_metres)
 
-    equivalent_ellipsoidal_volume = ProjectVar("4/3*math.pi*(major_axis*pixel_size)*(minor_axis*pixel_size)**2",
+    equivalent_ellipsoidal_volume = ProjectVar("4.0/3.0*math.pi*(major/2*pixel_size)*(minor/2*pixel_size)**2",
                                                Vocabulary.biovolume,
                                                Units.cubic_millimetres_per_cubic_metre)
 
-    equivalent_spherical_volume = ProjectVar("4/3*math.pi*(math.sqrt(area/math.pi)*pixel_size)",
+    equivalent_spherical_volume = ProjectVar("4.0/3.0*math.pi*(math.sqrt(area/math.pi)*pixel_size)**3",
                                                Vocabulary.biovolume,
                                                Units.cubic_millimetres_per_cubic_metre)
 

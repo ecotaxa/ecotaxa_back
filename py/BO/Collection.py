@@ -85,7 +85,7 @@ class CollectionBO(object):
         assert len(db_projects) == len(project_ids)
         # Loop on projects, adding them and collecting aggregated data
         prj_licenses: Set[LicenseEnum] = set()
-        samples_per_project: Dict[str, str] = {}
+        samples_per_project: Dict[str, Project] = {}
         problems: List[str] = []
         a_db_project: Project
         for a_db_project in db_projects:
@@ -96,10 +96,12 @@ class CollectionBO(object):
                 sample_id = a_sample.orig_id
                 # Sanity check: sample orig_id must be unique in the collection
                 if sample_id in samples_per_project:
-                    problems.append("Sample with orig_id %s is in both %s and %s" %
-                                    (sample_id, samples_per_project[sample_id], a_db_project.title))
+                    problems.append("Sample with orig_id %s is in both '%s'(#%d) and '%s'(#%d)" %
+                                    (sample_id, samples_per_project[sample_id].title,
+                                     samples_per_project[sample_id].projid,
+                                     a_db_project.title, a_db_project.projid))
                 else:
-                    samples_per_project[sample_id] = a_db_project.title
+                    samples_per_project[sample_id] = a_db_project
         # Set self to most restrictive of all licenses
         max_restrict = max([DataLicense.RESTRICTION[a_prj_lic] for a_prj_lic in prj_licenses])
         self._collection.license = DataLicense.BY_RESTRICTION[max_restrict]

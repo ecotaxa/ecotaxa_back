@@ -48,7 +48,7 @@ class AcquisitionBO(MappedEntity):
         res: ResultProxy = session.execute(
             "SELECT o.classif_id, count(1)"
             "  FROM obj_head o "
-            " WHERE o.acquisid = :acq"
+            " WHERE o.acquisid = :acq AND o.classif_id IS NOT NULL"
             " GROUP BY o.classif_id",
             {"acq": acquis_id})
         return {int(classif_id): int(cnt) for (classif_id, cnt) in res.fetchall()}
