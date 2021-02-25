@@ -186,6 +186,16 @@ DwC_ExtendedMeasurementOrFact = DwcExtendedMeasurementOrFact
 
 # Specs: https://eml.ecoinformatics.org/schema/index.html
 
+class EMLIdentifier(BaseModel):
+    """
+        EML unique identifier for the document
+    """
+    packageId: str = Field(title="Unique ID for this dataset in the system.")
+    system: str = Field(title="The system providing unicity, e.g. https://doi.org")
+    scope: Optional[str] = Field(title="The scope of the ID inside the system",
+                                 default="system")
+
+
 class EMLTitle(BaseModel):
     """
         EML title with optional lang.
@@ -224,9 +234,10 @@ class EMLPerson(BaseModel):
 
 
 class EMLAssociatedPerson(EMLPerson):
-    # ‘originator’, ‘content provider’, ‘principle investigator’
+    # A person with a role.
+    # role can be, e.g. ‘originator’, ‘content provider’, ‘principle investigator’, 'technician', 'reviewer'
     # 'developer' :)
-    role: Optional[str]
+    role: str
 
 
 class EMLKeywordSet(BaseModel):
@@ -363,6 +374,7 @@ class EMLMeta(BaseModel):
     """
         EML metadata
     """
+    identifier: EMLIdentifier = Field(title="The unique identifier for the collection")
     titles: List[EMLTitle] = Field(title="Titles, at least 1", min_items=1)
     creators: List[EMLPerson] = Field(title="Creators, at least 1", min_items=1)
     metadataProviders: List[EMLPerson] = Field(title="Metadata providers, at least 1", min_items=1)

@@ -10,7 +10,7 @@
 # EMODnet QC source code:
 #      https://github.com/EMODnet/EMODnetBiocheck
 import re
-from datetime import date
+from datetime import date, time, datetime
 from typing import Dict, List, Optional, Tuple, cast, Set
 
 from dataclasses import dataclass
@@ -40,7 +40,7 @@ from formats.EMODnet.MoF import SamplingNetMeshSizeInMicrons, SampleDeviceApertu
     SampleVolumeInCubicMeters, BiovolumeOfBiologicalEntity, SamplingInstrumentName
 from formats.EMODnet.models import DwC_Event, RecordTypeEnum, DwC_Occurrence, OccurrenceStatusEnum, \
     BasisOfRecordEnum, EMLGeoCoverage, EMLTemporalCoverage, EMLMeta, EMLTitle, EMLPerson, EMLKeywordSet, \
-    EMLTaxonomicClassification, EMLAdditionalMeta
+    EMLTaxonomicClassification, EMLAdditionalMeta, EMLIdentifier, EMLAssociatedPerson
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 from helpers.Timer import CodeTimer
 from .Countries import countries_by_name
@@ -232,6 +232,14 @@ class EMODnetExport(TaskServiceBase):
                 ret.electronicMailAddress = user.email
         return ret, problems
 
+    @staticmethod
+    def eml_person_to_associated_person(in_model: EMLPerson, role: str) -> EMLAssociatedPerson:
+        return EMLAssociatedPerson(organizationName=in_model.organizationName,
+                                   givenName=in_model.givenName,
+                                   surName=in_model.surName,
+                                   country=in_model.country,
+                                   role=role)
+
     MIN_ABSTRACT_CHARS = 256
     """ Minimum size of a 'quality' abstract """
 
@@ -243,6 +251,9 @@ class EMODnetExport(TaskServiceBase):
         """
         ret = None
         the_collection: CollectionBO = CollectionBO(self.collection).enrich()
+
+        identifier = EMLIdentifier(packageId=the_collection.external_id,
+                                   system=the_collection.external_id_system)
 
         title = EMLTitle(title=the_collection.title)
 
@@ -267,14 +278,14 @@ class EMODnetExport(TaskServiceBase):
         if provider is None:
             self.errors.append("No valid metadata provider user found for EML metadata.")
 
-        associates: List[EMLPerson] = []
+        associates: List[EMLAssociatedPerson] = []
         for a_user in the_collection.associate_users:
             person, errs = self.user_to_eml_person(a_user, "associated person %d" % a_user.id)
             if errs:
                 self.warnings.extend(errs)
             else:
                 assert person is not None
-                associates.append(person)
+                associates.append(self.eml_person_to_associated_person(person, "originator"))
         for an_org in the_collection.associate_organisations:
             associates.append(self.organisation_to_eml_person(an_org))
 
@@ -293,7 +304,7 @@ class EMODnetExport(TaskServiceBase):
         time_cov = EMLTemporalCoverage(beginDate=timestamp_to_str(min_date),
                                        endDate=timestamp_to_str(max_date))
 
-        publication_date = date.today().strftime("%Y-%m-%d")
+        publication_date = date.today().isoformat()
 
         abstract = the_collection.abstract
         if not abstract:
@@ -335,7 +346,8 @@ class EMODnetExport(TaskServiceBase):
 
         taxo_cov = self.get_taxo_coverage(the_collection.project_ids)
 
-        meta_plus = EMLAdditionalMeta(dateStamp=date.today().strftime("%Y-%m-%d"))
+        now = datetime.now().replace(microsecond=0)
+        meta_plus = EMLAdditionalMeta(dateStamp=now.isoformat())
 
         if len(self.errors) == 0:
             # The research project
@@ -343,7 +355,8 @@ class EMODnetExport(TaskServiceBase):
             # project = EMLProject(title=the_collection.title,
             #                      personnel=[])  # TODO: Unsure about duplicated information with metadata
             # noinspection PyUnboundLocalVariable
-            ret = EMLMeta(titles=[title],
+            ret = EMLMeta(identifier=identifier,
+                          titles=[title],
                           creators=creators,
                           contacts=[contact],
                           metadataProviders=[provider],
@@ -358,7 +371,7 @@ class EMODnetExport(TaskServiceBase):
                           intellectualRights=licence,
                           # project=project,
                           maintenance="periodic review of origin data",
-                          maintenanceUpdateFrequency="1M",
+                          maintenanceUpdateFrequency="monthly",  # From XSD
                           additionalMetadata=meta_plus)
         return ret
 

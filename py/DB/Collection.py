@@ -16,6 +16,11 @@ class Collection(Model):
     """ A set of projects see #82, #335, #519 """
     __tablename__ = 'collection'
     id = Column(INTEGER, Sequence('collection_id_seq'), primary_key=True)
+    """ Internal identifier """
+    external_id = Column(VARCHAR, nullable=False)
+    """ External identifier, e.g. doi:10.xxxx/eml.1.1 """
+    external_id_system = Column(VARCHAR, nullable=False)
+    """ External identifier system, e.g. https://doi.org """
     provider_user_id = Column(INTEGER, ForeignKey('users.id'))
     title = Column(VARCHAR, nullable=False)
     contact_user_id = Column(INTEGER, ForeignKey('users.id'))

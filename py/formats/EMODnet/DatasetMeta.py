@@ -2,6 +2,10 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+# Metadata for DwCA export
+#
+# See https://eml.ecoinformatics.org/ for background information
+#
 
 from lxml import etree
 
@@ -20,16 +24,13 @@ class DatasetMetadata(object):
     def __init__(self, meta: EMLMeta):
         self.name = "eml.xml"
         self.meta: EMLMeta = meta
-        # metadataProvider;
-        # associatedParty;
-        # contact
 
-    EML_HEADER = """
+    EML_HEADER = """<?xml version="1.0" encoding="UTF-8"?>
 <eml:eml xmlns:eml="eml://ecoinformatics.org/eml-2.1.1"
          xmlns:dc="http://purl.org/dc/terms/"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="eml://ecoinformatics.org/eml-2.1.1 http://rs.gbif.org/schema/eml-gbif-profile/1.1/eml.xsd"
-         packageId="758c44fb-18f7-4f21-a9d7-a0fe8519f633/v1.1" system="http://gbif.org" scope="system"
+         packageId="{0}" system="{1}" scope="{2}"
          xml:lang="eng">
 """
     EML_FOOTER = """
@@ -46,15 +47,12 @@ class DatasetMetadata(object):
         for a_person in meta.creators:
             xml_person = etree_sub_element(dataset, "creator")
             self.person_to_xml(xml_person, a_person)
-        for a_person in meta.contacts:
-            xml_person = etree_sub_element(dataset, "contact")
+        for a_person in meta.metadataProviders:
+            xml_person = etree_sub_element(dataset, "metadataProvider")
             self.person_to_xml(xml_person, a_person)
         for a_person in meta.associatedParties:
             xml_person = etree_sub_element(dataset, "associatedParty")
             self.party_to_xml(xml_person, a_person)
-        for a_person in meta.metadataProviders:
-            xml_person = etree_sub_element(dataset, "metadataProvider")
-            self.person_to_xml(xml_person, a_person)
         etree_sub_element(dataset, "pubDate").text = meta.pubDate
         etree_sub_element(dataset, "language").text = meta.language
         # Abstract
@@ -69,10 +67,11 @@ class DatasetMetadata(object):
             etree_sub_element(xml_keywordset, "keywordThesaurus").text = meta.keywordSet.keywordThesaurus
         if meta.additionalInfo:
             etree_sub_element(etree_sub_element(dataset, "additionalInfo"), "para").text = meta.additionalInfo
-        self.coverage_to_xml(etree_sub_element(dataset, "coverage"))
         # Licence
         ir_xml = etree.HTML("<para>" + meta.intellectualRights + "</para>")
         etree_sub_element(dataset, "intellectualRights").append(ir_xml[0][0])
+        # Coverage
+        self.coverage_to_xml(etree_sub_element(dataset, "coverage"))
         # Purpose
         if meta.purpose:
             etree_sub_element(etree_sub_element(dataset, "purpose"), "para").text = meta.purpose
@@ -92,13 +91,26 @@ class DatasetMetadata(object):
             xml_maint = etree_sub_element(dataset, "maintenance")
             etree_sub_element(etree_sub_element(xml_maint, "description"), "para").text = meta.maintenance
             etree_sub_element(xml_maint, "maintenanceUpdateFrequency").text = meta.maintenanceUpdateFrequency
+        # Contacts
+        for a_person in meta.contacts:
+            xml_person = etree_sub_element(dataset, "contact")
+            self.person_to_xml(xml_person, a_person)
         # Additional Metadata
-        xml_additional_meta = etree_sub_element(etree_sub_element(dataset, "additionalMetadata"), "metadata")
-        self.additional_meta_to_xml(xml_additional_meta, meta.additionalMetadata)
+        xml_additional_meta = etree.Element("additionalMetadata")
+        metadata = etree_sub_element(etree_sub_element(xml_additional_meta, "metadata"), "gbif")
+        self.additional_meta_to_xml(metadata, meta.additionalMetadata)
         # Format for output
         etree.indent(dataset, space="  ")
-        as_string = etree.tostring(dataset, pretty_print=True, encoding='unicode')
-        ret = self.EML_HEADER + as_string.replace("lang=", "xml:lang=") + self.EML_FOOTER
+        dataset_as_string = etree.tostring(dataset, pretty_print=True, encoding='unicode')
+        etree.indent(xml_additional_meta, space="  ")
+        metadata_as_string = etree.tostring(xml_additional_meta, pretty_print=True, encoding='unicode')
+        identifier = self.meta.identifier
+        ret = self.EML_HEADER.format(identifier.packageId,
+                                     identifier.system,
+                                     identifier.scope)
+        ret += dataset_as_string.replace("lang=", "xml:lang=")
+        ret += metadata_as_string
+        ret += self.EML_FOOTER
         return ret
 
     @staticmethod
@@ -127,7 +139,8 @@ class DatasetMetadata(object):
             etree_sub_element(addr, "administrativeArea").text = eml_person.administrativeArea
         if eml_person.postalCode:
             etree_sub_element(addr, "postalCode").text = eml_person.postalCode
-        etree_sub_element(addr, "country").text = eml_person.country
+        if eml_person.country:
+            etree_sub_element(addr, "country").text = eml_person.country
         # Rest of person fields
         if eml_person.phone:
             etree_sub_element(xml_person, "phone").text = eml_person.phone

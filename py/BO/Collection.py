@@ -186,9 +186,11 @@ class CollectionBO(object):
         """
             Create using minimum fields.
         """
-        # Find the collection
+        # Create the collection
         db_coll = Collection()
         db_coll.title = title
+        db_coll.external_id = "?"
+        db_coll.external_id_system = "?"
         session.add(db_coll)
         session.flush()  # to get the collection ID
         bo_coll = CollectionBO(db_coll)

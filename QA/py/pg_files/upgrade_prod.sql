@@ -936,3 +936,14 @@ ALTER TABLE users ADD COLUMN mail_status_date TIMESTAMP WITHOUT TIME ZONE;
 UPDATE alembic_version SET version_num='21bb404620d5' WHERE alembic_version.version_num = '271c5fddefbf';
 
 COMMIT;
+
+-- Running upgrade 21bb404620d5 -> 910b679215ca
+
+ALTER TABLE collection ADD COLUMN external_id VARCHAR NOT NULL;
+
+ALTER TABLE collection ADD COLUMN external_id_system VARCHAR NOT NULL;
+
+UPDATE alembic_version SET version_num='910b679215ca' WHERE alembic_version.version_num = '21bb404620d5';
+
+COMMIT;
+

@@ -44,6 +44,8 @@ def test_create_collection(config, database, fastapi, caplog):
     the_coll = rsp.json()
     assert the_coll == {'abstract': None,
                         'associate_organisations': [],
+                        'external_id': '?',
+                        'external_id_system': '?',
                         'associate_users': [],
                         'citation': None,
                         'contact_user': None,
@@ -79,6 +81,8 @@ def test_create_collection(config, database, fastapi, caplog):
     """,
                            'associate_organisations': [],
                            'associate_users': [],
+                           'external_id': '?',
+                           'external_id_system': '?',
                            'citation': None,
                            'contact_user': None,
                            'creator_organisations': [],

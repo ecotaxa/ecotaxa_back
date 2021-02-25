@@ -67,7 +67,7 @@ logger = get_logger(__name__)
 fastapi_logger.setLevel(INFO)
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.6",
+              version="0.0.7",
               # openapi URL as seen from navigator
               openapi_url="/api/openapi.json",
               # root_path="/API_models"

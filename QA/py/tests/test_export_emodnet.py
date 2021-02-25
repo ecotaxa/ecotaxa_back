@@ -117,6 +117,7 @@ This series is part of the long term planktonic monitoring of
     # Admin can get it
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
+    set_dates_in_ref(ref_zip)
     unzip_and_check(rsp.content, ref_zip)
 
     url_with_0s = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=True)
@@ -125,7 +126,16 @@ This series is part of the long term planktonic monitoring of
     task_id = rsp.json()["task_id"]
     dl_url = TASK_DOWNLOAD_URL.format(task_id=task_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
+    set_dates_in_ref(with_zeroes_zip)
     unzip_and_check(rsp.content, with_zeroes_zip)
+
+
+def set_dates_in_ref(ref_zip):
+    # TODO: In theory we should mock the time libs, but below is good enough if all is done in the same second
+    from datetime import date, datetime
+    today = date.today()
+    ref_zip["eml.xml"] = ref_zip["eml.xml"].replace("2021-02-13", datetime.now().replace(microsecond=0).isoformat())
+    ref_zip["eml.xml"] = ref_zip["eml.xml"].replace("2021-02-12", today.strftime("%Y-%m-%d"))
 
 
 def unzip_and_check(zip_content, ref_content):
@@ -139,7 +149,7 @@ def unzip_and_check(zip_content, ref_content):
             file_content = content_bin.decode('utf-8')
             print(file_content)
             # Add CRs before and after for readability of the py version
-            all_in_one[name] = "\n"+file_content+"\n"
+            all_in_one[name] = "\n" + file_content + "\n"
     assert all_in_one == ref_content
 
 

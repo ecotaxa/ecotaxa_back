@@ -1,10 +1,10 @@
 _eml = r"""
-
+<?xml version="1.0" encoding="UTF-8"?>
 <eml:eml xmlns:eml="eml://ecoinformatics.org/eml-2.1.1"
          xmlns:dc="http://purl.org/dc/terms/"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="eml://ecoinformatics.org/eml-2.1.1 http://rs.gbif.org/schema/eml-gbif-profile/1.1/eml.xsd"
-         packageId="758c44fb-18f7-4f21-a9d7-a0fe8519f633/v1.1" system="http://gbif.org" scope="system"
+         packageId="?" system="?" scope="system"
          xml:lang="eng">
 <dataset>
   <title xml:lang="eng">EMODNET test collection</title>
@@ -19,17 +19,6 @@ _eml = r"""
     </address>
     <electronicMailAddress>real@users.com</electronicMailAddress>
   </creator>
-  <contact>
-    <individualName>
-      <givenName>Real</givenName>
-      <surName>User</surName>
-    </individualName>
-    <organizationName>IMEV</organizationName>
-    <address>
-      <country>FR</country>
-    </address>
-    <electronicMailAddress>real@users.com</electronicMailAddress>
-  </contact>
   <metadataProvider>
     <individualName>
       <givenName>Real</givenName>
@@ -41,7 +30,7 @@ _eml = r"""
     </address>
     <electronicMailAddress>real@users.com</electronicMailAddress>
   </metadataProvider>
-  <pubDate>2021-02-13</pubDate>
+  <pubDate>2021-02-12</pubDate>
   <language>eng</language>
   <abstract>
     <para>
@@ -58,6 +47,11 @@ This series is part of the long term planktonic monitoring of
     <keyword>EcoTaxa</keyword>
     <keywordThesaurus>GBIF Dataset Type Vocabulary: http://rs.gbif.org/vocabulary/gbif/dataset_type.xml</keywordThesaurus>
   </keywordSet>
+  <intellectualRights>
+    <para>This work is licensed under a <ulink url="https://creativecommons.org/licenses/by/4.0/legalcode">
+        <citetitle>Creative Commons Attribution (CC-BY) 4.0 License</citetitle>
+      </ulink>.</para>
+  </intellectualRights>
   <coverage>
     <geographicCoverage>
       <geographicDescription>See coordinates</geographicDescription>
@@ -89,23 +83,31 @@ This series is part of the long term planktonic monitoring of
       </taxonomicClassification>
     </taxonomicCoverage>
   </coverage>
-  <intellectualRights>
-    <para>This work is licensed under a <ulink url="https://creativecommons.org/licenses/by/4.0/legalcode">
-        <citetitle>Creative Commons Attribution (CC-BY) 4.0 License</citetitle>
-      </ulink>.</para>
-  </intellectualRights>
   <maintenance>
     <description>
       <para>periodic review of origin data</para>
     </description>
-    <maintenanceUpdateFrequency>1M</maintenanceUpdateFrequency>
+    <maintenanceUpdateFrequency>monthly</maintenanceUpdateFrequency>
   </maintenance>
-  <additionalMetadata>
-    <metadata>
-      <dateStamp>2021-02-13</dateStamp>
-    </metadata>
-  </additionalMetadata>
+  <contact>
+    <individualName>
+      <givenName>Real</givenName>
+      <surName>User</surName>
+    </individualName>
+    <organizationName>IMEV</organizationName>
+    <address>
+      <country>FR</country>
+    </address>
+    <electronicMailAddress>real@users.com</electronicMailAddress>
+  </contact>
 </dataset>
+<additionalMetadata>
+  <metadata>
+    <gbif>
+      <dateStamp>2021-02-13</dateStamp>
+    </gbif>
+  </metadata>
+</additionalMetadata>
 
 </eml:eml>
 
@@ -186,10 +188,6 @@ m106_mn01_n1_sml		100.0	Volume sampled of the water body	Cubic metres	http://voc
 m106_mn01_n2_sml		100.0	Volume sampled of the water body	Cubic metres	http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/	http://vocab.nerc.ac.uk/collection/P06/current/MCUB/
 m106_mn01_n3_sml		100.0	Volume sampled of the water body	Cubic metres	http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/	http://vocab.nerc.ac.uk/collection/P06/current/MCUB/
 """
-# Adjust date to today
-from datetime import date
-today = date.today()
-_eml = _eml.replace("2021-02-13", today.strftime("%Y-%m-%d"))
 ref_zip = {"event.txt": _event,
            "eml.xml": _eml,
            "extendedmeasurementorfact.txt": _emofs,
