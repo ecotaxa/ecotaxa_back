@@ -986,6 +986,7 @@ def digest_project_images(project_id: int,
 @app.get("/admin/images/digest", tags=['WIP'], include_in_schema=False,
          response_model=str)
 def digest_images(max_digests: Optional[int],
+                  project_id: Optional[int] = None,
                   current_user: int = Depends(get_current_user)) -> str:
     """
         Compute digests if they are not.
@@ -993,7 +994,22 @@ def digest_images(max_digests: Optional[int],
     max_digests = 1000 if max_digests is None else max_digests
     sce = ImageManagerService()
     with RightsThrower(sce):
-        data = sce.do_digests(current_user, prj_id=None, max_digests=max_digests)
+        data = sce.do_digests(current_user, prj_id=project_id, max_digests=max_digests)
+    return data
+
+
+@app.get("/admin/images/cleanup1", tags=['WIP'], include_in_schema=False,
+         response_model=str)
+def cleanup_images_1(project_id: int,
+                     max_deletes: Optional[int] = None,
+                     current_user: int = Depends(get_current_user)) -> str:
+    """
+        Remove duplicated images inside same object. Probably due to import update bug.
+    """
+    max_deletes = 10000 if max_deletes is None else max_deletes
+    sce = ImageManagerService()
+    with RightsThrower(sce):
+        data = sce.do_cleanup_dup_same_obj(current_user, prj_id=project_id, max_deletes=max_deletes)
     return data
 
 

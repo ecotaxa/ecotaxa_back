@@ -48,7 +48,7 @@ def dataclass_to_model(clazz: T, add_suffix: bool = False, titles: Optional[Dict
             raise Exception("Not managed yet :", fld_type)  # pragma:nocover
         model_fields[a_field.name] = (fld_type, default)
     model_name = clazz.__name__ + ("Model" if add_suffix else "")  # type: ignore
-    ret = create_model(
+    ret: PydanticModelT = create_model(
         model_name, __config__=DataclassConfig, **model_fields  # type: ignore
     )
     if titles is not None:

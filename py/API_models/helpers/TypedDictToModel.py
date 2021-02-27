@@ -14,6 +14,8 @@ from typing import Optional, TypeVar
 # noinspection PyPackageRequirements
 from pydantic import create_model
 
+from API_models.helpers import PydanticModelT
+
 # Generify the def with input type
 T = TypeVar('T')
 
@@ -27,7 +29,7 @@ def typed_dict_to_model(typed_dict: T):  # TODO -> Type[BaseModel]:
             # app doesn't even start if below is raised -> nocover
             raise Exception("Not managed yet")  # pragma:nocover
 
-    ret = create_model(
+    ret: PydanticModelT = create_model(
         typed_dict.__name__, **annotations  # type: ignore
     )
     # Make the model get-able
