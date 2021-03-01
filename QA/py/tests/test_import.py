@@ -55,6 +55,7 @@ def check_project(prj_id: int):
     problems = ProjectConsistencyChecker(prj_id).run(ADMIN_USER_ID)
     assert problems == []
 
+
 def real_params_from_prep_out(task_id, prep_out: ImportPrepRsp) -> ImportRealReq:
     return ImportRealReq(task_id=task_id,
                          **prep_out.dict(exclude={'warnings', 'errors'}))
@@ -133,7 +134,7 @@ def test_import_again_skipping(config, database, caplog):
     assert found_err
 
 
-#@pytest.mark.skip()
+# @pytest.mark.skip()
 def test_import_again_irrelevant_skipping(config, database, caplog):
     """ Re-import similar files into same project
         CANNOT RUN BY ITSELF """
@@ -157,7 +158,7 @@ def test_import_again_irrelevant_skipping(config, database, caplog):
     assert found_err
 
 
-#@pytest.mark.skip()
+# @pytest.mark.skip()
 @pytest.mark.parametrize("title", ["Test Create Update"])
 def test_import_a_bit_more_skipping(config, database, caplog, title):
     """ Re-import similar files into same project, with an extra one.
@@ -227,7 +228,7 @@ def import_plain(prj_id, task_id):
     RealImport(prj_id, params).run(ADMIN_USER_ID)
 
 
-#@pytest.mark.skip()
+# @pytest.mark.skip()
 def test_import_again_not_skipping_nor_imgs(config, database, caplog):
     """ Re-import into same project, not skipping TSVs or images
         CANNOT RUN BY ITSELF """
@@ -247,7 +248,7 @@ def test_import_again_not_skipping_nor_imgs(config, database, caplog):
     assert nb_errs == 11
 
 
-#@pytest.mark.skip()
+# @pytest.mark.skip()
 def test_equal_dump_prj1(config, database, caplog):
     caplog.set_level(logging.DEBUG)
     out_dump = "prj1.txt"
@@ -255,7 +256,7 @@ def test_equal_dump_prj1(config, database, caplog):
     sce.run(projid=1, out=out_dump)
 
 
-#@pytest.mark.skip()
+# @pytest.mark.skip()
 def test_import_update(config, database, caplog):
     """ Update TSVs """
     caplog.set_level(logging.DEBUG)
@@ -283,9 +284,12 @@ def test_import_update(config, database, caplog):
     # Check that all went fine
     for a_msg in caplog.records:
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
+    # ecotaxa/ecotaxa_dev#583: Check that no image was added during the update
+    saves = [msg for msg in caplog.messages if "Batch save objects" in msg]
+    assert saves == ["Batch save objects of 0/0/0/0"] * 3
 
 
-#@pytest.mark.skip()
+# @pytest.mark.skip()
 def do_import_update(prj_id, caplog, classif):
     task_id = TaskService().create()
     params = ImportPrepReq(task_id=task_id,
@@ -310,8 +314,7 @@ def do_import_update(prj_id, caplog, classif):
         assert "++ ID" not in a_msg.getMessage()
 
 
-
-#@pytest.mark.skip()
+# @pytest.mark.skip()
 # noinspection DuplicatedCode
 @pytest.mark.parametrize("title", ["Test LS 2"])
 def test_import_uvp6(config, database, caplog, title):
@@ -332,7 +335,7 @@ def test_import_uvp6(config, database, caplog, title):
     return prj_id
 
 
-#@pytest.mark.skip()
+# @pytest.mark.skip()
 def test_equal_dump_prj2(config, database, caplog):
     caplog.set_level(logging.DEBUG)
     out_dump = "prj2.txt"
@@ -340,7 +343,7 @@ def test_equal_dump_prj2(config, database, caplog):
     sce.run(projid=2, out=out_dump)
 
 
-#@pytest.mark.skip()
+# @pytest.mark.skip()
 def test_import_empty(config, database, caplog):
     """ Nothing relevant to import """
     caplog.set_level(logging.DEBUG)
@@ -353,7 +356,7 @@ def test_import_empty(config, database, caplog):
     assert len(prep_out.errors) == 1
 
 
-#@pytest.mark.skip()
+# @pytest.mark.skip()
 def test_import_empty_tsv(config, database, caplog):
     """ a TSV but no data """
     caplog.set_level(logging.DEBUG)
@@ -366,7 +369,7 @@ def test_import_empty_tsv(config, database, caplog):
     assert len(prep_out.errors) == 1
 
 
-#@pytest.mark.skip()
+# @pytest.mark.skip()
 def test_import_issues(config, database, caplog):
     """ The TSV contains loads of problems """
     caplog.set_level(logging.DEBUG)
@@ -392,7 +395,7 @@ def test_import_issues(config, database, caplog):
         "Missing Image 'nada.png' in file ecotaxa_m106_mn01_n3_sml.tsv. "]
 
 
-#@pytest.mark.skip()
+# @pytest.mark.skip()
 def test_import_classif_issue(config, database, caplog):
     """ The TSV contains an unknown classification id """
     caplog.set_level(logging.DEBUG)
@@ -406,7 +409,7 @@ def test_import_classif_issue(config, database, caplog):
         "Some specified classif_id don't exist, correct them prior to reload: 99999999"]
 
 
-#@pytest.mark.skip()
+# @pytest.mark.skip()
 def test_import_too_many_custom_columns(config, database, caplog):
     """ The TSV contains too many custom columns.
         Not a realistic case, but it simulates what happens if importing into a project with
@@ -430,7 +433,7 @@ IMPORT_PREP_URL = "/import_prep/{project_id}"
 IMPORT_REAL_URL = "/import_real/{project_id}"
 
 
-#@pytest.mark.skip()
+# @pytest.mark.skip()
 def test_import_ambiguous_classification(config, database, fastapi, caplog):
     """ See https://github.com/oceanomics/ecotaxa_dev/issues/87
         Do it via API """
@@ -454,7 +457,7 @@ def test_import_ambiguous_classification(config, database, fastapi, caplog):
         rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
 
 
-#@pytest.mark.skip()
+# @pytest.mark.skip()
 def test_import_uvp6_zip_in_dir(config, database, caplog):
     """
         An *Images.zip inside a directory.
@@ -475,7 +478,7 @@ def test_import_uvp6_zip_in_dir(config, database, caplog):
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
 
 
-#@pytest.mark.skip()
+# @pytest.mark.skip()
 def test_import_sparse(config, database, caplog):
     """
         Import a sparse file, some columns are missing.
@@ -501,7 +504,7 @@ def test_import_sparse(config, database, caplog):
     sce.run(projid=prj_id, out="chk.dmp")
 
 
-#@pytest.mark.skip()
+# @pytest.mark.skip()
 def test_import_breaking_unicity(config, database, caplog):
     """
         Sample orig_id is unique per project
@@ -525,15 +528,16 @@ def test_import_breaking_unicity(config, database, caplog):
 
     prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
     assert prep_out.errors == ["Acquisition 'generic_m106_mn01_n1_sml' is already associated with sample "
- "'{'m106_mn01_n1_sml'}', it cannot be associated as well with "
- "'m106_mn01_n1_sml_brk"]
+                               "'{'m106_mn01_n1_sml'}', it cannot be associated as well with "
+                               "'m106_mn01_n1_sml_brk"]
     # Do real import, even if we should not...
     params = real_params_from_prep_out(task_id, prep_out)
     # Boom
     with pytest.raises(AssertionError) as e_info:
         RealImport(prj_id, params).run(ADMIN_USER_ID)
 
-#@pytest.mark.skip()
+
+# @pytest.mark.skip()
 @pytest.mark.parametrize("title", ["Test Import Images"])
 def test_import_images(config, database, caplog, title):
     """
@@ -581,7 +585,7 @@ def test_import_images(config, database, caplog, title):
 IMPORT_IMAGES_URL = "/simple_import/{project_id}"
 
 
-#@pytest.mark.skip()
+# @pytest.mark.skip()
 @pytest.mark.parametrize("title", ["Simple via fastapi"])
 def test_api_import_images(config, database, fastapi, caplog, title):
     """
@@ -602,7 +606,7 @@ def test_api_import_images(config, database, fastapi, caplog, title):
     return prj_id
 
 
-#@pytest.mark.skip()
+# @pytest.mark.skip()
 def test_issue_483(config, database, caplog):
     """
         Too large image.
