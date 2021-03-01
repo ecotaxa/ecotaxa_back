@@ -6,7 +6,7 @@
 #
 import filecmp
 import hashlib
-from os.path import join
+from os.path import join, exists
 from typing import Optional, Set
 
 from sqlalchemy import func, and_
@@ -67,19 +67,42 @@ class ImageManagerService(Service):
             cnt += 1
             img_file = ImageFile(path=an_img_file_name)
             self.session.add(img_file)
-            img_file_path = self.vault.sub_path(an_img_file_name)
-            try:
-                md5 = self.compute_md5(img_file_path)
-                img_file.digest = md5
-                img_file.digest_type = '5'
-                img_file.state = ImageFileStateEnum.OK.value
-            except FileNotFoundError:
-                img_file.state = ImageFileStateEnum.MISSING.value
-            except Exception as e:
-                logger.exception(e)
-                img_file.state = ImageFileStateEnum.ERROR.value
+            self._md5_on_record(img_file)
         self.session.commit()
+        # Eventually we can still satisfy the constraint while doing a few missing md5s
+        left_for_unknown = max_digests - cnt
+        if left_for_unknown > 0:
+            # Also do unknown image file lines
+            miss_qry: Query = self.session.query(ImageFile)
+            miss_qry = miss_qry.filter(and_(ImageFile.state == ImageFileStateEnum.UNKNOWN.value,
+                                            ImageFile.digest_type == '?'))
+            if prj_id is not None:
+                # Find unknown images in a project
+                miss_qry = miss_qry.outerjoin(Image, Image.file_name == ImageFile.path)
+                miss_qry = miss_qry.join(ObjectHeader).join(Acquisition).join(Sample).join(Project)
+                miss_qry = miss_qry.filter(Project.projid == prj_id)
+            # On purpose, no "order by" clause. Results are random, but sorting takes a while on lots of images
+            miss_qry = miss_qry.limit(left_for_unknown)
+            with CodeTimer("Files with unknown state, query '%s':" % str(miss_qry), logger):
+                missing_ones = [an_img_file for an_img_file in miss_qry.all()]
+            for a_missing in missing_ones:
+                cnt += 1
+                self._md5_on_record(a_missing)
+            self.session.commit()
         return "Digest for %d images done." % cnt
+
+    def _md5_on_record(self, img_file: ImageFile):
+        img_file_path = self.vault.sub_path(img_file.path)
+        try:
+            md5 = self.compute_md5(img_file_path)
+            img_file.digest = md5
+            img_file.digest_type = '5'
+            img_file.state = ImageFileStateEnum.OK.value
+        except FileNotFoundError:
+            img_file.state = ImageFileStateEnum.MISSING.value
+        except Exception as e:
+            logger.exception(e)
+            img_file.state = ImageFileStateEnum.ERROR.value
 
     def do_cleanup_dup_same_obj(self, current_user_id: UserIDT,
                                 prj_id: ProjectIDT,
@@ -126,18 +149,30 @@ class ImageManagerService(Service):
             orig_path = self.vault.sub_path(orig_file_name)
             dup_path = self.vault.sub_path(an_image.file_name)
             assert orig_path != dup_path
-            try:
-                same = filecmp.cmp(orig_path, dup_path, False)
-            except Exception as exc:
-                logger.info("Exception while comparing %s and %s: %s", orig_path, dup_path, str(exc))
-                ko_except += 1
-                continue
-            if not same:
-                ko_not_same += 1
+            orig_exists = exists(orig_path)
+            dup_exists = exists(dup_path)
+            if orig_exists:
+                if dup_exists:
+                    try:
+                        same = filecmp.cmp(orig_path, dup_path, False)
+                    except Exception as exc:
+                        logger.info("Exception while comparing orig:%s and dup:%s: %s", orig_path, dup_path, str(exc))
+                        ko_except += 1
+                        continue
+                    if not same:
+                        ko_not_same += 1
+                        continue
+                else:
+                    # Duplicate is gone already
+                    pass
+            else:
+                # DB record of physical file is wrong
+                # TODO
                 continue
             # Do the cleanup
             deleted_imgids.add(an_image.imgid)
-            remover.add_files([an_image.file_name])
+            if dup_exists:
+                remover.add_files([an_image.file_name])
             self.session.delete(an_image)
             self.session.delete(an_image_file)
         # Wait for the files handled
