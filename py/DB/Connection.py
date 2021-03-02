@@ -54,5 +54,6 @@ class Connection(object):
         # This is not necessary anymore with PG12+
         # ref: https://www.postgresql.org/docs/12/datatype-numeric.html#DATATYPE-FLOAT
         #  and https://www.postgresql.org/docs/11/runtime-config-client.html
-        #ret.execute("set extra_float_digits=2")
+        # TODO: Remove when go to PG12
+        ret.execute("set extra_float_digits=2")
         return ret
