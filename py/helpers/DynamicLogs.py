@@ -21,26 +21,27 @@ class PerThreadHandler(logging.Handler):
     def __init__(self, handler):
         super().__init__()
         self.handler = handler
-        self.alt_handler = None
-        self.alt_threadid = None
+        self.alt_handlers = {}
         self.level = handler.level
 
     def emit(self, record):
-        if self.alt_handler and get_ident() == self.alt_threadid:
-            self.alt_handler.emit(record)
+        alt_handler = self.alt_handlers.get(get_ident())
+        if alt_handler:
+            alt_handler.emit(record)
         else:
             self.handler.emit(record)
 
     def switch_to(self, new_filename_or_stream):
-        self.alt_threadid = get_ident()
-        self.alt_handler = logging.FileHandler(new_filename_or_stream)
-        self.alt_handler.setLevel(self.level)
-        self.alt_handler.setFormatter(logging.Formatter(ALT_LOGGING_FORMAT))
+        alt_handler = logging.FileHandler(new_filename_or_stream)
+        alt_handler.setLevel(self.level)
+        alt_handler.setFormatter(logging.Formatter(ALT_LOGGING_FORMAT))
+        self.alt_handlers[get_ident()] = alt_handler
 
     def stop_switch(self):
-        self.alt_handler.close()
-        self.alt_threadid = None
-        self.alt_handler = None
+        alt_handler = self.alt_handlers.get(get_ident())
+        if alt_handler:
+            alt_handler.close()
+            del self.alt_handlers[get_ident()]
 
 
 # Singleton handler per process

@@ -262,20 +262,31 @@ def test_import_update(config, database, caplog):
     caplog.set_level(logging.DEBUG)
     task_id = TaskService().create()
     prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test Import update"))
+
     # Plain import first
     import_plain(prj_id, task_id)
     dump_sce = AsciiDumper()
     dump_sce.run(projid=prj_id, out='before_upd.txt')
+
+    # Update using initial import data, should do nothing
+    do_import_update(prj_id, caplog, 'Yes', str(PLAIN_DIR))
+    print("Import update 0:" + "\n".join(caplog.messages))
+    upds = [msg for msg in caplog.messages if msg.startswith("Updating")]
+    assert upds == []
+
     # Update without classif, 10 cells
     do_import_update(prj_id, caplog, 'Yes')
+    print("Import update 1:" + "\n".join(caplog.messages))
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
-    print("\n".join(caplog.messages))
     # 9 fields + 7 derived sun positions
     assert nb_upds == 16
+    saves = [msg for msg in caplog.messages if "Batch save objects" in msg]
+    assert saves == ["Batch save objects of 0/0/0/0"] * 3
+
     # Update classif, 2 cells, one classif ID and one classif quality
     do_import_update(prj_id, caplog, 'Cla')
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
-    print("\n".join(caplog.messages))
+    print("Import update 2:" + "\n".join(caplog.messages))
     assert nb_upds == 2
     # 1 line corresponds to nothing, on purpose
     nb_notfound = len([msg for msg in caplog.messages if "not found while updating" in msg])
@@ -288,16 +299,27 @@ def test_import_update(config, database, caplog):
     saves = [msg for msg in caplog.messages if "Batch save objects" in msg]
     assert saves == ["Batch save objects of 0/0/0/0"] * 3
 
+    do_import_update(prj_id, caplog, 'Yes')
+    print("Import update 3:" + "\n".join(caplog.messages))
+    assert len(caplog.messages) > 0
+    upds = [msg for msg in caplog.messages if msg.startswith("Updating")]
+    assert upds == []
+    dump_sce.run(projid=prj_id, out='after_upd_3.txt')
+
+    # Ensure that re-updating updates nothing. This is tricky due to floats storage on DB.
+
 
 # @pytest.mark.skip()
-def do_import_update(prj_id, caplog, classif):
+def do_import_update(prj_id, caplog, classif, source=None):
     task_id = TaskService().create()
+    if source is None:
+        source = str(UPDATE_DIR)
     params = ImportPrepReq(task_id=task_id,
                            skip_existing_objects=True,
                            update_mode=classif,
-                           source_path=str(UPDATE_DIR))
+                           source_path=source)
     prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
-    assert len(prep_out.errors) == 0
+    assert prep_out.errors == []
     params = real_params_from_prep_out(task_id, prep_out)
     params.found_users['elizandro rodriguez'] = {'id': 1}
     params.found_taxa['other'] = 99999  # 'other<dead'

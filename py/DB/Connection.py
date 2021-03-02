@@ -49,4 +49,10 @@ class Connection(object):
         """
             Get a fresh session from the connection.
         """
-        return self.session_factory()
+        ret = self.session_factory()
+        # Align the DB precision of floats with the one in python
+        # This is not necessary anymore with PG12+
+        # ref: https://www.postgresql.org/docs/12/datatype-numeric.html#DATATYPE-FLOAT
+        #  and https://www.postgresql.org/docs/11/runtime-config-client.html
+        #ret.execute("set extra_float_digits=2")
+        return ret
