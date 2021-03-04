@@ -29,11 +29,6 @@ class Process(Model):
     # The relationships are created in Relations.py but the typing here helps IDE
     acquisition: relationship
 
-    @staticmethod
-    def pk_col():  # pragma: no cover
-        # TODO: Not needed anymore but mypy complains
-        return "processid"
-
     def pk(self) -> int:
         return self.processid
 

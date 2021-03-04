@@ -52,5 +52,5 @@ class TaskService(Service):
         out_file_path = temp_dir / out_file_name
         try:
             return open(out_file_path, mode="rb"), out_file_name
-        except IOError:
+        except IOError:  # pragma:nocover
             return StringIO("NOT FOUND"), out_file_name

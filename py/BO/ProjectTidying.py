@@ -98,7 +98,7 @@ class ProjectTopology(object):
         for acquis_user_id, parents in self.acquisition_parents.items():
             if len(parents) > 1:
                 ret.append("Acquisition '%s' is nested in several samples: %s "
-                           % (acquis_user_id, parents))
+                           % (acquis_user_id, parents))  # pragma: no cover
         for acquis_user_id in self.acquisition_parents.keys():
             if acquis_user_id not in self.acquisition_child:
                 ret.append("Acquisition '%s' has no associated Process "

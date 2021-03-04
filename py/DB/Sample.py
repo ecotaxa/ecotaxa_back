@@ -29,10 +29,6 @@ class Sample(Model):
     all_acquisitions: relationship
     ecopart_sample: relationship
 
-    @staticmethod
-    def pk_col():
-        return "sampleid"
-
     def pk(self) -> int:
         return self.sampleid
 

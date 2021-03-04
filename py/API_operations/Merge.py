@@ -164,7 +164,7 @@ class MergeService(Service):
                     upd_values = {'acq_sample_id': func.coalesce(smp_subqry.as_scalar(), Acquisition.acq_sample_id)}
                     upd = upd.filter(Acquisition.acq_sample_id == any_(list(common_samples.keys())))
                     # upd = upd.filter(Acquisition.acquisid != all_(list(common_acquisitions.keys())))
-                else:
+                if len(common_samples) == 0:
                     # Nothing to do. There were only new samples, all of them moved to self.
                     continue
             elif a_fk_to_proj_tbl == ObjectHeader:
@@ -181,7 +181,7 @@ class MergeService(Service):
                         acq_cte.c.column1 == ObjectHeader.acquisid)
                     upd_values = {'acquisid': func.coalesce(acq_subqry.as_scalar(), ObjectHeader.acquisid)}
                     upd = upd.filter(ObjectHeader.acquisid == any_(list(common_acquisitions.keys())))
-                else:
+                if len(common_acquisitions) == 0:
                     # Nothing to do. There were only new acquisitions, all of them moved to self.
                     continue
             else:

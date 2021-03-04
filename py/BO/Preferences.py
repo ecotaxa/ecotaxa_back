@@ -27,7 +27,7 @@ class Preferences(object):
         if user.preferences is not None:
             try:
                 self.prefs = json.loads(user.preferences)
-            except JSONDecodeError:
+            except JSONDecodeError:  # pragma:nocover
                 self.changed = True
 
     def add_recent_project(self, prj_id: ProjectIDT) -> bool:

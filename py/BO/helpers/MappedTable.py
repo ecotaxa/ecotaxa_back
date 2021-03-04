@@ -26,7 +26,7 @@ class MappedTable(metaclass=ABCMeta):
 
     @abc.abstractmethod
     def add_filter(self, upd):
-        ...
+        ...  # pragma:nocover
 
     def _apply_on_all(self, clazz: MappedTableTypeT, project: Project, updates: List[ColUpdate]) -> int:
         """
@@ -55,15 +55,14 @@ class MappedTable(metaclass=ABCMeta):
         """
         clean_updates = []
         a_col_upd: ColUpdate
+        updatable_cols = non_key_cols(clazz)
         for a_col_upd in updates:
             # We need a real DB column or a mapped one
             col_to_upd = a_col_upd["ucol"]
             if col_to_upd in tbl_mappings:
                 a_col_upd["ucol"] = tbl_mappings[col_to_upd]
-            elif col_to_upd in non_key_cols(clazz):
-                pass
-            else:
-                # Ignored
+            elif col_to_upd not in updatable_cols:
+                # Ignored with no reporting
                 continue
             clean_updates.append(a_col_upd)
         return clean_updates

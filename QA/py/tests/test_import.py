@@ -567,12 +567,11 @@ def test_import_images(config, database, caplog, title):
     """
     caplog.set_level(logging.DEBUG)
     prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title=title))
-    task_id = TaskService().create()
 
     vals = {"latitude": "abcde",
             "longitude": "456.5",
             "depthmin": "very very low"}
-    params = SimpleImportReq(task_id=task_id,
+    params = SimpleImportReq(task_id=0,
                              source_path=str(PLAIN_DIR),
                              values=vals)
     rsp = SimpleImport(prj_id, params).run(ADMIN_USER_ID)

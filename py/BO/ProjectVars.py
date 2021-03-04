@@ -52,7 +52,11 @@ class ProjectVar(object):
         """
             Analyze the formula from syntactic point of view and extract variables.
         """
-        formula_ast = ast.parse(self.formula)
+        try:
+            formula_ast = ast.parse(self.formula, '<formula>', 'eval')
+        except Exception as e:
+            # Basically anything can happen here
+            raise TypeError(str(e))
         ret = []
         for node in ast.walk(formula_ast):
             if isinstance(node, ast.Name):
@@ -60,11 +64,7 @@ class ProjectVar(object):
         return ret
 
     def _compile(self):
-        try:
-            return compile(self.formula, '<formula>', 'eval')
-        except Exception as e:
-            # Basically anything can happen here
-            raise TypeError(str(e))
+        return compile(self.formula, '<formula>', 'eval')
 
 
 

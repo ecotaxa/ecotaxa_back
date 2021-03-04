@@ -11,6 +11,8 @@ def clean_value(value: str, is_numeric: bool = False):
     """
         Remove spaces and map 2 special values to empty string, which is _accepted_ like an empty column.
     """
+    if value is None:
+        return ''
     value = value.strip()
     #    if len(value) < 4 and value.lower() in ('nan', 'na'):
     # TODO: Use RE and benchmark

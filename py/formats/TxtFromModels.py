@@ -39,11 +39,13 @@ class TxtFileWithModel(object):
     @staticmethod
     def id_col_from_model(model) -> Tuple[Optional[str], bool]:
         model_fields = model.__fields__
+        ret = None, True
         for a_field_name, a_field in model_fields.items():
             field_extra = a_field.field_info.extra
             if field_extra.get("is_id"):
-                return a_field_name, field_extra.get("dup_id")
-        return None, True
+                ret = a_field_name, field_extra.get("dup_id")
+                break
+        return ret
 
     def add_entity(self, an_entity):
         # Strip the pydantic model to the minimum.

@@ -66,6 +66,12 @@ def test_subentities(config, database, fastapi, caplog):
     assert response.status_code == status.HTTP_200_OK
     obj = response.json()
     assert obj is not None
+    # OK ID with anonymous
+    url = OBJECT_QUERY_URL.format(object_id=first_objid)
+    response = fastapi.get(url)
+    assert response.status_code == status.HTTP_200_OK
+    obj = response.json()
+    assert obj is not None
 
     # Move up in hierarchy
     sample_id = first_obj[2]

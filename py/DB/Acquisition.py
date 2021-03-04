@@ -33,10 +33,6 @@ class Acquisition(Model):
     process: relationship
     all_objects: relationship
 
-    @staticmethod
-    def pk_col():
-        return "acquisid"
-
     def pk(self) -> int:
         return self.acquisid
 

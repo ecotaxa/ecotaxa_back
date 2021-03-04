@@ -275,7 +275,7 @@ class EMLTemporalCoverage(BaseModel):
 
     # noinspection PyMethodParameters
     @root_validator(pre=True)
-    def check_passwords_match(cls, values):
+    def check_at_least_a_date(cls, values):
         assert 'singleDateTime' in values or ('beginDate' in values and 'endDate' in values), \
             'singleDateTime or beginDate+endDate should be specified'
         return values

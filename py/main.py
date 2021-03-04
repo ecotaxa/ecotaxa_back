@@ -614,7 +614,7 @@ def acquisition_query(acquisition_id: int,
 def instrument_query(project_ids: str) \
         -> List[str]:
     """
-        Query for instruments, either inside specific project(s) or globally.
+        Query for instruments, inside specific project(s).
     """
     sce = InstrumentsService()
     proj_ids = _split_num_list(project_ids)
@@ -810,7 +810,7 @@ def object_query(object_id: int,
                  current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> ObjectBO:
     """
-        Read a single object.
+        Read a single object. Anonymous reader can do if the project has the right rights :)
     """
     sce = ObjectService()
     with RightsThrower(sce):

@@ -14,6 +14,7 @@ COLLECTION_SEARCH_URL = "/collections/search?title={title}"
 COLLECTION_UPDATE_URL = "/collections/{collection_id}"
 COLLECTION_DELETE_URL = "/collections/{collection_id}"
 
+INSTRUMENT_QUERY_URL = "/instruments/?project_ids={project_id}"
 
 def test_create_collection(config, database, fastapi, caplog):
     caplog.set_level(logging.FATAL)
@@ -21,6 +22,12 @@ def test_create_collection(config, database, fastapi, caplog):
     # Admin imports the project
     from tests.test_import import test_import
     prj_id = test_import(config, database, caplog, "Collection project 1")
+
+    # Small instrument 'list' test
+    url = INSTRUMENT_QUERY_URL.format(project_id=prj_id)
+    rsp = fastapi.get(url)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == ['epson']
 
     # And creates a collection with it
     url = COLLECTION_CREATE_URL

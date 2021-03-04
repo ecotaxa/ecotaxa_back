@@ -307,9 +307,9 @@ class TSVFile(object):
                     # Log the appeared parent
                     logger.info("++ ID %s %s %d", alias, parent_orig_id, upper_level_pk)
 
-                # Columns in obj_head have same name as the pk column of corresponding entities
                 if parent_class == Acquisition:
-                    setattr(object_head_to_write, parent.pk_col(), upper_level_pk)
+                    # Set parent of object
+                    object_head_to_write.acquisid = upper_level_pk
             else:
                 # Process is a twin table of Acquisition, its orig_id can be anything so no check to do.
                 if not upper_level_created:
