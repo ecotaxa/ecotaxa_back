@@ -326,7 +326,9 @@ class TableMapping(object):
                 if real_col_in_dest != a_real_src_col:
                     # TSV column is present but mapped to a different DB column...
                     # hopefully of same type
-                    assert real_col_in_dest[0] == a_real_src_col[0]
+                    assert real_col_in_dest[0] == a_real_src_col[0], \
+                        "Destination column '%s' aka '%s' and source column '%s' aka '%s' have different types!" % \
+                        (a_tsv_src_col, real_col_in_dest, a_tsv_src_col, a_real_src_col)
                     remaps.append(RemapOp(a_real_src_col, real_col_in_dest))
                 else:
                     # TSV column is present and mapped to the same column
