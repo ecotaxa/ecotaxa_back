@@ -8070,8 +8070,13 @@ COPY public.taxonomy (id, parent_id, name, id_source, nbrobj, nbrobjcum, creatio
 5204	871	Cellulosimicrobium terreum	8275	\N	\N	\N	\N	Cellulosimicrobium terreum	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 5205	871	Cellulosimicrobium funkei	8274	\N	\N	\N	\N	Cellulosimicrobium funkei	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 5206	871	Cellulosimicrobium cellulans	8273	\N	\N	\N	\N	Cellulosimicrobium cellulans	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
+11517	2367	Arthropoda	42976	74	7891704	\N	\N	Arthropoda	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
+12846	11517	Crustacea	46068	43726	7836241	\N	\N	Crustacea	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
+16621	12846	Maxillopoda	48506	\N	6832368	\N	\N	Maxillopoda	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 25828	16621	Copepoda	48519	\N	\N	\N	\N	Copepoda	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 25829	16620	Nectiopoda	49716	\N	\N	\N	\N	Nectiopoda	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
+12845	11517	Hexapoda	49722	\N	11439	\N	\N	Hexapoda	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
+16630	12845	Collembola	49723	\N	34	\N	\N	Collembola	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 25830	16630	Symphypleona	49815	\N	\N	\N	\N	Symphypleona	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 25831	16630	Stemonitis	49813	\N	\N	\N	\N	Stemonitis<Collembola	\N	2019-01-29 05:53:34	\N	\N	\N	A	P
 25832	16630	Pseudachorutes	49811	\N	\N	\N	\N	Pseudachorutes	\N	2018-01-02 00:00:00	\N	\N	\N	A	P

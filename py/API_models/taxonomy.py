@@ -23,7 +23,7 @@ class TaxonModel(BaseModel):
     id: int = Field(title="The taxon/category IDs.")
     name: str = Field(title="The taxon/category verbatim name.")
     nb_objects: int = Field(title="How many objects are classified in this category.")
-    nb_children_objects: int = Field(title="How many objects are classified in this category and its subcategories.")
+    nb_children_objects: int = Field(title="How many objects are classified in this category children (not itself).")
     display_name: str = Field(title="The taxon/category display name.")
     lineage: List[str] = Field(title="The taxon/category name of ancestors, including self, in first.")
     children: List[int] = Field(title="The taxon/category IDs of children.")
