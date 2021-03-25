@@ -24,7 +24,7 @@ requests==2.25.1
 itsdangerous==1.1.0
 passlib==1.7.4
 # A bit of html
-jinja2==2.11.2
+jinja2==2.11.3
 aiofiles==0.6.0
 # Recent sqlite3 as the one embedded in python 3.6 is quite old
 pysqlite3==0.4.5
