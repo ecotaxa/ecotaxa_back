@@ -1,3 +1,15 @@
+--- Extra read-only role
+CREATE ROLE readerole WITH
+  LOGIN
+  NOSUPERUSER
+  INHERIT
+  NOCREATEDB
+  NOCREATEROLE
+  NOREPLICATION
+  PASSWORD 'Ec0t1x1Rd4';
+
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO readerole;
+
 -- Table: public.user_preferences
 
 -- DROP TABLE public.user_preferences;
@@ -958,3 +970,6 @@ UPDATE alembic_version SET version_num='910b679215ca' WHERE alembic_version.vers
 
 COMMIT;
 
+------- Leave on tail
+
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO readerole;

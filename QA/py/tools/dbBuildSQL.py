@@ -146,6 +146,11 @@ DB_PASSWORD="postgres12"
 DB_HOST="%s"
 DB_PORT="%d"
 DB_DATABASE="ecotaxa"
+RO_DB_USER="readerole"
+RO_DB_PASSWORD="Ec0t1x1Rd4"
+RO_DB_HOST="%s"
+RO_DB_PORT="%d"
+RO_DB_DATABASE="ecotaxa"
 THUMBSIZELIMIT=99
 SECRET_KEY = 'THIS KEY MUST BE CHANGED'
 serverloadarea = "/tmp"
@@ -156,7 +161,7 @@ SECURITY_PASSWORD_SALT="PePPER"
 
     def write_config(self):
         with open(str(self.conf_file), "w") as f:
-            f.write(self.CONF % (self.host, PG_PORT))
+            f.write(self.CONF % (self.host, PG_PORT, self.host, PG_PORT))
 
     def cleanup(self):
         # Remove data files
