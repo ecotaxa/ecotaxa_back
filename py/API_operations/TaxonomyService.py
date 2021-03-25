@@ -30,7 +30,7 @@ class TaxonomyService(Service):
             Return the freshness status of the taxonomy tree.
             Fresh == recently updated from the Taxonomy server.
         """
-        tree_info = self.session.query(TaxonomyTreeInfo).first()
+        tree_info = self.ro_session.query(TaxonomyTreeInfo).first()
         if tree_info is None:
             return None
         if tree_info.lastserverversioncheck_datetime is None:
@@ -63,7 +63,7 @@ class TaxonomyService(Service):
         # Get preset list, to favor in result order
         preset = set()
         if prj_id is not None:
-            the_prj = ProjectBOSet.get_one(self.session, prj_id)
+            the_prj = ProjectBOSet.get_one(self.ro_session, prj_id)
             if the_prj is not None:
                 include_ids = the_prj.get_preset()
                 preset = set(include_ids)
@@ -79,7 +79,7 @@ class TaxonomyService(Service):
                 # And arrange they are in first
                 return_order = {cl_id: num for num, cl_id in enumerate(limit_ids_to)}
         # Do the query
-        res = TaxonomyBO.query(self.session, limit_ids_to, include_ids, display_name_term, name_terms)
+        res = TaxonomyBO.query(self.ro_session, limit_ids_to, include_ids, display_name_term, name_terms)
         mru_ret = []
         preset_ret = []
         others_ret = []
@@ -103,7 +103,7 @@ class TaxonomyService(Service):
         """
             Return root (no parents) categories/taxa.
         """
-        qry: Query = self.session.query(Taxonomy.id)
+        qry: Query = self.ro_session.query(Taxonomy.id)
         qry = qry.filter(Taxonomy.parent_id.is_(None))
         root_ids = [ taxon_id for taxon_id, in qry.all()]
         return self.query_set(root_ids)
@@ -116,7 +116,7 @@ class TaxonomyService(Service):
             return ret[0]
 
     def query_set(self, taxon_ids: ClassifIDListT) -> List[TaxonBO]:
-        ret = TaxonBOSet(self.session, taxon_ids)
+        ret = TaxonBOSet(self.ro_session, taxon_ids)
         return ret.taxa
 
     def query_worms(self, aphia_id: ClassifIDT) -> Optional[TaxonBO]:
@@ -130,5 +130,5 @@ class TaxonomyService(Service):
             return ret[0]
 
     def query_worms_set(self, taxon_ids: ClassifIDListT) -> List[TaxonBO]:
-        ret = TaxonBOSetFromWoRMS(self.session, taxon_ids)
+        ret = TaxonBOSetFromWoRMS(self.ro_session, taxon_ids)
         return ret.taxa

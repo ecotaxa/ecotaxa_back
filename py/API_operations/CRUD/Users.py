@@ -29,11 +29,11 @@ class UserService(Service):
 
     def search_by_id(self, current_user_id: UserIDT, user_id: UserIDT) -> Optional[User]:
         # TODO: Not consistent with others e.g. project.query()
-        ret = self.session.query(User).get(user_id)
+        ret = self.ro_session.query(User).get(user_id)
         return ret
 
     def search(self, current_user_id: UserIDT, by_name: Optional[str]) -> List[User]:
-        qry = self.session.query(User).filter(User.active)
+        qry = self.ro_session.query(User).filter(User.active)
         if by_name is not None:
             qry = qry.filter(User.name.ilike(by_name))
         else:
@@ -44,10 +44,10 @@ class UserService(Service):
         """
             List all users, if requester is admin.
         """
-        current_user: User = self.session.query(User).get(current_user_id)
+        current_user: User = self.ro_session.query(User).get(current_user_id)
         ret = []
         if current_user.has_role(Role.APP_ADMINISTRATOR):
-            for usr in self.session.query(User):
+            for usr in self.ro_session.query(User):
                 ret.append(usr)
         return ret
 

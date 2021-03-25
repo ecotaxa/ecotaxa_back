@@ -54,7 +54,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
             Refresh the local taxonomy DB.
         """
         # Security check
-        _user = RightsBO.user_has_role(self.session, current_user_id, Role.APP_ADMINISTRATOR)
+        _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
         await self._do_refresh()
 
     # noinspection PyPep8Naming
@@ -399,7 +399,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
             Check the given aphia_id, adjust the DB if needed.
         """
         # Security check
-        _user = RightsBO.user_has_role(self.session, current_user_id, Role.APP_ADMINISTRATOR)
+        _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
         lineage = await WoRMSFinder.aphia_classif_by_id(aphia_id)
         # Nested struct, e.g. : {'AphiaID': 1, 'rank': 'Superdomain', 'scientificname': 'Biota', 'child':
         # {'AphiaID': 3, 'rank': 'Kingdom', 'scientificname': 'Plantae', 'child':

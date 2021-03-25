@@ -33,6 +33,7 @@ from API_operations.CRUD.Projects import ProjectsService
 from API_operations.CRUD.Tasks import TaskService
 from API_operations.CRUD.Users import UserService
 from API_operations.Consistency import ProjectConsistencyChecker
+from API_operations.DBSyncService import DBSyncService
 from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
 from API_operations.ObjectManager import ObjectManager
@@ -55,6 +56,7 @@ from BO.Project import ProjectBO, ProjectTaxoStats, ProjectUserStats
 from BO.Rights import RightsBO
 from BO.Sample import SampleBO
 from BO.Taxonomy import TaxonBO
+from DB import UserPreferences
 from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower, \
@@ -223,7 +225,7 @@ def get_collection(collection_id: int,
     """
     sce = CollectionsService()
     with RightsThrower(sce):
-        present_collection = sce.query(current_user, collection_id)
+        present_collection = sce.query(current_user, collection_id, for_update=False)
     if present_collection is None:
         raise HTTPException(status_code=404, detail="Collection not found")
     return present_collection
@@ -241,7 +243,7 @@ def update_collection(collection_id: int,
     """
     sce = CollectionsService()
     with RightsThrower(sce):
-        present_collection = sce.query(current_user, collection_id)
+        present_collection = sce.query(current_user, collection_id, for_update=True)
     if present_collection is None:
         raise HTTPException(status_code=404, detail="Collection not found")
     # noinspection PyUnresolvedReferences
@@ -349,7 +351,7 @@ def project_query(project_id: int,
     sce = ProjectsService()
     for_managing = bool(for_managing)
     with RightsThrower(sce):
-        ret = sce.query(current_user, project_id, for_managing)
+        ret = sce.query(current_user, project_id, for_managing, for_update=False)
     return ret
 
 
@@ -503,8 +505,9 @@ def update_project(project_id: int,
     sce = ProjectsService()
 
     with RightsThrower(sce):
-        present_project: ProjectBO = sce.query(current_user, project_id, for_managing=True)
+        present_project: ProjectBO = sce.query(current_user, project_id, for_managing=True, for_update=True)
 
+    sync_sce = DBSyncService(Project, Project.projid, project_id)
     with ValidityThrower():
         # noinspection PyUnresolvedReferences
         present_project.update(session=sce.session,
@@ -516,6 +519,7 @@ def update_project(project_id: int,
                                contact=project.contact,
                                managers=project.managers, annotators=project.annotators, viewers=project.viewers,
                                license_=project.license)
+    sync_sce.wait()
 
 
 # ######################## END OF PROJECT
@@ -768,7 +772,9 @@ def classify_object_set(req: ClassifyReq,
         ret, prj_id, changes = sce.classify_set(current_user, req.target_ids, req.classifications,
                                                 req.wanted_qualification)
     last_classif_ids = [change[2] for change in changes.keys()]  # Recently used are in first
+    sync_sce = DBSyncService(UserPreferences, UserPreferences.project_id, prj_id, UserPreferences.user_id, current_user)
     UserService().update_classif_mru(current_user, prj_id, last_classif_ids)
+    sync_sce.wait()
     return ret
 
 

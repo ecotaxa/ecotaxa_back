@@ -5,6 +5,7 @@
 import os
 
 from sqlalchemy.orm import Session
+from sqlalchemy import event
 
 from DB.Connection import Connection, check_sqlalchemy_version
 from helpers.link_to_legacy import read_config, read_link
@@ -61,8 +62,9 @@ class Service(BaseService):
             logs redirection
     """
     the_config = None
-    the_connection = None
     the_link = None
+    the_connection = None
+    the_readonly_connection = None
 
     def __init__(self):
         # Use a single configuration
@@ -71,28 +73,69 @@ class Service(BaseService):
             Service.the_config = config
         else:
             config = Service.the_config
-        # Use a single connection
-        if not Service.the_connection:
-            check_sqlalchemy_version()
-            port = config['DB_PORT']
-            if port is None:
-                port = '5432'
-            host = _turn_localhost_for_docker(config['DB_HOST'], port)
-            conn = Connection(host=host, port=port, db=config['DB_DATABASE'],
-                              user=config['DB_USER'], password=config['DB_PASSWORD'])
-            Service.the_connection = conn
-        else:
-            conn = Service.the_connection
         # And a single link
         if not Service.the_link:
             link_src = read_link()
             Service.the_link = link_src
         else:
             link_src = Service.the_link
+        # Use a single r/w connection
+        if not Service.the_connection:
+            check_sqlalchemy_version()
+            conn = self.build_connection(config)
+            Service.the_connection = conn
+        else:
+            conn = Service.the_connection
+        # Use a single read-only connection, with fallback to the r/w one
+        if not Service.the_readonly_connection:
+            if 'RO_DB_HOST' in config:
+                ro_conn = self.build_connection(config, "RO_")
+            else:
+                ro_conn = conn
+            Service.the_readonly_connection = ro_conn
+        else:
+            ro_conn = Service.the_readonly_connection
         # Finally feed the subclass
         self.session: Session = conn.get_session()
+        if ro_conn != conn:
+            self.ro_session: Session = ro_conn.get_session()
+            # When r/w session commits, ensure the ro is clean.
+            setattr(self.session, "ro", self.ro_session)
+            event.listen(self.session, "before_commit", self.abort_ro)
+        else:
+            self.ro_session = self.session
         self.config = config
         self.link_src = link_src
+
+    @staticmethod
+    def build_connection(config, prfx=""):
+        """
+            Read a connection from the configuration.
+        """
+        port = config.get(prfx + 'DB_PORT')
+        if port is None:
+            port = '5432'
+        host = _turn_localhost_for_docker(config[prfx + 'DB_HOST'], port)
+        conn = Connection(host=host, port=port, db=config[prfx + 'DB_DATABASE'],
+                          user=config[prfx + 'DB_USER'], password=config[prfx + 'DB_PASSWORD'])
+        return conn
+
+    @staticmethod
+    def abort_ro(rw_session):
+        """
+            Raise if SQLAlchemy tries to flush(write) a readonly session.
+            "Should not" happen in production if tests are covering OK.
+            This does not manage plain SQL queries, which should be caught as the RO user has no
+            relevant right on the tables.
+        """
+        try:
+            ro_session = rw_session.ro
+        except AttributeError:
+            return
+        # noinspection PyProtectedMember
+        if ro_session._is_clean():
+            return
+        assert False, "Trying to ORM-write to a read-only session: %s" % str(ro_session.dirty)
 
     def close(self):
         # Release DB session
@@ -103,7 +146,17 @@ class Service(BaseService):
             except Exception:
                 # In this context we want no stack trace.
                 pass
+            # noinspection PyBroadException
+            if self.ro_session != self.session:
+                # noinspection PyBroadException
+                try:
+                    delattr(self.session, "ro")
+                    self.ro_session.close()
+                except Exception:
+                    # In this context we want no stack trace.
+                    pass
             self.session = None
+            self.ro_session = None
 
     def __del__(self):
         # Release DB session

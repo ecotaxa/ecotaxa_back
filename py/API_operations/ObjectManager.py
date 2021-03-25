@@ -46,7 +46,7 @@ class ObjectManager(Service):
         """
         # Security check
         if current_user_id is None:
-            RightsBO.anonymous_wants(self.session, Action.READ, proj_id)
+            RightsBO.anonymous_wants(self.ro_session, Action.READ, proj_id)
             # Anonymous can only see validated objects
             # noinspection PyTypeHints
             filters.statusfilter = "V"  # type:ignore
@@ -59,7 +59,7 @@ class ObjectManager(Service):
         order_clause = self.cook_order_clause(order_field)
 
         # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(self.session, proj_id, filters)
+        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, filters)
 
         from_, where, params = object_set.get_sql(user_id, order_clause)
 
@@ -86,7 +86,7 @@ class ObjectManager(Service):
             sql += " LIMIT %d" % window_size
 
         with CodeTimer("query: for %d using %s " % (proj_id, sql), logger):
-            res: ResultProxy = self.session.execute(sql, params)
+            res: ResultProxy = self.ro_session.execute(sql, params)
         ids = []
         total = 0
         objid: int
@@ -130,7 +130,7 @@ class ObjectManager(Service):
             Query the given IDs, return parents.
         """
         # Security check
-        obj_set = EnumeratedObjectSet(self.session, object_ids)
+        obj_set = EnumeratedObjectSet(self.ro_session, object_ids)
         # Get project IDs for the objects and verify rights
         prj_ids = obj_set.get_projects_ids()
         for a_prj_id in prj_ids:
@@ -144,7 +144,7 @@ class ObjectManager(Service):
      WHERE obh.objid = any (:ids) """
         params = {"ids": object_ids}
 
-        res: ResultProxy = self.session.execute(sql, params)
+        res: ResultProxy = self.ro_session.execute(sql, params)
         ids = [(objid, acquisid, sampleid, projid)
                for objid, acquisid, sampleid, projid in res]
         return ids  # type:ignore
@@ -168,7 +168,7 @@ class ObjectManager(Service):
             user_id = user.id
 
         # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(self.session, proj_id, filters)
+        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, filters)
         from_, where, params = object_set.get_sql(user_id)
         sql = """
     SET LOCAL enable_seqscan=FALSE;
@@ -184,7 +184,7 @@ class ObjectManager(Service):
       FROM """ + from_.get_sql() + " " + where.get_sql()
 
         with CodeTimer("summary: V/D/P for %d using %s " % (proj_id, sql), logger):
-            res: ResultProxy = self.session.execute(sql, params)
+            res: ResultProxy = self.ro_session.execute(sql, params)
 
         nbr: int
         nbr_v: Optional[int]

@@ -47,7 +47,7 @@ class ImageManagerService(Service):
         """
             Pick some images without checksum and compute it.
         """
-        _user = RightsBO.user_has_role(self.session, current_user_id, Role.APP_ADMINISTRATOR)
+        _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
         qry: Query = self.session.query(Image.file_name)
         if prj_id is not None:
             # Find missing images in a project
@@ -110,7 +110,7 @@ class ImageManagerService(Service):
         """
             Simplest duplication pattern. Inside the same object there are several identical images.
         """
-        _user = RightsBO.user_has_role(self.session, current_user_id, Role.APP_ADMINISTRATOR)
+        _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
         orig_img = aliased(Image, name="orig")
         orig_file = aliased(ImageFile, name="orig_file")
         qry: Query = self.session.query(orig_img.file_name, orig_img.imgid, Image, ImageFile)  # Select what to delete

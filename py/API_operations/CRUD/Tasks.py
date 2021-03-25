@@ -39,9 +39,9 @@ class TaskService(Service):
             Return a stream containing the file associated with this task.
         """
         # Sanity & security checks
-        task: Task = self.session.query(Task).get(task_id)
+        task: Task = self.ro_session.query(Task).get(task_id)
         assert task is not None, NOT_FOUND
-        current_user = self.session.query(User).get(current_user_id)
+        current_user = self.ro_session.query(User).get(current_user_id)
         assert (task.owner_id == current_user_id) or (current_user.has_role(Role.APP_ADMINISTRATOR)), NOT_AUTHORIZED
         # TODO: 'temptask' constant is repeated in many places
         temp_for_task = TempDirForTasks(join(self.link_src, 'temptask'))

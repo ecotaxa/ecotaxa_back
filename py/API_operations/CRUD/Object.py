@@ -19,7 +19,7 @@ class ObjectService(Service):
     """
 
     def query(self, current_user_id: Optional[int], object_id: ObjectIDT) -> Optional[ObjectBO]:
-        ret = ObjectBO(self.session, object_id)
+        ret = ObjectBO(self.ro_session, object_id)
         if not ret.exists():
             return None
         # Security check
@@ -35,14 +35,14 @@ class ObjectService(Service):
 
     def query_history(self, current_user_id: Optional[int], object_id: ObjectIDT) \
             -> List[HistoricalClassification]:
-        the_obj = ObjectBO(self.session, object_id)
+        the_obj = ObjectBO(self.ro_session, object_id)
         if not the_obj.exists():
             return []
         # Security check
         # TODO: dup code
         projid = the_obj.header.acquisition.sample.projid
         if current_user_id is None:
-            RightsBO.anonymous_wants(self.session, Action.READ, projid)
+            RightsBO.anonymous_wants(self.ro_session, Action.READ, projid)
         else:
             _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, projid)
             assert project is not None

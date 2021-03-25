@@ -115,7 +115,7 @@ class SubsetServiceOnProject(TaskServiceOnProjectBase):
         """
         # TODO: Depending on filter, the joins could be plain (not outer)
         # E.g. if asked for a set of samples
-        ret: Query = self.session.query(ObjectHeader)
+        ret: Query = self.ro_session.query(ObjectHeader)
         ret = ret.join(Acquisition).join(Process).join(Sample)
         ret = ret.outerjoin(Image, ObjectHeader.all_images).outerjoin(ObjectCNNFeature).join(ObjectFields)
         ret = ret.filter(ObjectHeader.objid == any_(object_ids))
@@ -240,7 +240,7 @@ class SubsetServiceOnProject(TaskServiceOnProjectBase):
         logger.info("SQL=%s", sql)
         logger.info("SQLParam=%s", params)
 
-        res: ResultProxy = self.session.execute(sql, params)
+        res: ResultProxy = self.ro_session.execute(sql, params)
         ids = [r[0] for r in res]
         logger.info("There are %d IDs", len(ids))
 

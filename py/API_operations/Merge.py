@@ -20,8 +20,6 @@ from DB.helpers.Postgres import values_cte
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 from .helpers.Service import Service
 
-# noinspection PyProtectedMember
-
 logger = get_logger(__name__)
 
 
@@ -100,8 +98,8 @@ class MergeService(Service):
             self.dest_augmented_mappings.by_table[a_tbl].load_from(aug)
 
         # Also check problems on consistency of unique orig_id
-        dest_parents = InBundle.fetch_existing_parents(self.session, prj_id=self.prj_id)
-        src_parents = InBundle.fetch_existing_parents(self.session, prj_id=self.src_prj_id)
+        dest_parents = InBundle.fetch_existing_parents(self.ro_session, prj_id=self.prj_id)
+        src_parents = InBundle.fetch_existing_parents(self.ro_session, prj_id=self.src_prj_id)
 
         for an_orig_id_container in [Sample.__tablename__, Acquisition.__tablename__]:
             # key=orig_id value, value=full record
@@ -132,8 +130,8 @@ class MergeService(Service):
                 ProjectBO.remap(self.session, self.src_prj_id, a_mapped_tbl, remaps)
 
         # Collect orig_id
-        dest_parents = InBundle.fetch_existing_parents(self.session, prj_id=self.prj_id)
-        src_parents = InBundle.fetch_existing_parents(self.session, prj_id=self.src_prj_id)
+        dest_parents = InBundle.fetch_existing_parents(self.ro_session, prj_id=self.prj_id)
+        src_parents = InBundle.fetch_existing_parents(self.ro_session, prj_id=self.src_prj_id)
 
         # Compute needed projections in order to keep orig_id unicity
         common_samples = self.get_ids_for_common_orig_id(Sample, dest_parents, src_parents)

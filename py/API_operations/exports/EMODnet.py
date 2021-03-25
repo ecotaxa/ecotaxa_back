@@ -10,7 +10,7 @@
 # EMODnet QC source code:
 #      https://github.com/EMODnet/EMODnetBiocheck
 import re
-from datetime import date, time, datetime
+from datetime import date, datetime
 from typing import Dict, List, Optional, Tuple, cast, Set
 
 from dataclasses import dataclass
@@ -43,7 +43,7 @@ from formats.EMODnet.models import DwC_Event, RecordTypeEnum, DwC_Occurrence, Oc
     EMLTaxonomicClassification, EMLAdditionalMeta, EMLIdentifier, EMLAssociatedPerson
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 from helpers.Timer import CodeTimer
-from .Countries import countries_by_name
+from data.Countries import countries_by_name
 # TODO: Move somewhere else
 from ..helpers.TaskService import TaskServiceBase
 
@@ -67,7 +67,7 @@ class EMODnetExport(TaskServiceBase):
         # Input
         self.dry_run = dry_run
         self.with_zeroes = with_zeroes
-        self.collection = self.session.query(Collection).get(collection_id)
+        self.collection = self.ro_session.query(Collection).get(collection_id)
         assert self.collection is not None, "Invalid collection ID"
         # During processing
         self.mapping: Dict[ClassifIDT, WoRMS] = {}
@@ -93,7 +93,7 @@ class EMODnetExport(TaskServiceBase):
     def do_run(self, current_user_id: int) -> EMODnetExportRsp:
         # Security check
         # TODO, for now only admins
-        _user = RightsBO.user_has_role(self.session, current_user_id, Role.APP_ADMINISTRATOR)
+        _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
         # Adjust the task
         self.set_task_params(current_user_id, self.DWC_ZIP_NAME)
         # Do the job
@@ -388,7 +388,7 @@ class EMODnetExport(TaskServiceBase):
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid.in_(project_ids))
         used_taxa = {an_id: a_name for (an_id, a_name) in taxo_qry.all()}
         # Map them to WoRMS
-        mapping = WoRMSSetFromTaxaSet(self.session, list(used_taxa.keys()))
+        mapping = WoRMSSetFromTaxaSet(self.ro_session, list(used_taxa.keys()))
         self.mapping = mapping.res
         # Warnings for non-matches
         for an_id, a_name in used_taxa.items():
@@ -423,7 +423,7 @@ class EMODnetExport(TaskServiceBase):
 
         ds_name = self.sanitize_title(self.collection.title)
         for a_prj_id in the_collection.project_ids:
-            samples = Sample.get_orig_id_and_model(self.session, prj_id=a_prj_id)
+            samples = Sample.get_orig_id_and_model(self.ro_session, prj_id=a_prj_id)
             a_sample: Sample
             events = arch.events
             for orig_id, a_sample in samples.items():
@@ -591,7 +591,7 @@ class EMODnetExport(TaskServiceBase):
                                                                       acquis_id=an_acquis.acquisid,
                                                                       classif_ids=list(ret.keys()))
                 with CodeTimer("Objects for '%s': " % an_acquis.orig_id, logger):
-                    objects = ObjectBOSet(self.session, acq_object_ids, mapping.object_mappings)
+                    objects = ObjectBOSet(self.ro_session, acq_object_ids, mapping.object_mappings)
                 nb_biovols = 0
                 for an_obj in objects.all:
                     # Compute a biovol if possible

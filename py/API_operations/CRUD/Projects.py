@@ -32,7 +32,7 @@ class ProjectsService(Service):
         """
         current_user = RightsBO.user_wants_create_project(self.session, current_user_id)
         if req.clone_of_id:
-            prj = self.session.query(Project).get(req.clone_of_id)
+            prj = self.ro_session.query(Project).get(req.clone_of_id)
             if prj is None:
                 return "Project to clone not found"
             prj = clone_of(prj)
@@ -57,29 +57,30 @@ class ProjectsService(Service):
         current_user: Optional[User]
         if current_user_id is None:
             # For public
-            matching_ids = ProjectBO.list_public_projects(self.session, title_filter)
+            matching_ids = ProjectBO.list_public_projects(self.ro_session, title_filter)
             projects = ProjectBOSet(self.session, matching_ids, public=True)
         else:
             # No rights checking as basically everyone can see all projects
-            current_user = self.session.query(User).get(current_user_id)
+            current_user = self.ro_session.query(User).get(current_user_id)
             assert current_user is not None
-            matching_ids = ProjectBO.projects_for_user(self.session, current_user, for_managing, also_others,
+            matching_ids = ProjectBO.projects_for_user(self.ro_session, current_user, for_managing, also_others,
                                                        title_filter, instrument_filter, filter_subset)
-            projects = ProjectBOSet(self.session, matching_ids, public=False)
+            projects = ProjectBOSet(self.ro_session, matching_ids, public=False)
         return projects.as_list()
 
     def query(self, current_user_id: Optional[UserIDT],
               prj_id: int,
-              for_managing: bool) -> ProjectBO:
+              for_managing: bool,
+              for_update: bool) -> ProjectBO:
         if current_user_id is None:
-            RightsBO.anonymous_wants(self.session, Action.READ, prj_id)
+            RightsBO.anonymous_wants(self.ro_session, Action.READ, prj_id)
             highest_right = ""
         else:
             current_user, project = RightsBO.user_wants(self.session, current_user_id,
                                                         Action.ADMINISTRATE if for_managing else Action.READ,
                                                         prj_id)
             highest_right = RightsBO.highest_right_on(current_user, prj_id)
-        ret = ProjectBOSet.get_one(self.session, prj_id)
+        ret = ProjectBOSet.get_one(self.session if for_update else self.ro_session, prj_id)
         assert ret is not None
         ret.highest_right = highest_right
         return ret

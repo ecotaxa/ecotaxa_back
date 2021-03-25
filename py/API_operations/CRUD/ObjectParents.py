@@ -26,12 +26,12 @@ class SamplesService(Service):
     """
 
     def query(self, current_user_id: Optional[UserIDT], sample_id: SampleIDT) -> Optional[SampleBO]:
-        ret = SampleBO(self.session, sample_id)
+        ret = SampleBO(self.ro_session, sample_id)
         if not ret.exists():
             return None
         # Security check
         if current_user_id is None:
-            project = RightsBO.anonymous_wants(self.session, Action.READ, ret.sample.projid)
+            project = RightsBO.anonymous_wants(self.ro_session, Action.READ, ret.sample.projid)
         else:
             _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, ret.sample.projid)
         mappings = ProjectMapping().load_from_project(project)
@@ -54,12 +54,12 @@ class SamplesService(Service):
                orig_id_pattern: str) -> List[SampleBO]:
         # Security check
         if current_user_id is None:
-            [RightsBO.anonymous_wants(self.session, Action.READ, project_id)
+            [RightsBO.anonymous_wants(self.ro_session, Action.READ, project_id)
              for project_id in project_ids]
         else:
             [RightsBO.user_wants(self.session, current_user_id, Action.READ, project_id)
              for project_id in project_ids]
-        sample_set = DescribedSampleSet(self.session, project_ids, orig_id_pattern)
+        sample_set = DescribedSampleSet(self.ro_session, project_ids, orig_id_pattern)
         # mappings = ProjectMapping().load_from_project(project)
         # ret.map_free_columns(mappings.sample_mappings)
         return sample_set.list()
@@ -72,12 +72,12 @@ class AcquisitionsService(Service):
     """
 
     def query(self, current_user_id: Optional[int], acquisition_id: AcquisitionIDT) -> Optional[AcquisitionBO]:
-        ret = AcquisitionBO(self.session, acquisition_id)
+        ret = AcquisitionBO(self.ro_session, acquisition_id)
         if not ret.exists():
             return None
         # Security check
         if current_user_id is None:
-            project = RightsBO.anonymous_wants(self.session, Action.READ, ret.acquis.sample.projid)
+            project = RightsBO.anonymous_wants(self.ro_session, Action.READ, ret.acquis.sample.projid)
         else:
             _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, ret.acquis.sample.projid)
         mappings = ProjectMapping().load_from_project(project)
@@ -98,10 +98,10 @@ class AcquisitionsService(Service):
     def search(self, current_user_id: Optional[UserIDT], project_id: ProjectIDT) -> List[AcquisitionBO]:
         # Security check
         if current_user_id is None:
-            project = RightsBO.anonymous_wants(self.session, Action.READ, project_id)
+            project = RightsBO.anonymous_wants(self.ro_session, Action.READ, project_id)
         else:
             _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, project_id)
-        acquisition_set = DescribedAcquisitionSet(self.session, project_id)
+        acquisition_set = DescribedAcquisitionSet(self.ro_session, project_id)
         # mappings = ProjectMapping().load_from_project(project)
         # ret.map_free_columns(mappings.sample_mappings)
         return acquisition_set.list()
@@ -119,7 +119,7 @@ class ProcessesService(Service):
             return None
         # Security check
         if current_user_id is None:
-            project = RightsBO.anonymous_wants(self.session, Action.READ,
+            project = RightsBO.anonymous_wants(self.ro_session, Action.READ,
                                                ret.process.acquisition.sample.projid)
         else:
             _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ,
