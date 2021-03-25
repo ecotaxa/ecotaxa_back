@@ -56,7 +56,8 @@ from BO.Project import ProjectBO, ProjectTaxoStats, ProjectUserStats
 from BO.Rights import RightsBO
 from BO.Sample import SampleBO
 from BO.Taxonomy import TaxonBO
-from DB import UserPreferences
+from DB import ProjectPrivilege
+from DB.Project import ProjectTaxoStat
 from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower, \
@@ -507,7 +508,6 @@ def update_project(project_id: int,
     with RightsThrower(sce):
         present_project: ProjectBO = sce.query(current_user, project_id, for_managing=True, for_update=True)
 
-    sync_sce = DBSyncService(Project, Project.projid, project_id)
     with ValidityThrower():
         # noinspection PyUnresolvedReferences
         present_project.update(session=sce.session,
@@ -519,7 +519,8 @@ def update_project(project_id: int,
                                contact=project.contact,
                                managers=project.managers, annotators=project.annotators, viewers=project.viewers,
                                license_=project.license)
-    sync_sce.wait()
+    DBSyncService(Project, Project.projid, project_id).wait()
+    DBSyncService(ProjectPrivilege, ProjectPrivilege.projid, project_id).wait()
 
 
 # ######################## END OF PROJECT
@@ -772,9 +773,8 @@ def classify_object_set(req: ClassifyReq,
         ret, prj_id, changes = sce.classify_set(current_user, req.target_ids, req.classifications,
                                                 req.wanted_qualification)
     last_classif_ids = [change[2] for change in changes.keys()]  # Recently used are in first
-    sync_sce = DBSyncService(UserPreferences, UserPreferences.project_id, prj_id, UserPreferences.user_id, current_user)
     UserService().update_classif_mru(current_user, prj_id, last_classif_ids)
-    sync_sce.wait()
+    DBSyncService(ProjectTaxoStat, ProjectTaxoStat.projid, prj_id).wait()
     return ret
 
 
