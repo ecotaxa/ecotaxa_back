@@ -31,6 +31,9 @@ jinja2==2.11.3
 aiofiles==0.6.0
 # Recent sqlite3 as the one embedded in python 3.6 is quite old
 pysqlite3==0.4.5
+# Analyzis of XLSX data sources
+openpyxl==3.0.7
+openpyxl-stubs==0.1.19
 # END OF BACK-END REQUIREMENTS
 # Testing & QA additions
 tox==3.21.0

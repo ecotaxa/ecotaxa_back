@@ -33,6 +33,7 @@ from DB.Project import ProjectTaxoStat
 from DB.Sample import Sample
 from DB.helpers.ORM import Query
 from DB.helpers.Postgres import timestamp_to_str
+from data.Countries import countries_by_name
 from formats.EMODnet.Archive import DwC_Archive
 from formats.EMODnet.DatasetMeta import DatasetMetadata
 from formats.EMODnet.MoF import SamplingNetMeshSizeInMicrons, SampleDeviceApertureAreaInSquareMeters, \
@@ -43,7 +44,6 @@ from formats.EMODnet.models import DwC_Event, RecordTypeEnum, DwC_Occurrence, Oc
     EMLTaxonomicClassification, EMLAdditionalMeta, EMLIdentifier, EMLAssociatedPerson
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 from helpers.Timer import CodeTimer
-from data.Countries import countries_by_name
 # TODO: Move somewhere else
 from ..helpers.TaskService import TaskServiceBase
 
