@@ -27,7 +27,7 @@ from BO.Project import ProjectBO, ProjectIDListT, ProjectTaxoStats, ProjectIDT
 from BO.ProjectVars import DefaultVars
 from BO.Rights import RightsBO
 from BO.Sample import SampleBO
-from BO.Taxonomy import WoRMSSetFromTaxaSet
+from BO.TaxonomySwitch import TaxonomyMapper
 from DB import User, Taxonomy, WoRMS, Collection, Role
 from DB.Project import ProjectTaxoStat
 from DB.Sample import Sample
@@ -388,8 +388,7 @@ class EMODnetExport(TaskServiceBase):
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid.in_(project_ids))
         used_taxa = {an_id: a_name for (an_id, a_name) in taxo_qry.all()}
         # Map them to WoRMS
-        mapping = WoRMSSetFromTaxaSet(self.ro_session, list(used_taxa.keys()))
-        self.mapping = mapping.res
+        self.mapping = TaxonomyMapper(self.ro_session, list(used_taxa.keys())).do_match()
         # Warnings for non-matches
         for an_id, a_name in used_taxa.items():
             if an_id not in self.mapping:
