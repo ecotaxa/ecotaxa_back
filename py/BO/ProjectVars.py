@@ -33,6 +33,7 @@ class VariableValidity(object):
             return self.min_val <= a_val <= self.max_val
         if self.excluded is not None:
             return a_val != self.excluded
+        return True
 
 
 class ProjectVar(object):
