@@ -62,7 +62,7 @@ class EMODnetExport(TaskServiceBase):
                 http://rshiny.lifewatch.be/BioCheck/
     """
 
-    def __init__(self, collection_id: CollectionIDT, dry_run: bool, with_zeroes: bool, auto_morpho:bool):
+    def __init__(self, collection_id: CollectionIDT, dry_run: bool, with_zeroes: bool, auto_morpho: bool):
         super().__init__(task_type="TaskExportTxt")
         # Input
         self.dry_run = dry_run
@@ -88,6 +88,7 @@ class EMODnetExport(TaskServiceBase):
         self.unknown_nets: Dict[str, List[str]] = {}
         self.empty_samples: List[Tuple[ProjectIDT, str]] = []
         self.stats_per_rank: Dict[str, Dict] = {}
+        self.suspicious_vals: Dict[str, List[str]] = {}
 
     DWC_ZIP_NAME = "dwca.zip"
 
@@ -292,6 +293,7 @@ class EMODnetExport(TaskServiceBase):
                 assert person is not None
                 associates.append(self.eml_person_to_associated_person(person, "originator"))
         for an_org in the_collection.associate_organisations:
+            # noinspection PyTypeChecker
             associates.append(self.organisation_to_eml_person(an_org))
 
         # TODO if needed
@@ -413,6 +415,7 @@ class EMODnetExport(TaskServiceBase):
             assert a_worms_entry is not None, "None for %d" % _an_id
             rank = a_worms_entry.rank
             value = a_worms_entry.scientificname
+            assert rank is not None, "No name for %d" % _an_id
             ret.append(EMLTaxonomicClassification(taxonRankName=rank,
                                                   taxonRankValue=value))
         return ret
@@ -462,6 +465,8 @@ class EMODnetExport(TaskServiceBase):
                 if nb_added == 0:
                     self.warnings.append("No occurrence added for sample '%s' in %d" % (a_sample.orig_id, a_prj_id))
 
+    nine_nine_re = re.compile("999+.0$")
+
     # noinspection PyPep8Naming
     def add_eMoFs_for_sample(self, sample: Sample, arch: DwC_Archive, event_id: str):
         """
@@ -474,6 +479,9 @@ class EMODnetExport(TaskServiceBase):
         except TypeError as _e:
             pass
         else:
+            if self.nine_nine_re.match(str(sample_volume)):
+                self.suspicious_vals.setdefault("sample_volume", []).append(
+                    str(sample_volume) + " in " + sample.orig_id)
             # Add sampled water volume
             if sample_volume > 0:
                 arch.emofs.add(SampleVolumeInCubicMeters(event_id, str(sample_volume)))
@@ -537,7 +545,7 @@ class EMODnetExport(TaskServiceBase):
         for an_acquis in acquis_for_sample:
             # Get counts for acquisition (subsample)
             count_per_taxon_for_acquis = AcquisitionBO.get_sums_by_taxon(self.session, an_acquis.acquisid)
-            if True:
+            if self.auto_morpho:
                 self.add_morpho_counts(count_per_taxon_for_acquis)
             count_per_taxon_per_acquis[an_acquis.acquisid] = count_per_taxon_for_acquis
             for an_id, count_4_acquis in count_per_taxon_for_acquis.items():
@@ -565,7 +573,7 @@ class EMODnetExport(TaskServiceBase):
                     self.warnings.append("Could not compute subsampling coefficient from acquisition %s (%s),"
                                          " no concentration or biovolume will be computed" %
                                          (an_acquis.orig_id, str(e)))
-                    logger.info("concentrations: no subsample coeff for '%s'", an_acquis.orig_id)
+                    logger.info("concentrations: no subsample coeff for '%s' (%s)", an_acquis.orig_id, str(e))
                     continue
                 # Get counts for acquisition (sub-sample)
                 logger.info("computing concentrations for '%s'", an_acquis.orig_id)
@@ -611,13 +619,13 @@ class EMODnetExport(TaskServiceBase):
                         biovol = ObjectBO.get_computed_var(an_obj, DefaultVars.equivalent_ellipsoidal_volume,
                                                            mapping, constants)
                         biovol = -1
-                    except TypeError as e:
+                    except TypeError as _e:
                         biovol = -1
                     if biovol == -1:
                         try:
                             biovol = ObjectBO.get_computed_var(an_obj, DefaultVars.equivalent_spherical_volume,
                                                                mapping, constants)
-                        except TypeError as e:
+                        except TypeError as _e:
                             continue
                     # Aggregate by category/taxon
                     aggreg_for_taxon = ret[an_obj.classif_id]
@@ -634,7 +642,7 @@ class EMODnetExport(TaskServiceBase):
         return ret
 
     def add_morpho_counts(self, count_per_taxon_for_acquis):
-        # There are Morpho taxa with counts, cumulate and wipe them out
+        # If there are Morpho taxa with counts, cumulate and wipe them out
         for an_id, count_4_acquis in dict(count_per_taxon_for_acquis).items():
             phylo_id = self.morpho2phylo.get(an_id)
             if phylo_id is not None:
@@ -758,6 +766,9 @@ class EMODnetExport(TaskServiceBase):
                     "Net type '%s' is not mapped to a BODC term. It is used in %s" % (a_net, str(sample_ids)))
         if len(self.empty_samples) > 0:
             self.warnings.append("Empty samples found, format is (project ID, sample ID): %s" % str(self.empty_samples))
+        if len(self.suspicious_vals) > 0:
+            self.warnings.append(
+                "Suspicious values found, format is (variable, values): %s" % str(self.suspicious_vals))
         ranks_asc = sorted(self.stats_per_rank.keys())
         for a_rank in ranks_asc:
             logger.info("rank '%s' stats %s", str(a_rank), self.stats_per_rank.get(a_rank))

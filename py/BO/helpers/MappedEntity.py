@@ -117,6 +117,8 @@ class MappedEntity(metaclass=ABCMeta):
         try:
             import math
             ret = eval(var.code, {"math": math}, var_vals)
+            if not var.is_valid(ret):
+                raise TypeError("Not valid %s: %s" % (var.formula, str(ret)))
         except Exception as e:
             # Basically anything can happen here
             raise TypeError(str(e))

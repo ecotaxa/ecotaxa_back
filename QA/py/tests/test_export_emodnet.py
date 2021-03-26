@@ -183,7 +183,7 @@ def add_concentration_data(fastapi, prj_id):
     url = ACQUISITION_SET_UPDATE_URL.format(project_id=prj_id)
     req = {"target_ids": acquis_ids,
            "updates":
-               [{"ucol": "sub_part", "uval": "0.5"}]
+               [{"ucol": "sub_part", "uval": "2"}]
            }
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
