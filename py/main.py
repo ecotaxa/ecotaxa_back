@@ -263,6 +263,7 @@ def update_collection(collection_id: int,
 def emodnet_format_export(collection_id: int,
                           dry_run: bool,
                           with_zeroes: bool,
+                          auto_morpho: bool,
                           current_user: int = Depends(get_current_user)) -> EMODnetExportRsp:
     """
         Export the collection in EMODnet format, @see https://www.emodnet-ingestion.eu/
@@ -270,12 +271,14 @@ def emodnet_format_export(collection_id: int,
         - param `dry_run`: If set, then only a diagnostic of doability will be done.
         - param `with_zeroes`: If set, then *absent* records will be generated, in the relevant samples,
          for categories present in other samples.
+        - param `auto_morpho`: If set, then any object classified on a Morpho category will be added to
+         the count of the nearest Phylo parent, upward in the tree.
 
         Maybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html
 
         *Currently only for admins*
     """
-    sce = EMODnetExport(collection_id, dry_run, with_zeroes)
+    sce = EMODnetExport(collection_id, dry_run, with_zeroes, auto_morpho)
     with RightsThrower(sce):
         return sce.run(current_user)
 

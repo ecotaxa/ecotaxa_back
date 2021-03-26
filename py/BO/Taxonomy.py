@@ -8,7 +8,6 @@ from typing import List, Set, Dict, Tuple
 
 from API_operations.TaxoManager import TaxonomyChangeService
 from BO.Classification import ClassifIDCollT, ClassifIDT, ClassifIDListT
-from BO.Project import ProjectTaxoStats
 from DB import ResultProxy, Taxonomy, WoRMS
 from DB.Project import ProjectTaxoStat
 from DB.helpers.ORM import Session, Query, any_, case, func, text, select
@@ -60,6 +59,18 @@ class TaxonomyBO(object):
             " WHERE id = ANY (:een)",
             {"een": list(classif_id_seen)})
         return {int(r['id']) for r in res}
+
+    @staticmethod
+    def keep_phylo(session: Session, classif_id_seen: ClassifIDListT):
+        """
+            Return input IDs, for the existing ones with 'P' type.
+        """
+        res: ResultProxy = session.execute(
+            "SELECT id "
+            "  FROM taxonomy "
+            " WHERE id = ANY (:een) AND taxotype = 'P'",
+            {"een": list(classif_id_seen)})
+        return {an_id for an_id, in res}
 
     @staticmethod
     def resolve_taxa(session: Session, taxo_found, taxon_lower_list):

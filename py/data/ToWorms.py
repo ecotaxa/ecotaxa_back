@@ -24,7 +24,7 @@ from openpyxl.cell import Cell
 from openpyxl.worksheet.worksheet import Worksheet
 
 from API_operations.TaxonomyService import TaxonomyService
-from BO.Classification import ClassifIDT
+from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Taxonomy import TaxonBO, WoRMSSetFromTaxaSet
 from data.structs.TaxaTree import TaxaTree
 
@@ -221,13 +221,7 @@ class ToWorms(object):
         #     orig = sce.query(an_eco_id)
         #     assert orig is not None, "%d doesn't exist?" % an_eco_id
         #     print(orig.lineage)
-        ecotaxa_taxo_infos: List[TaxonBO] = taxo_sce.query_set(all_eco_ids)
-        # assert len(ecotaxa_taxo_infos) == len(all_eco_ids), "Some categories don't resolve"
-        for an_info in ecotaxa_taxo_infos:
-            self.unieuk[an_info.id] = an_info
-            self.unieuk_tree.add_path(list(zip(an_info.id_lineage, an_info.lineage)))
-            self.unieuk_tree.find_node(an_info.id).add_to_node(an_info.nb_objects)
-            # print("E: %d -> %s %s" % (an_info.id, an_info.lineage, len(an_info.children) == 0))
+        self.add_to_unieuk(all_eco_ids, taxo_sce)
         # # Commented out for tests
         # assert len(self.unieuk_tree.children) <= 3
 
@@ -248,6 +242,17 @@ class ToWorms(object):
             # print("W: %d -> %s %s" % (an_info.id, an_info.lineage, len(an_info.children) == 0))
             self.worms[an_info.id] = an_info
             self.worms_tree.add_path(list(zip(an_info.id_lineage, an_info.lineage)))
+
+    def add_to_unieuk(self, eco_ids: ClassifIDListT, taxo_sce):
+        # Add taxo from IDs, if they are not there already
+        missing_eco_ids = [an_id for an_id in eco_ids if an_id not in self.unieuk]
+        ecotaxa_taxo_infos: List[TaxonBO] = taxo_sce.query_set(missing_eco_ids)
+        # assert len(ecotaxa_taxo_infos) == len(all_eco_ids), "Some categories don't resolve"
+        for an_info in ecotaxa_taxo_infos:
+            self.unieuk[an_info.id] = an_info
+            self.unieuk_tree.add_path(list(zip(an_info.id_lineage, an_info.lineage)))
+            self.unieuk_tree.find_node(an_info.id).add_to_node(an_info.nb_objects)
+            # print("E: %d -> %s %s" % (an_info.id, an_info.lineage, len(an_info.children) == 0))
 
     def validate_with_trees(self):
         # It's dubious if a terminal (leaf) maps to a non-terminal
@@ -293,7 +298,6 @@ class ToWorms(object):
             Apply the actions onto present tree.
             We go thru the tree top-down, i.e. highest-level taxa first.
         """
-
         for a_node in self.unieuk_tree.top_to_bottom_ite():
             try:
                 an_info = self.unieuk[a_node.id]

@@ -62,15 +62,19 @@ class EMODnetExport(TaskServiceBase):
                 http://rshiny.lifewatch.be/BioCheck/
     """
 
-    def __init__(self, collection_id: CollectionIDT, dry_run: bool, with_zeroes: bool):
+    def __init__(self, collection_id: CollectionIDT, dry_run: bool, with_zeroes: bool, auto_morpho:bool):
         super().__init__(task_type="TaskExportTxt")
         # Input
         self.dry_run = dry_run
         self.with_zeroes = with_zeroes
+        self.auto_morpho = auto_morpho
         self.collection = self.ro_session.query(Collection).get(collection_id)
         assert self.collection is not None, "Invalid collection ID"
         # During processing
+        # The Phylo taxa to their WoRMS conterpart
         self.mapping: Dict[ClassifIDT, WoRMS] = {}
+        # The Morpho taxa to their nearest Phylo parent
+        self.morpho2phylo: Dict[ClassifIDT, ClassifIDT] = {}
         self.taxa_per_sample: Dict[str, Set[ClassifIDT]] = {}
         # Output
         self.errors: List[str] = []
@@ -79,6 +83,7 @@ class EMODnetExport(TaskServiceBase):
         self.total_count = 0
         self.produced_count = 0
         self.ignored_count: Dict[ClassifIDT, int] = {}
+        self.ignored_morpho: int = 0
         self.ignored_taxa: Dict[ClassifIDT, Tuple[str, ClassifIDT]] = {}
         self.unknown_nets: Dict[str, List[str]] = {}
         self.empty_samples: List[Tuple[ProjectIDT, str]] = []
@@ -381,19 +386,23 @@ class EMODnetExport(TaskServiceBase):
 
         """
         ret: List[EMLTaxonomicClassification] = []
-        # Fetch the used taxa in the project
+        # Fetch the used taxa in the projects
         taxo_qry: Query = self.session.query(ProjectTaxoStat.id, Taxonomy.name).distinct()
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.id == Taxonomy.id)
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.nbr > 0)
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid.in_(project_ids))
         used_taxa = {an_id: a_name for (an_id, a_name) in taxo_qry.all()}
         # Map them to WoRMS
-        self.mapping = TaxonomyMapper(self.ro_session, list(used_taxa.keys())).do_match()
+        self.mapping, self.morpho2phylo = TaxonomyMapper(self.ro_session, list(used_taxa.keys())).do_match()
+        assert set(self.mapping.keys()).isdisjoint(set(self.morpho2phylo.keys()))
         # Warnings for non-matches
         for an_id, a_name in used_taxa.items():
             if an_id not in self.mapping:
-                self.ignored_taxa[an_id] = (a_name, an_id)
-                self.ignored_count[an_id] = 0
+                if an_id in self.morpho2phylo:
+                    pass
+                else:
+                    self.ignored_taxa[an_id] = (a_name, an_id)
+                    self.ignored_count[an_id] = 0
         # TODO: Temporary until the whole system has a WoRMS taxo tree
         # Error out if nothing at all
         if len(self.mapping) == 0:
@@ -401,6 +410,7 @@ class EMODnetExport(TaskServiceBase):
             return ret
         # Produce the coverage
         for _an_id, a_worms_entry in self.mapping.items():
+            assert a_worms_entry is not None, "None for %d" % _an_id
             rank = a_worms_entry.rank
             value = a_worms_entry.scientificname
             ret.append(EMLTaxonomicClassification(taxonRankName=rank,
@@ -527,6 +537,8 @@ class EMODnetExport(TaskServiceBase):
         for an_acquis in acquis_for_sample:
             # Get counts for acquisition (subsample)
             count_per_taxon_for_acquis = AcquisitionBO.get_sums_by_taxon(self.session, an_acquis.acquisid)
+            if True:
+                self.add_morpho_counts(count_per_taxon_for_acquis)
             count_per_taxon_per_acquis[an_acquis.acquisid] = count_per_taxon_for_acquis
             for an_id, count_4_acquis in count_per_taxon_for_acquis.items():
                 aggreg_for_taxon = ret.get(an_id)
@@ -568,6 +580,7 @@ class EMODnetExport(TaskServiceBase):
         # Enrich with biovolumes. This needs a computation for each object, so it's likely to be slow.
         if sample_volume > 0:
             # Mappings are constant for the sample
+            # noinspection PyTypeChecker
             mapping = ProjectMapping().load_from_project(sample.project)
             # Cumulate for subsamples AKA acquisitions
             for an_acquis in acquis_for_sample:
@@ -620,6 +633,19 @@ class EMODnetExport(TaskServiceBase):
 
         return ret
 
+    def add_morpho_counts(self, count_per_taxon_for_acquis):
+        # There are Morpho taxa with counts, cumulate and wipe them out
+        for an_id, count_4_acquis in dict(count_per_taxon_for_acquis).items():
+            phylo_id = self.morpho2phylo.get(an_id)
+            if phylo_id is not None:
+                del count_per_taxon_for_acquis[an_id]
+                if phylo_id in count_per_taxon_for_acquis:
+                    # Accumulate in parent count
+                    count_per_taxon_for_acquis[phylo_id] += count_4_acquis
+                else:
+                    # Create the parent
+                    count_per_taxon_for_acquis[phylo_id] = count_4_acquis
+
     def add_occurences(self, sample: Sample, arch: DwC_Archive, event_id: str) -> int:
         """
             Add DwC occurences, for given sample, into the archive.
@@ -645,7 +671,10 @@ class EMODnetExport(TaskServiceBase):
                 worms = self.mapping[an_id]
             except KeyError:
                 # Mapping failed, count how many of them
-                self.ignored_count[an_id] += individual_count
+                if an_id in self.ignored_count:
+                    self.ignored_count[an_id] += individual_count
+                else:
+                    self.ignored_morpho += individual_count
                 continue
             self.produced_count += individual_count
             occurrence_id = event_id + "_" + str(an_id)
@@ -713,8 +742,8 @@ class EMODnetExport(TaskServiceBase):
 
     def log_stats(self):
         not_produced = sum(self.ignored_count.values())
-        self.warnings.append("Stats: total:%d produced to zip:%d not produced:%d"
-                             % (self.total_count, self.produced_count, not_produced))
+        self.warnings.append("Stats: total:%d produced to zip:%d not produced (M):%d not produced (P):%d"
+                             % (self.total_count, self.produced_count, self.ignored_morpho, not_produced))
         if len(self.ignored_count) > 0:
             unmatched = []
             ids = list(self.ignored_count.keys())

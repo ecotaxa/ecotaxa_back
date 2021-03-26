@@ -5,11 +5,10 @@
 #
 # An Acquisition business object
 #
-from typing import List, Any, Dict, Optional
+from typing import List, Dict, Optional
 
 from API_models.crud import ColUpdateList
 from BO.Classification import ClassifIDT, ClassifIDListT
-from BO.Mappings import ProjectMapping
 from BO.Project import ProjectIDListT, ProjectIDT
 from BO.helpers.MappedEntity import MappedEntity
 from BO.helpers.MappedTable import MappedTable
@@ -48,7 +47,9 @@ class AcquisitionBO(MappedEntity):
         res: ResultProxy = session.execute(
             "SELECT o.classif_id, count(1)"
             "  FROM obj_head o "
-            " WHERE o.acquisid = :acq AND o.classif_id IS NOT NULL"
+            " WHERE o.acquisid = :acq "
+            "   AND o.classif_id IS NOT NULL "
+            "   AND o.classif_qual = 'V'"
             " GROUP BY o.classif_id",
             {"acq": acquis_id})
         return {int(classif_id): int(cnt) for (classif_id, cnt) in res.fetchall()}

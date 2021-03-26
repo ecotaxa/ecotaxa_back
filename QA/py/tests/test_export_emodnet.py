@@ -1,21 +1,20 @@
 import logging
-
 # noinspection PyPackageRequirements
-from io import BytesIO, StringIO
+from io import BytesIO
 from zipfile import ZipFile
 
+from API_operations.exports.EMODnet import EMODnetExport
 from starlette import status
 
-from API_operations.exports.EMODnet import EMODnetExport
-
-from tests.credentials import ADMIN_AUTH, CREATOR_USER_ID, REAL_USER_ID, ADMIN_USER_ID
+from tests.credentials import ADMIN_AUTH, REAL_USER_ID, CREATOR_AUTH
 from tests.emodnet_ref import ref_zip, with_zeroes_zip
+from tests.test_classification import _prj_query, OBJECT_SET_CLASSIFY_URL
 from tests.test_collections import COLLECTION_CREATE_URL, COLLECTION_UPDATE_URL, COLLECTION_QUERY_URL
 from tests.test_fastapi import PROJECT_QUERY_URL
 from tests.test_update import ACQUISITION_SET_UPDATE_URL, SAMPLE_SET_UPDATE_URL
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
-COLLECTION_EXPORT_EMODNET_URL = "/collections/{collection_id}/export/emodnet?dry_run={dry}&with_zeroes={zeroes}"
+COLLECTION_EXPORT_EMODNET_URL = "/collections/{collection_id}/export/emodnet?dry_run={dry}&with_zeroes={zeroes}&auto_morpho={morph}"
 
 TASK_DOWNLOAD_URL = "/tasks/{task_id}/file"
 
@@ -48,7 +47,7 @@ def test_emodnet_export(config, database, fastapi, caplog):
 
     # Admin exports it
     # First attempt with LOTS of missing data
-    url = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=True)
+    url = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=True, morph=True)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json()["errors"] == ['No valid data creator (user or organisation) found for EML metadata.',
@@ -61,6 +60,16 @@ def test_emodnet_export(config, database, fastapi, caplog):
     assert rsp.json()["warnings"] == []
     task_id = rsp.json()["task_id"]
     assert task_id == 0  # No valid task as there were errors
+
+    # Validate everything, otherwise no export.
+    obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
+    assert len(obj_ids) == 11
+    url = OBJECT_SET_CLASSIFY_URL
+    classifications = [-1 for _obj in obj_ids]  # Keep current
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
+                                                      "classifications": classifications,
+                                                      "wanted_qualification": "V"})
+    assert rsp.status_code == status.HTTP_200_OK
 
     # Update underlying project license
     url = PROJECT_UPDATE_URL.format(project_id=prj_id)
@@ -87,7 +96,7 @@ This series is part of the long term planktonic monitoring of
     """
     the_coll['license'] = "CC BY 4.0"  # Would do nothing as the license comes from the underlying project
     user_doing_all = {'id': REAL_USER_ID,
-                      # TODO: below is redundant with ID, ignored, but fails validation (http 422) if not set
+                      # TODO: below is redundant with ID and ignored, but fails validation (http 422) if not set
                       'email': 'creator',
                       'name': 'User Creating Projects'
                       }
@@ -97,7 +106,7 @@ This series is part of the long term planktonic monitoring of
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=the_coll)
     assert rsp.status_code == status.HTTP_200_OK
 
-    url = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=False)
+    url = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=False, morph=True)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     warns = rsp.json()["warnings"]
@@ -120,7 +129,7 @@ This series is part of the long term planktonic monitoring of
     set_dates_in_ref(ref_zip)
     unzip_and_check(rsp.content, ref_zip)
 
-    url_with_0s = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=True)
+    url_with_0s = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=True, morph=True)
     rsp = fastapi.get(url_with_0s, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     task_id = rsp.json()["task_id"]
