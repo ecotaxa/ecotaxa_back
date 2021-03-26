@@ -51,7 +51,7 @@ six==1.15.0
 python-dateutil==2.8.1
 # For python API client generator
 typer==0.3.2
-PyYAML==5.3.1
+PyYAML==5.4
 stringcase==1.2.0
 # For python API client generated classes
 # Fails to build on GH due to obscure compilation issue. Nevermind for the moment.
