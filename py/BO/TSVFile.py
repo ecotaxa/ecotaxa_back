@@ -139,7 +139,7 @@ class TSVFile(object):
                     self.do_sun_position_field(object_head_to_write)
                     # Add parents
                     self.add_parent_objects(how, session, object_head_to_write, dicts_to_write)
-                    # Care for another line with another image
+                    # Care for existing images
                     key_exist_obj = "%s*%s" % (object_head_to_write.orig_id, image_to_write.orig_file_name)
                     if key_exist_obj in how.objects_and_images_to_skip:
                         logger.info("Image skipped: %s %s", object_head_to_write.orig_id,
@@ -166,6 +166,7 @@ class TSVFile(object):
                     # and pointed at, by the usual DB line. Instead, it's the vignette.
                     instead_image = how.vignette_maker.make_vignette(image_to_write.orig_file_name)
                     if how.vignette_maker.must_keep_original():
+                        # TODO: Put the code below in a def
                         # In this case, the original image is kept in another DB line
                         backup_img_to_write = ImageGen(**dicts_to_write["images"])
                         backup_img_to_write.imgrank = 100

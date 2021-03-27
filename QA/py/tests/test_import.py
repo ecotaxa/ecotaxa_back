@@ -207,6 +207,8 @@ def test_import_again_not_skipping_tsv_skipping_imgs(config, database, caplog):
     # Check that all went fine
     for a_msg in caplog.records:
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
+        # ecotaxa/ecotaxa_dev#583: Ensure that no extra image was added
+        assert "One more image" not in a_msg.getMessage()
 
 
 def import_plain(prj_id, task_id):

@@ -175,7 +175,8 @@ class RealImport(ImportServiceBase):
         import_how.found_users = self.req.found_users
         if self.req.skip_loaded_files:
             import_how.compute_skipped(source_bundle, logger)
-        if not self.req.skip_existing_objects:
+        if self.req.skip_existing_objects:
+            # If we must skip existing objects then do an inventory of what's in already
             with CodeTimer("run: Existing images for %d: " % self.prj_id, logger):
                 import_how.objects_and_images_to_skip = Image.fetch_existing_images(self.session, self.prj_id)
         import_how.do_thumbnail_above(int(self.config['THUMBSIZELIMIT']))
