@@ -217,6 +217,19 @@ def search_collection(title: str,
     return matching_collections
 
 
+@app.get("/collections/by_title", tags=['collections'], response_model=CollectionModel)
+def collection_by_title(q: str):
+    """
+        Return the single collection with this title.
+        For published datasets.
+        !!! DO NOT MODIFY BEHAVIOR !!!
+    """
+    sce = CollectionsService()
+    with RightsThrower(sce):
+        matching_collection = sce.query_by_title(q)
+    return matching_collection
+
+
 @app.get("/collections/{collection_id}", tags=['collections'], response_model=CollectionModel)
 def get_collection(collection_id: int,
                    current_user: int = Depends(get_current_user)):

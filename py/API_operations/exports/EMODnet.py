@@ -12,6 +12,7 @@
 import re
 from datetime import date, datetime
 from typing import Dict, List, Optional, Tuple, cast, Set
+from urllib.parse import quote_plus
 
 from dataclasses import dataclass
 
@@ -358,6 +359,9 @@ class EMODnetExport(TaskServiceBase):
         now = datetime.now().replace(microsecond=0)
         meta_plus = EMLAdditionalMeta(dateStamp=now.isoformat())
 
+        coll_title = the_collection.title
+        info_url = "https://ecotaxa.obs-vlfr.fr/api/collections/by_title?q=%s" % quote_plus(coll_title)
+
         if len(self.errors) == 0:
             # The research project
             # noinspection PyUnboundLocalVariable
@@ -380,8 +384,9 @@ class EMODnetExport(TaskServiceBase):
                           intellectualRights=licence,
                           # project=project,
                           maintenance="periodic review of origin data",
-                          maintenanceUpdateFrequency="monthly",  # From XSD
-                          additionalMetadata=meta_plus)
+                          maintenanceUpdateFrequency="unknown",  # From XSD
+                          additionalMetadata=meta_plus,
+                          informationUrl=info_url)
         return ret
 
     def get_taxo_coverage(self, project_ids: ProjectIDListT) -> List[EMLTaxonomicClassification]:

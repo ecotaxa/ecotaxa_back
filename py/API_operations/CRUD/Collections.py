@@ -37,11 +37,18 @@ class CollectionsService(Service):
         ret = [CollectionBO(a_rec).enrich() for a_rec in qry.all()]
         return ret
 
-    def query(self, current_user_id: UserIDT, coll_id: CollectionIDT, for_update:bool) -> Optional[CollectionBO]:
+    def query(self, current_user_id: UserIDT, coll_id: CollectionIDT, for_update: bool) -> Optional[CollectionBO]:
         # TODO, for now only admins
         _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
         ret = CollectionBO.get_one(self.session if for_update else self.ro_session, coll_id)
         return ret
+
+    def query_by_title(self, title: str) -> CollectionBO:
+        # Return a unique collection from its title
+        qry = self.ro_session.query(Collection).filter(Collection.title == title)
+        ret = [CollectionBO(a_rec).enrich() for a_rec in qry.all()]
+        assert len(ret) == 1
+        return ret[0]
 
     def delete(self, current_user_id: UserIDT, coll_id: CollectionIDT) -> int:
         # TODO, for now only admins
