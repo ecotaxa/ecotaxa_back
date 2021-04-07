@@ -62,12 +62,14 @@ class EMODnetExport(TaskServiceBase):
                 http://rshiny.lifewatch.be/BioCheck/
     """
 
-    def __init__(self, collection_id: CollectionIDT, dry_run: bool, with_zeroes: bool, auto_morpho: bool):
+    def __init__(self, collection_id: CollectionIDT, dry_run: bool, with_zeroes: bool,
+                 with_computations: bool, auto_morpho: bool):
         super().__init__(task_type="TaskExportTxt")
         # Input
         self.dry_run = dry_run
         self.with_zeroes = with_zeroes
         self.auto_morpho = auto_morpho
+        self.with_computations = with_computations
         self.collection = self.ro_session.query(Collection).get(collection_id)
         assert self.collection is not None, "Invalid collection ID"
         # During processing
@@ -532,13 +534,12 @@ class EMODnetExport(TaskServiceBase):
                 - 'Biovolume' -> BiovolumeOfBiologicalEntity -> sum(individual_biovolume) group by taxon
                     with individual_biovolume = individual_volume / subsample_coef / total_water_volume
             The abundance can always be computed. The 2 other ones depend on availability of values
-            for the project.
+            for the project and the configuration variable.
         """
         # We return all per taxon.
         ret: Dict[ClassifIDT, EMODnetExport.AggregForTaxon] = {}
 
         count_per_taxon_per_acquis: Dict[AcquisitionIDT, Dict[ClassifIDT, int]] = {}
-        subsampling_coeff_per_acquis: Dict[AcquisitionIDT, float] = {}
 
         # Start with abundances, simple count and giving its keys to the returned dict.
         acquis_for_sample = SampleBO.get_acquisitions(self.session, sample)
@@ -555,7 +556,11 @@ class EMODnetExport(TaskServiceBase):
                 else:
                     aggreg_for_taxon.abundance += count_4_acquis
 
+        if not self.with_computations:
+            return ret
+
         # Enrich with concentrations
+        subsampling_coeff_per_acquis: Dict[AcquisitionIDT, float] = {}
         try:
             # Fetch calculation data at sample level
             sample_volume = SampleBO.get_computed_var(sample, DefaultVars.volume_sampled)

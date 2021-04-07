@@ -199,6 +199,7 @@ def create_collection(params: CreateCollectionReq,
         ret = sce.create(current_user, params)
     if isinstance(ret, str):
         raise HTTPException(status_code=404, detail=ret)
+    # TODO: Mettre les syncs dans les services, moins dégeu
     return ret
 
 
@@ -264,6 +265,7 @@ def emodnet_format_export(collection_id: int,
                           dry_run: bool,
                           with_zeroes: bool,
                           auto_morpho: bool,
+                          with_computations: bool,
                           current_user: int = Depends(get_current_user)) -> EMODnetExportRsp:
     """
         Export the collection in EMODnet format, @see https://www.emodnet-ingestion.eu/
@@ -271,6 +273,8 @@ def emodnet_format_export(collection_id: int,
         - param `dry_run`: If set, then only a diagnostic of doability will be done.
         - param `with_zeroes`: If set, then *absent* records will be generated, in the relevant samples,
          for categories present in other samples.
+        - param `with_computations`: If set, then an attempt will be made to compute organisms concentrations
+        and biovolumes.
         - param `auto_morpho`: If set, then any object classified on a Morpho category will be added to
          the count of the nearest Phylo parent, upward in the tree.
 
@@ -278,7 +282,7 @@ def emodnet_format_export(collection_id: int,
 
         *Currently only for admins*
     """
-    sce = EMODnetExport(collection_id, dry_run, with_zeroes, auto_morpho)
+    sce = EMODnetExport(collection_id, dry_run, with_zeroes, with_computations, auto_morpho)
     with RightsThrower(sce):
         return sce.run(current_user)
 

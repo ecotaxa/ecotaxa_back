@@ -147,7 +147,8 @@ _meta = r"""
     <field index="7" term="http://rs.tdwg.org/dwc/terms/kingdom"/>
     <field index="8" term="http://rs.tdwg.org/dwc/terms/occurrenceStatus"/>
   </extension>
-
+"""
+_meta_emofs_with_computations = r"""
   <extension encoding="UTF-8" fieldsTerminatedBy="\t" linesTerminatedBy="\n" fieldsEnclosedBy="" 
         ignoreHeaderLines="1" rowType="http://rs.iobis.org/obis/terms/ExtendedMeasurementOrFact">
     <files>
@@ -160,6 +161,23 @@ _meta = r"""
     <field index="4" term="http://rs.tdwg.org/dwc/terms/measurementUnit"/>
     <field index="5" term="http://rs.iobis.org/obis/terms/measurementTypeID"/>
     <field index="6" term="http://rs.iobis.org/obis/terms/measurementUnitID"/>
+  </extension>
+</archive>
+
+"""
+# No occurence emof -> one column less
+_meta_emofs_without_computations = r"""
+  <extension encoding="UTF-8" fieldsTerminatedBy="\t" linesTerminatedBy="\n" fieldsEnclosedBy="" 
+        ignoreHeaderLines="1" rowType="http://rs.iobis.org/obis/terms/ExtendedMeasurementOrFact">
+    <files>
+      <location>extendedmeasurementorfact.txt</location>
+    </files> 
+    <coreid index="0"/>
+    <field index="1" term="http://rs.tdwg.org/dwc/terms/measurementValue"/>
+    <field index="2" term="http://rs.tdwg.org/dwc/terms/measurementType"/>
+    <field index="3" term="http://rs.tdwg.org/dwc/terms/measurementUnit"/>
+    <field index="4" term="http://rs.iobis.org/obis/terms/measurementTypeID"/>
+    <field index="5" term="http://rs.iobis.org/obis/terms/measurementUnitID"/>
   </extension>
 </archive>
 
@@ -188,13 +206,24 @@ m106_mn01_n1_sml		100.0	Volume sampled of the water body	Cubic metres	http://voc
 m106_mn01_n2_sml		100.0	Volume sampled of the water body	Cubic metres	http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/	http://vocab.nerc.ac.uk/collection/P06/current/MCUB/
 m106_mn01_n3_sml		100.0	Volume sampled of the water body	Cubic metres	http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/	http://vocab.nerc.ac.uk/collection/P06/current/MCUB/
 """
+_emofs_no_comp = r"""
+id	measurementValue	measurementType	measurementUnit	measurementTypeID	measurementUnitID
+m106_mn01_n1_sml	100.0	Volume sampled of the water body	Cubic metres	http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/	http://vocab.nerc.ac.uk/collection/P06/current/MCUB/
+m106_mn01_n2_sml	100.0	Volume sampled of the water body	Cubic metres	http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/	http://vocab.nerc.ac.uk/collection/P06/current/MCUB/
+m106_mn01_n3_sml	100.0	Volume sampled of the water body	Cubic metres	http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/	http://vocab.nerc.ac.uk/collection/P06/current/MCUB/
+"""
 ref_zip = {"event.txt": _event,
            "eml.xml": _eml,
            "extendedmeasurementorfact.txt": _emofs,
-           "meta.xml": _meta,
+           "meta.xml": _meta + _meta_emofs_with_computations,
            "occurrence.txt": _occurence}
 with_zeroes_zip = {"event.txt": _event,
                    "eml.xml": _eml,
                    "extendedmeasurementorfact.txt": _emofs,
-                   "meta.xml": _meta,
+                   "meta.xml": _meta + _meta_emofs_with_computations,
                    "occurrence.txt": _occurence + _occurence_with_absent}
+no_computations_zip = {"event.txt": _event,
+                       "eml.xml": _eml,
+                       "extendedmeasurementorfact.txt": _emofs_no_comp,
+                       "meta.xml": _meta + _meta_emofs_without_computations,
+                       "occurrence.txt": _occurence}

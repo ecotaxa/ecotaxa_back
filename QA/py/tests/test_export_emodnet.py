@@ -7,14 +7,15 @@ from API_operations.exports.EMODnet import EMODnetExport
 from starlette import status
 
 from tests.credentials import ADMIN_AUTH, REAL_USER_ID, CREATOR_AUTH
-from tests.emodnet_ref import ref_zip, with_zeroes_zip
+from tests.emodnet_ref import ref_zip, with_zeroes_zip, no_computations_zip
 from tests.test_classification import _prj_query, OBJECT_SET_CLASSIFY_URL
 from tests.test_collections import COLLECTION_CREATE_URL, COLLECTION_UPDATE_URL, COLLECTION_QUERY_URL
 from tests.test_fastapi import PROJECT_QUERY_URL
 from tests.test_update import ACQUISITION_SET_UPDATE_URL, SAMPLE_SET_UPDATE_URL
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
-COLLECTION_EXPORT_EMODNET_URL = "/collections/{collection_id}/export/emodnet?dry_run={dry}&with_zeroes={zeroes}&auto_morpho={morph}"
+COLLECTION_EXPORT_EMODNET_URL = "/collections/{collection_id}/export/emodnet?dry_run={dry}" \
+                                "&with_zeroes={zeroes}&with_computations={comp}&auto_morpho={morph}"
 
 TASK_DOWNLOAD_URL = "/tasks/{task_id}/file"
 
@@ -47,7 +48,7 @@ def test_emodnet_export(config, database, fastapi, caplog):
 
     # Admin exports it
     # First attempt with LOTS of missing data
-    url = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=True, morph=True)
+    url = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=True, comp=True, morph=True)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json()["errors"] == ['No valid data creator (user or organisation) found for EML metadata.',
@@ -106,7 +107,7 @@ This series is part of the long term planktonic monitoring of
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=the_coll)
     assert rsp.status_code == status.HTTP_200_OK
 
-    url = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=False, morph=True)
+    url = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=False, comp=True, morph=True)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     warns = rsp.json()["warnings"]
@@ -129,7 +130,8 @@ This series is part of the long term planktonic monitoring of
     set_dates_in_ref(ref_zip)
     unzip_and_check(rsp.content, ref_zip)
 
-    url_with_0s = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=True, morph=True)
+    url_with_0s = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=True, comp=True,
+                                                       morph=True)
     rsp = fastapi.get(url_with_0s, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     task_id = rsp.json()["task_id"]
@@ -137,6 +139,16 @@ This series is part of the long term planktonic monitoring of
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
     set_dates_in_ref(with_zeroes_zip)
     unzip_and_check(rsp.content, with_zeroes_zip)
+
+    url_raw_data = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=False, comp=False,
+                                                        morph=True)
+    rsp = fastapi.get(url_raw_data, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    task_id = rsp.json()["task_id"]
+    dl_url = TASK_DOWNLOAD_URL.format(task_id=task_id)
+    rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
+    set_dates_in_ref(no_computations_zip)
+    unzip_and_check(rsp.content, no_computations_zip)
 
 
 def set_dates_in_ref(ref_zip):
