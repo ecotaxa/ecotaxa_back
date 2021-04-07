@@ -30,7 +30,6 @@ class DatasetMetadata(object):
          xmlns:dc="http://purl.org/dc/terms/"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="eml://ecoinformatics.org/eml-2.1.1 http://rs.gbif.org/schema/eml-gbif-profile/1.1/eml.xsd"
-         packageId="{0}" system="{1}" scope="{2}"
          xml:lang="eng">
 """
     EML_FOOTER = """
@@ -70,6 +69,10 @@ class DatasetMetadata(object):
         # Licence
         ir_xml = etree.HTML("<para>" + meta.intellectualRights + "</para>")
         etree_sub_element(dataset, "intellectualRights").append(ir_xml[0][0])
+        # Back-link URL
+        online = etree_sub_element(etree_sub_element(dataset, "distribution"), "online")
+        url_elem = etree_sub_element(online, "url", attrib={"function": "information"})
+        url_elem.text = meta.informationUrl
         # Coverage
         self.coverage_to_xml(etree_sub_element(dataset, "coverage"))
         # Purpose
@@ -104,10 +107,11 @@ class DatasetMetadata(object):
         dataset_as_string = etree.tostring(dataset, pretty_print=True, encoding='unicode')
         etree.indent(xml_additional_meta, space="  ")
         metadata_as_string = etree.tostring(xml_additional_meta, pretty_print=True, encoding='unicode')
-        identifier = self.meta.identifier
-        ret = self.EML_HEADER.format(identifier.packageId,
-                                     identifier.system,
-                                     identifier.scope)
+        # identifier = self.meta.identifier
+        # ret = self.EML_HEADER.format(identifier.packageId,
+        #                              identifier.system,
+        #                              identifier.scope)
+        ret = self.EML_HEADER
         ret += dataset_as_string.replace("lang=", "xml:lang=")
         ret += metadata_as_string
         ret += self.EML_FOOTER

@@ -87,11 +87,11 @@ DwC_Event = DwcEvent
 
 
 class BasisOfRecordEnum(str, Enum):
-    materialSample = 'materialSample'
-    preservedSpecimen = 'preservedSpecimen'
-    humanObservation = 'humanObservation'
-    machineObservation = 'machineObservation'
-    livingSpecimen = 'livingSpecimen'
+    materialSample = 'MaterialSample'
+    preservedSpecimen = 'PreservedSpecimen'
+    humanObservation = 'HumanObservation'
+    machineObservation = 'MachineObservation'
+    livingSpecimen = 'LivingSpecimen'
 
 
 class OccurrenceStatusEnum(str, Enum):
@@ -357,17 +357,7 @@ class EMLAdditionalMeta(BaseModel):
     livingTimePeriod: Optional[str]
     """ Time period during which biological material was alive (for palaeontological collections). """
     specimenPreservationMethod: Optional[str]
-    """ """
-    # physical
-    #     objectName
-    #     characterEncoding
-    #     dataFormat
-    #         externallyDefinedFormat
-    #         formatName
-    #     distribution: URL links
-    #         online
-    #             url function="download"
-    #             url function="information"
+    """ Self-explaining. lol. """
 
 
 class EMLMeta(BaseModel):
@@ -412,6 +402,8 @@ class EMLMeta(BaseModel):
     taxonomicCoverage: List[EMLTaxonomicClassification]
     intellectualRights: str
     """ AKA licence """
+    informationUrl: str
+    """ A back-link to the dataset origin """
     purpose: Optional[str]
     """ A description of the purpose of this dataset. """
     methods: Optional[EMLMethod]

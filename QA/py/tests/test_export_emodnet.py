@@ -17,6 +17,8 @@ from tests.test_update_prj import PROJECT_UPDATE_URL
 COLLECTION_EXPORT_EMODNET_URL = "/collections/{collection_id}/export/emodnet?dry_run={dry}" \
                                 "&with_zeroes={zeroes}&with_computations={comp}&auto_morpho={morph}"
 
+COLLECTION_QUERY_BY_TITLE_URL = "/collections/by_title/?q={title}"
+
 TASK_DOWNLOAD_URL = "/tasks/{task_id}/file"
 
 PROJECT_SEARCH_SAMPLES_URL = "/samples/search?project_ids={project_id}&id_pattern="
@@ -37,9 +39,10 @@ def test_emodnet_export(config, database, fastapi, caplog):
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     prj_json = rsp.json()
 
+    coll_title = "EMODNET test collection"
     # Create a minimal collection with only this project
     url = COLLECTION_CREATE_URL
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"title": "EMODNET test collection",
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"title": coll_title,
                                                       "project_ids": [prj_id]})
     assert rsp.status_code == status.HTTP_200_OK
     coll_id = rsp.json()
@@ -149,6 +152,12 @@ This series is part of the long term planktonic monitoring of
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
     set_dates_in_ref(no_computations_zip)
     unzip_and_check(rsp.content, no_computations_zip)
+
+    url_query_back = COLLECTION_QUERY_BY_TITLE_URL.format(title=coll_title)
+    rsp = fastapi.get(url_query_back)
+    assert rsp.status_code == status.HTTP_200_OK
+    coll_desc = rsp.json()
+    assert coll_desc['title'] == coll_title
 
 
 def set_dates_in_ref(ref_zip):

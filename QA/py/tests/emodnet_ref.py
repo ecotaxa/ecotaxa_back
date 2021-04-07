@@ -4,7 +4,6 @@ _eml = r"""
          xmlns:dc="http://purl.org/dc/terms/"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="eml://ecoinformatics.org/eml-2.1.1 http://rs.gbif.org/schema/eml-gbif-profile/1.1/eml.xsd"
-         packageId="?" system="?" scope="system"
          xml:lang="eng">
 <dataset>
   <title xml:lang="eng">EMODNET test collection</title>
@@ -52,6 +51,11 @@ This series is part of the long term planktonic monitoring of
         <citetitle>Creative Commons Attribution (CC-BY) 4.0 License</citetitle>
       </ulink>.</para>
   </intellectualRights>
+  <distribution>
+    <online>
+      <url function="information">https://ecotaxa.obs-vlfr.fr/api/collections/by_title?q=EMODNET+test+collection</url>
+    </online>
+  </distribution>
   <coverage>
     <geographicCoverage>
       <geographicDescription>See coordinates</geographicDescription>
@@ -87,7 +91,7 @@ This series is part of the long term planktonic monitoring of
     <description>
       <para>periodic review of origin data</para>
     </description>
-    <maintenanceUpdateFrequency>monthly</maintenanceUpdateFrequency>
+    <maintenanceUpdateFrequency>unknown</maintenanceUpdateFrequency>
   </maintenance>
   <contact>
     <individualName>
@@ -190,13 +194,13 @@ m106_mn01_n3_sml	m106_mn01_n3_sml	sample	IMEV	EMODNET test collection	2014-04-20
 """
 _occurence = r"""
 id	eventID	occurrenceID	basisOfRecord	scientificName	scientificNameID	individualCount	kingdom	occurrenceStatus
-m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_78418	machineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	2	Animalia	present
-m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_45072	machineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	1	Animalia	present
+m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_78418	MachineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	2	Animalia	present
+m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_45072	MachineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	1	Animalia	present
 """
-_occurence_with_absent = r"""m106_mn01_n2_sml	m106_mn01_n2_sml	m106_mn01_n2_sml_45072	machineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	0	Animalia	absent
-m106_mn01_n2_sml	m106_mn01_n2_sml	m106_mn01_n2_sml_78418	machineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	0	Animalia	absent
-m106_mn01_n3_sml	m106_mn01_n3_sml	m106_mn01_n3_sml_45072	machineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	0	Animalia	absent
-m106_mn01_n3_sml	m106_mn01_n3_sml	m106_mn01_n3_sml_78418	machineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	0	Animalia	absent
+_occurence_with_absent = r"""m106_mn01_n2_sml	m106_mn01_n2_sml	m106_mn01_n2_sml_45072	MachineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	0	Animalia	absent
+m106_mn01_n2_sml	m106_mn01_n2_sml	m106_mn01_n2_sml_78418	MachineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	0	Animalia	absent
+m106_mn01_n3_sml	m106_mn01_n3_sml	m106_mn01_n3_sml_45072	MachineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	0	Animalia	absent
+m106_mn01_n3_sml	m106_mn01_n3_sml	m106_mn01_n3_sml_78418	MachineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	0	Animalia	absent
 """
 _emofs = r"""
 id	occurrenceID	measurementValue	measurementType	measurementUnit	measurementTypeID	measurementUnitID
