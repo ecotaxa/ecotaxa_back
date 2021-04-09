@@ -83,7 +83,7 @@ class EMODnetExport(TaskServiceBase):
         self.errors: List[str] = []
         self.warnings: List[str] = []
         # Summary for logging issues
-        self.total_count = 0
+        self.validated_count = 0
         self.produced_count = 0
         self.ignored_count: Dict[ClassifIDT, int] = {}
         self.ignored_morpho: int = 0
@@ -695,6 +695,7 @@ class EMODnetExport(TaskServiceBase):
                     self.ignored_morpho += individual_count
                 continue
             self.produced_count += individual_count
+            # Take the original taxo ID to build an occurence
             occurrence_id = event_id + "_" + str(an_id)
             occ = DwC_Occurrence(eventID=event_id,
                                  occurrenceID=occurrence_id,
@@ -760,8 +761,8 @@ class EMODnetExport(TaskServiceBase):
 
     def log_stats(self):
         not_produced = sum(self.ignored_count.values())
-        self.warnings.append("Stats: total:%d produced to zip:%d not produced (M):%d not produced (P):%d"
-                             % (self.total_count, self.produced_count, self.ignored_morpho, not_produced))
+        self.warnings.append("Stats: validated:%d produced to zip:%d not produced (M):%d not produced (P):%d"
+                             % (self.validated_count, self.produced_count, self.ignored_morpho, not_produced))
         if len(self.ignored_count) > 0:
             unmatched = []
             ids = list(self.ignored_count.keys())
@@ -795,4 +796,4 @@ class EMODnetExport(TaskServiceBase):
             Sample.propagate_geo(self.session, prj_id=a_project_id)
         a_stat: ProjectTaxoStats
         for a_stat in ProjectBO.read_taxo_stats(self.session, project_ids):
-            self.total_count += a_stat.nb_unclassified + a_stat.nb_predicted + a_stat.nb_dubious + a_stat.nb_validated
+            self.validated_count += a_stat.nb_validated
