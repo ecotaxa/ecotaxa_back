@@ -9,7 +9,7 @@ import hashlib
 from os.path import join, exists
 from typing import Optional, Set
 
-from sqlalchemy import func, and_
+from sqlalchemy import and_
 from sqlalchemy.orm import aliased
 
 from API_operations.helpers.Service import Service
@@ -48,17 +48,16 @@ class ImageManagerService(Service):
             Pick some images without checksum and compute it.
         """
         _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
-        qry: Query = self.session.query(Image.file_name)
+        qry: Query = self.ro_session.query(Image.file_name)
         if prj_id is not None:
             # Find missing images in a project
             qry = qry.join(ObjectHeader).join(Acquisition).join(Sample).join(Project)
-            qry = qry.outerjoin(ImageFile, Image.file_name == ImageFile.path)
-            qry = qry.filter(ImageFile.path.is_(None))
             qry = qry.filter(Project.projid == prj_id)
         else:
-            # Find images newer than the newest known one
-            sub_qry = self.session.query(func.max(ImageFile.path))
-            qry = qry.filter(Image.file_name > sub_qry)
+            # Find missing images globally
+            pass
+        qry = qry.outerjoin(ImageFile, Image.file_name == ImageFile.path)
+        qry = qry.filter(ImageFile.path.is_(None))
         qry = qry.limit(max_digests)
         cnt = 0
         with CodeTimer("Files without md5, query '%s':" % str(qry), logger):
