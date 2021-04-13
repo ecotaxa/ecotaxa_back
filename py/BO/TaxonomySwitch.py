@@ -26,13 +26,20 @@ class TaxonomyMapper(object):
         self.taxa_ids = set(taxon_ids)
 
     def do_match(self) -> Tuple[Dict[ClassifIDT, WoRMS], Dict[ClassifIDT, ClassifIDT]]:
+        """
+            Returns: A dict with matched Phylo taxo ids->WoRMS entry. The taxa might be Morpho ones,
+                        as the XLSX data source contains such mappings.
+                    + Another dict with unmatched Morpho entries.
+
+        :return:
+        """
         ret: Dict[ClassifIDT, WoRMS] = {}
+
+        # Do the manual (i.e. XLSX-driven) matching of what can be.
+        # In this part, both Morpho and Phylo taxa are matched to WoRMS.
         to_worms: ToWorms = ToWorms()
         to_worms.prepare()
         to_worms.apply()
-
-        # Do the manual matching of what can be. In this part, both Morpho and Phylo taxa
-        # are matched to WoRMS
         manual_ids = set(to_worms.done_remaps.keys()).intersection(self.taxa_ids)
         for a_manual_id in list(manual_ids):
             # Get the mapping
@@ -44,24 +51,27 @@ class TaxonomyMapper(object):
             ret[a_manual_id] = self.session.query(WoRMS).get(aphia_id)
 
         # Do auto matching of the rest
-        auto_ids = self.taxa_ids.difference(manual_ids)
+        ids_for_auto_match = self.taxa_ids.difference(manual_ids)
+
         # Only keep Phylo taxa, the Morpho ones will get aggregated with their nearest Phylo parent
-        phylo_auto_ids = TaxonomyBO.keep_phylo(self.session, list(auto_ids))
+        phylo_auto_ids = TaxonomyBO.keep_phylo(self.session, list(ids_for_auto_match))
 
         # Lookup parents of morpho taxa
         taxo_sce = TaxonomyService()
-        morphos = list(auto_ids.difference(phylo_auto_ids))
-        to_worms.add_to_unieuk(morphos, taxo_sce)
+        morpho_ids = list(ids_for_auto_match.difference(phylo_auto_ids))
+        # Borrow taxo tree from ToWorms which has nearly all we need.
+        to_worms.add_to_unieuk(morpho_ids, taxo_sce)
         unieuk_per_id = to_worms.unieuk
         needed_parents = []
-        for a_morpho_id in morphos:
+        for a_morpho_id in morpho_ids:
             for a_parent_id in unieuk_per_id[a_morpho_id].id_lineage:
                 if a_parent_id not in unieuk_per_id:
                     needed_parents.append(a_parent_id)
         to_worms.add_to_unieuk(needed_parents, taxo_sce)
-        # Build mapping dict
+
+        # Build morpho -> nearest phylo mapping
         phylo_per_morpho: Dict[ClassifIDT, ClassifIDT] = {}
-        for a_morpho_id in morphos:
+        for a_morpho_id in morpho_ids:
             for a_parent_id in unieuk_per_id[a_morpho_id].id_lineage:
                 if unieuk_per_id[a_parent_id].type == 'P':
                     phylo_per_morpho[a_morpho_id] = a_parent_id
@@ -71,4 +81,12 @@ class TaxonomyMapper(object):
 
         # Do more matches
         ret.update(WoRMSSetFromTaxaSet(self.session, list(phylo_auto_ids)).res)
+
+        # Sanity check
+        # for an_id in ret.keys():
+        #     assert unieuk_per_id[an_id].type == 'P' # Not true
+        for a_morpho_id, a_phylo_id in phylo_per_morpho.items():
+            assert unieuk_per_id[a_morpho_id].type == 'M'
+            assert unieuk_per_id[a_phylo_id].type == 'P'
+
         return ret, phylo_per_morpho
