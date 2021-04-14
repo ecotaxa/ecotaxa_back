@@ -10,6 +10,7 @@
 # EMODnet QC source code:
 #      https://github.com/EMODnet/EMODnetBiocheck
 import re
+from collections import OrderedDict
 from datetime import date, datetime
 from typing import Dict, List, Optional, Tuple, cast, Set
 from urllib.parse import quote_plus
@@ -38,8 +39,7 @@ from data.Countries import countries_by_name
 from formats.EMODnet.Archive import DwC_Archive
 from formats.EMODnet.DatasetMeta import DatasetMetadata
 from formats.EMODnet.MoF import SamplingNetMeshSizeInMicrons, SampleDeviceApertureAreaInSquareMeters, \
-    AbundancePerUnitVolumeOfTheWaterBody, \
-    SampleVolumeInCubicMeters, BiovolumeOfBiologicalEntity, SamplingInstrumentName
+    AbundancePerUnitVolumeOfTheWaterBody, BiovolumeOfBiologicalEntity, SamplingInstrumentName, CountOfBiologicalEntity
 from formats.EMODnet.models import DwC_Event, RecordTypeEnum, DwC_Occurrence, OccurrenceStatusEnum, \
     BasisOfRecordEnum, EMLGeoCoverage, EMLTemporalCoverage, EMLMeta, EMLTitle, EMLPerson, EMLKeywordSet, \
     EMLTaxonomicClassification, EMLAdditionalMeta, EMLIdentifier, EMLAssociatedPerson
@@ -407,9 +407,7 @@ class EMODnetExport(TaskServiceBase):
         # Warnings for non-matches
         for an_id, a_name in used_taxa.items():
             if an_id not in self.mapping:
-                if an_id in self.morpho2phylo:
-                    pass
-                else:
+                if not an_id in self.morpho2phylo:
                     self.ignored_taxa[an_id] = (a_name, an_id)
                     self.ignored_count[an_id] = 0
         # TODO: Temporary until the whole system has a WoRMS taxo tree
@@ -418,13 +416,17 @@ class EMODnetExport(TaskServiceBase):
             self.errors.append("Could not match in WoRMS _any_ classification in this project")
             return ret
         # Produce the coverage
+        produced = set()
         for _an_id, a_worms_entry in self.mapping.items():
             assert a_worms_entry is not None, "None for %d" % _an_id
             rank = a_worms_entry.rank
             value = a_worms_entry.scientificname
             assert rank is not None, "No name for %d" % _an_id
-            ret.append(EMLTaxonomicClassification(taxonRankName=rank,
-                                                  taxonRankValue=value))
+            tracked = (rank, value)
+            if tracked not in produced:
+                ret.append(EMLTaxonomicClassification(taxonRankName=rank,
+                                                      taxonRankValue=value))
+                produced.add(tracked)
         return ret
 
     @staticmethod
@@ -467,8 +469,8 @@ class EMODnetExport(TaskServiceBase):
                                 maximumDepthInMeters=str(summ[3])
                                 )
                 events.add(evt)
-                nb_added = self.add_occurences(sample=a_sample, arch=arch, event_id=event_id)
                 self.add_eMoFs_for_sample(sample=a_sample, arch=arch, event_id=event_id)
+                nb_added = self.add_occurences(sample=a_sample, arch=arch, event_id=event_id)
                 if nb_added == 0:
                     self.warnings.append("No occurrence added for sample '%s' in %d" % (a_sample.orig_id, a_prj_id))
 
@@ -490,8 +492,10 @@ class EMODnetExport(TaskServiceBase):
                 self.suspicious_vals.setdefault("sample_volume", []).append(
                     str(sample_volume) + " in " + sample.orig_id)
             # Add sampled water volume
-            if sample_volume > 0:
-                arch.emofs.add(SampleVolumeInCubicMeters(event_id, str(sample_volume)))
+            # 13/04/2021: Removed as it might give the impression that the individual count is
+            # the number found inside the volume, when there is subsampling involved.
+            # if sample_volume > 0:
+            #     arch.emofs.add(SampleVolumeInCubicMeters(event_id, str(sample_volume)))
 
         # Get the net features from the sample
         try:
@@ -525,7 +529,7 @@ class EMODnetExport(TaskServiceBase):
     # Simplest structure with literal names. No bloody dict.
     @dataclass()
     class AggregForTaxon:
-        abundance: int
+        abundance: int  # i.e. count of organisms
         concentration: Optional[float]
         biovolume: Optional[float]
 
@@ -550,7 +554,8 @@ class EMODnetExport(TaskServiceBase):
         acquis_for_sample = SampleBO.get_acquisitions(self.session, sample)
         for an_acquis in acquis_for_sample:
             # Get counts for acquisition (subsample)
-            count_per_taxon_for_acquis = AcquisitionBO.get_sums_by_taxon(self.session, an_acquis.acquisid)
+            count_per_taxon_for_acquis: Dict[ClassifIDT, int] = AcquisitionBO.get_sums_by_taxon(self.session,
+                                                                                                an_acquis.acquisid)
             if self.auto_morpho:
                 self.add_morpho_counts(count_per_taxon_for_acquis)
             count_per_taxon_per_acquis[an_acquis.acquisid] = count_per_taxon_for_acquis
@@ -651,7 +656,7 @@ class EMODnetExport(TaskServiceBase):
 
         return ret
 
-    def add_morpho_counts(self, count_per_taxon_for_acquis):
+    def add_morpho_counts(self, count_per_taxon_for_acquis: Dict[ClassifIDT, int]):
         # If there are Morpho taxa with counts, cumulate and wipe them out
         for an_id, count_4_acquis in dict(count_per_taxon_for_acquis).items():
             phylo_id = self.morpho2phylo.get(an_id)
@@ -666,40 +671,48 @@ class EMODnetExport(TaskServiceBase):
 
     def add_occurences(self, sample: Sample, arch: DwC_Archive, event_id: str) -> int:
         """
-            Add DwC occurences, for given sample, into the archive.
+            Add DwC occurences, for given sample, into the archive. A single line per WoRMS taxon.
         """
         aggregs = self.aggregate_for_sample(sample)
 
-        # To see
-        # print()
-        # print("Concentrations in sample '%s':%s" % (sample.orig_id, str(concentration_per_taxon)))
-        nb_added_occurences = 0
-        ids = list(aggregs.keys())
-        # Sort per abundance desc
-        ids.sort(key=lambda i: aggregs[i].abundance, reverse=True)
-        # Record production for this sample
-        self.taxa_per_sample[event_id] = set()
-        # Loop over _present_ taxa
-        for an_id in ids:
-            aggreg_for_taxon = aggregs[an_id]
-            # print("%s conc %f" % (worms.scientificname, conc_for_taxon))
-            #     self.keep_stats(worms, count_4_sample)
-            individual_count = aggreg_for_taxon.abundance
+        # Group by lsid, in order to have a single occurence
+        by_lsid: Dict[str, List] = {}
+        for an_id, an_aggreg in aggregs.items():
             try:
                 worms = self.mapping[an_id]
             except KeyError:
                 # Mapping failed, count how many of them
                 if an_id in self.ignored_count:
-                    self.ignored_count[an_id] += individual_count
+                    self.ignored_count[an_id] += an_aggreg.abundance
                 else:
-                    self.ignored_morpho += individual_count
+                    # Sanity check, there should be no morpho left
+                    if self.auto_morpho:
+                        assert an_id not in self.morpho2phylo
+                    self.ignored_morpho += an_aggreg.abundance
                 continue
-            self.produced_count += individual_count
-            # Take the original taxo ID to build an occurence
-            occurrence_id = event_id + "_" + str(an_id)
+            if worms.lsid in by_lsid:
+                for_lsid = by_lsid[worms.lsid]
+                # Add the taxon ID to complete the occurence
+                for_lsid[0] += "_" + str(an_id)
+                for_lsid[1].abundance += an_aggreg.abundance
+            else:
+                # Take the original taxo ID to build an occurence
+                assert worms.lsid is not None
+                by_lsid[worms.lsid] = [event_id + "_" + str(an_id), an_aggreg, worms]
+
+        # Sort per abundance desc
+        by_lsid_desc = OrderedDict(sorted(by_lsid.items(), key=lambda x: x[1][1].abundance, reverse=True))
+        # Record production for this sample
+        self.taxa_per_sample[event_id] = set()
+        # Loop over WoRMS taxa
+        nb_added_occurences = 0
+        for a_lsid, for_lsid in by_lsid_desc.items():
+            occurrence_id, aggreg_for_lsid, worms = for_lsid
+            self.produced_count += aggreg_for_lsid.abundance
             occ = DwC_Occurrence(eventID=event_id,
                                  occurrenceID=occurrence_id,
-                                 individualCount=individual_count,
+                                 # Below is better as an EMOF @see CountOfBiologicalEntity
+                                 # individualCount=individual_count,
                                  scientificName=worms.scientificname,
                                  scientificNameID=worms.lsid,
                                  kingdom=worms.kingdom,
@@ -711,10 +724,11 @@ class EMODnetExport(TaskServiceBase):
             self.add_eMoFs_for_occurence(arch=arch,
                                          event_id=event_id,
                                          occurrence_id=occurrence_id,
-                                         values=aggreg_for_taxon)
-            if self.with_zeroes:
-                # Record the production of an occurence 'present' for this taxon
-                self.taxa_per_sample[event_id].add(an_id)
+                                         values=aggreg_for_lsid)
+            # TODO
+            # if self.with_zeroes:
+            #     # Record the production of a 'present' occurence for this taxon
+            #     self.taxa_per_sample[event_id].add(an_id)
         return nb_added_occurences
 
     @staticmethod
@@ -724,6 +738,8 @@ class EMODnetExport(TaskServiceBase):
             Conditions are: - the value exists
                             - the value was required by the call
         """
+        cnt_emof = CountOfBiologicalEntity(event_id, occurrence_id, str(values.abundance))
+        arch.emofs.add(cnt_emof)
         if values.concentration is not None:
             value = round(values.concentration, 6)
             emof = AbundancePerUnitVolumeOfTheWaterBody(event_id, occurrence_id, str(value))
