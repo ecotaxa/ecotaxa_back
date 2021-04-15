@@ -49,7 +49,9 @@ class DescribedObjectSet(object):
         self.prj_id = prj_id
         self.filters = ObjectSetFilter(session, filters)
 
-    def get_sql(self, user_id: int, order_clause: Optional[OrderClause] = None) \
+    def get_sql(self, user_id: int,
+                order_clause: Optional[OrderClause] = None,
+                select_list: str = "") \
             -> Tuple[FromClause, WhereClause, SQLParamDict]:
         """
             Construct SQL parts for getting the IDs of objects.
@@ -64,12 +66,25 @@ class DescribedObjectSet(object):
         selected_tables = FromClause("obj_head obh")
         selected_tables += "samples sam ON sam.projid = :projid"
         selected_tables += "acquisitions acq ON acq.acq_sample_id = sam.sampleid"
-        if "prc." in obj_where.get_sql() + order_clause.get_sql():
+        column_referencing_sql = obj_where.get_sql() + order_clause.get_sql() + select_list
+        if "prc." in column_referencing_sql:
             selected_tables += "process prc ON prc.processid = acq.acquisid"
-        if "obf." in obj_where.get_sql() + order_clause.get_sql():
+        if "obf." in column_referencing_sql:
             selected_tables += "obj_field obf ON obf.objfid = obh.objid"
-        if "txo." in obj_where.get_sql() + order_clause.get_sql():
+        if "txo." in column_referencing_sql or "txp." in column_referencing_sql:
             selected_tables += "taxonomy txo ON txo.id = obh.classif_id"
+            selected_tables.set_outer("taxonomy txo ")
+        if "img." in column_referencing_sql:
+            selected_tables += "images img ON obh.objid = img.objid " \
+                               "AND img.imgrank = (SELECT MIN(img3.imgrank) " \
+                               "FROM images img3 WHERE img3.objid = obh.objid)"
+            selected_tables.set_outer("images img ")
+        if "usr." in column_referencing_sql:
+            selected_tables += "users usr ON obh.classif_who = usr.id"
+            selected_tables.set_outer("users usr ")
+        if "txp." in column_referencing_sql:
+            selected_tables += "taxonomy txp ON txp.id = txo.parent_id"
+            selected_tables.set_outer("taxonomy txp ")
         return selected_tables, obj_where, params
 
 
@@ -486,7 +501,7 @@ class ObjectSetFilter(object):
                 where_clause *= "obh.classif_qual = 'V'"
                 where_clause *= "obh.classif_who != " + str(user_id)
             elif self.status_filter == "VM":
-                where_clause *= "obh.classif_qual= 'V'"
+                where_clause *= "obh.classif_qual = 'V'"
                 where_clause *= "obh.classif_who = " + str(user_id)
             elif self.status_filter == "U":
                 where_clause *= "obh.classif_qual is null"

@@ -20,13 +20,18 @@ class FromClause(object):
 
     def __init__(self, first: str):
         self.joins = [first]
+        self.left_joins: Set[str] = set()
 
     def __add__(self, other) -> 'FromClause':
         self.joins.append(other)
         return self
 
     def get_sql(self):
-        return "\n  JOIN ".join(self.joins)
+        ret = "\n  JOIN ".join([a_join for a_join in self.joins if a_join not in self.left_joins])
+        if len(self.left_joins) > 0:
+            ret += "\n LEFT JOIN " + "\n LEFT JOIN ".join(
+                [a_join for a_join in self.joins if a_join in self.left_joins])
+        return ret
 
     def replace_table(self, before: str, after: str):
         repl = []
@@ -42,6 +47,19 @@ class FromClause(object):
     def remove_if_refers_to(self, table_name: str):
         self.joins = [a_join for a_join in self.joins
                       if table_name not in a_join]
+
+    def set_outer(self, join_start: str):
+        """ Signal that the clause starting with join_start should be a LEFT one """
+        for a_join in self.joins:
+            if a_join.startswith(join_start):
+                self.left_joins.add(a_join)
+
+    def find_join(self, join_start: str) -> bool:
+        """ Find a clause starting with join_start """
+        for a_join in self.joins:
+            if a_join.startswith(join_start):
+                return True
+        return False
 
 
 class WhereClause(object):
@@ -96,8 +114,12 @@ class OrderClause(object):
     def add_expression(self, alias: str, expr: str, asc_or_desc: Optional[str]) -> None:
         if asc_or_desc is None:
             asc_or_desc = "ASC"
-        self.expressions.append("%s.%s %s" % (alias, expr, asc_or_desc))
-        self.columns.append(alias + "." + expr)
+        if alias is not None:
+            self.expressions.append("%s.%s %s" % (alias, expr, asc_or_desc))
+            self.columns.append(alias + "." + expr)
+        else:
+            self.expressions.append("%s %s" % (expr, asc_or_desc))
+            self.columns.append(expr)
 
     def referenced_columns(self, with_prefices=True) -> Set[str]:
         if with_prefices:

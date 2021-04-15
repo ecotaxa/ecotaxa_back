@@ -6,12 +6,13 @@ from typing import Tuple, List, Optional, Set, Dict
 
 from API_models.crud import ProjectFilters, ColUpdateList
 from BO.Classification import HistoricalLastClassif, ClassifIDSetT, ClassifIDListT
+from BO.Mappings import TableMapping
 from BO.ObjectSet import DescribedObjectSet, ObjectIDListT, EnumeratedObjectSet, ObjectIDWithParentsListT
 from BO.Project import ProjectBO, ProjectIDT
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
 from BO.User import UserIDT
-from DB import Project, ObjectHeader
+from DB import Project, ObjectHeader, ObjectFields, Image, Taxonomy, Sample, User
 from DB.helpers.ORM import ResultProxy
 from DB.helpers.SQL import OrderClause
 from FS.VaultRemover import VaultRemover
@@ -34,10 +35,11 @@ class ObjectManager(Service):
 
     def query(self, current_user_id: Optional[UserIDT], proj_id: ProjectIDT,
               filters: ProjectFilters,
+              return_fields: Optional[List[str]] = None,
               order_field: Optional[str] = None,
               window_start: Optional[int] = None,
               window_size: Optional[int] = None) \
-            -> Tuple[ObjectIDWithParentsListT, int]:
+            -> Tuple[ObjectIDWithParentsListT, List[List], int]:
         """
             Query the given project with given filters, return all IDs.
             If provided order_field, the result is sorted by this field.
@@ -46,36 +48,41 @@ class ObjectManager(Service):
         """
         # Security check
         if current_user_id is None:
-            RightsBO.anonymous_wants(self.ro_session, Action.READ, proj_id)
+            prj = RightsBO.anonymous_wants(self.ro_session, Action.READ, proj_id)
             # Anonymous can only see validated objects
             # noinspection PyTypeHints
             filters.statusfilter = "V"  # type:ignore
             user_id = -1
         else:
-            user, _project = RightsBO.user_wants(self.session, current_user_id, Action.READ, proj_id)
+            user, prj = RightsBO.user_wants(self.session, current_user_id, Action.READ, proj_id)
             user_id = user.id
 
+        free_columns_mappings = TableMapping(ObjectFields).load_from_equal_list(prj.mappingobj)
+
         # The order field has an impact on the query
-        order_clause = self.cook_order_clause(order_field)
+        order_clause = self.cook_order_clause(order_field, free_columns_mappings)
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, filters)
 
-        from_, where, params = object_set.get_sql(user_id, order_clause)
+        extra_cols = self._add_return_fields(return_fields, free_columns_mappings)
+
+        from_, where, params = object_set.get_sql(user_id, order_clause, extra_cols)
 
         if "obf." in where.get_sql():
             # If the filter needs obj_field data it's more efficient to count with a window function
             # than issuing a second query.
-            extra_col = ", COUNT(objid) OVER() AS total"
+            total_col = "COUNT(objid) OVER() AS total"
         else:
             # Otherwise, no need for obj_field in count, less DB buffers
-            extra_col = ", 0 AS total"
+            total_col = "0 AS total"
 
         # The following hint is needed until we sort out why, time to time, there is a FTS on obj_head
         sql = """
     SET LOCAL enable_seqscan=FALSE;
-    SELECT obh.objid, acq.acquisid, sam.sampleid %s
-      FROM """ % extra_col + from_.get_sql() + " " + where.get_sql()
+    SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
+      FROM """ % (total_col, extra_cols)
+        sql += from_.get_sql() + " " + where.get_sql()
 
         # Add order & window if relevant
         if order_clause is not None:
@@ -88,42 +95,88 @@ class ObjectManager(Service):
         with CodeTimer("query: for %d using %s " % (proj_id, sql), logger):
             res: ResultProxy = self.ro_session.execute(sql, params)
         ids = []
+        details = []
         total = 0
         objid: int
         acquisid: int
         sampleid: int
-        for objid, acquisid, sampleid, total in res:  # type:ignore
+        for objid, acquisid, sampleid, total, *extra in res:  # type:ignore
             ids.append((objid, acquisid, sampleid, proj_id))
+            details.append(extra)
 
         if total == 0:
             # Total was not computed or left to 0
             total, _nbr_v, _nbr_d, _nbr_p = self.summary(current_user_id, proj_id, filters, True)
 
-        return ids, total
+        return ids, details, total
 
     @staticmethod
-    def cook_order_clause(order_field: Optional[str]) -> Optional[OrderClause]:
+    def cook_order_clause(order_field: Optional[str], mappings: TableMapping) -> Optional[OrderClause]:
         """
             Prepare a SQL "order by" clause from the required field.
+            The field is expressed using same table prefixes as return fields.
         """
-        ret = None
-        if order_field is not None:
-            ret = OrderClause()
-            asc_desc = None
-            if order_field[0] == "-":
-                asc_desc = "DESC"
-                order_field = order_field[1:]
-            if order_field == "classifname":
-                order_field_alias = "txo"
-                order_field = "name"
-            elif order_field in ObjectHeader.__dict__:
-                order_field_alias = "obh"
-            else:
-                order_field_alias = "obf"
-            ret.add_expression(order_field_alias, order_field, asc_desc)
-            # Disambiguate using obj_id
-            ret.add_expression("obh", "objid", asc_desc)
+        if order_field is None:
+            return None
+        ret = OrderClause()
+        asc_desc = None
+        if order_field[0] == "-":
+            asc_desc = "DESC"
+            order_field = order_field[1:]
+        order_expr = ObjectManager._field_to_db_col(order_field, mappings)
+        if order_expr is None:
+            return None
+        alias, order_col = order_expr.split(".", 1)
+        ret.add_expression(alias, order_col, asc_desc)
+        # Disambiguate using obj_id
+        ret.add_expression("obh", "objid", asc_desc)
         return ret
+
+    @staticmethod
+    def _field_to_db_col(a_field: str, mappings: TableMapping) -> Optional[str]:
+        try:
+            prfx, name = a_field.split(".", 1)
+        except ValueError:
+            return None
+        if prfx == "obj":
+            if name in ObjectHeader.__dict__:
+                return "obh." + name
+            elif name == 'imgcount':
+                return "(SELECT COUNT(img2.imgrank) FROM images img2 WHERE img2.objid = obh.objid) AS imgcount"
+        elif prfx == "fre":
+            if name in mappings.tsv_cols_to_real:
+                return "obf." + mappings.tsv_cols_to_real[name]
+        elif prfx == "img":
+            if name in Image.__dict__:
+                return a_field
+        elif prfx in ("txo", "txp"):
+            if name in Taxonomy.__dict__:
+                return a_field
+        elif prfx == "sam":
+            if name in Sample.__dict__:
+                return a_field
+        elif prfx == "usr":
+            if name in User.__dict__:
+                return a_field
+        return None
+
+    @staticmethod
+    def _add_return_fields(return_fields: Optional[List[str]],
+                           mappings: TableMapping) -> str:
+        """
+            From an API-named list of columns, return the real text for the SELECT to return them
+        :param return_fields:
+        :return:
+        """
+        if return_fields is None or len(return_fields) == 0:
+            return ""
+        vals = []
+        for a_field in return_fields:
+            a_col = ObjectManager._field_to_db_col(a_field, mappings)
+            if a_col is None:
+                logger.warning("Dropped unknown %s in query", a_field)
+            vals.append(a_col)
+        return ",\n" + ", ".join(vals)
 
     def parents_by_id(self, current_user_id: UserIDT, object_ids: ObjectIDListT) -> ObjectIDWithParentsListT:
         """

@@ -690,6 +690,7 @@ def process_query(process_id: int,
           )
 def get_object_set(project_id: int,
                    filters: ProjectFiltersModel,
+                   fields: Optional[str] = None,
                    order_field: Optional[str] = None,
                    # TODO: order_field should be a user-visible field name, not nXXX, in case of free field
                    window_start: Optional[int] = None,
@@ -697,20 +698,32 @@ def get_object_set(project_id: int,
                    current_user: Optional[int] = Depends(get_optional_current_user)) -> ObjectSetQueryRsp:
     """
         Return object ids for the given project with the filters.
+
         Optionally:
+
+            - fields will specify the needed object (and ancilliary entities) fields
             - order_field will order the result using given field, If prefixed with "-" then it will be reversed.
             - window_start & window_size allows to return only a slice of the result.
+
+        Fields follow the naming convention: `prefix.field`. Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.
+            - Column obj.imgcount contains the total count of images for the object.
     """
+    return_fields = None
+    if fields is not None:
+        return_fields = fields.split(",")
     sce = ObjectManager()
     with RightsThrower(sce):
         rsp = ObjectSetQueryRsp()
-        obj_with_parents, total = sce.query(current_user, project_id, filters, order_field, window_start, window_size)
+        obj_with_parents, details, total = sce.query(current_user, project_id, filters,
+                                                     return_fields, order_field,
+                                                     window_start, window_size)
     rsp.total_ids = total
     rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
     rsp.acquisition_ids = [with_p[1] for with_p in obj_with_parents]
     rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
     rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
-    # TODO: Despite the ORJSON encode above, this response is still quite slow due to a call
+    rsp.details = details
+    # TODO: Despite the ORJSON encode above, this response is still quite slow due to many calls
     # to def jsonable_encoder (in FastAPI encoders.py)
     return rsp
 
