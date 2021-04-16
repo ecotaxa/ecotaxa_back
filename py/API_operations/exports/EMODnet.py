@@ -476,6 +476,13 @@ class EMODnetExport(TaskServiceBase):
 
     nine_nine_re = re.compile("999+.0$")
 
+    # The nets in dataset but no official BODC definition
+    bodc_unknown_nets = {
+        "jb": "Juday-Bogorov net",
+        "regent": "Regent net",
+        "rg": "Regent net"
+    }
+
     # noinspection PyPep8Naming
     def add_eMoFs_for_sample(self, sample: Sample, arch: DwC_Archive, event_id: str):
         """
@@ -506,25 +513,37 @@ class EMODnetExport(TaskServiceBase):
             self.warnings.append("Could not extract sampling net name and features from sample %s (%s)."
                                  % (sample.orig_id, str(e)))
         else:
+            ins = None
             if net_type == "bongo":
                 # TODO: There could be more specific, a dozen of bongos are there:
                 #  http://vocab.nerc.ac.uk/collection/L22/current/
                 ins = SamplingInstrumentName(event_id, "Bongo net",
                                              "http://vocab.nerc.ac.uk/collection/L22/current/NETT0176/")
-                arch.emofs.add(ins)
-                arch.emofs.add(SamplingNetMeshSizeInMicrons(event_id, str(net_mesh)))
-                arch.emofs.add(SampleDeviceApertureAreaInSquareMeters(event_id, str(net_surf)))
-            elif net_type in ("wp2",  # There are several species of this one
-                              "jb",  # Juday-bogorov
-                              "regent"
-                              ):
-                ins = SamplingInstrumentName(event_id, "plankton nets",
-                                             "http://vocab.nerc.ac.uk/collection/L05/current/22/")
-                arch.emofs.add(ins)
-                arch.emofs.add(SamplingNetMeshSizeInMicrons(event_id, str(net_mesh)))
-                arch.emofs.add(SampleDeviceApertureAreaInSquareMeters(event_id, str(net_surf)))
+            elif net_type == "wp2":
+                if (net_mesh == 200  # 0.2 mm
+                        and net_surf == 0.25):
+                    ins = SamplingInstrumentName(event_id, "WP-2 net",
+                                                 "http://vocab.nerc.ac.uk/collection/L22/current/TOOL0979/")
+                else:
+                    ins = SamplingInstrumentName(event_id, "WP-2-style net",
+                                                 "http://vocab.nerc.ac.uk/collection/L22/current/TOOL0980/")
+            elif net_type == "multinet":
+                ins = SamplingInstrumentName(event_id, "multinet",
+                                             "http://vocab.nerc.ac.uk/collection/L05/current/68/")
+            elif net_type in self.bodc_unknown_nets:
+                # Quoting RP from VLIZ: "In case you can’t find a term in BODC, we recommend to leave
+                # the measurementValueID field empty until BODC has created that term, instead of populating it
+                # with more generic terms such as “plankton nets” in order to not mask the “issue (lack a suitable term)”.
+                # Also measurementValue would be “Regent net” and “Juday-Bogorov net” respectively
+                value = self.bodc_unknown_nets[net_type]
+                ins = SamplingInstrumentName(event_id, value, "")
             else:
                 self.unknown_nets.setdefault(net_type, []).append(sample.orig_id)
+            if ins is not None:
+                arch.emofs.add(ins)
+            # Produce net traits even if no net
+            arch.emofs.add(SamplingNetMeshSizeInMicrons(event_id, str(net_mesh)))
+            arch.emofs.add(SampleDeviceApertureAreaInSquareMeters(event_id, str(net_surf)))
 
     # Simplest structure with literal names. No bloody dict.
     @dataclass()
