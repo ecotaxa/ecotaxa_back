@@ -227,7 +227,8 @@ class TaxonBOSet(object):
             lineage_id = [an_id for an_id in lst_rec[0::2] if an_id]
             lineage = [name for name in lst_rec[1::2] if name]
             #assert lineage_id[-1] in (1, 84960, 84959), "Unexpected root %s" % str(lineage_id[-1])
-            self.taxa.append(TaxonBO(cat_type, display_name, nbobj1, nbobj2, lineage, lineage_id))  # type:ignore
+            self.taxa.append(TaxonBO(cat_type, display_name, nbobj1, nbobj2,
+                                     lineage, lineage_id))  # type:ignore
         self.get_children(session)
         self.get_cardinalities(session)
 

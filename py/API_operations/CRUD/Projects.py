@@ -5,6 +5,7 @@
 from typing import List, Union, Tuple, Optional
 
 from API_models.crud import CreateProjectReq
+from BO.Classification import ClassifIDListT
 from BO.ObjectSet import EnumeratedObjectSet
 from BO.Project import ProjectBO, ProjectBOSet, ProjectIDListT, ProjectIDT, ProjectTaxoStats, ProjectUserStats
 from BO.Rights import RightsBO, Action
@@ -124,12 +125,13 @@ class ProjectsService(Service):
         Sample.propagate_geo(self.session, prj_id)
 
     def read_stats(self, current_user_id: int,
-                   prj_ids: ProjectIDListT) -> List[ProjectTaxoStats]:
+                   prj_ids: ProjectIDListT,
+                   taxa_ids: Union[str, ClassifIDListT]) -> List[ProjectTaxoStats]:
         """
             Read classification statistics for these projects.
         """
         # No security barrier because there is no private information inside
-        return ProjectBO.read_taxo_stats(self.session, prj_ids)
+        return ProjectBO.read_taxo_stats(self.session, prj_ids, taxa_ids)
 
     def read_user_stats(self, current_user_id: int,
                         prj_ids: ProjectIDListT) -> List[ProjectUserStats]:

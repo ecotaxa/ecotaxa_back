@@ -378,14 +378,23 @@ def project_query(project_id: int,
 
 @app.get("/project_set/taxo_stats", tags=['projects'], response_model=List[ProjectTaxoStatsModel])  # type: ignore
 def project_set_get_stats(ids: str,
-                          current_user: int = Depends(get_current_user)) -> List[ProjectTaxoStats]:
+                          taxa_ids: Optional[str] = "",
+                          current_user: Optional[int] = Depends(get_optional_current_user)) -> List[ProjectTaxoStats]:
     """
         Read projects statistics, i.e. used taxa and classification states.
+
+        If several `ìds` are provided, one stat record will be returned per project.
+        If several `taxa_ids` are provided, one stat record will be returned per requested taxa, if populated.
+        If `taxa_ids` is 'all', all valued taxa in the project(s) are returned.
     """
     sce = ProjectsService()
-    num_ids = _split_num_list(ids)
+    num_prj_ids = _split_num_list(ids)
+    if taxa_ids == 'all':
+        num_taxa_ids = taxa_ids
+    else:
+        num_taxa_ids = _split_num_list(taxa_ids)
     with RightsThrower(sce):
-        ret = sce.read_stats(current_user, num_ids)
+        ret = sce.read_stats(current_user, num_prj_ids, num_taxa_ids)
     return ret
 
 
@@ -554,7 +563,7 @@ def samples_search(project_ids: str,
         Read samples for a set of projects.
 
         - project_ids: any(non number)-separated list of project numbers
-        - id_pattern: sample id textual pattern. Use * for 'any matches'. Match is case-insensitive.
+        - id_pattern: sample id textual pattern. Use * or '' for 'any matches'. Match is case-insensitive.
     """
     sce = SamplesService()
     proj_ids = _split_num_list(project_ids)
@@ -593,18 +602,6 @@ def sample_query(sample_id: int,
 
 # ######################## END OF SAMPLE
 
-@app.post("/acquisition_set/update", tags=['acquisitions'])
-def update_acquisitions(req: BulkUpdateReq,
-                        current_user: int = Depends(get_current_user)) -> int:
-    """
-        Do the required update for each acquisition in the set.
-            Return the number of updated entities.
-    """
-    sce = AcquisitionsService()
-    with RightsThrower(sce):
-        return sce.update_set(current_user, req.target_ids, req.updates)
-
-
 @app.get("/acquisitions/search", tags=['acquisitions'], response_model=List[AcquisitionModel])
 def acquisitions_search(project_id: int,
                         current_user: Optional[int] = Depends(get_optional_current_user)) \
@@ -616,6 +613,18 @@ def acquisitions_search(project_id: int,
     with RightsThrower(sce):
         ret = sce.search(current_user, project_id)
     return ret
+
+
+@app.post("/acquisition_set/update", tags=['acquisitions'])
+def update_acquisitions(req: BulkUpdateReq,
+                        current_user: int = Depends(get_current_user)) -> int:
+    """
+        Do the required update for each acquisition in the set.
+            Return the number of updated entities.
+    """
+    sce = AcquisitionsService()
+    with RightsThrower(sce):
+        return sce.update_set(current_user, req.target_ids, req.updates)
 
 
 @app.get("/acquisition/{acquisition_id}", tags=['acquisitions'], response_model=AcquisitionModel)
@@ -878,6 +887,17 @@ def object_query_history(object_id: int,
 # ######################## END OF OBJECT
 
 
+@app.get("/taxa", tags=['Taxonomy Tree'], response_model=List[TaxonModel])
+async def query_root_taxa() \
+        -> List[TaxonBO]:
+    """
+        Return all taxa with no parent.
+    """
+    sce = TaxonomyService()
+    ret = sce.query_roots()
+    return ret
+
+
 @app.get("/taxa/status", tags=['Taxonomy Tree'], response_model=TaxonomyTreeStatus)
 async def taxa_tree_status(current_user: int = Depends(get_current_user)):
     """
@@ -886,6 +906,18 @@ async def taxa_tree_status(current_user: int = Depends(get_current_user)):
     sce = TaxonomyService()
     refresh_date = sce.status(_current_user_id=current_user)
     return TaxonomyTreeStatus(last_refresh=refresh_date.isoformat() if refresh_date else None)
+
+
+@app.get("/taxon/{taxon_id}", tags=['Taxonomy Tree'], response_model=TaxonModel)
+async def query_taxa(taxon_id: int,
+                     _current_user: Optional[int] = Depends(get_optional_current_user)) \
+        -> Optional[TaxonBO]:
+    """
+        Information about a single taxon, including its lineage.
+    """
+    sce = TaxonomyService()
+    ret = sce.query(taxon_id)
+    return ret
 
 
 @app.get("/taxon_set/search", tags=['Taxonomy Tree'], response_model=List[TaxaSearchRsp])
@@ -911,26 +943,17 @@ async def search_taxa(query: str,
     return ret
 
 
-@app.get("/taxa", tags=['Taxonomy Tree'], response_model=List[TaxonModel])
-async def query_root_taxa() \
+@app.get("/taxon_set/query", tags=['Taxonomy Tree'], response_model=List[TaxonModel])
+async def query_taxa_set(ids: str,
+                         _current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> List[TaxonBO]:
     """
-        Return all taxa with no parent.
+        Information about several taxa, including their lineage.
+        The separator between numbers is arbitrary non-digit, e.g. ":", "|" or ","
     """
     sce = TaxonomyService()
-    ret = sce.query_roots()
-    return ret
-
-
-@app.get("/taxon/{taxon_id}", tags=['Taxonomy Tree'], response_model=TaxonModel)
-async def query_taxa(taxon_id: int,
-                     _current_user: Optional[int] = Depends(get_optional_current_user)) \
-        -> Optional[TaxonBO]:
-    """
-        Information about a single taxon, including its lineage.
-    """
-    sce = TaxonomyService()
-    ret = sce.query(taxon_id)
+    num_ids = _split_num_list(ids)
+    ret = sce.query_set(num_ids)
     return ret
 
 
@@ -943,20 +966,6 @@ async def query_taxa_in_worms(aphia_id: int,
     """
     sce = TaxonomyService()
     ret = sce.query_worms(aphia_id)
-    return ret
-
-
-@app.get("/taxon_set/query", tags=['Taxonomy Tree'], response_model=List[TaxonModel])
-async def query_taxa_set(ids: str,
-                         _current_user: Optional[int] = Depends(get_optional_current_user)) \
-        -> List[TaxonBO]:
-    """
-        Information about several taxa, including their lineage.
-        The separator between numbers is arbitrary non-digit, e.g. ":", "|" or ","
-    """
-    sce = TaxonomyService()
-    num_ids = _split_num_list(ids)
-    ret = sce.query_set(num_ids)
     return ret
 
 

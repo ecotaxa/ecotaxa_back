@@ -72,7 +72,7 @@ class ObjectManager(Service):
         if "obf." in where.get_sql():
             # If the filter needs obj_field data it's more efficient to count with a window function
             # than issuing a second query.
-            total_col = "COUNT(objid) OVER() AS total"
+            total_col = "COUNT(obh.objid) OVER() AS total"
         else:
             # Otherwise, no need for obj_field in count, less DB buffers
             total_col = "0 AS total"

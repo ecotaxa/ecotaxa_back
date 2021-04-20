@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from datetime import datetime
-from typing import List, Dict, Any, Iterable, Optional
+from typing import List, Dict, Any, Iterable, Optional, Union
 
 from dataclasses import dataclass
 
@@ -226,16 +226,27 @@ class ProjectBO(object):
                         {'prjid': projid})
 
     @staticmethod
-    def read_taxo_stats(session: Session, prj_ids: ProjectIDListT) -> List[ProjectTaxoStats]:
-        res: ResultProxy = \
-            session.execute("""
+    def read_taxo_stats(session: Session,
+                        prj_ids: ProjectIDListT,
+                        taxa_ids: Union[str, ClassifIDListT]) -> List[ProjectTaxoStats]:
+        sql = """
         SELECT pts.projid, ARRAY_AGG(pts.id) as ids, 
                SUM(CASE WHEN pts.id = -1 THEN pts.nbr ELSE 0 END) as nb_u, 
                SUM(pts.nbr_v) as nb_v, SUM(pts.nbr_d) as nb_d, SUM(pts.nbr_p) as nb_p
           FROM projects_taxo_stat pts
-         WHERE pts.projid = ANY(:ids)
-      GROUP BY pts.projid""",
-                            {'ids': prj_ids})
+         WHERE pts.projid = ANY(:ids)"""
+        params = {'ids': prj_ids}
+        if len(taxa_ids) > 0:
+            if taxa_ids == 'all':
+                pass
+            else:
+                sql += " AND pts.id = ANY(:tids)"
+                params["tids"] = taxa_ids
+        sql += """
+        GROUP BY pts.projid"""
+        if len(taxa_ids) > 0:
+            sql += ", pts.id"
+        res: ResultProxy = session.execute(sql, params)
         with CodeTimer("stats for %d projects:" % len(prj_ids), logger):
             ret = [ProjectTaxoStats(rec) for rec in res.fetchall()]
         for a_stat in ret:

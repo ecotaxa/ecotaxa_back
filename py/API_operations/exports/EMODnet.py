@@ -830,5 +830,5 @@ class EMODnetExport(TaskServiceBase):
             # Ensure that the geography is OK propagated upwards from objects, for all projects inside the collection
             Sample.propagate_geo(self.session, prj_id=a_project_id)
         a_stat: ProjectTaxoStats
-        for a_stat in ProjectBO.read_taxo_stats(self.session, project_ids):
+        for a_stat in ProjectBO.read_taxo_stats(self.session, project_ids, []):
             self.validated_count += a_stat.nb_validated

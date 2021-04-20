@@ -17,6 +17,7 @@ class TaxaSearchRsp(BaseModel):
     text: str = Field(title="The taxon name, display one.")
     pr: int = Field(title="1 if the taxon is in project list, 0 otherwise.")
 
+
 # TODO: dataclass_to_model(TaxonBO) to avoid repeated fields
 class TaxonModel(BaseModel):
     __config__ = OrmConfig
@@ -26,6 +27,7 @@ class TaxonModel(BaseModel):
     nb_children_objects: int = Field(title="How many objects are classified in this category children (not itself).")
     display_name: str = Field(title="The taxon/category display name.")
     lineage: List[str] = Field(title="The taxon/category name of ancestors, including self, in first.")
+    id_lineage: List[int] = Field(title="The taxon/category IDs of ancestors, including self, in first.")
     children: List[int] = Field(title="The taxon/category IDs of children.")
 
 
