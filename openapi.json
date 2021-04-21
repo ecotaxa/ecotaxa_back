@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.6"
+    "version":"0.0.8"
   },
   "paths":{
     "/login":{
@@ -420,6 +420,49 @@
         ]
       }
     },
+    "/collections/by_title":{
+      "get":{
+        "tags":[
+          "collections"
+        ],
+        "summary":"Collection By Title",
+        "description":"Return the single collection with this title.\nFor published datasets.\n!!! DO NOT MODIFY BEHAVIOR !!!",
+        "operationId":"collection_by_title_collections_by_title_get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Q",
+              "type":"string"
+            },
+            "name":"q",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/CollectionModel"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/collections/{collection_id}":{
       "get":{
         "tags":[
@@ -572,7 +615,7 @@
           "collections"
         ],
         "summary":"Emodnet Format Export",
-        "description":"Export the collection in EMODnet format, @see https://www.emodnet-ingestion.eu/\nProduces a DwC-A archive into a temporary directory, ready for download.\n- param `dry_run`: If set, then only a diagnostic of doability will be done.\n- param `with_zeroes`: If set, then *absent* records will be generated, in the relevant samples,\n for categories present in other samples.\n\nMaybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html\n\n*Currently only for admins*",
+        "description":"Export the collection in EMODnet format, @see https://www.emodnet-ingestion.eu/\nProduces a DwC-A archive into a temporary directory, ready for download.\n- param `dry_run`: If set, then only a diagnostic of doability will be done.\n- param `with_zeroes`: If set, then *absent* records will be generated, in the relevant samples,\n for categories present in other samples.\n- param `with_computations`: If set, then an attempt will be made to compute organisms concentrations\nand biovolumes.\n- param `auto_morpho`: If set, then any object classified on a Morpho category will be added to\n the count of the nearest Phylo parent, upward in the tree.\n\nMaybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html\n\n*Currently only for admins*",
         "operationId":"emodnet_format_export_collections__collection_id__export_emodnet_get",
         "parameters":[
           {
@@ -600,6 +643,24 @@
               "type":"boolean"
             },
             "name":"with_zeroes",
+            "in":"query"
+          },
+          {
+            "required":true,
+            "schema":{
+              "title":"Auto Morpho",
+              "type":"boolean"
+            },
+            "name":"auto_morpho",
+            "in":"query"
+          },
+          {
+            "required":true,
+            "schema":{
+              "title":"With Computations",
+              "type":"boolean"
+            },
+            "name":"with_computations",
             "in":"query"
           }
         ],
@@ -1000,7 +1061,7 @@
           "projects"
         ],
         "summary":"Project Set Get Stats",
-        "description":"Read projects statistics, i.e. used taxa and classification states.",
+        "description":"Read projects statistics, i.e. used taxa and classification states.\n\nIf several `ìds` are provided, one stat record will be returned per project.\nIf several `taxa_ids` are provided, one stat record will be returned per requested taxa, if populated.\nIf `taxa_ids` is 'all', all valued taxa in the project(s) are returned.",
         "operationId":"project_set_get_stats_project_set_taxo_stats_get",
         "parameters":[
           {
@@ -1010,6 +1071,16 @@
               "type":"string"
             },
             "name":"ids",
+            "in":"query"
+          },
+          {
+            "required":false,
+            "schema":{
+              "title":"Taxa Ids",
+              "type":"string",
+              "default":""
+            },
+            "name":"taxa_ids",
             "in":"query"
           }
         ],
@@ -1482,7 +1553,7 @@
           "samples"
         ],
         "summary":"Samples Search",
-        "description":"Read samples for a set of projects.\n\n- project_ids: any(non number)-separated list of project numbers\n- id_pattern: sample id textual pattern. Use * for 'any matches'. Match is case-insensitive.",
+        "description":"Read samples for a set of projects.\n\n- project_ids: any(non number)-separated list of project numbers\n- id_pattern: sample id textual pattern. Use * or '' for 'any matches'. Match is case-insensitive.",
         "operationId":"samples_search_samples_search_get",
         "parameters":[
           {
@@ -1630,51 +1701,6 @@
         ]
       }
     },
-    "/acquisition_set/update":{
-      "post":{
-        "tags":[
-          "acquisitions"
-        ],
-        "summary":"Update Acquisitions",
-        "description":"Do the required update for each acquisition in the set.\n    Return the number of updated entities.",
-        "operationId":"update_acquisitions_acquisition_set_update_post",
-        "requestBody":{
-          "content":{
-            "application/json":{
-              "schema":{
-                "$ref":"#/components/schemas/BulkUpdateReq"
-              }
-            }
-          },
-          "required":true
-        },
-        "responses":{
-          "200":{
-            "description":"Successful Response",
-            "content":{
-              "application/json":{
-                "schema":{}
-              }
-            }
-          },
-          "422":{
-            "description":"Validation Error",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security":[
-          {
-            "HTTPBearer":[]
-          }
-        ]
-      }
-    },
     "/acquisitions/search":{
       "get":{
         "tags":[
@@ -1706,6 +1732,51 @@
                     "$ref":"#/components/schemas/AcquisitionModel"
                   }
                 }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/acquisition_set/update":{
+      "post":{
+        "tags":[
+          "acquisitions"
+        ],
+        "summary":"Update Acquisitions",
+        "description":"Do the required update for each acquisition in the set.\n    Return the number of updated entities.",
+        "operationId":"update_acquisitions_acquisition_set_update_post",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/BulkUpdateReq"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
               }
             }
           },
@@ -1781,7 +1852,7 @@
           "instrument"
         ],
         "summary":"Instrument Query",
-        "description":"Query for instruments, either inside specific project(s) or globally.",
+        "description":"Query for instruments, inside specific project(s).",
         "operationId":"instrument_query_instruments__get",
         "parameters":[
           {
@@ -1924,7 +1995,7 @@
           "objects"
         ],
         "summary":"Get Object Set",
-        "description":"Return object ids for the given project with the filters.\nOptionally:\n    - order_field will order the result using given field, If prefixed with \"-\" then it will be reversed.\n    - window_start & window_size allows to return only a slice of the result.",
+        "description":"Return object ids for the given project with the filters.\n\nOptionally:\n\n    - fields will specify the needed object (and ancilliary entities) fields\n    - order_field will order the result using given field, If prefixed with \"-\" then it will be reversed.\n    - window_start & window_size allows to return only a slice of the result.\n\nFields follow the naming convention: `prefix.field`. Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n    - Column obj.imgcount contains the total count of images for the object.",
         "operationId":"get_object_set_object_set__project_id__query_post",
         "parameters":[
           {
@@ -1935,6 +2006,15 @@
             },
             "name":"project_id",
             "in":"path"
+          },
+          {
+            "required":false,
+            "schema":{
+              "title":"Fields",
+              "type":"string"
+            },
+            "name":"fields",
+            "in":"query"
           },
           {
             "required":false,
@@ -2398,7 +2478,7 @@
           "object"
         ],
         "summary":"Object Query",
-        "description":"Read a single object.",
+        "description":"Read a single object. Anonymous reader can do if the project has the right rights :)",
         "operationId":"object_query_object__object_id__get",
         "parameters":[
           {
@@ -2492,6 +2572,32 @@
         ]
       }
     },
+    "/taxa":{
+      "get":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Query Root Taxa",
+        "description":"Return all taxa with no parent.",
+        "operationId":"query_root_taxa_taxa_get",
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Query Root Taxa Taxa Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/TaxonModel"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/taxa/status":{
       "get":{
         "tags":[
@@ -2507,6 +2613,54 @@
               "application/json":{
                 "schema":{
                   "$ref":"#/components/schemas/TaxonomyTreeStatus"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "HTTPBearer":[]
+          }
+        ]
+      }
+    },
+    "/taxon/{taxon_id}":{
+      "get":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Query Taxa",
+        "description":"Information about a single taxon, including its lineage.",
+        "operationId":"query_taxa_taxon__taxon_id__get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Taxon Id",
+              "type":"integer"
+            },
+            "name":"taxon_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/TaxonModel"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -2558,80 +2712,6 @@
                   "items":{
                     "$ref":"#/components/schemas/TaxaSearchRsp"
                   }
-                }
-              }
-            }
-          },
-          "422":{
-            "description":"Validation Error",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security":[
-          {
-            "HTTPBearer":[]
-          }
-        ]
-      }
-    },
-    "/taxa":{
-      "get":{
-        "tags":[
-          "Taxonomy Tree"
-        ],
-        "summary":"Query Root Taxa",
-        "description":"Return all taxa with no parent.",
-        "operationId":"query_root_taxa_taxa_get",
-        "responses":{
-          "200":{
-            "description":"Successful Response",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "title":"Response Query Root Taxa Taxa Get",
-                  "type":"array",
-                  "items":{
-                    "$ref":"#/components/schemas/TaxonModel"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/taxon/{taxon_id}":{
-      "get":{
-        "tags":[
-          "Taxonomy Tree"
-        ],
-        "summary":"Query Taxa",
-        "description":"Information about a single taxon, including its lineage.",
-        "operationId":"query_taxa_taxon__taxon_id__get",
-        "parameters":[
-          {
-            "required":true,
-            "schema":{
-              "title":"Taxon Id",
-              "type":"integer"
-            },
-            "name":"taxon_id",
-            "in":"path"
-          }
-        ],
-        "responses":{
-          "200":{
-            "description":"Successful Response",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/TaxonModel"
                 }
               }
             }
@@ -2949,6 +3029,8 @@
         "title":"CollectionModel",
         "required":[
           "project_ids",
+          "external_id",
+          "external_id_system",
           "title"
         ],
         "type":"object",
@@ -3012,6 +3094,14 @@
           "id":{
             "title":"Id",
             "type":"integer"
+          },
+          "external_id":{
+            "title":"External Id",
+            "type":"string"
+          },
+          "external_id_system":{
+            "title":"External Id System",
+            "type":"string"
           },
           "title":{
             "title":"Title",
@@ -3776,6 +3866,15 @@
             },
             "default":[]
           },
+          "details":{
+            "title":"Requested fields, in request order",
+            "type":"array",
+            "items":{
+              "type":"array",
+              "items":{}
+            },
+            "default":[]
+          },
           "total_ids":{
             "title":"Total rows returned by the query, even if it was window-ed",
             "type":"integer",
@@ -4400,6 +4499,7 @@
           "nb_children_objects",
           "display_name",
           "lineage",
+          "id_lineage",
           "children"
         ],
         "type":"object",
@@ -4417,7 +4517,7 @@
             "type":"integer"
           },
           "nb_children_objects":{
-            "title":"How many objects are classified in this category and its subcategories.",
+            "title":"How many objects are classified in this category children (not itself).",
             "type":"integer"
           },
           "display_name":{
@@ -4429,6 +4529,13 @@
             "type":"array",
             "items":{
               "type":"string"
+            }
+          },
+          "id_lineage":{
+            "title":"The taxon/category IDs of ancestors, including self, in first.",
+            "type":"array",
+            "items":{
+              "type":"integer"
             }
           },
           "children":{

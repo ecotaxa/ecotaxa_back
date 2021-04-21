@@ -235,7 +235,7 @@ class ProjectBO(object):
                SUM(pts.nbr_v) as nb_v, SUM(pts.nbr_d) as nb_d, SUM(pts.nbr_p) as nb_p
           FROM projects_taxo_stat pts
          WHERE pts.projid = ANY(:ids)"""
-        params = {'ids': prj_ids}
+        params: Dict[str, Any] = {'ids': prj_ids}
         if len(taxa_ids) > 0:
             if taxa_ids == 'all':
                 pass

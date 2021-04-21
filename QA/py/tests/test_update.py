@@ -57,7 +57,7 @@ def test_updates(config, database, caplog):
     assert nb_upd == 1
 
     # Update all objects
-    objs, total = ObjectManager().query(ADMIN_USER_ID, prj_id, {}, order_field='objid')
+    objs, _details, total = ObjectManager().query(ADMIN_USER_ID, prj_id, {}, order_field='objid')
     objs = [an_obj[0] for an_obj in objs]
     assert len(objs) == 15
     # Wrong column
@@ -236,7 +236,7 @@ def test_api_updates(config, database, fastapi, caplog):
 
     # Update first 4 objects
     # TODO: Use the API for querying
-    objs, _total = ObjectManager().query(ADMIN_USER_ID, prj_id, {})
+    objs, _details, _total = ObjectManager().query(ADMIN_USER_ID, prj_id, {})
     objs = [an_obj[0] for an_obj in objs]
     assert len(objs) == 8
     url = OBJECT_SET_UPDATE_URL.format(project_id=prj_id)

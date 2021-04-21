@@ -124,7 +124,7 @@ class ProjectsService(Service):
         _current_user, _project = RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, prj_id)
         Sample.propagate_geo(self.session, prj_id)
 
-    def read_stats(self, current_user_id: int,
+    def read_stats(self, current_user_id: Optional[UserIDT],
                    prj_ids: ProjectIDListT,
                    taxa_ids: Union[str, ClassifIDListT]) -> List[ProjectTaxoStats]:
         """

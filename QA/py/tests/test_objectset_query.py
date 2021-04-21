@@ -40,21 +40,24 @@ def test_queries(config, database, fastapi, caplog):
     test_import_a_bit_more_skipping(config, database, caplog, "Queries test project")
 
     ref = [6, 7, 8, 11, 12, 13, 1, 2, 3, 4, 5]
-    all = _prj_query(fastapi, CREATOR_AUTH, prj_id, order="depth_min")
+    all = _prj_query(fastapi, CREATOR_AUTH, prj_id, order="obj.depth_min")
     # we must offset expected by first actual objID as they vary, run to run
     min_objid = min(all)
     ref = [r + min_objid - 1 for r in ref]
     assert all == ref
 
-    all = _prj_query(fastapi, CREATOR_AUTH, prj_id, order="-depth_min")
+    all = _prj_query(fastapi, CREATOR_AUTH, prj_id, order="-obj.depth_min")
     ref_v = ref[:]
     ref_v.reverse()
     assert all == ref_v
 
-    by_taxo = _prj_query(fastapi, CREATOR_AUTH, prj_id, order="-classifname")
+    by_taxo_rev = _prj_query(fastapi, CREATOR_AUTH, prj_id, order="-txo.name")
+    by_taxo = _prj_query(fastapi, CREATOR_AUTH, prj_id, order="txo.name")
+    assert by_taxo == list(reversed(by_taxo_rev))
 
-    # TODO: Should be a free column _name_
-    by_free_col = _prj_query(fastapi, CREATOR_AUTH, prj_id, order="n01")
+    by_free_col = _prj_query(fastapi, CREATOR_AUTH, prj_id, order="fre.area")
+    by_free_col_rev = _prj_query(fastapi, CREATOR_AUTH, prj_id, order="-fre.area")
+    assert by_free_col == list(reversed(by_free_col_rev))
 
     limit_4 = _prj_query(fastapi, CREATOR_AUTH, prj_id, size=4)
     assert len(limit_4) == 4

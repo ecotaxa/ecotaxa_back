@@ -178,6 +178,7 @@ def unzip_and_check(zip_content, ref_content):
             content_bin = myfile.read()
             file_content = content_bin.decode('utf-8')
             print(file_content)
+            print()
             # Add CRs before and after for readability of the py version
             all_in_one[name] = "\n" + file_content + "\n"
     assert all_in_one == ref_content

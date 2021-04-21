@@ -175,6 +175,7 @@ class ObjectManager(Service):
             a_col = ObjectManager._field_to_db_col(a_field, mappings)
             if a_col is None:
                 logger.warning("Dropped unknown %s in query", a_field)
+                continue
             vals.append(a_col)
         return ",\n" + ", ".join(vals)
 

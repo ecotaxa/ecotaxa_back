@@ -52,7 +52,7 @@ def test_subentities(config, database, fastapi, caplog):
     check_project(prj_id)
 
     # Pick the first object
-    qry_rsp, _total = ObjectManager().query(ADMIN_USER_ID, prj_id, filters={})
+    qry_rsp, _details, _total = ObjectManager().query(ADMIN_USER_ID, prj_id, filters={})
     first_obj = qry_rsp[0]
     first_objid = first_obj[0]  # obj id
 

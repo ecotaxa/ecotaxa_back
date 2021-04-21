@@ -147,9 +147,8 @@ _meta = r"""
     <field index="3" term="http://rs.tdwg.org/dwc/terms/basisOfRecord"/>
     <field index="4" term="http://rs.tdwg.org/dwc/terms/scientificName"/>
     <field index="5" term="http://rs.tdwg.org/dwc/terms/scientificNameID"/>
-    <field index="6" term="http://rs.tdwg.org/dwc/terms/individualCount"/>
-    <field index="7" term="http://rs.tdwg.org/dwc/terms/kingdom"/>
-    <field index="8" term="http://rs.tdwg.org/dwc/terms/occurrenceStatus"/>
+    <field index="6" term="http://rs.tdwg.org/dwc/terms/kingdom"/>
+    <field index="7" term="http://rs.tdwg.org/dwc/terms/occurrenceStatus"/>
   </extension>
 """
 _meta_emofs_with_computations = r"""
@@ -169,7 +168,7 @@ _meta_emofs_with_computations = r"""
 </archive>
 
 """
-# No occurence emof -> one column less
+# No occurence emof -> 2 columns less
 _meta_emofs_without_computations = r"""
   <extension encoding="UTF-8" fieldsTerminatedBy="\t" linesTerminatedBy="\n" fieldsEnclosedBy="" 
         ignoreHeaderLines="1" rowType="http://rs.iobis.org/obis/terms/ExtendedMeasurementOrFact">
@@ -177,11 +176,10 @@ _meta_emofs_without_computations = r"""
       <location>extendedmeasurementorfact.txt</location>
     </files> 
     <coreid index="0"/>
-    <field index="1" term="http://rs.tdwg.org/dwc/terms/measurementValue"/>
-    <field index="2" term="http://rs.tdwg.org/dwc/terms/measurementType"/>
-    <field index="3" term="http://rs.tdwg.org/dwc/terms/measurementUnit"/>
+    <field index="1" term="http://rs.tdwg.org/dwc/terms/occurrenceID"/>
+    <field index="2" term="http://rs.tdwg.org/dwc/terms/measurementValue"/>
+    <field index="3" term="http://rs.tdwg.org/dwc/terms/measurementType"/>
     <field index="4" term="http://rs.iobis.org/obis/terms/measurementTypeID"/>
-    <field index="5" term="http://rs.iobis.org/obis/terms/measurementUnitID"/>
   </extension>
 </archive>
 
@@ -193,28 +191,33 @@ m106_mn01_n2_sml	m106_mn01_n2_sml	sample	IMEV	EMODNET test collection	2014-04-20
 m106_mn01_n3_sml	m106_mn01_n3_sml	sample	IMEV	EMODNET test collection	2014-04-20T04:20:00Z/2014-04-21T04:20:00Z	18.000000	-24.416667	300.0	600.0
 """
 _occurence = r"""
-id	eventID	occurrenceID	basisOfRecord	scientificName	scientificNameID	individualCount	kingdom	occurrenceStatus
-m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_78418	MachineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	2	Animalia	present
-m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_45072	MachineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	1	Animalia	present
+id	eventID	occurrenceID	basisOfRecord	scientificName	scientificNameID	kingdom	occurrenceStatus
+m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_78418	MachineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	Animalia	present
+m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_45072	MachineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	Animalia	present
 """
-_occurence_with_absent = r"""m106_mn01_n2_sml	m106_mn01_n2_sml	m106_mn01_n2_sml_45072	MachineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	0	Animalia	absent
-m106_mn01_n2_sml	m106_mn01_n2_sml	m106_mn01_n2_sml_78418	MachineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	0	Animalia	absent
-m106_mn01_n3_sml	m106_mn01_n3_sml	m106_mn01_n3_sml_45072	MachineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	0	Animalia	absent
-m106_mn01_n3_sml	m106_mn01_n3_sml	m106_mn01_n3_sml_78418	MachineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	0	Animalia	absent
-"""
+# _occurence_with_absent = r"""m106_mn01_n2_sml	m106_mn01_n2_sml	m106_mn01_n2_sml_45072	MachineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	0	Animalia	absent
+# m106_mn01_n2_sml	m106_mn01_n2_sml	m106_mn01_n2_sml_78418	MachineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	0	Animalia	absent
+# m106_mn01_n3_sml	m106_mn01_n3_sml	m106_mn01_n3_sml_45072	MachineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	0	Animalia	absent
+# m106_mn01_n3_sml	m106_mn01_n3_sml	m106_mn01_n3_sml_78418	MachineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	0	Animalia	absent
+# """
+_occurence_with_absent = ""
 _emofs = r"""
 id	occurrenceID	measurementValue	measurementType	measurementUnit	measurementTypeID	measurementUnitID
+m106_mn01_n1_sml	m106_mn01_n1_sml_78418	2	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
 m106_mn01_n1_sml	m106_mn01_n1_sml_78418	0.04	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
+m106_mn01_n1_sml	m106_mn01_n1_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
 m106_mn01_n1_sml	m106_mn01_n1_sml_45072	0.02	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
-m106_mn01_n1_sml		100.0	Volume sampled of the water body	Cubic metres	http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/	http://vocab.nerc.ac.uk/collection/P06/current/MCUB/
-m106_mn01_n2_sml		100.0	Volume sampled of the water body	Cubic metres	http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/	http://vocab.nerc.ac.uk/collection/P06/current/MCUB/
-m106_mn01_n3_sml		100.0	Volume sampled of the water body	Cubic metres	http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/	http://vocab.nerc.ac.uk/collection/P06/current/MCUB/
 """
+# _emofs_no_comp = r"""
+# id	measurementValue	measurementType	measurementUnit	measurementTypeID	measurementUnitID
+# m106_mn01_n1_sml	100.0	Volume sampled of the water body	Cubic metres	http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/	http://vocab.nerc.ac.uk/collection/P06/current/MCUB/
+# m106_mn01_n2_sml	100.0	Volume sampled of the water body	Cubic metres	http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/	http://vocab.nerc.ac.uk/collection/P06/current/MCUB/
+# m106_mn01_n3_sml	100.0	Volume sampled of the water body	Cubic metres	http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/	http://vocab.nerc.ac.uk/collection/P06/current/MCUB/
+# """
 _emofs_no_comp = r"""
-id	measurementValue	measurementType	measurementUnit	measurementTypeID	measurementUnitID
-m106_mn01_n1_sml	100.0	Volume sampled of the water body	Cubic metres	http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/	http://vocab.nerc.ac.uk/collection/P06/current/MCUB/
-m106_mn01_n2_sml	100.0	Volume sampled of the water body	Cubic metres	http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/	http://vocab.nerc.ac.uk/collection/P06/current/MCUB/
-m106_mn01_n3_sml	100.0	Volume sampled of the water body	Cubic metres	http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/	http://vocab.nerc.ac.uk/collection/P06/current/MCUB/
+id	occurrenceID	measurementValue	measurementType	measurementTypeID
+m106_mn01_n1_sml	m106_mn01_n1_sml_78418	2	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
+m106_mn01_n1_sml	m106_mn01_n1_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
 """
 ref_zip = {"event.txt": _event,
            "eml.xml": _eml,
