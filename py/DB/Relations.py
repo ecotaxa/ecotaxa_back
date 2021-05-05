@@ -8,6 +8,7 @@
 from .Acquisition import Acquisition
 from .Collection import Collection, CollectionProject, CollectionUserRole, CollectionOrgaRole
 from .Image import Image
+from .Job import Job
 from .Object import ObjectHeader, ObjectFields, ObjectCNNFeature, ObjectsClassifHisto
 # Particle project
 from .ParticleProject import ParticleProject, ParticleSample
@@ -96,3 +97,6 @@ Project.ecopart_project = relationship(ParticleProject)
 # Particle Sample
 ParticleSample.ecotaxa_sample = relationship(Sample)
 Sample.ecopart_sample = relationship(ParticleSample)
+
+# Jobs
+Job.owner = relationship(User)

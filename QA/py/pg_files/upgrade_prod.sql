@@ -996,4 +996,6 @@ UPDATE alembic_version SET version_num='2d37ac7bcaca' WHERE alembic_version.vers
 
 ------- Leave on tail
 
+ALTER TABLE alembic_version REPLICA IDENTITY FULL;
+
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO readerole;
