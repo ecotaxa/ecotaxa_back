@@ -970,29 +970,39 @@ UPDATE alembic_version SET version_num='910b679215ca' WHERE alembic_version.vers
 
 COMMIT;
 
--- Running upgrade 910b679215ca -> 2d37ac7bcaca
+-- Running upgrade 21bb404620d5 -> dae002b5d15a, Job table & collection permalink
 
 CREATE TABLE job (
     id SERIAL NOT NULL,
-    owner_id INTEGER,
+    owner_id INTEGER NOT NULL,
     type VARCHAR(80) NOT NULL,
-    state VARCHAR(80),
+    params VARCHAR,
+    state VARCHAR(1),
     step INTEGER,
     progress_pct INTEGER,
     progress_msg VARCHAR,
-    params VARCHAR NOT NULL,
-    messages VARCHAR NOT NULL,
+    messages VARCHAR,
+    inside VARCHAR,
     question VARCHAR,
     reply VARCHAR,
-    inside VARCHAR,
     result VARCHAR,
-    creation_date timestamp without time zone NOT NULL,
-    updated_on timestamp without time zone NOT NULL,
+    creation_date TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    updated_on TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     PRIMARY KEY (id),
     FOREIGN KEY(owner_id) REFERENCES users (id)
 );
 
-UPDATE alembic_version SET version_num='2d37ac7bcaca' WHERE alembic_version.version_num = '910b679215ca';
+ALTER TABLE collection ADD COLUMN short_title VARCHAR(64);
+
+ALTER TABLE collection ALTER COLUMN external_id SET NOT NULL;
+
+ALTER TABLE collection ALTER COLUMN external_id_system SET NOT NULL;
+
+CREATE UNIQUE INDEX "CollectionShortTitle" ON collection (short_title);
+
+UPDATE alembic_version SET version_num='dae002b5d15a' WHERE alembic_version.version_num = '21bb404620d5';
+
+COMMIT;
 
 ------- Leave on tail
 

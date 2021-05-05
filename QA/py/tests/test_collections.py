@@ -11,10 +11,12 @@ PROJECT_EXPORT_EMODNET_URL = "/export/emodnet?dry_run=False"
 COLLECTION_CREATE_URL = "/collections/create"
 COLLECTION_QUERY_URL = "/collections/{collection_id}"
 COLLECTION_SEARCH_URL = "/collections/search?title={title}"
+COLLECTION_EXACT_QUERY_URL = "/collections/by_short_title?q={short_title}"
 COLLECTION_UPDATE_URL = "/collections/{collection_id}"
 COLLECTION_DELETE_URL = "/collections/{collection_id}"
 
 INSTRUMENT_QUERY_URL = "/instruments/?project_ids={project_id}"
+
 
 def test_create_collection(config, database, fastapi, caplog):
     caplog.set_level(logging.FATAL)
@@ -63,13 +65,15 @@ def test_create_collection(config, database, fastapi, caplog):
                         'license': '',
                         'project_ids': [prj_id],
                         'provider_user': None,
-                        'title': 'Test collection'}
+                        'title': 'Test collection',
+                        'short_title': None}
 
     # Update the abstract
     url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
     the_coll['abstract'] = """
     A bit less abstract...
     """
+    the_coll['short_title'] = "my-tiny-title"
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=the_coll)
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -99,7 +103,19 @@ def test_create_collection(config, database, fastapi, caplog):
                            'license': '',
                            'project_ids': [prj_id],
                            'provider_user': None,
-                           'title': 'Test collection'}]
+                           'title': 'Test collection',
+                           'short_title': 'my-tiny-title'
+                           }]
+
+    # Search by short title
+    url = COLLECTION_EXACT_QUERY_URL.format(short_title="my-tiny-title")
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+
+    # Wrong search by short title
+    url = COLLECTION_EXACT_QUERY_URL.format(short_title="my-absent-title")
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_404_NOT_FOUND
 
     # Empty search test
     url = COLLECTION_SEARCH_URL.format(title="coll%")

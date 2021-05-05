@@ -23,6 +23,8 @@ class Collection(Model):
     """ External identifier system, e.g. https://doi.org """
     provider_user_id = Column(INTEGER, ForeignKey('users.id'))
     title = Column(VARCHAR, nullable=False)
+    short_title = Column(VARCHAR(64))
+    """ A shorter and constrained title for the collection """
     contact_user_id = Column(INTEGER, ForeignKey('users.id'))
     citation = Column(VARCHAR)
     license = Column(VARCHAR(16))
@@ -42,6 +44,7 @@ class Collection(Model):
 
 # Unique index as we want no duplicate title
 Index('CollectionTitle', Collection.__table__.c.title, unique=True)
+Index('CollectionShortTitle', Collection.__table__.c.short_title, unique=True)
 
 
 class CollectionProject(Model):

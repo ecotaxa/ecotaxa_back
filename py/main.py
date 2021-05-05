@@ -233,6 +233,19 @@ def collection_by_title(q: str):
     return matching_collection
 
 
+@app.get("/collections/by_short_title", tags=['collections'], response_model=CollectionModel)
+def collection_by_short_title(q: str):
+    """
+        Return the single collection with this title.
+        For published datasets.
+        !!! DO NOT MODIFY BEHAVIOR !!!
+    """
+    with CollectionsService() as sce:
+        with RightsThrower():
+            matching_collection = sce.query_by_short_title(q)
+    return matching_collection
+
+
 @app.get("/collections/{collection_id}", tags=['collections'], response_model=CollectionModel)
 def get_collection(collection_id: int,
                    current_user: int = Depends(get_current_user)):
@@ -267,6 +280,7 @@ def update_collection(collection_id: int,
         # noinspection PyUnresolvedReferences
         present_collection.update(session=sce.session,
                                   title=collection.title,
+                                  short_title=collection.short_title,
                                   project_ids=collection.project_ids,
                                   provider_user=collection.provider_user, contact_user=collection.contact_user,
                                   citation=collection.citation, abstract=collection.abstract,

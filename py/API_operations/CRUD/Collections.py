@@ -6,7 +6,7 @@ from typing import List, Union, Optional
 
 from API_models.crud import CreateCollectionReq
 from BO.Collection import CollectionBO, CollectionIDT
-from BO.Rights import RightsBO
+from BO.Rights import RightsBO, NOT_FOUND
 from BO.User import UserIDT
 from DB.Collection import Collection
 from DB.User import Role
@@ -47,7 +47,14 @@ class CollectionsService(Service):
         # Return a unique collection from its title
         qry = self.ro_session.query(Collection).filter(Collection.title == title)
         ret = [CollectionBO(a_rec).enrich() for a_rec in qry.all()]
-        assert len(ret) == 1
+        assert len(ret) == 1, NOT_FOUND
+        return ret[0]
+
+    def query_by_short_title(self, title: str) -> CollectionBO:
+        # Return a unique collection from its title, short one
+        qry = self.ro_session.query(Collection).filter(Collection.short_title == title)
+        ret = [CollectionBO(a_rec).enrich() for a_rec in qry.all()]
+        assert len(ret) == 1, NOT_FOUND
         return ret[0]
 
     def delete(self, current_user_id: UserIDT, coll_id: CollectionIDT) -> int:

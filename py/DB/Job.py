@@ -40,7 +40,7 @@ class Job(Model):
     """ The job type, e.g. import, export... """
     params = Column(VARCHAR())
     """ JSON-encoded startup parameters """
-    state = Column(VARCHAR(80))
+    state = Column(VARCHAR(1))
     """ What the job is doing """
     step = Column(INTEGER)
     """ Where in the workflow the job is """

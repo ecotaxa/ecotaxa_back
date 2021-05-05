@@ -109,7 +109,7 @@ class CollectionBO(object):
         # Report (brutally) problems
         assert len(problems) == 0, "\n".join(problems)
 
-    def update(self, session: Session, title: str,
+    def update(self, session: Session, title: str, short_title: str,
                project_ids: ProjectIDListT,
                provider_user: Any, contact_user: Any,
                citation: str, abstract: str, description: str,
@@ -124,6 +124,7 @@ class CollectionBO(object):
         coll_id = self._collection.id
         # Simple fields update
         self._collection.title = title
+        self._collection.short_title = short_title
         self._collection.citation = citation
         self._collection.abstract = abstract
         self._collection.description = description
