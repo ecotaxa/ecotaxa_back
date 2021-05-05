@@ -350,6 +350,7 @@ def create_project(params: CreateProjectReq,
             ret = sce.create(current_user, params)
     if isinstance(ret, str):
         raise HTTPException(status_code=404, detail=ret)
+    with DBSyncService(Project, Project.projid, ret) as ssce: ssce.wait()
     return ret
 
 
