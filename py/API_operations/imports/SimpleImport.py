@@ -25,42 +25,54 @@ class SimpleImport(ImportServiceBase):
         Simple import, i.e. many images with same metadata.
     """
     req: SimpleImportReq  # Not used, just for typings
+    JOB_TYPE = "SimpleImport"
 
-    def __init__(self, prj_id: int, req: SimpleImportReq):
+    def __init__(self, prj_id: int, req: SimpleImportReq, dry_run: bool):
         super().__init__(prj_id, req)
+        self.dry_run = dry_run
 
-    def run(self, current_user_id: int) -> SimpleImportRsp:
-        with LogsSwitcher(self):
-            return self.do_run(current_user_id)
+    def init_args(self, args: Dict) -> Dict:
+        super().init_args(args)
+        args["dry_run"] = False
+        return args
 
-    def do_run(self, current_user_id: int) -> SimpleImportRsp:
+    @staticmethod
+    def deser_args(json_args: Dict):
+        json_args["req"] = SimpleImportReq(**json_args["req"])
+
+    def run(self, current_user_id: int) -> Optional[SimpleImportRsp]:
         # Security check
         RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, self.prj_id)
-        # OK
-        # Validate values in all cases
+        # Validate values in all cases, dry run or not.
         ret = self._validate()
         if len(ret.errors) > 0:
             return ret
-        if self.task_id != 0:
-            if len(ret.errors) == 0:
-                ret = self.do_import()
+        if not self.dry_run:
+            self.create_job(self.JOB_TYPE, current_user_id)
+            ret.job_id = self.job_id
         return ret
 
-    def do_import(self):
+    def do_background(self):
         """
-            Do the real job, i.e. copy files while creating records.
+            Background part of the job.
         """
-        errors = []
-        self.manage_uploaded()
-        self.unzip_if_needed()
+        with LogsSwitcher(self):
+            self.do_import()
+
+    def do_import(self) -> None:
+        """
+            Do the real job, i.e. copy files while creating records. Runs in background.
+        """
+        errors: List[str] = []
+        source_dir_or_zip = self.unzip_if_needed(self._get_owner_id())
         # Use a Bundle
-        source_bundle = InBundle(self.source_dir_or_zip, Path(self.temp_for_task.data_dir_for(self.task_id)))
+        source_bundle = InBundle(source_dir_or_zip, Path(self.temp_for_jobs.data_dir_for(self.job_id)))
         # Clean it, in case the ZIP contains a CSV
         source_bundle.remove_all_tsvs()
         images = source_bundle.list_image_files()
         # Configure the import to come, destination
         db_writer = DBWriter(self.session)
-        import_where = ImportWhere(db_writer, self.vault, self.temp_for_task.base_dir_for(self.task_id))
+        import_where = ImportWhere(db_writer, self.vault, self.temp_for_jobs.base_dir_for(self.job_id))
         # Configure the import to come, directives
         import_how = ImportHow(prj_id=self.prj_id, update_mode="", custom_mapping=ProjectMapping(),
                                skip_object_duplicates=False, loaded_files=[])
@@ -82,9 +94,7 @@ class SimpleImport(ImportServiceBase):
         ProjectBO.do_after_load(self.session, self.prj_id)
         self.session.commit()
 
-        ret = SimpleImportRsp(errors=errors,
-                              nb_images=nb_images)
-        return ret
+        self.set_job_result(errors=errors, infos={"nb_images": nb_images})
 
     # Form fields to TSV values
     # TODO: Repeated constants from Mappings.py
@@ -126,7 +136,8 @@ class SimpleImport(ImportServiceBase):
         """
             Generate a TSV file from values, inject it into the bundle.
         """
-        dest_file = Path(self.temp_for_task.in_base_dir_for(self.task_id, "import_meta.tsv"))
+        # TODO: Duplicated code
+        dest_file = Path(self.temp_for_jobs.in_base_dir_for(self.job_id, "import_meta.tsv"))
         with open(dest_file, "w", encoding='latin_1') as fp:
             fp.write(self.make_header())
             for an_image in images:
@@ -149,6 +160,8 @@ class SimpleImport(ImportServiceBase):
             Basic validation of values.
         """
         errors = []
+        if len(self.req.source_path) == 0:
+            errors.append("No file provided.")
         values = self.req.values
         for a_key, a_val in values.items():
             if a_val is None:
@@ -161,5 +174,5 @@ class SimpleImport(ImportServiceBase):
             except ValueError:
                 errors.append("'%s' is not a valid value for %s" % (a_val, a_key))
         ret = SimpleImportRsp(errors=errors,
-                              nb_images=0)
+                              job_id=0)
         return ret

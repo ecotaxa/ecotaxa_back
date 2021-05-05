@@ -4,15 +4,18 @@
 #
 import re
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List, Tuple
 
-from API_models.imports import ImportPrepReq, ImportRealReq, ImportRealRsp, ImportPrepRsp
+from API_models.imports import ImportReq, ImportRsp
 from API_operations.imports.ImportBase import ImportServiceBase
 from BO.Bundle import InBundle
+from BO.Classification import ClassifIDT
+from BO.Job import JobBO
 from BO.Mappings import ProjectMapping
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
+from BO.User import UserIDT
 from BO.helpers.ImportHelpers import ImportHow, ImportDiagnostic, ImportWhere
 from BO.helpers.TSVHelpers import none_to_empty
 from DB.Image import Image
@@ -24,71 +27,168 @@ from helpers.Timer import CodeTimer
 logger = get_logger(__name__)
 
 
-class ImportAnalysis(ImportServiceBase):
+class FileImport(ImportServiceBase):
     """
         Before doing the real import, analyze the input in order to prevent issues and give choices
         to user.
     """
-    req: ImportPrepReq  # Not used, just for typings
+    JOB_TYPE = "FileImport"
 
-    def __init__(self, prj_id: int, req: ImportPrepReq):
+    MISSING_INFO_MESSAGE = "Some users or taxonomic references could not be matched"
+
+    STATE_KEYS = ["found_users", "taxo_found", "col_mapping", "nb_rows", "source_path"]
+    STATE_KEYS_REPLY = ["found_users", "taxo_found"]
+
+    req: ImportReq  # Not used, just for typings
+
+    def __init__(self, prj_id: int, req: ImportReq):
         super().__init__(prj_id, req)
 
-    def run(self, current_user_id: int) -> ImportPrepRsp:
+    def init_args(self, args: Dict) -> Dict:
+        """ Nothing specific so far """
+        return super().init_args(args)
+
+    @staticmethod
+    def deser_args(json_args: Dict):
+        # Ensure that the request is OK, if not below will raise as pydantic is quite pydantic :)
+        json_args["req"] = ImportReq(**json_args["req"])
+
+    def run(self, current_user_id: int) -> ImportRsp:
+        """
+            Initial run, basically just create the job.
+        """
         # Security check
         RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, self.prj_id)
-        # OK
-        loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
-        logger.info("Previously loaded files: %s", loaded_files)
-        self.manage_uploaded()
-        # Prepare response
-        ret = ImportPrepRsp(source_path=self.source_dir_or_zip)
-        self.update_progress(0, "Starting")
-        # Unzip or point to source directory
-        self.unzip_if_needed()
-        ret.source_path = self.source_dir_or_zip
-        # Validate files
-        logger.info("Analyze TSV Files")
-        how, diag, nb_rows = self.do_intra_step_1(loaded_files)
-        ret.mappings = how.custom_mapping.as_dict()
-        ret.warnings = diag.messages
-        ret.errors = diag.errors
-        ret.rowcount = nb_rows
-        # Resolve users...
-        logger.info("Resolve users")
-        self.resolve_users(self.session, how.found_users)
-        ret.found_users = how.found_users
-        # ...and taxonomy
-        logger.info("Resolve taxonomy")
-        self.resolve_taxa(self.session, how.taxo_found)
-        ret.found_taxa = how.taxo_found
-
+        # OK, go background straight away
+        self.create_job(self.JOB_TYPE, current_user_id)
+        ret = ImportRsp(job_id=self.job_id)
         return ret
 
-    def do_intra_step_1(self, loaded_files):
-        # The mapping to custom columns, either empty or from previous import API_operations on same project.
-        custom_mapping = ProjectMapping().load_from_project(self.prj)
+    def do_background(self):
+        """
+            Background part of the job.
+        """
+        with LogsSwitcher(self):
+            job = self._get_job()
+            if job.progress_msg in (None, JobBO.PENDING_MESSAGE, JobBO.RESTARTING_MESSAGE):
+                self.do_validate()
+            elif job.progress_msg == JobBO.REPLIED_MESSAGE:
+                self.do_complete_and_continue()
+            else:
+                raise Exception("Not know progress:'%s'" % job.progress_msg)
+
+    def do_complete_and_continue(self) -> None:
+        """
+            Fill in (hopefully) missing data, before resuming processing if all is OK.
+        """
+        logger.info("Using reply %s", self.last_reply)
+        found_users = self.saved_state["found_users"]
+        found_taxa = self.saved_state["taxo_found"]
+        self.complete_references(found_users, found_taxa,
+                                 self.last_reply["users"], self.last_reply["taxa"])
+        self._save_vars_to_state(self.STATE_KEYS_REPLY, found_users, found_taxa)
+        # Assert validity after input
+        missing_users, missing_taxa = self.validate_references(found_users, found_taxa)
+        if len(missing_users) > 0 or len(missing_taxa) > 0:
+            question_data = {"missing_users": missing_users,
+                             "missing_taxa": missing_taxa}
+            self.set_job_to_ask(self.MISSING_INFO_MESSAGE, question_data)
+        else:
+            self.do_real()
+
+    def do_validate(self) -> None:
+        """
+            Do the real job, i.e. copy files while creating records. Runs in background.
+        """
+        loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
+        logger.info("Previously loaded files: %s", loaded_files)
+        # Prepare response
+        self.update_progress(0, "Validating")
+        # Unzip or point to source directory
+        job_user_id: UserIDT = self._get_owner_id()
+        source_dir_or_zip = self.unzip_if_needed(job_user_id)
+        # Validate files
+        logger.info("Analyze TSV Files")
+        how, diag, nb_rows = self._collect_existing_and_validate(source_dir_or_zip, loaded_files)
+        if len(diag.errors) > 0:
+            self.set_job_result(errors=diag.errors, infos={"infos": diag.messages})
+            return
+        # Resolve identifiers
+        self.resolve_references(how.found_users, how.found_taxa)
+        # Save all computations so far
+        self._save_vars_to_state(self.STATE_KEYS, how.found_users, how.found_taxa,
+                                 how.custom_mapping.as_dict(), nb_rows, source_dir_or_zip)
+        # If anything is missing then we need input from user
+        missing_users, missing_taxa = self.validate_references(how.found_users, how.found_taxa)
+        if len(missing_users) > 0 or len(missing_taxa) > 0:
+            question_data = {"missing_users": missing_users,
+                             "missing_taxa": missing_taxa}
+            self.set_job_to_ask(self.MISSING_INFO_MESSAGE, question_data)
+        else:
+            self.do_real()
+
+    def _collect_existing_and_validate(self, source_dir_or_zip, loaded_files) \
+            -> Tuple[ImportHow, ImportDiagnostic, int]:
+        """
+            Prepare the import by checking what's inside the project and scanning files to input.
+        """
+        # The mapping to TSV custom columns, either empty or from previous import operations on same project.
+        mapping = ProjectMapping().load_from_project(self.prj)
         # Source bundle construction
-        source_bundle = InBundle(self.source_dir_or_zip, Path(self.temp_for_task.data_dir_for(self.task_id)))
+        bundle_temp_dir = Path(self.temp_for_jobs.data_dir_for(self.job_id))
+        source_bundle = InBundle(source_dir_or_zip, bundle_temp_dir)
         # Configure the validation to come, directives.
-        import_how = ImportHow(self.prj_id, self.req.update_mode, custom_mapping, self.req.skip_existing_objects,
+        import_how = ImportHow(self.prj_id, self.req.update_mode, mapping, self.req.skip_existing_objects,
                                loaded_files)
         if self.req.skip_loaded_files:
             import_how.compute_skipped(source_bundle, logger)
         # A structure to collect validation result
         import_diag = ImportDiagnostic()
         if not self.req.skip_existing_objects:
-            with CodeTimer("do_intra_step_1: Existing images for %d: " % self.prj_id, logger):
+            with CodeTimer("collect_existing: Existing images for %d: " % self.prj_id, logger):
                 import_diag.existing_objects_and_image = Image.fetch_existing_images(self.session, self.prj_id)
         import_diag.topology.read_from_db(self.session, prj_id=self.prj_id)
         # Do the bulk job of validation
-        nb_rows = source_bundle.validate_import(import_how, import_diag, self.session, self.report_progress)
+        nb_rows = source_bundle.validate_import(import_how, import_diag, self.session,
+                                                self.report_validation_progress)
         return import_how, import_diag, nb_rows
 
+    def resolve_references(self, users_found: Dict, taxo_found: Dict):
+        """
+            We have references inside the TSVs, to users or categories.
+            Resolve them and fill in the dicts in arguments.
+        """
+        logger.info("Resolve users")
+        self.resolve_users(self.session, users_found)
+        logger.info("Resolve taxonomy")
+        self.resolve_taxa(self.session, taxo_found)
+
     @staticmethod
-    def resolve_users(session, users_found: Dict):
+    def complete_references(users_found: Dict, taxo_found: Dict,
+                            more_users: Dict[str, UserIDT],
+                            more_taxo: Dict[str, ClassifIDT]) -> None:
+        """
+            Use provided more_* dict for overriding the *_found data.
+        """
+        for a_user, its_id in more_users.items():
+            if a_user in users_found:
+                users_found[a_user] = {"id": its_id}
+        taxo_found.update(more_taxo)
+
+    @staticmethod
+    def validate_references(users_found: Dict, taxo_found: Dict) -> Tuple[List[str], List[str]]:
+        """
+            After collection of references, ensure completeness.
+        """
+        missing_users = [k for k, v in users_found.items() if v.get('id') is None]
+        missing_taxa = [k for k, v in taxo_found.items() if v is None]
+        return missing_users, missing_taxa
+
+    @staticmethod
+    def resolve_users(session, users_found: Dict) -> None:
         """
             Resolve TSV names from DB names or emails.
+            :param users_found: The resolve output
         """
         names = [x for x in users_found.keys()]
         emails = [x.get('email') for x in users_found.values()]
@@ -96,12 +196,10 @@ class ImportAnalysis(ImportServiceBase):
         logger.info("Users Found for all TSVs = %s", users_found)
 
     @staticmethod
-    def resolve_taxa(session, taxo_found: dict):
+    def resolve_taxa(session, taxo_found: Dict) -> None:
         """
             Resolve taxa names.
-            :param session:
             :param taxo_found: The resolve output
-            :return not found taxa
         """
         lower_taxon_list = []
         regexsearchparenthese = re.compile(r'(.+) \((.+)\)$')
@@ -116,63 +214,50 @@ class ImportAnalysis(ImportServiceBase):
 
         TaxonomyBO.resolve_taxa(session, taxo_found, lower_taxon_list)
 
-        logger.info("For all TSVs, taxa (no ID in TSV) found from DB = %s", taxo_found)
+        logger.info("For all TSVs, taxa (with no ID in TSV) found from DB = %s", taxo_found)
         for found_k, found_v in taxo_found.items():
             if found_v['nbr'] == 0:
                 logger.info("Taxo '%s' Not Found", found_k)
             elif found_v['nbr'] > 1:
-                # more than one is like not found
+                # more than one is ambiguous, hence like not found
                 logger.info("Taxo '%s' Found more than once", found_k)
                 taxo_found[found_k]['id'] = None
         for found_k, found_v in taxo_found.items():
             # in the end we just keep the id, other fields were transitory
             taxo_found[found_k] = found_v['id']
-        logger.info("For all TSVs, taxa (no ID in TSV) resolved = %s", taxo_found)
+        logger.info("For all TSVs, taxa (with no ID in TSV) resolved = %s", taxo_found)
 
-    def report_progress(self, current, total):
+    def report_validation_progress(self, current, total):
         self.update_progress(20 * current / total,
                              "Validating files %d/%d" % (current, total))
 
-
-class RealImport(ImportServiceBase):
-    """
-        Real import, assumes that previous step completed successfully.
-    """
-    req: ImportRealReq  # Not used, just here for correct typings
-
-    def __init__(self, prj_id: int, req: ImportRealReq):
-        super().__init__(prj_id, req)
-        # Transcode from serialized form
-        self.custom_mapping = ProjectMapping().load_from_dict(req.mappings)
-
-    def run(self, current_user_id: int) -> ImportRealRsp:
-        with LogsSwitcher(self):
-            return self.do_run(current_user_id)
-
-    def do_run(self, current_user_id: int) -> ImportRealRsp:
+    def do_real(self) -> None:
         """
-            Do the real job using injected parameters.
-            :return:
+            Do the real job, i.e. write everywhere (DB/filesystem)
         """
-        # Security check
-        RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, self.prj_id)
-        # OK
         loaded_files = none_to_empty(self.prj.fileloaded).splitlines()
         logger.info("Previously loaded files: %s", loaded_files)
 
-        # Save mappings straight away
-        self.save_mapping(self.custom_mapping)
+        found_users, taxo_found, col_mapping_dict, \
+        nb_rows, source_path = self._load_vars_from_state(self.STATE_KEYS)
 
-        source_bundle = InBundle(self.req.source_path, Path(self.temp_for_task.data_dir_for(self.task_id)))
+        # Save mappings straight away
+        col_mapping = ProjectMapping().load_from_dict(col_mapping_dict)
+        col_mapping.write_to_project(self.prj)
+        self.session.commit()
+
+        # TODO: Duplicated code
+        source_bundle = InBundle(source_path, Path(self.temp_for_jobs.data_dir_for(self.job_id)))
         # Configure the import to come, destination
         db_writer = DBWriter(self.session)
-        import_where = ImportWhere(db_writer, self.vault, self.temp_for_task.base_dir_for(self.task_id))
+        import_where = ImportWhere(db_writer, self.vault, self.temp_for_jobs.base_dir_for(self.job_id))
         # Configure the import to come, directives
-        import_how = ImportHow(self.prj_id, self.req.update_mode, self.custom_mapping, self.req.skip_existing_objects,
+        import_how = ImportHow(self.prj_id, self.req.update_mode, col_mapping,
+                               self.req.skip_existing_objects,
                                loaded_files)
         import_how.taxo_mapping = self.req.taxo_mappings
-        import_how.taxo_found = self.req.found_taxa
-        import_how.found_users = self.req.found_users
+        import_how.found_taxa = taxo_found
+        import_how.found_users = found_users
         if self.req.skip_loaded_files:
             import_how.compute_skipped(source_bundle, logger)
         if self.req.skip_existing_objects:
@@ -182,7 +267,9 @@ class RealImport(ImportServiceBase):
         import_how.do_thumbnail_above(int(self.config['THUMBSIZELIMIT']))
 
         # Do the bulk job of import
-        row_count = source_bundle.do_import(import_where, import_how, self.req.rowcount, self.report_progress)
+        rowcount_from_validate = nb_rows
+        row_count = source_bundle.do_import(import_where, import_how, rowcount_from_validate,
+                                            self.report_progress)
 
         # Update loaded files in DB, removing duplicates
         self.prj.fileloaded = "\n".join(set(import_how.loaded_files))
@@ -192,15 +279,6 @@ class RealImport(ImportServiceBase):
         ProjectBO.do_after_load(self.session, self.prj_id)
         self.session.commit()
 
-        logger.info("Total of %d rows loaded" % row_count)
-
-        # Prepare response
-        ret = ImportRealRsp()
-        return ret
-
-    def save_mapping(self, custom_mapping):
-        """
-        DB update of mappings for the Project
-        """
-        custom_mapping.write_to_project(self.prj)
-        self.session.commit()
+        msg = "Total of %d rows loaded" % row_count
+        logger.info(msg)
+        self.set_job_result(errors=[], infos={"rowcount": row_count})

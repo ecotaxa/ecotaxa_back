@@ -14,7 +14,8 @@ from deepdiff import DeepDiff
 from starlette import status
 
 from tests.test_fastapi import ADMIN_AUTH
-from tests.test_import import ADMIN_USER_ID, test_import_uvp6, test_import_images
+from tests.test_import import ADMIN_USER_ID, test_import_uvp6, dump_project
+from tests.test_import_simple import test_import_images_only
 from tests.test_subset_merge import check_project
 
 OUT_JSON_REF = "out_upd_tst.json"
@@ -35,48 +36,57 @@ def test_updates(config, database, caplog):
     acquis_id, process_id, sample_id = _get_ids(prj_id)
 
     # Typo in column name
-    nb_upd = SamplesService().update_set(ADMIN_USER_ID, [sample_id], ColUpdateList([upd("chip", "sagitta4")]))
+    with SamplesService() as sce:
+        nb_upd = sce.update_set(ADMIN_USER_ID, [sample_id], ColUpdateList([upd("chip", "sagitta4")]))
     assert nb_upd == 0
 
     # Update ship in the only sample, and a date to see
     upds = ColUpdateList([upd("ship", "sagitta4"),
                           upd("sampledatetime", "20200208-111218")])
-    nb_upd = SamplesService().update_set(ADMIN_USER_ID, [sample_id, sample_id], upds)
+    with SamplesService() as sce:
+        nb_upd = sce.update_set(ADMIN_USER_ID, [sample_id, sample_id], upds)
     assert nb_upd == 1
 
     # Update 1st acquisition, and a float, to see
     upds = ColUpdateList([upd("orig_id", "aid5"),
                           upd("exp", "0.6")])
-    nb_upd = AcquisitionsService().update_set(ADMIN_USER_ID, [acquis_id], upds)
+    with AcquisitionsService() as sce:
+        nb_upd = sce.update_set(ADMIN_USER_ID, [acquis_id], upds)
     assert nb_upd == 1
 
     # Update 1st process
     upds = ColUpdateList([upd("date", "20200325"),
                           upd("invert", "n")])
-    nb_upd = ProcessesService().update_set(ADMIN_USER_ID, [process_id], upds)
+    with ProcessesService() as sce:
+        nb_upd = sce.update_set(ADMIN_USER_ID, [process_id], upds)
     assert nb_upd == 1
 
     # Update all objects
-    objs, _details, total = ObjectManager().query(ADMIN_USER_ID, prj_id, {}, order_field='objid')
+    with  ObjectManager() as sce:
+        objs, _details, total = sce.query(ADMIN_USER_ID, prj_id, {}, order_field='objid')
     objs = [an_obj[0] for an_obj in objs]
     assert len(objs) == 15
     # Wrong column
-    nb_upd = ObjectManager().update_set(ADMIN_USER_ID, objs, ColUpdateList([upd("chip", "sagitta4")]))
+    with  ObjectManager() as sce:
+        nb_upd = sce.update_set(ADMIN_USER_ID, objs, ColUpdateList([upd("chip", "sagitta4")]))
     assert nb_upd == 0
     # Free column
-    nb_upd = ObjectManager().update_set(ADMIN_USER_ID, objs, ColUpdateList([upd("area", "10")]))
+    with  ObjectManager() as sce:
+        nb_upd = sce.update_set(ADMIN_USER_ID, objs, ColUpdateList([upd("area", "10")]))
     assert nb_upd == 15
     # Plain column
-    nb_upd = ObjectManager().update_set(ADMIN_USER_ID, objs, ColUpdateList([upd("depth_min", "10")]))
+    with  ObjectManager() as sce:
+        nb_upd = sce.update_set(ADMIN_USER_ID, objs, ColUpdateList([upd("depth_min", "10")]))
     assert nb_upd == 15
 
     # Dump the project after changes
     with open(OUT_JSON_MODIF, "w") as fd:
-        JsonDumper(ADMIN_USER_ID, prj_id, {}).run(fd)
+        dump_project(ADMIN_USER_ID, prj_id, fd)
 
     # Special column
     # TODO: Avoiding diff on purpose, it's just to cover code.
-    nb_upd = ObjectManager().update_set(ADMIN_USER_ID, objs, ColUpdateList([upd("classif_id", "100")]))
+    with  ObjectManager() as sce:
+        nb_upd = sce.update_set(ADMIN_USER_ID, objs, ColUpdateList([upd("classif_id", "100")]))
     assert nb_upd == 15
 
     # Json diff
@@ -168,7 +178,7 @@ def test_updates(config, database, caplog):
 def _get_ids(prj_id):
     # Dump the project before changes
     with open(OUT_JSON_REF, "w") as fd:
-        JsonDumper(ADMIN_USER_ID, prj_id, {}).run(fd)
+        dump_project(ADMIN_USER_ID, prj_id, fd)
     with open(OUT_JSON_REF) as fd:
         json_prj = json.load(fd)
     sample_id = json_prj["samples"][0]["id"]
@@ -185,7 +195,7 @@ OBJECT_SET_UPDATE_URL = "/object_set/update"
 
 
 def test_api_updates(config, database, fastapi, caplog):
-    prj_id = test_import_images(config, database, caplog, title="API updates test")
+    prj_id = test_import_images_only(config, database, caplog, title="API updates test")
 
     # Recompute geo, which is a kind of update
     url = RECOMPUTE_GEO_URL.format(project_id=prj_id)
@@ -236,7 +246,8 @@ def test_api_updates(config, database, fastapi, caplog):
 
     # Update first 4 objects
     # TODO: Use the API for querying
-    objs, _details, _total = ObjectManager().query(ADMIN_USER_ID, prj_id, {})
+    with  ObjectManager() as sce:
+        objs, _details, _total = sce.query(ADMIN_USER_ID, prj_id, {})
     objs = [an_obj[0] for an_obj in objs]
     assert len(objs) == 8
     url = OBJECT_SET_UPDATE_URL.format(project_id=prj_id)

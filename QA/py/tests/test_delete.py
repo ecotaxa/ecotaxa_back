@@ -8,7 +8,8 @@ from API_operations.JsonDumper import JsonDumper
 from BO.Project import ProjectBO
 
 from tests.credentials import CREATOR_AUTH, ADMIN_USER_ID
-from tests.test_import import test_api_import_images
+from tests.test_import import dump_project
+from tests.test_import_simple import test_api_import_images
 import io
 
 PROJECT_DELETE_URL = "/projects/{project_id}?only_objects={only_objects}"
@@ -27,6 +28,6 @@ def test_api_project_delete(config, database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
     # Test emptyness
     with io.StringIO() as fd:
-        JsonDumper(CREATOR_AUTH, prj_id, {}).run(fd)
+        dump_project(CREATOR_AUTH, prj_id, fd)
         buff = fd.getvalue()
     assert buff == "{}"

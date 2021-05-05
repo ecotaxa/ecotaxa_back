@@ -20,7 +20,8 @@ OUT_MERGE_REMAP_JSON = "out_merge_remap.json"
 
 
 def check_project(prj_id: int):
-    problems = ProjectConsistencyChecker(prj_id).run(ADMIN_USER_ID)
+    with ProjectConsistencyChecker(prj_id) as sce:
+        problems = sce.run(ADMIN_USER_ID)
     assert problems == []
 
 
@@ -52,7 +53,8 @@ def test_subentities(config, database, fastapi, caplog):
     check_project(prj_id)
 
     # Pick the first object
-    qry_rsp, _details, _total = ObjectManager().query(ADMIN_USER_ID, prj_id, filters={})
+    with  ObjectManager() as sce:
+        qry_rsp, _details, _total = sce.query(ADMIN_USER_ID, prj_id, filters={})
     first_obj = qry_rsp[0]
     first_objid = first_obj[0]  # obj id
 

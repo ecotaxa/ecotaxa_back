@@ -4,8 +4,8 @@
 #
 import os
 
-from sqlalchemy.orm import Session
 from sqlalchemy import event
+from sqlalchemy.orm import Session
 
 from DB.Connection import Connection, check_sqlalchemy_version
 from helpers.link_to_legacy import read_config, read_link
@@ -125,7 +125,7 @@ class Service(BaseService):
         """
             Raise if SQLAlchemy tries to flush(write) a readonly session.
             "Should not" happen in production if tests are covering OK.
-            This does not manage plain SQL queries, which should be caught as the RO user has no
+            This does not manage plain SQL writing queries, which should be caught as the RO user has no
             relevant right on the tables.
         """
         try:
@@ -137,7 +137,7 @@ class Service(BaseService):
             return
         assert False, "Trying to ORM-write to a read-only session: %s" % str(ro_session.dirty)
 
-    def close(self):
+    def close_db_sessions(self):
         # Release DB session
         if self.session is not None:
             # noinspection PyBroadException
@@ -159,12 +159,21 @@ class Service(BaseService):
             self.ro_session = None
 
     def __del__(self):
-        # Release DB session
-        self.close()
+        # DB session should have been released during __exit__
+        if self.session is not None:
+            try:
+                self.close_db_sessions()
+            except:
+                pass
+            assert False, "%s: Please use Service-derived classes in a with() context" % str(self)
 
-    def log_file_path(self):
-        """ To overload in subclass """
-        return None
+    def __enter__(self):
+        self.session = self.session
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # Release DB session
+        self.close_db_sessions()
 
 
 if __name__ == '__main__':

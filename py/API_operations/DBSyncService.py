@@ -41,7 +41,7 @@ class DBSyncService(Service):
 
     def wait(self):
         start_time = time.time()
-        # Wait half a second max for the sync
+        # Wait MAX_WAIT max for the sync
         waited = 0
         while waited < self.MAX_WAIT:
             new_val = self._get_result(self.ro_session)

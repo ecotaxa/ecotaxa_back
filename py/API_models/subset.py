@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from enum import Enum
-from typing import List, Dict
+from typing import Dict
 
 from helpers.pydantic import BaseModel, Field
 
@@ -15,7 +15,6 @@ class LimitMethods(str, Enum):
 
 class SubsetReq(BaseModel):
     """ Subset request. """
-    task_id: int = Field(title="The existing task to use.")
     filters: Dict[str, str] = Field(title="The filters to apply to project", default={})
     dest_prj_id: int = Field(title="The destination project ID.")
     limit_type: LimitMethods = Field(title="The type of limit_value: P for %, V for constant, both per category.")
@@ -25,5 +24,6 @@ class SubsetReq(BaseModel):
 
 class SubsetRsp(BaseModel):
     """ Subset response. """
-    errors: List[str] = Field(title="The errors found during processing",
-                              default=[])
+    job_id: int = Field(title="The job created for this operation.")
+    # errors: List[str] = Field(title="The errors found during processing",
+    #                           default=[])

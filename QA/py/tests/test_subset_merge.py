@@ -9,12 +9,11 @@ import pytest
 from API_models.crud import *
 # noinspection PyPackageRequirements
 from API_models.merge import MergeRsp
-from API_models.subset import SubsetReq
+from API_models.subset import SubsetReq, SubsetRsp
 # Import services
 # noinspection PyPackageRequirements
 from API_operations.CRUD.Projects import ProjectsService
 # noinspection PyPackageRequirements
-from API_operations.CRUD.Tasks import TaskService
 from API_operations.Consistency import ProjectConsistencyChecker
 from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
@@ -32,7 +31,9 @@ from starlette import status
 
 from tests.credentials import CREATOR_AUTH, CREATOR_USER_ID
 from tests.test_fastapi import PRJ_CREATE_URL, ADMIN_AUTH, PROJECT_QUERY_URL
-from tests.test_import import ADMIN_USER_ID, test_import_uvp6, DATA_DIR, do_import
+from tests.test_import import ADMIN_USER_ID, test_import_uvp6, DATA_DIR, do_import, create_project, dump_project
+from tests.test_jobs import wait_for_stable, check_job_ok, check_job_errors, api_wait_for_stable_job, \
+    api_check_job_errors
 
 OUT_JSON = "out.json"
 ORIGIN_AFTER_MERGE_JSON = "out_after_merge.json"
@@ -44,7 +45,8 @@ PROJECT_MERGE_URL = "/projects/{project_id}/merge?source_project_id={source_proj
 
 
 def check_project(prj_id: int):
-    problems = ProjectConsistencyChecker(prj_id).run(ADMIN_USER_ID)
+    with ProjectConsistencyChecker(prj_id) as sce:
+        problems = sce.run(ADMIN_USER_ID)
     assert problems == []
 
 
@@ -70,25 +72,25 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
     # Dump the project
     caplog.set_level(logging.DEBUG)
     with open(OUT_JSON, "w") as fd:
-        JsonDumper(ADMIN_USER_ID, prj_id, {}).run(fd)
+        dump_project(ADMIN_USER_ID, prj_id, fd)
     print("\n".join(caplog.messages))
 
     # Subset in full, i.e. clone
-    task_id = TaskService().create()
-    subset_prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Subset of UVP6"))
+    subset_prj_id = create_project(ADMIN_USER_ID,"Subset of UVP6")
     filters = {"freenum": "n01", "freenumst": "0"}
-    params = SubsetReq(task_id=task_id,
-                       dest_prj_id=subset_prj_id,
+    params = SubsetReq(dest_prj_id=subset_prj_id,
                        filters=filters,
                        limit_type='P',
                        limit_value=100.0,
                        do_images=True)
-    sce = SubsetServiceOnProject(prj_id=prj_id, req=params)
-    sce.update_task(taskstate="Running", percent=0, message="Running")
-    sce.run(ADMIN_USER_ID)
+    with SubsetServiceOnProject(prj_id=prj_id, req=params) as sce:
+        rsp: SubsetRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    check_job_ok(job)
+
     # Dump the subset
     with open(OUT_SUBS_JSON, "w") as fd:
-        JsonDumper(ADMIN_USER_ID, subset_prj_id, {}).run(fd)
+        dump_project(ADMIN_USER_ID, subset_prj_id, fd)
 
     # Json diff
     with open(OUT_JSON) as fd1:
@@ -116,18 +118,19 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
     assert changed_values == {}
 
     # Add a numerical feature into the subset
-    session = ProjectsService().session
-    db_prj: Project = session.query(Project).get(subset_prj_id)
-    mapg = ProjectMapping().load_from_project(db_prj)
-    mapg.add_column(ObjectFields.__tablename__, "object", "foobar", "n")
-    db_col = mapg.search_field("object_foobar")
-    assert db_col
-    mapg.write_to_project(db_prj)
-    for a_sample in db_prj.all_samples:
-        for an_acquis in a_sample.all_acquisitions:
-            for an_obj in an_acquis.all_objects:
-                setattr(an_obj.fields, db_col["field"], 4567)
-    session.commit()
+    with ProjectsService() as sce:
+        session = sce.session
+        db_prj: Project = session.query(Project).get(subset_prj_id)
+        mapg = ProjectMapping().load_from_project(db_prj)
+        mapg.add_column(ObjectFields.__tablename__, "object", "foobar", "n")
+        db_col = mapg.search_field("object_foobar")
+        assert db_col
+        mapg.write_to_project(db_prj)
+        for a_sample in db_prj.all_samples:
+            for an_acquis in a_sample.all_acquisitions:
+                for an_obj in an_acquis.all_objects:
+                    setattr(an_obj.fields, db_col["field"], 4567)
+        session.commit()
 
     # Re-merge subset into origin project
     # First a dry run to be sure, via API for variety
@@ -136,7 +139,8 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["errors"] == []
     # Then for real
-    does_it_work: MergeRsp = MergeService(prj_id=prj_id, src_prj_id=subset_prj_id, dry_run=False).run(ADMIN_USER_ID)
+    with MergeService(prj_id=prj_id, src_prj_id=subset_prj_id, dry_run=False) as sce:
+        does_it_work: MergeRsp = sce.run(ADMIN_USER_ID)
     assert does_it_work.errors == []
 
     # TODO:The merge introduces duplicates, so below fails
@@ -144,14 +148,14 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
 
     # Dump the subset which should be just gone
     with open(SUBS_AFTER_MERGE_JSON, "w") as fd:
-        JsonDumper(ADMIN_USER_ID, subset_prj_id, {}).run(fd)
+        dump_project(ADMIN_USER_ID, subset_prj_id, fd)
     with open(SUBS_AFTER_MERGE_JSON) as fd:
         json_subset = json.load(fd)
     assert json_subset == {}
 
     # Dump the origin project which should be 2x larger
     with open(ORIGIN_AFTER_MERGE_JSON, "w") as fd:
-        JsonDumper(ADMIN_USER_ID, prj_id, {}).run(fd)
+        dump_project(ADMIN_USER_ID, prj_id, fd)
     with open(ORIGIN_AFTER_MERGE_JSON) as fd:
         origin_after_merge = json.load(fd)
 
@@ -1306,7 +1310,7 @@ MERGE_DIR_4 = DATA_DIR / "merge_test" / "second_merge"
 
 def test_merge_remap(config, database, fastapi, caplog):
     # Project 1, usual columns
-    prj_id = ProjectsService().create(CREATOR_USER_ID, CreateProjectReq(title="Merge Dest project"))
+    prj_id = create_project(CREATOR_USER_ID,"Merge Dest project")
     do_import(prj_id, MERGE_DIR_1, CREATOR_USER_ID)
     check_project(prj_id)
     # Project 2, same columns but different order
@@ -1314,7 +1318,7 @@ def test_merge_remap(config, database, fastapi, caplog):
     # process: remove process_stop_n_images & process_gamma_value, put process_software at the end
     # sample: rename sample_volconc to sample_volconc2 and move it in last
     # object: remove object_link object_cv and object_sr, move lat & lon near the end
-    prj_id2 = ProjectsService().create(CREATOR_USER_ID, CreateProjectReq(title="Merge Src project"))
+    prj_id2 = create_project(CREATOR_USER_ID,"Merge Src project")
     do_import(prj_id2, MERGE_DIR_2, CREATOR_USER_ID)
     check_project(prj_id2)
     # Merge
@@ -1324,7 +1328,7 @@ def test_merge_remap(config, database, fastapi, caplog):
     assert response.json()["errors"] == []
     # Dump the dest
     with open(OUT_MERGE_REMAP_JSON, "w") as fd:
-        JsonDumper(ADMIN_USER_ID, prj_id, {}).run(fd)
+        dump_project(ADMIN_USER_ID, prj_id, fd)
     # Grab all median_mean free col values
     all_lats = []
     with open(OUT_MERGE_REMAP_JSON) as fd:
@@ -1336,7 +1340,7 @@ def test_merge_remap(config, database, fastapi, caplog):
     assert len(all_lats) == len(expected)
     assert all_lats == expected
     # Project 3 mistake as it has nothing to do with the 2 first ones
-    prj_id3 = ProjectsService().create(CREATOR_USER_ID, CreateProjectReq(title="Merge Src Big project"))
+    prj_id3 = create_project(CREATOR_USER_ID,"Merge Src Big project")
     do_import(prj_id3, MERGE_DIR_3, CREATOR_USER_ID)
     check_project(prj_id3)
     url = PROJECT_MERGE_URL.format(project_id=prj_id, source_project_id=prj_id3, dry_run=False)
@@ -1346,7 +1350,7 @@ def test_merge_remap(config, database, fastapi, caplog):
                                          "Column 'samples.5volconc2' cannot be mapped. No space left in mapping."]
     # Project 4 is different but compatible
     # It has a new acquisition for an existing sample
-    prj_id4 = ProjectsService().create(CREATOR_USER_ID, CreateProjectReq(title="Merge Src small project"))
+    prj_id4 = create_project(CREATOR_USER_ID,"Merge Src small project")
     do_import(prj_id4, MERGE_DIR_4, CREATOR_USER_ID)
     check_project(prj_id4)
     url = PROJECT_MERGE_URL.format(project_id=prj_id, source_project_id=prj_id4, dry_run=False)
@@ -1359,8 +1363,7 @@ def test_empty_subset_uvp6(config, database, fastapi, caplog):
     with caplog.at_level(logging.ERROR):
         prj_id = test_import_uvp6(config, database, caplog, "Test empty Subset")
 
-    task_id = TaskService().create()
-    subset_prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Empty subset"))
+    subset_prj_id = create_project(ADMIN_USER_ID,"Empty subset")
     # OK this test is just for covering the code in filters
     filters: ProjectFilters = {
         "taxo": "23456",
@@ -1390,13 +1393,16 @@ def test_empty_subset_uvp6(config, database, fastapi, caplog):
         "freetxtval": "zooprocess",
         "filt_annot": "34,67"
     }
-    params = SubsetReq(task_id=task_id,
-                       dest_prj_id=subset_prj_id,
+    params = SubsetReq(dest_prj_id=subset_prj_id,
                        filters=filters,
                        limit_type='P',
                        limit_value=100.0,
                        do_images=True)
-    SubsetServiceOnProject(prj_id=prj_id, req=params).run(ADMIN_USER_ID)
+    with SubsetServiceOnProject(prj_id=prj_id, req=params) as sce:
+        rsp: SubsetRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    errors = check_job_errors(job)
+    assert errors == ["No object found to clone into subset."]
     # A bit of fastapi testing
     # TODO for #484: Ensure it's a 200 for dst_prj_id and a non-admin user
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
@@ -1408,8 +1414,7 @@ def test_empty_subset_uvp6_other(config, database, fastapi, caplog):
     with caplog.at_level(logging.ERROR):
         prj_id = test_import_uvp6(config, database, caplog, "Test empty Subset")
 
-    task_id = TaskService().create()
-    subset_prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Empty subset"))
+    subset_prj_id = create_project(ADMIN_USER_ID,"Empty subset")
     # OK this test is just for covering (more) the code in filters
     filters: ProjectFilters = {
         "taxo": "23456",
@@ -1439,13 +1444,16 @@ def test_empty_subset_uvp6_other(config, database, fastapi, caplog):
         "freetxtval": "zooprocess",
         "filt_last_annot": "34,67"
     }
-    params = SubsetReq(task_id=task_id,
-                       dest_prj_id=subset_prj_id,
+    params = SubsetReq(dest_prj_id=subset_prj_id,
                        filters=filters,
                        limit_type='P',
                        limit_value=100.0,
                        do_images=True)
-    SubsetServiceOnProject(prj_id=prj_id, req=params).run(ADMIN_USER_ID)
+    with SubsetServiceOnProject(prj_id=prj_id, req=params) as sce:
+        rsp: SubsetRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    errors = check_job_errors(job)
+    assert errors == ["No object found to clone into subset."]
     # A bit of fastapi testing
     # TODO for #484: Ensure it's a 200 for dst_prj_id and a non-admin user
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
@@ -1464,17 +1472,17 @@ def test_api_subset(config, database, fastapi, caplog):
     src_prj_id = res.json()
     res = fastapi.post(url1, headers=ADMIN_AUTH, json={"title": "API subset tgt test"})
     tgt_prj_id = res.json()
-    # Create a task for this run
-    task_id = TaskService().create()
 
     url = SUBSET_URL.format(project_id=src_prj_id)
-    req = {"task_id": task_id,
-           "dest_prj_id": tgt_prj_id,
+    req = {"dest_prj_id": tgt_prj_id,
            "limit_type": "P",
            "limit_value": 10,
            "do_images": True}
-    response = fastapi.post(url, headers=ADMIN_AUTH, json=req)
-    assert response.json()["errors"] == ['No object found to clone into subset.']
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
+    job_id = rsp.json()["job_id"]
+    job = api_wait_for_stable_job(fastapi, job_id)
+    errors = api_check_job_errors(fastapi, job_id)
+    assert errors == ['No object found to clone into subset.']
 
     test_check_project_via_api(tgt_prj_id, fastapi)
 
@@ -1487,18 +1495,17 @@ def test_subset_of_no_visible_issue_484(config, database, fastapi, caplog):
     src_prj_id = res.json()
     res = fastapi.post(url1, headers=CREATOR_AUTH, json={"title": "API subset tgt test", "visible": False})
     tgt_prj_id = res.json()
-    # Create a task for this run
-    task_id = TaskService().create()
 
     url = SUBSET_URL.format(project_id=src_prj_id)
-    req = {"task_id": task_id,
-           "dest_prj_id": tgt_prj_id,
+    req = {"dest_prj_id": tgt_prj_id,
            "limit_type": "P",
            "limit_value": 10,
            "do_images": True}
     rsp = fastapi.post(url, headers=CREATOR_AUTH, json=req)
-    assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json()["errors"] == ['No object found to clone into subset.']
+    job_id = rsp.json()["job_id"]
+    job = api_wait_for_stable_job(fastapi, job_id)
+    errors = api_check_job_errors(fastapi, job_id)
+    assert errors == ['No object found to clone into subset.']
 
     test_check_project_via_api(tgt_prj_id, fastapi)
 
@@ -1507,28 +1514,26 @@ def test_subset_consistency(config, database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
     from tests.test_import import import_plain
     caplog.set_level(logging.DEBUG)
-    task_id = TaskService().create()
-    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test Import update"))
+    prj_id = create_project(ADMIN_USER_ID,"Test Import update")
     # Plain import first
-    import_plain(prj_id, task_id)
+    import_plain(prj_id)
     check_project(prj_id)
     # Dump the project
     caplog.set_level(logging.DEBUG)
     with open(OUT_JSON, "w") as fd:
-        JsonDumper(ADMIN_USER_ID, prj_id, {}).run(fd)
+        dump_project(ADMIN_USER_ID, prj_id, fd)
     print("\n".join(caplog.messages))
 
     # Subset in full, i.e. clone
-    task_id = TaskService().create()
-    subset_prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Subset of"))
+    subset_prj_id = create_project(ADMIN_USER_ID,"Subset of")
     filters = {"freenum": "n01", "freenumst": "0"}
-    params = SubsetReq(task_id=task_id,
-                       dest_prj_id=subset_prj_id,
+    params = SubsetReq(dest_prj_id=subset_prj_id,
                        filters=filters,
                        limit_type='P',
                        limit_value=100.0,
                        do_images=True)
-    sce = SubsetServiceOnProject(prj_id=prj_id, req=params)
-    sce.update_task(taskstate="Running", percent=0, message="Running")
-    sce.run(ADMIN_USER_ID)
+    with SubsetServiceOnProject(prj_id=prj_id, req=params) as sce:
+        rsp: SubsetRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    check_job_ok(job)
     check_project(subset_prj_id)

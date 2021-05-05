@@ -11,6 +11,7 @@ from tests.emodnet_ref import ref_zip, with_zeroes_zip, no_computations_zip
 from tests.test_classification import _prj_query, OBJECT_SET_CLASSIFY_URL
 from tests.test_collections import COLLECTION_CREATE_URL, COLLECTION_UPDATE_URL, COLLECTION_QUERY_URL
 from tests.test_fastapi import PROJECT_QUERY_URL
+from tests.test_jobs import wait_for_stable, api_check_job_ok, api_check_job_failed
 from tests.test_update import ACQUISITION_SET_UPDATE_URL, SAMPLE_SET_UPDATE_URL
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
@@ -19,7 +20,7 @@ COLLECTION_EXPORT_EMODNET_URL = "/collections/{collection_id}/export/emodnet?dry
 
 COLLECTION_QUERY_BY_TITLE_URL = "/collections/by_title/?q={title}"
 
-TASK_DOWNLOAD_URL = "/tasks/{task_id}/file"
+JOB_DOWNLOAD_URL = "/jobs/{job_id}/file"
 
 PROJECT_SEARCH_SAMPLES_URL = "/samples/search?project_ids={project_id}&id_pattern="
 PROJECT_SEARCH_ACQUIS_URL = "/acquisitions/search?project_id={project_id}"
@@ -54,16 +55,18 @@ def test_emodnet_export(config, database, fastapi, caplog):
     url = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=True, comp=True, morph=True)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json()["errors"] == ['No valid data creator (user or organisation) found for EML metadata.',
-                                    'No valid contact user found for EML metadata.',
-                                    "No valid metadata provider user found for EML metadata.",
-                                    "Collection 'abstract' field is empty",
-                                    "Collection license should be one of [<LicenseEnum.CC0: 'CC0 1.0'>, "
-                                    "<LicenseEnum.CC_BY: 'CC BY 4.0'>, <LicenseEnum.CC_BY_NC: 'CC BY-NC 4.0'>] to be "
-                                    "accepted, not ."]
-    assert rsp.json()["warnings"] == []
-    task_id = rsp.json()["task_id"]
-    assert task_id == 0  # No valid task as there were errors
+    job_id = rsp.json()["job_id"]
+    job = wait_for_stable(job_id)
+    api_check_job_failed(fastapi, job_id, '5 error(s) during run')
+    # TODO: Errors text
+    # assert rsp.json()["errors"] == ['No valid data creator (user or organisation) found for EML metadata.',
+    #                                 'No valid contact user found for EML metadata.',
+    #                                 "No valid metadata provider user found for EML metadata.",
+    #                                 "Collection 'abstract' field is empty",
+    #                                 "Collection license should be one of [<LicenseEnum.CC0: 'CC0 1.0'>, "
+    #                                 "<LicenseEnum.CC_BY: 'CC BY 4.0'>, <LicenseEnum.CC_BY_NC: 'CC BY-NC 4.0'>] to be "
+    #                                 "accepted, not ."]
+    # assert rsp.json()["warnings"] == []
 
     # Validate everything, otherwise no export.
     obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
@@ -113,13 +116,16 @@ This series is part of the long term planktonic monitoring of
     url = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=False, comp=True, morph=True)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
-    warns = rsp.json()["warnings"]
-    # assert warns == []
-    assert rsp.json()["errors"] == []
-    task_id = rsp.json()["task_id"]
+    job_id = rsp.json()["job_id"]
+    job = wait_for_stable(job_id)
+    api_check_job_ok(fastapi, job_id)
+    # warns = rsp.json()["warnings"]
+    # # assert warns == []
+    # assert rsp.json()["errors"] == []
+    # job_id = rsp.json()["job_id"]
 
     # Download the result zip
-    url = TASK_DOWNLOAD_URL.format(task_id=task_id)
+    url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     # Ensure it's not public
     rsp = fastapi.get(url)
     assert rsp.status_code == status.HTTP_403_FORBIDDEN
@@ -137,8 +143,10 @@ This series is part of the long term planktonic monitoring of
                                                        morph=True)
     rsp = fastapi.get(url_with_0s, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
-    task_id = rsp.json()["task_id"]
-    dl_url = TASK_DOWNLOAD_URL.format(task_id=task_id)
+    job_id = rsp.json()["job_id"]
+    job = wait_for_stable(job_id)
+    api_check_job_ok(fastapi, job_id)
+    dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
     set_dates_in_ref(with_zeroes_zip)
     unzip_and_check(rsp.content, with_zeroes_zip)
@@ -147,8 +155,10 @@ This series is part of the long term planktonic monitoring of
                                                         morph=True)
     rsp = fastapi.get(url_raw_data, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
-    task_id = rsp.json()["task_id"]
-    dl_url = TASK_DOWNLOAD_URL.format(task_id=task_id)
+    job_id = rsp.json()["job_id"]
+    job = wait_for_stable(job_id)
+    api_check_job_ok(fastapi, job_id)
+    dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
     set_dates_in_ref(no_computations_zip)
     unzip_and_check(rsp.content, no_computations_zip)

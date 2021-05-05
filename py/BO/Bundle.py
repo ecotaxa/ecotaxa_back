@@ -184,10 +184,9 @@ class InBundle(object):
         if len(diag.classif_id_seen) > 0:
             self.check_classif(session, diag, diag.classif_id_seen)
 
-        logger.info("Taxo Found = %s", how.taxo_found)
+        logger.info("Taxo Found = %s", how.found_taxa)
         logger.info("Users Found = %s", how.found_users)
         not_seen_fields = how.custom_mapping.all_fields.keys() - diag.cols_seen
-        logger.info("For Information, not seen fields %s", not_seen_fields)
         if len(not_seen_fields) > 0:
             diag.warn("Some fields configured in the project are not seen in this import {0} "
                       .format(", ".join(not_seen_fields)))

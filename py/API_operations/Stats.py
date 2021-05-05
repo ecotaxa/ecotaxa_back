@@ -12,7 +12,7 @@ from API_operations.helpers.Service import Service
 from BO.Acquisition import AcquisitionIDT
 from BO.Project import ProjectBO
 from BO.Rights import Action, RightsBO
-from helpers.DynamicLogs import LogsSwitcher
+from helpers.DynamicLogs import LogsSwitcher, LogEmitter
 
 
 class AcquisitionStats(object):
@@ -73,11 +73,14 @@ class AcquisitionStats(object):
         return ret
 
 
-class ProjectStatsFetcher(Service):
+class ProjectStatsFetcher(Service, LogEmitter):
 
     def __init__(self, prj_id: int):
         super().__init__()
         self.prj_id = prj_id
+
+    def log_file_path(self) -> str:
+        return "stats_%d.log" % self.prj_id
 
     def run(self, current_user_id: int) -> List[str]:
         with LogsSwitcher(self):

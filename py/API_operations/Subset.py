@@ -5,7 +5,7 @@
 import shutil
 from os.path import join
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 from API_models.subset import SubsetReq, SubsetRsp, LimitMethods
 from BO.Bundle import InBundle
@@ -22,7 +22,7 @@ from DB.helpers.DBWriter import DBWriter
 from DB.helpers.ORM import Query, any_, ResultProxy
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger, LogsSwitcher
-from .helpers.TaskService import TaskServiceOnProjectBase
+from .helpers.JobService import JobServiceOnProjectBase
 
 logger = get_logger(__name__)
 
@@ -32,16 +32,18 @@ DBObjectTupleT = Tuple[ObjectHeader, ObjectFields, ObjectCNNFeature, Image, Samp
 DBObjectTupleListT = List[DBObjectTupleT]
 
 
-class SubsetServiceOnProject(TaskServiceOnProjectBase):
+class SubsetServiceOnProject(JobServiceOnProjectBase):
     """
         A task doing the subset operation.
     """
+    JOB_TYPE = "Subset"
+
     # Fetch this number of objects at a time, and write them, in a DB session
     CHUNK_SIZE = 100
 
     def __init__(self, prj_id: int, req: SubsetReq):
 
-        super().__init__(prj_id, req.task_id)
+        super().__init__(prj_id)
         # Load the destination project
         dest_prj = self.session.query(Project).get(req.dest_prj_id)
         assert dest_prj is not None
@@ -52,27 +54,46 @@ class SubsetServiceOnProject(TaskServiceOnProjectBase):
         self.vault = Vault(join(self.link_src, 'vault'))
         self.first_query = True
 
-    def run(self, current_user_id: int) -> SubsetRsp:
-        with LogsSwitcher(self):
-            return self.do_run(current_user_id)
+    def init_args(self, args: Dict) -> Dict:
+        ret = super().init_args(args)
+        args["req"] = self.req.dict()
+        return args
 
-    def do_run(self, current_user_id: int) -> SubsetRsp:
-        # Security checks
+    @staticmethod
+    def deser_args(json_args: Dict):
+        json_args["req"] = SubsetReq(**json_args["req"])
+
+    def run(self, current_user_id: int) -> SubsetRsp:
+        """
+            Initial run, basically just create the job.
+        """
+        # Security check
         RightsBO.user_wants(self.session, current_user_id, Action.READ, self.prj_id)
         RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, self.dest_prj.projid)
+        # OK, go background straight away
+        self.create_job(self.JOB_TYPE, current_user_id)
+        ret = SubsetRsp(job_id=self.job_id)
+        return ret
+
+    def do_background(self):
+        """
+            Background part of the job.
+        """
+        with LogsSwitcher(self):
+            return self.do_run()
+
+    def do_run(self) -> None:
         # OK
         logger.info("Starting subset of '%s'", self.prj.title)
-        ret = SubsetRsp()
 
         self.update_progress(5, "Determining objects to clone")
         self._find_what_to_clone()
 
         logger.info("Matched %s objects", len(self.to_clone))
         if len(self.to_clone) == 0:
-            self.task.taskstate = "Error"
-            self.update_progress(10, "No object to include in the subset project")
-            ret.errors.append("No object found to clone into subset.")
-            return ret
+            errors = ["No object found to clone into subset."]
+            self.set_job_result(errors=errors, infos={"infos": ""})
+            return
 
         self._do_clone()
         self.session.commit()
@@ -80,7 +101,8 @@ class SubsetServiceOnProject(TaskServiceOnProjectBase):
         # Recompute stats and so on
         ProjectBO.do_after_load(self.session, self.dest_prj.projid)
         self.session.commit()
-        return ret
+
+        self.set_job_result(errors=[], infos={"rowcount": len(self.to_clone)})
 
     def _do_clone(self):
         """
@@ -226,7 +248,7 @@ class SubsetServiceOnProject(TaskServiceOnProjectBase):
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(self.session, self.prj_id, self.req.filters)
-        from_, where, params = object_set.get_sql(self.task.owner_id)
+        from_, where, params = object_set.get_sql(self._get_owner_id())
 
         sql = """
             SELECT objid FROM (

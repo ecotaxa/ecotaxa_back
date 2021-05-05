@@ -57,17 +57,17 @@ class TaxonomyMapper(object):
         phylo_auto_ids = TaxonomyBO.keep_phylo(self.session, list(ids_for_auto_match))
 
         # Lookup parents of morpho taxa
-        taxo_sce = TaxonomyService()
-        morpho_ids = list(ids_for_auto_match.difference(phylo_auto_ids))
-        # Borrow taxo tree from ToWorms which has nearly all we need.
-        to_worms.add_to_unieuk(morpho_ids, taxo_sce)
-        unieuk_per_id = to_worms.unieuk
-        needed_parents = []
-        for a_morpho_id in morpho_ids:
-            for a_parent_id in unieuk_per_id[a_morpho_id].id_lineage:
-                if a_parent_id not in unieuk_per_id:
-                    needed_parents.append(a_parent_id)
-        to_worms.add_to_unieuk(needed_parents, taxo_sce)
+        with TaxonomyService() as taxo_sce:
+            morpho_ids = list(ids_for_auto_match.difference(phylo_auto_ids))
+            # Borrow taxo tree from ToWorms which has nearly all we need.
+            to_worms.add_to_unieuk(morpho_ids, taxo_sce)
+            unieuk_per_id = to_worms.unieuk
+            needed_parents = []
+            for a_morpho_id in morpho_ids:
+                for a_parent_id in unieuk_per_id[a_morpho_id].id_lineage:
+                    if a_parent_id not in unieuk_per_id:
+                        needed_parents.append(a_parent_id)
+            to_worms.add_to_unieuk(needed_parents, taxo_sce)
 
         # Build morpho -> nearest phylo mapping
         phylo_per_morpho: Dict[ClassifIDT, ClassifIDT] = {}

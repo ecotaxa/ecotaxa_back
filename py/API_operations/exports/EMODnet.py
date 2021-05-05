@@ -46,12 +46,12 @@ from formats.EMODnet.models import DwC_Event, RecordTypeEnum, DwC_Occurrence, Oc
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 from helpers.Timer import CodeTimer
 # TODO: Move somewhere else
-from ..helpers.TaskService import TaskServiceBase
+from ..helpers.JobService import JobServiceBase
 
 logger = get_logger(__name__)
 
 
-class EMODnetExport(TaskServiceBase):
+class EMODnetExport(JobServiceBase):
     """
         EMODNet export.
         Help during development:
@@ -62,10 +62,22 @@ class EMODnetExport(TaskServiceBase):
             After IPT publishing
                 http://rshiny.lifewatch.be/BioCheck/
     """
+    JOB_TYPE = "DarwinCoreExport"
+
+    def init_args(self, args: Dict) -> Dict:
+        # A bit unusual to find a method before init(), but here we can visually ensure
+        # that arg lists are identical.
+        super().init_args(args)
+        args.update({"collection_id": self.collection.id,
+                     "dry_run": self.dry_run,
+                     "with_zeroes": self.with_zeroes,
+                     "with_computations": self.with_computations,
+                     "auto_morpho": self.auto_morpho})
+        return args
 
     def __init__(self, collection_id: CollectionIDT, dry_run: bool, with_zeroes: bool,
                  with_computations: bool, auto_morpho: bool):
-        super().__init__(task_type="TaskExportTxt")
+        super().__init__()
         # Input
         self.dry_run = dry_run
         self.with_zeroes = with_zeroes
@@ -74,7 +86,7 @@ class EMODnetExport(TaskServiceBase):
         self.collection = self.ro_session.query(Collection).get(collection_id)
         assert self.collection is not None, "Invalid collection ID"
         # During processing
-        # The Phylo taxa to their WoRMS conterpart
+        # The Phylo taxa to their WoRMS counterpart
         self.mapping: Dict[ClassifIDT, WoRMS] = {}
         # The Morpho taxa to their nearest Phylo parent
         self.morpho2phylo: Dict[ClassifIDT, ClassifIDT] = {}
@@ -94,32 +106,42 @@ class EMODnetExport(TaskServiceBase):
         self.suspicious_vals: Dict[str, List[str]] = {}
 
     DWC_ZIP_NAME = "dwca.zip"
+    PRODUCED_FILE_NAME = DWC_ZIP_NAME
 
     def run(self, current_user_id: int) -> EMODnetExportRsp:
-        with LogsSwitcher(self):
-            return self.do_run(current_user_id)
-
-    def do_run(self, current_user_id: int) -> EMODnetExportRsp:
-        # Security check
+        """
+            Initial run, basically just create the job.
+        """
         # TODO, for now only admins
         _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
-        # Adjust the task
-        self.set_task_params(current_user_id, self.DWC_ZIP_NAME)
+        # OK, go background straight away
+        self.create_job(self.JOB_TYPE, current_user_id)
+        ret = EMODnetExportRsp(job_id=self.job_id)
+        return ret
+
+    def do_background(self):
+        """
+            Background part of the job.
+        """
+        with LogsSwitcher(self):
+            self.do_export()
+
+    def do_export(self) -> None:
+        # Security check
         # Do the job
         logger.info("------------ starting --------------")
         # Update DB statistics
         self.update_db_stats()
-        ret = EMODnetExportRsp()
         # Build metadata with what comes from the collection
         meta = self.build_meta()
         if meta is None:
             # If we can't have meta there has to be reasons
             assert len(self.errors) > 0
-            ret.errors = self.errors
-            ret.warnings = self.warnings
-            return ret
+            self.set_job_result(self.errors, {"wrns": self.warnings})
+            return
         # Create a container
-        arch = DwC_Archive(DatasetMetadata(meta), self.temp_for_task.base_dir_for(self.task_id) / self.DWC_ZIP_NAME)
+        # TODO: Duplicated code
+        arch = DwC_Archive(DatasetMetadata(meta), self.temp_for_jobs.base_dir_for(self.job_id) / self.DWC_ZIP_NAME)
         # Add data from DB
         # OK because https://edmo.seadatanet.org/v_edmo/browse_step.asp?step=003IMEV_0021
         # But TODO: hardcoded, implement https://github.com/oceanomics/ecotaxa_dev/issues/514
@@ -139,11 +161,7 @@ class EMODnetExport(TaskServiceBase):
             # Produce the zip
             arch.build()
             self.log_stats()
-        ret.errors = self.errors
-        ret.warnings = self.warnings
-        if len(ret.errors) == 0:
-            ret.task_id = self.task_id
-        return ret
+        self.set_job_result(self.errors, {"wrns": self.warnings})
 
     def add_absent_occurrences(self, arch):
         """

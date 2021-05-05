@@ -8,9 +8,9 @@ import os
 from logging import INFO
 from typing import Union, Tuple
 
-from fastapi import FastAPI, Request, Response, status, Depends, HTTPException
+from fastapi import FastAPI, Request, Response, status, Depends, HTTPException, UploadFile, File
 from fastapi.logger import logger as fastapi_logger
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi_utils.timing import add_timing_middleware
 
@@ -27,10 +27,10 @@ from API_models.taxonomy import TaxaSearchRsp, TaxonModel, TaxonomyTreeStatus
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
 from API_operations.CRUD.Instruments import InstrumentsService
+from API_operations.CRUD.Jobs import JobCRUDService
 from API_operations.CRUD.Object import ObjectService
 from API_operations.CRUD.ObjectParents import SamplesService, AcquisitionsService, ProcessesService
 from API_operations.CRUD.Projects import ProjectsService
-from API_operations.CRUD.Tasks import TaskService
 from API_operations.CRUD.Users import UserService
 from API_operations.Consistency import ProjectConsistencyChecker
 from API_operations.DBSyncService import DBSyncService
@@ -42,12 +42,15 @@ from API_operations.Status import StatusService
 from API_operations.Subset import SubsetServiceOnProject
 from API_operations.TaxoManager import TaxonomyChangeService
 from API_operations.TaxonomyService import TaxonomyService
+from API_operations.UserFolder import UserFolderService
 from API_operations.admin.ImageManager import ImageManagerService
 from API_operations.exports.EMODnet import EMODnetExport
-from API_operations.imports.Import import ImportAnalysis, RealImport
+from API_operations.imports.Import import FileImport
 from API_operations.imports.SimpleImport import SimpleImport
+from BG_operations.JobScheduler import JobScheduler
 from BO.Acquisition import AcquisitionBO
 from BO.Classification import HistoricalClassification
+from BO.Job import JobBO
 from BO.Object import ObjectBO
 from BO.ObjectSet import ObjectIDListT
 from BO.Preferences import Preferences
@@ -70,7 +73,7 @@ logger = get_logger(__name__)
 fastapi_logger.setLevel(INFO)
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.8",
+              version="0.0.9",
               # openapi URL as seen from navigator
               openapi_url="/api/openapi.json",
               # root_path="/API_models"
@@ -102,9 +105,9 @@ async def login(params: LoginReq) -> str:
 
         -`password`: User password
     """
-    sce = LoginService()
-    with RightsThrower(sce):
-        return sce.validate_login(params.username, params.password)
+    with LoginService() as sce:
+        with RightsThrower():
+            return sce.validate_login(params.username, params.password)
 
 
 # TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
@@ -113,8 +116,8 @@ def get_users(current_user: int = Depends(get_current_user)):
     """
         Return the list of users. For admins only.
     """
-    sce = UserService()
-    return sce.list(current_user)
+    with UserService() as sce:
+        return sce.list(current_user)
 
 
 # TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
@@ -123,14 +126,14 @@ def show_current_user(current_user: int = Depends(get_current_user)):
     """
         Return currently authenticated user. On top of DB fields, 'can_do' lists the allowed system-wide actions.
     """
-    sce = UserService()
-    ret = sce.search_by_id(current_user, current_user)
-    assert ret is not None
-    # noinspection PyTypeHints
-    ret.can_do = RightsBO.allowed_actions(ret)  # type:ignore
-    # noinspection PyTypeHints
-    ret.last_used_projects = Preferences(ret).recent_projects(session=sce.session)  # type:ignore
-    return ret
+    with UserService() as sce:
+        ret = sce.search_by_id(current_user, current_user)
+        assert ret is not None
+        # noinspection PyTypeHints
+        ret.can_do = RightsBO.allowed_actions(ret)  # type:ignore
+        # noinspection PyTypeHints
+        ret.last_used_projects = Preferences(ret).recent_projects(session=sce.session)  # type:ignore
+        return ret
 
 
 @app.get("/users/my_preferences/{project_id}", tags=['users'], response_model=str)
@@ -140,8 +143,8 @@ def get_current_user_prefs(project_id: int,
     """
         Return one preference, for project and currently authenticated user.
     """
-    sce = UserService()
-    return sce.get_preferences_per_project(current_user, project_id, key)
+    with UserService() as sce:
+        return sce.get_preferences_per_project(current_user, project_id, key)
 
 
 @app.put("/users/my_preferences/{project_id}", tags=['users'])
@@ -152,10 +155,10 @@ def set_current_user_prefs(project_id: int,
     """
         Set one preference, for project and currently authenticated user.
         -`key`: The preference key
-        -`value`: The value to set this preference to
+        -`value`: The value to set this preference to.
     """
-    sce = UserService()
-    return sce.set_preferences_per_project(current_user, project_id, key, value)
+    with UserService() as sce:
+        return sce.set_preferences_per_project(current_user, project_id, key, value)
 
 
 # TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
@@ -165,8 +168,8 @@ def search_user(current_user: int = Depends(get_current_user),
     """
         Search users using various criteria, search is case insensitive and might contain % chars.
     """
-    sce = UserService()
-    ret = sce.search(current_user, by_name)
+    with UserService() as sce:
+        ret = sce.search(current_user, by_name)
     return ret
 
 
@@ -177,8 +180,8 @@ def get_user(user_id: int,
     """
         Return a single user by its id.
     """
-    sce = UserService()
-    ret = sce.search_by_id(current_user, user_id)
+    with UserService() as sce:
+        ret = sce.search_by_id(current_user, user_id)
     if ret is None:
         raise HTTPException(status_code=404, detail="User not found")
     return ret
@@ -194,9 +197,9 @@ def create_collection(params: CreateCollectionReq,
 
         *Currently only for admins*
     """
-    sce = CollectionsService()
-    with RightsThrower(sce):
-        ret = sce.create(current_user, params)
+    with CollectionsService() as sce:
+        with RightsThrower():
+            ret = sce.create(current_user, params)
     if isinstance(ret, str):
         raise HTTPException(status_code=404, detail=ret)
     # TODO: Mettre les syncs dans les services, moins dégeu
@@ -211,9 +214,9 @@ def search_collection(title: str,
 
         *Currently only for admins*
     """
-    sce = CollectionsService()
-    with RightsThrower(sce):
-        matching_collections = sce.search(current_user, title)
+    with CollectionsService() as sce:
+        with RightsThrower():
+            matching_collections = sce.search(current_user, title)
     return matching_collections
 
 
@@ -224,9 +227,9 @@ def collection_by_title(q: str):
         For published datasets.
         !!! DO NOT MODIFY BEHAVIOR !!!
     """
-    sce = CollectionsService()
-    with RightsThrower(sce):
-        matching_collection = sce.query_by_title(q)
+    with CollectionsService() as sce:
+        with RightsThrower():
+            matching_collection = sce.query_by_title(q)
     return matching_collection
 
 
@@ -238,12 +241,12 @@ def get_collection(collection_id: int,
 
         *Currently only for admins*
     """
-    sce = CollectionsService()
-    with RightsThrower(sce):
-        present_collection = sce.query(current_user, collection_id, for_update=False)
-    if present_collection is None:
-        raise HTTPException(status_code=404, detail="Collection not found")
-    return present_collection
+    with CollectionsService() as sce:
+        with RightsThrower():
+            present_collection = sce.query(current_user, collection_id, for_update=False)
+        if present_collection is None:
+            raise HTTPException(status_code=404, detail="Collection not found")
+        return present_collection
 
 
 @app.put("/collections/{collection_id}", tags=['collections'])
@@ -256,21 +259,21 @@ def update_collection(collection_id: int,
 
         *Currently only for admins*
     """
-    sce = CollectionsService()
-    with RightsThrower(sce):
-        present_collection = sce.query(current_user, collection_id, for_update=True)
-    if present_collection is None:
-        raise HTTPException(status_code=404, detail="Collection not found")
-    # noinspection PyUnresolvedReferences
-    present_collection.update(session=sce.session,
-                              title=collection.title,
-                              project_ids=collection.project_ids,
-                              provider_user=collection.provider_user, contact_user=collection.contact_user,
-                              citation=collection.citation, abstract=collection.abstract,
-                              description=collection.description,
-                              creator_users=collection.creator_users, associate_users=collection.associate_users,
-                              creator_orgs=collection.creator_organisations,
-                              associate_orgs=collection.associate_organisations)
+    with CollectionsService() as sce:
+        with RightsThrower():
+            present_collection = sce.query(current_user, collection_id, for_update=True)
+        if present_collection is None:
+            raise HTTPException(status_code=404, detail="Collection not found")
+        # noinspection PyUnresolvedReferences
+        present_collection.update(session=sce.session,
+                                  title=collection.title,
+                                  project_ids=collection.project_ids,
+                                  provider_user=collection.provider_user, contact_user=collection.contact_user,
+                                  citation=collection.citation, abstract=collection.abstract,
+                                  description=collection.description,
+                                  creator_users=collection.creator_users, associate_users=collection.associate_users,
+                                  creator_orgs=collection.creator_organisations,
+                                  associate_orgs=collection.associate_organisations)
 
 
 @app.get("/collections/{collection_id}/export/emodnet", tags=['collections'], response_model=EMODnetExportRsp)
@@ -295,20 +298,20 @@ def emodnet_format_export(collection_id: int,
 
         *Currently only for admins*
     """
-    sce = EMODnetExport(collection_id, dry_run, with_zeroes, with_computations, auto_morpho)
-    with RightsThrower(sce):
-        return sce.run(current_user)
+    with EMODnetExport(collection_id, dry_run, with_zeroes, with_computations, auto_morpho) as sce:
+        with RightsThrower():
+            return sce.run(current_user)
 
 
 @app.delete("/collections/{collection_id}", tags=['collections'])
 def erase_collection(collection_id: int,
                      current_user: int = Depends(get_current_user)) -> int:
     """
-        Delete the collection, i.e. the precious fields, as the projects are just unliked from the collection.
+        Delete the collection, i.e. the precious fields, as the projects are just linked-at from the collection.
     """
-    sce = CollectionsService()
-    with RightsThrower(sce):
-        return sce.delete(current_user, collection_id)
+    with CollectionsService() as sce:
+        with RightsThrower():
+            return sce.delete(current_user, collection_id)
 
 
 # ######################## END OF COLLECTION
@@ -328,9 +331,9 @@ def search_projects(current_user: Optional[int] = Depends(get_optional_current_u
         - `param` instrument_filter: Only return projects where this instrument was used
         - `param` filter_subset: Only return projects having 'subset' in their names
     """
-    sce = ProjectsService()
-    ret = sce.search(current_user_id=current_user, also_others=also_others, for_managing=for_managing,
-                     title_filter=title_filter, instrument_filter=instrument_filter, filter_subset=filter_subset)
+    with ProjectsService() as sce:
+        ret = sce.search(current_user_id=current_user, also_others=also_others, for_managing=for_managing,
+                         title_filter=title_filter, instrument_filter=instrument_filter, filter_subset=filter_subset)
     return ret
 
 
@@ -342,9 +345,9 @@ def create_project(params: CreateProjectReq,
         The project will be managed by current user.
         The user has to be app administrator or project creator.
     """
-    sce = ProjectsService()
-    with RightsThrower(sce):
-        ret = sce.create(current_user, params)
+    with ProjectsService() as sce:
+        with RightsThrower():
+            ret = sce.create(current_user, params)
     if isinstance(ret, str):
         raise HTTPException(status_code=404, detail=ret)
     return ret
@@ -357,9 +360,10 @@ def project_subset(project_id: int,
     """
         Subset a project into another one.
     """
-    sce = SubsetServiceOnProject(project_id, params)
-    with RightsThrower(sce):
-        return sce.run(current_user)
+    with SubsetServiceOnProject(project_id, params) as sce:
+        with RightsThrower():
+            ret = sce.run(current_user)
+    return ret
 
 
 @app.get("/projects/{project_id}", tags=['projects'], response_model=ProjectModel)
@@ -369,11 +373,11 @@ def project_query(project_id: int,
     """
         Read project if it exists for current user, eventually for managing it.
     """
-    sce = ProjectsService()
-    for_managing = bool(for_managing)
-    with RightsThrower(sce):
-        ret = sce.query(current_user, project_id, for_managing, for_update=False)
-    return ret
+    with ProjectsService() as sce:
+        for_managing = bool(for_managing)
+        with RightsThrower():
+            ret = sce.query(current_user, project_id, for_managing, for_update=False)
+        return ret
 
 
 @app.get("/project_set/taxo_stats", tags=['projects'], response_model=List[ProjectTaxoStatsModel])  # type: ignore
@@ -387,15 +391,15 @@ def project_set_get_stats(ids: str,
         If several `taxa_ids` are provided, one stat record will be returned per requested taxa, if populated.
         If `taxa_ids` is 'all', all valued taxa in the project(s) are returned.
     """
-    sce = ProjectsService()
-    num_prj_ids = _split_num_list(ids)
-    if taxa_ids == 'all':
-        num_taxa_ids = taxa_ids
-    else:
-        num_taxa_ids = _split_num_list(taxa_ids)
-    with RightsThrower(sce):
-        ret = sce.read_stats(current_user, num_prj_ids, num_taxa_ids)
-    return ret
+    with ProjectsService() as sce:
+        num_prj_ids = _split_num_list(ids)
+        if taxa_ids == 'all':
+            num_taxa_ids = taxa_ids
+        else:
+            num_taxa_ids = _split_num_list(taxa_ids)
+        with RightsThrower():
+            ret = sce.read_stats(current_user, num_prj_ids, num_taxa_ids)
+        return ret
 
 
 @app.get("/project_set/user_stats", tags=['projects'], response_model=List[ProjectUserStatsModel])  # type: ignore
@@ -404,11 +408,11 @@ def project_set_get_user_stats(ids: str,
     """
         Read projects user statistics.
     """
-    sce = ProjectsService()
-    num_ids = _split_num_list(ids)
-    with RightsThrower(sce):
-        ret = sce.read_user_stats(current_user, num_ids)
-    return ret
+    with ProjectsService() as sce:
+        num_ids = _split_num_list(ids)
+        with RightsThrower():
+            ret = sce.read_user_stats(current_user, num_ids)
+        return ret
 
 
 @app.post("/projects/{project_id}/dump", tags=['projects'], include_in_schema=False)  # pragma:nocover
@@ -419,10 +423,10 @@ def project_dump(project_id: int,
         Dump the project in JSON form. Internal so far.
     """
     # TODO: Use a StreamingResponse to avoid buffering
-    sce = JsonDumper(current_user, project_id, filters)
-    # TODO: Finish. lol.
-    import sys
-    return sce.run(sys.stdout)
+    with JsonDumper(current_user, project_id, filters) as sce:
+        # TODO: Finish. lol.
+        import sys
+        return sce.run(sys.stdout)
 
 
 @app.post("/projects/{project_id}/merge", tags=['projects'], response_model=MergeRsp)
@@ -435,9 +439,9 @@ def project_merge(project_id: int,
         all its objects gone and will be erased.
         - param `dry_run`: If set, then only a diagnostic of doability will be done.
     """
-    sce = MergeService(project_id, source_project_id, dry_run)
-    with RightsThrower(sce):
-        return sce.run(current_user)
+    with MergeService(project_id, source_project_id, dry_run) as sce:
+        with RightsThrower():
+            return sce.run(current_user)
 
 
 @app.get("/projects/{project_id}/check", tags=['projects'])
@@ -446,9 +450,9 @@ def project_check(project_id: int,
     """
         Check consistency of a project.
     """
-    sce = ProjectConsistencyChecker(project_id)
-    with RightsThrower(sce):
-        return sce.run(current_user)
+    with ProjectConsistencyChecker(project_id) as sce:
+        with RightsThrower():
+            return sce.run(current_user)
 
 
 @app.get("/projects/{project_id}/stats", tags=['projects'])
@@ -457,9 +461,9 @@ def project_stats(project_id: int,
     """
         Check consistency of a project.
     """
-    sce = ProjectStatsFetcher(project_id)
-    with RightsThrower(sce):
-        return sce.run(current_user)
+    with ProjectStatsFetcher(project_id) as sce:
+        with RightsThrower():
+            return sce.run(current_user)
 
 
 @app.post("/projects/{project_id}/recompute_geo", tags=['projects'])
@@ -468,45 +472,39 @@ def project_recompute_geography(project_id: int,
     """
         Recompute geography information for all samples in project.
     """
-    sce = ProjectsService()
-    with RightsThrower(sce):
-        sce.recompute_geo(current_user, project_id)
+    with ProjectsService() as sce:
+        with RightsThrower():
+            sce.recompute_geo(current_user, project_id)
 
 
-@app.post("/import_prep/{project_id}", tags=['projects'], response_model=ImportPrepRsp)
-def import_preparation(project_id: int,
-                       params: ImportPrepReq,
-                       current_user: int = Depends(get_current_user)):
-    """
-        Prepare/validate the import of an EcoTaxa archive or directory.
-    """
-    sce = ImportAnalysis(project_id, params)
-    with RightsThrower(sce):
-        return sce.run(current_user)
-
-
-@app.post("/import_real/{project_id}", tags=['projects'], response_model=ImportRealRsp)
-def real_import(project_id: int,
-                params: ImportRealReq,
+@app.post("/file_import/{project_id}", tags=['projects'], response_model=ImportRsp)
+def import_file(project_id: int,
+                params: ImportReq,
                 current_user: int = Depends(get_current_user)):
     """
-        Import an EcoTaxa archive or directory.
+        Validate or do a real import of an EcoTaxa archive or directory.
     """
-    sce = RealImport(project_id, params)
-    with RightsThrower(sce):
-        return sce.run(current_user)
+    with FileImport(project_id, params) as sce:
+        with RightsThrower():
+            ret = sce.run(current_user)
+    return ret
 
 
 @app.post("/simple_import/{project_id}", tags=['projects'], response_model=SimpleImportRsp)
 def simple_import(project_id: int,
                   params: SimpleImportReq,
+                  dry_run: bool,
                   current_user: int = Depends(get_current_user)):
     """
         Import images only, with same metadata for all.
+        - param `dry_run`: If set, then _only_ a diagnostic of do-ability will be done.
+            In this case, plain value check.
+        If no dry_run, this call will create a background job.
     """
-    sce = SimpleImport(project_id, params)
-    with RightsThrower(sce):
-        return sce.run(current_user)
+    with SimpleImport(project_id, params, dry_run) as sce:
+        with RightsThrower():
+            ret = sce.run(current_user)
+    return ret
 
 
 @app.delete("/projects/{project_id}", tags=['projects'])
@@ -519,9 +517,9 @@ def erase_project(project_id: int,
                 but emptied from any object/sample/acquisition/process
             Otherwise, no trace of the project will remain in the database.
     """
-    sce = ProjectsService()
-    with RightsThrower(sce):
-        return sce.delete(current_user, project_id, only_objects)
+    with ProjectsService() as sce:
+        with RightsThrower():
+            return sce.delete(current_user, project_id, only_objects)
 
 
 @app.put("/projects/{project_id}", tags=['projects'])
@@ -532,24 +530,24 @@ def update_project(project_id: int,
         Update the project.
         Note that some fields will NOT be updated and simply ignored, e.g. *free_cols.
     """
-    sce = ProjectsService()
+    with ProjectsService() as sce:
+        with RightsThrower():
+            present_project: ProjectBO = sce.query(current_user, project_id, for_managing=True, for_update=True)
 
-    with RightsThrower(sce):
-        present_project: ProjectBO = sce.query(current_user, project_id, for_managing=True, for_update=True)
+        with ValidityThrower():
+            # noinspection PyUnresolvedReferences
+            present_project.update(session=sce.session,
+                                   title=project.title, visible=project.visible, status=project.status,
+                                   projtype=project.projtype,
+                                   init_classif_list=project.init_classif_list,
+                                   classiffieldlist=project.classiffieldlist, popoverfieldlist=project.popoverfieldlist,
+                                   cnn_network_id=project.cnn_network_id, comments=project.comments,
+                                   contact=project.contact,
+                                   managers=project.managers, annotators=project.annotators, viewers=project.viewers,
+                                   license_=project.license)
 
-    with ValidityThrower():
-        # noinspection PyUnresolvedReferences
-        present_project.update(session=sce.session,
-                               title=project.title, visible=project.visible, status=project.status,
-                               projtype=project.projtype,
-                               init_classif_list=project.init_classif_list,
-                               classiffieldlist=project.classiffieldlist, popoverfieldlist=project.popoverfieldlist,
-                               cnn_network_id=project.cnn_network_id, comments=project.comments,
-                               contact=project.contact,
-                               managers=project.managers, annotators=project.annotators, viewers=project.viewers,
-                               license_=project.license)
-    DBSyncService(Project, Project.projid, project_id).wait()
-    DBSyncService(ProjectPrivilege, ProjectPrivilege.projid, project_id).wait()
+    with DBSyncService(Project, Project.projid, project_id) as ssce: ssce.wait()
+    with DBSyncService(ProjectPrivilege, ProjectPrivilege.projid, project_id) as ssce: ssce.wait()
 
 
 # ######################## END OF PROJECT
@@ -565,11 +563,11 @@ def samples_search(project_ids: str,
         - project_ids: any(non number)-separated list of project numbers
         - id_pattern: sample id textual pattern. Use * or '' for 'any matches'. Match is case-insensitive.
     """
-    sce = SamplesService()
-    proj_ids = _split_num_list(project_ids)
-    with RightsThrower(sce):
-        ret = sce.search(current_user, proj_ids, id_pattern)
-    return ret
+    with SamplesService() as sce:
+        proj_ids = _split_num_list(project_ids)
+        with RightsThrower():
+            ret = sce.search(current_user, proj_ids, id_pattern)
+        return ret
 
 
 @app.post("/sample_set/update", tags=['samples'])
@@ -580,9 +578,9 @@ def update_samples(req: BulkUpdateReq,
         every impacted sample.
             Return the number of updated entities.
     """
-    sce = SamplesService()
-    with RightsThrower(sce):
-        return sce.update_set(current_user, req.target_ids, req.updates)
+    with SamplesService() as sce:
+        with RightsThrower():
+            return sce.update_set(current_user, req.target_ids, req.updates)
 
 
 @app.get("/sample/{sample_id}", tags=['samples'], response_model=SampleModel)
@@ -592,12 +590,12 @@ def sample_query(sample_id: int,
     """
         Read a single object.
     """
-    sce = SamplesService()
-    with RightsThrower(sce):
-        ret = sce.query(current_user, sample_id)
-    if ret is None:
-        raise HTTPException(status_code=404, detail="Sample not found")
-    return ret
+    with SamplesService() as sce:
+        with RightsThrower():
+            ret = sce.query(current_user, sample_id)
+        if ret is None:
+            raise HTTPException(status_code=404, detail="Sample not found")
+        return ret
 
 
 # ######################## END OF SAMPLE
@@ -609,10 +607,10 @@ def acquisitions_search(project_id: int,
     """
         Read all acquisitions for a project.
     """
-    sce = AcquisitionsService()
-    with RightsThrower(sce):
-        ret = sce.search(current_user, project_id)
-    return ret
+    with AcquisitionsService() as sce:
+        with RightsThrower():
+            ret = sce.search(current_user, project_id)
+        return ret
 
 
 @app.post("/acquisition_set/update", tags=['acquisitions'])
@@ -622,9 +620,9 @@ def update_acquisitions(req: BulkUpdateReq,
         Do the required update for each acquisition in the set.
             Return the number of updated entities.
     """
-    sce = AcquisitionsService()
-    with RightsThrower(sce):
-        return sce.update_set(current_user, req.target_ids, req.updates)
+    with AcquisitionsService() as sce:
+        with RightsThrower():
+            return sce.update_set(current_user, req.target_ids, req.updates)
 
 
 @app.get("/acquisition/{acquisition_id}", tags=['acquisitions'], response_model=AcquisitionModel)
@@ -634,12 +632,12 @@ def acquisition_query(acquisition_id: int,
     """
         Read a single object.
     """
-    sce = AcquisitionsService()
-    with RightsThrower(sce):
-        ret = sce.query(current_user, acquisition_id)
-    if ret is None:
-        raise HTTPException(status_code=404, detail="Acquisition not found")
-    return ret
+    with AcquisitionsService() as sce:
+        with RightsThrower():
+            ret = sce.query(current_user, acquisition_id)
+        if ret is None:
+            raise HTTPException(status_code=404, detail="Acquisition not found")
+        return ret
 
 
 # ######################## END OF ACQUISITION
@@ -650,11 +648,11 @@ def instrument_query(project_ids: str) \
     """
         Query for instruments, inside specific project(s).
     """
-    sce = InstrumentsService()
-    proj_ids = _split_num_list(project_ids)
-    with RightsThrower(sce):
-        ret = sce.query(proj_ids)
-    return ret
+    with InstrumentsService() as sce:
+        proj_ids = _split_num_list(project_ids)
+        with RightsThrower():
+            ret = sce.query(proj_ids)
+        return ret
 
 
 # ######################## END OF INSTRUMENT
@@ -666,9 +664,9 @@ def update_processes(req: BulkUpdateReq,
         Do the required update for each process in the set.
             Return the number of updated entities.
     """
-    sce = ProcessesService()
-    with RightsThrower(sce):
-        return sce.update_set(current_user, req.target_ids, req.updates)
+    with ProcessesService() as sce:
+        with RightsThrower():
+            return sce.update_set(current_user, req.target_ids, req.updates)
 
 
 @app.get("/process/{process_id}", tags=['processes'], response_model=ProcessModel)
@@ -678,16 +676,15 @@ def process_query(process_id: int,
     """
         Read a single object.
     """
-    sce = ProcessesService()
-    with RightsThrower(sce):
-        ret = sce.query(current_user, process_id)
-    if ret is None:
-        raise HTTPException(status_code=404, detail="Process not found")
-    return ret
+    with ProcessesService() as sce:
+        with RightsThrower():
+            ret = sce.query(current_user, process_id)
+        if ret is None:
+            raise HTTPException(status_code=404, detail="Process not found")
+        return ret
 
 
 # ######################## END OF PROCESS
-
 
 # TODO: Should be app.get, but for this we need a way to express
 #  that each field in ProjectFilter is part of the params
@@ -714,27 +711,28 @@ def get_object_set(project_id: int,
             - order_field will order the result using given field, If prefixed with "-" then it will be reversed.
             - window_start & window_size allows to return only a slice of the result.
 
-        Fields follow the naming convention: `prefix.field`. Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.
+        Fields follow the naming convention: `prefix.field`.
+            Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.
             - Column obj.imgcount contains the total count of images for the object.
     """
     return_fields = None
     if fields is not None:
         return_fields = fields.split(",")
-    sce = ObjectManager()
-    with RightsThrower(sce):
-        rsp = ObjectSetQueryRsp()
-        obj_with_parents, details, total = sce.query(current_user, project_id, filters,
-                                                     return_fields, order_field,
-                                                     window_start, window_size)
-    rsp.total_ids = total
-    rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
-    rsp.acquisition_ids = [with_p[1] for with_p in obj_with_parents]
-    rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
-    rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
-    rsp.details = details
-    # TODO: Despite the ORJSON encode above, this response is still quite slow due to many calls
-    # to def jsonable_encoder (in FastAPI encoders.py)
-    return rsp
+    with ObjectManager() as sce:
+        with RightsThrower():
+            rsp = ObjectSetQueryRsp()
+            obj_with_parents, details, total = sce.query(current_user, project_id, filters,
+                                                         return_fields, order_field,
+                                                         window_start, window_size)
+        rsp.total_ids = total
+        rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
+        rsp.acquisition_ids = [with_p[1] for with_p in obj_with_parents]
+        rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
+        rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
+        rsp.details = details
+        # TODO: Despite the ORJSON encode above, this response is still quite slow due to many calls
+        # to def jsonable_encoder (in FastAPI encoders.py)
+        return rsp
 
 
 @app.post("/object_set/{project_id}/summary", tags=['objects'], response_model=ObjectSetSummaryRsp)
@@ -750,12 +748,12 @@ def get_object_set_summary(project_id: int,
             - Number of Dubious ones
             - Number of Predicted ones
     """
-    sce = ObjectManager()
-    with RightsThrower(sce):
-        rsp = ObjectSetSummaryRsp()
-        rsp.total_objects, rsp.validated_objects, rsp.dubious_objects, rsp.predicted_objects \
-            = sce.summary(current_user, project_id, filters, only_total)
-    return rsp
+    with ObjectManager() as sce:
+        with RightsThrower():
+            rsp = ObjectSetSummaryRsp()
+            rsp.total_objects, rsp.validated_objects, rsp.dubious_objects, rsp.predicted_objects \
+                = sce.summary(current_user, project_id, filters, only_total)
+        return rsp
 
 
 @app.post("/object_set/{project_id}/reset_to_predicted", tags=['objects'], response_model=None)
@@ -765,12 +763,13 @@ def reset_object_set_to_predicted(project_id: int,
     """
         Reset to Predicted all objects for the given project with the filters.
     """
-    sce = ObjectManager()
-    with RightsThrower(sce):
-        return sce.reset_to_predicted(current_user, project_id, filters)
+    with ObjectManager() as sce:
+        with RightsThrower():
+            return sce.reset_to_predicted(current_user, project_id, filters)
 
 
-@app.post("/object_set/{project_id}/revert_to_history", tags=['objects'], response_model=ObjectSetRevertToHistoryRsp)
+@app.post("/object_set/{project_id}/revert_to_history", tags=['objects'],
+          response_model=ObjectSetRevertToHistoryRsp)
 def revert_object_set_to_history(project_id: int,
                                  filters: ProjectFiltersModel,
                                  dry_run: bool,
@@ -783,11 +782,11 @@ def revert_object_set_to_history(project_id: int,
         - param `target`: Use null/None for reverting using the last annotation from anyone, or a user id
             for the last annotation from this user.
     """
-    sce = ObjectManager()
-    with RightsThrower(sce):
-        obj_hist, classif_info = sce.revert_to_history(current_user, project_id, filters, dry_run, target)
-    return ObjectSetRevertToHistoryRsp(last_entries=obj_hist,
-                                       classif_info=classif_info)
+    with ObjectManager() as sce:
+        with RightsThrower():
+            obj_hist, classif_info = sce.revert_to_history(current_user, project_id, filters, dry_run, target)
+        return ObjectSetRevertToHistoryRsp(last_entries=obj_hist,
+                                           classif_info=classif_info)
 
 
 @app.post("/object_set/update", tags=['objects'])
@@ -797,9 +796,9 @@ def update_object_set(req: BulkUpdateReq,
         Update all the objects with given IDs and values
         Current user needs Manage right on all projects of specified objects.
     """
-    sce = ObjectManager()
-    with RightsThrower(sce):
-        return sce.update_set(current_user, req.target_ids, req.updates)
+    with ObjectManager() as sce:
+        with RightsThrower():
+            return sce.update_set(current_user, req.target_ids, req.updates)
 
 
 @app.post("/object_set/classify", tags=['objects'])
@@ -809,15 +808,15 @@ def classify_object_set(req: ClassifyReq,
         Change classification and/or qualification for a set of objects.
         Current user needs at least Annotate right on all projects of specified objects.
     """
-    sce = ObjectManager()
     assert len(req.target_ids) == len(req.classifications), "Need the same number of objects and classifications"
-    with RightsThrower(sce):
-        ret, prj_id, changes = sce.classify_set(current_user, req.target_ids, req.classifications,
-                                                req.wanted_qualification)
-    last_classif_ids = [change[2] for change in changes.keys()]  # Recently used are in first
-    UserService().update_classif_mru(current_user, prj_id, last_classif_ids)
-    DBSyncService(ProjectTaxoStat, ProjectTaxoStat.projid, prj_id).wait()
-    return ret
+    with ObjectManager() as sce:
+        with RightsThrower():
+            ret, prj_id, changes = sce.classify_set(current_user, req.target_ids, req.classifications,
+                                                    req.wanted_qualification)
+        last_classif_ids = [change[2] for change in changes.keys()]  # Recently used are in first
+        with UserService() as usce: usce.update_classif_mru(current_user, prj_id, last_classif_ids)
+        with DBSyncService(ProjectTaxoStat, ProjectTaxoStat.projid, prj_id) as ssce: ssce.wait()
+        return ret
 
 
 # TODO: For small lists we could have a GET
@@ -829,16 +828,16 @@ def query_object_set_parents(object_ids: ObjectIDListT,
     """
         Return object ids, with parent ones and projects for the objects in given list.
     """
-    sce = ObjectManager()
-    with RightsThrower(sce):
-        rsp = ObjectSetQueryRsp()
-        obj_with_parents = sce.parents_by_id(current_user, object_ids)
-    rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
-    rsp.acquisition_ids = [with_p[1] for with_p in obj_with_parents]
-    rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
-    rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
-    rsp.total_ids = len(rsp.object_ids)
-    return rsp
+    with ObjectManager() as sce:
+        with RightsThrower():
+            rsp = ObjectSetQueryRsp()
+            obj_with_parents = sce.parents_by_id(current_user, object_ids)
+        rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
+        rsp.acquisition_ids = [with_p[1] for with_p in obj_with_parents]
+        rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
+        rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
+        rsp.total_ids = len(rsp.object_ids)
+        return rsp
 
 
 @app.delete("/object_set/", tags=['objects'])
@@ -848,9 +847,9 @@ def erase_object_set(object_ids: ObjectIDListT,
         Delete the objects with given object ids.
         Current user needs Manage right on all projects of specified objects.
     """
-    sce = ObjectManager()
-    with RightsThrower(sce):
-        return sce.delete(current_user, object_ids)
+    with ObjectManager() as sce:
+        with RightsThrower():
+            return sce.delete(current_user, object_ids)
 
 
 @app.get("/object/{object_id}", tags=['object'], response_model=ObjectModel)
@@ -860,12 +859,12 @@ def object_query(object_id: int,
     """
         Read a single object. Anonymous reader can do if the project has the right rights :)
     """
-    sce = ObjectService()
-    with RightsThrower(sce):
-        ret = sce.query(current_user, object_id)
-    if ret is None:
-        raise HTTPException(status_code=404, detail="Object not found")
-    return ret
+    with ObjectService() as sce:
+        with RightsThrower():
+            ret = sce.query(current_user, object_id)
+        if ret is None:
+            raise HTTPException(status_code=404, detail="Object not found")
+        return ret
 
 
 @app.get("/object/{object_id}/history", tags=['object'],
@@ -876,16 +875,15 @@ def object_query_history(object_id: int,
     """
         Read a single object's history.
     """
-    sce = ObjectService()
-    with RightsThrower(sce):
-        ret = sce.query_history(current_user, object_id)
-    if ret is None:
-        raise HTTPException(status_code=404, detail="Object not found")
-    return ret
+    with ObjectService() as sce:
+        with RightsThrower():
+            ret = sce.query_history(current_user, object_id)
+        if ret is None:
+            raise HTTPException(status_code=404, detail="Object not found")
+        return ret
 
 
 # ######################## END OF OBJECT
-
 
 @app.get("/taxa", tags=['Taxonomy Tree'], response_model=List[TaxonModel])
 async def query_root_taxa() \
@@ -893,9 +891,9 @@ async def query_root_taxa() \
     """
         Return all taxa with no parent.
     """
-    sce = TaxonomyService()
-    ret = sce.query_roots()
-    return ret
+    with TaxonomyService() as sce:
+        ret = sce.query_roots()
+        return ret
 
 
 @app.get("/taxa/status", tags=['Taxonomy Tree'], response_model=TaxonomyTreeStatus)
@@ -903,9 +901,9 @@ async def taxa_tree_status(current_user: int = Depends(get_current_user)):
     """
         Return the status of taxonomy tree w/r to freshness.
     """
-    sce = TaxonomyService()
-    refresh_date = sce.status(_current_user_id=current_user)
-    return TaxonomyTreeStatus(last_refresh=refresh_date.isoformat() if refresh_date else None)
+    with TaxonomyService() as sce:
+        refresh_date = sce.status(_current_user_id=current_user)
+        return TaxonomyTreeStatus(last_refresh=refresh_date.isoformat() if refresh_date else None)
 
 
 @app.get("/taxon/{taxon_id}", tags=['Taxonomy Tree'], response_model=TaxonModel)
@@ -915,9 +913,9 @@ async def query_taxa(taxon_id: int,
     """
         Information about a single taxon, including its lineage.
     """
-    sce = TaxonomyService()
-    ret = sce.query(taxon_id)
-    return ret
+    with TaxonomyService() as sce:
+        ret = sce.query(taxon_id)
+        return ret
 
 
 @app.get("/taxon_set/search", tags=['Taxonomy Tree'], response_model=List[TaxaSearchRsp])
@@ -938,9 +936,9 @@ async def search_taxa(query: str,
         - otherwise, a full search is done. Results are ordered so that taxa in the project list are in first,
             and are signalled as such in the response.
     """
-    sce = TaxonomyService()
-    ret = sce.search(current_user_id=current_user, prj_id=project_id, query=query)
-    return ret
+    with TaxonomyService() as sce:
+        ret = sce.search(current_user_id=current_user, prj_id=project_id, query=query)
+        return ret
 
 
 @app.get("/taxon_set/query", tags=['Taxonomy Tree'], response_model=List[TaxonModel])
@@ -951,10 +949,10 @@ async def query_taxa_set(ids: str,
         Information about several taxa, including their lineage.
         The separator between numbers is arbitrary non-digit, e.g. ":", "|" or ","
     """
-    sce = TaxonomyService()
-    num_ids = _split_num_list(ids)
-    ret = sce.query_set(num_ids)
-    return ret
+    with TaxonomyService() as sce:
+        num_ids = _split_num_list(ids)
+        ret = sce.query_set(num_ids)
+        return ret
 
 
 @app.get("/worms/{aphia_id}", tags=['Taxonomy Tree'], include_in_schema=False, response_model=TaxonModel)
@@ -964,9 +962,9 @@ async def query_taxa_in_worms(aphia_id: int,
     """
         Information about a single taxon in WoRMS reference, including its lineage.
     """
-    sce = TaxonomyService()
-    ret = sce.query_worms(aphia_id)
-    return ret
+    with TaxonomyService() as sce:
+        ret = sce.query_worms(aphia_id)
+        return ret
 
 
 @app.get("/taxa_ref_change/refresh", tags=['WIP'], include_in_schema=False,
@@ -976,12 +974,12 @@ async def refresh_taxa_db(max_requests: int,
     """
         Refresh local mirror of WoRMS database.
     """
-    sce = TaxonomyChangeService(max_requests)
-    with RightsThrower(sce):
-        tsk = sce.db_refresh(current_user)
-        async_bg_run(tsk)  # Run in bg while streaming logs
-    # Below produces a chunked HTTP encoding, which is officially only HTTP 1.1 protocol
-    return StreamingResponse(log_streamer(sce.temp_log, "Done,"), media_type="text/plain")
+    with TaxonomyChangeService(max_requests) as sce:
+        with RightsThrower():
+            tsk = sce.db_refresh(current_user)
+            async_bg_run(tsk)  # Run in bg while streaming logs
+        # Below produces a chunked HTTP encoding, which is officially only HTTP 1.1 protocol
+        return StreamingResponse(log_streamer(sce.temp_log, "Done,"), media_type="text/plain")
 
 
 @app.get("/taxa_ref_change/check/{aphia_id}", tags=['WIP'], include_in_schema=False,
@@ -991,11 +989,11 @@ async def check_taxa_db(aphia_id: int,
     """
         Check that the given aphia_id is correctly stored.
     """
-    sce = TaxonomyChangeService(1)
-    with RightsThrower(sce):
-        msg = await sce.check_id(current_user, aphia_id)
-    # Below produces a chunked HTTP encoding, which is officially only HTTP 1.1 protocol
-    return Response(msg, media_type="text/plain")
+    with TaxonomyChangeService(1) as sce:
+        with RightsThrower():
+            msg = await sce.check_id(current_user, aphia_id)
+        # Below produces a chunked HTTP encoding, which is officially only HTTP 1.1 protocol
+        return Response(msg, media_type="text/plain")
 
 
 @app.get("/taxa_ref_change/matches", tags=['WIP'], include_in_schema=False,
@@ -1007,14 +1005,16 @@ async def matching_with_worms_nice(request: Request,
         Show current state of matches - HTML version.
     """
     params = request.query_params
-    sce = TaxonomyChangeService(0)
-    with RightsThrower(sce):
-        # noinspection PyProtectedMember
-        data = sce.matching(current_user, params._dict)
-    return templates.TemplateResponse("worms.html",
-                                      {"request": request, "matches": data, "params": params},
-                                      headers=CRSF_header)
+    with TaxonomyChangeService(0) as sce:
+        with RightsThrower():
+            # noinspection PyProtectedMember
+            data = sce.matching(current_user, params._dict)
+        return templates.TemplateResponse("worms.html",
+                                          {"request": request, "matches": data, "params": params},
+                                          headers=CRSF_header)
 
+
+# ######################## END OF TAXA_REF
 
 @app.get("/admin/images/{project_id}/digest", tags=['WIP'], include_in_schema=False,
          response_model=str)
@@ -1025,10 +1025,10 @@ def digest_project_images(project_id: int,
         Compute digests for images referenced from a project.
     """
     max_digests = 1000 if max_digests is None else max_digests
-    sce = ImageManagerService()
-    with RightsThrower(sce):
-        data = sce.do_digests(current_user, project_id, max_digests)
-    return data
+    with ImageManagerService() as sce:
+        with RightsThrower():
+            data = sce.do_digests(current_user, project_id, max_digests)
+        return data
 
 
 @app.get("/admin/images/digest", tags=['WIP'], include_in_schema=False,
@@ -1040,10 +1040,10 @@ def digest_images(max_digests: Optional[int],
         Compute digests if they are not.
     """
     max_digests = 1000 if max_digests is None else max_digests
-    sce = ImageManagerService()
-    with RightsThrower(sce):
-        data = sce.do_digests(current_user, prj_id=project_id, max_digests=max_digests)
-    return data
+    with ImageManagerService() as sce:
+        with RightsThrower():
+            data = sce.do_digests(current_user, prj_id=project_id, max_digests=max_digests)
+        return data
 
 
 @app.get("/admin/images/cleanup1", tags=['WIP'], include_in_schema=False,
@@ -1055,38 +1055,132 @@ def cleanup_images_1(project_id: int,
         Remove duplicated images inside same object. Probably due to import update bug.
     """
     max_deletes = 10000 if max_deletes is None else max_deletes
-    sce = ImageManagerService()
-    with RightsThrower(sce):
-        data = sce.do_cleanup_dup_same_obj(current_user, prj_id=project_id, max_deletes=max_deletes)
-    return data
+    with ImageManagerService() as sce:
+        with RightsThrower():
+            data = sce.do_cleanup_dup_same_obj(current_user, prj_id=project_id, max_deletes=max_deletes)
+        return data
 
+
+# ######################## END OF ADMIN
+
+@app.get("/jobs/", tags=['jobs'], response_model=List[JobModel])
+def list_jobs(for_admin: bool,
+              current_user: int = Depends(get_current_user)) -> List[JobBO]:
+    """
+        Return the jobs for current user, or all of them if admin and asked for.
+    """
+    with JobCRUDService() as sce:
+        with RightsThrower():
+            ret = sce.list(current_user, for_admin)
+    return ret
+
+
+@app.get("/jobs/{job_id}/", tags=['jobs'], response_model=JobModel)
+def get_job(job_id: int,
+            current_user: int = Depends(get_current_user)) -> JobBO:
+    """
+        Return the job by its id.
+    """
+    with JobCRUDService() as sce:
+        with RightsThrower():
+            ret = sce.query(current_user, job_id)
+        return ret
+
+
+@app.post("/jobs/{job_id}/answer", tags=['jobs'])
+def reply_job_question(job_id: int,
+                       reply: Dict[str, Any],
+                       current_user: int = Depends(get_current_user)) -> None:
+    """
+        Send answers to last question. The job resumes after it receives the reply.
+        Note: It's only about data storage here.
+        If the data is technically NOK e.g. not a JS object, standard 422 error should be thrown.
+        If the data is incorrect from consistency point of view, the job will return in Asking state.
+    """
+    with JobCRUDService() as sce:
+        with RightsThrower():
+            sce.reply(current_user, job_id, reply)
+
+
+@app.get("/jobs/{job_id}/restart", tags=['jobs'])
+def restart_job(job_id: int,
+                current_user: int = Depends(get_current_user)):
+    """
+        Restart the job by its id.
+        The job must be in a restartable state, and be accessible to current user.
+    """
+    with JobCRUDService() as sce:
+        with RightsThrower():
+            sce.restart(current_user, job_id)
+
+
+@app.get("/jobs/{job_id}/log", tags=['jobs'])
+def get_job_log_file(job_id: int,
+                     current_user: int = Depends(get_current_user)) -> FileResponse:
+    """
+        Return the log file produced by given task.
+        The task must belong to requester.
+    """
+    with JobCRUDService() as sce:
+        with RightsThrower():
+            path = sce.get_log_path(current_user, job_id)
+        return FileResponse(str(path))
+
+
+@app.get("/jobs/{job_id}/file", tags=['jobs'], responses={
+    200: {
+        "content": {"application/zip": {}},
+        "description": "Return the produced file.",
+    }
+})
+def get_job_file(job_id: int,
+                 current_user: int = Depends(get_current_user)) -> StreamingResponse:
+    """
+        Return the file produced by given task.
+        The task must belong to requester.
+    """
+    with JobCRUDService() as sce:
+        with RightsThrower():
+            file_like, file_name = sce.get_file_stream(current_user, job_id)
+        headers = {"content-disposition": "attachment; filename=\"" + file_name + "\""}
+        return StreamingResponse(file_like, headers=headers, media_type="application/zip")
+
+
+@app.delete("/jobs/{job_id}", tags=['jobs'])
+def erase_job(job_id: int,
+              current_user: int = Depends(get_current_user)) -> int:
+    """
+        Delete the task, from DB and with associated storage.
+    """
+    with JobCRUDService() as sce:
+        with RightsThrower():
+            return sce.delete(current_user, job_id)
+
+
+# ######################## END OF JOBS
+
+@app.post("/my_files/", tags=['Files'], response_model=str)
+async def put_user_file(file: UploadFile = File(...),
+                        current_user: int = Depends(get_current_user)):
+    """
+        Upload a file for the current user. The returned text will contain a serve-side path
+        which is usable for some file-related operations e.g. import.
+    """
+    with UserFolderService() as sce:
+        with RightsThrower():
+            file_name = await sce.store(current_user, file)
+        return file_name
+
+
+# ######################## END OF FILES
 
 @app.get("/status", tags=['WIP'])
 def system_status(_current_user: int = Depends(get_current_user)) -> Response:
     """
         Report the status, mainly used for verifying that the server is up.
     """
-    sce = StatusService()
-    return Response(sce.run(), media_type="text/plain")
-
-
-@app.get("/tasks/{task_id}/file", tags=['task'], responses={
-    200: {
-        "content": {"application/zip": {}},
-        "description": "Return the file.",
-    }
-})
-def get_task_file(task_id: int,
-                  current_user: int = Depends(get_current_user)) -> StreamingResponse:
-    """
-        Return the file produced by given task.
-        The task must belong to requester.
-    """
-    sce = TaskService()
-    with RightsThrower(sce):
-        file_like, file_name = sce.get_file_stream(current_user, task_id)
-    headers = {"content-disposition": "attachment; filename=\"" + file_name + "\""}
-    return StreamingResponse(file_like, headers=headers, media_type="application/zip")
+    with StatusService() as sce:
+        return Response(sce.run(), media_type="text/plain")
 
 
 @app.get("/error", tags=['misc'])
@@ -1114,7 +1208,8 @@ def used_constants() -> Constants:
         This entry point will return useful strings for user dialog.
         Now also used for values extracted from Config.
     """
-    return ConstantsService().get()
+    with ConstantsService() as sce:
+        return sce.get()
 
 
 # @app.get("/loadtest", tags=['WIP'], include_in_schema=False)
@@ -1124,15 +1219,24 @@ def used_constants() -> Constants:
 #         See if we just wait or fail to serve:
 #         httperf --server=localhost --port=8000 --uri=/loadtest --num-conns=1000 --num-calls=10
 #     """
-#     sce = StatusService()
+#     with StatusService() as sce:
 #     import time
 #     time.sleep(random()/10)
 #     return Response(sce.run(), media_type="text/plain")
 
-
 app.add_exception_handler(status.HTTP_500_INTERNAL_SERVER_ERROR, internal_server_error_handler)
 
 dump_openapi(app, __file__)
+
+
+@app.on_event("startup")
+def startup_event():
+    JobScheduler.launch_at_interval(1)
+
+
+@app.on_event("shutdown")
+def shutdown_event():
+    JobScheduler.shutdown()
 
 
 def _split_num_list(ids):

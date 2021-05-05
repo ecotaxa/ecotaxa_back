@@ -17,13 +17,13 @@ from BO.Sample import SampleIDT
 from DB import ObjectHeader, Sample, Acquisition, Project, ParticleProject
 from DB.helpers.ORM import orm_equals, any_, all_, Query
 from DB.helpers.Postgres import values_cte
-from helpers.DynamicLogs import get_logger, LogsSwitcher
+from helpers.DynamicLogs import get_logger, LogsSwitcher, LogEmitter
 from .helpers.Service import Service
 
 logger = get_logger(__name__)
 
 
-class MergeService(Service):
+class MergeService(Service, LogEmitter):
     """
         Merge operation, move everything from source into destination project.
     """
@@ -37,6 +37,9 @@ class MergeService(Service):
         # work vars
         self.remap_operations: Dict[MappedTableTypeT, List[RemapOp]] = {}
         self.dest_augmented_mappings = ProjectMapping()
+
+    def log_file_path(self) -> str:
+        return "merge_%d_in_%d.log" % (self.prj_id, self.src_prj_id)
 
     def run(self, current_user_id: int) -> MergeRsp:
         with LogsSwitcher(self):

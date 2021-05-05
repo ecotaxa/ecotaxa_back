@@ -1,4 +1,3 @@
-from API_operations.CRUD.Users import UserService
 from BO.User import UserBO
 
 

@@ -47,6 +47,7 @@ class User(Model):
     def find_users(session: Session, names: List[str], emails: List[str], found_users: dict):
         """
             Find the users in DB, by name or email.
+            :param found_users: A dict in
         """
         res: ResultProxy = session.execute(
             "SELECT id, LOWER(name), LOWER(email) "

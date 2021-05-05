@@ -39,6 +39,7 @@ class Connection(object):
                                           executemany_mode='batch',
                                           # Not needed anyway it's not async anywhere
                                           # pool_size=20, max_overflow=5,
+                                          # This way we can restart the DB and re-establish sessions
                                           pool_pre_ping=True,
                                           connect_args={"application_name": "ecotaxa_back"})
         self.session_factory = sessionmaker(bind=engine)

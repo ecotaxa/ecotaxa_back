@@ -11,7 +11,7 @@ from typing_extensions import TypedDict
 
 from BO.DataLicense import LicenseEnum
 from BO.Project import ProjectUserStats
-from DB import User, Project, Sample, Acquisition, Process
+from DB import User, Project, Sample, Acquisition, Process, Job
 from DB.Acquisition import ACQUISITION_FREE_COLUMNS
 from DB.Collection import Collection
 from DB.Process import PROCESS_FREE_COLUMNS
@@ -288,4 +288,30 @@ included in the citation.""",
 class CollectionModel(_CollectionModelFromDB, _AddedToCollection):  # type:ignore
     """
         Collection + computed
+    """
+
+
+_JobModelFromDB = sqlalchemy_to_pydantic(Job, exclude=[Job.params.name,
+                                                       Job.result.name,
+                                                       Job.messages.name,
+                                                       Job.question.name,
+                                                       Job.reply.name,
+                                                       Job.inside.name])
+
+
+class _AddedToJob(BaseModel):
+    """
+        What's added to a Job compared to the plain DB record.
+    """
+    params: Dict[str, Any] = Field(title="Creation parameters", default={})
+    result: Dict[str, Any] = Field(title="Final result of the run", default={})
+    errors: List[str] = Field(title="The errors seen during last step", default=[])
+    question: Dict[str, Any] = Field(title="The data provoking job move to Asking state", default={})
+    reply: Dict[str, Any] = Field(title="The data provided as a reply to the question", default={})
+    inside: Dict[str, Any] = Field(title="Internal state of the job", default={})
+
+
+class JobModel(_JobModelFromDB, _AddedToJob):  # type:ignore
+    """
+        All from DB table
     """

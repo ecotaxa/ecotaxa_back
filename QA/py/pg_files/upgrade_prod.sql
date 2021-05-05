@@ -970,6 +970,30 @@ UPDATE alembic_version SET version_num='910b679215ca' WHERE alembic_version.vers
 
 COMMIT;
 
+-- Running upgrade 910b679215ca -> 2d37ac7bcaca
+
+CREATE TABLE job (
+    id SERIAL NOT NULL,
+    owner_id INTEGER,
+    type VARCHAR(80) NOT NULL,
+    state VARCHAR(80),
+    step INTEGER,
+    progress_pct INTEGER,
+    progress_msg VARCHAR,
+    params VARCHAR NOT NULL,
+    messages VARCHAR NOT NULL,
+    question VARCHAR,
+    reply VARCHAR,
+    inside VARCHAR,
+    result VARCHAR,
+    creation_date timestamp without time zone NOT NULL,
+    updated_on timestamp without time zone NOT NULL,
+    PRIMARY KEY (id),
+    FOREIGN KEY(owner_id) REFERENCES users (id)
+);
+
+UPDATE alembic_version SET version_num='2d37ac7bcaca' WHERE alembic_version.version_num = '910b679215ca';
+
 ------- Leave on tail
 
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO readerole;

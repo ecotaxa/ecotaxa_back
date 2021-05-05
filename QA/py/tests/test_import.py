@@ -2,36 +2,36 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-
-
+import json
 import logging
-import shutil
 from os.path import dirname, realpath
 from pathlib import Path
 
 import pytest
+from API_models.crud import *
 # noinspection PyPackageRequirements
 from API_models.imports import *
-from API_models.crud import *
+# noinspection PyPackageRequirements
+from API_operations.AsciiDump import AsciiDumper
+# noinspection PyPackageRequirements
+from API_operations.CRUD.Jobs import JobCRUDService
 # Import services
 # noinspection PyPackageRequirements
 from API_operations.CRUD.Projects import ProjectsService
-# noinspection PyPackageRequirements
-from API_operations.CRUD.Tasks import TaskService
-# noinspection PyPackageRequirements
-from API_operations.imports.Import import ImportAnalysis, RealImport
-# noinspection PyPackageRequirements
-from API_operations.imports.SimpleImport import SimpleImport
-from API_operations.AsciiDump import AsciiDumper
 from API_operations.Consistency import ProjectConsistencyChecker
-
+# noinspection PyPackageRequirements
+from API_operations.imports.Import import FileImport
+from API_operations.JsonDumper import JsonDumper
+from DB.Job import DBJobStateEnum
 # # noinspection PyUnresolvedReferences
 # from tests.config_fixture import config
 # # noinspection PyUnresolvedReferences
 # from tests.db_fixture import database
 from starlette import status
 
-from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID, CREATOR_AUTH, CREATOR_USER_ID
+from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID
+from tests.test_jobs import wait_for_stable, check_job_ok, get_job_errors, check_job_errors, api_wait_for_stable_job, \
+    FILE_IMPORT_URL, api_check_job_errors, api_check_job_questions
 
 DATA_DIR = (Path(dirname(realpath(__file__))) / ".." / "data").resolve()
 PLAIN_FILE = DATA_DIR / "import_test.zip"
@@ -51,62 +51,70 @@ EMPTY_TSV_IN_UPD_DIR = DATA_DIR / "import_test_upd_empty"
 AMBIG_DIR = DATA_DIR / "import de categories ambigues"
 
 
+def create_project(owner, title):
+    with ProjectsService() as sce:
+        prj_id = sce.create(owner, CreateProjectReq(title=title))
+        return prj_id
+
+
+def search_unique_project(asker, title):
+    with ProjectsService() as sce:
+        srch = sce.search(current_user_id=asker, title_filter=title)
+        assert len(srch) == 1
+        return srch[0]
+
+
 def check_project(prj_id: int):
-    problems = ProjectConsistencyChecker(prj_id).run(ADMIN_USER_ID)
+    with ProjectConsistencyChecker(prj_id) as sce:
+        problems = sce.run(ADMIN_USER_ID)
     assert problems == []
 
 
-def real_params_from_prep_out(task_id, prep_out: ImportPrepRsp) -> ImportRealReq:
-    return ImportRealReq(task_id=task_id,
-                         **prep_out.dict(exclude={'warnings', 'errors'}))
-
-
-def real_params_from_json_prep_out(task_id, prep_out: Dict) -> Dict:
-    ret = {"task_id": task_id}
-    ret.update(prep_out)
-    for exc in ('warnings', 'errors'):
-        if exc in ret:
-            del ret[exc]
-    return ret
+def dump_project(asker: int, prj_id: int, fd: Any):
+    with JsonDumper(asker, prj_id, {}) as sce:
+        sce.run(fd)
 
 
 def do_import(prj_id: int, source_path: str, user_id: int):
     """ Import helper for tests """
-    # Create a task for this run
-    task_id = TaskService().create()
     # Do preparation, preparation
-    params = ImportPrepReq(task_id=task_id,
-                           source_path=str(source_path))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(user_id)
-    # Do real import, reusing prep output
-    params = real_params_from_prep_out(task_id, prep_out)
-    # Map any not found to admin
-    for usr in params.found_users.keys():
-        params.found_users[usr] = {'id': 1}
-    RealImport(prj_id, params).run(user_id)
+    params = ImportReq(source_path=str(source_path))
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(user_id)
+    job = wait_for_stable(rsp.job_id)
+    job = fill_in_if_missing(job)
+    check_job_ok(job)
     return prj_id
+
+
+def fill_in_if_missing(job):
+    if job.state == DBJobStateEnum.Asking:
+        job_id = job.id
+        # Missing user or taxa -> should proceed to step 2 for filling missing
+        assert job.progress_msg == "Some users or taxonomic references could not be matched"
+        # Simulate a missing user and map him to admin
+        with JobCRUDService() as sce:
+            sce.reply(ADMIN_USER_ID, job_id, {"users": {"admin4test": 1,
+                                                        "elizandro rodriguez": 1},
+                                              "taxa": {}})
+        return wait_for_stable(job_id)
+    else:
+        return job
 
 
 @pytest.mark.parametrize("title", ["Test Create Update"])
 def test_import(config, database, caplog, title):
     caplog.set_level(logging.DEBUG)
     # Create a dest project
-    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title=title))
-    # Create a task for this run
-    task_id = TaskService().create()
-    # user_sce = UserService()
-    # Create an admin for mapping
-    # Now in SQL
-    # user_sce.create("admin", "me@home.fr")
-    # Do preparation, preparation
-    params = ImportPrepReq(task_id=task_id,
-                           source_path=str(PLAIN_FILE))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
-    # Do real import, reusing prep output
-    params = real_params_from_prep_out(task_id, prep_out)
-    # Simulate a missing user and map it to admin
-    params.found_users['elizandro rodriguez'] = {'id': 1}
-    RealImport(prj_id, params).run(ADMIN_USER_ID)
+    prj_id = create_project(ADMIN_USER_ID, title)
+    # Prepare import request
+    params = ImportReq(source_path=str(PLAIN_FILE))
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    job = fill_in_if_missing(job)
+    # assert (job.state, job.progress_pct, job.progress_msg) == (DBJobStateEnum.Finished, 100, "Done")
+    # assert job.result["rowcount"] == 8
     return prj_id
 
 
@@ -115,18 +123,18 @@ def test_import_again_skipping(config, database, caplog):
     """ Re-import similar files into same project
         CANNOT RUN BY ITSELF """
     caplog.set_level(logging.DEBUG)
-    task_id = TaskService().create()
-    srch = ProjectsService().search(current_user_id=ADMIN_USER_ID,
-                                    title_filter="Test Create Update")
-    assert len(srch) == 1
-    prj_id = srch[0].projid  # <- need the project from first test
+    srch = search_unique_project(ADMIN_USER_ID, "Test Create Update")
+    prj_id = srch.projid  # <- need the project from first test
     # Do preparation
-    params = ImportPrepReq(task_id=task_id,
-                           source_path=str(PLAIN_FILE),
-                           skip_loaded_files=True,
-                           skip_existing_objects=True)
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
-    errs = prep_out.errors
+    params = ImportReq(source_path=str(PLAIN_FILE),
+                       skip_loaded_files=True,
+                       skip_existing_objects=True)
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    job = fill_in_if_missing(job)
+    check_job_errors(job)
+    errs = get_job_errors(job)
     found_err = False
     for an_err in errs:
         if "all TSV files were imported before" in an_err:
@@ -139,18 +147,17 @@ def test_import_again_irrelevant_skipping(config, database, caplog):
     """ Re-import similar files into same project
         CANNOT RUN BY ITSELF """
     caplog.set_level(logging.DEBUG)
-    task_id = TaskService().create()
-    srch = ProjectsService().search(current_user_id=ADMIN_USER_ID,
-                                    title_filter="Test Create Update")
-    assert len(srch) == 1
-    prj_id = srch[0].projid  # <- need the project from first test
+    srch = search_unique_project(ADMIN_USER_ID, "Test Create Update")
+    prj_id = srch.projid  # <- need the project from first test
     # Do preparation
-    params = ImportPrepReq(task_id=task_id,
-                           source_path=str(EMPTY_TSV_IN_UPD_DIR),
-                           skip_loaded_files=True,
-                           skip_existing_objects=True)
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
-    errs = prep_out.errors
+    params = ImportReq(source_path=str(EMPTY_TSV_IN_UPD_DIR),
+                       skip_loaded_files=True,
+                       skip_existing_objects=True)
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    check_job_errors(job)
+    errs = get_job_errors(job)
     found_err = False
     for an_err in errs:
         if "new TSV file(s) are not compliant" in an_err:
@@ -165,17 +172,17 @@ def test_import_a_bit_more_skipping(config, database, caplog, title):
         The extra one has missing values in the TSV.
         CANNOT RUN BY ITSELF """
     caplog.set_level(logging.DEBUG)
-    task_id = TaskService().create()
-    srch = ProjectsService().search(current_user_id=ADMIN_USER_ID,
-                                    title_filter=title)
-    assert len(srch) == 1
-    prj_id = srch[0].projid  # <- need the project from first test
+    srch = search_unique_project(ADMIN_USER_ID, title)
+    prj_id = srch.projid  # <- need the project from first test
     # Do preparation
-    params = ImportPrepReq(task_id=task_id,
-                           source_path=str(PLUS_DIR),
-                           skip_loaded_files=True,
-                           skip_existing_objects=True)
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
+    params = ImportReq(source_path=str(PLUS_DIR),
+                       skip_loaded_files=True,
+                       skip_existing_objects=True)
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    job = fill_in_if_missing(job)
+    check_job_ok(job)
     # warns = preparation_out["wrn"]
     # found_imps = 0
     # for a_warn in warns:
@@ -184,12 +191,12 @@ def test_import_a_bit_more_skipping(config, database, caplog, title):
     # # A single TSV should be analyzed
     # assert found_imps == 1
     # Do real import
-    params = real_params_from_prep_out(task_id, prep_out)
-    params.skip_loaded_files = True
-    params.skip_existing_objects = True
-    # Simulate a missing user and map it to admin
-    params.found_users['elizandro rodriguez'] = {'id': 1}
-    RealImport(prj_id, params).run(ADMIN_USER_ID)
+    # params = real_params_from_prep_out(task_id, prep_out)
+    # params.skip_loaded_files = True
+    # params.skip_existing_objects = True
+    # # Simulate a missing user and map it to admin
+    # params.found_users['elizandro rodriguez'] = {'id': 1}
+    # RealImport(prj_id, params).run(ADMIN_USER_ID)
     # TODO: Assert the extra "object_extra" in TSV in data/import_test_plus/m106_mn01_n3_sml
 
 
@@ -197,13 +204,10 @@ def test_import_again_not_skipping_tsv_skipping_imgs(config, database, caplog):
     """ Re-import into same project, not skipping TSVs
         CANNOT RUN BY ITSELF """
     caplog.set_level(logging.DEBUG)
-    task_id = TaskService().create()
-    srch = ProjectsService().search(current_user_id=ADMIN_USER_ID,
-                                    title_filter="Test Create Update")
-    assert len(srch) == 1
-    prj_id = srch[0].projid  # <- need the project from first test
+    srch = search_unique_project(ADMIN_USER_ID, "Test Create Update")
+    prj_id = srch.projid  # <- need the project from first test
     # Do preparation
-    import_plain(prj_id, task_id)
+    import_plain(prj_id)
     # Check that all went fine
     for a_msg in caplog.records:
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
@@ -211,23 +215,26 @@ def test_import_again_not_skipping_tsv_skipping_imgs(config, database, caplog):
         assert "One more image" not in a_msg.getMessage()
 
 
-def import_plain(prj_id, task_id):
-    params = ImportPrepReq(task_id=task_id,
-                           source_path=str(PLAIN_DIR),
-                           skip_existing_objects=True)
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
-    assert prep_out.errors == []
-    # Do real import
-    params = real_params_from_prep_out(task_id, prep_out)
-    params.skip_existing_objects = True
-    # Simulate a missing user and map it to admin
-    params.found_users['elizandro rodriguez'] = {'id': 1}
-    # 'other' category is ambiguous as it maps (in test DB) to other<living and other<dead
-    params.found_taxa['other'] = 99999  # 'other<dead'
-    # 'ozzeur' category is unknown
-    params.found_taxa['ozzeur'] = 85011  # 'other<living'
-    params.update_mode = True  # TODO, should be in response
-    RealImport(prj_id, params).run(ADMIN_USER_ID)
+def import_plain(prj_id):
+    params = ImportReq(source_path=str(PLAIN_DIR),
+                       skip_existing_objects=True)
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+
+    assert job.state == DBJobStateEnum.Asking
+    assert job.question == {"missing_users": ["admin4test", "elizandro rodriguez"],
+                            "missing_taxa": ["other", "ozzeur"]}
+
+    reply = {"users": {'admin4test': 1,
+                       'elizandro rodriguez': 1},  # Map to admin
+             "taxa": {'other': 99999,  # 'other<dead'
+                      'ozzeur': 85011  # 'other<living'
+                      }}
+    with JobCRUDService() as sce:
+        sce.reply(ADMIN_USER_ID, rsp.job_id, reply)
+    job = wait_for_stable(rsp.job_id)
+    check_job_ok(job)
 
 
 # @pytest.mark.skip()
@@ -235,17 +242,14 @@ def test_import_again_not_skipping_nor_imgs(config, database, caplog):
     """ Re-import into same project, not skipping TSVs or images
         CANNOT RUN BY ITSELF """
     caplog.set_level(logging.DEBUG)
-    task_id = TaskService().create()
-    srch = ProjectsService().search(current_user_id=ADMIN_USER_ID,
-                                    title_filter="Test Create Update")
-    assert len(srch) == 1
-    prj_id = srch[0].projid  # <- need the project from first test
-    # Do preparation
-    params = ImportPrepReq(task_id=task_id,
-                           source_path=str(PLAIN_DIR))
-
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
-    nb_errs = len([an_err for an_err in prep_out.errors
+    srch = search_unique_project(ADMIN_USER_ID, "Test Create Update")
+    prj_id = srch.projid  # <- need the project from first test
+    params = ImportReq(source_path=str(PLAIN_DIR))
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    check_job_errors(job)
+    nb_errs = len([an_err for an_err in get_job_errors(job)
                    if "Duplicate object" in an_err])
     assert nb_errs == 11
 
@@ -254,21 +258,20 @@ def test_import_again_not_skipping_nor_imgs(config, database, caplog):
 def test_equal_dump_prj1(config, database, caplog):
     caplog.set_level(logging.DEBUG)
     out_dump = "prj1.txt"
-    sce = AsciiDumper()
-    sce.run(projid=1, out=out_dump)
+    with AsciiDumper() as sce:
+        sce.run(projid=1, out=out_dump)
 
 
 # @pytest.mark.skip()
 def test_import_update(config, database, caplog):
     """ Update TSVs """
     caplog.set_level(logging.DEBUG)
-    task_id = TaskService().create()
-    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test Import update"))
+    prj_id = create_project(ADMIN_USER_ID, "Test Import update")
 
     # Plain import first
-    import_plain(prj_id, task_id)
-    dump_sce = AsciiDumper()
-    dump_sce.run(projid=prj_id, out='before_upd.txt')
+    import_plain(prj_id)
+    with AsciiDumper() as dump_sce:
+        dump_sce.run(projid=prj_id, out='before_upd.txt')
 
     # Update using initial import data, should do nothing
     do_import_update(prj_id, caplog, 'Yes', str(PLAIN_DIR))
@@ -293,7 +296,8 @@ def test_import_update(config, database, caplog):
     # 1 line corresponds to nothing, on purpose
     nb_notfound = len([msg for msg in caplog.messages if "not found while updating" in msg])
     assert nb_notfound == 2
-    dump_sce.run(projid=prj_id, out='after_upd.txt')
+    with AsciiDumper() as dump_sce:
+        dump_sce.run(projid=prj_id, out='after_upd.txt')
     # Check that all went fine
     for a_msg in caplog.records:
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
@@ -306,30 +310,36 @@ def test_import_update(config, database, caplog):
     assert len(caplog.messages) > 0
     upds = [msg for msg in caplog.messages if msg.startswith("Updating")]
     assert upds == []
-    dump_sce.run(projid=prj_id, out='after_upd_3.txt')
+    with AsciiDumper() as dump_sce:
+        dump_sce.run(projid=prj_id, out='after_upd_3.txt')
 
-    # Ensure that re-updating updates nothing. This is tricky due to floats storage on DB.
 
-
+# Ensure that re-updating updates nothing. This is tricky due to floats storage on DB.
 # @pytest.mark.skip()
 def do_import_update(prj_id, caplog, classif, source=None):
-    task_id = TaskService().create()
     if source is None:
         source = str(UPDATE_DIR)
-    params = ImportPrepReq(task_id=task_id,
-                           skip_existing_objects=True,
-                           update_mode=classif,
-                           source_path=source)
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
-    assert prep_out.errors == []
-    params = real_params_from_prep_out(task_id, prep_out)
-    params.found_users['elizandro rodriguez'] = {'id': 1}
-    params.found_taxa['other'] = 99999  # 'other<dead'
-    params.found_taxa['ozzeur'] = 85011  # 'other<living'
-    params.skip_existing_objects = True
-    params.update_mode = classif
+    params = ImportReq(skip_existing_objects=True,
+                       update_mode=classif,
+                       source_path=source)
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+
+    assert job.state == DBJobStateEnum.Asking
+    assert job.question == {"missing_users": ["admin4test", "elizandro rodriguez"],
+                            "missing_taxa": ["other", "ozzeur"]}
+
+    reply = {"users": {'admin4test': 1,
+                       'elizandro rodriguez': 1},  # Map to admin
+             "taxa": {'other': 99999,  # 'other<dead'
+                      'ozzeur': 85011  # 'other<living'
+                      }}
     caplog.clear()
-    RealImport(prj_id, params).run(ADMIN_USER_ID)
+    with JobCRUDService() as sce:
+        sce.reply(ADMIN_USER_ID, rsp.job_id, reply)
+    job = wait_for_stable(rsp.job_id)
+    check_job_ok(job)
     # Check that all went fine
     for a_msg in caplog.records:
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
@@ -343,16 +353,12 @@ def do_import_update(prj_id, caplog, classif, source=None):
 @pytest.mark.parametrize("title", ["Test LS 2"])
 def test_import_uvp6(config, database, caplog, title):
     caplog.set_level(logging.DEBUG)
-    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title=title))
-    task_id = TaskService().create()
-
-    params = ImportPrepReq(task_id=task_id,
-                           source_path=str(V6_FILE))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
-    params = real_params_from_prep_out(task_id, prep_out)
-    assert len(prep_out.errors) == 0
-    # Do real import
-    RealImport(prj_id, params).run(ADMIN_USER_ID)
+    prj_id = create_project(ADMIN_USER_ID, title)
+    params = ImportReq(source_path=str(V6_FILE))
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    check_job_ok(job)
     # Check that all went fine
     for a_msg in caplog.records:
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
@@ -363,47 +369,51 @@ def test_import_uvp6(config, database, caplog, title):
 def test_equal_dump_prj2(config, database, caplog):
     caplog.set_level(logging.DEBUG)
     out_dump = "prj2.txt"
-    sce = AsciiDumper()
-    sce.run(projid=2, out=out_dump)
+    with AsciiDumper() as sce:
+        sce.run(projid=2, out=out_dump)
 
 
 # @pytest.mark.skip()
 def test_import_empty(config, database, caplog):
     """ Nothing relevant to import """
     caplog.set_level(logging.DEBUG)
-    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test LS 3"))
-    task_id = TaskService().create()
+    prj_id = create_project(ADMIN_USER_ID, "Test LS 3")
 
-    params = ImportPrepReq(task_id=task_id,
-                           source_path=str(EMPTY_DIR))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
-    assert len(prep_out.errors) == 1
+    params = ImportReq(source_path=str(EMPTY_DIR))
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    errors = check_job_errors(job)
+    assert len(errors) == 1
 
 
 # @pytest.mark.skip()
 def test_import_empty_tsv(config, database, caplog):
     """ a TSV but no data """
     caplog.set_level(logging.DEBUG)
-    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test LS 3"))
-    task_id = TaskService().create()
+    prj_id = create_project(ADMIN_USER_ID, "Test LS 3")
 
-    params = ImportPrepReq(task_id=task_id,
-                           source_path=str(EMPTY_TSV_DIR))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
-    assert len(prep_out.errors) == 1
+    params = ImportReq(source_path=str(EMPTY_TSV_DIR))
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    check_job_errors(job)
+    assert len(get_job_errors(job)) == 1
 
 
 # @pytest.mark.skip()
 def test_import_issues(config, database, caplog):
     """ The TSV contains loads of problems """
     caplog.set_level(logging.DEBUG)
-    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test LS 4"))
-    task_id = TaskService().create()
+    prj_id = create_project(ADMIN_USER_ID, "Test LS 4")
 
-    params = ImportPrepReq(task_id=task_id,
-                           source_path=str(ISSUES_DIR))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
-    assert prep_out.errors == [
+    params = ImportReq(source_path=str(ISSUES_DIR))
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    check_job_errors(job)
+    errors = get_job_errors(job)
+    assert errors == [
         "Invalid Header 'nounderscorecol' in file ecotaxa_m106_mn01_n3_sml.tsv. Format must be Table_Field. Field ignored",
         "Invalid Header 'unknown_target' in file ecotaxa_m106_mn01_n3_sml.tsv. Unknown table prefix. Field ignored",
         "Invalid Type '[H]' for Field 'object_wrongtype' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect Type. Field ignored",
@@ -423,13 +433,15 @@ def test_import_issues(config, database, caplog):
 def test_import_classif_issue(config, database, caplog):
     """ The TSV contains an unknown classification id """
     caplog.set_level(logging.DEBUG)
-    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test LS 5"))
-    task_id = TaskService().create()
+    prj_id = create_project(ADMIN_USER_ID, "Test LS 5")
 
-    params = ImportPrepReq(task_id=task_id,
-                           source_path=str(ISSUES_DIR2))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
-    assert prep_out.errors == [
+    params = ImportReq(source_path=str(ISSUES_DIR2))
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    check_job_errors(job)
+    errors = get_job_errors(job)
+    assert errors == [
         "Some specified classif_id don't exist, correct them prior to reload: 99999999"]
 
 
@@ -439,22 +451,20 @@ def test_import_too_many_custom_columns(config, database, caplog):
         Not a realistic case, but it simulates what happens if importing into a project with
          mappings """
     caplog.set_level(logging.DEBUG)
-    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test LS 6"))
-    task_id = TaskService().create()
+    prj_id = create_project(ADMIN_USER_ID, "Test LS 6")
 
-    params = ImportPrepReq(task_id=task_id,
-                           source_path=str(ISSUES_DIR3))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
-    assert prep_out.errors == ['Field acq_cus29, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too '
-                               'many custom fields, or bad type.',
-                               'Field acq_cus30, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too '
-                               'many custom fields, or bad type.',
-                               'Field acq_cus31, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too '
-                               'many custom fields, or bad type.']
-
-
-IMPORT_PREP_URL = "/import_prep/{project_id}"
-IMPORT_REAL_URL = "/import_real/{project_id}"
+    params = ImportReq(source_path=str(ISSUES_DIR3))
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    check_job_errors(job)
+    errors = get_job_errors(job)
+    assert errors == ['Field acq_cus29, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too '
+                      'many custom fields, or bad type.',
+                      'Field acq_cus30, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too '
+                      'many custom fields, or bad type.',
+                      'Field acq_cus31, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too '
+                      'many custom fields, or bad type.']
 
 
 # @pytest.mark.skip()
@@ -462,23 +472,16 @@ def test_import_ambiguous_classification(config, database, fastapi, caplog):
     """ See https://github.com/oceanomics/ecotaxa_dev/issues/87
         Do it via API """
     caplog.set_level(logging.DEBUG)
-    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test LS 7"))
-    task_id = TaskService().create()
+    prj_id = create_project(ADMIN_USER_ID, "Test LS 7")
 
-    url = IMPORT_PREP_URL.format(project_id=prj_id)
-    req = {"task_id": task_id,
-           "source_path": str(AMBIG_DIR)}
+    url = FILE_IMPORT_URL.format(project_id=prj_id)
+    req = {"source_path": str(AMBIG_DIR)}
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
-    prep_out = rsp.json()
-    assert len(prep_out["errors"]) == 0
-
-    url = IMPORT_REAL_URL.format(project_id=prj_id)
-    req = real_params_from_json_prep_out(task_id, prep_out)
-    with pytest.raises(Exception,
-                       match="Column object_annotation_category: no classification of part \(Annelida\) mapped as part \(Annelida\)"):
-        # Do real import, this has to fail as we have unmapped taxonomy
-        rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
+    job_id = rsp.json()["job_id"]
+    api_wait_for_stable_job(fastapi, job_id)
+    questions = api_check_job_questions(fastapi, job_id)
+    assert questions == {"missing_users": [], "missing_taxa": ["part (annelida)", "part"]}
 
 
 # @pytest.mark.skip()
@@ -487,16 +490,13 @@ def test_import_uvp6_zip_in_dir(config, database, caplog):
         An *Images.zip inside a directory.
     """
     caplog.set_level(logging.DEBUG)
-    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test LS 8"))
-    task_id = TaskService().create()
+    prj_id = create_project(ADMIN_USER_ID, "Test LS 8")
 
-    params = ImportPrepReq(task_id=task_id,
-                           source_path=str(V6_DIR))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
-    params = real_params_from_prep_out(task_id, prep_out)
-    assert len(prep_out.errors) == 0
-    # Do real import
-    RealImport(prj_id, params).run(ADMIN_USER_ID)
+    params = ImportReq(source_path=str(V6_DIR))
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    check_job_ok(job)
     # Check that all went fine
     for a_msg in caplog.records:
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
@@ -508,24 +508,21 @@ def test_import_sparse(config, database, caplog):
         Import a sparse file, some columns are missing.
     """
     caplog.set_level(logging.DEBUG)
-    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title="Test Sparse"))
-    task_id = TaskService().create()
+    prj_id = create_project(ADMIN_USER_ID, "Test Sparse")
 
-    params = ImportPrepReq(task_id=task_id,
-                           source_path=str(SPARSE_DIR))
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
-    params = real_params_from_prep_out(task_id, prep_out)
-    print(prep_out.errors)
-    assert prep_out.errors == \
+    params = ImportReq(source_path=str(SPARSE_DIR))
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    errors = check_job_errors(job)
+    assert errors == \
            [
                "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field acq_id is mandatory as there are some acq columns: ['acq_hardware', 'acq_imgtype', 'acq_instrument'].",
                "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field sample_id is mandatory as there are some sample columns: ['sample_program', 'sample_ship', 'sample_stationid']."
            ]
-    # Do real import, even if we had problems before.
-    RealImport(prj_id, params).run(ADMIN_USER_ID)
     print("\n".join(caplog.messages))
-    sce = AsciiDumper()
-    sce.run(projid=prj_id, out="chk.dmp")
+    with AsciiDumper() as sce:
+        sce.run(projid=prj_id, out="chk.dmp")
 
 
 # @pytest.mark.skip()
@@ -541,92 +538,18 @@ def test_import_breaking_unicity(config, database, caplog):
         Message should be like 'Acquisition 'b' already belongs to sample 'a' so it cannot be created under 'a2'
     """
     caplog.set_level(logging.DEBUG)
-    task_id = TaskService().create()
-    srch = ProjectsService().search(current_user_id=ADMIN_USER_ID,
-                                    title_filter="Test Create Update")
-    assert len(srch) == 1
-    prj_id = srch[0].projid  # <- need the project from first test
+    srch = search_unique_project(ADMIN_USER_ID, "Test Create Update")
+    prj_id = srch.projid  # <- need the project from first test
     # Do preparation
-    params = ImportPrepReq(task_id=task_id,
-                           source_path=str(BREAKING_HIERARCHY_DIR))
+    params = ImportReq(source_path=str(BREAKING_HIERARCHY_DIR))
 
-    prep_out: ImportPrepRsp = ImportAnalysis(prj_id, params).run(ADMIN_USER_ID)
-    assert prep_out.errors == ["Acquisition 'generic_m106_mn01_n1_sml' is already associated with sample "
-                               "'{'m106_mn01_n1_sml'}', it cannot be associated as well with "
-                               "'m106_mn01_n1_sml_brk"]
-    # Do real import, even if we should not...
-    params = real_params_from_prep_out(task_id, prep_out)
-    # Boom
-    with pytest.raises(AssertionError) as e_info:
-        RealImport(prj_id, params).run(ADMIN_USER_ID)
-
-
-# @pytest.mark.skip()
-@pytest.mark.parametrize("title", ["Test Import Images"])
-def test_import_images(config, database, caplog, title):
-    """
-        Simple import with fixed values.
-    """
-    caplog.set_level(logging.DEBUG)
-    prj_id = ProjectsService().create(ADMIN_USER_ID, CreateProjectReq(title=title))
-
-    vals = {"latitude": "abcde",
-            "longitude": "456.5",
-            "depthmin": "very very low"}
-    params = SimpleImportReq(task_id=0,
-                             source_path=str(PLAIN_DIR),
-                             values=vals)
-    rsp = SimpleImport(prj_id, params).run(ADMIN_USER_ID)
-    assert rsp.errors == ["'abcde' is not a valid value for SimpleImportFields.latitude",
-                          "'456.5' is not a valid value for SimpleImportFields.longitude",
-                          "'very very low' is not a valid value for SimpleImportFields.depthmin"]
-    # Do real import
-    vals["latitude"] = "43.8802"
-    vals["longitude"] = "7.2329"
-    vals["depthmin"] = "500"
-    params.values = vals
-    params.task_id = TaskService().create()
-    rsp: SimpleImportRsp = SimpleImport(prj_id, params).run(ADMIN_USER_ID)
-    print("\n".join(caplog.messages))
-    assert rsp.errors == []
-    assert rsp.nb_images == 8
-    # Check that all went fine
-    for a_msg in caplog.records:
-        assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
-
-    # Second run, ensure we don't create dummy parents
-    caplog.clear()
-    rsp: SimpleImportRsp = SimpleImport(prj_id, params).run(ADMIN_USER_ID)
-    print("\n2:".join(caplog.messages))
-    for a_msg in caplog.records:
-        assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
-        assert "++ ID" not in a_msg.getMessage()
-
-    return prj_id
-
-
-IMPORT_IMAGES_URL = "/simple_import/{project_id}"
-
-
-# @pytest.mark.skip()
-@pytest.mark.parametrize("title", ["Simple via fastapi"])
-def test_api_import_images(config, database, fastapi, caplog, title):
-    """
-        Simple import with no fixed values at all, but using the upload directory.
-    """
-    caplog.set_level(logging.DEBUG)
-    prj_id = ProjectsService().create(CREATOR_USER_ID, CreateProjectReq(title=title))
-    sce = TaskService()
-    task_id = sce.create()
-    shutil.copyfile(str(PLAIN_FILE), sce.get_temp(task_id, "uploaded.zip"))
-
-    url = IMPORT_IMAGES_URL.format(project_id=prj_id)
-    req = {"task_id": task_id,
-           "source_path": "uploaded.zip",
-           "values": {}}
-    rsp = fastapi.post(url, headers=CREATOR_AUTH, json=req)
-    assert rsp.status_code == status.HTTP_200_OK
-    return prj_id
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    errors = check_job_errors(job)
+    assert errors == ["Acquisition 'generic_m106_mn01_n1_sml' is already associated with sample "
+                      "'{'m106_mn01_n1_sml'}', it cannot be associated as well with "
+                      "'m106_mn01_n1_sml_brk"]
 
 
 # @pytest.mark.skip()
@@ -634,11 +557,14 @@ def test_issue_483(config, database, caplog):
     """
         Too large image.
     """
-    # Inject a very small maximum size inside the library
+    # Inject a very small maximum size inside the library, so basically any image
+    # will raise a Decompression bomb
     from PIL import Image
     sav = Image.MAX_IMAGE_PIXELS
     Image.MAX_IMAGE_PIXELS = 512
     try:
+        # This should show as a nice error
         test_import(config, database, caplog, title="Too large import")
     finally:
+        # Restore the lib
         Image.MAX_IMAGE_PIXELS = sav

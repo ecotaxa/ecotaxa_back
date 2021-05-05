@@ -9,11 +9,11 @@ from typing import List
 
 from BO.ProjectTidying import ProjectTopology
 from BO.Rights import RightsBO, Action
-from helpers.DynamicLogs import LogsSwitcher
+from helpers.DynamicLogs import LogsSwitcher, LogEmitter
 from .helpers.Service import Service
 
 
-class ProjectConsistencyChecker(Service):
+class ProjectConsistencyChecker(Service, LogEmitter):
     """
         With time and bugs, some consistency problems could be introduced in projects.
         This service aims at listing them.
@@ -22,6 +22,9 @@ class ProjectConsistencyChecker(Service):
     def __init__(self, prj_id: int):
         super().__init__()
         self.prj_id = prj_id
+
+    def log_file_path(self) -> str:
+        return "consistency_%d.log" % self.prj_id
 
     def run(self, current_user_id: int) -> List[str]:
         with LogsSwitcher(self):

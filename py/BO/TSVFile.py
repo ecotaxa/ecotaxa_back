@@ -479,7 +479,7 @@ class TSVFile(object):
                     # The first, numeric, version is in "if type=n" case above.
                     mapped_val = how.taxo_mapping.get(csv_val.lower(), csv_val)
                     # Use initial mapping
-                    cached_field_value = how.taxo_found[none_to_empty(mapped_val).lower()]
+                    cached_field_value = how.found_taxa[none_to_empty(mapped_val).lower()]
                     # better crash than write bad value into the DB
                     assert cached_field_value is not None, "Column %s: no classification of %s mapped as %s" % (
                         a_field, csv_val, mapped_val)
@@ -812,7 +812,7 @@ class TSVFile(object):
                     # Apply the mapping, if and only if there is no id
                     csv_val = how.taxo_mapping.get(csv_val.lower(), csv_val)
                     # Record that the taxon was seen
-                    how.taxo_found[csv_val.lower()] = None
+                    how.found_taxa[csv_val.lower()] = None
             elif a_field == 'object_annotation_person_name':
                 maybe_email = clean_value_and_none(lig.get('object_annotation_person_email', ''))
                 # TODO: It's more "diag" than "how"

@@ -23,5 +23,5 @@ class EMODnetExportRsp(BaseModel):
                               default=[])
     warnings: List[str] = Field(title="Problems found while building the archive, which do not prevent producing it.",
                               default=[])
-    task_id: int = Field(title="The created task, 0 if there were problems.",
+    job_id: int = Field(title="The created job, 0 if there were problems.",
                          default=0)

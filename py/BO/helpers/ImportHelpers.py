@@ -72,10 +72,11 @@ class ImportHow(object):
         # Mappings, collected during ImportAnalysis and read during RealImport
         self.custom_mapping: ProjectMapping = custom_mapping
         # TODO: for validating it's !=
+        # The users found in analyzed TSVs, key = name, value = dict with 'email' and/or user 'id'
         self.found_users: Dict[str, Dict] = {}
-        # The taxa _names_ found in TSV _without ID_,
+        # The taxa/category _names_ found in TSV _without ID_,
         #     key = taxon NAME (str), value = None during analysis, id during resolve
-        self.taxo_found: Dict[str, Optional[int]] = {}
+        self.found_taxa: Dict[str, Optional[int]] = {}
         # Collected during RealImport
         # e.g. { 'samples': { 'm106_mn01_n2': <Sample object at xxxx> } }
         # TODO: Process is not really needed anymore

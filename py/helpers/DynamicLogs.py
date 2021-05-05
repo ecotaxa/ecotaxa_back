@@ -2,9 +2,10 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import abc
 import logging
+from abc import ABC
 from threading import get_ident
-from typing import Any
 
 LOGGING_FORMAT = '%(process)d:%(threadName)s:%(asctime)s:%(name)s:%(levelname)s %(message)s'
 ALT_LOGGING_FORMAT = '%(asctime)s:%(name)s:%(levelname)s %(message)s'
@@ -56,21 +57,36 @@ def get_logger(name) -> logging.Logger:
     return ret
 
 
+class LogEmitter(ABC):
+    """
+        Just to force presence of the right primitive for log emitter classes, and add a member to the switcher.
+    """
+    @abc.abstractmethod
+    def log_file_path(self) -> str: ...
+
+    def __init__(self):
+        self.switcher = None
+
+
 class LogsSwitcher(object):
     """
         Redirect logs to the file provided by the log-emitting object.
     """
 
-    def __init__(self, log_emitter: Any):  # Can't import Service due to deps
+    def __init__(self, log_emitter: LogEmitter):
         self.emitter = log_emitter
+        self.emitter.switcher = self
 
     def __enter__(self):
+        self.switch()
+        return self
+
+    def switch(self):
         switch_to = self.emitter.log_file_path()
         if switch_to is not None:
-            # Log the switch to current log file
+            # Log the fact that we switch to a new file, to current log file.
             logging.log(logging.INFO, "Switching logs to %s", switch_to)
             _the_handler.switch_to(switch_to)
-        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.emitter.log_file_path():
