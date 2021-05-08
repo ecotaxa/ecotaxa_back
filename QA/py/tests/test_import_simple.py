@@ -34,7 +34,7 @@ def test_import_images_only(config, database, caplog, title):
         Simple import AKA image only import, with fixed values.
     """
     caplog.set_level(logging.DEBUG)
-    prj_id = create_project(ADMIN_USER_ID,title)
+    prj_id = create_project(ADMIN_USER_ID, title)
 
     vals = {"latitude": "abcde",
             "longitude": "456.5",
@@ -85,7 +85,7 @@ def test_api_import_images(config, database, fastapi, caplog, title):
         Simple import with no fixed values at all, but using the upload directory.
     """
     caplog.set_level(logging.DEBUG)
-    prj_id = create_project(CREATOR_USER_ID,title)
+    prj_id = create_project(CREATOR_USER_ID, title)
 
     with open(PLAIN_FILE, "rb") as fin:
         upload_rsp = fastapi.post(UPLOAD_FILE_URL, headers=CREATOR_AUTH, files={"file": fin})
@@ -96,8 +96,8 @@ def test_api_import_images(config, database, fastapi, caplog, title):
     req = {"source_path": srv_file_path,
            "values": {}}
     rsp = fastapi.post(url, headers=CREATOR_AUTH, json=req)
+    assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
     assert job_id > 0
-    assert rsp.status_code == status.HTTP_200_OK
     job = api_wait_for_stable_job(fastapi, job_id)
     return prj_id

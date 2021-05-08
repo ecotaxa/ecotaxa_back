@@ -10,6 +10,7 @@ from DB.helpers.DBWriter import DBWriter
 from BO.TSVFile import TSVFile
 
 import logging
+
 logging.basicConfig(level=logging.INFO)
 
 from tools.dbBuildSQL import EcoTaxaExistingDB
@@ -19,8 +20,8 @@ def main():
     EcoTaxaExistingDB.write_config(CONF_FILE, "localhost", 5434)
     DBWriter.SEQUENCE_CACHE_SIZE = 5
     TSVFile.REPORT_EVERY = 5
-    src = EMODnetExport(99,False,True)
-    src.run(760)
+    with EMODnetExport(99, False, True) as sce:
+        sce.run(760)
 
 
 if __name__ == '__main__':

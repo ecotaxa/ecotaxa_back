@@ -52,7 +52,7 @@ class EcoTaxaExistingDB(object):
     @staticmethod
     def write_config(conf_file: Path, host: str, port: int):
         with open(str(conf_file), "w") as f:
-            f.write(EcoTaxaDBFrom0.CONF % (host, port))
+            f.write(EcoTaxaDBFrom0.CONF % (host, port, host, port))
 
 
 class EcoTaxaDBFrom0(object):
