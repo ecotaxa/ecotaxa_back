@@ -42,7 +42,7 @@ jobs:
     - name: Run tox in QA
       working-directory: ./QA/py
       run: |
-        PYTHONPATH=. tox
+        PATH=/venv/bin PYTHONPATH=. tox
       env:
         # The hostname used to communicate with the PostgreSQL service container
         POSTGRES_HOST: postgres
