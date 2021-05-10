@@ -35,6 +35,7 @@ def my_on_connect(dbapi_conn, _conn_record):
     crs = dbapi_conn.cursor()
     crs.execute("set extra_float_digits=2")
     crs.close()
+    dbapi_conn.commit()
 
 
 class ReadOnlyQueuePool(QueuePool):
