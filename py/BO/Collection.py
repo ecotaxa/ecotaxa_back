@@ -66,7 +66,6 @@ class CollectionBO(object):
         by_role_org = {COLLECTION_ROLE_DATA_CREATOR: self.creator_organisations,
                        COLLECTION_ROLE_ASSOCIATED_PERSON: self.associate_organisations}
         an_org_and_role: CollectionOrgaRole
-        # noinspection PyTypeChecker
         for an_org_and_role in self._collection.organisations_by_role:
             by_role_org[an_org_and_role.role].append(an_org_and_role.organisation)
         return self
@@ -91,7 +90,6 @@ class CollectionBO(object):
         for a_db_project in db_projects:
             self._collection.projects.append(a_db_project)
             prj_licenses.add(cast(LicenseEnum, a_db_project.license))
-            # noinspection PyTypeChecker
             for a_sample in a_db_project.all_samples:
                 sample_id = a_sample.orig_id
                 # Sanity check: sample orig_id must be unique in the collection

@@ -4,10 +4,12 @@
 #
 # Pydantic model from dataclass
 #
-import datetime
-from typing import Optional, TypeVar, Dict, List, GenericMeta
-
 import dataclasses
+import datetime
+from typing import Optional, TypeVar, Dict, List
+# noinspection PyUnresolvedReferences
+from typing import _GenericAlias  # type: ignore
+
 from pydantic import create_model, BaseConfig
 from pydantic.fields import ModelField
 
@@ -31,7 +33,7 @@ def dataclass_to_model(clazz: T, add_suffix: bool = False, titles: Optional[Dict
         if fld_type in (str, Optional[str], int, float, datetime.datetime):
             # Basic types become directly model fields
             pass
-        elif type(fld_type) == GenericMeta:
+        elif type(fld_type) == _GenericAlias:
             # A typing e.g. typing.List[BO.UserBO]
             str_type = str(fld_type)
             if str_type.startswith("typing.List["):

@@ -45,7 +45,7 @@ class ProjectsService(Service):
         self.session.add(prj)
         self.session.flush()  # to get the project ID
         # Add the manage privilege
-        RightsBO.grant(current_user, Action.ADMINISTRATE, prj)
+        RightsBO.grant(self.session, current_user, Action.ADMINISTRATE, prj)
         self.session.commit()
         return prj.projid
 

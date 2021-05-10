@@ -4,8 +4,8 @@
 #
 from typing import Optional
 
-from PIL import Image as PIL_Image
-from PIL.Image import DecompressionBombError
+from PIL import Image as PIL_Image  # type: ignore
+from PIL.Image import DecompressionBombError  # type: ignore
 
 from DB.helpers.Bean import Bean
 from FS.Vault import Vault

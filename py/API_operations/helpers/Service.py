@@ -7,7 +7,7 @@ import os
 from sqlalchemy import event
 from sqlalchemy.orm import Session
 
-from DB.Connection import Connection, check_sqlalchemy_version
+from DB.helpers.Connection import Connection, check_sqlalchemy_version
 from helpers.link_to_legacy import read_config, read_link
 
 
@@ -66,6 +66,8 @@ class Service(BaseService):
     the_connection = None
     the_readonly_connection = None
 
+    __slots__ = ["session", "ro_session", "config", "link_src"]
+
     def __init__(self):
         # Use a single configuration
         if not Service.the_config:
@@ -73,12 +75,14 @@ class Service(BaseService):
             Service.the_config = config
         else:
             config = Service.the_config
+        self.config = config
         # And a single link
         if not Service.the_link:
             link_src = read_link()
             Service.the_link = link_src
         else:
             link_src = Service.the_link
+        self.link_src = link_src
         # Use a single r/w connection
         if not Service.the_connection:
             check_sqlalchemy_version()
@@ -89,7 +93,7 @@ class Service(BaseService):
         # Use a single read-only connection, with fallback to the r/w one
         if not Service.the_readonly_connection:
             if 'RO_DB_HOST' in config:
-                ro_conn = self.build_connection(config, "RO_")
+                ro_conn = self.build_connection(config, True)
             else:
                 ro_conn = conn
             Service.the_readonly_connection = ro_conn
@@ -100,24 +104,25 @@ class Service(BaseService):
         if ro_conn != conn:
             self.ro_session: Session = ro_conn.get_session()
             # When r/w session commits, ensure the ro is clean.
-            setattr(self.session, "ro", self.ro_session)
-            event.listen(self.session, "before_commit", self.abort_ro)
+            if not hasattr(self.session, "ro"):
+                setattr(self.session, "ro", self.ro_session)
+                event.listen(self.session, "before_commit", self.abort_ro)
         else:
             self.ro_session = self.session
-        self.config = config
-        self.link_src = link_src
 
     @staticmethod
-    def build_connection(config, prfx=""):
+    def build_connection(config, read_only=False):
         """
             Read a connection from the configuration.
         """
+        prfx = "RO_" if read_only else ""
         port = config.get(prfx + 'DB_PORT')
         if port is None:
             port = '5432'
         host = _turn_localhost_for_docker(config[prfx + 'DB_HOST'], port)
         conn = Connection(host=host, port=port, db=config[prfx + 'DB_DATABASE'],
-                          user=config[prfx + 'DB_USER'], password=config[prfx + 'DB_PASSWORD'])
+                          user=config[prfx + 'DB_USER'], password=config[prfx + 'DB_PASSWORD'],
+                          read_only=read_only)
         return conn
 
     @staticmethod

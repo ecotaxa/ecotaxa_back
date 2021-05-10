@@ -5,11 +5,10 @@
 #
 # Collection i.e. set of projects.
 #
-from sqlalchemy import Column, Sequence, ForeignKey, Index
-from sqlalchemy.dialects.postgresql import VARCHAR, INTEGER
-from sqlalchemy.orm import relationship
-
 from DB.helpers.ORM import Model
+from .helpers.DDL import Column, Sequence, ForeignKey, Index
+from .helpers.ORM import relationship
+from .helpers.Postgres import VARCHAR, INTEGER
 
 
 class Collection(Model):

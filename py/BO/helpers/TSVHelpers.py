@@ -2,8 +2,8 @@ import datetime
 import re
 from typing import Optional
 
-from astral import LocationInfo, Depression
-from astral.sun import sun
+from astral import LocationInfo, Depression  # type: ignore
+from astral.sun import sun  # type: ignore
 from pytz import utc
 
 
@@ -50,7 +50,7 @@ def to_float(value: str):
         return None
 
 
-def none_to_empty(value: str):
+def none_to_empty(value: Optional[str]):
     """
     Map None to empty string or just return input value.
     :param value: None or any string

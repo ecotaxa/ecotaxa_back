@@ -3,12 +3,9 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-# noinspection PyPackageRequirements
-from sqlalchemy import Index, Column, Sequence, func
-# noinspection PyPackageRequirements
-from sqlalchemy.dialects.postgresql import VARCHAR, INTEGER, CHAR, TIMESTAMP
-
-from DB.helpers.ORM import Model
+from .helpers.DDL import Index, Column, Sequence, func
+from .helpers.ORM import Model
+from .helpers.Postgres import VARCHAR, INTEGER, CHAR, TIMESTAMP
 
 
 class Taxonomy(Model):

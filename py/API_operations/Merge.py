@@ -4,8 +4,6 @@
 #
 from typing import List, Dict, Union
 
-from sqlalchemy import func
-
 from API_models.merge import MergeRsp
 from BO.Acquisition import AcquisitionIDT
 from BO.Bundle import InBundle
@@ -15,7 +13,7 @@ from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.Rights import RightsBO, Action
 from BO.Sample import SampleIDT
 from DB import ObjectHeader, Sample, Acquisition, Project, ParticleProject
-from DB.helpers.ORM import orm_equals, any_, all_, Query
+from DB.helpers.ORM import orm_equals, any_, all_, func, Query
 from DB.helpers.Postgres import values_cte
 from helpers.DynamicLogs import get_logger, LogsSwitcher, LogEmitter
 from .helpers.Service import Service
@@ -55,7 +53,9 @@ class MergeService(Service, LogEmitter):
         RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, self.src_prj_id)
         # OK
         prj = self.session.query(Project).get(self.prj_id)
+        assert prj is not None
         src_prj = self.session.query(Project).get(self.src_prj_id)
+        assert src_prj is not None
 
         logger.info("Validating Merge of '%s'", prj.title)
         ret = MergeRsp()
@@ -162,7 +162,8 @@ class MergeService(Service, LogEmitter):
                                          [(k, v) for k, v in common_samples.items()])
                     smp_subqry = self.session.query(smp_cte.c.column2).filter(
                         smp_cte.c.column1 == Acquisition.acq_sample_id)
-                    upd_values = {'acq_sample_id': func.coalesce(smp_subqry.as_scalar(), Acquisition.acq_sample_id)}
+                    upd_values = {'acq_sample_id': func.coalesce(smp_subqry.scalar_subquery(),  # type: ignore
+                                                                 Acquisition.acq_sample_id)}
                     upd = upd.filter(Acquisition.acq_sample_id == any_(list(common_samples.keys())))
                     # upd = upd.filter(Acquisition.acquisid != all_(list(common_acquisitions.keys())))
                 if len(common_samples) == 0:
@@ -190,7 +191,8 @@ class MergeService(Service, LogEmitter):
                 upd = upd.filter(ParticleProject.projid == self.src_prj_id)  # type: ignore
                 upd_values = {'projid': self.prj_id}
             rowcount = upd.update(values=upd_values, synchronize_session=False)
-            logger.info("Update in %s: %s rows", a_fk_to_proj_tbl.__tablename__, rowcount)
+            table_name = a_fk_to_proj_tbl.__tablename__  # type: ignore
+            logger.info("Update in %s: %s rows", table_name, rowcount)
 
         # Acquisition & twin Process have followed their enclosing Sample
 
@@ -206,7 +208,8 @@ class MergeService(Service, LogEmitter):
                 to_del = to_del.filter(
                     Sample.sampleid == any_(list(common_samples.keys())))  # type: ignore
             rowcount = to_del.delete(synchronize_session=False)
-            logger.info("Delete in %s: %s rows", a_fk_to_proj_tbl.__tablename__, rowcount)
+            table_name = a_fk_to_proj_tbl.__tablename__  # type: ignore
+            logger.info("Delete in %s: %s rows", table_name, rowcount)
 
         self.dest_augmented_mappings.write_to_project(dest_prj)
 

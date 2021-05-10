@@ -3,11 +3,10 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-from sqlalchemy import Column, Sequence, ForeignKey, Index
-from sqlalchemy.dialects.postgresql import VARCHAR, INTEGER
-from sqlalchemy.orm import relationship
-
+from .helpers.DDL import Column, Sequence, ForeignKey, Index
 from .helpers.ORM import Model
+from .helpers.ORM import relationship
+from .helpers.Postgres import VARCHAR, INTEGER
 
 
 class ProjectPrivilege(Model):

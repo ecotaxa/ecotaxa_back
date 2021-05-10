@@ -45,7 +45,9 @@ class ProjectTopology(object):
             Read the project topology from DB.
         """
         qry: Query = session.query(Sample)
-        qry = qry.join(Acquisition).join(Process).join(ObjectHeader)
+        qry = qry.join(Sample.all_acquisitions)
+        qry = qry.join(Acquisition.process)
+        qry = qry.join(Acquisition.all_objects)
         qry = qry.filter(Sample.projid == prj_id)
         qry = qry.with_entities(Sample.orig_id, Acquisition.orig_id, Process.orig_id, ObjectHeader.objid)
         sam_orig_id: str

@@ -5,7 +5,7 @@
 import abc
 from abc import ABC
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from BO.Job import JobBO
 from BO.Project import ProjectIDT
@@ -115,12 +115,12 @@ class JobServiceBase(Service, LogEmitter, ABC):
         self.temp_for_jobs.erase_for(new_job.id)
 
     def _get_job(self) -> Job:
-        job: Job = self.session.query(Job).get(self.job_id)
+        job: Optional[Job] = self.session.query(Job).get(self.job_id)
         assert job is not None
         return job
 
     def _get_owner_id(self) -> UserIDT:
-        job: Job = self.session.query(Job).get(self.job_id)
+        job: Optional[Job] = self.session.query(Job).get(self.job_id)
         assert job is not None
         return job.owner_id
 

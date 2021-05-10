@@ -3,10 +3,8 @@
 #
 # to avoid importing sqlalchemy everywhere
 #
-# noinspection PyUnresolvedReferences,PyProtectedMember
-from sqlalchemy.engine import ResultProxy
 # noinspection PyUnresolvedReferences
 from sqlalchemy.orm import Session, Query
 
-from .Relations import *
 from .ParticleProject import *
+from .Relations import *

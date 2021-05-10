@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# noinspection PyUnresolvedReferences
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
@@ -7,25 +8,24 @@ from typing import Tuple, List, Set, Dict, TypeVar, Type, Any, Union
 # noinspection PyUnresolvedReferences
 from sqlalchemy import Column, inspect, MetaData, Table, any_ as _pg_any, all_ as _pg_all, not_, and_, or_, func, case, \
     text, select, column, Integer, Float, FLOAT
-# noinspection PyUnresolvedReferences
-from sqlalchemy.dialects import postgresql
-# noinspection PyUnresolvedReferences
-from sqlalchemy.engine.result import ResultProxy
+from sqlalchemy.engine.result import Result  # type: ignore
 from sqlalchemy.ext.declarative import declarative_base
 # noinspection PyUnresolvedReferences
-from sqlalchemy.orm import Session, Query, make_transient, contains_eager, joinedload, subqueryload
+from sqlalchemy.orm import Query, make_transient, contains_eager, joinedload, subqueryload
 # For exporting
 # noinspection PyUnresolvedReferences
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, RelationshipProperty, aliased
 # noinspection PyUnresolvedReferences
-from sqlalchemy.sql import Insert, Update, Delete
+from sqlalchemy.sql import Delete, Update, Insert, ColumnElement
 # noinspection PyUnresolvedReferences
 from sqlalchemy.sql.functions import concat
 
-_Base = declarative_base()
+from . import Session
+
+_Base: type = declarative_base()
 
 
-class Model(_Base):
+class Model(_Base):  # type: ignore
     __abstract__ = True  # prevent SQLAlchemy from trying to map
     __tablename__: str
     __table__: Any
@@ -111,7 +111,7 @@ def _analyze_cols(orm_table: Table) -> Tuple[List[str], List[str]]:
         pass
     to_copy = []
     to_clear = []
-    a_col: Column
+    a_col: ColumnElement
     for a_col in orm_table.columns:
         if a_col.primary_key or a_col.foreign_keys:
             to_clear.append(a_col.name)
@@ -144,7 +144,8 @@ def minimal_table_of(metadata: MetaData, clazz, to_keep: Set[str], exact_floats=
     a_col: Column
     for a_col in insp.columns:
         if a_col.primary_key or not a_col.nullable or a_col.name in to_keep:
-            clone_col = a_col.copy()
+            # noinspection PyProtectedMember
+            clone_col = a_col._copy()  # type: ignore
             if exact_floats and isinstance(clone_col.type, FLOAT):
                 clone_col.type = Float(asdecimal=True)
             cols.append(clone_col)

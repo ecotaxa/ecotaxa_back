@@ -4,9 +4,8 @@
 #
 
 import json
-from typing import Any
-
 from dataclasses import dataclass
+from typing import Any
 
 from BO.Classification import ClassifIDListT
 from BO.helpers.DataclassAsDict import DataclassAsDict
@@ -35,7 +34,8 @@ class UserBO(object):
         """
             Get a preference, for given project and user. Keys are not standardized (for now).
         """
-        current_user: User = session.query(User).get(user_id)
+        current_user = session.query(User).get(user_id)
+        assert current_user is not None
         prefs_for_proj: UserPreferences = current_user.preferences_for_projects.filter_by(project_id=project_id).first()
         if prefs_for_proj:
             all_prefs_for_proj = json.loads(prefs_for_proj.json_prefs)
@@ -48,7 +48,8 @@ class UserBO(object):
         """
             Set preference for a key, for given project and user. The key disappears if set to empty string.
         """
-        current_user: User = session.query(User).get(user_id)
+        current_user = session.query(User).get(user_id)
+        assert current_user is not None
         prefs_for_proj: UserPreferences = current_user.preferences_for_projects.filter_by(project_id=project_id).first()
         if prefs_for_proj:
             all_prefs_for_proj = json.loads(prefs_for_proj.json_prefs)

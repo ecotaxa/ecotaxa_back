@@ -2,10 +2,9 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Dict, Any, Iterable, Optional, Union
-
-from dataclasses import dataclass
 
 from BO.Classification import ClassifIDListT
 from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping
@@ -14,9 +13,10 @@ from BO.User import MinimalUserBO
 from BO.helpers.DataclassAsDict import DataclassAsDict
 from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFields, Acquisition, Process, \
     ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram, ObjectCNNFeature
-from DB import Session, ResultProxy
 from DB.User import Role
-from DB.helpers.ORM import Delete, Query, text, any_, and_, contains_eager, minimal_table_of
+from DB.helpers import Session, Result
+from DB.helpers.Direct import text
+from DB.helpers.ORM import Delete, Query, any_, and_, contains_eager, minimal_table_of
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -175,9 +175,9 @@ class ProjectBO(object):
 
     def get_all_num_columns_values(self, session: Session):
         """
-            Get all numerical free fields values for a project.
+            Get all numerical free fields values for all objects in a project.
         """
-        from sqlalchemy import MetaData
+        from DB.helpers.ORM import MetaData
         metadata = MetaData(bind=session.get_bind())
         # TODO: Cache in a member
         mappings = ProjectMapping().load_from_project(self._project)
@@ -185,7 +185,7 @@ class ProjectBO(object):
                                if col[0] == 'n'])
         obj_fields_tbl = minimal_table_of(metadata, ObjectFields, num_fields_cols, exact_floats=True)
         qry: Query = session.query(Project)
-        qry = qry.join(Sample).join(Acquisition).join(ObjectHeader)
+        qry = qry.join(Project.all_samples).join(Sample.all_acquisitions).join(Acquisition.all_objects)
         qry = qry.join(obj_fields_tbl, ObjectHeader.objid == obj_fields_tbl.c.objfid)
         qry = qry.filter(Project.projid == self._project.projid)
         qry = qry.order_by(Acquisition.acquisid)
@@ -194,7 +194,7 @@ class ProjectBO(object):
 
     @staticmethod
     def update_taxo_stats(session: Session, projid: int):
-        session.execute("""
+        sql = text("""
         DELETE FROM projects_taxo_stat pts
          WHERE pts.projid = :prjid;
         INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
@@ -205,12 +205,12 @@ class ProjectBO(object):
           FROM obj_head obh
           JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
           JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prjid 
-        GROUP BY sam.projid, obh.classif_id;""",
-                        {'prjid': projid})
+        GROUP BY sam.projid, obh.classif_id;""")
+        session.execute(sql, {'prjid': projid})
 
     @staticmethod
     def update_stats(session: Session, projid: int):
-        session.execute("""
+        sql = text("""
         UPDATE projects
            SET objcount=q.nbr_sum, 
                pctclassified=100.0*nbrclassified/q.nbr_sum, 
@@ -222,8 +222,8 @@ class ProjectBO(object):
                WHERE projid = :prjid
               GROUP BY projid) q ON p.projid = q.projid
         WHERE projects.projid = :prjid 
-          AND p.projid = :prjid""",
-                        {'prjid': projid})
+          AND p.projid = :prjid""")
+        session.execute(sql, {'prjid': projid})
 
     @staticmethod
     def read_taxo_stats(session: Session,
@@ -246,7 +246,7 @@ class ProjectBO(object):
         GROUP BY pts.projid"""
         if len(taxa_ids) > 0:
             sql += ", pts.id"
-        res: ResultProxy = session.execute(sql, params)
+        res: Result = session.execute(text(sql), params)
         with CodeTimer("stats for %d projects:" % len(prj_ids), logger):
             ret = [ProjectTaxoStats(rec) for rec in res.fetchall()]
         for a_stat in ret:
@@ -338,7 +338,7 @@ class ProjectBO(object):
                      AND NOT title ILIKE '%%subset%%'  """
 
         with CodeTimer("Projects query:", logger):
-            res: ResultProxy = session.execute(sql, sql_params)
+            res: Result = session.execute(text(sql), sql_params)
             # single-element tuple :( DBAPI
             ret = [an_id for an_id, in res.fetchall()]
         return ret  # type:ignore
@@ -361,11 +361,10 @@ class ProjectBO(object):
     @classmethod
     def get_bounding_geo(cls, session: Session, project_ids: ProjectIDListT) -> Iterable[float]:
         # TODO: Why using the view?
-        res: ResultProxy = session.execute(
-            "SELECT min(o.latitude), max(o.latitude), min(o.longitude), max(o.longitude)"
-            "  FROM objects o "
-            " WHERE o.projid = ANY(:prj)",
-            {"prj": project_ids})
+        sql = ("SELECT min(o.latitude), max(o.latitude), min(o.longitude), max(o.longitude)"
+               "  FROM objects o "
+               " WHERE o.projid = ANY(:prj)")
+        res: Result = session.execute(text(sql), {"prj": project_ids})
         vals = res.first()
         assert vals
         return [a_val for a_val in vals]
@@ -373,11 +372,10 @@ class ProjectBO(object):
     @classmethod
     def get_date_range(cls, session: Session, project_ids: ProjectIDListT) -> Iterable[datetime]:
         # TODO: Why using the view?
-        res: ResultProxy = session.execute(
-            "SELECT min(o.objdate), max(o.objdate)"
-            "  FROM objects o "
-            " WHERE o.projid = ANY(:prj)",
-            {"prj": project_ids})
+        sql = ("SELECT min(o.objdate), max(o.objdate)"
+               "  FROM objects o "
+               " WHERE o.projid = ANY(:prj)")
+        res: Result = session.execute(text(sql), {"prj": project_ids})
         vals = res.first()
         assert vals
         return [a_val for a_val in vals]
@@ -400,9 +398,9 @@ class ProjectBO(object):
             Remove object parents, also project children entities, in the project.
         """
         # The EcoTaxa samples which are going to disappear. We have to cleanup Particle side.
-        soon_deleted_samples = Query(Sample.sampleid).filter(Sample.projid == prj_id)
+        soon_deleted_samples: Query = Query(Sample.sampleid).filter(Sample.projid == prj_id)
         # The EcoPart samples to clean.
-        soon_invalid_part_samples = Query(ParticleSample.psampleid).filter(
+        soon_invalid_part_samples: Query = Query(ParticleSample.psampleid).filter(
             ParticleSample.sampleid.in_(soon_deleted_samples))
 
         # Cleanup EcoPart corresponding tables
@@ -465,6 +463,8 @@ class ProjectBO(object):
         values = {a_remap.to: text(a_remap.frm) if a_remap.frm is not None else a_remap.frm
                   for a_remap in remaps}
         qry: Query = session.query(table)
+        samples_4_prj: Query
+        acqs_4_samples: Query
         if table == Sample:
             qry = qry.filter(Sample.projid == prj_id)  # type: ignore
         elif table == Acquisition:
@@ -477,7 +477,7 @@ class ProjectBO(object):
         elif table == ObjectFields:
             samples_4_prj = Query(Sample.sampleid).filter(Sample.projid == prj_id)
             acqs_4_samples = Query(Acquisition.acquisid).filter(Acquisition.acq_sample_id.in_(samples_4_prj))
-            objs_for_acqs = Query(ObjectHeader.objid).filter(ObjectHeader.acquisid.in_(acqs_4_samples))
+            objs_for_acqs: Query = Query(ObjectHeader.objid).filter(ObjectHeader.acquisid.in_(acqs_4_samples))
             qry = qry.filter(ObjectFields.objfid.in_(objs_for_acqs))  # type: ignore
         qry = qry.update(values=values, synchronize_session=False)
 
@@ -493,7 +493,7 @@ class ProjectBO(object):
         qry = qry.join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
         qry = qry.join(Sample, and_(Sample.sampleid == Acquisition.acq_sample_id,
                                     Sample.projid == prj_id))
-        return [an_id for an_id in qry.all()]
+        return [an_id for an_id, in qry.all()]
 
     @classmethod
     def incremental_update_taxo_stats(cls, session: Session, prj_id: int, collated_changes: Dict):
@@ -509,14 +509,14 @@ class ProjectBO(object):
                       WHERE id = ANY(:ids)
                      FOR NO KEY UPDATE
         """
-        session.execute(pts_sql, {"ids": needed_ids})
+        session.execute(text(pts_sql), {"ids": needed_ids})
         # Lock the rows we are going to update, including -1 for unclassified
         pts_sql = """SELECT id, nbr
                        FROM projects_taxo_stat 
                       WHERE projid = :prj
                         AND id = ANY(:ids)
                      FOR NO KEY UPDATE"""
-        res = session.execute(pts_sql, {"prj": prj_id, "ids": needed_ids})
+        res = session.execute(text(pts_sql), {"prj": prj_id, "ids": needed_ids})
         ids_in_db = {classif_id: nbr for (classif_id, nbr) in res.fetchall()}
         ids_not_in_db = set(needed_ids).difference(ids_in_db.keys())
         if len(ids_not_in_db) > 0:
@@ -531,7 +531,7 @@ class ProjectBO(object):
                            JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prj 
                           WHERE COALESCE(obh.classif_id, -1) = ANY(:ids)
                        GROUP BY obh.classif_id"""
-            session.execute(pts_ins, {'prj': prj_id, 'ids': list(ids_not_in_db)})
+            session.execute(text(pts_ins), {'prj': prj_id, 'ids': list(ids_not_in_db)})
         # Apply delta
         for classif_id, chg in collated_changes.items():
             if classif_id in ids_not_in_db:
@@ -549,7 +549,7 @@ class ProjectBO(object):
                 ts_sql = """UPDATE projects_taxo_stat 
                                SET nbr=nbr+:nul, nbr_v=nbr_v+:val, nbr_d=nbr_d+:dub, nbr_p=nbr_p+:prd 
                              WHERE projid = :prj AND id = :cid"""
-            session.execute(ts_sql, sqlparam)
+            session.execute(text(ts_sql), sqlparam)
 
 
 class ProjectBOSet(object):

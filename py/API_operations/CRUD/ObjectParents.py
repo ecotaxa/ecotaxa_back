@@ -29,6 +29,8 @@ class SamplesService(Service):
         ret = SampleBO(self.ro_session, sample_id)
         if not ret.exists():
             return None
+        assert ret.sample is not None
+        assert ret.sample.projid is not None  # TODO: Why need this?
         # Security check
         if current_user_id is None:
             project = RightsBO.anonymous_wants(self.ro_session, Action.READ, ret.sample.projid)
@@ -75,6 +77,7 @@ class AcquisitionsService(Service):
         ret = AcquisitionBO(self.ro_session, acquisition_id)
         if not ret.exists():
             return None
+        assert ret.acquis is not None
         # Security check
         if current_user_id is None:
             project = RightsBO.anonymous_wants(self.ro_session, Action.READ, ret.acquis.sample.projid)
@@ -117,6 +120,7 @@ class ProcessesService(Service):
         ret = ProcessBO(self.session, process_id)
         if not ret.exists():
             return None
+        assert ret.process is not None
         # Security check
         if current_user_id is None:
             project = RightsBO.anonymous_wants(self.ro_session, Action.READ,

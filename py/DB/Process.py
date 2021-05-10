@@ -4,15 +4,14 @@
 #
 from typing import Dict
 
-from sqlalchemy import Column, ForeignKey
-from sqlalchemy.dialects.postgresql import VARCHAR, INTEGER
-# noinspection PyProtectedMember
-from sqlalchemy.orm import relationship, Session
-
 from .Acquisition import Acquisition
 from .Project import Project
 from .Sample import Sample
+from .helpers import Session
+from .helpers.DDL import Column, ForeignKey
 from .helpers.ORM import Model, Query
+from .helpers.ORM import relationship
+from .helpers.Postgres import VARCHAR, INTEGER
 
 PROCESS_FREE_COLUMNS = 31
 

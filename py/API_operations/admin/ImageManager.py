@@ -10,7 +10,6 @@ from os.path import join, exists
 from typing import Optional, Set
 
 from sqlalchemy import and_
-from sqlalchemy.orm import aliased
 
 from API_operations.helpers.Service import Service
 from BO.Project import ProjectIDT
@@ -18,7 +17,7 @@ from BO.Rights import RightsBO
 from BO.User import UserIDT
 from DB import ObjectHeader, Sample, Acquisition, Project, Role
 from DB.Image import Image, ImageFile, ImageFileStateEnum
-from DB.helpers.ORM import Query
+from DB.helpers.ORM import Query, aliased
 from FS.Vault import Vault
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger

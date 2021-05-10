@@ -10,8 +10,6 @@ from pathlib import Path
 # noinspection PyPackageRequirements
 from typing import Callable, List, Dict
 
-from sqlalchemy.orm import Session
-
 from BO.Mappings import GlobalMapping, ParentTableClassT, ParentTableT
 from BO.TSVFile import TSVFile
 from BO.Taxonomy import TaxonomyBO
@@ -19,6 +17,7 @@ from BO.Vignette import VignetteMaker
 from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
 from DB.Image import Image
 from DB.Object import ObjectHeader
+from DB.helpers import Session
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 

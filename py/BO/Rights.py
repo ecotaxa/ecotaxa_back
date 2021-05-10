@@ -40,7 +40,8 @@ class RightsBO(object):
             Check rights for the user to do this specific action onto this project.
         """
         # Load ORM entities
-        user: User = session.query(User).get(user_id)
+        user = session.query(User).get(user_id)
+        assert user is not None
         project = session.query(Project).get(prj_id)
         assert project is not None, NOT_FOUND
         # Check
@@ -50,7 +51,6 @@ class RightsBO(object):
         else:
             a_priv: ProjectPrivilege
             # Collect privileges for user on project
-            # noinspection PyTypeChecker
             rights_on_proj = {a_priv.privilege for a_priv in user.privs_on_projects
                               if a_priv.projid == prj_id}
             if action == Action.ADMINISTRATE:
@@ -84,7 +84,6 @@ class RightsBO(object):
         else:
             a_priv: ProjectPrivilege
             # Collect privileges for user on project
-            # noinspection PyTypeChecker
             rights_on_proj = {a_priv.privilege for a_priv in user.privs_on_projects
                               if a_priv.projid == prj_id}
             if ProjectPrivilegeBO.MANAGE in rights_on_proj:
@@ -102,7 +101,7 @@ class RightsBO(object):
             Check rights for the user to do this specific action.
         """
         # Load ORM entity
-        user: User = session.query(User).get(user_id)
+        user: Optional[User] = session.query(User).get(user_id)
         assert user is not None, NOT_AUTHORIZED
         # Check
         assert Action.CREATE_PROJECT in RightsBO.allowed_actions(user), NOT_AUTHORIZED
@@ -142,17 +141,20 @@ class RightsBO(object):
             Check user role. Should be temporary until a proper action is defined, e.g. refresh taxo tree.
         """
         # Load ORM entity
-        user: User = session.query(User).get(user_id)
+        user = session.query(User).get(user_id)
+        assert user is not None, NOT_FOUND
         # Check
         assert user.has_role(role), NOT_AUTHORIZED
         return user
 
     @staticmethod
-    def grant(user: User, action: Action, prj: Project):
+    def grant(session: Session, user: User, action: Action, prj: Project):
         """
             Grant the possibility to do this action on this project to this user.
         """
         privilege = ProjectPrivilege()
         privilege.privilege = ACTION_TO_PRIV[action]
         privilege.project = prj
-        user.privs_on_projects.append(privilege)
+        privilege.user = user
+        session.add(privilege)
+

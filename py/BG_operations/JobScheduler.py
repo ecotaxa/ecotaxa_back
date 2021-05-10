@@ -45,6 +45,7 @@ class JobRunner(Thread):
     def tech_error(job_id: JobIDT, te: Any):
         session = Service().session
         the_job = session.query(Job).get(job_id)
+        assert the_job is not None
         the_job.state = DBJobStateEnum.Error
         the_job.progress_msg = str(te)
         session.commit()
@@ -70,7 +71,7 @@ class JobScheduler(Service):
             if self.the_runner.is_alive():
                 return
         qry: Query = self.session.query(Job).filter(Job.state == DBJobStateEnum.Pending).limit(1)
-        qry = qry.with_lockmode('update_nowait')
+        qry = qry.with_for_update(nowait=True)
         try:
             the_job: Job = qry.first()
         except:

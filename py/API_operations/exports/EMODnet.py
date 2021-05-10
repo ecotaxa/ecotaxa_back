@@ -11,11 +11,10 @@
 #      https://github.com/EMODnet/EMODnetBiocheck
 import re
 from collections import OrderedDict
+from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Dict, List, Optional, Tuple, cast, Set
 from urllib.parse import quote_plus
-
-from dataclasses import dataclass
 
 from API_models.exports import EMODnetExportRsp
 from BO.Acquisition import AcquisitionBO, AcquisitionIDT
@@ -83,8 +82,9 @@ class EMODnetExport(JobServiceBase):
         self.with_zeroes = with_zeroes
         self.auto_morpho = auto_morpho
         self.with_computations = with_computations
-        self.collection = self.ro_session.query(Collection).get(collection_id)
-        assert self.collection is not None, "Invalid collection ID"
+        collection = self.ro_session.query(Collection).get(collection_id)
+        assert collection is not None, "Invalid collection ID"
+        self.collection = collection
         # During processing
         # The Phylo taxa to their WoRMS counterpart
         self.mapping: Dict[ClassifIDT, WoRMS] = {}
@@ -474,8 +474,8 @@ class EMODnetExport(JobServiceBase):
                     self.empty_samples.append((a_prj_id, a_sample.orig_id))
                     continue
                 evt_date = self.event_date(summ[0], summ[1])
-                latitude = self.geo_to_txt(a_sample.latitude)
-                longitude = self.geo_to_txt(a_sample.longitude)
+                latitude = self.geo_to_txt(float(a_sample.latitude))
+                longitude = self.geo_to_txt(float(a_sample.longitude))
                 evt = DwC_Event(eventID=event_id,
                                 type=evt_type,
                                 institutionCode=self.institution_code,

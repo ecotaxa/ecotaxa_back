@@ -3,15 +3,14 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-from sqlalchemy import Table, text
-
 from DB.Acquisition import Acquisition
 from DB.Image import Image
 from DB.Object import ObjectHeader, ObjectFields
 from DB.Process import Process
 from DB.Project import Project
 from DB.Sample import Sample
-from DB.helpers.ORM import Model
+from DB.helpers.Direct import text
+from DB.helpers.ORM import Model, Table
 from .helpers.Service import Service
 
 

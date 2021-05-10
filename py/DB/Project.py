@@ -3,12 +3,11 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-from sqlalchemy import Column, Sequence, Boolean, ForeignKey
-from sqlalchemy.dialects.postgresql import VARCHAR, INTEGER, DOUBLE_PRECISION
-from sqlalchemy.orm import relationship
-
 from BO.DataLicense import LicenseEnum
 from DB.helpers.ORM import Model
+from .helpers.DDL import Column, Sequence, Boolean, ForeignKey
+from .helpers.ORM import relationship
+from .helpers.Postgres import VARCHAR, INTEGER, DOUBLE_PRECISION
 
 """
     Possible values for status field.

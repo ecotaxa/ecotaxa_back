@@ -167,7 +167,9 @@ class TaxonomyChangeService(Service):  # pragma:nocover
                 self.session.rollback()
                 return self._do_one_by_one(added_children)
         # Signal done
-        self.session.query(WoRMS).get(parent_aphia_id).all_fetched = True
+        worms_rec = self.session.query(WoRMS).get(parent_aphia_id)
+        assert worms_rec is not None
+        worms_rec.all_fetched = True
         self.session.commit()
         return children_ids
 

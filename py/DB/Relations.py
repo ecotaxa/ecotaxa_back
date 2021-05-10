@@ -26,7 +26,7 @@ from .helpers.ORM import relationship
 
 # User
 User.roles = relationship(Role, secondary="users_roles")
-Role.users = relationship(User, secondary="users_roles")
+Role.users = relationship(User, secondary="users_roles", viewonly=True)
 
 # User preferences
 User.preferences_for_projects = relationship(UserPreferences, lazy='dynamic')
@@ -35,36 +35,36 @@ User.preferences_for_projects = relationship(UserPreferences, lazy='dynamic')
 Collection.projects = relationship(Project, secondary=CollectionProject.__tablename__)
 Collection.contact_user = relationship(User, foreign_keys=[Collection.contact_user_id], uselist=False)
 Collection.provider_user = relationship(User, foreign_keys=[Collection.provider_user_id], uselist=False)
-Collection.users_by_role = relationship(CollectionUserRole)
+Collection.users_by_role = relationship(CollectionUserRole, viewonly=True)
 Collection.organisations_by_role = relationship(CollectionOrgaRole)
 
 CollectionUserRole.collection = relationship(Collection, uselist=False)
 CollectionUserRole.user = relationship(User, uselist=False)
 
 # Project
-Project.all_samples = relationship(Sample)
+Project.all_samples = relationship(Sample, viewonly=True)
 Sample.project = relationship(Project)
 
 # Sample
-Sample.all_acquisitions = relationship(Acquisition)
+Sample.all_acquisitions = relationship(Acquisition, viewonly=True)
 Acquisition.sample = relationship(Sample)
 
 # Acquisition to its only Process
 Acquisition.process = relationship(Process, uselist=False)
-Process.acquisition = relationship(Acquisition, uselist=False)
+Process.acquisition = relationship(Acquisition, uselist=False, viewonly=True)
 
 # Privileges
 # Project.owner = relationship(User, primaryjoin="User.id==Project.owner_id",
 #                              foreign_keys="User.id", uselist=False)
 
 ProjectPrivilege.project = relationship(Project, cascade="all, delete-orphan", single_parent=True)
-Project.privs_for_members = relationship(ProjectPrivilege)
+Project.privs_for_members = relationship(ProjectPrivilege, viewonly=True)
 
 ProjectPrivilege.user = relationship(User, cascade="all, delete-orphan", single_parent=True)
-User.privs_on_projects = relationship(ProjectPrivilege)
+User.privs_on_projects = relationship(ProjectPrivilege, viewonly=True, )
 
 # Object
-ObjectHeader.fields = relationship(ObjectFields, uselist=False)
+ObjectHeader.fields = relationship(ObjectFields, uselist=False, viewonly=True)
 ObjectFields.object = relationship(ObjectHeader, uselist=False)
 
 ObjectHeader.classif = relationship(Taxonomy, primaryjoin="Taxonomy.id==ObjectHeader.classif_id",
@@ -83,20 +83,20 @@ ObjectHeader.cnn_features = relationship(ObjectCNNFeature, uselist=False)
 ObjectHeader.all_images = relationship(Image)
 
 ObjectHeader.acquisition = relationship(Acquisition)
-Acquisition.all_objects = relationship(ObjectHeader)
+Acquisition.all_objects = relationship(ObjectHeader, viewonly=True)
 
-ObjectHeader.history = relationship(ObjectsClassifHisto)
+ObjectHeader.history = relationship(ObjectsClassifHisto, viewonly=True)
 ObjectsClassifHisto.object = relationship(ObjectHeader)
 # Task
 Task.owner = relationship(User)
 
 # Particle Project
 ParticleProject.ecotaxa_project = relationship(Project)
-Project.ecopart_project = relationship(ParticleProject)
+Project.ecopart_project = relationship(ParticleProject, viewonly=True)
 
 # Particle Sample
 ParticleSample.ecotaxa_sample = relationship(Sample)
-Sample.ecopart_sample = relationship(ParticleSample)
+Sample.ecopart_sample = relationship(ParticleSample, viewonly=True)
 
 # Jobs
 Job.owner = relationship(User)

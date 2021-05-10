@@ -3,8 +3,8 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-from sqlalchemy import Column, ForeignKey, Integer, String
 
+from .helpers.DDL import Column, ForeignKey, Integer, String
 from .helpers.ORM import Model
 
 

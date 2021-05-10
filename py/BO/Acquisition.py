@@ -13,7 +13,8 @@ from BO.Project import ProjectIDListT, ProjectIDT
 from BO.helpers.MappedEntity import MappedEntity
 from BO.helpers.MappedTable import MappedTable
 from DB import Session, Query, Project, Acquisition, Sample, ObjectHeader
-from DB.helpers.ORM import any_, and_, ResultProxy
+from DB.helpers.Direct import text
+from DB.helpers.ORM import any_, and_, Result
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -44,14 +45,13 @@ class AcquisitionBO(MappedEntity):
     @classmethod
     def get_sums_by_taxon(cls, session: Session, acquis_id: AcquisitionIDT) \
             -> Dict[ClassifIDT, int]:
-        res: ResultProxy = session.execute(
-            "SELECT o.classif_id, count(1)"
-            "  FROM obj_head o "
-            " WHERE o.acquisid = :acq "
-            "   AND o.classif_id IS NOT NULL "
-            "   AND o.classif_qual = 'V'"
-            " GROUP BY o.classif_id",
-            {"acq": acquis_id})
+        sql = text("SELECT o.classif_id, count(1)"
+                   "  FROM obj_head o "
+                   " WHERE o.acquisid = :acq "
+                   "   AND o.classif_id IS NOT NULL "
+                   "   AND o.classif_qual = 'V'"
+                   " GROUP BY o.classif_id")
+        res: Result = session.execute(sql, {"acq": acquis_id})
         return {int(classif_id): int(cnt) for (classif_id, cnt) in res.fetchall()}
 
     @classmethod

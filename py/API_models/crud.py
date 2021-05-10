@@ -6,7 +6,6 @@
 #
 from typing import Optional, Dict, Type, Iterable, List, Any
 
-from sqlalchemy.sql.functions import current_timestamp
 from typing_extensions import TypedDict
 
 from BO.DataLicense import LicenseEnum
@@ -16,6 +15,7 @@ from DB.Acquisition import ACQUISITION_FREE_COLUMNS
 from DB.Collection import Collection
 from DB.Process import PROCESS_FREE_COLUMNS
 from DB.Sample import SAMPLE_FREE_COLUMNS
+from DB.helpers.Ansi import current_timestamp
 from helpers.pydantic import BaseModel, Field
 from .helpers.DBtoModel import sqlalchemy_to_pydantic
 from .helpers.DataclassToModel import dataclass_to_model

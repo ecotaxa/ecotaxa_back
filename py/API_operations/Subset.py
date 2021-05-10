@@ -19,7 +19,7 @@ from DB import Image, ObjectHeader, ObjectFields, Sample, Acquisition, Process, 
 from DB.Object import ObjectCNNFeature
 from DB.helpers.Bean import bean_of
 from DB.helpers.DBWriter import DBWriter
-from DB.helpers.ORM import Query, any_, ResultProxy
+from DB.helpers.ORM import Query, any_, Result
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 from .helpers.JobService import JobServiceOnProjectBase
@@ -138,7 +138,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         # TODO: Depending on filter, the joins could be plain (not outer)
         # E.g. if asked for a set of samples
         ret: Query = self.ro_session.query(ObjectHeader)
-        ret = ret.join(Acquisition).join(Process).join(Sample)
+        ret = ret.join(ObjectHeader.acquisition).join(Acquisition.process).join(Acquisition.sample)
         ret = ret.outerjoin(Image, ObjectHeader.all_images).outerjoin(ObjectCNNFeature).join(ObjectFields)
         ret = ret.filter(ObjectHeader.objid == any_(object_ids))
         ret = ret.order_by(ObjectHeader.objid, Image.imgid)
@@ -262,7 +262,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         logger.info("SQL=%s", sql)
         logger.info("SQLParam=%s", params)
 
-        res: ResultProxy = self.ro_session.execute(sql, params)
+        res: Result = self.ro_session.execute(sql, params)
         ids = [r[0] for r in res]
         logger.info("There are %d IDs", len(ids))
 

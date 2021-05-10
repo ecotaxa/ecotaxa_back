@@ -7,9 +7,8 @@
 #
 import time
 
-from sqlalchemy.sql import select
-
 from API_operations.helpers.Service import Service
+from DB.helpers.Core import select
 from DB.helpers.ORM import Session, Table, ModelT, text
 from helpers.DynamicLogs import get_logger
 

@@ -11,8 +11,6 @@ from sqlalchemy import Index, Column, ForeignKey, Sequence, Integer
 # noinspection PyPackageRequirements
 from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, INTEGER, REAL, DOUBLE_PRECISION, DATE, TIME, FLOAT, CHAR, \
     TIMESTAMP
-# noinspection PyPackageRequirements,PyProtectedMember
-from sqlalchemy.engine import ResultProxy
 # noinspection PyPackageRequirements
 from sqlalchemy.orm import relationship, Session
 
@@ -21,6 +19,9 @@ from .Acquisition import Acquisition
 from .Image import Image
 from .Project import Project
 from .Sample import Sample
+# noinspection PyPackageRequirements,PyProtectedMember
+from .helpers import Result
+from .helpers.Direct import text
 from .helpers.ORM import Model, Query
 
 # Classification qualification
@@ -87,11 +88,10 @@ class ObjectHeader(Model):
     @classmethod
     def fetch_existing_objects(cls, session: Session, prj_id) -> Dict[str, int]:
         # TODO: Why using the view?
-        res: ResultProxy = session.execute(
-            "SELECT o.orig_id, o.objid "
-            "  FROM objects o "
-            " WHERE o.projid = :prj",
-            {"prj": prj_id})
+        sql = text("SELECT o.orig_id, o.objid "
+                   "  FROM objects o "
+                   " WHERE o.projid = :prj")
+        res: Result = session.execute(sql, {"prj": prj_id})
         ret = {orig_id: objid for orig_id, objid in res}
         return ret  # type: ignore
 

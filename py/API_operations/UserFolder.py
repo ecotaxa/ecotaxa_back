@@ -30,7 +30,8 @@ class UserFolderService(Service):
             TODO: Quotas
         """
         file_name = file.filename
-        current_user: User = self.ro_session.query(User).get(current_user_id)
+        current_user = self.ro_session.query(User).get(current_user_id)
+        assert current_user is not None
         logger.info("Adding '%s' for '%s'", file_name, current_user.name)
         ret = await UserDirectory(current_user_id).add_file(file_name, file)
         return ret

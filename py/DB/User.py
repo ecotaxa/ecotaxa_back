@@ -4,14 +4,12 @@
 #
 from typing import List
 
-from sqlalchemy import Column, ForeignKey, Sequence, Integer, String, Boolean, func
-from sqlalchemy.dialects.postgresql import TIMESTAMP, CHAR
-# noinspection PyProtectedMember
-from sqlalchemy.engine import ResultProxy
-from sqlalchemy.orm import Session, relationship
-
 from BO.helpers.TSVHelpers import none_to_empty
-from DB.helpers.ORM import Model
+from .helpers import Session, Result
+from .helpers.DDL import Column, ForeignKey, Sequence, Integer, String, Boolean, func
+from .helpers.Direct import text
+from .helpers.ORM import Model, relationship
+from .helpers.Postgres import TIMESTAMP, CHAR
 
 
 class User(Model):
@@ -49,11 +47,10 @@ class User(Model):
             Find the users in DB, by name or email.
             :param found_users: A dict in
         """
-        res: ResultProxy = session.execute(
-            "SELECT id, LOWER(name), LOWER(email) "
-            "  FROM users "
-            " WHERE LOWER(name) = ANY(:nms) or email = ANY(:ems) ",
-            {"nms": names, "ems": emails})
+        sql = text("SELECT id, LOWER(name), LOWER(email) "
+                   "  FROM users "
+                   " WHERE LOWER(name) = ANY(:nms) or email = ANY(:ems) ")
+        res: Result = session.execute(sql, {"nms": names, "ems": emails})
         for rec in res:
             for u in found_users:
                 if u == rec[1] or none_to_empty(found_users[u].get('email')).lower() == rec[2]:

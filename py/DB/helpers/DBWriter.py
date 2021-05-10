@@ -4,12 +4,13 @@
 #
 from typing import Dict, Tuple, List, Type, Optional
 
-from DB.Image import Image
-from DB.Object import ObjectHeader, ObjectFields, ObjectCNNFeature
-from DB.helpers.Bean import Bean
-from DB.helpers.ORM import Session, Table, MetaData, minimal_table_of
-from DB.helpers.Postgres import SequenceCache
 from helpers.DynamicLogs import get_logger
+from .Bean import Bean
+from .Direct import text
+from .ORM import Session, Table, MetaData, minimal_table_of
+from .Postgres import SequenceCache
+from ..Image import Image
+from ..Object import ObjectHeader, ObjectFields, ObjectCNNFeature
 
 logger = get_logger(__name__)
 
@@ -39,7 +40,7 @@ class DBWriter(object):
         self.img_tbl: Table
 
         # Save a bit of time for commit
-        self.session.execute("SET synchronous_commit TO OFF;")
+        self.session.execute(text("SET synchronous_commit TO OFF;"))
         self.obj_seq_cache = SequenceCache(self.session, "seq_objects", self.SEQUENCE_CACHE_SIZE)
         self.img_seq_cache = SequenceCache(self.session, "seq_images", self.SEQUENCE_CACHE_SIZE)
 

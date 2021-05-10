@@ -11,17 +11,16 @@ from pathlib import Path
 from typing import Dict, Set, Any, Mapping, Tuple
 
 # noinspection PyPackageRequirements
-from PIL import Image as PIL_Image
-# noinspection PyPackageRequirements
-from sqlalchemy import text
-from sqlalchemy.orm import Session
+from PIL import Image as PIL_Image  # type: ignore
 
 from BO.Mappings import GlobalMapping, ProjectMapping, ParentTableT, ParentTableClassT
 from BO.SpaceTime import compute_sun_position, USED_FIELDS_FOR_SUNPOS
 from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
 from DB import Process, Acquisition
 from DB.Object import classif_qual_revert, ObjectHeader, ObjectFields
+from DB.helpers import Session
 from DB.helpers.Bean import Bean
+from DB.helpers.Direct import text
 from DB.helpers.ORM import Model, detach_from_session
 from helpers.DynamicLogs import get_logger
 from .Image import ImageBO
@@ -389,7 +388,7 @@ class TSVFile(object):
             if attr in update_dict and update_dict[attr] != value:
                 upd_val = update_dict[attr]
                 setattr(model, attr, upd_val)
-                updates.append((attr, repr(value)+"->"+repr(upd_val)))
+                updates.append((attr, repr(value) + "->" + repr(upd_val)))
         # TODO: Extra values in update_dict ?
         return updates
 
@@ -529,7 +528,6 @@ class TSVFile(object):
                     filter_for_id = text("%s=%d" % (its_pk, objid))
                     # Fetch the record to update
                     obj = session.query(a_cls).filter(filter_for_id).first()
-                    assert obj is not None
                     if a_cls == ObjectHeader:
                         # Eventually refresh sun position
                         if an_upd.nb_fields_from(USED_FIELDS_FOR_SUNPOS) > 0:
@@ -537,7 +535,7 @@ class TSVFile(object):
                             for a_field in USED_FIELDS_FOR_SUNPOS.difference(an_upd.keys()):
                                 an_upd[a_field] = getattr(obj, a_field)
                             TSVFile.do_sun_position_field(an_upd)
-                    updates = TSVFile.update_orm_object(obj, an_upd)
+                    updates = TSVFile.update_orm_object(obj, an_upd)  # type: ignore
                     if len(updates) > 0:
                         logger.info("Updating '%s' using %s", filter_for_id, updates)
                         session.flush()
@@ -683,7 +681,7 @@ class TSVFile(object):
     def validate_content(self, how: ImportHow, diag: ImportDiagnostic):
         row_count_for_csv = 0
         vals_cache: Dict = {}
-        logged_parents: Set[Tuple[Any,Any]] = set()
+        logged_parents: Set[Tuple[Any, Any]] = set()
         for lig in self.rdr:
             row_count_for_csv += 1
 

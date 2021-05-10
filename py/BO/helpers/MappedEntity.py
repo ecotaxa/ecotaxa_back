@@ -10,8 +10,6 @@
 #
 from abc import ABCMeta
 from collections import OrderedDict
-# starting 3.7
-# from typing import OrderedDict as OrderedDictT
 from typing import Any, List, Callable, Tuple, Optional, Dict
 
 from BO.Mappings import TableMapping, ProjectMapping

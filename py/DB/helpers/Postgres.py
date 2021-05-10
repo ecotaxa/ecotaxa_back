@@ -9,6 +9,13 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Tuple
 
+# noinspection PyUnresolvedReferences
+from sqlalchemy import VARCHAR, INTEGER, CHAR
+# noinspection PyUnresolvedReferences
+from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, DATE, TIMESTAMP, BIGINT, BYTEA
+# noinspection PyUnresolvedReferences
+from sqlalchemy.dialects.postgresql import insert as pg_insert, dialect as pg_dialect
+
 from .ORM import text, Session, column, Integer
 
 

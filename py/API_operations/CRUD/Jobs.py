@@ -30,6 +30,7 @@ class JobCRUDService(Service):
             owned by caller.
         """
         current_user = self.ro_session.query(User).get(current_user_id)
+        assert current_user is not None
         assert not admin_mode or (admin_mode and current_user.has_role(Role.APP_ADMINISTRATOR)), NOT_AUTHORIZED
         qry: Query = self.ro_session.query(Job)
         if not admin_mode:
@@ -42,9 +43,10 @@ class JobCRUDService(Service):
             Return a single job BO by its id.
         """
         # Sanity & security checks
-        job: Job = self.ro_session.query(Job).get(job_id)
+        job = self.ro_session.query(Job).get(job_id)
         assert job is not None, NOT_FOUND
         current_user = self.ro_session.query(User).get(current_user_id)
+        assert current_user is not None
         assert (job.owner_id == current_user_id) or (current_user.has_role(Role.APP_ADMINISTRATOR)), NOT_AUTHORIZED
         return JobBO(job)
 
@@ -58,6 +60,7 @@ class JobCRUDService(Service):
         except ValueError:
             assert False, NOT_FOUND
         current_user = self.ro_session.query(User).get(current_user_id)
+        assert current_user is not None
         assert (job.owner_id == current_user_id) or (current_user.has_role(Role.APP_ADMINISTRATOR)), NOT_AUTHORIZED
         return job
 

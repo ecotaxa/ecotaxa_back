@@ -7,7 +7,7 @@ from os.path import realpath, dirname, join
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont  # type: ignore
 
 HERE = dirname(realpath(__file__))
 

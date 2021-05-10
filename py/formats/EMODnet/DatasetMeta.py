@@ -7,7 +7,7 @@
 # See https://eml.ecoinformatics.org/ for background information
 #
 
-from lxml import etree
+from lxml import etree  # type: ignore
 
 from formats.EMODnet.models import EMLPerson, EMLMeta, EMLAssociatedPerson, EMLAdditionalMeta
 
@@ -37,7 +37,7 @@ class DatasetMetadata(object):
 """
 
     def content(self) -> str:
-        dataset: etree.Element = etree.Element("dataset")
+        dataset = etree.Element("dataset")
         meta = self.meta
         for a_title in meta.titles:
             xml_title = etree_sub_element(dataset, "title")
@@ -105,8 +105,10 @@ class DatasetMetadata(object):
         # Format for output
         etree.indent(dataset, space="  ")
         dataset_as_string = etree.tostring(dataset, pretty_print=True, encoding='unicode')
+        assert isinstance(dataset_as_string, str)
         etree.indent(xml_additional_meta, space="  ")
         metadata_as_string = etree.tostring(xml_additional_meta, pretty_print=True, encoding='unicode')
+        assert isinstance(metadata_as_string, str)
         # identifier = self.meta.identifier
         # ret = self.EML_HEADER.format(identifier.packageId,
         #                              identifier.system,

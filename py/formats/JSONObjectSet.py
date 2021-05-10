@@ -7,10 +7,8 @@
 #
 from typing import Dict, Union
 
-from sqlalchemy.orm import RelationshipProperty
-
 from DB import Project, Sample, Acquisition, Process, ObjectHeader, ObjectFields, Image
-from DB.helpers.ORM import ModelT, Column
+from DB.helpers.ORM import ModelT, Column, RelationshipProperty
 
 # Typing for the clarity. Key = DB Column, Value = string in target dict
 JSONDesc = Dict[Union[Column, RelationshipProperty], str]

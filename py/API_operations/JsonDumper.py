@@ -5,15 +5,12 @@
 import json
 from typing import IO, Dict, List, Any, Set
 
-from sqlalchemy.engine import ResultProxy
-from sqlalchemy.orm import Query, contains_eager
-
 from API_models.crud import ProjectFilters
 from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet
-from DB import Sample, Acquisition, Process, Image, ObjectHeader, ObjectFields
-from DB.Project import Project
-from DB.helpers.ORM import Model, any_
+from DB import Project, Sample, Acquisition, Process, Image, ObjectHeader, ObjectFields
+from DB.helpers import Result
+from DB.helpers.ORM import Query, Model, contains_eager, any_
 from formats.JSONObjectSet import JSON_FIELDS, JSONDesc
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
@@ -38,8 +35,8 @@ class JsonDumper(Service):
         self.requester_id = current_user
         self.filters = filters
         prj = self.session.query(Project).get(prj_id)
-        # We don't check for existence
-        self.prj: Project = prj
+        # We don't check for existence, so self.prj is Optional[]
+        self.prj = prj
         # Work vars
         self.mapping = ProjectMapping()
         if self.prj:
@@ -52,6 +49,7 @@ class JsonDumper(Service):
         """
             Produce the json into given stream.
         """
+        to_stream: Dict[str, Any]
         if self.prj is None:
             to_stream = {}
         else:
@@ -119,6 +117,7 @@ class JsonDumper(Service):
         """
             Determine the objects to dump.
         """
+        assert self.prj is not None
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(self.session, self.prj.projid, self.filters)
         from_, where, params = object_set.get_sql(self.requester_id)
@@ -129,7 +128,7 @@ class JsonDumper(Service):
         logger.info("SQLParam=%s", params)
 
         with CodeTimer("Get IDs:", logger):
-            res: ResultProxy = self.session.execute(sql, params)
+            res: Result = self.session.execute(sql, params)
         ids = [r['objid'] for r in res]
 
         logger.info("NB OBJIDS=%d", len(ids))

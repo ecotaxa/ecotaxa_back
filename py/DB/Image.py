@@ -4,12 +4,11 @@
 #
 from enum import Enum
 
-from sqlalchemy import Index, Column, ForeignKey, Sequence, CHAR
-from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, INTEGER, BYTEA
-# noinspection PyProtectedMember
-from sqlalchemy.engine import ResultProxy
-from sqlalchemy.orm import Session
-
+from DB.helpers import Session
+from DB.helpers.DDL import Index, Column, ForeignKey, Sequence
+from DB.helpers.Direct import text
+from DB.helpers.Postgres import CHAR, BIGINT, VARCHAR, INTEGER, BYTEA
+from .helpers import Result
 from .helpers.ORM import Model
 
 
@@ -36,14 +35,13 @@ class Image(Model):
         """
             Get all object/image pairs from the project
         """
-        res: ResultProxy = session.execute(
-            # Must be reloaded from DB, as phase 1 added all objects for duplicates checking
-            # TODO: Why using the view?
-            "SELECT concat(o.orig_id,'*',i.orig_file_name) "
-            "  FROM images i "
-            "  JOIN objects o ON i.objid = o.objid "
-            " WHERE o.projid = :prj",
-            {"prj": prj_id})
+        # Must be reloaded from DB, as phase 1 added all objects for duplicates checking
+        # TODO: Why using the view?
+        sql = text("SELECT concat(o.orig_id,'*',i.orig_file_name) "
+                   "  FROM images i "
+                   "  JOIN objects o ON i.objid = o.objid "
+                   " WHERE o.projid = :prj")
+        res: Result = session.execute(sql, {"prj": prj_id})
         ret = {img_id for img_id, in res}
         return ret
 

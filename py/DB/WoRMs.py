@@ -2,9 +2,9 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, SmallInteger
 
-from DB.helpers.ORM import Model
+from .helpers.DDL  import Column, Integer, String, Boolean, DateTime, SmallInteger
+from .helpers.ORM import Model
 
 
 class WoRMS(Model):

@@ -20,7 +20,10 @@ class Bean(dict):
 
     def __getattr__(self, attr):
         """ To support e.g. obj.latitude """
-        return self[attr]
+        try:
+            return self[attr]
+        except KeyError:
+            raise AttributeError()
 
     def __setattr__(self, key, value):
         """ To support e.g. obj.prjid = 1 """

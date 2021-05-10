@@ -8,8 +8,9 @@ from typing import List, Set, Dict, Tuple
 
 from API_operations.TaxoManager import TaxonomyChangeService
 from BO.Classification import ClassifIDCollT, ClassifIDT, ClassifIDListT
-from DB import ResultProxy, Taxonomy, WoRMS
+from DB import Taxonomy, WoRMS
 from DB.Project import ProjectTaxoStat
+from DB.helpers import Result
 from DB.helpers.ORM import Session, Query, any_, case, func, text, select
 from helpers.DynamicLogs import get_logger
 
@@ -53,11 +54,10 @@ class TaxonomyBO(object):
         """
             Return input IDs for the existing ones.
         """
-        res: ResultProxy = session.execute(
-            "SELECT id "
-            "  FROM taxonomy "
-            " WHERE id = ANY (:een)",
-            {"een": list(classif_id_seen)})
+        sql = text("SELECT id "
+                   "  FROM taxonomy "
+                   " WHERE id = ANY (:een)")
+        res: Result = session.execute(sql, {"een": list(classif_id_seen)})
         return {int(r['id']) for r in res}
 
     @staticmethod
@@ -65,11 +65,10 @@ class TaxonomyBO(object):
         """
             Return input IDs, for the existing ones with 'P' type.
         """
-        res: ResultProxy = session.execute(
-            "SELECT id "
-            "  FROM taxonomy "
-            " WHERE id = ANY (:een) AND taxotype = 'P'",
-            {"een": list(classif_id_seen)})
+        sql = text("SELECT id "
+                   "  FROM taxonomy "
+                   " WHERE id = ANY (:een) AND taxotype = 'P'")
+        res: Result = session.execute(sql, {"een": list(classif_id_seen)})
         return {an_id for an_id, in res}
 
     @staticmethod
@@ -77,14 +76,13 @@ class TaxonomyBO(object):
         """
             Match taxa in taxon_lower_list and return the matched ones in taxo_found.
         """
-        res: ResultProxy = session.execute(
-            """SELECT t.id, lower(t.name) AS name, lower(t.display_name) AS display_name, 
+        sql = text("""SELECT t.id, lower(t.name) AS name, lower(t.display_name) AS display_name, 
                       lower(t.name)||'<'||lower(p.name) AS computedchevronname 
                  FROM taxonomy t
                 LEFT JOIN taxonomy p on t.parent_id = p.id
                 WHERE lower(t.name) = ANY(:nms) OR lower(t.display_name) = ANY(:dms) 
-                    OR lower(t.name)||'<'||lower(p.name) = ANY(:chv) """,
-            {"nms": taxon_lower_list, "dms": taxon_lower_list, "chv": taxon_lower_list})
+                    OR lower(t.name)||'<'||lower(p.name) = ANY(:chv) """)
+        res: Result = session.execute(sql, {"nms": taxon_lower_list, "dms": taxon_lower_list, "chv": taxon_lower_list})
         for rec_taxon in res:
             for found_k, found_v in taxo_found.items():
                 if ((found_k == rec_taxon['name'])
@@ -101,12 +99,11 @@ class TaxonomyBO(object):
             Get taxa names from id list.
         """
         ret = {}
-        res: ResultProxy = session.execute(
-            """SELECT t.id, t.name, p.name AS parent_name
+        sql = text("""SELECT t.id, t.name, p.name AS parent_name
                  FROM taxonomy t
                 LEFT JOIN taxonomy p ON t.parent_id = p.id
-                WHERE t.id = ANY(:ids) """,
-            {"ids": list(id_coll)})
+                WHERE t.id = ANY(:ids) """)
+        res: Result = session.execute(sql, {"ids": list(id_coll)})
         for rec_taxon in res:
             ret[rec_taxon['id']] = (rec_taxon['name'], rec_taxon['parent_name'])
         return ret
@@ -116,8 +113,7 @@ class TaxonomyBO(object):
         """
             Get id and children taxa ids for given id.
         """
-        res: ResultProxy = session.execute(
-            """WITH RECURSIVE rq(id) 
+        sql = text("""WITH RECURSIVE rq(id) 
                 AS (SELECT id 
                       FROM taxonomy 
                      WHERE id = ANY(:ids)
@@ -125,8 +121,8 @@ class TaxonomyBO(object):
                     SELECT t.id 
                       FROM rq 
                       JOIN taxonomy t ON rq.id = t.parent_id )
-               SELECT id FROM rq """,
-            {"ids": id_list})
+               SELECT id FROM rq """)
+        res: Result = session.execute(sql, {"ids": id_list})
         return {int(r['id']) for r in res}
 
     MAX_MATCHES = 200
@@ -164,7 +160,7 @@ class TaxonomyBO(object):
         qry = qry.order_by(priority, func.lower(tf.c.display_name))
         qry = qry.limit(cls.MAX_MATCHES)
         logger.info("Taxo query: %s with params %s and %s ", qry, display_name_filter, name_filters)
-        res: ResultProxy = session.execute(qry)
+        res: Result = session.execute(qry)
         return res.fetchall()
 
     @classmethod
@@ -219,7 +215,7 @@ class TaxonBOSet(object):
         qry = qry.where(tf.c.id == any_(taxon_ids))
         # Add another join for getting children
         logger.info("Taxo query: %s with IDs %s", qry, taxon_ids)
-        res: ResultProxy = session.execute(qry)
+        res: Result = session.execute(qry)
         self.taxa: List[TaxonBO] = []
         for a_rec in res.fetchall():
             lst_rec = list(a_rec)
@@ -296,7 +292,7 @@ class TaxonBOSetFromWoRMS(object):
         qry = qry.select_from(chained_joins)
         qry = qry.where(tf.c.aphia_id == any_(taxon_ids))
         logger.info("Taxo query: %s with IDs %s", qry, taxon_ids)
-        res: ResultProxy = session.execute(qry)
+        res: Result = session.execute(qry)
         self.taxa = []
         for a_rec in res.fetchall():
             lst_rec = list(a_rec)

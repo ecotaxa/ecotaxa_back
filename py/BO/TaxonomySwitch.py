@@ -48,7 +48,9 @@ class TaxonomyMapper(object):
                 # No mapping -> re-add to auto matching to come, who knows...
                 manual_ids.remove(a_manual_id)
                 continue
-            ret[a_manual_id] = self.session.query(WoRMS).get(aphia_id)
+            worms_rec = self.session.query(WoRMS).get(aphia_id)
+            assert worms_rec is not None
+            ret[a_manual_id] = worms_rec
 
         # Do auto matching of the rest
         ids_for_auto_match = self.taxa_ids.difference(manual_ids)

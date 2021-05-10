@@ -13,8 +13,7 @@ def async_bg_run(coro: Coroutine):
     """
         Run in 'background' the given coroutine.
     """
-    # Only starting 3.7 the def is officially exposed
-    loop = asyncio.events._get_running_loop()
+    loop = asyncio.events.get_running_loop()
     return loop.create_task(coro)
 
 

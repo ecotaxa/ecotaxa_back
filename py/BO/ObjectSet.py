@@ -12,10 +12,8 @@ from collections import OrderedDict
 from decimal import Decimal
 from typing import Tuple, Optional, List, Iterator, Callable, Dict
 
-from sqlalchemy import select, text, func, true
 # A Postgresl insert generator, needed for the key conflict clause
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.engine import ResultProxy
+from sqlalchemy.sql import Alias
 
 from API_models.crud import ProjectFilters, ColUpdateList
 from BO.Classification import HistoricalLastClassif, ClassifIDListT
@@ -26,7 +24,11 @@ from BO.User import UserIDT
 from BO.helpers.MappedTable import MappedTable
 from DB import Project, ObjectHeader, Image, Sample, Acquisition
 from DB.Object import ObjectsClassifHisto, ObjectFields
-from DB.helpers.ORM import Session, Query, Delete, Update, Insert, any_, and_, postgresql, or_, case
+from DB.helpers import Result, Session
+from DB.helpers.Core import select
+from DB.helpers.Direct import text, func, true
+from DB.helpers.ORM import Query, Delete, Update, Insert, any_, and_, or_, case
+from DB.helpers.Postgres import pg_insert, pg_dialect
 from DB.helpers.SQL import WhereClause, SQLParamDict, FromClause, OrderClause
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
@@ -95,6 +97,8 @@ class EnumeratedObjectSet(MappedTable):
 
     def __init__(self, session: Session, object_ids: ObjectIDListT):
         super().__init__(session)
+        assert isinstance(object_ids, list)
+        assert len(object_ids) == 0 or isinstance(object_ids[0], ObjectIDT)
         self.object_ids = object_ids
 
     def add(self, object_id: ObjectIDT):
@@ -228,7 +232,7 @@ class EnumeratedObjectSet(MappedTable):
         ins_qry = ins_qry.from_select([och.objid, och.classif_date, och.classif_type, och.classif_id,
                                        och.classif_qual, och.classif_who], sel_subqry)
         ins_qry = ins_qry.on_conflict_do_nothing(constraint='objectsclassifhisto_pkey')
-        logger.info("Histo query: %s", ins_qry.compile(dialect=postgresql.dialect()))
+        logger.info("Histo query: %s", ins_qry.compile(dialect=pg_dialect()))
         nb_objs = self.session.execute(ins_qry).rowcount
         logger.info(" %d out of %d rows copied to log", nb_objs, len(self.object_ids))
         return oh
@@ -264,35 +268,36 @@ class EnumeratedObjectSet(MappedTable):
             to have restore-able lines.
         """
         # Get the histo entries
-        subqry = self.session.query(ObjectsClassifHisto,
-                                    func.rank().over(partition_by=ObjectsClassifHisto.objid,
-                                                     order_by=ObjectsClassifHisto.classif_date.desc()).
-                                    label("rnk"))
+        subqry: Query = self.session.query(ObjectsClassifHisto,
+                                           func.rank().over(partition_by=ObjectsClassifHisto.objid,
+                                                            order_by=ObjectsClassifHisto.classif_date.desc()).
+                                           label("rnk"))
         if from_user_id:
             subqry = subqry.filter(ObjectsClassifHisto.classif_who == from_user_id)
         if but_not_from_user_id:
             subqry = subqry.filter(ObjectsClassifHisto.classif_who != but_not_from_user_id)
         subqry = subqry.filter(ObjectsClassifHisto.classif_type == "M")
-        subqry = subqry.filter(ObjectsClassifHisto.objid == any_(self.object_ids)).subquery()
+        subq_alias: Alias = subqry.filter(ObjectsClassifHisto.objid == any_(self.object_ids)).subquery()
 
         # Also get some fields from ObjectHeader for referencing, info, and fallback
         qry = self.session.query(ObjectHeader.objid, ObjectHeader.classif_id,
-                                 func.coalesce(subqry.c.classif_date, ObjectHeader.classif_auto_when),
-                                 subqry.c.classif_type,
-                                 func.coalesce(subqry.c.classif_id, ObjectHeader.classif_auto_id).label("h_classif_id"),
-                                 func.coalesce(subqry.c.classif_qual,
+                                 func.coalesce(subq_alias.c.classif_date, ObjectHeader.classif_auto_when),
+                                 subq_alias.c.classif_type,
+                                 func.coalesce(subq_alias.c.classif_id, ObjectHeader.classif_auto_id).label(
+                                     "h_classif_id"),
+                                 func.coalesce(subq_alias.c.classif_qual,
                                                case([(ObjectHeader.classif_auto_id.isnot(None), 'P')])),
-                                 subqry.c.classif_who)
-        qry = qry.join(subqry, ObjectHeader.objid == subqry.c.objid, isouter=(from_user_id is None))
+                                 subq_alias.c.classif_who)
+        qry = qry.join(subq_alias, ObjectHeader.objid == subq_alias.c.objid, isouter=(from_user_id is None))
         if from_user_id is not None:
             # If taking history from a user, don't apply to the objects he/she classsified
             # in last already.
             qry = qry.filter(ObjectHeader.classif_who != from_user_id)
-            qry = qry.filter(subqry.c.rnk == 1)
+            qry = qry.filter(subq_alias.c.rnk == 1)
         else:
             # Taking any history, including nothing, so emit blank history (see isouter above)
             qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))
-            qry = qry.filter(or_(subqry.c.rnk == 1, subqry.c.rnk.is_(None)))
+            qry = qry.filter(or_(subq_alias.c.rnk == 1, subq_alias.c.rnk.is_(None)))
         logger.info("_get_last_classif_history qry:%s", str(qry))
         with CodeTimer("HISTORY for %d objs: " % len(self.object_ids), logger):
             ret = [HistoricalLastClassif(rec) for rec in qry.all()]
@@ -343,7 +348,7 @@ class EnumeratedObjectSet(MappedTable):
                       ObjectHeader.classif_who, ObjectHeader.classif_when]).with_for_update(key_share=True)
         qry = qry.where(ObjectHeader.objid == any_(self.object_ids))
         logger.info("Fetch with lock: %s", qry)
-        res: ResultProxy = self.session.execute(qry)
+        res: Result = self.session.execute(qry)
         prev = {rec['objid']: rec for rec in res.fetchall()}
 
         # Cook a diff b/w present and wanted values, both for the update of obj_head and preparing the ones on _stat

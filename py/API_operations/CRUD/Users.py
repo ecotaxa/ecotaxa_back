@@ -44,7 +44,8 @@ class UserService(Service):
         """
             List all users, if requester is admin.
         """
-        current_user: User = self.ro_session.query(User).get(current_user_id)
+        current_user: Optional[User] = self.ro_session.query(User).get(current_user_id)
+        assert current_user is not None
         ret = []
         if current_user.has_role(Role.APP_ADMINISTRATOR):
             for usr in self.ro_session.query(User):

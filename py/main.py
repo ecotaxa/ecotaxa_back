@@ -110,8 +110,7 @@ async def login(params: LoginReq) -> str:
             return sce.validate_login(params.username, params.password)
 
 
-# TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
-@app.get("/users", tags=['users'], response_model=List[UserModel])  # type:ignore
+@app.get("/users", tags=['users'], response_model=List[UserModel])
 def get_users(current_user: int = Depends(get_current_user)):
     """
         Return the list of users. For admins only.
@@ -120,8 +119,7 @@ def get_users(current_user: int = Depends(get_current_user)):
         return sce.list(current_user)
 
 
-# TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
-@app.get("/users/me", tags=['users'], response_model=UserModelWithRights)  # type:ignore
+@app.get("/users/me", tags=['users'], response_model=UserModelWithRights)
 def show_current_user(current_user: int = Depends(get_current_user)):
     """
         Return currently authenticated user. On top of DB fields, 'can_do' lists the allowed system-wide actions.
@@ -161,8 +159,7 @@ def set_current_user_prefs(project_id: int,
         return sce.set_preferences_per_project(current_user, project_id, key, value)
 
 
-# TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
-@app.get("/users/search", tags=['users'], response_model=List[UserModel])  # type:ignore
+@app.get("/users/search", tags=['users'], response_model=List[UserModel])
 def search_user(current_user: int = Depends(get_current_user),
                 by_name: Optional[str] = None):
     """
@@ -173,8 +170,7 @@ def search_user(current_user: int = Depends(get_current_user),
     return ret
 
 
-# TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
-@app.get("/users/{user_id}", tags=['users'], response_model=UserModel)  # type:ignore
+@app.get("/users/{user_id}", tags=['users'], response_model=UserModel)
 def get_user(user_id: int,
              current_user: int = Depends(get_current_user)):
     """

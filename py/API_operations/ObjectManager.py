@@ -13,7 +13,8 @@ from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
 from BO.User import UserIDT
 from DB import Project, ObjectHeader, ObjectFields, Image, Taxonomy, Sample, User
-from DB.helpers.ORM import ResultProxy
+from DB.helpers.Direct import text
+from DB.helpers.ORM import Result
 from DB.helpers.SQL import OrderClause
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
@@ -93,7 +94,7 @@ class ObjectManager(Service):
             sql += " LIMIT %d" % window_size
 
         with CodeTimer("query: for %d using %s " % (proj_id, sql), logger):
-            res: ResultProxy = self.ro_session.execute(sql, params)
+            res: Result = self.ro_session.execute(text(sql), params)
         ids = []
         details = []
         total = 0
@@ -198,7 +199,7 @@ class ObjectManager(Service):
      WHERE obh.objid = any (:ids) """
         params = {"ids": object_ids}
 
-        res: ResultProxy = self.ro_session.execute(sql, params)
+        res: Result = self.ro_session.execute(text(sql), params)
         ids = [(objid, acquisid, sampleid, projid)
                for objid, acquisid, sampleid, projid in res]
         return ids  # type:ignore
@@ -238,7 +239,7 @@ class ObjectManager(Service):
       FROM """ + from_.get_sql() + " " + where.get_sql()
 
         with CodeTimer("summary: V/D/P for %d using %s " % (proj_id, sql), logger):
-            res: ResultProxy = self.ro_session.execute(sql, params)
+            res: Result = self.ro_session.execute(text(sql), params)
 
         nbr: int
         nbr_v: Optional[int]

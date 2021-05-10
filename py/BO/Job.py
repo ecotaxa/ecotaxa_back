@@ -82,7 +82,7 @@ class JobBO(object):
 
     @classmethod
     def get_one(cls, session: Session, job_id: JobIDT) -> Optional[Job]:
-        job: Job = session.query(Job).get(job_id)
+        job = session.query(Job).get(job_id)
         return job
 
     @classmethod

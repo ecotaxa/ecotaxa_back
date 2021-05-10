@@ -44,4 +44,4 @@ class HistoricalClassification(DataclassAsDict):
     classif_qual: str
     classif_score: float
     user_name: str
-    taxon_name:str
+    taxon_name: str
