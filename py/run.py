@@ -40,7 +40,8 @@ def run_gunicorn():
                 # Refers to site-packages/uvicorn/workers.py
                 "worker_class": "uvicorn.workers.UvicornWorker",
                 'bind': '%s:%s' % ('0.0.0.0', APP_PORT),
-                'workers': 16,
+                # Use WEB_CONCURRENCY env. var
+                #'workers': 16,
                 # https://docs.gunicorn.org/en/stable/settings.html#workers
                 # Below is only for gthread workers type
                 # 'threads': 2,

@@ -7,6 +7,7 @@
 #
 
 import configparser
+import os
 from os import path
 from os.path import abspath, join
 
@@ -14,6 +15,8 @@ from os.path import abspath, join
 INI_DIR = path.join(path.dirname(__file__), "../..")
 INI_FILE = path.join(INI_DIR, "link.ini")
 
+# Optional env. variable
+ENV_KEY= "LEGACY_APP"
 
 def read_link():
     config = configparser.ConfigParser()
@@ -29,7 +32,10 @@ def read_link():
 
 
 def read_config():
-    legacy_src = read_link()
+    if ENV_KEY in os.environ:
+        legacy_src = os.environ[ENV_KEY]
+    else:
+        legacy_src = read_link()
     # We have to cook a pseudo-config as configparser needs an ini-like section
     config_file = join(legacy_src, "appli", "config.cfg")
     config_string = "[conf]\n" + open(config_file).read()
