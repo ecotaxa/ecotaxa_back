@@ -181,7 +181,8 @@ class MergeService(Service, LogEmitter):
                                          [(k, v) for k, v in common_acquisitions.items()])
                     acq_subqry = self.session.query(acq_cte.c.column2).filter(
                         acq_cte.c.column1 == ObjectHeader.acquisid)
-                    upd_values = {'acquisid': func.coalesce(acq_subqry.as_scalar(), ObjectHeader.acquisid)}
+                    upd_values = {'acquisid': func.coalesce(acq_subqry.scalar_subquery(),  # type:ignore
+                                                            ObjectHeader.acquisid)}
                     upd = upd.filter(ObjectHeader.acquisid == any_(list(common_acquisitions.keys())))
                 if len(common_acquisitions) == 0:
                     # Nothing to do. There were only new acquisitions, all of them moved to self.

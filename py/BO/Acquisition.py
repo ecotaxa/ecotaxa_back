@@ -7,8 +7,8 @@
 #
 from typing import List, Dict, Optional
 
-from API_models.crud import ColUpdateList
 from BO.Classification import ClassifIDT, ClassifIDListT
+from BO.ColumnUpdate import ColUpdateList
 from BO.Project import ProjectIDListT, ProjectIDT
 from BO.helpers.MappedEntity import MappedEntity
 from BO.helpers.MappedTable import MappedTable

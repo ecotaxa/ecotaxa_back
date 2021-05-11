@@ -30,6 +30,7 @@ PROJECT_CHECK_URL = "/projects/{project_id}/check"
 OBJECT_QUERY_URL = "/object/{object_id}"
 OBJECT_HISTORY_QUERY_URL = "/object/{object_id}/history"
 SAMPLE_QUERY_URL = "/sample/{sample_id}"
+SAMPLE_TAXO_STAT_URL = "/sample_set/taxo_stats?sample_ids={sample_ids}"
 ACQUISITION_QUERY_URL = "/acquisition/{acquisition_id}"
 PROCESS_QUERY_URL = "/process/{process_id}"
 
@@ -87,6 +88,17 @@ def test_subentities(config, database, fastapi, caplog):
     assert response.status_code == status.HTTP_200_OK
     sample = response.json()
     assert sample is not None
+    # Stats
+    url = SAMPLE_TAXO_STAT_URL.format(sample_ids="%d+%d" % (sample_id, sample_id))
+    response = fastapi.get(url, headers=ADMIN_AUTH)
+    assert response.status_code == status.HTTP_200_OK
+    stats = response.json()
+    assert stats == [{'nb_dubious': 0,
+                      'nb_predicted': 0,
+                      'nb_unclassified': 15,
+                      'nb_validated': 0,
+                      'sample_id': sample_id,
+                      'used_taxa': [-1]}]
 
     acquis_id = first_obj[1]
     # Wrong ID

@@ -6,15 +6,18 @@
 #
 # A Sample BO + enumerated set of Sample(s)
 #
-from typing import List, Any
+from dataclasses import dataclass
+from typing import List
 
-from API_models.crud import ColUpdateList
 from BO.Project import ProjectIDListT
 from DB import Session, Query, Project, Sample, Acquisition
+from DB.helpers.Direct import text
 from DB.helpers.ORM import any_
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
-from .Mappings import ProjectMapping
+from .Classification import ClassifIDListT
+from .ColumnUpdate import ColUpdateList
+from .helpers.DataclassAsDict import DataclassAsDict
 from .helpers.MappedEntity import MappedEntity
 from .helpers.MappedTable import MappedTable
 
@@ -23,6 +26,19 @@ SampleIDListT = List[int]  # Typings, to be clear that these are not e.g. projec
 SampleOrigIDT = str
 
 logger = get_logger(__name__)
+
+
+@dataclass(init=False)
+class SampleTaxoStats(DataclassAsDict):
+    """
+        Taxonomy statistics for a sample.
+    """
+    sample_id: SampleIDT
+    used_taxa: ClassifIDListT
+    nb_unclassified: int
+    nb_validated: int
+    nb_dubious: int
+    nb_predicted: int
 
 
 class SampleBO(MappedEntity):
@@ -101,3 +117,21 @@ class EnumeratedSampleSet(MappedTable):
 
     def add_filter(self, upd):
         return upd.filter(Sample.sampleid == any_(self.ids))
+
+    def read_taxo_stats(self) -> List[SampleTaxoStats]:
+        sql = text("""
+        SELECT sam.sampleid,
+               ARRAY_AGG(DISTINCT COALESCE(obh.classif_id, -1)) as ids,
+               SUM(CASE WHEN obh.classif_id <> -1 THEN 0 ELSE 1 END) as nb_u,
+               COUNT(CASE WHEN obh.classif_qual = 'V' THEN 1 END) nbr_v,
+               COUNT(CASE WHEN obh.classif_qual = 'D' THEN 1 END) nbr_d, 
+               COUNT(CASE WHEN obh.classif_qual = 'P' THEN 1 END) nbr_p
+          FROM obj_head obh
+          JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
+          JOIN samples sam ON sam.sampleid = acq.acq_sample_id
+         WHERE sam.sampleid = ANY(:ids)
+         GROUP BY sam.sampleid;""")
+        with CodeTimer("Stats for %d samples: " % len(self.ids), logger):
+            res = self.session.execute(sql, {'ids': self.ids})
+            ret = [SampleTaxoStats(rec) for rec in res]
+        return ret

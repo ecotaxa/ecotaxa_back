@@ -39,11 +39,14 @@ def dataclass_to_model(clazz: T, add_suffix: bool = False, titles: Optional[Dict
             if str_type.startswith("typing.List["):
                 # TODO: I did not find how to instrospect a type from typings, so below is a bit ugly
                 contained_class_full_name = str_type[12:-1]
-                to_import, contained_class_name = contained_class_full_name.rsplit(".", 1)
-                globs: Dict = {}
-                exec("import " + to_import, globs)
-                contained_class = eval(contained_class_full_name, globs)
-                fld_type = List[dataclass_to_model(contained_class)]  # type: ignore
+                try:
+                    to_import, contained_class_name = contained_class_full_name.rsplit(".", 1)
+                    globs: Dict = {}
+                    exec("import " + to_import, globs)
+                    contained_class = eval(contained_class_full_name, globs)
+                    fld_type = List[dataclass_to_model(contained_class)] # type: ignore
+                except ValueError:
+                    pass
             # Pydantic maps everything to object, no doc or fields or types
             pass
         else:

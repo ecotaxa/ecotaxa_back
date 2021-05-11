@@ -4,8 +4,9 @@
 #
 from typing import Tuple, List, Optional, Set, Dict
 
-from API_models.crud import ProjectFilters, ColUpdateList
+from API_models.crud import ProjectFilters
 from BO.Classification import HistoricalLastClassif, ClassifIDSetT, ClassifIDListT
+from BO.ColumnUpdate import ColUpdateList
 from BO.Mappings import TableMapping
 from BO.ObjectSet import DescribedObjectSet, ObjectIDListT, EnumeratedObjectSet, ObjectIDWithParentsListT
 from BO.Project import ProjectBO, ProjectIDT

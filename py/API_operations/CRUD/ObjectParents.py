@@ -7,15 +7,15 @@
 #
 from typing import Optional, List
 
-from API_models.crud import ColUpdateList
 from API_operations.helpers.Service import Service
 from BO.Acquisition import AcquisitionIDListT, EnumeratedAcquisitionSet, AcquisitionBO, AcquisitionIDT, \
     DescribedAcquisitionSet
+from BO.ColumnUpdate import ColUpdateList
 from BO.Mappings import ProjectMapping
 from BO.Process import ProcessIDListT, EnumeratedProcessSet, ProcessIDT, ProcessBO
 from BO.Project import ProjectIDT, ProjectIDListT
 from BO.Rights import RightsBO, Action
-from BO.Sample import SampleIDListT, EnumeratedSampleSet, SampleIDT, SampleBO, DescribedSampleSet
+from BO.Sample import SampleIDListT, EnumeratedSampleSet, SampleIDT, SampleBO, DescribedSampleSet, SampleTaxoStats
 from BO.User import UserIDT
 
 
@@ -65,6 +65,20 @@ class SamplesService(Service):
         # mappings = ProjectMapping().load_from_project(project)
         # ret.map_free_columns(mappings.sample_mappings)
         return sample_set.list()
+
+    def read_taxo_stats(self, current_user_id: Optional[UserIDT],
+                        sample_ids: SampleIDListT) -> List[SampleTaxoStats]:
+        # Get project IDs for the samples and verify rights
+        sample_set = EnumeratedSampleSet(self.ro_session, sample_ids)
+        project_ids = sample_set.get_projects_ids()
+        # Security check
+        if current_user_id is None:
+            [RightsBO.anonymous_wants(self.ro_session, Action.READ, project_id)
+             for project_id in project_ids]
+        else:
+            [RightsBO.user_wants(self.session, current_user_id, Action.READ, project_id)
+             for project_id in project_ids]
+        return sample_set.read_taxo_stats()
 
 
 class AcquisitionsService(Service):

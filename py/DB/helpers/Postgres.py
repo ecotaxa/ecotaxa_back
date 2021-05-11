@@ -14,7 +14,9 @@ from sqlalchemy import VARCHAR, INTEGER, CHAR
 # noinspection PyUnresolvedReferences
 from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, DATE, TIMESTAMP, BIGINT, BYTEA
 # noinspection PyUnresolvedReferences
-from sqlalchemy.dialects.postgresql import insert as pg_insert, dialect as pg_dialect
+from sqlalchemy.dialects.postgresql import dialect as pg_dialect
+# noinspection PyUnresolvedReferences
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from .ORM import text, Session, column, Integer
 

@@ -7,7 +7,7 @@
 #
 from typing import List
 
-from API_models.crud import ColUpdateList
+from BO.ColumnUpdate import ColUpdateList
 from BO.Project import ProjectIDListT
 from BO.helpers.MappedEntity import MappedEntity
 from BO.helpers.MappedTable import MappedTable

@@ -4,18 +4,19 @@
 #
 #  Models used in CRUD API_operations.
 #
-from typing import Optional, Dict, Type, Iterable, List, Any
+from typing import Optional, Dict, Type, List, Any
 
 from typing_extensions import TypedDict
 
+from BO.ColumnUpdate import ColUpdateList
 from BO.DataLicense import LicenseEnum
 from BO.Project import ProjectUserStats
+from BO.Sample import SampleTaxoStats
 from DB import User, Project, Sample, Acquisition, Process, Job
 from DB.Acquisition import ACQUISITION_FREE_COLUMNS
 from DB.Collection import Collection
 from DB.Process import PROCESS_FREE_COLUMNS
 from DB.Sample import SAMPLE_FREE_COLUMNS
-from DB.helpers.Ansi import current_timestamp
 from helpers.pydantic import BaseModel, Field
 from .helpers.DBtoModel import sqlalchemy_to_pydantic
 from .helpers.DataclassToModel import dataclass_to_model
@@ -120,6 +121,16 @@ class SampleModel(_SampleModelFromDB):  # type:ignore
                                          default={})
 
 
+SampleTaxoStatsModel = dataclass_to_model(SampleTaxoStats, add_suffix=True,
+                                          titles={'sample_id': "The sample id",
+                                                  'used_taxa': "The taxa/category ids used inside the sample. -1 for unclassified objects",
+                                                  "nb_unclassified": "The number of unclassified objects inside the sample",
+                                                  "nb_validated": "The number of validated objects inside the sample",
+                                                  "nb_dubious": "The number of dubious objects inside the sample",
+                                                  "nb_predicted": "The number of predicted objects inside the sample"
+                                                  })
+
+
 class AcquisitionModel(_AcquisitionModelFromDB):  # type:ignore
     free_columns: Dict[str, Any] = Field(title="Free columns from acquisition mapping in project",
                                          default={})
@@ -206,33 +217,6 @@ class ProjectFilters(TypedDict, total=False):
 
 
 ProjectFiltersModel = typed_dict_to_model(ProjectFilters)
-
-
-class ColUpdate(TypedDict):
-    ucol: str
-    """ A column name, pseudo-columns AKA free ones, are OK """
-    uval: str
-    """ The new value to set, always as a string """
-
-
-class ColUpdateList(list):
-    """
-        Formalized way of updating entities in the system.
-            It's, on purpose, not a Dict as we take provision for futures usage when we need an order.
-    """
-
-    def __init__(self, iterable: Iterable[ColUpdate]):
-        super().__init__(iterable)
-
-    def as_dict_for_db(self):
-        ret = {}
-        an_update: ColUpdate
-        for an_update in self:
-            upd_col = an_update["ucol"]
-            ret[upd_col] = an_update["uval"]
-            if ret[upd_col] == 'current_timestamp':
-                ret[upd_col] = current_timestamp()
-        return ret
 
 
 class BulkUpdateReq(BaseModel):

@@ -5,7 +5,7 @@
 import json
 import logging
 
-from API_models.crud import *
+from BO.ColumnUpdate import ColUpdate, ColUpdateList
 # Import services
 from API_operations.CRUD.ObjectParents import SamplesService, AcquisitionsService, ProcessesService
 from API_operations.JsonDumper import JsonDumper

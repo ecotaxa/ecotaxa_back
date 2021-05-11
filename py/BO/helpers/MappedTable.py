@@ -10,7 +10,7 @@ import abc
 from abc import ABCMeta
 from typing import Dict, List
 
-from API_models.crud import ColUpdateList, ColUpdate
+from BO.ColumnUpdate import ColUpdateList, ColUpdate
 from BO.Mappings import MappedTableTypeT, ProjectMapping
 from DB import Project, Session
 from DB.helpers.ORM import non_key_cols, ModelT

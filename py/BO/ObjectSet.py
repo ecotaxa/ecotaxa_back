@@ -15,8 +15,9 @@ from typing import Tuple, Optional, List, Iterator, Callable, Dict
 # A Postgresl insert generator, needed for the key conflict clause
 from sqlalchemy.sql import Alias
 
-from API_models.crud import ProjectFilters, ColUpdateList
+from API_models.crud import ProjectFilters
 from BO.Classification import HistoricalLastClassif, ClassifIDListT
+from BO.ColumnUpdate import ColUpdateList
 from BO.Object import ObjectIDT, ObjectIDWithParentsT
 from BO.Project import ProjectIDListT
 from BO.Taxonomy import TaxonomyBO

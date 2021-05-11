@@ -73,7 +73,7 @@ logger = get_logger(__name__)
 fastapi_logger.setLevel(INFO)
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.9",
+              version="0.0.10",
               # openapi URL as seen from navigator
               openapi_url="/api/openapi.json",
               # root_path="/API_models"
@@ -578,6 +578,23 @@ def samples_search(project_ids: str,
         proj_ids = _split_num_list(project_ids)
         with RightsThrower():
             ret = sce.search(current_user, proj_ids, id_pattern)
+        return ret
+
+
+@app.get("/sample_set/taxo_stats", tags=['samples'], response_model=List[SampleTaxoStatsModel])  # type:ignore
+def sample_set_get_stats(sample_ids: str,
+                         current_user: Optional[int] = Depends(get_optional_current_user)) \
+        -> List[SampleTaxoStats]:
+    """
+        Read classification statistics for a set of samples.
+        EXPECT A SLOW RESPONSE. No cache of such information anywhere.
+
+        - sample_ids: any(non number)-separated list of sample numbers
+    """
+    with SamplesService() as sce:
+        sample_ids = _split_num_list(sample_ids)
+        with RightsThrower():
+            ret = sce.read_taxo_stats(current_user, sample_ids)
         return ret
 
 

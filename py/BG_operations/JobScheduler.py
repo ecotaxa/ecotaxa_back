@@ -43,6 +43,10 @@ class JobRunner(Thread):
 
     @staticmethod
     def tech_error(job_id: JobIDT, te: Any):
+        """
+            Technical problem, which cannot be managed by the service as it was not possible
+            to create it. Report here.
+        """
         session = Service().session
         the_job = session.query(Job).get(job_id)
         assert the_job is not None
