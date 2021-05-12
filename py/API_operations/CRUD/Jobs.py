@@ -115,9 +115,13 @@ class JobCRUDService(Service):
         """
         # Security check
         with self._query_for_update(current_user_id, job_id) as job_bo:
-            if job_bo.state not in (DBJobStateEnum.Finished, DBJobStateEnum.Error, DBJobStateEnum.Pending):
-                return
             temp_for_job = TempDirForTasks(self.link_src)
-            # TODO: Set the job to a state e.g. Trashed and erase in background, better for responsiveness
-            temp_for_job.erase_for(job_id)
-            job_bo.delete()
+            if job_bo.state in (DBJobStateEnum.Finished, DBJobStateEnum.Error, DBJobStateEnum.Pending):
+                # TODO: Set the job to a state e.g. Trashed and erase in background, better for responsiveness
+                temp_for_job.erase_for(job_id)
+                job_bo.delete()
+            elif job_bo.state == DBJobStateEnum.Running:
+                # Set the job to Killed
+                # TODO: No _real_ kill just presentation
+                job_bo.state = DBJobStateEnum.Error
+                job_bo.progress_msg = JobBO.KILLED_MESSAGE

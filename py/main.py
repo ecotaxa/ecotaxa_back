@@ -1178,7 +1178,8 @@ def get_job_file(job_id: int,
 def erase_job(job_id: int,
               current_user: int = Depends(get_current_user)) -> int:
     """
-        Delete the task, from DB and with associated storage.
+        Delete the job, from DB and with associated storage.
+        If the job is running then kill it.
     """
     with JobCRUDService() as sce:
         with RightsThrower():

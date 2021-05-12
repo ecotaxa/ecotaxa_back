@@ -27,6 +27,8 @@ class JobBO(object):
     REPLIED_MESSAGE = "Proceeding"
     # An ack of Restart action
     RESTARTING_MESSAGE = "Restarting"
+    # An ack of Kill action
+    KILLED_MESSAGE = "Killed"
 
     __slots__ = ['_job', '_session', 'params', 'result', 'errors', 'question', 'reply', 'inside']
 
