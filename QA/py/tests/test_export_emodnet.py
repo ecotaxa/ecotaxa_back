@@ -22,7 +22,7 @@ COLLECTION_QUERY_BY_TITLE_URL = "/collections/by_title/?q={title}"
 
 JOB_DOWNLOAD_URL = "/jobs/{job_id}/file"
 
-PROJECT_SEARCH_SAMPLES_URL = "/samples/search?project_ids={project_id}&id_pattern="
+PROJECT_SEARCH_SAMPLES_URL = "/api/samples/search?project_ids={project_id}&id_pattern="
 PROJECT_SEARCH_ACQUIS_URL = "/acquisitions/search?project_id={project_id}"
 
 

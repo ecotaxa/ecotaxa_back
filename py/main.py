@@ -73,11 +73,16 @@ logger = get_logger(__name__)
 fastapi_logger.setLevel(INFO)
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.10",
-              # openapi URL as seen from navigator
+              version="0.0.11",
+              # openapi URL as seen from navigator, this is included when /docs is required
+              # which serves swagger-ui JS app. Stay in /api sub-path.
               openapi_url="/api/openapi.json",
-              # root_path="/API_models"
+              servers=[
+                  {"url": "/api", "description": "External access"},
+                  {"url": "/", "description": "Local access"},
+              ],
               default_response_class=MyORJSONResponse
+              # For later: Root path is in fact _removed_ from incoming requests, so not relevant here
               )
 
 # Instrument a bit
@@ -92,6 +97,9 @@ CRSF_header = {
     'Content-Security-Policy': "default-src 'self' 'unsafe-inline' 'unsafe-eval' "
                                f"blob: data: {CDNs};frame-ancestors 'self';form-action 'self';"
 }
+
+# Establish second routes via /api to same app
+app.mount("/api", app)
 
 
 # noinspection PyUnusedLocal
