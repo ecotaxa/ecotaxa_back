@@ -103,3 +103,10 @@ class UserBO(object):
 class MinimalUserBO(DataclassAsDict):
     id: UserIDT
     name: str
+
+
+@dataclass(init=False)
+class UserActivity(DataclassAsDict):
+    id: UserIDT
+    nb_actions: int
+    last_annot: str

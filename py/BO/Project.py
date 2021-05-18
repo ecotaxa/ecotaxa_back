@@ -9,14 +9,14 @@ from typing import List, Dict, Any, Iterable, Optional, Union
 from BO.Classification import ClassifIDListT
 from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping
 from BO.ProjectPrivilege import ProjectPrivilegeBO
-from BO.User import MinimalUserBO
+from BO.User import MinimalUserBO, UserActivity
 from BO.helpers.DataclassAsDict import DataclassAsDict
 from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFields, Acquisition, Process, \
     ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram, ObjectCNNFeature
 from DB.User import Role
 from DB.helpers import Session, Result
 from DB.helpers.Direct import text
-from DB.helpers.ORM import Delete, Query, any_, and_, contains_eager, minimal_table_of
+from DB.helpers.ORM import Delete, Query, any_, and_, contains_eager, minimal_table_of, func
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -47,6 +47,7 @@ class ProjectUserStats(DataclassAsDict):
     """
     projid: ProjectIDT
     annotators: List[MinimalUserBO]
+    activities: List[UserActivity]
 
 
 class ProjectBO(object):
@@ -145,6 +146,8 @@ class ProjectBO(object):
         self._project.initclassiflist = ",".join([str(cl_id) for cl_id in init_classif_list])
         # Inverse for users by privilege
         # Dispatch members by right
+        # TODO: Nothing prevents or cares about redundant rights, such as adding same
+        #     user as both Viewer and Annotator.
         by_right = {ProjectPrivilegeBO.MANAGE: managers,
                     ProjectPrivilegeBO.ANNOTATE: annotators,
                     ProjectPrivilegeBO.VIEW: viewers}
@@ -257,22 +260,31 @@ class ProjectBO(object):
     def read_user_stats(session: Session, prj_ids: ProjectIDListT) -> List[ProjectUserStats]:
         """
             Read the users (annotators) involved in each project.
+            Also compute a summary of their activity. This can only be an estimate since, e.g.
+            imported data contains exact same data as the one obtained from live actions.
         """
-        qry: Query = session.query(Project.projid, User.id, User.name).distinct()
+        # Activity count: Count 1 for present classification for a user per object
+        #  and of the classification date is the latest for the user
+        qry: Query = session.query(Project.projid, User.id, User.name,
+                                   func.count(ObjectHeader.objid), func.max(ObjectHeader.classif_when))
         qry = qry.join(Sample).join(Acquisition).join(ObjectHeader)
         qry = qry.filter(Project.projid == any_(prj_ids))
         qry = qry.filter(ObjectHeader.classif_who == User.id)
+        qry = qry.group_by(Project.projid, User.id)
         qry = qry.order_by(Project.projid, User.name)
         ret = []
         with CodeTimer("user stats for %d projects, qry: %s:" % (len(prj_ids), str(qry)), logger):
             last_prj = None
-            for projid, user_id, user_name in qry.all():
+            for projid, user_id, user_name, cnt, last_date in qry.all():
                 if projid != last_prj:
-                    prj_stat = ProjectUserStats((projid, []))
+                    prj_stat = ProjectUserStats((projid, [], []))
                     ret.append(prj_stat)
                     last_prj = projid
-                else:
-                    prj_stat.annotators.append(MinimalUserBO((user_id, user_name)))
+                prj_stat.annotators.append(MinimalUserBO((user_id, user_name)))
+                last_date_str = last_date.replace(microsecond=0).isoformat()
+                prj_stat.activities.append(UserActivity((user_id, cnt, last_date_str)))
+        # TODO: Activity count update: Add 1 for each entry in history for each user.
+        # The dates in history are ignored, except for users which do not appear in first resultset.
         return ret
 
     @staticmethod

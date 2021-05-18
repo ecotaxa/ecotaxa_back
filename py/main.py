@@ -425,7 +425,9 @@ def project_set_get_stats(ids: str,
 def project_set_get_user_stats(ids: str,
                                current_user: int = Depends(get_current_user)) -> List[ProjectUserStats]:
     """
-        Read projects user statistics.
+        Read projects user statistics, i.e. a summary of the work done by users in the
+        required projects. The returned values are a detail _per project_, so size of input list
+        equals size of output list.
     """
     with ProjectsService() as sce:
         num_ids = _split_num_list(ids)

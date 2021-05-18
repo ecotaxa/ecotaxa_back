@@ -237,7 +237,8 @@ class ProjectTaxoStatsModel(BaseModel):
 
 ProjectUserStatsModel = dataclass_to_model(ProjectUserStats, add_suffix=True,
                                            titles={'projid': "The project id",
-                                                   'annotators': "The users who decided on present classification of objects"})
+                                                   'annotators': "The users who decided on present classification or state of objects",
+                                                   'activities': "More details on annotators' activities"})
 
 
 class CreateCollectionReq(BaseModel):
