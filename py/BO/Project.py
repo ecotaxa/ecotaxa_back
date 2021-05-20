@@ -9,10 +9,11 @@ from typing import List, Dict, Any, Iterable, Optional, Union
 from BO.Classification import ClassifIDListT
 from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping
 from BO.ProjectPrivilege import ProjectPrivilegeBO
-from BO.User import MinimalUserBO, UserActivity
+from BO.User import MinimalUserBO, UserActivity, UserIDT
 from BO.helpers.DataclassAsDict import DataclassAsDict
 from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFields, Acquisition, Process, \
-    ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram, ObjectCNNFeature
+    ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram, ObjectCNNFeature, \
+    ObjectsClassifHisto
 from DB.User import Role
 from DB.helpers import Session, Result
 from DB.helpers.Direct import text
@@ -263,28 +264,70 @@ class ProjectBO(object):
             Also compute a summary of their activity. This can only be an estimate since, e.g.
             imported data contains exact same data as the one obtained from live actions.
         """
-        # Activity count: Count 1 for present classification for a user per object
-        #  and of the classification date is the latest for the user
-        qry: Query = session.query(Project.projid, User.id, User.name,
-                                   func.count(ObjectHeader.objid), func.max(ObjectHeader.classif_when))
-        qry = qry.join(Sample).join(Acquisition).join(ObjectHeader)
-        qry = qry.filter(Project.projid == any_(prj_ids))
-        qry = qry.filter(ObjectHeader.classif_who == User.id)
-        qry = qry.group_by(Project.projid, User.id)
-        qry = qry.order_by(Project.projid, User.name)
+        # Activity count: Count 1 for present classification for a user per object.
+        #  Of course, the classification date is the latest for the user.
+        pqry: Query = session.query(Project.projid, User.id, User.name,
+                                    func.count(ObjectHeader.objid),
+                                    func.max(ObjectHeader.classif_when))
+        pqry = pqry.join(Sample).join(Acquisition).join(ObjectHeader)
+        pqry = pqry.join(User, User.id == ObjectHeader.classif_who)
+        pqry = pqry.filter(Project.projid == any_(prj_ids))
+        pqry = pqry.filter(ObjectHeader.classif_who == User.id)
+        pqry = pqry.group_by(Project.projid, User.id)
+        pqry = pqry.order_by(Project.projid, User.name)
         ret = []
-        with CodeTimer("user stats for %d projects, qry: %s:" % (len(prj_ids), str(qry)), logger):
+        user_activities: Dict[UserIDT, UserActivity] = {}
+        user_activities_per_project = {}
+        stats_per_project = {}
+        with CodeTimer("user present stats for %d projects, qry: %s:" % (len(prj_ids), str(pqry)), logger):
             last_prj = None
-            for projid, user_id, user_name, cnt, last_date in qry.all():
+            for projid, user_id, user_name, cnt, last_date in pqry.all():
+                last_date_str = last_date.replace(microsecond=0).isoformat()
                 if projid != last_prj:
+                    last_prj = projid
                     prj_stat = ProjectUserStats((projid, [], []))
                     ret.append(prj_stat)
-                    last_prj = projid
+                    user_activities = {}
+                    # Store for second pass with history
+                    stats_per_project[projid] = prj_stat
+                    user_activities_per_project[projid] = user_activities
                 prj_stat.annotators.append(MinimalUserBO((user_id, user_name)))
-                last_date_str = last_date.replace(microsecond=0).isoformat()
-                prj_stat.activities.append(UserActivity((user_id, cnt, last_date_str)))
-        # TODO: Activity count update: Add 1 for each entry in history for each user.
+                user_activity = UserActivity((user_id, cnt, last_date_str))
+                prj_stat.activities.append(user_activity)
+                # Store for second pass
+                user_activities[user_id] = user_activity
+        # Activity count update: Add 1 for each entry in history for each user.
         # The dates in history are ignored, except for users which do not appear in first resultset.
+        hqry: Query = session.query(Project.projid, User.id, User.name,
+                                    func.count(ObjectsClassifHisto.objid),
+                                    func.max(ObjectsClassifHisto.classif_date))
+        hqry = hqry.join(Sample).join(Acquisition).join(ObjectHeader).join(ObjectsClassifHisto)
+        hqry = hqry.join(User, User.id == ObjectsClassifHisto.classif_who)
+        hqry = hqry.filter(Project.projid == any_(prj_ids))
+        hqry = hqry.group_by(Project.projid, User.id)
+        hqry = hqry.order_by(Project.projid, User.name)
+        with CodeTimer("user history stats for %d projects, qry: %s:" % (len(prj_ids), str(hqry)), logger):
+            last_prj = None
+            for projid, user_id, user_name, cnt, last_date in hqry.all():
+                last_date_str = last_date.replace(microsecond=0).isoformat()
+                if projid != last_prj:
+                    last_prj = projid
+                    # Just in case
+                    if projid not in user_activities_per_project:
+                        continue
+                    # Get stored data for the project
+                    user_activities = user_activities_per_project[projid]
+                    prj_stat = stats_per_project[projid]
+                already_there = user_activities.get(user_id)
+                if already_there is not None:
+                    # A user in both history and present classification
+                    already_there.nb_actions += cnt
+                else:
+                    # A user _only_ in history
+                    prj_stat.annotators.append(MinimalUserBO((user_id, user_name)))
+                    user_activity = UserActivity((user_id, cnt, last_date_str))
+                    prj_stat.activities.append(user_activity)
+                    user_activities[user_id] = user_activity
         return ret
 
     @staticmethod
@@ -312,42 +355,42 @@ class ProjectBO(object):
         # Default query: all projects, eventually with first manager information
         # noinspection SqlResolve
         sql = """SELECT p.projid
-                   FROM projects p
-                   LEFT JOIN ( """ + ProjectPrivilegeBO.first_manager_by_project() + """ ) fpm 
-                     ON fpm.projid = p.projid """
+                       FROM projects p
+                       LEFT JOIN ( """ + ProjectPrivilegeBO.first_manager_by_project() + """ ) fpm 
+                         ON fpm.projid = p.projid """
         if also_others:
             # Add the projects for which no entry is found in ProjectPrivilege
             sql += """
-                   LEFT JOIN projectspriv pp ON p.projid = pp.projid AND pp.member = :user_id
-                  WHERE pp.member is null """
+                       LEFT JOIN projectspriv pp ON p.projid = pp.projid AND pp.member = :user_id
+                      WHERE pp.member is null """
         else:
             if not user.has_role(Role.APP_ADMINISTRATOR):
                 # Not an admin, so restrict to projects which current user can work on, or view
                 sql += """
-                        JOIN projectspriv pp 
-                          ON p.projid = pp.projid 
-                         AND pp.member = :user_id """
+                            JOIN projectspriv pp 
+                              ON p.projid = pp.projid 
+                             AND pp.member = :user_id """
                 if for_managing:
                     sql += """
-                         AND pp.privilege = '%s' """ % ProjectPrivilegeBO.MANAGE
+                             AND pp.privilege = '%s' """ % ProjectPrivilegeBO.MANAGE
             sql += " WHERE 1 = 1 "
 
         if title_filter != '':
             sql += """ 
-                    AND ( title ILIKE '%%'|| :title ||'%%'
-                          OR TO_CHAR(p.projid,'999999') LIKE '%%'|| :title ) """
+                        AND ( title ILIKE '%%'|| :title ||'%%'
+                              OR TO_CHAR(p.projid,'999999') LIKE '%%'|| :title ) """
             sql_params["title"] = title_filter
 
         if instrument_filter != '':
             sql += """
-                     AND p.projid IN (SELECT DISTINCT sam.projid FROM samples sam, acquisitions acq
-                                       WHERE acq.acq_sample_id = sam.sampleid
-                                         AND acq.instrument ILIKE '%%'|| :instrum ||'%%' ) """
+                         AND p.projid IN (SELECT DISTINCT sam.projid FROM samples sam, acquisitions acq
+                                           WHERE acq.acq_sample_id = sam.sampleid
+                                             AND acq.instrument ILIKE '%%'|| :instrum ||'%%' ) """
             sql_params["instrum"] = instrument_filter
 
         if filter_subset:
             sql += """
-                     AND NOT title ILIKE '%%subset%%'  """
+                         AND NOT title ILIKE '%%subset%%'  """
 
         with CodeTimer("Projects query:", logger):
             res: Result = session.execute(text(sql), sql_params)
@@ -517,32 +560,32 @@ class ProjectBO(object):
         needed_ids = list(collated_changes.keys())
         # Lock taxo lines to prevent re-entering, during validation it's often a handful of them.
         pts_sql = """SELECT id
-                       FROM taxonomy
-                      WHERE id = ANY(:ids)
-                     FOR NO KEY UPDATE
-        """
+                           FROM taxonomy
+                          WHERE id = ANY(:ids)
+                         FOR NO KEY UPDATE
+            """
         session.execute(text(pts_sql), {"ids": needed_ids})
         # Lock the rows we are going to update, including -1 for unclassified
         pts_sql = """SELECT id, nbr
-                       FROM projects_taxo_stat 
-                      WHERE projid = :prj
-                        AND id = ANY(:ids)
-                     FOR NO KEY UPDATE"""
+                           FROM projects_taxo_stat 
+                          WHERE projid = :prj
+                            AND id = ANY(:ids)
+                         FOR NO KEY UPDATE"""
         res = session.execute(text(pts_sql), {"prj": prj_id, "ids": needed_ids})
         ids_in_db = {classif_id: nbr for (classif_id, nbr) in res.fetchall()}
         ids_not_in_db = set(needed_ids).difference(ids_in_db.keys())
         if len(ids_not_in_db) > 0:
             # Insert rows for missing IDs
             pts_ins = """INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
-                         SELECT :prj, COALESCE(obh.classif_id, -1), COUNT(*) nbr, 
-                                COUNT(CASE WHEN obh.classif_qual = 'V' THEN 1 END) nbr_v,
-                                COUNT(CASE WHEN obh.classif_qual = 'D' THEN 1 END) nbr_d,
-                                COUNT(CASE WHEN obh.classif_qual = 'P' THEN 1 END) nbr_p
-                           FROM obj_head obh
-                           JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
-                           JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prj 
-                          WHERE COALESCE(obh.classif_id, -1) = ANY(:ids)
-                       GROUP BY obh.classif_id"""
+                             SELECT :prj, COALESCE(obh.classif_id, -1), COUNT(*) nbr, 
+                                    COUNT(CASE WHEN obh.classif_qual = 'V' THEN 1 END) nbr_v,
+                                    COUNT(CASE WHEN obh.classif_qual = 'D' THEN 1 END) nbr_d,
+                                    COUNT(CASE WHEN obh.classif_qual = 'P' THEN 1 END) nbr_p
+                               FROM obj_head obh
+                               JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
+                               JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prj 
+                              WHERE COALESCE(obh.classif_id, -1) = ANY(:ids)
+                           GROUP BY obh.classif_id"""
             session.execute(text(pts_ins), {'prj': prj_id, 'ids': list(ids_not_in_db)})
         # Apply delta
         for classif_id, chg in collated_changes.items():
@@ -553,14 +596,14 @@ class ProjectBO(object):
                 # The delta means 0 for this taxon in this project, delete the line
                 sqlparam = {'prj': prj_id, 'cid': classif_id}
                 ts_sql = """DELETE FROM projects_taxo_stat 
-                             WHERE projid = :prj AND id = :cid"""
+                                 WHERE projid = :prj AND id = :cid"""
             else:
                 # General case
                 sqlparam = {'prj': prj_id, 'cid': classif_id,
                             'nul': chg['n'], 'val': chg['V'], 'dub': chg['D'], 'prd': chg['P']}
                 ts_sql = """UPDATE projects_taxo_stat 
-                               SET nbr=nbr+:nul, nbr_v=nbr_v+:val, nbr_d=nbr_d+:dub, nbr_p=nbr_p+:prd 
-                             WHERE projid = :prj AND id = :cid"""
+                                   SET nbr=nbr+:nul, nbr_v=nbr_v+:val, nbr_d=nbr_d+:dub, nbr_p=nbr_p+:prd 
+                                 WHERE projid = :prj AND id = :cid"""
             session.execute(text(ts_sql), sqlparam)
 
 
