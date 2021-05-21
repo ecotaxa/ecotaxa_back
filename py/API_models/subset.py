@@ -13,12 +13,19 @@ class LimitMethods(str, Enum):
     constant = "V"
 
 
+class GroupDefinitions(str, Enum):
+    categories = "C"
+    samples = "S"
+    acquisitions = "A"
+
+
 class SubsetReq(BaseModel):
     """ Subset request. """
     filters: Dict[str, str] = Field(title="The filters to apply to project", default={})
     dest_prj_id: int = Field(title="The destination project ID.")
-    limit_type: LimitMethods = Field(title="The type of limit_value: P for %, V for constant, both per category.")
-    limit_value: float = Field(title="Limit value, e.g. 20% or 5 per copepoda.")
+    group_type: GroupDefinitions = Field(title="Define the groups in which to apply limits. C for categories, S for samples, A for acquisitions.")
+    limit_type: LimitMethods = Field(title="The type of limit_value: P for %, V for constant, both per group.")
+    limit_value: float = Field(title="Limit value, e.g. 20% or 5 per copepoda or 5% per sample.")
     do_images: bool = Field(title="If set, also clone images.")
 
 

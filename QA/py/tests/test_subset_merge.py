@@ -76,10 +76,11 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
     print("\n".join(caplog.messages))
 
     # Subset in full, i.e. clone
-    subset_prj_id = create_project(ADMIN_USER_ID,"Subset of UVP6")
+    subset_prj_id = create_project(ADMIN_USER_ID, "Subset of UVP6")
     filters = {"freenum": "n01", "freenumst": "0"}
     params = SubsetReq(dest_prj_id=subset_prj_id,
                        filters=filters,
+                       group_type='C',
                        limit_type='P',
                        limit_value=100.0,
                        do_images=True)
@@ -1310,7 +1311,7 @@ MERGE_DIR_4 = DATA_DIR / "merge_test" / "second_merge"
 
 def test_merge_remap(config, database, fastapi, caplog):
     # Project 1, usual columns
-    prj_id = create_project(CREATOR_USER_ID,"Merge Dest project")
+    prj_id = create_project(CREATOR_USER_ID, "Merge Dest project")
     do_import(prj_id, MERGE_DIR_1, CREATOR_USER_ID)
     check_project(prj_id)
     # Project 2, same columns but different order
@@ -1318,7 +1319,7 @@ def test_merge_remap(config, database, fastapi, caplog):
     # process: remove process_stop_n_images & process_gamma_value, put process_software at the end
     # sample: rename sample_volconc to sample_volconc2 and move it in last
     # object: remove object_link object_cv and object_sr, move lat & lon near the end
-    prj_id2 = create_project(CREATOR_USER_ID,"Merge Src project")
+    prj_id2 = create_project(CREATOR_USER_ID, "Merge Src project")
     do_import(prj_id2, MERGE_DIR_2, CREATOR_USER_ID)
     check_project(prj_id2)
     # Merge
@@ -1340,7 +1341,7 @@ def test_merge_remap(config, database, fastapi, caplog):
     assert len(all_lats) == len(expected)
     assert all_lats == expected
     # Project 3 mistake as it has nothing to do with the 2 first ones
-    prj_id3 = create_project(CREATOR_USER_ID,"Merge Src Big project")
+    prj_id3 = create_project(CREATOR_USER_ID, "Merge Src Big project")
     do_import(prj_id3, MERGE_DIR_3, CREATOR_USER_ID)
     check_project(prj_id3)
     url = PROJECT_MERGE_URL.format(project_id=prj_id, source_project_id=prj_id3, dry_run=False)
@@ -1350,7 +1351,7 @@ def test_merge_remap(config, database, fastapi, caplog):
                                          "Column 'samples.5volconc2' cannot be mapped. No space left in mapping."]
     # Project 4 is different but compatible
     # It has a new acquisition for an existing sample
-    prj_id4 = create_project(CREATOR_USER_ID,"Merge Src small project")
+    prj_id4 = create_project(CREATOR_USER_ID, "Merge Src small project")
     do_import(prj_id4, MERGE_DIR_4, CREATOR_USER_ID)
     check_project(prj_id4)
     url = PROJECT_MERGE_URL.format(project_id=prj_id, source_project_id=prj_id4, dry_run=False)
@@ -1363,7 +1364,7 @@ def test_empty_subset_uvp6(config, database, fastapi, caplog):
     with caplog.at_level(logging.ERROR):
         prj_id = test_import_uvp6(config, database, caplog, "Test empty Subset")
 
-    subset_prj_id = create_project(ADMIN_USER_ID,"Empty subset")
+    subset_prj_id = create_project(ADMIN_USER_ID, "Empty subset")
     # OK this test is just for covering the code in filters
     filters: ProjectFilters = {
         "taxo": "23456",
@@ -1395,6 +1396,7 @@ def test_empty_subset_uvp6(config, database, fastapi, caplog):
     }
     params = SubsetReq(dest_prj_id=subset_prj_id,
                        filters=filters,
+                       group_type='C',
                        limit_type='P',
                        limit_value=100.0,
                        do_images=True)
@@ -1414,7 +1416,7 @@ def test_empty_subset_uvp6_other(config, database, fastapi, caplog):
     with caplog.at_level(logging.ERROR):
         prj_id = test_import_uvp6(config, database, caplog, "Test empty Subset")
 
-    subset_prj_id = create_project(ADMIN_USER_ID,"Empty subset")
+    subset_prj_id = create_project(ADMIN_USER_ID, "Empty subset")
     # OK this test is just for covering (more) the code in filters
     filters: ProjectFilters = {
         "taxo": "23456",
@@ -1446,6 +1448,7 @@ def test_empty_subset_uvp6_other(config, database, fastapi, caplog):
     }
     params = SubsetReq(dest_prj_id=subset_prj_id,
                        filters=filters,
+                       group_type='C',
                        limit_type='P',
                        limit_value=100.0,
                        do_images=True)
@@ -1475,6 +1478,7 @@ def test_api_subset(config, database, fastapi, caplog):
 
     url = SUBSET_URL.format(project_id=src_prj_id)
     req = {"dest_prj_id": tgt_prj_id,
+           "group_type": "A",
            "limit_type": "P",
            "limit_value": 10,
            "do_images": True}
@@ -1498,6 +1502,7 @@ def test_subset_of_no_visible_issue_484(config, database, fastapi, caplog):
 
     url = SUBSET_URL.format(project_id=src_prj_id)
     req = {"dest_prj_id": tgt_prj_id,
+           "group_type": "A",
            "limit_type": "P",
            "limit_value": 10,
            "do_images": True}
@@ -1514,7 +1519,7 @@ def test_subset_consistency(config, database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
     from tests.test_import import import_plain
     caplog.set_level(logging.DEBUG)
-    prj_id = create_project(ADMIN_USER_ID,"Test Import update")
+    prj_id = create_project(ADMIN_USER_ID, "Test Import update")
     # Plain import first
     import_plain(prj_id)
     check_project(prj_id)
@@ -1525,10 +1530,11 @@ def test_subset_consistency(config, database, fastapi, caplog):
     print("\n".join(caplog.messages))
 
     # Subset in full, i.e. clone
-    subset_prj_id = create_project(ADMIN_USER_ID,"Subset of")
+    subset_prj_id = create_project(ADMIN_USER_ID, "Subset of")
     filters = {"freenum": "n01", "freenumst": "0"}
     params = SubsetReq(dest_prj_id=subset_prj_id,
                        filters=filters,
+                       group_type='S',
                        limit_type='P',
                        limit_value=100.0,
                        do_images=True)

@@ -7,7 +7,7 @@ from os.path import join
 from pathlib import Path
 from typing import List, Tuple, Dict
 
-from API_models.subset import SubsetReq, SubsetRsp, LimitMethods
+from API_models.subset import SubsetReq, SubsetRsp, LimitMethods, GroupDefinitions
 from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet, EnumeratedObjectSet, ObjectIDListT
@@ -55,7 +55,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         self.first_query = True
 
     def init_args(self, args: Dict) -> Dict:
-        ret = super().init_args(args)
+        super().init_args(args)
         args["req"] = self.req.dict()
         return args
 
@@ -163,8 +163,8 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             # Send each 'line'
             for a_db_tuple in db_tuples:
                 self._send_to_writer(import_how, writer, a_db_tuple)
-                # Bean counting and reporting
-                nb_objects += 1
+            # Bean counting and reporting
+            nb_objects += len(a_chunk)
             # Save
             writer.do_bulk_save()
             # Commit (it expires SQLAlchemy session-linked objects)
@@ -245,14 +245,24 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             rank_function = '100*percent_rank'
         else:
             rank_function = 'FunctionError'
+        # And repartition key
+        if req.group_type == GroupDefinitions.categories:
+            part_key = "obh.classif_id"
+        elif req.group_type == GroupDefinitions.samples:
+            part_key = "sam.sampleid"
+        elif req.group_type == GroupDefinitions.acquisitions:
+            part_key = "acq.acquisid"
+        else:
+            part_key = "???"
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(self.session, self.prj_id, self.req.filters)
         from_, where, params = object_set.get_sql(self._get_owner_id())
 
+        # noinspection SqlResolve
         sql = """
             SELECT objid FROM (
-                SELECT """ + rank_function + """() OVER (PARTITION BY obh.classif_id ORDER BY RANDOM()) rang,
+                SELECT """ + rank_function + """() OVER (PARTITION BY """ + part_key + """ ORDER BY RANDOM()) rang,
                        obh.objid
                   FROM """ + from_.get_sql() + """
                 """ + where.get_sql() + """ ) sr
@@ -263,7 +273,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         logger.info("SQLParam=%s", params)
 
         res: Result = self.ro_session.execute(sql, params)
-        ids = [r[0] for r in res]
+        ids = [r for r, in res]
         logger.info("There are %d IDs", len(ids))
 
         self.to_clone = EnumeratedObjectSet(self.session, ids)
