@@ -704,10 +704,11 @@ class TSVFile(object):
             else:
                 # noinspection PyBroadException
                 try:
-                    _im = PIL_Image.open(img_file_path.as_posix())
-                except Exception as _e:
-                    diag.error("Error while reading Image '%s' in file %s. %s"
-                               % (img_file_name, self.relative_name, sys.exc_info()[0]))
+                    ImageBO.validate_image(img_file_path.as_posix())
+                except Exception:
+                    exc_str = str(sys.exc_info()[1])+" "+str(sys.exc_info()[0])
+                    diag.error("Error while reading image '%s' from file %s: %s"
+                               % (img_file_name, self.relative_name, exc_str))
 
             # Verify duplicate images
             key_exist_obj = "%s*%s" % (object_id, img_file_name)

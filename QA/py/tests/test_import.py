@@ -36,7 +36,7 @@ from tests.test_jobs import wait_for_stable, check_job_ok, get_job_errors, check
 # All files paths are now relative to root shared directory
 SHARED_DIR = (Path(dirname(realpath(__file__))) / ".." / "data").resolve()
 DATA_DIR = Path("")
-PLAIN_FILE = DATA_DIR / "import_test.zip" # As seen from server
+PLAIN_FILE = DATA_DIR / "import_test.zip"  # As seen from server
 PLAIN_FILE_PATH = SHARED_DIR / "import_test.zip"  # As seen from client
 V6_FILE = DATA_DIR / "UVP6_example.zip"
 V6_DIR = DATA_DIR / "import_uvp6_zip_in_dir"
@@ -427,25 +427,26 @@ def test_import_issues(config, database, caplog):
         "Invalid Time value '9920' for Field 'object_time' in file ecotaxa_m106_mn01_n3_sml.tsv.",
         "Invalid Annotation Status 'predit' for Field 'object_annotation_status' in file ecotaxa_m106_mn01_n3_sml.tsv.",
         "Missing Image 'm106_mn01_n3_sml_1081.jpg2' in file ecotaxa_m106_mn01_n3_sml.tsv. ",
-        "Error while reading Image 'm106_mn01_n3_sml_corrupted_image.jpg' in file ecotaxa_m106_mn01_n3_sml.tsv. <class 'PIL.UnidentifiedImageError'>",
+        "Error while reading image 'm106_mn01_n3_sml_corrupted_image.jpg' "
+        "from file ecotaxa_m106_mn01_n3_sml.tsv: cannot identify image file '/home/laurent/Devs/from_Lab/ecotaxa_back/QA/py/data/import_issues/tsv_issues/m106_mn01_n3_sml_corrupted_image.jpg' <class 'PIL.UnidentifiedImageError'>",
         "Missing object_id in line '5' of file ecotaxa_m106_mn01_n3_sml.tsv. ",
         "Missing Image 'nada.png' in file ecotaxa_m106_mn01_n3_sml.tsv. "]
 
+    # @pytest.mark.skip()
 
-# @pytest.mark.skip()
-def test_import_classif_issue(config, database, caplog):
-    """ The TSV contains an unknown classification id """
-    caplog.set_level(logging.DEBUG)
-    prj_id = create_project(ADMIN_USER_ID, "Test LS 5")
+    def test_import_classif_issue(config, database, caplog):
+        """ The TSV contains an unknown classification id """
+        caplog.set_level(logging.DEBUG)
+        prj_id = create_project(ADMIN_USER_ID, "Test LS 5")
 
-    params = ImportReq(source_path=str(ISSUES_DIR2))
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
-    check_job_errors(job)
-    errors = get_job_errors(job)
-    assert errors == [
-        "Some specified classif_id don't exist, correct them prior to reload: 99999999"]
+        params = ImportReq(source_path=str(ISSUES_DIR2))
+        with FileImport(prj_id, params) as sce:
+            rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+        job = wait_for_stable(rsp.job_id)
+        check_job_errors(job)
+        errors = get_job_errors(job)
+        assert errors == [
+            "Some specified classif_id don't exist, correct them prior to reload: 99999999"]
 
 
 # @pytest.mark.skip()
