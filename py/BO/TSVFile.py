@@ -287,7 +287,8 @@ class TSVFile(object):
                     if parent_class == Acquisition:
                         assert not upper_level_created, (
                                 "Cannot add existing acquisition '%s' under just created sample %s."
-                                "It would mean that the acquisition is shared between samples which is not physically possible"
+                                "It would mean that the acquisition is shared between samples,"
+                                " which is not physically possible"
                                 % (parent_orig_id, upper_level_pk))
                     # This parent object was known before, don't add it into the session (DB)
                     # but link the child object_head to it (like newly created ones below)
@@ -707,6 +708,8 @@ class TSVFile(object):
                     ImageBO.validate_image(img_file_path.as_posix())
                 except Exception:
                     exc_str = str(sys.exc_info()[1])+" "+str(sys.exc_info()[0])
+                    # Drop the vault folder from the error message, if there.
+                    exc_str = exc_str.replace(str(self.image_dir), "...")
                     diag.error("Error while reading image '%s' from file %s: %s"
                                % (img_file_name, self.relative_name, exc_str))
 

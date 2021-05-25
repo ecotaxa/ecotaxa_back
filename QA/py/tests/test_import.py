@@ -428,7 +428,7 @@ def test_import_issues(config, database, caplog):
         "Invalid Annotation Status 'predit' for Field 'object_annotation_status' in file ecotaxa_m106_mn01_n3_sml.tsv.",
         "Missing Image 'm106_mn01_n3_sml_1081.jpg2' in file ecotaxa_m106_mn01_n3_sml.tsv. ",
         "Error while reading image 'm106_mn01_n3_sml_corrupted_image.jpg' "
-        "from file ecotaxa_m106_mn01_n3_sml.tsv: cannot identify image file '/home/laurent/Devs/from_Lab/ecotaxa_back/QA/py/data/import_issues/tsv_issues/m106_mn01_n3_sml_corrupted_image.jpg' <class 'PIL.UnidentifiedImageError'>",
+        "from file ecotaxa_m106_mn01_n3_sml.tsv: cannot identify image file '.../m106_mn01_n3_sml_corrupted_image.jpg' <class 'PIL.UnidentifiedImageError'>",
         "Missing object_id in line '5' of file ecotaxa_m106_mn01_n3_sml.tsv. ",
         "Missing Image 'nada.png' in file ecotaxa_m106_mn01_n3_sml.tsv. "]
 
