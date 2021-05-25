@@ -20,7 +20,7 @@ from API_operations.imports.SimpleImport import SimpleImport
 from starlette import status
 
 from tests.credentials import ADMIN_USER_ID, CREATOR_AUTH, CREATOR_USER_ID
-from tests.test_import import PLAIN_DIR, PLAIN_FILE, create_project
+from tests.test_import import PLAIN_DIR, PLAIN_FILE, create_project, PLAIN_FILE_PATH
 from tests.test_jobs import wait_for_stable, api_wait_for_stable_job
 
 IMPORT_IMAGES_URL = "/simple_import/{project_id}?dry_run={dry_run}"
@@ -87,7 +87,7 @@ def test_api_import_images(config, database, fastapi, caplog, title):
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(CREATOR_USER_ID, title)
 
-    with open(PLAIN_FILE, "rb") as fin:
+    with open(PLAIN_FILE_PATH, "rb") as fin:
         upload_rsp = fastapi.post(UPLOAD_FILE_URL, headers=CREATOR_AUTH, files={"file": fin})
         assert upload_rsp.status_code == 200
         srv_file_path = upload_rsp.json()

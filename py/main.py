@@ -17,6 +17,7 @@ from fastapi_utils.timing import add_timing_middleware
 from API_models.constants import Constants
 from API_models.crud import *
 from API_models.exports import EMODnetExportRsp
+from API_models.filesystem import DirectoryModel
 from API_models.imports import *
 from API_models.login import LoginReq
 from API_models.merge import MergeRsp
@@ -42,7 +43,7 @@ from API_operations.Status import StatusService
 from API_operations.Subset import SubsetServiceOnProject
 from API_operations.TaxoManager import TaxonomyChangeService
 from API_operations.TaxonomyService import TaxonomyService
-from API_operations.UserFolder import UserFolderService
+from API_operations.UserFolder import UserFolderService, CommonFolderService
 from API_operations.admin.ImageManager import ImageManagerService
 from API_operations.exports.EMODnet import EMODnetExport
 from API_operations.imports.Import import FileImport
@@ -73,7 +74,7 @@ logger = get_logger(__name__)
 fastapi_logger.setLevel(INFO)
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.11",
+              version="0.0.12",
               # openapi URL as seen from navigator, this is included when /docs is required
               # which serves swagger-ui JS app. Stay in /api sub-path.
               openapi_url="/api/openapi.json",
@@ -1209,6 +1210,18 @@ async def put_user_file(file: UploadFile = File(...),
         with RightsThrower():
             file_name = await sce.store(current_user, file)
         return file_name
+
+
+@app.get("/common_files/", tags=['Files'], response_model=DirectoryModel)
+async def list_common_files(path: str,
+                            current_user: int = Depends(get_current_user)) -> DirectoryModel:
+    """
+        List the common files which are usable for some file-related operations e.g. import.
+    """
+    with CommonFolderService() as sce:
+        with RightsThrower():
+            file_list = await sce.list(path, current_user)
+    return file_list
 
 
 # ######################## END OF FILES

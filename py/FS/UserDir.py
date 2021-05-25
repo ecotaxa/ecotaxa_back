@@ -41,6 +41,6 @@ class UserDirectory(object):
         parts = path_str.split(os.path.sep)
         if len(parts) < 3:
             return False
-        if parts[0] == tempfile.gettempprefix() and parts[1].endswith(self._user_suffix()):
+        if parts[1] == tempfile.gettempprefix() and parts[2].endswith(self._user_suffix()):
             return True
         return False

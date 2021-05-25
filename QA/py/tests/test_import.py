@@ -33,8 +33,11 @@ from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID
 from tests.test_jobs import wait_for_stable, check_job_ok, get_job_errors, check_job_errors, api_wait_for_stable_job, \
     FILE_IMPORT_URL, api_check_job_errors, api_check_job_questions
 
-DATA_DIR = (Path(dirname(realpath(__file__))) / ".." / "data").resolve()
-PLAIN_FILE = DATA_DIR / "import_test.zip"
+# All files paths are now relative to root shared directory
+SHARED_DIR = (Path(dirname(realpath(__file__))) / ".." / "data").resolve()
+DATA_DIR = Path("")
+PLAIN_FILE = DATA_DIR / "import_test.zip" # As seen from server
+PLAIN_FILE_PATH = SHARED_DIR / "import_test.zip"  # As seen from client
 V6_FILE = DATA_DIR / "UVP6_example.zip"
 V6_DIR = DATA_DIR / "import_uvp6_zip_in_dir"
 PLAIN_DIR = DATA_DIR / "import_test"

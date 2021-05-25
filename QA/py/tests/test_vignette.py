@@ -9,7 +9,7 @@ from pathlib import Path
 
 from BO.Vignette import VignetteMaker
 
-DATA_DIR = Path(dirname(realpath(__file__))) / ".." / "data" / "vignette"
+VIGNETTE_DIR = Path(dirname(realpath(__file__))) / ".." / "data" / "vignette"
 
 CONFIG = """
 [vignette]
@@ -41,7 +41,7 @@ def test_vignette1():
     config = configparser.ConfigParser()
     config.read_string(CONFIG)
     vignette = "0128_vig.png"
-    maker = VignetteMaker(config, DATA_DIR, vignette)
+    maker = VignetteMaker(config, VIGNETTE_DIR, vignette)
     assert maker.must_keep_original()
     original = "0128.png"
     maker.make_vignette(original)

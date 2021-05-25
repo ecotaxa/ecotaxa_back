@@ -10,7 +10,9 @@ from helpers.pydantic import BaseModel, Field
 
 class ImportReq(BaseModel):
     """ Import request, from UI choices. """
-    source_path: str = Field(title="Source path on server, to zip or plain directory")
+    source_path: str = Field(title="Source path on server, to zip or plain directory."
+                                   " The path can be returned by a file upload (absolute),"
+                                   " otherwise it's relative to shared file area root.")
     taxo_mappings: Dict[str, str] = Field(
         title="Optional taxonomy mapping, key=taxo ID found in file, value=final taxo ID to write", default={})
     skip_loaded_files: bool = Field(default=False)
