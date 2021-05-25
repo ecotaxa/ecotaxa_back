@@ -31,13 +31,14 @@ class ProjectsService(Service):
         """
             Create a project, eventually as a shallow copy of another.
         """
-        current_user = RightsBO.user_wants_create_project(self.session, current_user_id)
         if req.clone_of_id:
-            prj = self.ro_session.query(Project).get(req.clone_of_id)
+            # Cloning a project needs only manager rights on the origin
+            current_user, prj = RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, req.clone_of_id)
             if prj is None:
                 return "Project to clone not found"
             prj = clone_of(prj)
         else:
+            current_user = RightsBO.user_wants_create_project(self.session, current_user_id)
             prj = Project()
         prj.title = req.title
         prj.status = ANNOTATE_STATUS
