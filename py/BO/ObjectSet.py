@@ -29,7 +29,7 @@ from DB.helpers import Result, Session
 from DB.helpers.Core import select
 from DB.helpers.Direct import text, func, true
 from DB.helpers.ORM import Query, Delete, Update, Insert, any_, and_, or_, case
-from DB.helpers.Postgres import pg_insert, pg_dialect
+from DB.helpers.Postgres import pg_insert
 from DB.helpers.SQL import WhereClause, SQLParamDict, FromClause, OrderClause
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
@@ -233,7 +233,8 @@ class EnumeratedObjectSet(MappedTable):
         ins_qry = ins_qry.from_select([och.objid, och.classif_date, och.classif_type, och.classif_id,
                                        och.classif_qual, och.classif_who], sel_subqry)
         ins_qry = ins_qry.on_conflict_do_nothing(constraint='objectsclassifhisto_pkey')
-        logger.info("Histo query: %s", ins_qry.compile(dialect=pg_dialect()))
+        # TODO: mypy crashes due to pg_dialect below
+        #logger.info("Histo query: %s", ins_qry.compile(dialect=pg_dialect()))
         nb_objs = self.session.execute(ins_qry).rowcount
         logger.info(" %d out of %d rows copied to log", nb_objs, len(self.object_ids))
         return oh
@@ -590,7 +591,13 @@ class ObjectSetFilter(object):
                 where_clause *= "sam." + criteria_col + " ilike :freetxtval "
             elif criteria_tbl == 'p':
                 where_clause *= "prc." + criteria_col + " ilike :freetxtval "
-            params['freetxtval'] = '%' + self.free_text_val + '%'
+            like_exp = '%' + self.free_text_val + '%'
+            # Apply standard BOL/EOL regexp markers
+            if like_exp[:2] == "%^":  # Exact match at beginning
+                like_exp = like_exp[2:]
+            if like_exp[-2:] == "$%":  # Exact match at end
+                like_exp = like_exp[:-2]
+            params['freetxtval'] = like_exp
 
         if self.annotators:
             where_clause *= "(obh.classif_who = any (:filt_annot) " \

@@ -76,6 +76,6 @@ if False:  # pragma: no cover
 
         return Ret
 
-
+if __name__ == '__main__':
     def print_table(tbl: Table):
         print(CreateTable(tbl).compile(dialect=postgresql.dialect()))
