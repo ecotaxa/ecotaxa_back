@@ -16,7 +16,7 @@ from fastapi_utils.timing import add_timing_middleware
 
 from API_models.constants import Constants
 from API_models.crud import *
-from API_models.exports import EMODnetExportRsp
+from API_models.exports import EMODnetExportRsp, ExportRsp, ExportReq
 from API_models.filesystem import DirectoryModel
 from API_models.imports import *
 from API_models.login import LoginReq
@@ -46,6 +46,7 @@ from API_operations.TaxonomyService import TaxonomyService
 from API_operations.UserFolder import UserFolderService, CommonFolderService
 from API_operations.admin.ImageManager import ImageManagerService
 from API_operations.exports.EMODnet import EMODnetExport
+from API_operations.exports.ForProject import ProjectExport
 from API_operations.imports.Import import FileImport
 from API_operations.imports.SimpleImport import SimpleImport
 from BG_operations.JobScheduler import JobScheduler
@@ -74,7 +75,7 @@ logger = get_logger(__name__)
 fastapi_logger.setLevel(INFO)
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.12",
+              version="0.0.13",
               # openapi URL as seen from navigator, this is included when /docs is required
               # which serves swagger-ui JS app. Stay in /api sub-path.
               openapi_url="/api/openapi.json",
@@ -877,6 +878,18 @@ def query_object_set_parents(object_ids: ObjectIDListT,
         rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
         rsp.total_ids = len(rsp.object_ids)
         return rsp
+
+
+@app.post("/object_set/export", tags=['objects'], response_model=ExportRsp)
+def export_object_set(filters: ProjectFiltersModel,
+                      request: ExportReq,
+                      current_user: Optional[int] = Depends(get_optional_current_user)) -> ExportRsp:
+    """
+        Start an export job for the given object set.
+    """
+    with ProjectExport(request, filters) as sce:
+        rsp = sce.run(current_user)
+    return rsp
 
 
 @app.delete("/object_set/", tags=['objects'])

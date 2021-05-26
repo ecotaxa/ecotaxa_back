@@ -3,6 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import datetime
+import shutil
 from pathlib import Path
 from typing import Any, List, Tuple
 
@@ -13,6 +14,8 @@ class CommonFolder(object):
          Pointed at by a configuration variable.
     """
     COMMON_FOLDER_CONFIG_KEY = 'SERVERLOADAREA'
+    # Contains a subdirectory of previous
+    EXPORT_CONFIG_KEY = 'FTPEXPORTAREA'
 
     def __init__(self, config: Any):
         base_path = config[self.COMMON_FOLDER_CONFIG_KEY]
@@ -22,7 +25,6 @@ class CommonFolder(object):
     def path_to(self, sub_path: str) -> str:
         """
             Return absolute path to given relative subpath.
-        :return:
         """
         # Leading / implies root directory
         sub_path = sub_path.lstrip("/")
@@ -52,3 +54,26 @@ class CommonFolder(object):
                 str_entry_time = entry_time.isoformat(" ")
             ret.append((an_entry.name, e_type, entry_sz, str_entry_time))
         return ret
+
+
+class ExportFolder(object):
+    """
+         The directory where exports are produced, if asked so.
+    """
+    # Contains a subdirectory of previous
+    EXPORT_CONFIG_KEY = 'FTPEXPORTAREA'
+
+    def __init__(self, config: Any):
+        base_path = config[self.EXPORT_CONFIG_KEY]
+        base_path = base_path.strip("'")
+        self.path: Path = Path(base_path)
+
+    def receive_from(self, src_path: Path, as_name: str):
+        """
+            Move a file into self, changing the source name.
+        """
+        if not self.path.exists():
+            self.path.mkdir()
+        dst_file = self.path / as_name
+        # fichier.rename(fichierdest) si ce sont des volumes sur des devices differents ça ne marche pas
+        shutil.copyfile(src_path.as_posix(), dst_file.as_posix())
