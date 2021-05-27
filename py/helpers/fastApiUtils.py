@@ -11,9 +11,16 @@ from typing import Any, Optional
 
 import orjson
 from fastapi import FastAPI, Depends, HTTPException
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.openapi.models import OAuthFlows as OAuthFlowsModel
+from fastapi.security import OAuth2
+from fastapi.security.utils import get_authorization_scheme_param
 from itsdangerous import URLSafeTimedSerializer, TimestampSigner, SignatureExpired, BadSignature
+# noinspection PyPackageRequirements
+from starlette.requests import Request
+# noinspection PyPackageRequirements
 from starlette.responses import JSONResponse
+# noinspection PyPackageRequirements
+from starlette.status import HTTP_403_FORBIDDEN
 
 from helpers.link_to_legacy import read_config
 from .starlette import status, PlainTextResponse
@@ -60,10 +67,48 @@ def dump_openapi(app: FastAPI, main_path: str):  # pragma: no cover
             fd.write(json_def)
 
 
-secured_scheme = HTTPBearer()
+class BearerOrCookieAuth(OAuth2):
+    """
+        Credits to https://medium.com/data-rebels/fastapi-how-to-add-basic-and-cookie-authentication-a45c85ef47d3
+    """
+
+    def __init__(
+            self,
+            tokenUrl: str,
+            scheme_name: str = None,
+            scopes: dict = None,
+            auto_error: bool = True,
+    ):
+        if not scopes:
+            scopes = {}
+        flows = OAuthFlowsModel(password={"tokenUrl": tokenUrl, "scopes": scopes})
+        super().__init__(flows=flows, scheme_name=scheme_name, auto_error=auto_error)
+
+    async def __call__(self, request: Request) -> Optional[str]:
+        header_authorization: str = request.headers.get("Authorization")
+        session_cookie: Optional[str] = request.cookies.get("session")
+
+        header_scheme, header_param = get_authorization_scheme_param(
+            header_authorization
+        )
+
+        if header_scheme.lower() == "bearer":
+            return header_param
+        elif session_cookie is not None:
+            return session_cookie
+        else:
+            if self.auto_error:
+                raise HTTPException(
+                    status_code=HTTP_403_FORBIDDEN, detail="Not authenticated"
+                )
+            else:
+                return None
+
+
+mixed_scheme = BearerOrCookieAuth(tokenUrl="/token")
 # The same but not throwing an exception if user is not authenticated.
 # used for cases when authentication is optional
-secured_scheme_nothrow = HTTPBearer(auto_error=False)
+mixed_scheme_nothrow = BearerOrCookieAuth(tokenUrl="/token", auto_error=False)
 
 _credentials_exception = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -89,15 +134,13 @@ def build_serializer():
     return _serializer
 
 
-def _get_current_user(scheme, credentials) -> int:  # pragma: no cover
+def _get_current_user(token) -> int:  # pragma: no cover
     """
         Extract current user from auth string, anything going wrong means security exception.
         Not reasonable to test automatically, so excluded from code coverage measurement.
     """
     try:
-        if scheme != 'Bearer':
-            raise _credentials_exception
-        payload = build_serializer().loads(credentials, max_age=MAX_TOKEN_AGE)
+        payload = build_serializer().loads(token, max_age=MAX_TOKEN_AGE)
         try:
             ret: int = int(payload["user_id"])
         except (KeyError, ValueError):
@@ -109,24 +152,24 @@ def _get_current_user(scheme, credentials) -> int:  # pragma: no cover
     return ret
 
 
-async def get_optional_current_user(creds: HTTPAuthorizationCredentials = Depends(secured_scheme_nothrow)) \
+async def get_optional_current_user(token: str = Depends(mixed_scheme_nothrow)) \
         -> Optional[int]:  # pragma: no cover
     """
         There _can_ be a user in the request, get the id if the case.
     """
-    if creds is None:
+    if token is None:
         return None
     try:
-        return _get_current_user(creds.scheme, creds.credentials)
+        return _get_current_user(token)
     except HTTPException:
         return None
 
 
-async def get_current_user(creds: HTTPAuthorizationCredentials = Depends(secured_scheme)) -> int:
+async def get_current_user(token: str = Depends(mixed_scheme)) -> int:
     """
         Just relay the call to the private def above.
     """
-    return _get_current_user(creds.scheme, creds.credentials)
+    return _get_current_user(token)
 
 
 _forbidden_exception = HTTPException(
@@ -199,6 +242,7 @@ class MyORJSONResponse(JSONResponse):
             return orjson.dumps(content, option=orjson.OPT_NON_STR_KEYS)
 
     except ImportError:
+        # noinspection PyUnusedLocal
         def render(self, content: Any) -> bytes:
             assert False, "orjson must be installed to use ORJSONResponse"
             # noinspection PyUnreachableCode
