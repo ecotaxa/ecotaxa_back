@@ -1,4 +1,6 @@
 import logging
+from io import BytesIO
+from zipfile import ZipFile
 
 from starlette import status
 
@@ -6,8 +8,9 @@ from tests.credentials import ADMIN_AUTH, REAL_USER_ID, CREATOR_AUTH
 from tests.emodnet_ref import ref_zip, with_zeroes_zip, no_computations_zip
 from tests.test_classification import _prj_query, OBJECT_SET_CLASSIFY_URL
 from tests.test_collections import COLLECTION_UPDATE_URL, COLLECTION_QUERY_URL
+from tests.test_export_emodnet import JOB_DOWNLOAD_URL
 from tests.test_fastapi import PROJECT_QUERY_URL
-from tests.test_jobs import wait_for_stable, api_check_job_ok, api_check_job_failed
+from tests.test_jobs import wait_for_stable, api_check_job_ok, api_check_job_failed, get_job_and_wait_until_ok
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
 OBJECT_SET_EXPORT_URL = "/object_set/export"
@@ -36,7 +39,7 @@ def test_export_tsv(config, database, fastapi, caplog):
            "tsv_entities": "OPASHC",
            "coma_as_separator": True,
            "with_images": True,
-           "only_first_image": True,
+           "only_first_image": False,
            "split_by": "sample",
            "with_internal_ids": False,
            "out_to_ftp": False,
@@ -47,16 +50,45 @@ def test_export_tsv(config, database, fastapi, caplog):
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
     assert rsp.status_code == status.HTTP_200_OK
 
-    job_id = rsp.json()["job_id"]
-    wait_for_stable(job_id)
-    api_check_job_ok(fastapi, job_id)
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_unzip_and_check(fastapi, job_id)
 
     # Backup export
     req["exp_type"] = "BAK"
-    req["with_images"] = True
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
     assert rsp.status_code == status.HTTP_200_OK
 
-    job_id = rsp.json()["job_id"]
-    wait_for_stable(job_id)
-    api_check_job_ok(fastapi, job_id)
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_unzip_and_check(fastapi, job_id)
+
+    # DOI export
+    req["exp_type"] = "DOI"
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+    assert rsp.status_code == status.HTTP_200_OK
+
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_unzip_and_check(fastapi, job_id)
+
+    # TSV export
+    req["exp_type"] = "TSV"
+    req["with_internal_ids"] = True
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+    assert rsp.status_code == status.HTTP_200_OK
+
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_unzip_and_check(fastapi, job_id)
+
+
+def download_and_unzip_and_check(fastapi, job_id):
+    dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
+    rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
+    unzip_and_check(rsp.content, with_zeroes_zip)
+
+
+def unzip_and_check(zip_content, ref_content):
+    pseudo_file = BytesIO(zip_content)
+    zip = ZipFile(pseudo_file)
+    for a_file in zip.filelist:
+        name = a_file.filename
+        with zip.open(name) as myfile:
+            content_bin = myfile.read()

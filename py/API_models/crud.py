@@ -228,7 +228,8 @@ class BulkUpdateReq(BaseModel):
 # TODO: Derive from ProjectTaxoStats
 class ProjectTaxoStatsModel(BaseModel):
     projid: int = Field(title="The project id")
-    used_taxa: List[int] = Field(title="The taxa/category ids used inside the project", default=[])
+    used_taxa: List[int] = Field(title="The taxa/category ids used inside the project."
+                                       " An id of -1 means some unclassified objects", default=[])
     nb_unclassified: int = Field(title="The number of unclassified objects inside the project")
     nb_validated: int = Field(title="The number of validated objects inside the project")
     nb_dubious: int = Field(title="The number of dubious objects inside the project")

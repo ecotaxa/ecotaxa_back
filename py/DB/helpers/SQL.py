@@ -111,13 +111,15 @@ class OrderClause(object):
         self.expressions: List[str] = []
         self.columns: List[str] = []
 
-    def add_expression(self, alias: str, expr: str, asc_or_desc: Optional[str]) -> None:
+    def add_expression(self, alias: Optional[str], expr: str, asc_or_desc: Optional[str] = None) -> None:
         if asc_or_desc is None:
             asc_or_desc = "ASC"
         if alias is not None:
+            # Refer to a table in select list
             self.expressions.append("%s.%s %s" % (alias, expr, asc_or_desc))
             self.columns.append(alias + "." + expr)
         else:
+            # Refer to a select expression
             self.expressions.append("%s %s" % (expr, asc_or_desc))
             self.columns.append(expr)
 

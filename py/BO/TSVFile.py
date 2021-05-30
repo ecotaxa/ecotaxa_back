@@ -36,12 +36,6 @@ class TSVFile(object):
         A tab-separated file, index of images with additional information about them.
     """
 
-    # Fields which are not mapped, i.e. not directly destined to DB, but needed here for fallback values.
-    ProgFields = {'object_annotation_time',
-                  'object_annotation_person_email',
-                  # 'annotation_person_first_name' # historical
-                  }
-
     def __init__(self, path: Path, bundle_path: Path):
         self.path: Path = path
         try:
@@ -93,7 +87,7 @@ class TSVFile(object):
             # Only keep the fields we can persist, the ones ignored at first step would be signalled here as well
             # if we didn't prohibit the move to 2nd step in this case.
             field_set = set(self.clean_fields.values())
-            field_set = self.filter_unused_fields(how, field_set) - self.ProgFields
+            field_set = self.filter_unused_fields(how, field_set) - set(GlobalMapping.DOUBLED_FIELDS.keys())
 
             # We can now prepare ORM classes with optimal performance
             target_fields = self.dispatch_fields_by_table(how.custom_mapping, field_set)
@@ -236,7 +230,7 @@ class TSVFile(object):
         ok_fields = set([field for field in field_set
                          if field in how.custom_mapping.all_fields
                          or field in GlobalMapping.PREDEFINED_FIELDS
-                         or field in self.ProgFields])
+                         or field in GlobalMapping.DOUBLED_FIELDS])
         # Remove classification fields if updating but not classification
         if how.can_update_only and not how.update_with_classif:
             for fld in GlobalMapping.ANNOTATION_FIELDS.keys():
@@ -632,7 +626,7 @@ class TSVFile(object):
             if a_field in GlobalMapping.PREDEFINED_FIELDS:
                 # OK it's a predefined one
                 continue
-            if a_field in TSVFile.ProgFields:
+            if a_field in GlobalMapping.DOUBLED_FIELDS:
                 # Not mapped, but not a programmatically-used field
                 continue
             # Not a predefined field, so nXX or tXX
@@ -707,7 +701,7 @@ class TSVFile(object):
                 try:
                     ImageBO.validate_image(img_file_path.as_posix())
                 except Exception:
-                    exc_str = str(sys.exc_info()[1])+" "+str(sys.exc_info()[0])
+                    exc_str = str(sys.exc_info()[1]) + " " + str(sys.exc_info()[0])
                     # Drop the vault folder from the error message, if there.
                     exc_str = exc_str.replace(str(self.image_dir), "...")
                     diag.error("Error while reading image '%s' from file %s: %s"

@@ -33,8 +33,6 @@ class JobRunner(Thread):
         """
         try:
             sce = JobScheduler.instantiate(self.db_job)
-            # TODO: Direct member assignment is bad
-            sce.job_id = self.db_job.id
         except (AssertionError, TypeError, json.decoder.JSONDecodeError) as te:
             self.tech_error(self.db_job.id, te)
             return
@@ -87,7 +85,7 @@ class JobScheduler(Service):
         the_job.state = DBJobStateEnum.Running
         self.session.commit()
         # Detach the job DB line from session, as JobRunner is in another thread
-        # and objects are linked to sessions, and sessions cannot be shared
+        # and objects are linked to sessions, and sessions cannot be shared b/w threads
         job_clone = clone_of(the_job)
         job_clone.id = the_job.id
         # Run the service background
@@ -112,6 +110,8 @@ class JobScheduler(Service):
         # Inject the service state
         sce.load_state_from(a_job.inside)
         sce.load_reply_from(a_job.reply)
+        # TODO: Direct member assignment is bad
+        sce.job_id = a_job.id
         return sce
 
     @classmethod

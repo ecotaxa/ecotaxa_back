@@ -125,6 +125,25 @@ class TaxonomyBO(object):
         res: Result = session.execute(sql, {"ids": id_list})
         return {int(r['id']) for r in res}
 
+    @staticmethod
+    def parents_sql(ref_obj_id: str) -> str:
+        """
+            SQL for recursive '>'-separated names of parents.
+        """
+        sql = """(WITH RECURSIVE rq(id, name, parent_id) 
+                   AS (SELECT id, name, parent_id, 1 AS rank 
+                         FROM taxonomy 
+                        WHERE id = {0}
+                       UNION
+                       SELECT txpr.id, txpr.name, txpr.parent_id, rank+1 AS rank 
+                         FROM rq 
+                         JOIN taxonomy txpr ON txpr.id = rq.parent_id)
+                    SELECT string_agg(name,'>') 
+                      FROM (SELECT name 
+                              FROM rq 
+                          ORDER BY rank desc) q)""".format(ref_obj_id)
+        return sql
+
     MAX_MATCHES = 200
     MAX_TAXONOMY_LEVELS = 20
 

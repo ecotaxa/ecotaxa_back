@@ -23,12 +23,18 @@ class GlobalMapping(object):
         Information about mapping process (from TSV to DB)
     """
     ANNOTATION_FIELDS = {
-        # !!! 2 TSV fields end up into a single DB column
+        # !!! 2 TSV fields end up into a single DB column, it's one OR the other
         'object_annotation_category': {'table': ObjectHeader.__tablename__, 'field': 'classif_id', 'type': 't'},
         'object_annotation_category_id': {'table': ObjectHeader.__tablename__, 'field': 'classif_id', 'type': 'n'},
         'object_annotation_date': {'table': ObjectHeader.__tablename__, 'field': 'classif_when', 'type': 't'},
         'object_annotation_person_name': {'table': ObjectHeader.__tablename__, 'field': 'classif_who', 'type': 't'},
         'object_annotation_status': {'table': ObjectHeader.__tablename__, 'field': 'classif_qual', 'type': 't'},
+    }
+    DOUBLED_FIELDS = {
+        # Added to object_annotation_date
+        'object_annotation_time': {'table': ObjectHeader.__tablename__, 'field': 'classif_when', 'type': 't'},
+        # Either this one or object_annotation_person_name
+        'object_annotation_person_email': {'table': ObjectHeader.__tablename__, 'field': 'classif_who', 'type': 't'},
     }
     PREDEFINED_FIELDS = {
         **ANNOTATION_FIELDS,
@@ -283,6 +289,15 @@ class TableMapping(object):
 
     def as_equal_list(self):
         return encode_equal_list(self.real_cols_to_tsv, "\n")
+
+    def as_select_list(self, alias: str) -> str:
+        """
+            Return a SQL select list for given alias.
+        """
+        sels = []
+        for db_col, tsv_fld in self.real_cols_to_tsv.items():
+            sels.append('%s.%s AS "%s_%s"' % (alias, db_col, self.table_name, tsv_fld))
+        return ", " + ", ".join(sels) if sels else ""
 
     def transforms_from(self, other):
         """

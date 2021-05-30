@@ -2,9 +2,11 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import os
 import shutil
 from os.path import join
 from pathlib import Path
+from typing import Optional
 
 
 class TempDirForTasks(object):
@@ -24,6 +26,13 @@ class TempDirForTasks(object):
             # TODO: Cache for current instance
             ret.mkdir()
         return ret
+
+    def search_base_dir_for(self, task_id: int, prefix:str) -> Optional[str]:
+        subdir = self.base_dir_for(task_id)
+        for a_file in os.listdir(subdir):
+            if a_file.endswith(prefix):
+                return a_file
+        return None
 
     def data_dir_for(self, task_id: int) -> str:
         data_subdir = self.base_dir_for(task_id).joinpath("data")

@@ -885,7 +885,7 @@ def export_object_set(filters: ProjectFiltersModel,
                       request: ExportReq,
                       current_user: Optional[int] = Depends(get_optional_current_user)) -> ExportRsp:
     """
-        Start an export job for the given object set.
+        Start an export job for the given object set and options.
     """
     with ProjectExport(request, filters) as sce:
         rsp = sce.run(current_user)

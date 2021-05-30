@@ -48,11 +48,11 @@ class ExportReq(BaseModel):
                                 "'sample', 'taxo' or '' (no split)")
     coma_as_separator: bool = Field(title="For 'TSV' type, use a , instead of . for decimal separator.")
     with_images: bool = Field(title="For 'BAK' and 'DOI' types, export images as well.")
-    with_internal_ids: bool = Field(title="For 'BAK' and 'DOI' types, export images as well.")
+    with_internal_ids: bool = Field(title="For 'BAK' and 'DOI' types, export internal DB IDs.")
     only_first_image: bool = Field(title="For 'DOI' type, export only first (displayed) image.")
     sum_subtotal: str = Field(title="For 'SUM' type, how subtotals should be calculated. "
-                                    "A(cquisition) or S(ample) or ''")
-    out_to_ftp: bool = Field(title="Copy result file to FTP area.")
+                                    "Per A(cquisition) or S(ample) or ''")
+    out_to_ftp: bool = Field(title="Copy result file to FTP area. Original file is still available.")
 
 
 class ExportRsp(EMODnetExportRsp):

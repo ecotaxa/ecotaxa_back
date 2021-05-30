@@ -18,7 +18,7 @@ class Taxonomy(Model):
     name = Column(VARCHAR(100), nullable=False)
     id_source = Column(VARCHAR(20))
     taxotype = Column(CHAR(1), nullable=False, server_default='P')  # P = Phylo , M = Morpho
-    display_name = Column(VARCHAR(200))
+    display_name = Column(VARCHAR(200))  # Unique, to disambiguate ties in names
     lastupdate_datetime = Column(TIMESTAMP(precision=0))
     id_instance = Column(INTEGER)
     taxostatus = Column(CHAR(1), nullable=False, server_default='A')

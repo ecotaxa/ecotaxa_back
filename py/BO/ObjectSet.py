@@ -54,10 +54,12 @@ class DescribedObjectSet(object):
 
     def get_sql(self, user_id: int,
                 order_clause: Optional[OrderClause] = None,
-                select_list: str = "") \
+                select_list: str = "",
+                all_images: bool = False) \
             -> Tuple[FromClause, WhereClause, SQLParamDict]:
         """
             Construct SQL parts for getting the IDs of objects.
+            :param all_images: If not set (default), only return the lowest rank, i.e. visible, image
             :return:
         """
         if order_clause is None:
@@ -78,9 +80,9 @@ class DescribedObjectSet(object):
             selected_tables += "taxonomy txo ON txo.id = obh.classif_id"
             selected_tables.set_outer("taxonomy txo ")
         if "img." in column_referencing_sql:
-            selected_tables += "images img ON obh.objid = img.objid " \
-                               "AND img.imgrank = (SELECT MIN(img3.imgrank) " \
-                               "FROM images img3 WHERE img3.objid = obh.objid)"
+            selected_tables += "images img ON obh.objid = img.objid " + \
+                               ("AND img.imgrank = (SELECT MIN(img3.imgrank) "
+                                "FROM images img3 WHERE img3.objid = obh.objid)" if not all_images else "")
             selected_tables.set_outer("images img ")
         if "usr." in column_referencing_sql:
             selected_tables += "users usr ON obh.classif_who = usr.id"
@@ -234,7 +236,7 @@ class EnumeratedObjectSet(MappedTable):
                                        och.classif_qual, och.classif_who], sel_subqry)
         ins_qry = ins_qry.on_conflict_do_nothing(constraint='objectsclassifhisto_pkey')
         # TODO: mypy crashes due to pg_dialect below
-        #logger.info("Histo query: %s", ins_qry.compile(dialect=pg_dialect()))
+        # logger.info("Histo query: %s", ins_qry.compile(dialect=pg_dialect()))
         nb_objs = self.session.execute(ins_qry).rowcount
         logger.info(" %d out of %d rows copied to log", nb_objs, len(self.object_ids))
         return oh

@@ -72,9 +72,10 @@ class JobCRUDService(Service):
         with self._query_for_update(current_user_id, job_id) as job_bo:
             temp_for_job = TempDirForTasks(self.link_src)
             temp_dir = temp_for_job.base_dir_for(job_id)
-            # Get the job in its state
+            # Get the job in its state...
             with JobScheduler.instantiate(job_bo) as sce:
                 out_file_name = sce.PRODUCED_FILE_NAME
+            # ...and the file in its temp directory
             out_file_path = temp_dir / out_file_name
             try:
                 return open(out_file_path, mode="rb"), out_file_name
