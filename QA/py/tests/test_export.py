@@ -1,19 +1,22 @@
+import datetime
 import logging
-from io import BytesIO
+import os
+from io import BytesIO, TextIOWrapper
+from unittest import mock
 from zipfile import ZipFile
 
+# noinspection PyPackageRequirements
 from starlette import status
 
-from tests.credentials import ADMIN_AUTH, REAL_USER_ID, CREATOR_AUTH
-from tests.emodnet_ref import ref_zip, with_zeroes_zip, no_computations_zip
-from tests.test_classification import _prj_query, OBJECT_SET_CLASSIFY_URL
-from tests.test_collections import COLLECTION_UPDATE_URL, COLLECTION_QUERY_URL
+from tests.credentials import ADMIN_AUTH
 from tests.test_export_emodnet import JOB_DOWNLOAD_URL
 from tests.test_fastapi import PROJECT_QUERY_URL
-from tests.test_jobs import wait_for_stable, api_check_job_ok, api_check_job_failed, get_job_and_wait_until_ok
-from tests.test_update_prj import PROJECT_UPDATE_URL
+from tests.test_import import SHARED_DIR
+from tests.test_jobs import get_job_and_wait_until_ok
 
 OBJECT_SET_EXPORT_URL = "/object_set/export"
+
+EXPORT_ROOT_REF_DIR = "ref_exports"
 
 
 def test_export_tsv(config, database, fastapi, caplog):
@@ -28,7 +31,7 @@ def test_export_tsv(config, database, fastapi, caplog):
     # Get the project for update
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
-    prj_json = rsp.json()
+    _prj_json = rsp.json()
 
     caplog.set_level(logging.DEBUG)
 
@@ -37,8 +40,8 @@ def test_export_tsv(config, database, fastapi, caplog):
     req = {"project_id": prj_id,
            "exp_type": "TSV",
            "tsv_entities": "OPASHC",
-           "coma_as_separator": True,
-           "with_images": True,
+           "coma_as_separator": False,
+           "with_images": False,
            "only_first_image": False,
            "split_by": "sample",
            "with_internal_ids": False,
@@ -51,44 +54,83 @@ def test_export_tsv(config, database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
 
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
-    download_and_unzip_and_check(fastapi, job_id)
+    download_and_unzip_and_check(fastapi, job_id, "tsv_all_entities_no_img_no_ids")
 
     # Backup export
-    req["exp_type"] = "BAK"
+    req.update({"exp_type": "BAK",
+                "with_images": True,
+                "only_first_image": False})
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
     assert rsp.status_code == status.HTTP_200_OK
 
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
-    download_and_unzip_and_check(fastapi, job_id)
+    download_and_unzip_and_check(fastapi, job_id, "bak_all_images")
 
     # DOI export
-    req["exp_type"] = "DOI"
+    req.update({"exp_type": "DOI"})
+    fixed_date = datetime.datetime(2021, 5, 30, 11, 22, 33)
+    with mock.patch('helpers.DateTime.now_time',
+                    return_value=fixed_date):
+        rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+        assert rsp.status_code == status.HTTP_200_OK
+        _job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    # The object_id inside prevents predictability
+    # TODO: Better comparison ignoring columns, inject project id and so on
+    # download_and_unzip_and_check(fastapi, job_id, "doi", only_hdr=True)
+
+    # TSV export with IDs
+    req.update({"exp_type": "TSV",
+                "with_internal_ids": True,
+                "out_to_ftp": True,
+                "coma_as_separator": True})
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
     assert rsp.status_code == status.HTTP_200_OK
 
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
-    download_and_unzip_and_check(fastapi, job_id)
-
-    # TSV export
-    req["exp_type"] = "TSV"
-    req["with_internal_ids"] = True
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
-    assert rsp.status_code == status.HTTP_200_OK
-
-    job_id = get_job_and_wait_until_ok(fastapi, rsp)
-    download_and_unzip_and_check(fastapi, job_id)
+    # Too much randomness inside: IDs, random value
+    # TODO: Better comparison ignoring columns
+    download_and_unzip_and_check(fastapi, job_id, "tsv_with_ids", only_hdr=True)
 
 
-def download_and_unzip_and_check(fastapi, job_id):
+def download_and_unzip_and_check(fastapi, job_id, ref_dir, only_hdr: bool = False):
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
-    unzip_and_check(rsp.content, with_zeroes_zip)
+    unzip_and_check(rsp.content, ref_dir, only_hdr)
 
 
-def unzip_and_check(zip_content, ref_content):
+def recursive_list_dir(pth: str):
+    dir_list = [pth]
+    files = []
+    while len(dir_list) > 0:
+        for (dirpath, dirnames, filenames) in os.walk(dir_list.pop()):
+            dirpath = dirpath[len(pth) + 1:]
+            dir_list.extend(dirnames)
+            files.extend(map(lambda n: os.path.join(*n),
+                             zip([dirpath] * len(filenames),
+                                 filenames)))
+    return files
+
+
+def unzip_and_check(zip_content, ref_dir: str, only_hdr: bool):
+    ref_dir_path = SHARED_DIR / EXPORT_ROOT_REF_DIR / ref_dir
+    ref_dir_content = recursive_list_dir(str(ref_dir_path))
+
     pseudo_file = BytesIO(zip_content)
-    zip = ZipFile(pseudo_file)
-    for a_file in zip.filelist:
+    zip_file = ZipFile(pseudo_file)
+    for a_file in zip_file.filelist:
         name = a_file.filename
-        with zip.open(name) as myfile:
+        assert name in ref_dir_content
+        # ref_dir_content.remove(name)
+        with zip_file.open(name) as myfile:
             content_bin = myfile.read()
+        if name.endswith(".tsv"):
+            file_content = TextIOWrapper(BytesIO(content_bin), "utf-8").readlines()
+            ref_content = open(ref_dir_path / name).readlines()
+            assert len(file_content) == len(ref_content), "For %s, not same number of lines" % name
+            num_line = 1
+            for act, ref in zip(file_content, ref_content):
+                assert ref == act, "diff in %s line %d" % (name, num_line)
+                if only_hdr:
+                    break
+                num_line += 1
+    # assert len(ref_dir_content) == 0

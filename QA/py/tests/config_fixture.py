@@ -21,6 +21,7 @@ import helpers.link_to_legacy as link
 from DB.helpers.DBWriter import DBWriter
 from BO.TSVFile import TSVFile
 from FS.Vault import Vault
+from API_operations.exports.ForProject import ProjectExport
 
 class EcoTaxaConfig(object):
     def cleanup(self):
@@ -36,6 +37,8 @@ def config() -> EcoTaxaConfig:
     # Inject low values for covering, even with test small dataset
     DBWriter.SEQUENCE_CACHE_SIZE = 5
     TSVFile.REPORT_EVERY = 5
+    ProjectExport.ROWS_REPORT_EVERY = 5
+    ProjectExport.IMAGES_REPORT_EVERY = 7
     # Empty Vault
     vault = Vault(join(link.read_link(), 'vault'))
     shutil.rmtree(vault.sub_path("0000"), ignore_errors=True)

@@ -5,7 +5,6 @@
 # Textual export of data. Presently TSV with images or not, XML.
 #
 import csv
-import datetime
 import os
 import re
 import zipfile
@@ -24,6 +23,7 @@ from DB.helpers.Direct import text
 from DB.helpers.SQL import OrderClause
 from FS.CommonDir import ExportFolder
 from FS.Vault import Vault
+from helpers import DateTime  # Need to keep the whole module imported, as the function is mocked
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 # TODO: Move somewhere else
 from ..helpers.JobService import JobServiceBase
@@ -36,6 +36,8 @@ class ProjectExport(JobServiceBase):
 
     """
     JOB_TYPE = "GenExport"
+    ROWS_REPORT_EVERY = 10000
+    IMAGES_REPORT_EVERY = 1000
 
     def __init__(self, req: ExportReq, filters: ProjectFilters):
         super().__init__()
@@ -113,15 +115,16 @@ class ProjectExport(JobServiceBase):
         elif req.exp_type == ExportTypeEnum.summary:
             nb_rows = self.create_summary(src_project)
         else:
-            raise Exception("Unsupported exportation type : %s" % (req.exp_type,))
+            raise Exception("Unsupported export type : %s" % req.exp_type)
         # Final copy
         if req.out_to_ftp:
             self.update_progress(progress_before_copy, "Copying file to FTP")
             dest = ExportFolder(self.config)
             # Disambiguate using the job ID
             dest_name = "task_%d_%s" % (self.job_id, self.out_file_name)
-            dest.receive_from(self.out_path, self.out_file_name)
-            final_message = "Export successful : File '%s' is available (as well) in the 'Exported_data' FTP folder" % dest_name
+            dest.receive_from(self.out_path / self.out_file_name, dest_name)
+            final_message = "Export successful : File '%s' is available (as well)" \
+                            " in the 'Exported_data' FTP folder" % dest_name
         else:
             final_message = "Export successful"
 
@@ -193,14 +196,6 @@ class ProjectExport(JobServiceBase):
         if req.with_images:
             select_clause += "\n, img.orig_file_name AS img_file_name, img.imgrank AS img_rank, " \
                              "img.file_name AS img_src_path"
-            if req.only_first_image:  # First image, i.e. lowest rank
-                # from_clause += "\nLEFT JOIN images img ON o.objid = img.objid " \
-                #                "                      AND img.imgrank = (SELECT MIN(img2.imgrank) " \
-                #                "                                           FROM images img2 WHERE img2.objid = o.objid) "
-                pass
-            else:
-                # from_clause += "\nLEFT JOIN images img ON o.objid = img.objid "
-                pass
 
         if 'C' in req.tsv_entities:
             select_clause += "\n, obh.complement_info"
@@ -278,20 +273,19 @@ class ProjectExport(JobServiceBase):
 
         res = self.ro_session.execute(text(sql), params)
 
-        now_txt = datetime.datetime.now().strftime("%Y%m%d_%H%M")
+        now_txt = DateTime.now_time().strftime("%Y%m%d_%H%M")
         self.out_file_name = "export_{0:d}_{1:s}.{2}".format(proj_id, now_txt, "zip")
 
         produced_path = self.out_path / self.out_file_name
         zfile = zipfile.ZipFile(produced_path, 'w', allowZip64=True, compression=zipfile.ZIP_DEFLATED)
 
         splitcsv = (req.split_by != "")
+        csv_filename = 'data.tsv'  # Just a temp name as there is a rename while filling up the Zip
         if splitcsv:
             # Produce into the same temp file all the time, at zipping time the name in archive will vary
-            csv_filename = 'data.tsv'
             prev_value = "NotAssigned"  # To trigger a sequence change immediately
         else:
             # The zip will contain a single TSV with same base name as the zip
-            csv_filename = self.out_file_name.replace('.zip', '.tsv')
             prev_value = self.out_file_name.replace('.zip', '')
 
         csv_path: Path = self.out_path / csv_filename  # Constant path to a (sometimes) changing file
@@ -369,7 +363,7 @@ class ProjectExport(JobServiceBase):
             # Produce the row in the TSV
             csv_wtr.writerow(a_row)
             nb_rows += 1
-            if nb_rows % 10000 == 0:
+            if nb_rows % self.ROWS_REPORT_EVERY == 0:
                 msg = "Row %d of max %d" % (nb_rows, obj_count)
                 logger.info(msg)
                 self.update_progress(1 + progress_range / obj_count * nb_rows, msg)
@@ -412,7 +406,7 @@ class ProjectExport(JobServiceBase):
                     logger.error("Not found image: %s", path_in_zip)
                 logger.info("Added file %s as %s", img_file_path, path_in_zip)
                 nb_files_added += 1
-                if nb_files_added % 1000 == 0:
+                if nb_files_added % self.IMAGES_REPORT_EVERY == 0:
                     msg = "Added %d files" % nb_files_added
                     logger.info(msg)
                     progress = int(start_progress + progress_range / nb_files_to_add * nb_files_added)
@@ -435,7 +429,7 @@ class ProjectExport(JobServiceBase):
     def create_summary(self, src_project: Project):
         self.update_progress(1, "Start Summary export")
 
-        now_txt = datetime.datetime.now().strftime("%Y%m%d_%H%M")
+        now_txt = DateTime.now_time().strftime("%Y%m%d_%H%M")
         self.out_file_name = "export_summary_{0:d}_{1:s}.tsv".format(src_project.projid, now_txt)
         out_file = self.temp_for_jobs.base_dir_for(self.job_id) / self.out_file_name
 

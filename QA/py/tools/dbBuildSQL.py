@@ -11,7 +11,7 @@ from pathlib import Path
 from lib.processes import SyncSubProcess
 import socket
 
-from tests.test_import import DATA_DIR, SHARED_DIR
+from tests.test_import import DATA_DIR, SHARED_DIR, FTP_DIR
 
 psql_bin = "psql"
 # If we already have a server don't create one, e.g. in GitHub action
@@ -68,6 +68,7 @@ class EcoTaxaDBFrom0(object):
         self.conf_file = conffile
         self.host = None
         self.shared_dir = SHARED_DIR
+        self.ftp_dir = FTP_DIR
 
     def get_env(self):
         # Return the environment for postgres subprocesses
@@ -157,14 +158,15 @@ RO_DB_DATABASE="ecotaxa"
 THUMBSIZELIMIT=99
 SECRET_KEY = 'THIS KEY MUST BE CHANGED'
 serverloadarea = "%s"
-ftpexportarea = "H:\\"
+ftpexportarea = "%s"
 SECURITY_PASSWORD_HASH="sha512_crypt"
 SECURITY_PASSWORD_SALT="PePPER"
     """
 
     def write_config(self):
         with open(str(self.conf_file), "w") as f:
-            f.write(self.CONF % (self.host, PG_PORT, self.host, PG_PORT, self.shared_dir))
+            f.write(self.CONF % (self.host, PG_PORT, self.host, PG_PORT,
+                                 self.shared_dir, self.ftp_dir))
 
     def cleanup(self):
         # Remove data files

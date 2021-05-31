@@ -70,7 +70,7 @@ class ExportFolder(object):
 
     def receive_from(self, src_path: Path, as_name: str):
         """
-            Move a file into self, changing the source name.
+            Copy a file into self, as :param as_name.
         """
         if not self.path.exists():
             self.path.mkdir()

@@ -35,6 +35,7 @@ from tests.test_jobs import wait_for_stable, check_job_ok, get_job_errors, check
 
 # All files paths are now relative to root shared directory
 SHARED_DIR = (Path(dirname(realpath(__file__))) / ".." / "data").resolve()
+FTP_DIR = SHARED_DIR / "ftp"
 DATA_DIR = Path("")
 PLAIN_FILE = DATA_DIR / "import_test.zip"  # As seen from server
 PLAIN_FILE_PATH = SHARED_DIR / "import_test.zip"  # As seen from client
