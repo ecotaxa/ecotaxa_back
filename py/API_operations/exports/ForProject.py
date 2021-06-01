@@ -76,7 +76,10 @@ class ProjectExport(JobServiceBase):
 
     @property
     def PRODUCED_FILE_NAME(self):
-        return self.temp_for_jobs.search_base_dir_for(self.job_id, ".zip")
+        result = self.get_job_result()
+        if result is None:
+            return None
+        return result["out_file"]
 
     def do_export(self) -> None:
         """
@@ -129,7 +132,9 @@ class ProjectExport(JobServiceBase):
             final_message = "Export successful"
 
         self.update_progress(100, final_message)
-        self.set_job_result(errors=[], infos={"rowcount": nb_rows})
+        done_infos = {"rowcount": nb_rows,
+                      "out_file": self.out_file_name}
+        self.set_job_result(errors=[], infos=done_infos)
 
     def create_tsv(self, src_project: Project, end_progress: int) -> Tuple[int, int]:
         """
@@ -173,9 +178,12 @@ class ProjectExport(JobServiceBase):
         #     mpg = GlobalMapping.PREDEFINED_FIELDS[a_fld]
         #     mpg[""]
         #     assert a_fld in GlobalMapping.PREDEFINED_FIELDS, "%s is not a mapped column" % a_fld
+        date_fmt, time_fmt = "YYYYMMDD", "HH24MISS"
+        if req.format_dates_times:
+            date_fmt, time_fmt = "YYYY-MM-DD", "HH24:MI:SS"
         select_clause = """select obh.orig_id AS object_id, obh.latitude AS object_lat, obh.longitude AS object_lon,
-                         TO_CHAR(obh.objdate,'YYYYMMDD') AS object_date,
-                         TO_CHAR(obh.objtime,'HH24MISS') AS object_time,
+                         TO_CHAR(obh.objdate,'{0}') AS object_date,
+                         TO_CHAR(obh.objtime,'{1}') AS object_time,
                          obh.object_link, obh.depth_min AS object_depth_min, obh.depth_max AS object_depth_max,
                          CASE obh.classif_qual 
                             WHEN 'V' then 'validated' 
@@ -184,10 +192,10 @@ class ProjectExport(JobServiceBase):
                             ELSE obh.classif_qual 
                          END AS object_annotation_status,                
                          usr.name AS object_annotation_person_name, usr.email AS object_annotation_person_email,
-                         TO_CHAR(obh.classif_when,'YYYYMMDD') AS object_annotation_date,
-                         TO_CHAR(obh.classif_when,'HH24MISS') AS object_annotation_time,                
+                         TO_CHAR(obh.classif_when,'{0}') AS object_annotation_date,
+                         TO_CHAR(obh.classif_when,'{1}') AS object_annotation_time,                
                          txo.display_name AS object_annotation_category 
-                    """
+                    """.format(date_fmt, time_fmt)
         if req.exp_type == ExportTypeEnum.backup:
             select_clause += ", txo.id AS object_annotation_category_id"
         else:
@@ -225,7 +233,7 @@ class ProjectExport(JobServiceBase):
                     obh.acquisid AS processid_internal, obh.acquisid AS acq_id_internal, 
                     sam.sampleid AS sample_id_internal, 
                     obh.classif_id, obh.classif_who, obh.classif_auto_id, txp.name classif_auto_name, 
-                    classif_auto_score, classif_auto_when,
+                    obh.classif_auto_score, obh.classif_auto_when,
                     obh.random_value object_random_value, obh.sunpos object_sunpos """
             if 'S' in req.tsv_entities:
                 select_clause += "\n, sam.latitude sample_lat, sam.longitude sample_long "
@@ -427,45 +435,39 @@ class ProjectExport(JobServiceBase):
         return re.sub(R"[^a-zA-Z0-9 \.\-\(\)]", "_", str(filename))
 
     def create_summary(self, src_project: Project):
+        req = self.req
+        proj_id = src_project.projid
         self.update_progress(1, "Start Summary export")
 
         now_txt = DateTime.now_time().strftime("%Y%m%d_%H%M")
         self.out_file_name = "export_summary_{0:d}_{1:s}.tsv".format(src_project.projid, now_txt)
         out_file = self.temp_for_jobs.base_dir_for(self.job_id) / self.out_file_name
 
-        grp = "to1.display_name"
+        # Prepare a where clause and parameters from filter
+        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, self.filters)
+
+        # By default, select (and group by) unambiguous category name
+        sels = ["txo.display_name"]
         if self.req.sum_subtotal == "A":
-            grp = "a.orig_id," + grp
+            sels[:0] = ["acq.orig_id"]
         elif self.req.sum_subtotal == "S":
-            grp = "s.orig_id, s.latitude, s.longitude," + grp
+            sels[:0] = ["sam.orig_id", "sam.latitude", "sam.longitude", "MAX(obh.objdate) AS date"]
+        sels.append("COUNT(*) AS nbr")
 
-        sql1 = "SELECT " + grp
-        if self.req.sum_subtotal == "S":
-            # Il est demandé d'avoir la colonne agrégé date au milieu du groupe, donc réécriture de la requete.
-            sql1 = "SELECT s.orig_id, s.latitude, s.longitude, MAX(objdate) AS date, to1.display_name"
-        sql1 += ",COUNT(*) Nbr"
-        sql2 = """ FROM objects o
-                LEFT JOIN taxonomy to1 ON o.classif_id = to1.id
-                     JOIN samples ON on o.sampleid = s.sampleid
-                     JOIN acquisitions a ON o.acquisid = a.acquisid """
-        sql3 = " WHERE o.projid = :projid "
-        params = {'projid': self.req.project_id}
+        select_clause = "SELECT " + ", ".join(sels)
+        not_aggregated = [a_sel for a_sel in sels if " " not in a_sel]
+        group_clause = " GROUP BY " + ", ".join(not_aggregated)
+        order_clause = OrderClause()
+        for a_sel in not_aggregated:
+            alias, col = a_sel.split(".")
+            order_clause.add_expression(alias, col)
 
-        # sql3 += sharedfilter.GetSQLFilter(self.param.filtres, params, self.task.owner_id)
+        # Base SQL comes from filters
+        from_, where, params = object_set.get_sql(self._get_owner_id(), order_clause, select_clause)
+        sql = select_clause + " FROM " + from_.get_sql() + where.get_sql() + group_clause + order_clause.get_sql()
 
-        # Use the API entry point for filtering
-        # with ApiClient(ObjectsApi, self.cookie) as api:
-        #     res: ObjectSetQueryRsp = api.get_object_set_object_set_project_id_query_post(self.param.ProjectId,
-        #                                                                                  self.param.filtres)
-        #     sql3 += "and o.objid = any (%(objids)s) "
-        #     params["objids"] = sorted(res.object_ids)
-
-        sql3 += " group by " + grp
-        sql3 += " order by " + grp
-
-        sql = sql1 + " " + sql2 + " " + sql3
-        logger.info("Execute SQL : %s" % (sql,))
-        logger.info("Params : %s" % (params,))
+        logger.info("Execute SQL : %s", sql)
+        logger.info("Params : %s", params)
         res = self.ro_session.execute(text(sql), params)
 
         msg = "Creating file %s" % out_file
@@ -480,12 +482,12 @@ class ProjectExport(JobServiceBase):
     @staticmethod
     def write_result_to_csv(res, out_file):
         nb_lines = 0
-        with open(out_file, 'w', encoding='latin_1') as csvfile:
-            colnames = [desc[0] for desc in res.cursor.description]
-            wtr = csv.DictWriter(csvfile, colnames, delimiter='\t', quotechar='"', lineterminator='\n')
-            wtr.writerow({c: c for c in colnames})
+        with open(out_file, 'w') as csv_file:
+            col_names = [a_desc.name for a_desc in res.cursor.description]
+            wtr = csv.DictWriter(csv_file, col_names, delimiter='\t', quotechar='"', lineterminator='\n')
+            wtr.writeheader()
             for r in res:
-                a_row = {a_col: r[a_col] for a_col in colnames}
+                a_row = dict(r)
                 wtr.writerow(a_row)
                 nb_lines += 1
         return nb_lines

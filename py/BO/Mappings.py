@@ -295,8 +295,9 @@ class TableMapping(object):
             Return a SQL select list for given alias.
         """
         sels = []
+        tsv_table_name = GlobalMapping.TABLE_TO_PREFIX[self.table_name]
         for db_col, tsv_fld in self.real_cols_to_tsv.items():
-            sels.append('%s.%s AS "%s_%s"' % (alias, db_col, self.table_name, tsv_fld))
+            sels.append('%s.%s AS "%s_%s"' % (alias, db_col, tsv_table_name, tsv_fld))
         return ", " + ", ".join(sels) if sels else ""
 
     def transforms_from(self, other):

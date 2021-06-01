@@ -64,7 +64,7 @@ class JobCRUDService(Service):
         assert (job.owner_id == current_user_id) or (current_user.has_role(Role.APP_ADMINISTRATOR)), NOT_AUTHORIZED
         return job
 
-    def get_file_stream(self, current_user_id: UserIDT, job_id: JobIDT) -> Tuple[IO, str]:
+    def get_file_stream(self, current_user_id: UserIDT, job_id: JobIDT) -> Tuple[IO, str, str]:
         """
             Return a stream containing the produced file associated with this job.
         """
@@ -77,10 +77,16 @@ class JobCRUDService(Service):
                 out_file_name = sce.PRODUCED_FILE_NAME
             # ...and the file in its temp directory
             out_file_path = temp_dir / out_file_name
+            if out_file_name.endswith(".zip"):
+                media_type = "application/zip"
+            elif out_file_name.endswith(".tsv"):
+                media_type = "text/tab-separated-values"
+            else:
+                media_type = "unknown"
             try:
-                return open(out_file_path, mode="rb"), out_file_name
+                return open(out_file_path, mode="rb"), out_file_name, media_type
             except IOError:  # pragma:nocover
-                return StringIO("NOT FOUND"), out_file_name
+                return StringIO("NOT FOUND"), out_file_name, media_type
 
     def get_log_stream(self, current_user_id: UserIDT, job_id: JobIDT) -> IO:
         return open(self.get_log_path(current_user_id, job_id), "r")

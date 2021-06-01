@@ -153,6 +153,14 @@ class JobServiceBase(Service, LogEmitter, ABC):
                 job_bo.progress_pct = 100
                 job_bo.progress_msg = "Done"
 
+    def get_job_result(self) -> Any:
+        """
+            Get job detailed result.
+        """
+        job_bo = JobBO.get_one(self.session, self.job_id)
+        assert job_bo is not None
+        return job_bo.get_result()
+
     def set_job_to_ask(self, message: str, question_data: Dict[str, Any]):
         """
             Set the job to ask something from user.

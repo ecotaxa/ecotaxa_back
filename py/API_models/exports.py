@@ -40,13 +40,14 @@ class ExportReq(BaseModel):
         Export request.
     """
     project_id: int = Field(title="The project to export")
-    exp_type: ExportTypeEnum = Field(title="The export type: 'TSV', 'BAK', 'DOI' or 'SUM' .")
+    exp_type: ExportTypeEnum = Field(title="The export type: 'TSV', 'BAK', 'DOI' or 'SUM'.")
     tsv_entities: str = Field(title="For 'TSV' type, the entities to export, one letter for each of "
                                     "O(bject), P(rocess), A(cquisition), S(ample), "
                                     "classification H(istory), C(omments).")
     split_by: str = Field(title="For 'TSV' type, inside archives, split in one directory per... "
                                 "'sample', 'taxo' or '' (no split)")
     coma_as_separator: bool = Field(title="For 'TSV' type, use a , instead of . for decimal separator.")
+    format_dates_times: bool = Field(title="For 'TSV' type, format dates and times using - and : respectively.")
     with_images: bool = Field(title="For 'BAK' and 'DOI' types, export images as well.")
     with_internal_ids: bool = Field(title="For 'BAK' and 'DOI' types, export internal DB IDs.")
     only_first_image: bool = Field(title="For 'DOI' type, export only first (displayed) image.")

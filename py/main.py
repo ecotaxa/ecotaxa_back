@@ -75,7 +75,7 @@ logger = get_logger(__name__)
 fastapi_logger.setLevel(INFO)
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.13",
+              version="0.0.14",
               # openapi URL as seen from navigator, this is included when /docs is required
               # which serves swagger-ui JS app. Stay in /api sub-path.
               openapi_url="/api/openapi.json",
@@ -1181,7 +1181,8 @@ def get_job_log_file(job_id: int,
 
 @app.get("/jobs/{job_id}/file", tags=['jobs'], responses={
     200: {
-        "content": {"application/zip": {}},
+        "content": {"application/zip": {},
+                    "text/tab-separated-values": {} },
         "description": "Return the produced file.",
     }
 })
@@ -1193,9 +1194,9 @@ def get_job_file(job_id: int,
     """
     with JobCRUDService() as sce:
         with RightsThrower():
-            file_like, file_name = sce.get_file_stream(current_user, job_id)
+            file_like, file_name, media_type = sce.get_file_stream(current_user, job_id)
         headers = {"content-disposition": "attachment; filename=\"" + file_name + "\""}
-        return StreamingResponse(file_like, headers=headers, media_type="application/zip")
+        return StreamingResponse(file_like, headers=headers, media_type=media_type)
 
 
 @app.delete("/jobs/{job_id}", tags=['jobs'])

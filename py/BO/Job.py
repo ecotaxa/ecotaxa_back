@@ -6,7 +6,7 @@
 # The idea is to keep here the DB details, namely the fact that many fields are JSON-encoded.
 #
 from datetime import datetime
-from json import loads as json_loads, dumps as json_dumps
+from json import loads as json_loads, dumps as json_dumps, JSONDecodeError
 from typing import Dict, Optional, Any, List
 
 from BO.User import UserIDT
@@ -58,6 +58,12 @@ class JobBO(object):
         self.result = result
         self._job.result = json_dumps(result)
 
+    def get_result(self):
+        try:
+            return json_loads(self._job.result)
+        except JSONDecodeError:
+            return None
+
     def set_reply(self, reply: Dict):
         self.reply = reply
         self._job.reply = json_dumps(reply)
@@ -83,17 +89,19 @@ class JobBO(object):
             setattr(self._job, item, value)
 
     @classmethod
-    def get_one(cls, session: Session, job_id: JobIDT) -> Optional[Job]:
+    def get_one(cls, session: Session, job_id: JobIDT) -> Optional['JobBO']:
         job = session.query(Job).get(job_id)
-        return job
+        if job is None:
+            return None
+        return JobBO(job)
 
     @classmethod
     def get_for_update(cls, session: Session, job_id: JobIDT) -> 'JobBO':
         """
-            Return a single JobBO. If used in a 'with' context, the session will commit on exit.
+            Return a single JobBO. If used in a 'with' context, the session will commit on context exit.
             Note: it's not only the Job which will be committed, but the _whole_ session.
         """
-        job = cls.get_one(session, job_id)
+        job = session.query(Job).get(job_id)
         if job is None:
             raise ValueError
         job.updated_on = datetime.now()
