@@ -67,6 +67,16 @@ def test_export_tsv(config, database, fastapi, caplog):
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
     download_and_unzip_and_check(fastapi, job_id, "bak_all_images")
 
+    # Backup export without images (but their ref is still in the TSVs)
+    req.update({"exp_type": "BAK",
+                "with_images": False,
+                "only_first_image": False})
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+    assert rsp.status_code == status.HTTP_200_OK
+
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_unzip_and_check(fastapi, job_id, "bak_no_image")
+
     # DOI export
     req.update({"exp_type": "DOI"})
     fixed_date = datetime.datetime(2021, 5, 30, 11, 22, 33)
@@ -159,7 +169,7 @@ def one_tsv_check(content_bin, name, only_hdr, ref_dir_path):
     assert len(file_content) == len(ref_content), "For %s, not same number of lines" % name
     num_line = 1
     for act, ref in zip(file_content, ref_content):
-        assert ref == act, "diff in %s line %d" % (name, num_line)
+        assert act == ref, "diff in %s line %d" % (name, num_line)
         if only_hdr:
             break
         num_line += 1
