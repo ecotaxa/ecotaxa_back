@@ -106,6 +106,7 @@ class ProjectExport(JobServiceBase):
             req.split_by = ""
             req.coma_as_separator = False
         elif req.exp_type == ExportTypeEnum.general_tsv:
+            req.with_images = False
             if req.split_by == "sample" and 'S' not in req.tsv_entities:
                 req.tsv_entities += 'S'
         # Bulk of the job
@@ -201,9 +202,10 @@ class ProjectExport(JobServiceBase):
         else:
             select_clause += "," + TaxonomyBO.parents_sql("obh.classif_id") + " AS object_annotation_hierarchy"
 
-        if req.with_images:
-            select_clause += "\n, img.orig_file_name AS img_file_name, img.imgrank AS img_rank, " \
-                             "img.file_name AS img_src_path"
+        if req.with_images or (req.exp_type == ExportTypeEnum.backup):
+            select_clause += "\n, img.orig_file_name AS img_file_name, img.imgrank AS img_rank "
+            if req.with_images:
+                select_clause += ", img.file_name AS img_src_path"
 
         if 'C' in req.tsv_entities:
             select_clause += "\n, obh.complement_info"
@@ -269,7 +271,7 @@ class ProjectExport(JobServiceBase):
             split_field = "object_id"  # cette valeur permet d'éviter des erreurs plus loin dans r[split_field]
         order_clause.add_expression("obh", "objid")
 
-        if req.with_images:
+        if req.with_images or (req.exp_type == ExportTypeEnum.backup):
             order_clause.add_expression(None, "img_rank")
 
         # Base SQL comes from filters
