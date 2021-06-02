@@ -182,7 +182,16 @@ class ProjectExport(JobServiceBase):
         date_fmt, time_fmt = "YYYYMMDD", "HH24MISS"
         if req.format_dates_times:
             date_fmt, time_fmt = "YYYY-MM-DD", "HH24:MI:SS"
-        select_clause = """select obh.orig_id AS object_id, obh.latitude AS object_lat, obh.longitude AS object_lon,
+
+        select_clause = "select "
+
+        if req.with_images or (req.exp_type == ExportTypeEnum.backup):
+            select_clause += "img.orig_file_name AS img_file_name, img.imgrank AS img_rank"
+            if req.with_images:
+                select_clause += ", img.file_name AS img_src_path"
+            select_clause += ",\n"
+
+        select_clause += """obh.orig_id AS object_id, obh.latitude AS object_lat, obh.longitude AS object_lon,
                          TO_CHAR(obh.objdate,'{0}') AS object_date,
                          TO_CHAR(obh.objtime,'{1}') AS object_time,
                          obh.object_link, obh.depth_min AS object_depth_min, obh.depth_max AS object_depth_max,
@@ -202,10 +211,6 @@ class ProjectExport(JobServiceBase):
         else:
             select_clause += "," + TaxonomyBO.parents_sql("obh.classif_id") + " AS object_annotation_hierarchy"
 
-        if req.with_images or (req.exp_type == ExportTypeEnum.backup):
-            select_clause += "\n, img.orig_file_name AS img_file_name, img.imgrank AS img_rank "
-            if req.with_images:
-                select_clause += ", img.file_name AS img_src_path"
 
         if 'C' in req.tsv_entities:
             select_clause += "\n, obh.complement_info"
