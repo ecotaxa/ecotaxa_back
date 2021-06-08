@@ -211,7 +211,6 @@ class ProjectExport(JobServiceBase):
         else:
             select_clause += "," + TaxonomyBO.parents_sql("obh.classif_id") + " AS object_annotation_hierarchy"
 
-
         if 'C' in req.tsv_entities:
             select_clause += "\n, obh.complement_info"
 
@@ -331,6 +330,7 @@ class ProjectExport(JobServiceBase):
                           for name, a_desc in zip(tsv_cols, col_descs)}
         nb_rows = 0
         nb_images = 0
+        used_dst_pathes = set()
         for r in res:
             # Rows from SQLAlchemy are not mutable, so we need a clone for arranging values
             a_row = dict(r)
@@ -364,7 +364,16 @@ class ProjectExport(JobServiceBase):
                 else:  # It's a backup
                     # Images are stored in the Zip subdirectory per sample/taxo, i.e. at the same place as
                     # their referring TSV
-                    copy_op["dst_path"] = "{0}/{1}".format(prev_value, a_row['img_file_name'])
+                    dst_path = "{0}/{1}".format(prev_value, a_row['img_file_name'])
+                    if dst_path in used_dst_pathes:
+                        # Avoid duplicates in zip as only the last entry will be present during unzip
+                        # root cause: for UVP6 bundles, the vignette and original image are both stored
+                        # with the same name.
+                        img_with_rank = "{0}/{1}".format(a_row['img_rank'], a_row['img_file_name'])
+                        a_row['img_file_name'] = img_with_rank  # write into TSV the corrected path
+                        dst_path = prev_value + "/" + img_with_rank
+                    used_dst_pathes.add(dst_path)
+                    copy_op["dst_path"] = dst_path
                 img_wtr.writerow(copy_op)
                 nb_images += 1
             # Remove CR from comments
