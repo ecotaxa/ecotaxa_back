@@ -316,8 +316,13 @@ class ProjectExport(JobServiceBase):
         # Prepare TSV structure
         col_descs = [a_desc for a_desc in res.cursor.description
                      if a_desc.name != "img_src_path"]
-        # on lit le type de la colonne 2 alias latitude pour determiner le code du type double
-        db_float_type = col_descs[2].type_code
+        # read latitude column to get float DB type
+        for a_desc in col_descs:
+            if a_desc.name == "object_lat":
+                db_float_type = a_desc.type_code
+                break
+        else:
+            raise
         float_cols = set()
         # Prepare float separator conversion, if not required the set will just be empty
         if req.coma_as_separator:
