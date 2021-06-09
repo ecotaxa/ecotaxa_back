@@ -154,6 +154,8 @@ def unzip_and_check(zip_content, ref_dir: str, only_hdr: bool):
     zip_file = ZipFile(pseudo_file)
     for a_file in zip_file.filelist:
         name = a_file.filename
+        if name.endswith(".log"):
+            continue
         assert name in ref_dir_content
         ref_dir_content.remove(name)
         with zip_file.open(name) as myfile:
@@ -173,3 +175,38 @@ def one_tsv_check(content_bin, name, only_hdr, ref_dir_path):
         if only_hdr:
             break
         num_line += 1
+
+def test_export_roundtrip(config, database, fastapi, caplog):
+    """ roundtrip export/import/compare"""
+    caplog.set_level(logging.FATAL)
+
+    # Admin imports the project
+    from tests.test_import import test_import_uvp6
+    prj_id = test_import_uvp6(config, database, caplog, "TSV UVP6 roundtrip export project")
+
+    # Get the project for update
+    url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    _prj_json = rsp.json()
+
+    # Admin exports it
+    url = OBJECT_SET_EXPORT_URL
+    req = {"project_id": prj_id,
+           "exp_type": "BAK",
+           "tsv_entities": "OPASHC",
+           "coma_as_separator": False,
+           "format_dates_times": False,
+           "with_images": True,
+           "only_first_image": False,
+           "split_by": "sample",
+           "with_internal_ids": False,
+           "out_to_ftp": False,
+           "sum_subtotal": ""}
+    filters = {}
+    req_and_filters = {"filters": filters,
+                       "request": req}
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+    assert rsp.status_code == status.HTTP_200_OK
+
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    #download_and_unzip_and_check(fastapi, job_id, "tsv_all_entities_no_img_no_ids")

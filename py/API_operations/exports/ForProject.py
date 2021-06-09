@@ -74,6 +74,7 @@ class ProjectExport(JobServiceBase):
         with LogsSwitcher(self):
             self.do_export()
 
+    # noinspection PyPep8Naming
     @property
     def PRODUCED_FILE_NAME(self):
         result = self.get_job_result()
@@ -116,6 +117,9 @@ class ProjectExport(JobServiceBase):
             nb_rows, nb_images = self.create_tsv(src_project, 10 if req.with_images else progress_before_copy)
             if req.with_images:
                 self.add_images(nb_images, 10, progress_before_copy)
+            # Zip present log file as well
+            logger.info("Log in zip should end here.")
+            self.append_log_to_zip()
         elif req.exp_type == ExportTypeEnum.summary:
             nb_rows = self.create_summary(src_project)
         else:
@@ -136,6 +140,15 @@ class ProjectExport(JobServiceBase):
         done_infos = {"rowcount": nb_rows,
                       "out_file": self.out_file_name}
         self.set_job_result(errors=[], infos=done_infos)
+
+    def append_log_to_zip(self):
+        """
+            Copy log file of present job into currently produced zip.
+        """
+        produced_path = self.out_path / self.out_file_name
+        zfile = zipfile.ZipFile(produced_path, 'a', allowZip64=True, compression=zipfile.ZIP_DEFLATED)
+        zfile.write(self.log_file_path(), arcname="job_%d.log" % self.job_id)
+        zfile.close()
 
     def create_tsv(self, src_project: Project, end_progress: int) -> Tuple[int, int]:
         """
@@ -433,6 +446,7 @@ class ProjectExport(JobServiceBase):
                     zfile.write(img_file_path, arcname=path_in_zip)
                 except FileNotFoundError:
                     logger.error("Not found image: %s", path_in_zip)
+                    continue
                 logger.info("Added file %s as %s", img_file_path, path_in_zip)
                 nb_files_added += 1
                 if nb_files_added % self.IMAGES_REPORT_EVERY == 0:
