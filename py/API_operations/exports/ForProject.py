@@ -117,13 +117,14 @@ class ProjectExport(JobServiceBase):
             nb_rows, nb_images = self.create_tsv(src_project, 10 if req.with_images else progress_before_copy)
             if req.with_images:
                 self.add_images(nb_images, 10, progress_before_copy)
-            # Zip present log file as well
-            logger.info("Log in zip should end here.")
-            self.append_log_to_zip()
         elif req.exp_type == ExportTypeEnum.summary:
             nb_rows = self.create_summary(src_project)
         else:
             raise Exception("Unsupported export type : %s" % req.exp_type)
+        # Zip present log file as well
+        if req.exp_type != ExportTypeEnum.summary:
+            logger.info("Log in zip should end here.")
+            self.append_log_to_zip()
         # Final copy
         if req.out_to_ftp:
             self.update_progress(progress_before_copy, "Copying file to FTP")
@@ -131,6 +132,7 @@ class ProjectExport(JobServiceBase):
             # Disambiguate using the job ID
             dest_name = "task_%d_%s" % (self.job_id, self.out_file_name)
             dest.receive_from(self.out_path / self.out_file_name, dest_name)
+            logger.info("Result copied to %s", dest_name)
             final_message = "Export successful : File '%s' is available (as well)" \
                             " in the 'Exported_data' FTP folder" % dest_name
         else:

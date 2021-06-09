@@ -132,8 +132,10 @@ class ObjectHeader(Model):
 
     @staticmethod
     def time_from_txt(txt: str) -> datetime.time:
-        """ Convert/check time before setting field. HHMM with optional SS.
+        """ Convert/check time before setting field. HHMM with optional SS. Or strictly HH:MM:SS
             :raises ValueError """
+        if txt[2:3] == txt[5:6] == ":":
+            return datetime.time(int(txt[0:2]), int(txt[3:5]), int(txt[6:8]))
         # Left pad with 0s as they tend to be truncated by spreadsheets e.g. 320 -> 0320
         txt = '0' * (4 - len(txt)) + txt if len(txt) < 4 else txt
         # Right pad with 0s for seconds e.g. 0320 -> 032000
@@ -142,8 +144,10 @@ class ObjectHeader(Model):
 
     @staticmethod
     def date_from_txt(txt: str) -> datetime.date:
-        """ Convert/check date before setting field
+        """ Convert/check date before setting field. Format YYYYMMDD or YYYY-MM-DD
             :raises ValueError """
+        if txt[4:5] == txt[7:8] == "-":
+            return datetime.date(int(txt[0:4]), int(txt[5:7]), int(txt[8:10]))
         return datetime.date(int(txt[0:4]), int(txt[4:6]), int(txt[6:8]))
 
     def __lt__(self, other):
