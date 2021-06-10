@@ -447,7 +447,7 @@ class ProjectExport(JobServiceBase):
                 try:
                     zfile.write(img_file_path, arcname=path_in_zip)
                 except FileNotFoundError:
-                    logger.error("Not found image: %s", path_in_zip)
+                    logger.error("Not found image: %s", img_file_path)
                     continue
                 logger.info("Added file %s as %s", img_file_path, path_in_zip)
                 nb_files_added += 1
