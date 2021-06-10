@@ -377,7 +377,6 @@ class ProjectExport(JobServiceBase):
                     # Images will be stored in a per-category directory, but there is a single TSV at the Zip root
                     categ = a_row['object_annotation_category']
                     # All names cannot directly become directories
-                    categ = categ.replace("<", "_")
                     a_row['img_file_name'] = self.get_DOI_imgfile_name(a_row['objid'], a_row['img_rank'],
                                                                        categ, a_row['img_file_name'])
                     copy_op["dst_path"] = a_row['img_file_name']
