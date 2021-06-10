@@ -1004,8 +1004,26 @@ UPDATE alembic_version SET version_num='dae002b5d15a' WHERE alembic_version.vers
 
 COMMIT;
 
+-- Running upgrade dae002b5d15a -> 00601700d281
+
+ALTER TABLE images ALTER COLUMN file_name SET NOT NULL;
+
+ALTER TABLE images ALTER COLUMN height SET NOT NULL;
+
+ALTER TABLE images ALTER COLUMN imgrank SET NOT NULL;
+
+ALTER TABLE images ALTER COLUMN orig_file_name SET NOT NULL;
+
+ALTER TABLE images ALTER COLUMN width SET NOT NULL;
+
+UPDATE alembic_version SET version_num='00601700d281' WHERE alembic_version.version_num = 'dae002b5d15a';
+
+COMMIT;
+
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;
 
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO readerole;
+
+ALTER SUBSCRIPTION mysub13 REFRESH PUBLICATION;
