@@ -12,20 +12,20 @@ from .helpers import Result
 from .helpers.ORM import Model
 
 
-# TODO: Why the ORM does not generate a DEFAULT?
 class Image(Model):
     __tablename__ = 'images'
     imgid = Column(BIGINT, Sequence('seq_images'), primary_key=True)
     # The Object that this image belongs to
     # TODO: It looks like we have a relationship cycle Object->Image->Object
     #  Probably due to the fact that several images can exist for a single Object
-    # Real PK: objid + imgrank or better orig_id + imgrank
+    # Real PK: objid + imgrank or better orig_id + imgrank, unless we can share images b/w objects... WIP
     objid = Column(BIGINT, ForeignKey('obj_head.objid'))
-    imgrank = Column(INTEGER)
-    file_name = Column(VARCHAR(255))
-    orig_file_name = Column(VARCHAR(255))
-    width = Column(INTEGER)
-    height = Column(INTEGER)
+    imgrank = Column(INTEGER, nullable=False)
+    file_name = Column(VARCHAR(255), nullable=False)
+    orig_file_name = Column(VARCHAR(255), nullable=False)
+    width = Column(INTEGER, nullable=False)
+    height = Column(INTEGER, nullable=False)
+
     thumb_file_name = Column(VARCHAR(255))
     thumb_width = Column(INTEGER)
     thumb_height = Column(INTEGER)
