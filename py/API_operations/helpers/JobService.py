@@ -144,7 +144,8 @@ class JobServiceBase(Service, LogEmitter, ABC):
         """
         with JobBO.get_for_update(self.session, self.job_id) as job_bo:
             job_bo.set_result(infos)
-            job_bo.set_messages(errors)
+            # Limit storage to 1000 first errors
+            job_bo.set_messages(errors[:1000])
             if len(errors) > 0:
                 job_bo.state = DBJobStateEnum.Error
                 job_bo.progress_msg = "%d error(s) during run" % len(errors)
