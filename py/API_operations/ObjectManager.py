@@ -69,9 +69,17 @@ class ObjectManager(Service):
 
         extra_cols = self._add_return_fields(return_fields, free_columns_mappings)
 
-        from_, where, params = object_set.get_sql(user_id, order_clause, extra_cols)
+        from_, where_clause, params = object_set.get_sql(user_id, order_clause, extra_cols)
 
-        if "obf." in where.get_sql():
+        oid_lst, cnt = None, None
+        # with ObjectCache(project=prj, mapping=free_columns_mappings,
+        #                  where_clause=where_clause, order_clause=order_clause, params=params,
+        #                  window_start=window_start, window_size=window_size) as cache:
+        #     oid_lst, cnt = cache.pump_cache()
+
+        if oid_lst is not None:
+            total_col = "%d AS total" % cnt
+        elif "obf." in where_clause.get_sql():
             # If the filter needs obj_field data it's more efficient to count with a window function
             # than issuing a second query.
             total_col = "COUNT(obh.objid) OVER() AS total"
@@ -81,10 +89,25 @@ class ObjectManager(Service):
 
         # The following hint is needed until we sort out why, time to time, there is a FTS on obj_head
         sql = """
-    SET LOCAL enable_seqscan=FALSE;
+    SET LOCAL enable_seqscan=FALSE;"""
+        if oid_lst is not None:
+            if len(oid_lst) == 0:  # All was filtered but an empty array does not work in below query
+                oid_lst = [-1]  # impossible objid
+            # SqlDialectInspection,SqlResolve
+            sql += "\n    WITH ordr (ordr, objid)"
+            sql += " AS (select * from UNNEST(:numbrs, :oids)) "
+            # The CTE is ordered and in practice it orders the result as well,
+            # but let's not depend on it, in case PG behavior evolves.
+            params["numbrs"] = list(range(len(oid_lst)))
+            params["oids"] = oid_lst
+            from_ += "ordr ON ordr.objid = obh.objid"
+            order_clause = OrderClause()
+            order_clause.add_expression("ordr", "ordr")
+            window_start = window_size = None  # The window is in the CTE
+        sql += """
     SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
       FROM """ % (total_col, extra_cols)
-        sql += from_.get_sql() + " " + where.get_sql()
+        sql += from_.get_sql() + " " + where_clause.get_sql()
 
         # Add order & window if relevant
         if order_clause is not None:
@@ -108,7 +131,13 @@ class ObjectManager(Service):
 
         if total == 0:
             # Total was not computed or left to 0
-            total, _nbr_v, _nbr_d, _nbr_p = self.summary(current_user_id, proj_id, filters, True)
+            total, _nbr_v, _nbr_d, _nbr_p = self.summary(current_user_id, proj_id, filters, only_total=True)
+
+        # If we can, refresh the cache in background, most of the data should be in PG cache
+        # if cache.should_refresh():
+        #     # Try to fill the cache in background. We cannot pass a session as they do not cross threads.
+        #     assert self.the_readonly_connection
+        #     ObjectCacheWriter(cache).bg_fetch_fill(self.the_readonly_connection)
 
         return ids, details, total
 
@@ -130,8 +159,11 @@ class ObjectManager(Service):
             return None
         alias, order_col = order_expr.split(".", 1)
         ret.add_expression(alias, order_col, asc_desc)
-        # Disambiguate using obj_id
-        ret.add_expression("obh", "objid", asc_desc)
+        # Disambiguate using obj_id, from one object table or the other
+        if alias == "obf":
+            ret.add_expression("obf", "objfid", asc_desc)
+        else:
+            ret.add_expression("obh", "objid", asc_desc)
         return ret
 
     @staticmethod

@@ -80,26 +80,16 @@ class WhereClause(object):
         else:
             return " "
 
-    def replace_reference(self, chunk_from, chunk_to):
-        self.ands = [an_and.replace(chunk_from, chunk_to)
-                     for an_and in self.ands]
-
-    def remove_if(self, chunk):
-        self.ands = [an_and for an_and in self.ands
-                     if an_and != chunk]
-
-    # Not completely exact but enough
+    # Not completely exact but good enough
     COL_RE = re.compile(r"\b(\w+)\.(\w+)\b", re.ASCII)
 
-    def referenced_columns(self, with_prefices=True) -> Set[str]:
-        ret = []
-        for an_and in self.ands:
-            for a_match in self.COL_RE.finditer(an_and):
-                if with_prefices:
-                    ret.append(a_match.group(0))
-                else:
-                    ret.append(a_match.group(2))
-        return set(ret)
+    def conds_and_refs(self):
+        """
+            Iterator over the conditions, with a pre-analysis on their references.
+        """
+        for a_cond in self.ands:
+            refs = set([a_match.group(0) for a_match in self.COL_RE.finditer(a_cond)])
+            yield a_cond, refs
 
 
 class OrderClause(object):

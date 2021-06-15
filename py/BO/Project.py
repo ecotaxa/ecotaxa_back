@@ -2,12 +2,14 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import typing
+from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Dict, Any, Iterable, Optional, Union
 
 from BO.Classification import ClassifIDListT
-from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping
+from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping, TableMapping
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.User import MinimalUserBO, UserActivity, UserIDT
 from BO.helpers.DataclassAsDict import DataclassAsDict
@@ -495,7 +497,7 @@ class ProjectBO(object):
     @staticmethod
     def delete(session: Session, prj_id: int):
         """
-            Completely remove the project. It is assumed that contained objects has been removed.
+            Completely remove the project. It is assumed that contained objects have been removed.
         """
         # TODO: Remove from user preferences
         # Unlink Particle project if any
@@ -605,6 +607,37 @@ class ProjectBO(object):
                                    SET nbr=nbr+:nul, nbr_v=nbr_v+:val, nbr_d=nbr_d+:dub, nbr_p=nbr_p+:prd 
                                  WHERE projid = :prj AND id = :cid"""
             session.execute(text(ts_sql), sqlparam)
+
+    @classmethod
+    def get_sort_fields(cls, project: Project) -> typing.OrderedDict[str, str]:
+        """
+            Return the content of 'Fields available for sorting & Display In the manual classification page'
+        """
+        # e.g. area=area [pixel]
+        #      meangreyobjet=mean [0-255]
+        #      fractal_box=fractal
+        ret = OrderedDict()
+        list_as_str = project.classiffieldlist
+        if list_as_str is None:
+            return ret
+        for a_pair in list_as_str.splitlines():
+            try:
+                free_col, alias = a_pair.split("=")
+            except ValueError:
+                continue
+            ret[free_col.strip()] = alias.strip()
+        return ret
+
+    @classmethod
+    def get_sort_db_columns(cls, project: Project, mapping: Optional[TableMapping]) -> List[str]:
+        """
+            Get sort list as DB columns, e.g. typically t03, n34
+        """
+        sort_list = cls.get_sort_fields(project)
+        if mapping is None:
+            return []
+        mpg = mapping.find_tsv_cols(list(sort_list.keys()))
+        return list(mpg.values())
 
 
 class ProjectBOSet(object):

@@ -8,6 +8,8 @@ def test_sql_wrap(config, database, fastapi, caplog):
     where *= "obh.n57 >= :freenumst"
     where *= "obh.n57 >= obh.n56"
     where *= "obf.orig_id = :img"
-    assert where.referenced_columns(with_prefices=False) == {"classif_id", "latitude", "n57", "n56", "orig_id"}
-    assert where.referenced_columns(with_prefices=True) == {'obh.latitude', 'obh.n57', 'obh.classif_id', 'obf.orig_id',
-                                                            'obh.n56'}
+    assert list(where.conds_and_refs()) == [('obh.classif_id = any (:taxo)', {'obh.classif_id'}),
+                                            ('obh.latitude between :MapS and :MapN', {'obh.latitude'}),
+                                            ('obh.n57 >= :freenumst', {'obh.n57'}),
+                                            ('obh.n57 >= obh.n56', {'obh.n56', 'obh.n57'}),
+                                            ('obf.orig_id = :img', {'obf.orig_id'})]

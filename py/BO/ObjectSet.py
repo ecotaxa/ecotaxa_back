@@ -70,8 +70,8 @@ class DescribedObjectSet(object):
         params: SQLParamDict = {"projid": self.prj_id}
         self.filters.get_sql_filter(obj_where, params, user_id)
         selected_tables = FromClause("obj_head obh")
-        selected_tables += "samples sam ON sam.projid = :projid"
-        selected_tables += "acquisitions acq ON acq.acq_sample_id = sam.sampleid"
+        selected_tables += "acquisitions acq ON acq.acquisid = obh.acquisid"
+        selected_tables += "samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :projid"
         column_referencing_sql = obj_where.get_sql() + order_clause.get_sql() + select_list
         if "prc." in column_referencing_sql:
             selected_tables += "process prc ON prc.processid = acq.acquisid"
@@ -162,6 +162,7 @@ class EnumeratedObjectSet(MappedTable):
             nb_objs = session.execute(obj_del_qry).rowcount
 
         session.commit()
+        # TODO: Cache delete
         return nb_objs, nb_img_rows, img_files
 
     def delete(self, chunk_size: int, do_with_files: Optional[Callable[[List[str]], None]]) -> \
@@ -196,6 +197,7 @@ class EnumeratedObjectSet(MappedTable):
                                              (oh.classif_qual.in_(['V', 'D']))))
         obj_upd_qry = obj_upd_qry.values(classif_qual='P')
         nb_objs = self.session.execute(obj_upd_qry).rowcount
+        # TODO: Cache upd
         logger.info(" %d out of %d rows reset to predicted", nb_objs, len(self.object_ids))
 
         self.session.commit()
@@ -209,6 +211,9 @@ class EnumeratedObjectSet(MappedTable):
         obj_upd_qry = obj_upd_qry.where(ObjectHeader.objid == any_(self.object_ids))
         obj_upd_qry = obj_upd_qry.values(params)
         updated_objs = self.session.execute(obj_upd_qry).rowcount
+        # TODO: Cache upd
+        # prj_id = self.get_projects_ids()[0]
+        # ObjectCacheUpdater(prj_id).update_objects(self.object_ids, params)
         return updated_objs
 
     def historize_classification(self, only_qual=None, manual=True):
@@ -581,17 +586,14 @@ class ObjectSetFilter(object):
         :return:
         """
 
-        # Objects must belong to selected acquisition(s)
-        where_clause *= "obh.acquisid = acq.acquisid"
-
         # Hierarchy first
         if self.samples:
             samples_ids = [int(x) for x in self.samples.split(',')]
-            where_clause *= "sam.sampleid = any (:samples)"
+            where_clause *= "sam.sampleid = ANY (:samples)"
             params['samples'] = samples_ids
 
         if self.taxo:
-            where_clause *= "obh.classif_id = any (:taxo)"
+            where_clause *= "obh.classif_id = ANY (:taxo)"
             if self.taxo_child:
                 # TODO: Cache if used
                 params['taxo'] = list(TaxonomyBO.children_of(self.session, [int(self.taxo)]))
@@ -600,9 +602,9 @@ class ObjectSetFilter(object):
 
         if self.status_filter:
             if self.status_filter == "NV":
-                where_clause *= "(obh.classif_qual != 'V' or obh.classif_qual is null)"
+                where_clause *= "(obh.classif_qual != 'V' OR obh.classif_qual IS NULL)"
             elif self.status_filter == "PV":
-                where_clause *= "obh.classif_qual in ('V','P')"
+                where_clause *= "obh.classif_qual IN ('V','P')"
             elif self.status_filter == "NVM":
                 where_clause *= "obh.classif_qual = 'V'"
                 where_clause *= "obh.classif_who != " + str(user_id)
@@ -610,47 +612,47 @@ class ObjectSetFilter(object):
                 where_clause *= "obh.classif_qual = 'V'"
                 where_clause *= "obh.classif_who = " + str(user_id)
             elif self.status_filter == "U":
-                where_clause *= "obh.classif_qual is null"
+                where_clause *= "obh.classif_qual IS NULL"
             else:
                 where_clause *= "obh.classif_qual = '" + self.status_filter + "'"
 
         if self.MapN and self.MapW and self.MapE and self.MapS:
-            where_clause *= "obh.latitude between :MapS and :MapN"
-            where_clause *= "obh.longitude between :MapW and :MapE"
+            where_clause *= "obh.latitude BETWEEN :MapS AND :MapN"
+            where_clause *= "obh.longitude BETWEEN :MapW AND :MapE"
             params['MapN'] = self.MapN
             params['MapW'] = self.MapW
             params['MapE'] = self.MapE
             params['MapS'] = self.MapS
 
         if self.depth_min and self.depth_max:
-            where_clause *= "obh.depth_min between :depthmin and :depthmax"
-            where_clause *= "obh.depth_max between :depthmin and :depthmax"
+            where_clause *= "obh.depth_min BETWEEN :depthmin AND :depthmax"
+            where_clause *= "obh.depth_max BETWEEN :depthmin AND :depthmax"
             params['depthmin'] = self.depth_min
             params['depthmax'] = self.depth_max
 
         if self.instrument:
-            where_clause *= "acq.instrument ilike :instrum "
+            where_clause *= "acq.instrument ILIKE :instrum "
             params['instrum'] = '%' + self.instrument + '%'
 
         if self.daytime:
-            where_clause *= "obh.sunpos = any (:daytime)"
+            where_clause *= "obh.sunpos = ANY (:daytime)"
             params['daytime'] = [x for x in self.daytime.split(',')]
 
         if self.months:
-            where_clause *= "extract(month from obh.objdate) = any (:month)"
+            where_clause *= "EXTRACT(month FROM obh.objdate) = ANY (:month)"
             params['month'] = [int(x) for x in self.months.split(',')]
 
         if self.from_date:
-            where_clause *= "obh.objdate >= to_date(:fromdate,'YYYY-MM-DD')"
+            where_clause *= "obh.objdate >= TO_DATE(:fromdate,'YYYY-MM-DD')"
             params['fromdate'] = self.from_date
 
         if self.to_date:
-            where_clause *= "obh.objdate <= to_date(:todate,'YYYY-MM-DD')"
+            where_clause *= "obh.objdate <= TO_DATE(:todate,'YYYY-MM-DD')"
             params['todate'] = self.to_date
 
         if self.invert_time:
             if self.from_time and self.to_time:
-                where_clause *= "(obh.objtime <= time :fromtime or obh.objtime >= time :totime)"
+                where_clause *= "(obh.objtime <= time :fromtime OR obh.objtime >= time :totime)"
                 params['fromtime'] = self.from_time
                 params['totime'] = self.to_time
         else:
@@ -662,11 +664,11 @@ class ObjectSetFilter(object):
                 params['totime'] = self.to_time
 
         if self.validated_from:
-            where_clause *= "obh.classif_when >= to_timestamp(:validfromdate,'YYYY-MM-DD HH24:MI')"
+            where_clause *= "obh.classif_when >= TO_TIMESTAMP(:validfromdate,'YYYY-MM-DD HH24:MI')"
             params['validfromdate'] = self.validated_from
 
         if self.validated_to:
-            where_clause *= "obh.classif_when <= to_timestamp(:validtodate,'YYYY-MM-DD HH24:MI')"
+            where_clause *= "obh.classif_when <= TO_TIMESTAMP(:validtodate,'YYYY-MM-DD HH24:MI')"
             params['validtodate'] = self.validated_to
 
         if self.free_num and self.free_num_start:
@@ -683,13 +685,13 @@ class ObjectSetFilter(object):
             criteria_tbl = self.free_text[0]
             criteria_col = "t%02d" % int(self.free_text[2:])
             if criteria_tbl == 'o':
-                where_clause *= "obf." + criteria_col + " ilike :freetxtval"
+                where_clause *= "obf." + criteria_col + " ILIKE :freetxtval"
             elif criteria_tbl == 'a':
-                where_clause *= "acq." + criteria_col + " ilike :freetxtval"
+                where_clause *= "acq." + criteria_col + " ILIKE :freetxtval"
             elif criteria_tbl == 's':
-                where_clause *= "sam." + criteria_col + " ilike :freetxtval "
+                where_clause *= "sam." + criteria_col + " ILIKE :freetxtval "
             elif criteria_tbl == 'p':
-                where_clause *= "prc." + criteria_col + " ilike :freetxtval "
+                where_clause *= "prc." + criteria_col + " ILIKE :freetxtval "
             like_exp = '%' + self.free_text_val + '%'
             # Apply standard BOL/EOL regexp markers
             if like_exp[:2] == "%^":  # Exact match at beginning
@@ -699,12 +701,12 @@ class ObjectSetFilter(object):
             params['freetxtval'] = like_exp
 
         if self.annotators:
-            where_clause *= "(obh.classif_who = any (:filt_annot) " \
-                            " or exists (select classif_who " \
-                            "              from " + ObjectsClassifHisto.__tablename__ + " och " + \
-                            "             where och.objid = obh.objid " \
-                            "               and classif_who = any (:filt_annot) ) )"
+            where_clause *= "(obh.classif_who = ANY (:filt_annot) " \
+                            " OR exists (SELECT och.classif_who " \
+                            "              FROM " + ObjectsClassifHisto.__tablename__ + " och " + \
+                            "             WHERE och.objid = obh.objid " \
+                            "               AND och.classif_who = ANY (:filt_annot) ) )"
             params['filt_annot'] = [int(x) for x in self.annotators.split(',')]
         elif self.last_annotators:
-            where_clause *= "obh.classif_who = any (:filt_annot)"
+            where_clause *= "obh.classif_who = ANY (:filt_annot)"
             params['filt_annot'] = [int(x) for x in self.last_annotators.split(',')]
