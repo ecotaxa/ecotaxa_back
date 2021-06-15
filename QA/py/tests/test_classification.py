@@ -27,7 +27,7 @@ def _prj_query(fastapi, auth, prj_id, **kwargs):
 OBJECT_SET_REVERT_URL = "/object_set/{project_id}/revert_to_history?dry_run={dry_run}{tgt_usr}"
 OBJECT_SET_RESET_PREDICTED_URL = "/object_set/{project_id}/reset_to_predicted"
 OBJECT_SET_CLASSIFY_URL = "/object_set/classify"
-OBJECT_SET_CLASSIFY_AUTO_URL = "/object_set/classify_a"
+OBJECT_SET_CLASSIFY_AUTO_URL = "/object_set/classify_auto"
 OBJECT_SET_DELETE_URL = "/object_set/"
 OBJECT_SET_SUMMARY_URL = "/object_set/{project_id}/summary?only_total=False"
 OBJECT_SET_PARENTS_URL = "/object_set/parents"

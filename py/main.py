@@ -859,7 +859,7 @@ def classify_object_set(req: ClassifyReq,
         return ret
 
 
-@app.post("/object_set/classify_a", tags=['objects'], include_in_schema=False)
+@app.post("/object_set/classify_auto", tags=['objects'])
 def classify_auto_object_set(req: ClassifyAutoReq,
                              current_user: int = Depends(get_current_user)) -> int:
     """
