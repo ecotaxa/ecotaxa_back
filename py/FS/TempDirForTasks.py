@@ -22,12 +22,10 @@ class TempDirForTasks(object):
     def base_dir_for(self, task_id: int) -> Path:
         task_subdir = "task%06d" % task_id
         ret = self.path.joinpath(task_subdir)
-        if not ret.exists():
-            # TODO: Cache for current instance
-            ret.mkdir()
+        self.ensure_exists(ret)
         return ret
 
-    def search_base_dir_for(self, task_id: int, prefix:str) -> Optional[str]:
+    def search_base_dir_for(self, task_id: int, prefix: str) -> Optional[str]:
         subdir = self.base_dir_for(task_id)
         for a_file in os.listdir(subdir):
             if a_file.endswith(prefix):
@@ -36,16 +34,12 @@ class TempDirForTasks(object):
 
     def data_dir_for(self, task_id: int) -> str:
         data_subdir = self.base_dir_for(task_id).joinpath("data")
-        if not data_subdir.exists():
-            # TODO: Cache for current instance
-            data_subdir.mkdir()
+        self.ensure_exists(data_subdir)
         return str(data_subdir.absolute())
 
     def unzipped_dir_for(self, task_id: int) -> str:
         unzip_subdir = self.base_dir_for(task_id).joinpath("unzip")
-        if not unzip_subdir.exists():
-            # TODO: Cache for current instance
-            unzip_subdir.mkdir()
+        self.ensure_exists(unzip_subdir)
         return str(unzip_subdir.absolute())
 
     def in_base_dir_for(self, job_id: int, file_name: str) -> str:
@@ -66,4 +60,14 @@ class TempDirForTasks(object):
         try:
             shutil.rmtree(temp_for_job)
         except (FileNotFoundError, PermissionError):
+            pass
+
+    @staticmethod
+    def ensure_exists(path: Path) -> None:
+        if path.exists():
+            return
+        try:
+            # @see ecotaxa/ecotaxa_dev/issues/688 : Sometimes the creations are concurrent
+            path.mkdir()
+        except FileExistsError:
             pass
