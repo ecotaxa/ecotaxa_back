@@ -76,6 +76,13 @@ class ClassifyReq(BaseModel):
     wanted_qualification: str = Field(title="The wanted qualifications for all objects. 'V' and 'P'.")
 
 
+class ClassifyAutoReq(BaseModel):
+    target_ids: List[int] = Field(title="The IDs of the target objects")
+    classifications: List[int] = Field(title="The wanted new classifications, i.e. taxon ID, one for each object. ")
+    scores: List[float] = Field(title="The classification scores, generally b/w 0 and 1. ")
+    keep_log: bool = Field(title="Set if former automatic classification history is needed. ")
+
+
 HistoricalClassificationModel = dataclass_to_model(HistoricalClassification)
 
 

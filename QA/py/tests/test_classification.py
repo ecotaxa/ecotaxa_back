@@ -27,6 +27,7 @@ def _prj_query(fastapi, auth, prj_id, **kwargs):
 OBJECT_SET_REVERT_URL = "/object_set/{project_id}/revert_to_history?dry_run={dry_run}{tgt_usr}"
 OBJECT_SET_RESET_PREDICTED_URL = "/object_set/{project_id}/reset_to_predicted"
 OBJECT_SET_CLASSIFY_URL = "/object_set/classify"
+OBJECT_SET_CLASSIFY_AUTO_URL = "/object_set/classify_a"
 OBJECT_SET_DELETE_URL = "/object_set/"
 OBJECT_SET_SUMMARY_URL = "/object_set/{project_id}/summary?only_total=False"
 OBJECT_SET_PARENTS_URL = "/object_set/parents"
@@ -44,6 +45,7 @@ def test_classif(config, database, fastapi, caplog):
 
     copepod_id = 25828
     entomobryomorpha_id = 25835
+    crustacea = 12846
     # See if the taxa we are going to use are OK
     rsp = fastapi.get(TAXA_SET_QUERY_URL.format(taxa_ids="%d+%d" % (copepod_id, entomobryomorpha_id)))
     # Note: There is no real lineage in test DB
@@ -141,6 +143,26 @@ def test_classif(config, database, fastapi, caplog):
     url = OBJECT_SET_RESET_PREDICTED_URL.format(project_id=prj_id)
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
     assert rsp.status_code == status.HTTP_200_OK
+
+    # Super ML result, 4 first objects are crustacea
+    def classify_auto_all(classif_id):
+        url = OBJECT_SET_CLASSIFY_AUTO_URL
+        classifications = [classif_id for _obj in obj_ids[:4]]
+        scores = [0.52 for _obj in obj_ids[:4]]
+        rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids[:4],
+                                                          "classifications": classifications,
+                                                          "scores": scores,
+                                                          "keep_log": True})
+        assert rsp.status_code == status.HTTP_200_OK
+
+    classify_auto_all(crustacea)
+
+    assert get_stats() == {'nb_dubious': 0,
+                           'nb_predicted': 4,
+                           'nb_unclassified': 4,
+                           'nb_validated': 0,
+                           'projid': prj_id,
+                           'used_taxa': [-1, crustacea]}
 
     # Admin (me!) thinks that all is a copepod :)
     def classify_all(classif_id):

@@ -367,16 +367,39 @@ class ObjectManager(Service):
             ret.remove(None)
         return ret
 
-    def classify_set(self, current_user_id: UserIDT, target_ids: ObjectIDListT, classif_ids: ClassifIDListT,
+    def classify_set(self, current_user_id: UserIDT,
+                     target_ids: ObjectIDListT, classif_ids: ClassifIDListT,
                      wanted_qualif: str) -> Tuple[int, int, Dict]:
         """
-            Classify or validate/set to dubious a set of objects.
+            Classify (from human source) or validate/set to dubious a set of objects.
         """
         # Get the objects and project, checking rights at the same time.
         object_set, project = self._the_project_for(current_user_id, target_ids, Action.ANNOTATE)
         # Do the raw classification with history.
         nb_upd, all_changes = object_set.classify_validate(current_user_id, classif_ids, wanted_qualif)
         # Propagate changes to update projects_taxo_stat
+        self.propagate_classif_changes(nb_upd, all_changes, project)
+        # Return status
+        return nb_upd, project.projid, all_changes
+
+    def classify_auto_set(self, current_user_id: UserIDT,
+                          target_ids: ObjectIDListT, classif_ids: ClassifIDListT, scores: List[float],
+                          keep_logs: bool) -> Tuple[int, int, Dict]:
+        """
+            Classify (from automatic source) a set of objects.
+        """
+        # Get the objects and project, checking rights at the same time.
+        object_set, project = self._the_project_for(current_user_id, target_ids, Action.ANNOTATE)
+        # Do the raw classification, eventually with history.
+        nb_upd, all_changes = object_set.classify_auto(classif_ids, scores, keep_logs)
+        # Propagate changes to update projects_taxo_stat
+        self.propagate_classif_changes(nb_upd, all_changes, project)
+        # Return status
+        return nb_upd, project.projid, all_changes
+
+    def propagate_classif_changes(self, nb_upd: int, all_changes: Dict[Tuple, ObjectIDListT],
+                                  project: Project):
+        """ After a classification, update stats """
         if nb_upd > 0:
             # Log a bit
             for a_chg, impacted in all_changes.items():
@@ -393,8 +416,6 @@ class ObjectManager(Service):
             self.session.commit()
         else:
             self.session.rollback()
-        # Return status
-        return nb_upd, project.projid, all_changes
 
     @staticmethod
     def count_in_and_out(cumulated_changes, classif_id, qualif, inc_or_dec):

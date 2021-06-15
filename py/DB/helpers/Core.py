@@ -6,4 +6,4 @@
 # SQLAlchemy core imports, for re-export
 #
 
-from sqlalchemy.sql import select
+from sqlalchemy.sql import select, Select

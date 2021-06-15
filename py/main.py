@@ -22,7 +22,7 @@ from API_models.imports import *
 from API_models.login import LoginReq
 from API_models.merge import MergeRsp
 from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp, ClassifyReq, ObjectModel, \
-    ObjectHeaderModel, HistoricalClassificationModel, ObjectSetSummaryRsp
+    ObjectHeaderModel, HistoricalClassificationModel, ObjectSetSummaryRsp, ClassifyAutoReq
 from API_models.subset import SubsetReq, SubsetRsp
 from API_models.taxonomy import TaxaSearchRsp, TaxonModel, TaxonomyTreeStatus
 from API_operations.CRUD.Collections import CollectionsService
@@ -75,7 +75,7 @@ logger = get_logger(__name__)
 fastapi_logger.setLevel(INFO)
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.14",
+              version="0.0.15",
               # openapi URL as seen from navigator, this is included when /docs is required
               # which serves swagger-ui JS app. Stay in /api sub-path.
               openapi_url="/api/openapi.json",
@@ -859,6 +859,22 @@ def classify_object_set(req: ClassifyReq,
         return ret
 
 
+@app.post("/object_set/classify_a", tags=['objects'], include_in_schema=False)
+def classify_auto_object_set(req: ClassifyAutoReq,
+                             current_user: int = Depends(get_current_user)) -> int:
+    """
+        Inject automatic classification of a set of objects.
+    """
+    assert len(req.target_ids) == len(req.classifications) == len(req.scores), \
+        "Need the same number of objects, classifications and scores"
+    with ObjectManager() as sce:
+        with RightsThrower():
+            ret, prj_id, changes = sce.classify_auto_set(current_user, req.target_ids, req.classifications, req.scores,
+                                                         req.keep_log)
+        with DBSyncService(ProjectTaxoStat, ProjectTaxoStat.projid, prj_id) as ssce: ssce.wait()
+        return ret
+
+
 # TODO: For small lists we could have a GET
 @app.post("/object_set/parents", tags=['objects'], response_model=ObjectSetQueryRsp,
           response_class=MyORJSONResponse  # Force the ORJSON encoder
@@ -1182,7 +1198,7 @@ def get_job_log_file(job_id: int,
 @app.get("/jobs/{job_id}/file", tags=['jobs'], responses={
     200: {
         "content": {"application/zip": {},
-                    "text/tab-separated-values": {} },
+                    "text/tab-separated-values": {}},
         "description": "Return the produced file.",
     }
 })

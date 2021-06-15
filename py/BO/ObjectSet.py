@@ -10,9 +10,10 @@
 #
 from collections import OrderedDict
 from decimal import Decimal
-from typing import Tuple, Optional, List, Iterator, Callable, Dict
+from typing import Tuple, Optional, List, Iterator, Callable, Dict, Any
 
 # A Postgresl insert generator, needed for the key conflict clause
+from sqlalchemy import bindparam
 from sqlalchemy.sql import Alias
 
 from API_models.crud import ProjectFilters
@@ -24,7 +25,7 @@ from BO.Taxonomy import TaxonomyBO
 from BO.User import UserIDT
 from BO.helpers.MappedTable import MappedTable
 from DB import Project, ObjectHeader, Image, Sample, Acquisition
-from DB.Object import ObjectsClassifHisto, ObjectFields
+from DB.Object import ObjectsClassifHisto, ObjectFields, PREDICTED_CLASSIF_QUAL
 from DB.helpers import Result, Session
 from DB.helpers.Core import select
 from DB.helpers.Direct import text, func, true
@@ -104,7 +105,7 @@ class EnumeratedObjectSet(MappedTable):
         assert len(object_ids) == 0 or isinstance(object_ids[0], ObjectIDT)
         self.object_ids = object_ids
 
-    def add(self, object_id: ObjectIDT):
+    def add_object(self, object_id: ObjectIDT):
         self.object_ids.append(object_id)
 
     def __len__(self):
@@ -130,7 +131,7 @@ class EnumeratedObjectSet(MappedTable):
         qry = qry.join(ObjectHeader)
         qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))
         with CodeTimer("Prjs for %d objs: " % len(self.object_ids), logger):
-            return [an_id[0] for an_id in qry.all()]
+            return [an_id for an_id, in qry.all()]
 
     @staticmethod
     def _delete_chunk(session: Session, a_chunk: ObjectIDListT) -> Tuple[int, int, List[str]]:
@@ -199,9 +200,9 @@ class EnumeratedObjectSet(MappedTable):
 
         self.session.commit()
 
-    def update(self, params: Dict) -> int:
+    def update_all(self, params: Dict) -> int:
         """
-            Update self's objects using given parameters, dict of column names and values.
+            Update all self's objects using given parameters, dict of column names and values.
         """
         # Update objects table
         obj_upd_qry: Update = ObjectHeader.__table__.update()
@@ -210,30 +211,45 @@ class EnumeratedObjectSet(MappedTable):
         updated_objs = self.session.execute(obj_upd_qry).rowcount
         return updated_objs
 
-    def historize_classification(self, only_qual=None):
+    def historize_classification(self, only_qual=None, manual=True):
         """
            Copy current classification information into history table, for all rows in self.
            :param only_qual: If set, only historize for current rows with this classification.
+           :param manual: If set, historize manual entries, otherwise, pick automatic ones.
         """
         # Light up a bit the SQLA expressions
         oh = ObjectHeader
         och = ObjectsClassifHisto
         # What we want to historize, as a subquery
-        sel_subqry = select([oh.objid, oh.classif_when, text("'M'"), oh.classif_id,
-                             oh.classif_qual, oh.classif_who])
-        if only_qual is not None:
-            qual_cond = oh.classif_qual.in_(only_qual)
+        if manual:
+            # What we want to historize, as a subquery
+            sel_subqry = select([oh.objid, oh.classif_when, text("'M'"), oh.classif_id,
+                                 oh.classif_qual, oh.classif_who])
+            if only_qual is not None:
+                qual_cond = oh.classif_qual.in_(only_qual)
+            else:
+                qual_cond = true()
+            sel_subqry = sel_subqry.where(and_(oh.objid == any_(self.object_ids),
+                                               oh.classif_when.isnot(None),
+                                               qual_cond
+                                               )
+                                          )
+            ins_columns = [och.objid, och.classif_date, och.classif_type, och.classif_id,
+                                       och.classif_qual, och.classif_who]
         else:
-            qual_cond = true()
-        sel_subqry = sel_subqry.where(and_(oh.objid == any_(self.object_ids),
-                                           oh.classif_when.isnot(None),
-                                           qual_cond
-                                           )
-                                      )
+            # What we want to historize, as a subquery
+            sel_subqry = select([oh.objid, oh.classif_auto_when, text("'A'"), oh.classif_auto_id,
+                                 oh.classif_qual, oh.classif_auto_score])
+            sel_subqry = sel_subqry.where(and_(oh.objid == any_(self.object_ids),
+                                               oh.classif_auto_id.isnot(None),
+                                               oh.classif_auto_when.isnot(None)
+                                               )
+                                          )
+            ins_columns = [och.objid, och.classif_date, och.classif_type, och.classif_id,
+                           och.classif_qual, och.classif_score]
         # Insert into the log table
         ins_qry: Insert = pg_insert(och.__table__)
-        ins_qry = ins_qry.from_select([och.objid, och.classif_date, och.classif_type, och.classif_id,
-                                       och.classif_qual, och.classif_who], sel_subqry)
+        ins_qry = ins_qry.from_select(ins_columns, sel_subqry)
         ins_qry = ins_qry.on_conflict_do_nothing(constraint='objectsclassifhisto_pkey')
         # TODO: mypy crashes due to pg_dialect below
         # logger.info("Histo query: %s", ins_qry.compile(dialect=pg_dialect()))
@@ -346,14 +362,7 @@ class EnumeratedObjectSet(MappedTable):
             :returns updated rows and a summary of changes, for MRU and logging.
         """
         # Gather state of classification, for impacted objects, before the change. Keep a lock on rows.
-        qry = select([ObjectHeader.objid,
-                      ObjectHeader.classif_auto_id, ObjectHeader.classif_auto_when, ObjectHeader.classif_auto_score,
-                      ObjectHeader.classif_id, ObjectHeader.classif_qual,
-                      ObjectHeader.classif_who, ObjectHeader.classif_when]).with_for_update(key_share=True)
-        qry = qry.where(ObjectHeader.objid == any_(self.object_ids))
-        logger.info("Fetch with lock: %s", qry)
-        res: Result = self.session.execute(qry)
-        prev = {rec['objid']: rec for rec in res.fetchall()}
+        present = self._fetch_classifs_and_lock()
 
         # Cook a diff b/w present and wanted values, both for the update of obj_head and preparing the ones on _stat
         # Group the updates as lots of them are identical
@@ -365,7 +374,7 @@ class EnumeratedObjectSet(MappedTable):
         classif_who_col = ObjectHeader.classif_who.name
         classif_when_col = ObjectHeader.classif_when.name
         for obj_id, v in zip(self.object_ids, classif_ids):
-            prev_obj = prev[obj_id]
+            prev_obj = present[obj_id]
             prev_classif_id: Optional[int] = prev_obj['classif_id']
             new_classif_id: Optional[int]
             if v == -1:  # special value from validate all
@@ -381,7 +390,7 @@ class EnumeratedObjectSet(MappedTable):
                 continue
             # There was at least 1 field change for this object
             an_update = updates.setdefault((new_classif_id, wanted_qualif), EnumeratedObjectSet(self.session, []))
-            an_update.add(obj_id)
+            an_update.add_object(obj_id)
             # Compact changes, grouped by operation
             change_key = (prev_classif_id, prev_classif_qual, new_classif_id, wanted_qualif)
             for_this_change = all_changes.setdefault(change_key, [])
@@ -404,12 +413,100 @@ class EnumeratedObjectSet(MappedTable):
                        classif_who_col: user_id,
                        classif_when_col: sql_now}
             # Do the update itsef
-            nb_updated += an_obj_set.update(row_upd)
+            nb_updated += an_obj_set.update_all(row_upd)
 
         logger.info("%d rows updated in %d queries", nb_updated, len(updates))
 
         # Return statuses
         return nb_updated, all_changes
+
+    def classify_auto(self, classif_ids: ClassifIDListT, scores: List[float], keep_logs: bool) \
+            -> Tuple[int, Dict[Tuple, ObjectIDListT]]:
+        """
+            Set automatic classifications in self.
+            :param classif_ids: One category id for each of the object ids in self.
+            :param scores: One confidence score for each object from automatic classification algorithm.
+            :param keep_logs: Self-explained
+            :returns updated rows and a summary of changes, for stats.
+        """
+        # Gather state of classification, for impacted objects, before the change. Keep a lock on rows.
+        prev = self._fetch_classifs_and_lock()
+
+        # Cook a diff b/w present and wanted values, both for the update of obj_head and preparing the ones on _stat
+        # updates: Dict[Tuple, EnumeratedObjectSet] = {}
+        all_changes: OrderedDict[Tuple, List[int]] = OrderedDict()
+        # A bit of obsessive optimization
+        classif_auto_id_col = ObjectHeader.classif_auto_id.name
+        classif_auto_score_col = ObjectHeader.classif_auto_score.name
+        classif_id_col = ObjectHeader.classif_id.name
+        classif_qual_col = ObjectHeader.classif_qual.name
+        overriden_by_prediction = {None, PREDICTED_CLASSIF_QUAL}
+        full_updates = []
+        partial_updates = []
+        objid_param = "_objid"
+        for obj_id, classif, score in zip(self.object_ids, classif_ids, scores):
+            prev_obj = prev[obj_id]
+            prev_classif_id: Optional[int] = prev_obj['classif_id']
+            prev_classif_qual = prev_obj['classif_qual']
+            # Whatever, set the auto_* fields
+            an_update: Dict[str, Any] = {objid_param: obj_id,
+                                         classif_auto_id_col: classif,
+                                         classif_auto_score_col: score}
+            if prev_classif_qual in overriden_by_prediction:
+                # If not manually modified, go to Predicted state and set prediction as classification
+                an_update[classif_id_col] = classif
+                an_update[classif_qual_col] = PREDICTED_CLASSIF_QUAL
+                full_updates.append(an_update)
+                change_key = (prev_classif_id, prev_classif_qual, classif, PREDICTED_CLASSIF_QUAL)
+                # Compact changes, grouped by operation
+                for_this_change = all_changes.setdefault(change_key, [])
+                for_this_change.append(obj_id)
+            else:
+                # Just store prediction, no change on user-visible data
+                partial_updates.append(an_update)
+
+        # Historize (auto)
+        if keep_logs:
+            self.historize_classification(None, True)
+
+        # Bulk (or sort of) update of obj_head
+        sql_now = text("now()")
+        obj_upd_qry: Update = ObjectHeader.__table__.update()
+        obj_upd_qry = obj_upd_qry.where(ObjectHeader.objid == bindparam(objid_param))
+        nb_updated = 0
+        if len(full_updates) > 0:
+            full_upd_qry = obj_upd_qry.values(classif_id=bindparam(classif_id_col),
+                                              classif_qual=bindparam(classif_qual_col),
+                                              classif_auto_id=bindparam(classif_auto_id_col),
+                                              classif_auto_score=bindparam(classif_auto_score_col),
+                                              classif_auto_when=sql_now)
+            nb_updated += self.session.execute(full_upd_qry, full_updates).rowcount
+        # Partial updates
+        if len(partial_updates) > 0:
+            part_upd_qry = obj_upd_qry.values(classif_auto_id=bindparam(classif_auto_id_col),
+                                              classif_auto_score=bindparam(classif_auto_score_col),
+                                              classif_auto_when=sql_now)
+            nb_updated += self.session.execute(part_upd_qry, partial_updates).rowcount
+        # TODO: Cache upd
+        logger.info("_auto: %d and %d gives %d rows updated ", len(full_updates), len(partial_updates), nb_updated)
+
+        # Return statuses
+        return nb_updated, all_changes
+
+    def _fetch_classifs_and_lock(self) -> Dict[int, Dict]:
+        """
+            Fetch, and DB lock, self's objects
+        :return:
+        """
+        qry = select([ObjectHeader.objid,
+                      ObjectHeader.classif_auto_id, ObjectHeader.classif_auto_when, ObjectHeader.classif_auto_score,
+                      ObjectHeader.classif_id, ObjectHeader.classif_qual,
+                      ObjectHeader.classif_who, ObjectHeader.classif_when]).with_for_update(key_share=True)
+        qry = qry.where(ObjectHeader.objid == any_(self.object_ids))
+        logger.info("Fetch with lock: %s", qry)
+        res: Result = self.session.execute(qry)
+        prev = {rec['objid']: rec for rec in res.fetchall()}
+        return prev
 
 
 class ObjectSetFilter(object):

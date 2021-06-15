@@ -25,6 +25,9 @@ from .helpers.Direct import text
 from .helpers.ORM import Model, Query
 
 # Classification qualification
+PREDICTED_CLASSIF_QUAL = 'P'
+DUBIOUS_CLASSIF_QUAL = 'D'
+VALIDATED_CLASSIF_QUAL = 'V'
 classif_qual = {'P': 'predicted', 'D': 'dubious', 'V': 'validated'}
 classif_qual_revert = {}
 for (k, v) in classif_qual.items():
