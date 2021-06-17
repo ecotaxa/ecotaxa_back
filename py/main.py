@@ -338,6 +338,11 @@ def erase_collection(collection_id: int,
 
 # ######################## END OF COLLECTION
 
+MyORJSONResponse.register(ProjectBO, ProjectModel)
+MyORJSONResponse.register(User, UserModel)
+
+
+# TODO TODO TODO: No verification of GET query parameters by FastAPI. pydantic does POST models OK.
 @app.get("/projects/search", tags=['projects'], response_model=List[ProjectModel])
 def search_projects(current_user: Optional[int] = Depends(get_optional_current_user),
                     also_others: bool = Query(default=False, deprecated=True),
@@ -345,7 +350,7 @@ def search_projects(current_user: Optional[int] = Depends(get_optional_current_u
                     for_managing: bool = False,
                     title_filter: str = '',
                     instrument_filter: str = '',
-                    filter_subset: bool = False) -> List[ProjectBO]:  # PABOPABOPABO
+                    filter_subset: bool = False) -> MyORJSONResponse:  # List[ProjectBO]
     """
         Return projects which the current user has explicit permission to access, with search options
         - `param` not_granted: Return projects on which the current user has _no permission_, but visible to him/her
@@ -358,7 +363,7 @@ def search_projects(current_user: Optional[int] = Depends(get_optional_current_u
     with ProjectsService() as sce:
         ret = sce.search(current_user_id=current_user, not_granted=not_granted, for_managing=for_managing,
                          title_filter=title_filter, instrument_filter=instrument_filter, filter_subset=filter_subset)
-    return ret
+    return MyORJSONResponse(ret)
 
 
 @app.post("/projects/create", tags=['projects'])

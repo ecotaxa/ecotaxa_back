@@ -207,6 +207,7 @@ class TableMapping(object):
     """
         The mapping for a given DB table, i.e. from TSV columns to DB ones.
     """
+    __slots__ = ['table', 'table_name', 'real_cols_to_tsv', 'tsv_cols_to_real', 'max_by_type']
 
     def __init__(self, table: MappedTableTypeT):
         self.table: MappedTableTypeT = table
@@ -230,20 +231,20 @@ class TableMapping(object):
             return
         real_cols_to_tsv = self.real_cols_to_tsv
         tsv_cols_to_real = self.tsv_cols_to_real
-        vals_by_type: Dict[str, List[int]] = {}
+        vals_by_type: Dict[str, List[int]] = {'n': [0], 't': [0]}
         for a_map in str_mapping.splitlines():
             if not a_map:
                 # Empty lines are tolerated
                 continue
             db_col, tsv_col_no_prfx = a_map.split('=', 1)
-            self.add_association(db_col, tsv_col_no_prfx)
+            # self.add_association(db_col, tsv_col_no_prfx)
             # Above is too slow for many (all!) projects, below is an equivalent rewrite
             real_cols_to_tsv[db_col] = tsv_col_no_prfx
             tsv_cols_to_real[tsv_col_no_prfx] = db_col
             db_col_type = db_col[0]  # i.e. 't' or 'n'
             db_col_ndx = int(db_col[1:])
             # Store values instead of recomputing maximum for each addition
-            vals_by_type.setdefault(db_col_type, []).append(db_col_ndx)
+            vals_by_type[db_col_type].append(db_col_ndx)
         for a_col_type, vals_for_type in vals_by_type.items():
             self.max_by_type[a_col_type] = max(vals_for_type)
         return self

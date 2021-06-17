@@ -7,7 +7,7 @@
 import sys
 import traceback
 from os.path import dirname
-from typing import Any, Optional
+from typing import Any, Optional, Dict, List
 
 import orjson
 from fastapi import FastAPI, Depends, HTTPException
@@ -235,11 +235,28 @@ class MyORJSONResponse(JSONResponse):
     """
     media_type = "application/json"
 
+    type_to_fields: Dict[Any, List[str]] = {}
+
+    @classmethod
+    def register(cls, a_class, its_model):
+        cls.type_to_fields[a_class] = list(its_model.__fields__.keys())
+
+    @classmethod
+    def orjson_default(cls, obj):
+        # ORJSon calls this method when it cannot serialize an object.
+        # We mimic FastApi behavior of fetching data from the object using the model fields
+        fields = cls.type_to_fields.get(obj.__class__)
+        if fields is None:
+            raise TypeError
+        ret = {fld: getattr(obj, fld) for fld in fields}
+        return ret
+
     try:
         import orjson
 
         def render(self, content: Any) -> bytes:
-            return orjson.dumps(content, option=orjson.OPT_NON_STR_KEYS)
+            return orjson.dumps(content, option=orjson.OPT_NON_STR_KEYS,
+                                default=MyORJSONResponse.orjson_default)
 
     except ImportError:
         # noinspection PyUnusedLocal

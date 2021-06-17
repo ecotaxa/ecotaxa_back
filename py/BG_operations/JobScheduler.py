@@ -72,12 +72,10 @@ class JobScheduler(Service):
             # A single runner at a time
             if self.the_runner.is_alive():
                 return
-        qry: Query = self.session.query(Job).filter(Job.state == DBJobStateEnum.Pending).limit(1)
-        qry = qry.with_for_update(nowait=True)
-        try:
-            the_job: Job = qry.first()
-        except:
-            return
+        # Pick the first pending job which is not already managed by another runner
+        qry: Query = self.session.query(Job).filter(Job.state == DBJobStateEnum.Pending)
+        qry = qry.with_for_update(skip_locked=True)
+        the_job: Job = qry.first()
         if the_job is None:
             return
         logger.info("Found job to run: %s", str(the_job))
