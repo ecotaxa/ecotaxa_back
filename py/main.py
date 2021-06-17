@@ -8,7 +8,7 @@ import os
 from logging import INFO
 from typing import Union, Tuple
 
-from fastapi import FastAPI, Request, Response, status, Depends, HTTPException, UploadFile, File
+from fastapi import FastAPI, Request, Response, status, Depends, HTTPException, UploadFile, File, Query
 from fastapi.logger import logger as fastapi_logger
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
@@ -68,6 +68,8 @@ from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower, \
     get_optional_current_user, MyORJSONResponse, ValidityThrower
 from helpers.login import LoginService
+
+# from fastapi.middleware.gzip import GZipMiddleware
 
 logger = get_logger(__name__)
 # TODO: A nicer API doc, see https://github.com/tiangolo/fastapi/issues/1140
@@ -338,21 +340,23 @@ def erase_collection(collection_id: int,
 
 @app.get("/projects/search", tags=['projects'], response_model=List[ProjectModel])
 def search_projects(current_user: Optional[int] = Depends(get_optional_current_user),
-                    also_others: bool = False,
+                    also_others: bool = Query(default=False, deprecated=True),
+                    not_granted: bool = False,
                     for_managing: bool = False,
                     title_filter: str = '',
                     instrument_filter: str = '',
                     filter_subset: bool = False) -> List[ProjectBO]:  # PABOPABOPABO
     """
-        Return projects for current user, if any.
-        - `param` also_others: Allows to return projects for which given user has no right
-        - `param` for_managing: Allows to return project that can be written to (including erased) by the given user
+        Return projects which the current user has explicit permission to access, with search options
+        - `param` not_granted: Return projects on which the current user has _no permission_, but visible to him/her
+        - `param` for_managing: Return projects that can be written to (including erased) by the current user
         - `param` title_filter: Use this pattern for matching returned projects names
         - `param` instrument_filter: Only return projects where this instrument was used
         - `param` filter_subset: Only return projects having 'subset' in their names
     """
+    not_granted = not_granted or also_others
     with ProjectsService() as sce:
-        ret = sce.search(current_user_id=current_user, also_others=also_others, for_managing=for_managing,
+        ret = sce.search(current_user_id=current_user, not_granted=not_granted, for_managing=for_managing,
                          title_filter=title_filter, instrument_filter=instrument_filter, filter_subset=filter_subset)
     return ret
 

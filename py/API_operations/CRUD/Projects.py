@@ -52,7 +52,7 @@ class ProjectsService(Service):
 
     def search(self, current_user_id: Optional[int],
                for_managing: bool = False,
-               also_others: bool = False,
+               not_granted: bool = False,
                title_filter: str = '',
                instrument_filter: str = '',
                filter_subset: bool = False) -> List[ProjectBO]:
@@ -65,7 +65,7 @@ class ProjectsService(Service):
             # No rights checking as basically everyone can see all projects
             current_user = self.ro_session.query(User).get(current_user_id)
             assert current_user is not None
-            matching_ids = ProjectBO.projects_for_user(self.ro_session, current_user, for_managing, also_others,
+            matching_ids = ProjectBO.projects_for_user(self.ro_session, current_user, for_managing, not_granted,
                                                        title_filter, instrument_filter, filter_subset)
             projects = ProjectBOSet(self.ro_session, matching_ids, public=False)
         return projects.as_list()

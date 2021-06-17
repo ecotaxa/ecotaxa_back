@@ -335,7 +335,7 @@ class ProjectBO(object):
     @staticmethod
     def projects_for_user(session: Session, user: User,
                           for_managing: bool = False,
-                          also_others: bool = False,
+                          not_granted: bool = False,
                           title_filter: str = '',
                           instrument_filter: str = '',
                           filter_subset: bool = False) -> List[ProjectIDT]:
@@ -343,7 +343,7 @@ class ProjectBO(object):
         :param session:
         :param user: The user for which the list is needed.
         :param for_managing: If set, list the projects that the user can manage.
-        :param also_others: If set, also list the projects on which given user has no right, so user can
+        :param not_granted: If set, list (only) the projects on which given user has no right, so user can
                                 request access to them.
         :param title_filter: If set, filter out the projects with title not matching the required string,
                                 or if set to a number, filter out the projects of which ID does not match.
@@ -360,7 +360,7 @@ class ProjectBO(object):
                        FROM projects p
                        LEFT JOIN ( """ + ProjectPrivilegeBO.first_manager_by_project() + """ ) fpm 
                          ON fpm.projid = p.projid """
-        if also_others:
+        if not_granted:
             # Add the projects for which no entry is found in ProjectPrivilege
             sql += """
                        LEFT JOIN projectspriv pp ON p.projid = pp.projid AND pp.member = :user_id
