@@ -365,6 +365,8 @@ class ProjectBO(object):
             sql += """
                        LEFT JOIN projectspriv pp ON p.projid = pp.projid AND pp.member = :user_id
                       WHERE pp.member is null """
+            if for_managing:
+                sql += " AND False "
         else:
             if not user.has_role(Role.APP_ADMINISTRATOR):
                 # Not an admin, so restrict to projects which current user can work on, or view
