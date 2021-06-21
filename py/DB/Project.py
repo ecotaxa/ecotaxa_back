@@ -2,6 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from typing import List
 
 from BO.DataLicense import LicenseEnum
 from DB.helpers.ORM import Model
@@ -16,6 +17,10 @@ from .helpers.Postgres import VARCHAR, INTEGER, DOUBLE_PRECISION
 ANNOTATE_STATUS = "Annotate"
 ANNOTATE_NO_PREDICTION = "Annotate No Prediction"
 EXPLORE_ONLY = "ExploreOnly"
+
+# Typings, to be clear that these are not e.g. object IDs
+ProjectIDT = int
+ProjectIDListT = List[int]
 
 
 class Project(Model):

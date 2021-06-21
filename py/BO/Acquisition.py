@@ -9,10 +9,10 @@ from typing import List, Dict, Optional
 
 from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.ColumnUpdate import ColUpdateList
-from BO.Project import ProjectIDListT, ProjectIDT
 from BO.helpers.MappedEntity import MappedEntity
 from BO.helpers.MappedTable import MappedTable
 from DB import Session, Query, Project, Acquisition, Sample, ObjectHeader
+from DB.Project import ProjectIDT, ProjectIDListT
 from DB.helpers.Direct import text
 from DB.helpers.ORM import any_, and_, Result
 from helpers.DynamicLogs import get_logger

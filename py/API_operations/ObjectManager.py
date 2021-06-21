@@ -9,11 +9,12 @@ from BO.Classification import HistoricalLastClassif, ClassifIDSetT, ClassifIDLis
 from BO.ColumnUpdate import ColUpdateList
 from BO.Mappings import TableMapping
 from BO.ObjectSet import DescribedObjectSet, ObjectIDListT, EnumeratedObjectSet, ObjectIDWithParentsListT
-from BO.Project import ProjectBO, ProjectIDT
+from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
 from BO.User import UserIDT
 from DB import Project, ObjectHeader, ObjectFields, Image, Taxonomy, Sample, User
+from DB.Project import ProjectIDT
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Result
 from DB.helpers.SQL import OrderClause

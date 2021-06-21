@@ -13,10 +13,10 @@ from BO.Acquisition import AcquisitionIDListT, EnumeratedAcquisitionSet, Acquisi
 from BO.ColumnUpdate import ColUpdateList
 from BO.Mappings import ProjectMapping
 from BO.Process import ProcessIDListT, EnumeratedProcessSet, ProcessIDT, ProcessBO
-from BO.Project import ProjectIDT, ProjectIDListT
 from BO.Rights import RightsBO, Action
 from BO.Sample import SampleIDListT, EnumeratedSampleSet, SampleIDT, SampleBO, DescribedSampleSet, SampleTaxoStats
 from BO.User import UserIDT
+from DB.Project import ProjectIDT, ProjectIDListT
 
 
 class SamplesService(Service):

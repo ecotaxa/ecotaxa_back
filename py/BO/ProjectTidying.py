@@ -9,10 +9,10 @@ from typing import Dict, Set, List, Optional
 from BO.Acquisition import AcquisitionOrigIDT
 from BO.Object import ObjectIDT
 from BO.Process import ProcessOrigIDT
-from BO.Project import ProjectIDT
 from BO.Sample import SampleOrigIDT
 from DB import Sample, Acquisition, ObjectHeader, Process
 from DB import Session
+from DB.Project import ProjectIDT
 from DB.helpers.ORM import Query
 
 

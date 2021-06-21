@@ -7,11 +7,11 @@ from typing import List, Union, Tuple, Optional
 from API_models.crud import CreateProjectReq
 from BO.Classification import ClassifIDListT
 from BO.ObjectSet import EnumeratedObjectSet
-from BO.Project import ProjectBO, ProjectBOSet, ProjectIDListT, ProjectIDT, ProjectTaxoStats, ProjectUserStats
+from BO.Project import ProjectBO, ProjectBOSet, ProjectTaxoStats, ProjectUserStats
 from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
 from DB import Sample
-from DB.Project import Project, ANNOTATE_STATUS
+from DB.Project import Project, ANNOTATE_STATUS, ProjectIDT, ProjectIDListT
 from DB.User import User
 from DB.helpers.ORM import clone_of
 from FS.VaultRemover import VaultRemover

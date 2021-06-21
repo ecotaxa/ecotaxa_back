@@ -20,12 +20,12 @@ from API_models.crud import ProjectFilters
 from BO.Classification import HistoricalLastClassif, ClassifIDListT
 from BO.ColumnUpdate import ColUpdateList
 from BO.Object import ObjectIDT, ObjectIDWithParentsT
-from BO.Project import ProjectIDListT
 from BO.Taxonomy import TaxonomyBO
 from BO.User import UserIDT
 from BO.helpers.MappedTable import MappedTable
 from DB import Project, ObjectHeader, Image, Sample, Acquisition
 from DB.Object import ObjectsClassifHisto, ObjectFields, PREDICTED_CLASSIF_QUAL
+from DB.Project import ProjectIDListT
 from DB.helpers import Result, Session
 from DB.helpers.Core import select
 from DB.helpers.Direct import text, func, true

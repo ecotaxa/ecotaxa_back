@@ -5,7 +5,7 @@
 from typing import List
 
 from BO.Instrument import DescribedInstrumentSet, InstrumentIDT
-from BO.Project import ProjectIDListT
+from DB.Project import ProjectIDListT
 from helpers.DynamicLogs import get_logger
 from ..helpers.Service import Service
 

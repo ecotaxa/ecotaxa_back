@@ -18,13 +18,13 @@ from BO.SpaceTime import compute_sun_position, USED_FIELDS_FOR_SUNPOS
 from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
 from DB import Process, Acquisition
 from DB.Object import classif_qual_revert, ObjectHeader, ObjectFields
+from DB.Project import ProjectIDT
 from DB.helpers import Session
 from DB.helpers.Bean import Bean
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Model, detach_from_session
 from helpers.DynamicLogs import get_logger
 from .Image import ImageBO
-from .Project import ProjectIDT
 from .helpers.TSVHelpers import clean_value, clean_value_and_none, to_float, none_to_empty, \
     convert_degree_minute_float_to_decimal_degree
 

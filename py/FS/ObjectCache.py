@@ -16,8 +16,9 @@ from threading import Thread
 from typing import Optional, Tuple, List, Dict, Set, Any
 
 from BO.Mappings import TableMapping
-from BO.Project import ProjectBO, ProjectIDT
+from BO.Project import ProjectBO
 from DB import Project
+from DB.Project import ProjectIDT
 from DB.helpers import Result, Session
 from DB.helpers.Connection import Connection
 from DB.helpers.SQL import OrderClause, WhereClause

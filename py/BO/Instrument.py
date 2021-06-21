@@ -5,10 +5,11 @@
 #
 # Instruments, as of today just names i.e. instrument types.
 #
-from typing import List
+from typing import List, Dict, Set
 
-from BO.Project import ProjectIDListT
 from DB import Session, Acquisition, Sample, Project
+from DB.Project import ProjectIDListT, ProjectIDT
+from DB.helpers.Direct import text
 from DB.helpers.ORM import Query
 from helpers.DynamicLogs import get_logger
 

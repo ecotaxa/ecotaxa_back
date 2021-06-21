@@ -24,13 +24,13 @@ from BO.DataLicense import LicenseEnum, DataLicense
 from BO.Mappings import ProjectMapping
 from BO.Object import ObjectBO, ObjectBOSet
 from BO.Process import ProcessBO
-from BO.Project import ProjectBO, ProjectIDListT, ProjectTaxoStats, ProjectIDT
+from BO.Project import ProjectBO, ProjectTaxoStats
 from BO.ProjectVars import DefaultVars
 from BO.Rights import RightsBO
 from BO.Sample import SampleBO
 from BO.TaxonomySwitch import TaxonomyMapper
 from DB import User, Taxonomy, WoRMS, Collection, Role
-from DB.Project import ProjectTaxoStat
+from DB.Project import ProjectTaxoStat, ProjectIDT, ProjectIDListT
 from DB.Sample import Sample
 from DB.helpers.ORM import Query
 from DB.helpers.Postgres import timestamp_to_str

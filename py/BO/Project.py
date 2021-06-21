@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Iterable, Optional, Union
 
 from BO.Classification import ClassifIDListT
+from BO.Instrument import DescribedInstrumentSet
 from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping, TableMapping
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.User import MinimalUserBO, UserActivity, UserIDT
@@ -16,6 +17,7 @@ from BO.helpers.DataclassAsDict import DataclassAsDict
 from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFields, Acquisition, Process, \
     ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram, ObjectCNNFeature, \
     ObjectsClassifHisto
+from DB.Project import ProjectIDT, ProjectIDListT
 from DB.User import Role
 from DB.helpers import Session, Result
 from DB.helpers.Direct import text
@@ -24,10 +26,6 @@ from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
 logger = get_logger(__name__)
-
-# Typings, to be clear that these are not e.g. object IDs
-ProjectIDT = int
-ProjectIDListT = List[int]
 
 
 @dataclass(init=False)

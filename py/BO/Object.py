@@ -13,10 +13,10 @@ from sqlalchemy import MetaData
 from BO.Acquisition import AcquisitionIDT
 from BO.Classification import HistoricalClassificationListT, HistoricalClassification
 from BO.Mappings import TableMapping
-from BO.Project import ProjectIDT
 from BO.Sample import SampleIDT
 from BO.helpers.MappedEntity import MappedEntity
 from DB import ObjectHeader, ObjectFields, Image, ObjectsClassifHisto, User, Taxonomy
+from DB.Project import ProjectIDT
 from DB.helpers.ORM import Session, Query, joinedload, subqueryload, Model, minimal_model_of
 from helpers.DynamicLogs import get_logger
 

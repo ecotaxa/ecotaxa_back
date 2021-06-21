@@ -8,10 +8,10 @@
 from typing import List
 
 from BO.ColumnUpdate import ColUpdateList
-from BO.Project import ProjectIDListT
 from BO.helpers.MappedEntity import MappedEntity
 from BO.helpers.MappedTable import MappedTable
 from DB import Session, Query, Project, Process, Sample
+from DB.Project import ProjectIDListT
 from DB.helpers.ORM import any_
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer

@@ -8,8 +8,8 @@
 import json
 from json import JSONDecodeError
 
-from BO.Project import ProjectIDT
 from DB import User, Project
+from DB.Project import ProjectIDT
 from DB.helpers.ORM import Session, Query
 
 

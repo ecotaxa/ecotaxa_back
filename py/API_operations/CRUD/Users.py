@@ -5,8 +5,8 @@
 from typing import Optional, List, Any
 
 from BO.Classification import ClassifIDListT
-from BO.Project import ProjectIDT
 from BO.User import UserBO, UserIDT
+from DB.Project import ProjectIDT
 from DB.User import User, Role
 from helpers.DynamicLogs import get_logger
 from ..helpers.Service import Service

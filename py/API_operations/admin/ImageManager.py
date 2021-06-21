@@ -12,11 +12,11 @@ from typing import Optional, Set
 from sqlalchemy import and_
 
 from API_operations.helpers.Service import Service
-from BO.Project import ProjectIDT
 from BO.Rights import RightsBO
 from BO.User import UserIDT
 from DB import ObjectHeader, Sample, Acquisition, Project, Role
 from DB.Image import Image, ImageFile, ImageFileStateEnum
+from DB.Project import ProjectIDT
 from DB.helpers.ORM import Query, aliased
 from FS.Vault import Vault
 from FS.VaultRemover import VaultRemover

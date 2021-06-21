@@ -8,10 +8,9 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 
 from BO.Job import JobBO
-from BO.Project import ProjectIDT
 from BO.User import UserIDT
 from DB.Job import Job, JobIDT, DBJobStateEnum
-from DB.Project import Project
+from DB.Project import Project, ProjectIDT
 from FS.TempDirForTasks import TempDirForTasks
 from helpers.DynamicLogs import get_logger, LogEmitter, LogsSwitcher
 from helpers.exception import format_exception

@@ -5,11 +5,11 @@
 from typing import List, Any, Optional, Set, cast, Dict
 
 from BO.DataLicense import DataLicense, LicenseEnum
-from BO.Project import ProjectIDListT
 from DB import Collection, User, CollectionUserRole, Project, Sample
 from DB import Session, Query
 from DB.Collection import COLLECTION_ROLE_DATA_CREATOR, COLLECTION_ROLE_ASSOCIATED_PERSON, CollectionProject, \
     CollectionOrgaRole
+from DB.Project import ProjectIDListT
 from DB.helpers.ORM import contains_eager
 from helpers.DynamicLogs import get_logger
 
