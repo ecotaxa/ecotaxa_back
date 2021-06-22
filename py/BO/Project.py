@@ -60,6 +60,7 @@ class ProjectBO(object):
     def __init__(self, project: Project):
         self._project = project
         # Added values
+        self.instrument = ""
         self.highest_right = ""  # This field depends on the user asking for the information
         self.obj_free_cols: Dict[str, str] = {}
         self.sample_free_cols: Dict[str, str] = {}
@@ -664,6 +665,14 @@ class ProjectBOSet(object):
                     else:
                         self.projects.append(ProjectBO(a_proj).enrich())
                     done.add(a_proj.projid)
+        # Add instruments
+        with CodeTimer("%s set instruments:" % len(prj_ids), logger):
+            instruments = DescribedInstrumentSet(session, prj_ids)
+            for a_project in self.projects:
+                instrums = instruments.by_project.get(a_project.projid)
+                if instrums is not None:
+                    a_project.instrument = ",".join(instrums)
+
 
     def as_list(self) -> List[ProjectBO]:
         return self.projects

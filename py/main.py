@@ -18,6 +18,7 @@ from API_models.constants import Constants
 from API_models.crud import *
 from API_models.exports import EMODnetExportRsp, ExportRsp, ExportReq
 from API_models.filesystem import DirectoryModel
+from API_models.helpers.Introspect import plain_columns
 from API_models.imports import *
 from API_models.login import LoginReq
 from API_models.merge import MergeRsp
@@ -68,6 +69,7 @@ from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower, \
     get_optional_current_user, MyORJSONResponse, ValidityThrower
 from helpers.login import LoginService
+from helpers.pydantic import sort_and_prune
 
 # from fastapi.middleware.gzip import GZipMiddleware
 
@@ -91,6 +93,9 @@ app = FastAPI(title="EcoTaxa",
 
 # Instrument a bit
 add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
+
+# Optimize large responses
+# app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 # HTML stuff
 # app.mount("/styles", StaticFiles(directory="pages/styles"), name="styles")
@@ -341,6 +346,8 @@ def erase_collection(collection_id: int,
 MyORJSONResponse.register(ProjectBO, ProjectModel)
 MyORJSONResponse.register(User, UserModel)
 
+project_model_columns = plain_columns(ProjectModel)
+
 
 # TODO TODO TODO: No verification of GET query parameters by FastAPI. pydantic does POST models OK.
 @app.get("/projects/search", tags=['projects'], response_model=List[ProjectModel])
@@ -350,19 +357,29 @@ def search_projects(current_user: Optional[int] = Depends(get_optional_current_u
                     for_managing: bool = False,
                     title_filter: str = '',
                     instrument_filter: str = '',
-                    filter_subset: bool = False) -> MyORJSONResponse:  # List[ProjectBO]
+                    filter_subset: bool = False,
+                    order_field: Optional[str] = Query(default=None,
+                                                       description="One of %s" % list(project_model_columns.keys())),
+                    window_start: Optional[int] = Query(default=None,
+                                                        description="Skip `window_start` before returning data"),
+                    window_size: Optional[int] = Query(default=None,
+                                                       description="Return only `window_size` lines")
+                    ) -> MyORJSONResponse:  # List[ProjectBO]
     """
-        Return projects which the current user has explicit permission to access, with search options
+        Return projects which the current user has explicit permission to access, with search options.
         - `param` not_granted: Return projects on which the current user has _no permission_, but visible to him/her
         - `param` for_managing: Return projects that can be written to (including erased) by the current user
         - `param` title_filter: Use this pattern for matching returned projects names
         - `param` instrument_filter: Only return projects where this instrument was used
         - `param` filter_subset: Only return projects having 'subset' in their names
+        - `params` order_field, window_start, window_size: See accompanying description.
     """
     not_granted = not_granted or also_others
     with ProjectsService() as sce:
         ret = sce.search(current_user_id=current_user, not_granted=not_granted, for_managing=for_managing,
                          title_filter=title_filter, instrument_filter=instrument_filter, filter_subset=filter_subset)
+    # The DB query takes a few ms, and enrich not much more, so we can afford to narrow the search on the result
+    ret = sort_and_prune(ret, order_field, project_model_columns, window_start, window_size)
     return MyORJSONResponse(ret)
 
 

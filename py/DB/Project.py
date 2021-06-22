@@ -25,7 +25,7 @@ ProjectIDListT = List[int]
 
 class Project(Model):
     """
-        Main holder of image data.
+        Top-level holder of image data.
     """
     __tablename__ = 'projects'
     projid = Column(INTEGER, Sequence('seq_projects'), primary_key=True)

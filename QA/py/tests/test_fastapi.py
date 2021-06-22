@@ -123,6 +123,7 @@ def test_project_search(config, database, fastapi):
                                                               "instrument_filter": "flow",
                                                               "filter_subset": True,
                                                               "for_managing": True})
+    # TODO: Windowing tests
     assert response.json() == []
 
 
