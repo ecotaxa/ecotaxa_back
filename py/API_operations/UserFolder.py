@@ -5,6 +5,7 @@
 # Per-user or shared set of files.
 #
 import time
+from typing import Optional
 
 from fastapi import UploadFile
 
@@ -27,7 +28,7 @@ class UserFolderService(Service):
     def __init__(self):
         super().__init__()
 
-    async def store(self, current_user_id: UserIDT, file: UploadFile) -> str:
+    async def store(self, current_user_id: UserIDT, file: UploadFile, path: Optional[str]) -> str:
         """
             Add a file into current user's folder.
             TODO: Quotas
@@ -35,7 +36,7 @@ class UserFolderService(Service):
         file_name = file.filename
         current_user = self.ro_session.query(User).get(current_user_id)
         assert current_user is not None
-        logger.info("Adding '%s' for '%s'", file_name, current_user.name)
+        logger.info("Adding '%s' ('%s') for '%s'", file_name, path, current_user.name)
         ret = await UserDirectory(current_user_id).add_file(file_name, file)
         return ret
 

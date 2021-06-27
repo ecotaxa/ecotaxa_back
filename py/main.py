@@ -8,7 +8,7 @@ import os
 from logging import INFO
 from typing import Union, Tuple
 
-from fastapi import FastAPI, Request, Response, status, Depends, HTTPException, UploadFile, File, Query
+from fastapi import FastAPI, Request, Response, status, Depends, HTTPException, UploadFile, File, Query, Form
 from fastapi.logger import logger as fastapi_logger
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
@@ -1257,6 +1257,7 @@ def erase_job(job_id: int,
 
 @app.post("/my_files/", tags=['Files'], response_model=str)
 async def put_user_file(file: UploadFile = File(...),
+                        path: Optional[str] = Form(None),
                         current_user: int = Depends(get_current_user)):
     """
         Upload a file for the current user. The returned text will contain a serve-side path
@@ -1264,7 +1265,7 @@ async def put_user_file(file: UploadFile = File(...),
     """
     with UserFolderService() as sce:
         with RightsThrower():
-            file_name = await sce.store(current_user, file)
+            file_name = await sce.store(current_user, file, path)
         return file_name
 
 
