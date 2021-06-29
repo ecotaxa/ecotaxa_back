@@ -1255,9 +1255,22 @@ def erase_job(job_id: int,
 
 # ######################## END OF JOBS
 
+@app.get("/my_files/{sub_path:path}", tags=['Files'], response_model=DirectoryModel)
+async def list_user_files(sub_path: str,
+                          current_user: int = Depends(get_current_user)) -> DirectoryModel:
+    """
+        List the private files which are usable for some file-related operations e.g. import.
+    """
+    with UserFolderService() as sce:
+        with RightsThrower():
+            file_list = await sce.list(sub_path, current_user)
+    return file_list
+
+
 @app.post("/my_files/", tags=['Files'], response_model=str)
 async def put_user_file(file: UploadFile = File(...),
                         path: Optional[str] = Form(None),
+                        tag: Optional[str] = Form(None),
                         current_user: int = Depends(get_current_user)):
     """
         Upload a file for the current user. The returned text will contain a serve-side path
@@ -1265,7 +1278,7 @@ async def put_user_file(file: UploadFile = File(...),
     """
     with UserFolderService() as sce:
         with RightsThrower():
-            file_name = await sce.store(current_user, file, path)
+            file_name = await sce.store(current_user, file, path, tag)
         return file_name
 
 

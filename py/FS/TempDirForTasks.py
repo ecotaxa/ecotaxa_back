@@ -6,7 +6,7 @@ import os
 import shutil
 from os.path import join
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Set
 
 
 class TempDirForTasks(object):
@@ -63,11 +63,17 @@ class TempDirForTasks(object):
             pass
 
     @staticmethod
-    def ensure_exists(path: Path) -> None:
+    def ensure_exists(path: Path, cache: Optional[Set] = None) -> None:
+        if cache is None:
+            cache = set()
+        if path in cache:
+            return
         if path.exists():
+            cache.add(path)
             return
         try:
             # @see ecotaxa/ecotaxa_dev/issues/688 : Sometimes the creations are concurrent
-            path.mkdir()
+            path.mkdir(parents=True)
+            cache.add(path)
         except FileExistsError:
             pass

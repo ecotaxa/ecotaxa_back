@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 from typing import Any, List, Tuple
 
+DirEntryT = Tuple[str, str, int, str]
 
 class CommonFolder(object):
     """
@@ -30,14 +31,18 @@ class CommonFolder(object):
         sub_path = sub_path.lstrip("/")
         return self.path.joinpath(sub_path).as_posix()
 
-    def list(self, sub_path: str) -> List[Tuple[str, str, int, str]]:
+    def list(self, sub_path: str) -> List[DirEntryT]:
         """
             List given sub-path, returning the name of entries and details of zip files.
         """
-        ret = []
+        ret: List[DirEntryT] = []
         # Leading / implies root directory
         sub_path = sub_path.lstrip("/")
         abs_path = Path(self.path.joinpath(sub_path))
+        return self.list_dir_into(abs_path, ret)
+
+    @staticmethod
+    def list_dir_into(abs_path, out):
         for an_entry in abs_path.iterdir():
             if an_entry.is_dir():
                 e_type = 'D'
@@ -52,8 +57,8 @@ class CommonFolder(object):
                 entry_sz = entry_stat.st_size
                 entry_time = datetime.datetime.fromtimestamp(entry_stat.st_mtime)
                 str_entry_time = entry_time.isoformat(" ")
-            ret.append((an_entry.name, e_type, entry_sz, str_entry_time))
-        return ret
+            out.append((an_entry.name, e_type, entry_sz, str_entry_time))
+        return out
 
 
 class ExportFolder(object):

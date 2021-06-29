@@ -87,7 +87,7 @@ class _AddedToProject(BaseModel):
                                         default=[])
     viewers: List[UserModel] = Field(title="Viewers of this project, if not manager nor annotator",
                                      default=[])
-    instrument: str = Field(title="This project's instrument. Transitory: if several of them, then coma-separated")
+    instrument: Optional[str] = Field(title="This project's instrument. Transitory: if several of them, then coma-separated")
     contact: Optional[UserModel] = Field(
         title="The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.")
 
