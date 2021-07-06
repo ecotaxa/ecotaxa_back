@@ -81,7 +81,15 @@ class ClassifyAutoReq(BaseModel):
     classifications: List[int] = Field(title="The wanted new classifications, i.e. taxon ID, one for each object. ")
     scores: List[float] = Field(title="The classification scores, generally b/w 0 and 1. ")
     keep_log: bool = Field(title="Set if former automatic classification history is needed. ")
-
+    class Config:
+        schema_extra = {
+            "example": {
+                "target_ids": [634509, 6234516, 976544],
+                "classifications": [7546, 3421, 788],
+                "scores": [0.4, 0.56, 0.38],
+                "keep_log": False,
+            }
+        }
 
 HistoricalClassificationModel = dataclass_to_model(HistoricalClassification)
 

@@ -889,7 +889,8 @@ def classify_object_set(req: ClassifyReq,
 def classify_auto_object_set(req: ClassifyAutoReq,
                              current_user: int = Depends(get_current_user)) -> int:
     """
-        Inject automatic classification of a set of objects.
+        Set automatic classification of a set of objects.
+         - `params`: None, all is in the Request body.
     """
     assert len(req.target_ids) == len(req.classifications) == len(req.scores), \
         "Need the same number of objects, classifications and scores"
