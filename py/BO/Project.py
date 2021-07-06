@@ -579,6 +579,7 @@ class ProjectBO(object):
         ids_not_in_db = set(needed_ids).difference(ids_in_db.keys())
         if len(ids_not_in_db) > 0:
             # Insert rows for missing IDs
+            # TODO: We can't lock what does not exists, so it can fail here.
             pts_ins = """INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
                              SELECT :prj, COALESCE(obh.classif_id, -1), COUNT(*) nbr, 
                                     COUNT(CASE WHEN obh.classif_qual = 'V' THEN 1 END) nbr_v,

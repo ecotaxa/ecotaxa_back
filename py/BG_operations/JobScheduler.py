@@ -127,8 +127,11 @@ class JobScheduler(Service):
             Launch a job if possible, then wait a bit before accessing next one.
         """
         def launch():
-            with cls() as sce:
-                sce.run_one()
+            try:
+                with cls() as sce:
+                    sce.run_one()
+            except Exception as e:
+                logger.exception("Job run() exception: %s", e)
             cls.launch_at_interval(interval)
 
         cls.the_timer = threading.Timer(interval=interval, function=launch)
