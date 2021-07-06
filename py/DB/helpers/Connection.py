@@ -5,9 +5,8 @@
 
 import sqlalchemy
 from sqlalchemy import MetaData
-from sqlalchemy.event import listens_for
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import QueuePool, Pool
+from sqlalchemy.pool import QueuePool
 
 from helpers.DynamicLogs import get_logger
 
@@ -24,18 +23,18 @@ def check_sqlalchemy_version():
         exit(-1)
 
 
-@listens_for(Pool, "connect")
-def my_on_connect(dbapi_conn, _conn_record):
-    # Fix for https://github.com/ecotaxa/ecotaxa_dev/issues/636
-    # Align the DB precision of floats with the one in python
-    # This is not necessary anymore with PG12+
-    # ref: https://www.postgresql.org/docs/12/datatype-numeric.html#DATATYPE-FLOAT
-    #  and https://www.postgresql.org/docs/11/runtime-config-client.html
-    # TODO: Remove when go to PG12+
-    crs = dbapi_conn.cursor()
-    crs.execute("set extra_float_digits=2")
-    crs.close()
-    dbapi_conn.commit()
+# @listens_for(Pool, "connect")
+# def my_on_connect(dbapi_conn, _conn_record):
+#     # Fix for https://github.com/ecotaxa/ecotaxa_dev/issues/636
+#     # Align the DB precision of floats with the one in python
+#     # This is not necessary anymore with PG12+
+#     # ref: https://www.postgresql.org/docs/12/datatype-numeric.html#DATATYPE-FLOAT
+#     #  and https://www.postgresql.org/docs/11/runtime-config-client.html
+#     # TODO: Remove when go to PG12+
+#     crs = dbapi_conn.cursor()
+#     crs.execute("set extra_float_digits=2")
+#     crs.close()
+#     dbapi_conn.commit()
 
 
 class ReadOnlyQueuePool(QueuePool):
