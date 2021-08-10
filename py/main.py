@@ -46,6 +46,7 @@ from API_operations.TaxoManager import TaxonomyChangeService
 from API_operations.TaxonomyService import TaxonomyService
 from API_operations.UserFolder import UserFolderService, CommonFolderService
 from API_operations.admin.ImageManager import ImageManagerService
+from API_operations.admin.NightlyJob import NightlyJobService
 from API_operations.exports.EMODnet import EMODnetExport
 from API_operations.exports.ForProject import ProjectExport
 from API_operations.imports.Import import FileImport
@@ -1153,6 +1154,18 @@ def cleanup_images_1(project_id: int,
     with ImageManagerService() as sce:
         with RightsThrower():
             data = sce.do_cleanup_dup_same_obj(current_user, prj_id=project_id, max_deletes=max_deletes)
+        return data
+
+
+@app.get("/admin/nightly", tags=['WIP'], include_in_schema=False,
+         response_model=str)
+def nightly_maintenance(current_user: int = Depends(get_current_user)) -> int:
+    """
+        Do nightly cleanups and calculations.
+    """
+    with NightlyJobService() as sce:
+        with RightsThrower():
+            data = sce.run(current_user)
         return data
 
 
