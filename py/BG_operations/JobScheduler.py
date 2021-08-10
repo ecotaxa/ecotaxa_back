@@ -102,7 +102,7 @@ class JobScheduler(Service):
             logger.error(msg)
             assert sce_class is not None, msg
         # Load the service creation arguments
-        assert a_job.params
+        assert a_job.params is not None
         sce_class.deser_args(a_job.params)
         sce = sce_class(**a_job.params)
         # Inject the service state

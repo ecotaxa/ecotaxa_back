@@ -27,8 +27,8 @@ class Taxonomy(Model):
     source_desc = Column(VARCHAR(1000))
     creator_email = Column(VARCHAR(255))
     creation_datetime = Column(TIMESTAMP(precision=0))
-    nbrobj = Column(INTEGER)
-    nbrobjcum = Column(INTEGER)
+    nbrobj = Column(INTEGER)  # Number of objects with this as classif_id
+    nbrobjcum = Column(INTEGER)  # Number of objects with this, or any descendant, as classif_id
 
     def __str__(self):
         return "{0} ({1})".format(self.name, self.id)

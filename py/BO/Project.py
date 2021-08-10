@@ -217,17 +217,17 @@ class ProjectBO(object):
     def update_stats(session: Session, projid: int):
         sql = text("""
         UPDATE projects
-           SET objcount=q.nbr_sum, 
-               pctclassified=100.0*nbrclassified/q.nbr_sum, 
-               pctvalidated=100.0*nbrvalidated/q.nbr_sum
-          FROM projects p
+           SET objcount=tsp.nbr_sum, 
+               pctclassified=100.0*nbrclassified/tsp.nbr_sum, 
+               pctvalidated=100.0*nbrvalidated/tsp.nbr_sum
+          FROM projects prj
           LEFT JOIN
              (SELECT projid, SUM(nbr) nbr_sum, SUM(CASE WHEN id>0 THEN nbr END) nbrclassified, SUM(nbr_v) nbrvalidated
                 FROM projects_taxo_stat
                WHERE projid = :prjid
-              GROUP BY projid) q ON p.projid = q.projid
+              GROUP BY projid) tsp ON prj.projid = tsp.projid
         WHERE projects.projid = :prjid 
-          AND p.projid = :prjid""")
+          AND prj.projid = :prjid""")
         session.execute(sql, {'prjid': projid})
 
     @staticmethod

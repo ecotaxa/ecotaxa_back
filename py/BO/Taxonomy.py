@@ -215,6 +215,44 @@ class TaxonomyBO(object):
         qry = qry.select_from(chained_joins)
         return concat_all, qry
 
+    @classmethod
+    def compute_stats(cls, session: Session):
+        """
+            Update fields nbrobj and nbrobjcum with usage statistics
+            nbrobj is the number of validated objects in the category, nbrobjcum is the sum
+            of nbrobj for all children recursively.
+        """
+        sql = text("""
+        -- Reset all
+        UPDATE taxonomy 
+           SET nbrobj=0, nbrobjcum=NULL 
+         WHERE nbrobj IS NULL or nbrobj != 0 or nbrobjcum IS NOT NULL;
+        -- Set per-category number
+        WITH tsp as (SELECT id AS classif_id, sum(nbr_v) AS nbr
+                       FROM projects_taxo_stat pts
+                     -- historical: JOIN projects prj ON pts.projid=prj.projid AND prj.visible=true
+                      WHERE nbr_v>0 GROUP BY id)
+        UPDATE taxonomy
+           SET nbrobj=tsp.nbr
+          FROM tsp
+         WHERE taxonomy.id = tsp.classif_id;
+        -- Set cumulated number, i.e. sum of numbers under a given node
+        WITH cml AS (WITH RECURSIVE rq(id, nbrobj, parent_id) 
+                     AS (SELECT id, nbrobj, parent_id, id as root
+                           FROM taxonomy
+                          UNION
+                         SELECT txpr.id, txpr.nbrobj, txpr.parent_id, rq.root
+                           FROM rq 
+                           JOIN taxonomy txpr ON txpr.parent_id = rq.id)
+                     SELECT root AS classif_id, sum(nbrobj) as nbr
+                       FROM rq
+                      GROUP BY root)
+        UPDATE taxonomy
+           SET nbrobjcum=cml.nbr
+          FROM cml
+         WHERE taxonomy.id = cml.classif_id;""")
+        session.execute(sql)
+
 
 class TaxonBOSet(object):
     """
@@ -271,7 +309,6 @@ class TaxonBOSet(object):
 
     def as_list(self) -> List[TaxonBO]:
         return self.taxa
-
 
 class TaxonBOSetFromWoRMS(object):
     """

@@ -54,7 +54,7 @@ class TempDirForTasks(object):
 
     def erase_for(self, job_id: int):
         """
-            Wipe any directory, which belongs to another job with same ID.
+            Wipe temp directory for this job ID.
         """
         temp_for_job = self.base_dir_for(job_id)
         try:
