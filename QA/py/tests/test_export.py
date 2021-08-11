@@ -80,7 +80,7 @@ def test_export_tsv(config, database, fastapi, caplog):
     # DOI export
     req.update({"exp_type": "DOI"})
     fixed_date = datetime.datetime(2021, 5, 30, 11, 22, 33)
-    with mock.patch('helpers.DateTime.now_time',
+    with mock.patch('helpers.DateTime._now_time',
                     return_value=fixed_date):
         rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
         assert rsp.status_code == status.HTTP_200_OK

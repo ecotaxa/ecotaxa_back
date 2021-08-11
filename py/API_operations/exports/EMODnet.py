@@ -12,7 +12,6 @@
 import re
 from collections import OrderedDict
 from dataclasses import dataclass
-from datetime import date, datetime
 from typing import Dict, List, Optional, Tuple, cast, Set
 from urllib.parse import quote_plus
 
@@ -42,6 +41,7 @@ from formats.EMODnet.MoF import SamplingNetMeshSizeInMicrons, SampleDeviceApertu
 from formats.EMODnet.models import DwC_Event, RecordTypeEnum, DwC_Occurrence, OccurrenceStatusEnum, \
     BasisOfRecordEnum, EMLGeoCoverage, EMLTemporalCoverage, EMLMeta, EMLTitle, EMLPerson, EMLKeywordSet, \
     EMLTaxonomicClassification, EMLAdditionalMeta, EMLIdentifier, EMLAssociatedPerson
+from helpers.DateTime import now_time
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 from helpers.Timer import CodeTimer
 # TODO: Move somewhere else
@@ -332,7 +332,7 @@ class EMODnetExport(JobServiceBase):
         time_cov = EMLTemporalCoverage(beginDate=timestamp_to_str(min_date),
                                        endDate=timestamp_to_str(max_date))
 
-        publication_date = date.today().isoformat()
+        publication_date = now_time().date().isoformat()
 
         abstract = the_collection.abstract
         if not abstract:
@@ -374,7 +374,7 @@ class EMODnetExport(JobServiceBase):
 
         taxo_cov = self.get_taxo_coverage(the_collection.project_ids)
 
-        now = datetime.now().replace(microsecond=0)
+        now = now_time().replace(microsecond=0)
         meta_plus = EMLAdditionalMeta(dateStamp=now.isoformat())
 
         coll_title = the_collection.title

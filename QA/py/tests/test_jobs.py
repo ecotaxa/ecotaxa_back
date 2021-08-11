@@ -16,6 +16,7 @@ def wait_for_stable(job_id: int):
     """ Wait for the job to be in a stable state, i.e. not running """
     with JobCRUDService() as sce:
         assert sce.query(ADMIN_USER_ID, job_id).state == DBJobStateEnum.Pending
+        # Manually create a scheduler, so there is no dependency on the way it's used in main.py (launched at interval)
         with JobScheduler() as jsce:
             jsce.run_one()
             jsce.wait_for_stable()

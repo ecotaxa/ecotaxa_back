@@ -1,4 +1,4 @@
 """
     Helper classes and utilities, used in several subdirectories.
-    If used in a single one, move to relevant helper.
+    Policy: if an helper is used in a single subdirectory, move to relevant helper inside it.
 """

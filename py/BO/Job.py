@@ -122,6 +122,9 @@ class JobBO(object):
 
     @classmethod
     def create_job(cls, session: Session, user_id: UserIDT, job_type: str, args: Dict) -> Job:
+        """
+            Add a job, as pending, into the DB. The job does not start until a scheduler takes it.
+        """
         job = Job()
         job.state = DBJobStateEnum.Pending
         job.progress_msg = cls.PENDING_MESSAGE

@@ -1,10 +1,11 @@
+import datetime
 import logging
 # noinspection PyPackageRequirements
 from io import BytesIO
 from zipfile import ZipFile
 
-from API_operations.exports.EMODnet import EMODnetExport
 from starlette import status
+from unittest import mock
 
 from tests.credentials import ADMIN_AUTH, REAL_USER_ID, CREATOR_AUTH
 from tests.emodnet_ref import ref_zip, with_zeroes_zip, no_computations_zip
@@ -27,6 +28,13 @@ PROJECT_SEARCH_ACQUIS_URL = "/acquisitions/search?project_id={project_id}"
 
 
 def test_emodnet_export(config, database, fastapi, caplog):
+    fixed_date = datetime.datetime(2021, 7, 10, 11, 22, 33)
+    with mock.patch('helpers.DateTime._now_time',
+                    return_value=fixed_date):
+        do_test_emodnet_export(config, database, fastapi, caplog)
+
+
+def do_test_emodnet_export(config, database, fastapi, caplog):
     caplog.set_level(logging.FATAL)
 
     # Admin imports the project
@@ -136,7 +144,6 @@ This series is part of the long term planktonic monitoring of
     # Admin can get it
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
-    set_dates_in_ref(ref_zip)
     unzip_and_check(rsp.content, ref_zip)
 
     url_with_0s = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=True, comp=True,
@@ -148,7 +155,6 @@ This series is part of the long term planktonic monitoring of
     api_check_job_ok(fastapi, job_id)
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
-    set_dates_in_ref(with_zeroes_zip)
     unzip_and_check(rsp.content, with_zeroes_zip)
 
     url_raw_data = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=False, comp=False,
@@ -160,7 +166,6 @@ This series is part of the long term planktonic monitoring of
     api_check_job_ok(fastapi, job_id)
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
-    set_dates_in_ref(no_computations_zip)
     unzip_and_check(rsp.content, no_computations_zip)
 
     url_query_back = COLLECTION_QUERY_BY_TITLE_URL.format(title=coll_title)
@@ -168,14 +173,6 @@ This series is part of the long term planktonic monitoring of
     assert rsp.status_code == status.HTTP_200_OK
     coll_desc = rsp.json()
     assert coll_desc['title'] == coll_title
-
-
-def set_dates_in_ref(ref_zip):
-    # TODO: In theory we should mock the time libs, but below is good enough if all is done in the same second
-    from datetime import date, datetime
-    today = date.today()
-    ref_zip["eml.xml"] = ref_zip["eml.xml"].replace("2021-02-13", datetime.now().replace(microsecond=0).isoformat())
-    ref_zip["eml.xml"] = ref_zip["eml.xml"].replace("2021-02-12", today.strftime("%Y-%m-%d"))
 
 
 def unzip_and_check(zip_content, ref_content):
@@ -223,6 +220,7 @@ def add_concentration_data(fastapi, prj_id):
 
 
 def test_names():
+    from API_operations.exports.EMODnet import EMODnetExport
     assert EMODnetExport.capitalize_name("JEAN") == "Jean"
     assert EMODnetExport.capitalize_name("JEAN-MARC") == "Jean-Marc"
     assert EMODnetExport.capitalize_name("FOo--BAR") == "Foo--Bar"

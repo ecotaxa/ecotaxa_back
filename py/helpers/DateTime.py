@@ -7,5 +7,11 @@
 import datetime
 
 
-def now_time():
+def _now_time():
+    # We patch this one during tests.
     return datetime.datetime.now()
+
+
+def now_time():
+    # During test, sometimes this def is imported before the test, so it cannot be patched.
+    return _now_time()

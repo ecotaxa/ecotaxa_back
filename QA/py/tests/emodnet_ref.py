@@ -29,7 +29,7 @@ _eml = r"""
     </address>
     <electronicMailAddress>real@users.com</electronicMailAddress>
   </metadataProvider>
-  <pubDate>2021-02-12</pubDate>
+  <pubDate>2021-07-10</pubDate>
   <language>eng</language>
   <abstract>
     <para>
@@ -108,7 +108,7 @@ This series is part of the long term planktonic monitoring of
 <additionalMetadata>
   <metadata>
     <gbif>
-      <dateStamp>2021-02-13</dateStamp>
+      <dateStamp>2021-07-10T11:22:33</dateStamp>
     </gbif>
   </metadata>
 </additionalMetadata>
