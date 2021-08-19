@@ -32,9 +32,14 @@ class TaxonomyService(Service):
         """
         tree_info = self.ro_session.query(TaxonomyTreeInfo).first()
         if tree_info is None:
+            # No DB line at all, create it. We need exactly one.
+            tree_info = TaxonomyTreeInfo()
+            tree_info.id = 1
+            self.session.add(tree_info)
+            self.session.commit()
             return None
-        if tree_info.lastserverversioncheck_datetime is None:
-            return None
+        # The column is NULL-able so this can happen:
+        # tree_info.lastserverversioncheck_datetime is None
         return tree_info.lastserverversioncheck_datetime
 
     def search(self, current_user_id: Optional[UserIDT],

@@ -144,6 +144,23 @@ class TaxonomyBO(object):
                           ORDER BY rank desc) q)""".format(ref_obj_id)
         return sql
 
+    @staticmethod
+    def lineage_cte() -> str:
+        """
+            SQL for (again) recursive '>'-separated names of parents, but as a CTE
+            so no constraint on providing a specific ID.
+            TODO: Use instead of previous one.
+        """
+        sql = """(WITH RECURSIVE rq(leaf_id, lineage, root_id, parent_id) 
+                 AS (SELECT id, name||'', id, parent_id
+                      FROM taxonomy
+                     UNION
+                    SELECT rq.leaf_id , txpr.name||'>'||rq.lineage, txpr.id, txpr.parent_id
+                      FROM rq 
+                      JOIN taxonomy txpr ON txpr.id = rq.parent_id)
+                SELECT * FROM rq WHERE parent_id IS NULL)"""
+        return sql
+
     MAX_MATCHES = 200
     MAX_TAXONOMY_LEVELS = 20
 
@@ -309,6 +326,7 @@ class TaxonBOSet(object):
 
     def as_list(self) -> List[TaxonBO]:
         return self.taxa
+
 
 class TaxonBOSetFromWoRMS(object):
     """

@@ -1016,7 +1016,7 @@ async def query_taxa(taxon_id: int,
 
 @app.get("/taxon_set/search", tags=['Taxonomy Tree'], response_model=List[TaxaSearchRsp])
 async def search_taxa(query: str,
-                      project_id: Optional[int],
+                      project_id: Optional[int] = None,
                       current_user: Optional[int] = Depends(get_optional_current_user)):
     """
         Search for taxa by name.
