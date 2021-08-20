@@ -8,12 +8,6 @@ import os
 from logging import INFO
 from typing import Union, Tuple
 
-from fastapi import FastAPI, Request, Response, status, Depends, HTTPException, UploadFile, File, Query, Form
-from fastapi.logger import logger as fastapi_logger
-from fastapi.responses import StreamingResponse, FileResponse
-from fastapi.templating import Jinja2Templates
-from fastapi_utils.timing import add_timing_middleware
-
 from API_models.constants import Constants
 from API_models.crud import *
 from API_models.exports import EMODnetExportRsp, ExportRsp, ExportReq
@@ -42,7 +36,7 @@ from API_operations.ObjectManager import ObjectManager
 from API_operations.Stats import ProjectStatsFetcher
 from API_operations.Status import StatusService
 from API_operations.Subset import SubsetServiceOnProject
-from API_operations.TaxoManager import TaxonomyChangeService
+from API_operations.TaxoManager import TaxonomyChangeService, CentralTaxonomyService
 from API_operations.TaxonomyService import TaxonomyService
 from API_operations.UserFolder import UserFolderService, CommonFolderService
 from API_operations.admin.ImageManager import ImageManagerService
@@ -65,6 +59,11 @@ from BO.Sample import SampleBO
 from BO.Taxonomy import TaxonBO
 from DB import ProjectPrivilege
 from DB.Project import ProjectTaxoStat
+from fastapi import FastAPI, Request, Response, status, Depends, HTTPException, UploadFile, File, Query, Form
+from fastapi.logger import logger as fastapi_logger
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.templating import Jinja2Templates
+from fastapi_utils.timing import add_timing_middleware
 from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower, \
@@ -80,7 +79,7 @@ logger = get_logger(__name__)
 fastapi_logger.setLevel(INFO)
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.15",
+              version="0.0.16",
               # openapi URL as seen from navigator, this is included when /docs is required
               # which serves swagger-ui JS app. Stay in /api sub-path.
               openapi_url="/api/openapi.json",
@@ -1049,6 +1048,36 @@ async def query_taxa_set(ids: str,
         num_ids = _split_num_list(ids)
         ret = sce.query_set(num_ids)
         return ret
+
+
+@app.get("/taxon/central/{taxon_id}", tags=['Taxonomy Tree'])
+async def get_taxon_in_central(taxon_id: int,
+                               _current_user: int = Depends(get_current_user)):
+    """
+        Get EcoTaxoServer full record for this taxon.
+    """
+    with CentralTaxonomyService() as sce:
+        return sce.get_taxon_by_id(taxon_id)
+
+
+# noinspection PyUnusedLocal
+@app.put("/taxon/central", tags=['Taxonomy Tree'])
+async def add_taxon_in_central(name: str,
+                               parent_id: int,  # We don't let users create a root taxon
+                               taxotype: str,
+                               creator_email: str,
+                               request: Request,
+                               source_desc: Optional[str] = None,
+                               source_url: Optional[str] = None,
+                               current_user: int = Depends(get_current_user)):
+    """
+        Create a taxon on EcoTaxoServer.
+        Logged user must be manager (on any project) or application admin.
+    """
+    with CentralTaxonomyService() as sce:
+        # Clone params which are immutable
+        params = {k: v for k, v in request.query_params.items()}
+        return sce.add_taxon(current_user, params)
 
 
 @app.get("/worms/{aphia_id}", tags=['Taxonomy Tree'], include_in_schema=False, response_model=TaxonModel)

@@ -148,6 +148,28 @@ class RightsBO(object):
         return user
 
     @staticmethod
+    def user_can_add_taxonomy(session: Session, user_id: int) -> User:
+        """
+            A user can add a taxonomy entry, if he/she is admin on the whole app
+            or on any project.
+        """
+        # Load ORM entity
+        user = session.query(User).get(user_id)
+        assert user is not None, NOT_FOUND
+        # Check
+        if user.has_role(Role.APP_ADMINISTRATOR):
+            # King of the world
+            return user
+        else:
+            # Collect privileges for user on project
+            a_priv: ProjectPrivilege
+            for a_priv in user.privs_on_projects:
+                if a_priv.privilege == ProjectPrivilegeBO.MANAGE:
+                    # If any is managed, OK
+                    return user
+        assert False, NOT_AUTHORIZED
+
+    @staticmethod
     def grant(session: Session, user: User, action: Action, prj: Project):
         """
             Grant the possibility to do this action on this project to this user.

@@ -23,6 +23,7 @@ class TaxonModel(BaseModel):
     __config__ = OrmConfig
     id: int = Field(title="The taxon/category IDs.")
     name: str = Field(title="The taxon/category verbatim name.")
+    type: str = Field(title="The taxon/category type, 'M' or 'P'")
     nb_objects: int = Field(title="How many objects are classified in this category.")
     nb_children_objects: int = Field(title="How many objects are classified in this category children (not itself).")
     display_name: str = Field(title="The taxon/category display name.")

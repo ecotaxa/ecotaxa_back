@@ -1,5 +1,5 @@
 import logging
-from urllib.parse import urlencode, quote_plus
+from urllib.parse import quote_plus
 
 from starlette import status
 
@@ -53,7 +53,8 @@ def test_taxo_query(config, database, fastapi, caplog):
                           'id_lineage': [849, 96, 3, 1],
                           'name': 'Cyanobacteria',
                           'nb_children_objects': 0,
-                          'nb_objects': 0}
+                          'nb_objects': 0,
+                          'type': 'P'}
 
 
 def test_worms_query(config, database, fastapi, caplog):
@@ -89,4 +90,5 @@ def test_worms_query(config, database, fastapi, caplog):
                                          1],
                           'name': 'Oncaeidae',
                           'nb_children_objects': 0,
-                          'nb_objects': 0}
+                          'nb_objects': 0,
+                          'type': 'P'}

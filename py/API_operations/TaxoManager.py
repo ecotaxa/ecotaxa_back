@@ -2,8 +2,9 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-# Managing (i.e. not for end-user) services around taxonomy tree
+# Managing (i.e. not for end-user) services around taxonomy tree.
 #
+import datetime
 import random
 import tempfile
 from collections import deque
@@ -13,6 +14,7 @@ from httpx import ReadTimeout, HTTPError
 
 from BO.Classification import ClassifIDListT
 from BO.Rights import RightsBO
+from BO.User import UserIDT
 from DB import Taxonomy, Role
 from DB.Project import ProjectTaxoStat
 from DB.WoRMs import WoRMS
@@ -20,6 +22,7 @@ from DB.helpers.Charset import to_latin1_compat
 from DB.helpers.ORM import Query, any_, Session
 from DB.helpers.ORM import only_res, func, not_, or_, and_, text
 from helpers.DynamicLogs import get_logger
+from providers.EcoTaxoServer import EcoTaxoServerClient
 from providers.WoRMS import WoRMSFinder
 from .helpers.Service import Service
 
@@ -422,3 +425,38 @@ class TaxonomyChangeService(Service):  # pragma:nocover
             lineage = lineage["child"]
             prev_level = db_entry
         return "All OK"
+
+
+class CentralTaxonomyService(Service):
+    """
+        Communication with EcoTaxoServer, for various purposes.
+    """
+    # Configuration keys
+    TAXOSERVER_URL_KEY = 'TAXOSERVER_URL'
+    TAXOSERVER_MY_ID = 'TAXOSERVER_INSTANCE_ID'
+    TAXOSERVER_MY_SECRET_KEY = 'TAXOSERVER_SHARED_SECRET'
+
+    def __init__(self):
+        super().__init__()
+        url = self.config.get(self.TAXOSERVER_URL_KEY)
+        assert url is not None
+        my_id = self.config.get(self.TAXOSERVER_MY_ID)
+        assert my_id is not None
+        my_key = self.config.get(self.TAXOSERVER_MY_SECRET_KEY)
+        assert my_key is not None
+        self.client = EcoTaxoServerClient(url, my_id, my_key)
+
+    def get_taxon_by_id(self, taxon_id: int) -> str:
+        """ Read all taxon data from EcoTaxoServer """
+        ret = self.client.call("/gettaxon/", {'filtertype': 'id', 'id': taxon_id})
+        return ret
+
+    def add_taxon(self, current_user_id: UserIDT, taxon_params: Dict) -> str:
+        # Security barrier, user must be admin or manager in any project
+        #                            creation_datetime: str, =
+        _user = RightsBO.user_can_add_taxonomy(self.ro_session, current_user_id)
+        # Amend params
+        taxon_params['creation_datetime'] = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+        taxon_params['taxostatus'] = 'N'
+        ret = self.client.call("/settaxon/", taxon_params)
+        return ret

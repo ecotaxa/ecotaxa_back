@@ -4,15 +4,13 @@
 #
 import logging
 
+from API_models.crud import ProjectFilters
 from starlette import status
 
 from tests.credentials import CREATOR_AUTH, ORDINARY_USER2_USER_ID, ADMIN_AUTH
 from tests.test_objectset_query import OBJECT_SET_QUERY_URL
 from tests.test_prj_admin import PROJECT_CLASSIF_STATS_URL
 from tests.test_subentities import OBJECT_HISTORY_QUERY_URL
-
-from API_models.crud import ProjectFilters
-
 from tests.test_taxa_query import TAXA_SET_QUERY_URL
 
 
@@ -64,7 +62,8 @@ def test_classif(config, database, fastapi, caplog):
                                        'living'],
                            'name': 'Copepoda',
                            'nb_children_objects': 0,
-                           'nb_objects': 0},
+                           'nb_objects': 0,
+                           'type': 'P'},
                           {'children': [],
                            'display_name': 'Entomobryomorpha',
                            'id': 25835,
@@ -80,7 +79,8 @@ def test_classif(config, database, fastapi, caplog):
                                        'living'],
                            'name': 'Entomobryomorpha',
                            'nb_children_objects': 0,
-                           'nb_objects': 0}]
+                           'nb_objects': 0,
+                           'type': 'P'}]
 
     # Initial stats just after load
     def get_stats():
