@@ -5,6 +5,7 @@
 # Managing (i.e. not for end-user) services around taxonomy tree.
 #
 import datetime
+import json
 import random
 import tempfile
 from collections import deque
@@ -14,6 +15,7 @@ from httpx import ReadTimeout, HTTPError
 
 from BO.Classification import ClassifIDListT
 from BO.Rights import RightsBO
+from BO.Taxonomy import TaxonomyBO
 from BO.User import UserIDT
 from DB import Taxonomy, Role
 from DB.Project import ProjectTaxoStat
@@ -459,4 +461,14 @@ class CentralTaxonomyService(Service):
         taxon_params['creation_datetime'] = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
         taxon_params['taxostatus'] = 'N'
         ret = self.client.call("/settaxon/", taxon_params)
+        return ret
+
+    def push_stats(self):
+        # Get data for update
+        stats = TaxonomyBO.get_full_stats(self.ro_session)
+        # Push to central
+        params = {'data': json.dumps(stats)}
+        ret = self.client.call("/setstat/", params)
+        if 'msg' in ret:
+            TaxonomyBO.update_tree_status(self.session)
         return ret

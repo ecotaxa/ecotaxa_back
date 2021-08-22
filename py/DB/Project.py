@@ -79,7 +79,13 @@ class ProjectTaxoStat(Model):
     projid = Column(INTEGER, ForeignKey('projects.projid', ondelete="CASCADE"), primary_key=True)
     # FK to Taxonomy, but there is the special "-1" value (for unclassified) preventing an official FK
     id = Column(INTEGER, primary_key=True)
+    # Number of objects in this category for this project.
+    # NOTE: This can be larger than nbr_v+nbr_d+nbr_p, as objects can be without state but still belong
+    # to a category.
     nbr = Column(INTEGER)
+    # Number of validated objects in this category for this project
     nbr_v = Column(INTEGER)
+    # Number of dubious objects in this category for this project
     nbr_d = Column(INTEGER)
+    # Number of predicted objects in this category for this project
     nbr_p = Column(INTEGER)

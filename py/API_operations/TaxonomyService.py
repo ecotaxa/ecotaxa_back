@@ -13,7 +13,7 @@ from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Project import ProjectBOSet
 from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet, TaxonBOSetFromWoRMS
 from BO.User import UserIDT, UserBO
-from DB.Taxonomy import TaxonomyTreeInfo, Taxonomy
+from DB.Taxonomy import Taxonomy
 from DB.helpers.ORM import Query
 
 
@@ -30,14 +30,7 @@ class TaxonomyService(Service):
             Return the freshness status of the taxonomy tree.
             Fresh == recently updated from the Taxonomy server.
         """
-        tree_info = self.ro_session.query(TaxonomyTreeInfo).first()
-        if tree_info is None:
-            # No DB line at all, create it. We need exactly one.
-            tree_info = TaxonomyTreeInfo()
-            tree_info.id = 1
-            self.session.add(tree_info)
-            self.session.commit()
-            return None
+        tree_info = TaxonomyBO.get_tree_status(self.session)
         # The column is NULL-able so this can happen:
         # tree_info.lastserverversioncheck_datetime is None
         return tree_info.lastserverversioncheck_datetime

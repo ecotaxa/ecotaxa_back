@@ -4,12 +4,13 @@
 #
 # After SQL alchemy models are defined individually, setup the relations b/w them
 #
+from datetime import datetime
 from typing import List, Set, Dict, Tuple
 
-from API_operations.TaxoManager import TaxonomyChangeService
 from BO.Classification import ClassifIDCollT, ClassifIDT, ClassifIDListT
 from DB import Taxonomy, WoRMS
 from DB.Project import ProjectTaxoStat
+from DB.Taxonomy import TaxonomyTreeInfo
 from DB.helpers import Result
 from DB.helpers.ORM import Session, Query, any_, case, func, text, select
 from helpers.DynamicLogs import get_logger
@@ -270,6 +271,36 @@ class TaxonomyBO(object):
          WHERE taxonomy.id = cml.classif_id;""")
         session.execute(sql)
 
+    @staticmethod
+    def get_full_stats(session: Session) -> Dict[ClassifIDT, int]:
+        # Get usage statistics for all taxa, as a dict category_id -> number
+        qry: Query = session.query(ProjectTaxoStat.id, func.sum(ProjectTaxoStat.nbr))
+        qry = qry.group_by(ProjectTaxoStat.id)
+        ret = {an_id: a_sum for an_id, a_sum in qry.all()}
+        return ret
+
+    @staticmethod
+    def get_tree_status(session: Session) -> TaxonomyTreeInfo:
+        """
+            Return the DB line with status of the taxonomy tree.
+        """
+        tree_info = session.query(TaxonomyTreeInfo).first()
+        if tree_info is None:
+            # No DB line at all, create it. We need exactly one.
+            tree_info = TaxonomyTreeInfo()
+            tree_info.id = 1
+            session.add(tree_info)
+            session.commit()
+        return tree_info
+
+    @staticmethod
+    def update_tree_status(session: Session):
+        """
+            Update the DB line with status of the taxonomy tree.
+        """
+        TaxonomyBO.get_tree_status(session).lastserverversioncheck_datetime = datetime.now()
+        session.commit()
+
 
 class TaxonBOSet(object):
     """
@@ -398,6 +429,8 @@ class WoRMSSetFromTaxaSet(object):
     """
 
     def __init__(self, session: Session, taxon_ids: ClassifIDListT):
+        # TODO: It's not clean to import a sce from a BO
+        from API_operations.TaxoManager import TaxonomyChangeService
         # Do the matching right away, most strict way
         match = TaxonomyChangeService.strict_match(session, taxon_ids)
         # Format result

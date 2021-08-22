@@ -8,6 +8,12 @@ import os
 from logging import INFO
 from typing import Union, Tuple
 
+from fastapi import FastAPI, Request, Response, status, Depends, HTTPException, UploadFile, File, Query, Form
+from fastapi.logger import logger as fastapi_logger
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.templating import Jinja2Templates
+from fastapi_utils.timing import add_timing_middleware
+
 from API_models.constants import Constants
 from API_models.crud import *
 from API_models.exports import EMODnetExportRsp, ExportRsp, ExportReq
@@ -59,11 +65,6 @@ from BO.Sample import SampleBO
 from BO.Taxonomy import TaxonBO
 from DB import ProjectPrivilege
 from DB.Project import ProjectTaxoStat
-from fastapi import FastAPI, Request, Response, status, Depends, HTTPException, UploadFile, File, Query, Form
-from fastapi.logger import logger as fastapi_logger
-from fastapi.responses import StreamingResponse, FileResponse
-from fastapi.templating import Jinja2Templates
-from fastapi_utils.timing import add_timing_middleware
 from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower, \
@@ -1060,6 +1061,7 @@ async def get_taxon_in_central(taxon_id: int,
         return sce.get_taxon_by_id(taxon_id)
 
 
+# Below pragma is because we need the same params as EcoTaxoServer, but we just relay them
 # noinspection PyUnusedLocal
 @app.put("/taxon/central", tags=['Taxonomy Tree'])
 async def add_taxon_in_central(name: str,
@@ -1078,6 +1080,15 @@ async def add_taxon_in_central(name: str,
         # Clone params which are immutable
         params = {k: v for k, v in request.query_params.items()}
         return sce.add_taxon(current_user, params)
+
+
+@app.get("/taxa/stats/push_to_central", tags=['Taxonomy Tree'])
+async def push_taxa_stats_in_central(_current_user: int = Depends(get_current_user)):
+    """
+        Push present instance stats into EcoTaxoServer.
+    """
+    with CentralTaxonomyService() as sce:
+        return sce.push_stats()
 
 
 @app.get("/worms/{aphia_id}", tags=['Taxonomy Tree'], include_in_schema=False, response_model=TaxonModel)
