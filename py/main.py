@@ -140,7 +140,11 @@ def get_users(current_user: int = Depends(get_current_user)):
 @app.get("/users/me", tags=['users'], response_model=UserModelWithRights)
 def show_current_user(current_user: int = Depends(get_current_user)):
     """
-        Return currently authenticated user. On top of DB fields, 'can_do' lists the allowed system-wide actions.
+        Return currently authenticated user. On top of DB fields, 'can_do' lists the allowed system-wide actions:
+            CREATE_PROJECT = 1
+            ADMINISTRATE_APP = 2
+            ADMINISTRATE_USERS = 3
+            CREATE_TAXON = 4
     """
     with UserService() as sce:
         ret = sce.search_by_id(current_user, current_user)

@@ -16,6 +16,7 @@ class Action(IntEnum):
     CREATE_PROJECT = 1
     ADMINISTRATE_APP = 2
     ADMINISTRATE_USERS = 3
+    CREATE_TAXON = 4
     # Actions on project, by increasing value
     READ = 10
     ANNOTATE = 11  # Write of only certain fields
@@ -112,12 +113,18 @@ class RightsBO(object):
         ret = []
         if user.has_role(Role.APP_ADMINISTRATOR):
             # King of the world
-            ret.extend([Action.CREATE_PROJECT, Action.ADMINISTRATE_APP, Action.ADMINISTRATE_USERS])
+            ret.extend([Action.CREATE_PROJECT, Action.ADMINISTRATE_APP, Action.ADMINISTRATE_USERS, Action.CREATE_TAXON])
         else:
             if user.has_role(Role.PROJECT_CREATOR):
                 ret.append(Action.CREATE_PROJECT)
             if user.has_role(Role.USERS_ADMINISTRATOR):
                 ret.append(Action.ADMINISTRATE_USERS)
+            a_priv: ProjectPrivilege
+            for a_priv in user.privs_on_projects:
+                if a_priv.privilege == ProjectPrivilegeBO.MANAGE:
+                    # If any is managed, OK
+                    ret.append(Action.CREATE_TAXON)
+                    break
         return ret
 
     @staticmethod
@@ -157,17 +164,8 @@ class RightsBO(object):
         user = session.query(User).get(user_id)
         assert user is not None, NOT_FOUND
         # Check
-        if user.has_role(Role.APP_ADMINISTRATOR):
-            # King of the world
-            return user
-        else:
-            # Collect privileges for user on project
-            a_priv: ProjectPrivilege
-            for a_priv in user.privs_on_projects:
-                if a_priv.privilege == ProjectPrivilegeBO.MANAGE:
-                    # If any is managed, OK
-                    return user
-        assert False, NOT_AUTHORIZED
+        assert Action.CREATE_TAXON in RightsBO.allowed_actions(user), NOT_AUTHORIZED
+        return user
 
     @staticmethod
     def grant(session: Session, user: User, action: Action, prj: Project):

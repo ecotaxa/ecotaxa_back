@@ -6,7 +6,9 @@
 from starlette import status
 from starlette.testclient import TestClient
 
+from tests.credentials import CREATOR_USER_ID
 from tests.test_fastapi import USER_ME_URL
+from tests.test_import import create_project
 
 LOGIN_URL = "/login"
 
@@ -51,6 +53,9 @@ def test_plain_API_login(config, database, caplog):
     rsp = client.get(USER_ME_URL)
     assert rsp.status_code == status.HTTP_403_FORBIDDEN
 
+    # Create a project, the creator becomes manager so he/she can create a taxon
+    prj_id = create_project(CREATOR_USER_ID, "Just for being here")
+
     # Try the token with an authenticated API call
     rsp = client.get(USER_ME_URL, headers={"Authorization": "Bearer " + token})
     assert rsp.status_code == status.HTTP_200_OK
@@ -64,4 +69,4 @@ def test_plain_API_login(config, database, caplog):
                           'organisation': None,
                           'usercreationdate': '2020-05-13T08:59:48.701060',
                           'usercreationreason': None,
-                          'can_do': [1]}
+                          'can_do': [1, 4]}
