@@ -13,7 +13,7 @@ from typing import Dict, Set, List, Tuple, Any, Optional
 
 from httpx import ReadTimeout, HTTPError
 
-from BO.Classification import ClassifIDListT
+from BO.Classification import ClassifIDListT, ClassifIDT
 from BO.Rights import RightsBO
 from BO.Taxonomy import TaxonomyBO
 from BO.User import UserIDT
@@ -464,6 +464,9 @@ class CentralTaxonomyService(Service):
         return ret
 
     def push_stats(self):
+        """
+            Push taxa usage statistics to EcoTaxoServer.
+        """
         # Get data for update
         stats = TaxonomyBO.get_full_stats(self.ro_session)
         # Push to central
@@ -472,3 +475,70 @@ class CentralTaxonomyService(Service):
         if 'msg' in ret:
             TaxonomyBO.update_tree_status(self.session)
         return ret
+
+    # The columns received from EcoTaxoServer which can update the local tree
+    UpdatableCols = ['parent_id', 'name', 'taxotype', 'taxostatus',
+                     'id_source', 'id_instance', 'rename_to',
+                     'display_name', 'source_desc', 'source_url',
+                     'creation_datetime', 'creator_email']
+
+    def pull_updates(self) -> Dict:
+        """
+            Pull taxa changes from EcoTaxoServer
+        """
+        # Get latest update date for local taxonomy
+        max_updated = TaxonomyBO.get_latest_update(self.session)
+        if max_updated is None:
+            max_updated = datetime.datetime(2000, 1, 1)
+        # Ask central what changed since
+        max_updated_str = max_updated.strftime("%Y-%m-%d %H:%M:%S")
+        updates = self.client.call("/gettaxon/", {'filtertype': 'since', 'startdate': max_updated_str})
+        # Note: The query on EcoTaxoServer uses >=, so the last updated taxon is always returned.
+        if 'msg' in updates:
+            return {"error": updates['msg']}
+
+        # Example response:  [{'creation_datetime': '2021-08-20 09:09:39',
+        # 'creator_email': 'laurent.salinas@laposte.net', 'display_name': 'Devtest',
+        # 'id': 93817, 'id_instance': 1, 'id_source': '',
+        # 'lastupdate_datetime': '2021-08-20 09:09:40',
+        # 'name': 'Devtest', 'parent_id': 93550, 'rename_to': None,
+        # 'source_desc': '', 'source_url': 'http://www.google.fr/', 'taxostatus': 'N', 'taxotype': 'P'}]
+        nbr_rows = len(updates)
+        nbr_updates = nbr_inserts = 0
+
+        to_rename: Dict[ClassifIDT, ClassifIDT] = {}
+
+        for a_json_taxon in updates:
+            # Convert non-str fields
+            json_taxon_id = int(a_json_taxon['id'])
+            lastupdate_datetime = datetime.datetime.strptime(a_json_taxon['lastupdate_datetime'], '%Y-%m-%d %H:%M:%S')
+            # Store rename intentions
+            if a_json_taxon['rename_to']:
+                to_rename[json_taxon_id] = int(a_json_taxon['rename_to'])
+            # Read taxon from DB
+            taxon = self.session.query(Taxonomy).get(json_taxon_id)
+            if taxon is not None:
+                # The taxon is already present
+                if taxon.lastupdate_datetime == lastupdate_datetime:
+                    continue  # already up to date
+                nbr_updates += 1
+            else:
+                # The taxon is not present, create it
+                nbr_inserts += 1
+                taxon = Taxonomy()
+                taxon.id = json_taxon_id
+                self.session.add(taxon)
+            # We have a taxon, either brand new or already there, update it
+            for a_col in self.UpdatableCols:
+                setattr(taxon, a_col, a_json_taxon[a_col])
+            taxon.lastupdate_datetime = lastupdate_datetime
+            self.session.commit()
+        # Manage rename_to
+        if len(to_rename) > 0:
+            TaxonomyBO.do_renames(self.session, to_rename)
+
+        # if gvp('updatestat') == 'Y':
+        #     msg = DoSyncStatUpdate()
+        #     flash("Taxon statistics update : " + msg, "success" if msg == 'ok' else 'error')
+
+        return {"inserts": nbr_inserts, "updates": nbr_updates, "error": None}

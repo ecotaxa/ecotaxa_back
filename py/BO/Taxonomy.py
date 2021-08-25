@@ -5,7 +5,7 @@
 # After SQL alchemy models are defined individually, setup the relations b/w them
 #
 from datetime import datetime
-from typing import List, Set, Dict, Tuple
+from typing import List, Set, Dict, Tuple, Optional
 
 from BO.Classification import ClassifIDCollT, ClassifIDT, ClassifIDListT
 from DB import Taxonomy, WoRMS
@@ -282,9 +282,9 @@ class TaxonomyBO(object):
     @staticmethod
     def get_tree_status(session: Session) -> TaxonomyTreeInfo:
         """
-            Return the DB line with status of the taxonomy tree.
+            Return, creating it if needed, the DB line with status of the taxonomy tree.
         """
-        tree_info = session.query(TaxonomyTreeInfo).first()
+        tree_info = session.query(TaxonomyTreeInfo).one_or_none()
         if tree_info is None:
             # No DB line at all, create it. We need exactly one.
             tree_info = TaxonomyTreeInfo()
@@ -300,6 +300,57 @@ class TaxonomyBO(object):
         """
         TaxonomyBO.get_tree_status(session).lastserverversioncheck_datetime = datetime.now()
         session.commit()
+
+    @staticmethod
+    def get_latest_update(session: Session) -> Optional[datetime]:
+        """
+            Get the date/time at which a taxon was latest updated.
+        """
+        max_upd_qry = session.query(func.max(Taxonomy.lastupdate_datetime))
+        max_upd, = max_upd_qry.one()
+        return max_upd
+
+    @staticmethod
+    def do_renames(session: Session, to_rename: Dict[ClassifIDT, ClassifIDT]):
+        """
+            Do renames (i.e. remaps) from one classification to another.
+
+            Just a copy/paste/comment out of the historical code.
+            The semantic of "renaming" is quite unclear, for example it could be mandatory to
+            deprecate a taxon before renaming (or at the same time).
+
+        """
+        # SELECT * FROM (VALUES (1, 2), (3, 4)) AS q (col1, col2)
+        # sqlbase = "with taxorename as (select id, rename_to from taxonomy where rename_to is not null) "
+        # sql = sqlbase + """select distinct obj.projid from objects obj join taxorename tr on obj.classif_id=tr.id """
+        # ProjetsToRecalc = database.GetAll(sql)
+        #
+        # sql = sqlbase + """update obj_head obh set classif_id=tr.rename_to
+        #       from taxorename tr  where obh.classif_id=tr.id """
+        # NbrRenamedObjects = ExecSQL(sql)
+        # sql = sqlbase + """update obj_head obh set classif_auto_id=tr.rename_to
+        #       from taxorename tr  where obh.classif_auto_id=tr.id """
+        # ExecSQL(sql)
+        # sql = sqlbase + """update objectsclassifhisto och set classif_id=tr.rename_to
+        #       from taxorename tr  where och.classif_id=tr.id """
+        # ExecSQL(sql)
+        # # on efface les taxon qui doivent être renommés car ils l'ont normalement été
+        # #sql = """delete from taxonomy where rename_to is not null """
+        # #ExecSQL(sql)
+        # sql = """delete from taxonomy t where taxostatus='D'
+        #           and not exists(select 1 from projects_taxo_stat where id=t.id) """
+        # ExecSQL(sql)
+        # # il faut recalculer projects_taxo_stat et part_histocat,part_histocat_lst pour ceux qui referencaient un
+        # # taxon renomé et donc disparu
+        # if NbrRenamedObjects > 0:
+        #     # cron.RefreshTaxoStat() operation trés longue (env 5 minutes en prod, il faut être plus selectif)
+        #     # permet de recalculer projects_taxo_stat
+        #     for Projet in ProjetsToRecalc:
+        #         RecalcProjectTaxoStat(Projet['projid'])
+        #     # recalcul part_histocat,part_histocat_lst
+
+        #     !!!! ECOPART LINK !!!!
+        #     appli.part.prj.GlobalTaxoCompute()
 
 
 class TaxonBOSet(object):
