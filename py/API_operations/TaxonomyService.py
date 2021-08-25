@@ -13,8 +13,12 @@ from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Project import ProjectBOSet
 from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet, TaxonBOSetFromWoRMS
 from BO.User import UserIDT, UserBO
+from DB.Project import ProjectTaxoStat, Project
 from DB.Taxonomy import Taxonomy
 from DB.helpers.ORM import Query
+from helpers.DynamicLogs import get_logger
+
+logger = get_logger(__name__)
 
 
 class TaxonomyService(Service):
@@ -103,7 +107,7 @@ class TaxonomyService(Service):
         """
         qry: Query = self.ro_session.query(Taxonomy.id)
         qry = qry.filter(Taxonomy.parent_id.is_(None))
-        root_ids = [ taxon_id for taxon_id, in qry.all()]
+        root_ids = [taxon_id for taxon_id, in qry.all()]
         return self.query_set(root_ids)
 
     def query(self, taxon_id: ClassifIDT) -> Optional[TaxonBO]:
@@ -112,6 +116,20 @@ class TaxonomyService(Service):
             return None
         else:
             return ret[0]
+
+    def query_usage(self, taxon_id: ClassifIDT):
+        taxo_and_prjs_qry: Query = self.session.query(ProjectTaxoStat.nbr_v, Project.projid, Project.title)
+        taxo_and_prjs_qry = taxo_and_prjs_qry.filter((Project.projid == ProjectTaxoStat.projid)
+                                                & (ProjectTaxoStat.nbr_v > 0)
+                                                & (ProjectTaxoStat.id == taxon_id))
+        taxo_and_prjs_qry = taxo_and_prjs_qry.order_by(ProjectTaxoStat.nbr_v.desc())
+        logger.info("qry:%s", taxo_and_prjs_qry)
+        ret = [{
+            "projid": projid,
+            "title": title,
+            "nb_validated": nbr_v
+        } for nbr_v, projid, title in taxo_and_prjs_qry.all()]
+        return ret
 
     def query_set(self, taxon_ids: ClassifIDListT) -> List[TaxonBO]:
         ret = TaxonBOSet(self.ro_session, taxon_ids)

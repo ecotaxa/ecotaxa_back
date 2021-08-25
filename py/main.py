@@ -25,7 +25,7 @@ from API_models.merge import MergeRsp
 from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp, ClassifyReq, ObjectModel, \
     ObjectHeaderModel, HistoricalClassificationModel, ObjectSetSummaryRsp, ClassifyAutoReq
 from API_models.subset import SubsetReq, SubsetRsp
-from API_models.taxonomy import TaxaSearchRsp, TaxonModel, TaxonomyTreeStatus
+from API_models.taxonomy import TaxaSearchRsp, TaxonModel, TaxonomyTreeStatus, TaxonUsageModel
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
 from API_operations.CRUD.Instruments import InstrumentsService
@@ -1014,6 +1014,18 @@ async def query_taxa(taxon_id: int,
         return ret
 
 
+@app.get("/taxon/{taxon_id}/usage", tags=['Taxonomy Tree'], response_model=List[TaxonUsageModel])
+async def query_taxa_usage(taxon_id: int,
+                           _current_user: Optional[int] = Depends(get_optional_current_user)) \
+        -> List[TaxonUsageModel]:
+    """
+        Where a given taxon is used. Only validated uses are returned.
+    """
+    with TaxonomyService() as sce:
+        ret = sce.query_usage(taxon_id)
+        return ret
+
+
 @app.get("/taxon_set/search", tags=['Taxonomy Tree'], response_model=List[TaxaSearchRsp])
 async def search_taxa(query: str,
                       project_id: Optional[int] = None,
@@ -1089,6 +1101,15 @@ async def push_taxa_stats_in_central(_current_user: int = Depends(get_current_us
     """
     with CentralTaxonomyService() as sce:
         return sce.push_stats()
+
+
+@app.get("/taxa/pull_from_central", tags=['Taxonomy Tree'])
+async def pull_taxa_update_from_central(_current_user: int = Depends(get_current_user)):
+    """
+        Get what changed in EcoTaxoServer managed tree and update local tree accordingly.
+    """
+    with CentralTaxonomyService() as sce:
+        return sce.pull_updates()
 
 
 @app.get("/worms/{aphia_id}", tags=['Taxonomy Tree'], include_in_schema=False, response_model=TaxonModel)

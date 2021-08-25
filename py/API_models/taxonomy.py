@@ -9,6 +9,7 @@ from typing import List, Optional
 from pydantic import Field
 from pydantic.main import BaseModel
 
+from API_models.crud import ProjectSummaryModel
 from API_models.helpers.DBtoModel import OrmConfig
 
 
@@ -31,6 +32,9 @@ class TaxonModel(BaseModel):
     id_lineage: List[int] = Field(title="The taxon/category IDs of ancestors, including self, in first.")
     children: List[int] = Field(title="The taxon/category IDs of children.")
 
+
+class TaxonUsageModel(ProjectSummaryModel):
+    nb_validated: int= Field(title="How many validated objects in this category in this project")
 
 class TaxonomyTreeStatus(BaseModel):
     last_refresh: Optional[str] = Field(title="Taxonomy tree last refresh/sync from taxonomy server. "
