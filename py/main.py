@@ -225,10 +225,11 @@ def create_collection(params: CreateCollectionReq,
 
 
 @app.get("/collections/search", tags=['collections'], response_model=List[CollectionModel])
-def search_collection(title: str,
-                      current_user: int = Depends(get_current_user)):
+def search_collections(title: str,
+                       current_user: int = Depends(get_current_user)):
     """
         Search for collections.
+        Use % for searching with 'any char'.
 
         *Currently only for admins*
     """
