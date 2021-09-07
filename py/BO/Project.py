@@ -355,45 +355,51 @@ class ProjectBO(object):
 
         # Default query: all projects, eventually with first manager information
         # noinspection SqlResolve
-        sql = """SELECT p.projid
-                       FROM projects p
-                       LEFT JOIN ( """ + ProjectPrivilegeBO.first_manager_by_project() + """ ) fpm 
-                         ON fpm.projid = p.projid """
+        sql = """SELECT prj.projid
+                   FROM projects prj
+                   LEFT JOIN ( """ + ProjectPrivilegeBO.first_manager_by_project() + """ ) fpm 
+                          ON fpm.projid = prj.projid """
         if not_granted:
-            # Add the projects for which no entry is found in ProjectPrivilege
-            sql += """
-                       LEFT JOIN projectspriv pp ON p.projid = pp.projid AND pp.member = :user_id
-                      WHERE pp.member is null """
-            if for_managing:
-                sql += " AND False "
+            if not user.has_role(Role.APP_ADMINISTRATOR):
+                # Add the projects for which no entry is found in ProjectPrivilege
+                sql += """
+                           LEFT JOIN projectspriv prp ON prj.projid = prp.projid AND prp.member = :user_id
+                          WHERE prp.member is null 
+                            AND prj.visible """
+                if for_managing:
+                    # No right so no possibility to manage
+                    sql += " AND False "
+            else:
+                # Admin can see all, so nothing is not granted to Admin
+                sql += " WHERE False "
         else:
             if not user.has_role(Role.APP_ADMINISTRATOR):
                 # Not an admin, so restrict to projects which current user can work on, or view
                 sql += """
-                            JOIN projectspriv pp 
-                              ON p.projid = pp.projid 
-                             AND pp.member = :user_id """
+                            JOIN projectspriv prp 
+                              ON prj.projid = prp.projid 
+                             AND prp.member = :user_id """
                 if for_managing:
                     sql += """
-                             AND pp.privilege = '%s' """ % ProjectPrivilegeBO.MANAGE
+                             AND prp.privilege = '%s' """ % ProjectPrivilegeBO.MANAGE
             sql += " WHERE 1 = 1 "
 
         if title_filter != '':
             sql += """ 
-                        AND ( title ILIKE '%%'|| :title ||'%%'
-                              OR TO_CHAR(p.projid,'999999') LIKE '%%'|| :title ) """
+                        AND ( prj.title ILIKE '%%'|| :title ||'%%'
+                              OR TO_CHAR(prj.projid,'999999') LIKE '%%'|| :title ) """
             sql_params["title"] = title_filter
 
         if instrument_filter != '':
             sql += """
-                         AND p.projid IN (SELECT DISTINCT sam.projid FROM samples sam, acquisitions acq
-                                           WHERE acq.acq_sample_id = sam.sampleid
-                                             AND acq.instrument ILIKE '%%'|| :instrum ||'%%' ) """
+                         AND prj.projid IN (SELECT DISTINCT sam.projid FROM samples sam, acquisitions acq
+                                             WHERE acq.acq_sample_id = sam.sampleid
+                                               AND acq.instrument ILIKE '%%'|| :instrum ||'%%' ) """
             sql_params["instrum"] = instrument_filter
 
         if filter_subset:
             sql += """
-                         AND NOT title ILIKE '%%subset%%'  """
+                         AND NOT prj.title ILIKE '%%subset%%'  """
 
         with CodeTimer("Projects query:", logger):
             res: Result = session.execute(text(sql), sql_params)
