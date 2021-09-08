@@ -152,7 +152,7 @@ class CreateProjectReq(BaseModel):
 
 class ProjectFilters(TypedDict, total=False):
     taxo: Optional[str]
-    """ Coma-separated list of numeric taxonomy/category ids. Only include object classified with one of them """
+    """ Coma-separated list of numeric taxonomy/category ids. Only include objects classified with one of them """
     taxochild: Optional[str]
     """ If 'Y' and taxo is set, also include children of each member of 'taxo' list in taxonomy tree """
     statusfilter: Optional[str]

@@ -17,7 +17,7 @@ from sqlalchemy import bindparam
 from sqlalchemy.sql import Alias
 
 from API_models.crud import ProjectFilters
-from BO.Classification import HistoricalLastClassif, ClassifIDListT
+from BO.Classification import HistoricalLastClassif, ClassifIDListT, ClassifIDT
 from BO.ColumnUpdate import ColUpdateList
 from BO.Object import ObjectIDT, ObjectIDWithParentsT
 from BO.Taxonomy import TaxonomyBO
@@ -566,6 +566,68 @@ class ObjectSetFilter(object):
         self.annotators: Optional[str] = filters.get('filt_annot', '')
         # Only the last annotator, unlike "filt_annot" which digs in history
         self.last_annotators: Optional[str] = filters.get('filt_last_annot', '')
+
+    def category_id_only(self) -> Optional[ClassifIDT]:
+        """
+            If, and only if, the filter is on a single taxon, return its identifier
+        """
+        if self.samples:
+            return None
+
+        if self.status_filter:
+            return None
+
+        if self.MapN or self.MapW or self.MapE or self.MapS:
+            return None
+
+        if self.depth_min or self.depth_max:
+            return None
+
+        if self.instrument:
+            return None
+
+        if self.daytime:
+            return None
+
+        if self.months:
+            return None
+
+        if self.from_date:
+            return None
+
+        if self.to_date:
+            return None
+
+        if self.invert_time or self.from_time or self.to_time:
+            return None
+
+        if self.validated_from:
+            return None
+
+        if self.validated_to:
+            return None
+
+        if self.free_num or self.free_num_start:
+            return None
+
+        if self.free_num or self.free_num_end:
+            return None
+
+        if self.free_text or self.free_text_val:
+            return None
+
+        if self.annotators or self.last_annotators:
+            return None
+
+        if self.taxo_child:
+            return None
+
+        if self.taxo:
+            cats = [int(x) for x in self.taxo.split(',')]
+            if len(cats) == 1:
+                return cats[0]
+
+        return None
 
     @staticmethod
     def _str_to_decimal(a_dict: ProjectFilters, a_key: str) -> Optional[Decimal]:

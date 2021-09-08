@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-# After SQL alchemy models are defined individually, setup the relations b/w them
+# Taxon/Category/Classification 
 #
 from datetime import datetime
 from typing import List, Set, Dict, Tuple, Optional

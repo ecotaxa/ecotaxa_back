@@ -11,9 +11,10 @@ from API_models.taxonomy import TaxaSearchRsp
 from API_operations.helpers.Service import Service
 from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Project import ProjectBOSet
+from BO.ReClassifyLog import ReClassificationBO
 from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet, TaxonBOSetFromWoRMS
 from BO.User import UserIDT, UserBO
-from DB.Project import ProjectTaxoStat, Project
+from DB.Project import ProjectTaxoStat, Project, ProjectIDT
 from DB.Taxonomy import Taxonomy
 from DB.helpers.ORM import Query
 from helpers.DynamicLogs import get_logger
@@ -122,8 +123,8 @@ class TaxonomyService(Service):
     def query_usage(self, taxon_id: ClassifIDT):
         taxo_and_prjs_qry: Query = self.session.query(ProjectTaxoStat.nbr_v, Project.projid, Project.title)
         taxo_and_prjs_qry = taxo_and_prjs_qry.filter((Project.projid == ProjectTaxoStat.projid)
-                                                & (ProjectTaxoStat.nbr_v > 0)
-                                                & (ProjectTaxoStat.id == taxon_id))
+                                                     & (ProjectTaxoStat.nbr_v > 0)
+                                                     & (ProjectTaxoStat.id == taxon_id))
         taxo_and_prjs_qry = taxo_and_prjs_qry.order_by(ProjectTaxoStat.nbr_v.desc())
         logger.info("qry:%s", taxo_and_prjs_qry)
         ret = [{
@@ -136,6 +137,21 @@ class TaxonomyService(Service):
     def query_set(self, taxon_ids: ClassifIDListT) -> List[TaxonBO]:
         ret = TaxonBOSet(self.ro_session, taxon_ids)
         return ret.taxa
+
+    def most_used_non_advised(self, _current_user_id: Optional[UserIDT], taxon_ids: ClassifIDListT) -> List[TaxonBO]:
+        prev_choices = ReClassificationBO.previous_choices(self.ro_session, taxon_ids)
+        ret_taxa = []
+        for a_taxon_id in taxon_ids:
+            # If no relevant previous choice, return source
+            found_choice = prev_choices.get(a_taxon_id, a_taxon_id)
+            ret_taxa.append(found_choice)
+        # Index as we need exact order
+        ret_dict = {a_taxon.id: a_taxon for a_taxon in TaxonBOSet(self.ro_session, ret_taxa).taxa}
+        return [ret_dict[txid] for txid in ret_taxa]
+
+    def reclassification_history(self,  _current_user_id: Optional[UserIDT], project_id: ProjectIDT):
+        history = ReClassificationBO.history_for_project(self.ro_session, project_id)
+        return history
 
     def query_worms(self, aphia_id: ClassifIDT) -> Optional[TaxonBO]:
         """

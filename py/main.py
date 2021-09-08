@@ -785,6 +785,7 @@ def get_object_set(project_id: int,
 
         Fields follow the naming convention: `prefix.field`.
             Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.
+            Use a comma to separate fields.
             - Column obj.imgcount contains the total count of images for the object.
     """
     return_fields = None
@@ -1023,6 +1024,36 @@ async def taxa_tree_status(current_user: int = Depends(get_current_user)):
     with TaxonomyService() as sce:
         refresh_date = sce.status(_current_user_id=current_user)
         return TaxonomyTreeStatus(last_refresh=refresh_date.isoformat() if refresh_date else None)
+
+
+@app.get("/taxa/reclassification_stats", tags=['Taxonomy Tree'], response_model=List[TaxonModel])
+async def reclassif_stats(taxa_ids: str,
+                          current_user: Optional[int] = Depends(get_optional_current_user)) \
+        -> List[TaxonBO]:
+    """
+        Dig into reclassification logs and, for each input category id, determine the most chosen target category,
+        excluding the advised one.
+        By convention, if nothing relevant is found, the input category itself is returned. So one can expect
+        that the returned list has the same size as the required one.
+    """
+    with TaxonomyService() as sce:
+        num_taxa_ids = _split_num_list(taxa_ids)
+        with RightsThrower():
+            ret = sce.most_used_non_advised(current_user, num_taxa_ids)
+        return ret
+
+
+@app.get("/taxa/reclassification_history/{project_id}", tags=['Taxonomy Tree'])
+async def reclassif_project_stats(project_id: int,
+                                  current_user: Optional[int] = Depends(get_optional_current_user)) \
+        -> List[TaxonBO]:
+    """
+        Dig into reclassification logs and return the associations source->target for previous reclassifications.
+    """
+    with TaxonomyService() as sce:
+        with RightsThrower():
+            ret = sce.reclassification_history(current_user, project_id)
+        return ret
 
 
 @app.get("/taxon/{taxon_id}", tags=['Taxonomy Tree'], response_model=TaxonModel)

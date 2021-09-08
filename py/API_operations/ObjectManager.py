@@ -8,8 +8,10 @@ from API_models.crud import ProjectFilters
 from BO.Classification import HistoricalLastClassif, ClassifIDSetT, ClassifIDListT, ClassifIDT
 from BO.ColumnUpdate import ColUpdateList
 from BO.Mappings import TableMapping
-from BO.ObjectSet import DescribedObjectSet, ObjectIDListT, EnumeratedObjectSet, ObjectIDWithParentsListT
+from BO.ObjectSet import DescribedObjectSet, ObjectIDListT, EnumeratedObjectSet, ObjectIDWithParentsListT, \
+    ObjectSetFilter
 from BO.Project import ProjectBO
+from BO.ReClassifyLog import ReClassificationBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
 from BO.User import UserIDT
@@ -403,6 +405,12 @@ class ObjectManager(Service):
         nb_upd, all_changes = obj_set.classify_validate(current_user_id, classif_ids, "=")
         # Propagate changes to update projects_taxo_stat
         self.propagate_classif_changes(nb_upd, all_changes, project)
+
+        # If filter was _only_ a single category, then write a log line
+        filter_set = ObjectSetFilter(self.ro_session, filters)
+        only_taxon = filter_set.category_id_only()
+        if only_taxon is not None:
+            ReClassificationBO.add_log(self.session, only_taxon, forced_id, proj_id, reason, nb_upd)
 
         self.session.commit()
 
