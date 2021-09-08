@@ -24,11 +24,11 @@ def test_taxotree_query(config, database, fastapi, caplog):
     url = TAXA_SEARCH_URL.format(project_id=prj_id, query=quote_plus("cyano<living"))
     # Unauthenticated call
     rsp = fastapi.get(url, json={})
-    assert rsp.json() == [{'id': 233, 'pr': 0, 'text': 'Cyanobacteria<Bacteria'},
-                          {'id': 849, 'pr': 0, 'text': 'Cyanobacteria<Proteobacteria'},
-                          {'id': 2396, 'pr': 0, 'text': 'Cyanophora'},
-                          {'id': 1680, 'pr': 0, 'text': 'Cyanophyceae'},
-                          {'id': 2395, 'pr': 0, 'text': 'Cyanoptyche'}]
+    assert rsp.json() == [{'id': 233, 'pr': 0, 'renm_id': None, 'text': 'Cyanobacteria<Bacteria'},
+                          {'id': 849, 'pr': 0, 'renm_id': None, 'text': 'Cyanobacteria<Proteobacteria'},
+                          {'id': 2396, 'pr': 0, 'renm_id': None, 'text': 'Cyanophora'},
+                          {'id': 1680, 'pr': 0, 'renm_id': None, 'text': 'Cyanophyceae'},
+                          {'id': 2395, 'pr': 0, 'renm_id': None, 'text': 'Cyanoptyche'}]
 
 
 def test_taxo_query(config, database, fastapi, caplog):
@@ -54,6 +54,7 @@ def test_taxo_query(config, database, fastapi, caplog):
                           'name': 'Cyanobacteria',
                           'nb_children_objects': 0,
                           'nb_objects': 0,
+                          'renm_id': None,
                           'type': 'P'}
 
 
@@ -91,4 +92,5 @@ def test_worms_query(config, database, fastapi, caplog):
                           'name': 'Oncaeidae',
                           'nb_children_objects': 0,
                           'nb_objects': 0,
+                          'renm_id': None,
                           'type': 'P'}

@@ -1020,6 +1020,26 @@ UPDATE alembic_version SET version_num='00601700d281' WHERE alembic_version.vers
 
 COMMIT;
 
+-- INFO  [alembic.runtime.migration] Running upgrade 00601700d281 -> a4c0d0c48e5a, empty message
+-- Running upgrade 00601700d281 -> a4c0d0c48e5a
+
+CREATE TABLE taxo_change_log (
+    from_id INTEGER NOT NULL,
+    to_id INTEGER NOT NULL,
+    project_id INTEGER NOT NULL,
+    why VARCHAR(1) NOT NULL,
+    impacted INTEGER NOT NULL,
+    occurred_on TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    PRIMARY KEY (from_id, to_id, project_id),
+    FOREIGN KEY(from_id) REFERENCES taxonomy (id) ON DELETE CASCADE,
+    FOREIGN KEY(project_id) REFERENCES projects (projid) ON DELETE CASCADE,
+    FOREIGN KEY(to_id) REFERENCES taxonomy (id) ON DELETE CASCADE
+);
+
+UPDATE alembic_version SET version_num='a4c0d0c48e5a' WHERE alembic_version.version_num = '00601700d281';
+
+COMMIT;
+
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;
@@ -1027,3 +1047,4 @@ ALTER TABLE alembic_version REPLICA IDENTITY FULL;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO readerole;
 
 ALTER SUBSCRIPTION mysub13 REFRESH PUBLICATION;
+

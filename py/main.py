@@ -53,7 +53,7 @@ from API_operations.imports.Import import FileImport
 from API_operations.imports.SimpleImport import SimpleImport
 from BG_operations.JobScheduler import JobScheduler
 from BO.Acquisition import AcquisitionBO
-from BO.Classification import HistoricalClassification
+from BO.Classification import HistoricalClassification, ClassifIDT
 from BO.Job import JobBO
 from BO.Object import ObjectBO
 from BO.ObjectSet import ObjectIDListT
@@ -861,6 +861,23 @@ def revert_object_set_to_history(project_id: int,
                                            classif_info=classif_info)
 
 
+@app.post("/object_set/{project_id}/reclassify", tags=['objects'])
+def reclassify_object_set(project_id: int,
+                          filters: ProjectFiltersModel,
+                          forced_id: ClassifIDT,
+                          reason: str,
+                          current_user: int = Depends(get_current_user)) -> int:
+    """
+        Regardless of present classification or state, set the new classification for this object set.
+        If the filter designates "all with given classification", add a TaxonomyChangeLog entry.
+        :returns the number of affected objects.
+    """
+    with ObjectManager() as sce:
+        with RightsThrower():
+            nb_impacted = sce.reclassify(current_user, project_id, filters, forced_id, reason)
+        return nb_impacted
+
+
 @app.post("/object_set/update", tags=['objects'])
 def update_object_set(req: BulkUpdateReq,
                       current_user: int = Depends(get_current_user)) -> int:
@@ -880,6 +897,7 @@ def classify_object_set(req: ClassifyReq,
         Change classification and/or qualification for a set of objects.
         Current user needs at least Annotate right on all projects of specified objects.
     """
+    # TODO: Cannot classify anymore to deprecated taxon/category
     assert len(req.target_ids) == len(req.classifications), "Need the same number of objects and classifications"
     with ObjectManager() as sce:
         with RightsThrower():

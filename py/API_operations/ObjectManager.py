@@ -5,7 +5,7 @@
 from typing import Tuple, List, Optional, Set, Dict
 
 from API_models.crud import ProjectFilters
-from BO.Classification import HistoricalLastClassif, ClassifIDSetT, ClassifIDListT
+from BO.Classification import HistoricalLastClassif, ClassifIDSetT, ClassifIDListT, ClassifIDT
 from BO.ColumnUpdate import ColUpdateList
 from BO.Mappings import TableMapping
 from BO.ObjectSet import DescribedObjectSet, ObjectIDListT, EnumeratedObjectSet, ObjectIDWithParentsListT
@@ -385,6 +385,28 @@ class ObjectManager(Service):
             self.session.commit()
         # Give feedback
         return impact, classifs
+
+    def reclassify(self, current_user_id: UserIDT, proj_id: ProjectIDT,
+                   filters: ProjectFilters, forced_id: ClassifIDT, reason: str) -> int:
+        """
+            Regardless of present classification or state, set the new classification for this object set.
+        """
+        # Security check
+        user, project = RightsBO.user_wants(self.session, current_user_id, Action.ANNOTATE, proj_id)
+
+        # Get target objects
+        impacted_objs = [r[0] for r in self.query(current_user_id, proj_id, filters)[0]]
+        obj_set = EnumeratedObjectSet(self.session, impacted_objs)
+
+        # Do the raw classification with history.
+        classif_ids = [forced_id for _an_obj in obj_set.object_ids]
+        nb_upd, all_changes = obj_set.classify_validate(current_user_id, classif_ids, "=")
+        # Propagate changes to update projects_taxo_stat
+        self.propagate_classif_changes(nb_upd, all_changes, project)
+
+        self.session.commit()
+
+        return len(obj_set)
 
     @staticmethod
     def collect_classif(histo: List[HistoricalLastClassif]) -> ClassifIDSetT:

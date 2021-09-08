@@ -88,8 +88,10 @@ class TaxonomyService(Service):
         # Carefully order the result
         for a_rec in res:
             classif_id = a_rec['id']
+            renm_id = a_rec['rename_to']
             is_preset = 1 if classif_id in preset else 0
             to_add = TaxaSearchRsp(id=classif_id,
+                                   renm_id=renm_id,
                                    text=a_rec['display_name'],
                                    pr=is_preset)
             if classif_id in return_order:
