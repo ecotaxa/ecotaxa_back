@@ -240,7 +240,7 @@ class EnumeratedObjectSet(MappedTable):
                                                )
                                           )
             ins_columns = [och.objid, och.classif_date, och.classif_type, och.classif_id,
-                                       och.classif_qual, och.classif_who]
+                           och.classif_qual, och.classif_who]
         else:
             # What we want to historize, as a subquery
             sel_subqry = select([oh.objid, oh.classif_auto_when, text("'A'"), oh.classif_auto_id,
@@ -363,7 +363,7 @@ class EnumeratedObjectSet(MappedTable):
             Set current classifications in self and/or validate current classification.
             :param user_id: The User who did these changes.
             :param classif_ids: One category id for each of the object ids in self. -1 means "keep current".
-            :param wanted_qualif: Validate or Dubious
+            :param wanted_qualif: V(alidate) or D(ubious). Use "=" for keeping same qualification.
             :returns updated rows and a summary of changes, for MRU and logging.
         """
         # Gather state of classification, for impacted objects, before the change. Keep a lock on rows.
@@ -373,6 +373,7 @@ class EnumeratedObjectSet(MappedTable):
         # Group the updates as lots of them are identical
         updates: Dict[Tuple, EnumeratedObjectSet] = {}
         all_changes: OrderedDict[Tuple, List[int]] = OrderedDict()
+        target_qualif = wanted_qualif
         # A bit of obsessive optimization
         classif_id_col = ObjectHeader.classif_id.name
         classif_qual_col = ObjectHeader.classif_qual.name
@@ -389,15 +390,18 @@ class EnumeratedObjectSet(MappedTable):
             else:
                 new_classif_id = v
             prev_classif_qual = prev_obj['classif_qual']
+            if wanted_qualif == '=':  # special value for 'keep current qualification'
+                # Arrange that no change can happen for this field
+                target_qualif = prev_classif_qual
             if (prev_classif_id == new_classif_id
-                    and prev_classif_qual == wanted_qualif
+                    and prev_classif_qual == target_qualif
                     and prev_obj['classif_who'] == user_id):
                 continue
             # There was at least 1 field change for this object
-            an_update = updates.setdefault((new_classif_id, wanted_qualif), EnumeratedObjectSet(self.session, []))
+            an_update = updates.setdefault((new_classif_id, target_qualif), EnumeratedObjectSet(self.session, []))
             an_update.add_object(obj_id)
             # Compact changes, grouped by operation
-            change_key = (prev_classif_id, prev_classif_qual, new_classif_id, wanted_qualif)
+            change_key = (prev_classif_id, prev_classif_qual, new_classif_id, target_qualif)
             for_this_change = all_changes.setdefault(change_key, [])
             for_this_change.append(obj_id)
             # Keep the recently used in first
@@ -410,11 +414,11 @@ class EnumeratedObjectSet(MappedTable):
         # Update of obj_head, grouped by similar operations.
         nb_updated = 0
         sql_now = text("now()")
-        for (new_classif_id, wanted_qualif), an_obj_set in updates.items():
+        for (new_classif_id, new_wanted_qualif), an_obj_set in updates.items():
             # Historize the updated rows (can be a lot!)
             an_obj_set.historize_classification()
             row_upd = {classif_id_col: new_classif_id,
-                       classif_qual_col: wanted_qualif,
+                       classif_qual_col: new_wanted_qualif,
                        classif_who_col: user_id,
                        classif_when_col: sql_now}
             # Do the update itsef

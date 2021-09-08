@@ -15,6 +15,7 @@ from API_models.helpers.DBtoModel import OrmConfig
 
 class TaxaSearchRsp(BaseModel):
     id: int = Field(title="The taxon/category IDs.")
+    renm_id: Optional[int] = Field(title="The advised replacement ID iif the taxon/category is deprecated.")
     text: str = Field(title="The taxon name, display one.")
     pr: int = Field(title="1 if the taxon is in project list, 0 otherwise.")
 
@@ -23,6 +24,7 @@ class TaxaSearchRsp(BaseModel):
 class TaxonModel(BaseModel):
     __config__ = OrmConfig
     id: int = Field(title="The taxon/category IDs.")
+    renm_id: Optional[int] = Field(title="The advised replacement ID iif the taxon/category is deprecated.")
     name: str = Field(title="The taxon/category verbatim name.")
     type: str = Field(title="The taxon/category type, 'M' or 'P'")
     nb_objects: int = Field(title="How many objects are classified in this category.")

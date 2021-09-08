@@ -24,15 +24,21 @@ class TaxonBO(object):
     """
         Holder of a node of the taxonomy tree.
     """
+    __slots__ = ['type', 'id', 'renm_id', 'name', 'nb_objects', 'nb_children_objects',
+                 'display_name', 'lineage', 'id_lineage', 'children']
 
     def __init__(self, cat_type: str, display_name: str, nb_objects: int, nb_children_objects: int,
                  lineage: List[str], id_lineage: List[ClassifIDT],
-                 children: List[ClassifIDT] = None):
+                 children: List[ClassifIDT] = None,
+                 rename_id: Optional[int] = None):
         assert cat_type in ('P', 'M')
         self.type = cat_type
         if children is None:
             children = []
+        else:
+            assert isinstance(children, list), "Not a list: %s"%children
         self.id = id_lineage[0]
+        self.renm_id = rename_id
         self.name = lineage[0]
         self.nb_objects = nb_objects if nb_objects is not None else 0
         self.nb_children_objects = nb_children_objects if nb_children_objects is not None else 0
@@ -182,7 +188,7 @@ class TaxonomyBO(object):
         bind = session.get_bind()
         # noinspection PyTypeChecker
         priority = case([(tf.c.id == any_(priority_set), text('0'))], else_=text('1')).label('prio')
-        qry = select([tf.c.taxotype, tf.c.id, tf.c.display_name, priority], bind=bind)
+        qry = select([tf.c.taxotype, tf.c.id, tf.c.rename_to, tf.c.display_name, priority], bind=bind)
         if len(name_filters) > 0:
             # Add to the query enough to get the full hierarchy for filtering
             concat_all, qry = cls._add_recursive_query(qry, tf, do_concat=True)
@@ -362,7 +368,10 @@ class TaxonBOSet(object):
         tf = Taxonomy.__table__.alias('tf')
         # bind = None  # For portable SQL, no 'ilike'
         bind = session.get_bind()
-        select_list = [tf.c.taxotype, tf.c.nbrobj, tf.c.nbrobjcum, tf.c.display_name, tf.c.id, tf.c.name, ]
+        select_list = [tf.c.taxotype, tf.c.nbrobj,
+                       tf.c.nbrobjcum, tf.c.display_name,
+                       tf.c.rename_to,
+                       tf.c.id, tf.c.name]
         select_list.extend([text("t%d.id, t%d.name" % (level, level))  # type:ignore
                             for level in range(1, TaxonomyBO.MAX_TAXONOMY_LEVELS)])
         qry = select(select_list, bind=bind)
@@ -375,15 +384,17 @@ class TaxonBOSet(object):
         self.taxa: List[TaxonBO] = []
         for a_rec in res.fetchall():
             lst_rec = list(a_rec)
-            cat_type, nbobj1, nbobj2, display_name = lst_rec.pop(0), lst_rec.pop(0), lst_rec.pop(0), lst_rec.pop(0)
+            cat_type, nbobj1, nbobj2, display_name, rename_id = lst_rec.pop(0), lst_rec.pop(0), \
+                                                                lst_rec.pop(0), lst_rec.pop(0), \
+                                                                lst_rec.pop(0)
             lineage_id = [an_id for an_id in lst_rec[0::2] if an_id]
             lineage = [name for name in lst_rec[1::2] if name]
             # assert lineage_id[-1] in (1, 84960, 84959), "Unexpected root %s" % str(lineage_id[-1])
             self.taxa.append(TaxonBO(cat_type, display_name,
                                      nbobj1, nbobj2,  # type:ignore
                                      lineage,
-                                     lineage_id  # type:ignore
-                                     ))
+                                     lineage_id,  # type:ignore
+                                     rename_id=rename_id))
         self.get_children(session)
         self.get_cardinalities(session)
 
