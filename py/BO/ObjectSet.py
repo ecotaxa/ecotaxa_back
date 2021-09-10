@@ -225,9 +225,11 @@ class EnumeratedObjectSet(MappedTable):
         # Light up a bit the SQLA expressions
         oh = ObjectHeader
         och = ObjectsClassifHisto
-        # What we want to historize, as a subquery
+        # What's inserted, both cases, into the history table
+        ins_columns = [och.objid, och.classif_date, och.classif_type, och.classif_id,
+                       och.classif_qual]
         if manual:
-            # What we want to historize, as a subquery
+            # What we want to historize, as a subquery - The current manual state
             sel_subqry = select([oh.objid, oh.classif_when, text("'M'"), oh.classif_id,
                                  oh.classif_qual, oh.classif_who])
             if only_qual is not None:
@@ -239,8 +241,7 @@ class EnumeratedObjectSet(MappedTable):
                                                qual_cond
                                                )
                                           )
-            ins_columns = [och.objid, och.classif_date, och.classif_type, och.classif_id,
-                           och.classif_qual, och.classif_who]
+            ins_columns.append(och.classif_who)  # We can insert 'who did it' as well
         else:
             # What we want to historize, as a subquery
             sel_subqry = select([oh.objid, oh.classif_auto_when, text("'A'"), oh.classif_auto_id,
@@ -250,8 +251,7 @@ class EnumeratedObjectSet(MappedTable):
                                                oh.classif_auto_when.isnot(None)
                                                )
                                           )
-            ins_columns = [och.objid, och.classif_date, och.classif_type, och.classif_id,
-                           och.classif_qual, och.classif_score]
+            ins_columns.append(och.classif_score)  # We can insert prediction score as well
         # Insert into the log table
         ins_qry: Insert = pg_insert(och.__table__)
         ins_qry = ins_qry.from_select(ins_columns, sel_subqry)

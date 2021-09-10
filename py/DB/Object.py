@@ -58,12 +58,18 @@ class ObjectHeader(Model):
     sunpos = Column(CHAR(1))  # Sun position, from date, time and coords
     #
     classif_id = Column(INTEGER)
+    # The following is logically out of this block of 4, because depending on its value,
+    # - it's the other classif_* columns which reflecting the "last state"
+    # - or the classif_auto_* ones.
     classif_qual = Column(CHAR(1))
     classif_who = Column(Integer, ForeignKey('users.id'))
     classif_when = Column(TIMESTAMP)
 
+    # The following 3 are set if the object was ever predicted, then they remain
+    # forever with these values. They reflect the "last state" only if classif_qual is 'P'.
     classif_auto_id = Column(INTEGER)
     classif_auto_score = Column(DOUBLE_PRECISION)
+    # TODO: is NULL on prod' DB even if classif_qual='P' and other classif_auto_* are set
     classif_auto_when = Column(TIMESTAMP)
 
     classif_crossvalidation_id = Column(INTEGER)  # Always NULL in prod'
