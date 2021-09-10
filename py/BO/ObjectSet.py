@@ -189,7 +189,7 @@ class EnumeratedObjectSet(MappedTable):
             Reset to Predicted state, keeping log, i.e. history, of previous change.
         """
         oh = ObjectHeader
-        self.historize_classification(['V', 'D'])
+        self.historize_classification(only_qual=['V', 'D'], manual=True)
 
         # Update objects table
         obj_upd_qry: Update = oh.__table__.update()
@@ -216,7 +216,7 @@ class EnumeratedObjectSet(MappedTable):
         # ObjectCacheUpdater(prj_id).update_objects(self.object_ids, params)
         return updated_objs
 
-    def historize_classification(self, only_qual=None, manual=True):
+    def historize_classification(self, only_qual, manual):
         """
            Copy current classification information into history table, for all rows in self.
            :param only_qual: If set, only historize for current rows with this classification.
@@ -271,7 +271,7 @@ class EnumeratedObjectSet(MappedTable):
         for an_upd in updates:
             if an_upd["ucol"] in ObjectHeader.__dict__:
                 if an_upd["ucol"] == "classif_id":
-                    self.historize_classification()
+                    self.historize_classification(only_qual=None, manual=True)
                 direct_updates.append(an_upd)
             else:
                 mapped_updates.append(an_upd)
@@ -416,7 +416,7 @@ class EnumeratedObjectSet(MappedTable):
         sql_now = text("now()")
         for (new_classif_id, new_wanted_qualif), an_obj_set in updates.items():
             # Historize the updated rows (can be a lot!)
-            an_obj_set.historize_classification()
+            an_obj_set.historize_classification(only_qual=None, manual=True)
             row_upd = {classif_id_col: new_classif_id,
                        classif_qual_col: new_wanted_qualif,
                        classif_who_col: user_id,
@@ -476,7 +476,7 @@ class EnumeratedObjectSet(MappedTable):
 
         # Historize (auto)
         if keep_logs:
-            self.historize_classification(None, True)
+            self.historize_classification(only_qual=None, manual=True)
 
         # Bulk (or sort of) update of obj_head
         sql_now = text("now()")
