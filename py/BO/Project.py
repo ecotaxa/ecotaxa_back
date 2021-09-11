@@ -17,6 +17,7 @@ from BO.helpers.DataclassAsDict import DataclassAsDict
 from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFields, Acquisition, Process, \
     ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram, ObjectCNNFeature, \
     ObjectsClassifHisto
+from DB.Object import VALIDATED_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL
 from DB.Project import ProjectIDT, ProjectIDListT
 from DB.User import Role
 from DB.helpers import Session, Result
@@ -204,9 +205,9 @@ class ProjectBO(object):
          WHERE pts.projid = :prjid;
         INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
         SELECT sam.projid, COALESCE(obh.classif_id, -1) id, COUNT(*) nbr, 
-               COUNT(CASE WHEN obh.classif_qual = 'V' THEN 1 END) nbr_v,
-               COUNT(CASE WHEN obh.classif_qual = 'D' THEN 1 END) nbr_d, 
-               COUNT(CASE WHEN obh.classif_qual = 'P' THEN 1 END) nbr_p
+               COUNT(CASE WHEN obh.classif_qual = '"""+VALIDATED_CLASSIF_QUAL+"""' THEN 1 END) nbr_v,
+               COUNT(CASE WHEN obh.classif_qual = '"""+DUBIOUS_CLASSIF_QUAL+"""' THEN 1 END) nbr_d, 
+               COUNT(CASE WHEN obh.classif_qual = '"""+PREDICTED_CLASSIF_QUAL+"""' THEN 1 END) nbr_p
           FROM obj_head obh
           JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
           JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prjid 
@@ -588,9 +589,9 @@ class ProjectBO(object):
             # TODO: We can't lock what does not exists, so it can fail here.
             pts_ins = """INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
                              SELECT :prj, COALESCE(obh.classif_id, -1), COUNT(*) nbr, 
-                                    COUNT(CASE WHEN obh.classif_qual = 'V' THEN 1 END) nbr_v,
-                                    COUNT(CASE WHEN obh.classif_qual = 'D' THEN 1 END) nbr_d,
-                                    COUNT(CASE WHEN obh.classif_qual = 'P' THEN 1 END) nbr_p
+                                    COUNT(CASE WHEN obh.classif_qual = '"""+VALIDATED_CLASSIF_QUAL+"""' THEN 1 END) nbr_v,
+                                    COUNT(CASE WHEN obh.classif_qual = '"""+DUBIOUS_CLASSIF_QUAL+"""' THEN 1 END) nbr_d,
+                                    COUNT(CASE WHEN obh.classif_qual = '"""+PREDICTED_CLASSIF_QUAL+"""' THEN 1 END) nbr_p
                                FROM obj_head obh
                                JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
                                JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prj 
@@ -610,7 +611,10 @@ class ProjectBO(object):
             else:
                 # General case
                 sqlparam = {'prj': prj_id, 'cid': classif_id,
-                            'nul': chg['n'], 'val': chg['V'], 'dub': chg['D'], 'prd': chg['P']}
+                            'nul': chg['n'],
+                            'val': chg[VALIDATED_CLASSIF_QUAL],
+                            'dub': chg[DUBIOUS_CLASSIF_QUAL],
+                            'prd': chg[PREDICTED_CLASSIF_QUAL]}
                 ts_sql = """UPDATE projects_taxo_stat 
                                    SET nbr=nbr+:nul, nbr_v=nbr_v+:val, nbr_d=nbr_d+:dub, nbr_p=nbr_p+:prd 
                                  WHERE projid = :prj AND id = :cid"""
@@ -679,7 +683,6 @@ class ProjectBOSet(object):
                 instrums = instruments.by_project.get(a_project.projid)
                 if instrums is not None:
                     a_project.instrument = ",".join(instrums)
-
 
     def as_list(self) -> List[ProjectBO]:
         return self.projects

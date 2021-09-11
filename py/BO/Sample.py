@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import List
 
 from DB import Session, Query, Project, Sample, Acquisition
+from DB.Object import VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL
 from DB.Project import ProjectIDListT
 from DB.helpers.Direct import text
 from DB.helpers.ORM import any_
@@ -123,9 +124,9 @@ class EnumeratedSampleSet(MappedTable):
         SELECT sam.sampleid,
                ARRAY_AGG(DISTINCT COALESCE(obh.classif_id, -1)) as ids,
                SUM(CASE WHEN obh.classif_id <> -1 THEN 0 ELSE 1 END) as nb_u,
-               COUNT(CASE WHEN obh.classif_qual = 'V' THEN 1 END) nbr_v,
-               COUNT(CASE WHEN obh.classif_qual = 'D' THEN 1 END) nbr_d, 
-               COUNT(CASE WHEN obh.classif_qual = 'P' THEN 1 END) nbr_p
+               COUNT(CASE WHEN obh.classif_qual = '"""+VALIDATED_CLASSIF_QUAL+"""' THEN 1 END) nbr_v,
+               COUNT(CASE WHEN obh.classif_qual = '"""+DUBIOUS_CLASSIF_QUAL+"""' THEN 1 END) nbr_d, 
+               COUNT(CASE WHEN obh.classif_qual = '"""+PREDICTED_CLASSIF_QUAL+"""' THEN 1 END) nbr_p
           FROM obj_head obh
           JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
           JOIN samples sam ON sam.sampleid = acq.acq_sample_id

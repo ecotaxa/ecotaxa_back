@@ -24,7 +24,8 @@ from BO.Taxonomy import TaxonomyBO
 from BO.User import UserIDT
 from BO.helpers.MappedTable import MappedTable
 from DB import Project, ObjectHeader, Image, Sample, Acquisition
-from DB.Object import ObjectsClassifHisto, ObjectFields, PREDICTED_CLASSIF_QUAL
+from DB.Object import ObjectsClassifHisto, ObjectFields, PREDICTED_CLASSIF_QUAL, VALIDATED_CLASSIF_QUAL, \
+    DUBIOUS_CLASSIF_QUAL
 from DB.Project import ProjectIDListT
 from DB.helpers import Result, Session
 from DB.helpers.Core import select
@@ -189,13 +190,13 @@ class EnumeratedObjectSet(MappedTable):
             Reset to Predicted state, keeping log, i.e. history, of previous change.
         """
         oh = ObjectHeader
-        self.historize_classification(only_qual=['V', 'D'], manual=True)
+        self.historize_classification(only_qual=[VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL], manual=True)
 
         # Update objects table
         obj_upd_qry: Update = oh.__table__.update()
         obj_upd_qry = obj_upd_qry.where(and_(oh.objid == any_(self.object_ids),
-                                             (oh.classif_qual.in_(['V', 'D']))))
-        obj_upd_qry = obj_upd_qry.values(classif_qual='P')
+                                             (oh.classif_qual.in_([VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL]))))
+        obj_upd_qry = obj_upd_qry.values(classif_qual=PREDICTED_CLASSIF_QUAL)
         nb_objs = self.session.execute(obj_upd_qry).rowcount
         # TODO: Cache upd
         logger.info(" %d out of %d rows reset to predicted", nb_objs, len(self.object_ids))
@@ -311,7 +312,7 @@ class EnumeratedObjectSet(MappedTable):
                                  func.coalesce(subq_alias.c.classif_id, ObjectHeader.classif_auto_id).label(
                                      "h_classif_id"),
                                  func.coalesce(subq_alias.c.classif_qual,
-                                               case([(ObjectHeader.classif_auto_id.isnot(None), 'P')])),
+                                               case([(ObjectHeader.classif_auto_id.isnot(None), PREDICTED_CLASSIF_QUAL)])),
                                  subq_alias.c.classif_who)
         qry = qry.join(subq_alias, ObjectHeader.objid == subq_alias.c.objid, isouter=(from_user_id is None))
         if from_user_id is not None:
@@ -668,14 +669,14 @@ class ObjectSetFilter(object):
 
         if self.status_filter:
             if self.status_filter == "NV":
-                where_clause *= "(obh.classif_qual != 'V' OR obh.classif_qual IS NULL)"
+                where_clause *= "(obh.classif_qual != '%s' OR obh.classif_qual IS NULL)" % VALIDATED_CLASSIF_QUAL
             elif self.status_filter == "PV":
-                where_clause *= "obh.classif_qual IN ('V','P')"
+                where_clause *= "obh.classif_qual IN ('%s','%s')" % (VALIDATED_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL)
             elif self.status_filter == "NVM":
-                where_clause *= "obh.classif_qual = 'V'"
+                where_clause *= "obh.classif_qual = '%s'" % VALIDATED_CLASSIF_QUAL
                 where_clause *= "obh.classif_who != " + str(user_id)
             elif self.status_filter == "VM":
-                where_clause *= "obh.classif_qual = 'V'"
+                where_clause *= "obh.classif_qual = '%s'" % VALIDATED_CLASSIF_QUAL
                 where_clause *= "obh.classif_who = " + str(user_id)
             elif self.status_filter == "U":
                 where_clause *= "obh.classif_qual IS NULL"

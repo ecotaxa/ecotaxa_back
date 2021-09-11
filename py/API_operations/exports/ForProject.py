@@ -18,6 +18,7 @@ from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
+from DB.Object import VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL
 from DB.Project import Project
 from DB.helpers.Direct import text
 from DB.helpers.SQL import OrderClause
@@ -206,21 +207,21 @@ class ProjectExport(JobServiceBase):
                 select_clause += ", img.file_name AS img_src_path"
             select_clause += ",\n"
 
-        select_clause += """obh.orig_id AS object_id, obh.latitude AS object_lat, obh.longitude AS object_lon,
+        select_clause += ("""obh.orig_id AS object_id, obh.latitude AS object_lat, obh.longitude AS object_lon,
                          TO_CHAR(obh.objdate,'{0}') AS object_date,
                          TO_CHAR(obh.objtime,'{1}') AS object_time,
                          obh.object_link, obh.depth_min AS object_depth_min, obh.depth_max AS object_depth_max,
                          CASE obh.classif_qual 
-                            WHEN 'V' then 'validated' 
-                            WHEN 'P' then 'predicted' 
-                            WHEN 'D' then 'dubious' 
+                            WHEN '"""+VALIDATED_CLASSIF_QUAL+"""' then 'validated' 
+                            WHEN '"""+PREDICTED_CLASSIF_QUAL+"""' then 'predicted' 
+                            WHEN '"""+DUBIOUS_CLASSIF_QUAL+"""' then 'dubious' 
                             ELSE obh.classif_qual 
                          END AS object_annotation_status,                
                          usr.name AS object_annotation_person_name, usr.email AS object_annotation_person_email,
                          TO_CHAR(obh.classif_when,'{0}') AS object_annotation_date,
                          TO_CHAR(obh.classif_when,'{1}') AS object_annotation_time,                
                          txo.display_name AS object_annotation_category 
-                    """.format(date_fmt, time_fmt)
+                    """).format(date_fmt, time_fmt)
         if req.exp_type == ExportTypeEnum.backup:
             select_clause += ", txo.id AS object_annotation_category_id"
         else:

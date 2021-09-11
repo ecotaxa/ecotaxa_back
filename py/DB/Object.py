@@ -28,7 +28,10 @@ from .helpers.ORM import Model, Query
 PREDICTED_CLASSIF_QUAL = 'P'
 DUBIOUS_CLASSIF_QUAL = 'D'
 VALIDATED_CLASSIF_QUAL = 'V'
-classif_qual = {'P': 'predicted', 'D': 'dubious', 'V': 'validated'}
+classif_qual = {PREDICTED_CLASSIF_QUAL: 'predicted',
+                DUBIOUS_CLASSIF_QUAL: 'dubious',
+                VALIDATED_CLASSIF_QUAL: 'validated'}
+CLASSIF_QUALS = set(classif_qual.keys())
 classif_qual_revert = {}
 for (k, v) in classif_qual.items():
     classif_qual_revert[v] = k

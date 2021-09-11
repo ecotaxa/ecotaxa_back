@@ -16,6 +16,7 @@ from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
 from BO.User import UserIDT
 from DB import Project, ObjectHeader, ObjectFields, Image, Taxonomy, Sample, User
+from DB.Object import VALIDATED_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, CLASSIF_QUALS
 from DB.Project import ProjectIDT
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Result
@@ -268,9 +269,9 @@ class ObjectManager(Service):
             sql += """, NULL nbr_v, NULL nbr_d, NULL nbr_p"""
         else:
             sql += """, 
-           COUNT(CASE WHEN obh.classif_qual = 'V' THEN 1 END) nbr_v,
-           COUNT(CASE WHEN obh.classif_qual = 'D' THEN 1 END) nbr_d, 
-           COUNT(CASE WHEN obh.classif_qual = 'P' THEN 1 END) nbr_p"""
+           COUNT(CASE WHEN obh.classif_qual = '""" + VALIDATED_CLASSIF_QUAL + """' THEN 1 END) nbr_v,
+           COUNT(CASE WHEN obh.classif_qual = '""" + DUBIOUS_CLASSIF_QUAL + """' THEN 1 END) nbr_d, 
+           COUNT(CASE WHEN obh.classif_qual = '""" + PREDICTED_CLASSIF_QUAL + """' THEN 1 END) nbr_p"""
         sql += """
       FROM """ + from_.get_sql() + " " + where.get_sql()
 
@@ -485,7 +486,9 @@ class ObjectManager(Service):
         """ Cumulate change +/- for a given taxon """
         if classif_id is None:
             classif_id = -1  # Unclassified
-        changes_for_id = cumulated_changes.setdefault(classif_id, {'n': 0, 'V': 0, 'P': 0, 'D': 0})
+        changes_for_id = cumulated_changes.setdefault(classif_id,
+                                                      {'n': 0, VALIDATED_CLASSIF_QUAL: 0, PREDICTED_CLASSIF_QUAL: 0,
+                                                       DUBIOUS_CLASSIF_QUAL: 0})
         changes_for_id['n'] += inc_or_dec
-        if qualif in ('V', 'P', 'D'):
+        if qualif in CLASSIF_QUALS:
             changes_for_id[qualif] += inc_or_dec
