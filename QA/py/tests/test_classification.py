@@ -199,8 +199,12 @@ def test_classif(config, database, fastapi, caplog):
 
     # No history yet as the object was just created
     classif = classif_history(fastapi, obj_ids[0])
-    assert classif is not None
-    assert len(classif) == 0
+    assert len(classif) == 1
+    assert classif[0]['classif_date'] is not None  # e.g. 2021-09-12T09:28:03.278626
+    classif[0]['classif_date'] = "now"
+    assert classif == [
+        {'objid': obj_ids[0], 'classif_id': 12846, 'classif_date': 'now', 'classif_who': None,
+         'classif_type': 'A', 'classif_qual': 'P', 'classif_score': 0.52, 'user_name': None, 'taxon_name': 'Crustacea'}]
 
     # Not a copepod :(
     classify_all(fastapi, obj_ids, entomobryomorpha_id)
@@ -219,17 +223,25 @@ def test_classif(config, database, fastapi, caplog):
     assert classif2 is not None
     # Date is not predictable
     classif2[0]['classif_date'] = 'hopefully just now'
-    # nor object_id
-    classif2[0]['objid'] = 1
+    classif2[1]['classif_date'] = 'a bit before'
     assert classif2 == [{'classif_date': 'hopefully just now',
                          'classif_id': 25828,
                          'classif_qual': 'V',
                          'classif_score': None,
                          'classif_type': 'M',
                          'classif_who': 1,
-                         'objid': 1,
+                         'objid': obj_ids[0],
                          'taxon_name': 'Copepoda',
-                         'user_name': 'Application Administrator'}]
+                         'user_name': 'Application Administrator'},
+                        {'classif_date': 'a bit before',
+                         'classif_id': 12846,
+                         'classif_qual': 'P',
+                         'classif_score': 0.52,
+                         'classif_type': 'A',
+                         'classif_who': None,
+                         'objid': obj_ids[0],
+                         'taxon_name': 'Crustacea',
+                         'user_name': None}]
 
     # There should be 0 predicted
     obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id, statusfilter='P')

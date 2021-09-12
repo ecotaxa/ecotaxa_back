@@ -204,6 +204,7 @@ Index('is_objectsdate', ObjectHeader.__table__.c.objdate, ObjectHeader.__table__
 # For FK checks during deletion
 Index('is_objectsacquisition', ObjectHeader.__table__.c.acquisid)
 
+DEFAULT_CLASSIF_HISTORY_DATE = "TO_TIMESTAMP(0)"
 
 class ObjectsClassifHisto(Model):
     __tablename__ = 'objectsclassifhisto'
