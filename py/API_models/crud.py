@@ -159,6 +159,7 @@ class ProjectFilters(TypedDict, total=False):
     """ Include objects with given status:
           'NV': Not validated 
           'PV': Predicted or Validated 
+          'PVD': Predicted or Validated or Dubious
           'NVM': Validated, but not by me 
           'VM': Validated by me 
           'U': Not classified
@@ -191,9 +192,9 @@ class ProjectFilters(TypedDict, total=False):
     inverttime: Optional[str]
     """ If '1', include objects outside fromtime an totime range """
     validfromdate: Optional[str]
-    """ Format is 'YYYY-MM-DD HH24:MI', include objects validated after this date+time """
+    """ Format is 'YYYY-MM-DD HH24:MI', include objects validated/set to dubious after this date+time """
     validtodate: Optional[str]
-    """ Format is 'YYYY-MM-DD HH24:MI', include objects validated before this date+time """
+    """ Format is 'YYYY-MM-DD HH24:MI', include objects validated/set to dubious before this date+time """
     freenum: Optional[str]
     """ Numerical DB column number in Object as basis for the 2 following criteria """
     freenumst: Optional[str]

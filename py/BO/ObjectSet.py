@@ -724,6 +724,8 @@ class ObjectSetFilter(object):
                 where_clause *= "obh.classif_who = " + str(user_id)
             elif self.status_filter == "U":
                 where_clause *= "obh.classif_qual IS NULL"
+            elif self.status_filter == "PVD":
+                where_clause *= "obh.classif_qual IS NOT NULL"
             else:
                 where_clause *= "obh.classif_qual = '" + self.status_filter + "'"
 
@@ -775,7 +777,11 @@ class ObjectSetFilter(object):
                 params['totime'] = self.to_time
 
         if self.validated_from:
-            where_clause *= "obh.classif_when >= TO_TIMESTAMP(:validfromdate,'YYYY-MM-DD HH24:MI')"
+            if self.status_filter == "PVD":
+                # Intepret the date as a 'changed_from' filter
+                where_clause *= "COALESCE(obh.classif_when, obh.classif_auto_when) >= TO_TIMESTAMP(:validfromdate,'YYYY-MM-DD HH24:MI')"
+            else:
+                where_clause *= "obh.classif_when >= TO_TIMESTAMP(:validfromdate,'YYYY-MM-DD HH24:MI')"
             params['validfromdate'] = self.validated_from
 
         if self.validated_to:
