@@ -4,13 +4,14 @@
 #
 # Remember the mass move of objects from one category to another, inside a project.
 #
+from datetime import datetime
 from typing import List, Dict, Tuple
 
 from BO.Classification import ClassifIDT, ClassifIDListT
 from DB import Taxonomy
 from DB.Project import ProjectIDT
 from DB.Taxonomy import TaxonomyChangeLog
-from DB.helpers.ORM import Session, any_, func
+from DB.helpers.ORM import Session, any_, func, and_
 from helpers.DynamicLogs import get_logger
 
 ClassifSetInfoT = Dict[ClassifIDT, Tuple[str, str]]
@@ -26,18 +27,22 @@ class ReClassificationBO(object):
 
     @staticmethod
     def add_log(session: Session, from_id: ClassifIDT, to_id: ClassifIDT,
-                project_id: ProjectIDT, why: str, impacted: int):
+                project_id: ProjectIDT, why: str, impacted: int, log_time: datetime):
         """
-            Add a log line.
+            Add a log line. In practice, a previous log might be in already, and erased by a rollback.
         """
-        new_line = TaxonomyChangeLog()
-        new_line.from_id = from_id
-        new_line.to_id = to_id
-        new_line.project_id = project_id
-        new_line.why = why
-        new_line.impacted = impacted
-        new_line.occurred_on = func.now()
-        session.add(new_line)
+        already_there = session.get(TaxonomyChangeLog, (from_id, to_id, project_id))
+        if already_there is None:
+            new_line = TaxonomyChangeLog()
+            new_line.from_id = from_id
+            new_line.to_id = to_id
+            new_line.project_id = project_id
+            new_line.why = why
+            new_line.impacted = impacted
+            new_line.occurred_on = log_time
+            session.add(new_line)
+        else:
+            already_there.occurred_on = log_time
         session.commit()
 
     @staticmethod

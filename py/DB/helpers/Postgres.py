@@ -48,6 +48,13 @@ class SequenceCache(object):
             return self.next()
 
 
+def db_server_now(session: Session) -> datetime:
+    """
+        Return the current time on DB server.
+    """
+    return session.scalar(text('select now()'))
+
+
 class DateFormat(int, Enum):
     ISO_8601_2004_E = 1  # ISO 8601:2004(E)
 

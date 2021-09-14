@@ -20,6 +20,7 @@ from DB.Object import VALIDATED_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL, DUBIOUS_CL
 from DB.Project import ProjectIDT
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Result
+from DB.helpers.Postgres import db_server_now
 from DB.helpers.SQL import OrderClause
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
@@ -397,23 +398,24 @@ class ObjectManager(Service):
         # Security check
         user, project = RightsBO.user_wants(self.session, current_user_id, Action.ANNOTATE, proj_id)
 
+        # Determine if it's the use case 'global search & replace a single category with another'
+        filter_set = ObjectSetFilter(self.ro_session, filters)
+        only_taxon = filter_set.category_id_only()
+
         # Get target objects
         impacted_objs = [r[0] for r in self.query(current_user_id, proj_id, filters)[0]]
         obj_set = EnumeratedObjectSet(self.session, impacted_objs)
 
         # Do the raw classification with history.
-        classif_ids = [forced_id for _an_obj in obj_set.object_ids]
-        nb_upd, all_changes = obj_set.classify_validate(current_user_id, classif_ids, "=")
-        # Propagate changes to update projects_taxo_stat
-        self.propagate_classif_changes(nb_upd, all_changes, project)
+        classif_ids = [forced_id] * len(obj_set.object_ids)
+        now = db_server_now(self.session)
+        nb_upd, all_changes = obj_set.classify_validate(current_user_id, classif_ids, "=", now)
 
-        # If filter was _only_ a single category, then write a log line
-        filter_set = ObjectSetFilter(self.ro_session, filters)
-        only_taxon = filter_set.category_id_only()
         if only_taxon is not None:
-            ReClassificationBO.add_log(self.session, only_taxon, forced_id, proj_id, reason, nb_upd)
+            ReClassificationBO.add_log(self.session, only_taxon, forced_id, proj_id, reason, nb_upd, now)
 
-        self.session.commit()
+        # Propagate changes to update projects_taxo_stat and commit
+        self.propagate_classif_changes(nb_upd, all_changes, project)
 
         return len(obj_set)
 
@@ -440,7 +442,8 @@ class ObjectManager(Service):
         # Get the objects and project, checking rights at the same time.
         object_set, project = self._the_project_for(current_user_id, target_ids, Action.ANNOTATE)
         # Do the raw classification with history.
-        nb_upd, all_changes = object_set.classify_validate(current_user_id, classif_ids, wanted_qualif)
+        now = db_server_now(self.session)
+        nb_upd, all_changes = object_set.classify_validate(current_user_id, classif_ids, wanted_qualif, now)
         # Propagate changes to update projects_taxo_stat
         self.propagate_classif_changes(nb_upd, all_changes, project)
         # Return status

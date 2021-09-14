@@ -8,6 +8,7 @@
 #
 # The set comprises all objects from a Project, except the ones filtered by a set of criteria.
 #
+import datetime
 from collections import OrderedDict
 from decimal import Decimal
 from typing import Tuple, Optional, List, Iterator, Callable, Dict, Any
@@ -225,7 +226,6 @@ class EnumeratedObjectSet(MappedTable):
         """
            Copy current classification information into history table, for all rows in self.
            :param only_qual: If set, only historize for current rows with this classification.
-           :param manual: If set, historize manual entries, otherwise, pick automatic ones.
         """
         # Light up a bit the SQLA expressions
         oh = ObjectHeader
@@ -241,7 +241,8 @@ class EnumeratedObjectSet(MappedTable):
         #
         # 'V' and 'D' states: classif_id contains the user-chosen category, which can be either the
         #                     last auto_classif_id, or not if another category was assigned in the UI.
-        #                     There is no specific code for 'accept prediction'.
+        #                     There is no specific code for 'accept prediction',
+        #                     but there is some code for 'validate current' (-1 as target_qualif) .
         #
         manual_states_text = text("'%s','%s'" % (VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL))
         predicted_state = text("'%s'" % PREDICTED_CLASSIF_QUAL)
@@ -272,8 +273,10 @@ class EnumeratedObjectSet(MappedTable):
                              ]),
                              ])
         if only_qual is not None:
+            # Pick only the required states
             qual_cond = oh.classif_qual.in_(only_qual)
         else:
+            # Pick any present state
             qual_cond = oh.classif_qual.isnot(None)
         sel_subqry = sel_subqry.where(and_(oh.objid == any_(self.object_ids),
                                            qual_cond
@@ -386,13 +389,15 @@ class EnumeratedObjectSet(MappedTable):
         histo = self._get_last_classif_history(from_user_id, but_not_from_user_id)
         return histo
 
-    def classify_validate(self, user_id: UserIDT, classif_ids: ClassifIDListT, wanted_qualif: str) \
+    def classify_validate(self, user_id: UserIDT, classif_ids: ClassifIDListT, wanted_qualif: str,
+                          log_timestamp: datetime.datetime) \
             -> Tuple[int, Dict[Tuple, ObjectIDListT]]:
         """
             Set current classifications in self and/or validate current classification.
             :param user_id: The User who did these changes.
             :param classif_ids: One category id for each of the object ids in self. -1 means "keep current".
             :param wanted_qualif: V(alidate) or D(ubious). Use "=" for keeping same qualification.
+            :param log_timestamp: The time to set on objects.
             :returns updated rows and a summary of changes, for MRU and logging.
         """
         # Gather state of classification, for impacted objects, before the change. Keep a lock on rows.
@@ -405,11 +410,14 @@ class EnumeratedObjectSet(MappedTable):
         target_qualif = wanted_qualif
         # A bit of obsessive optimization
         classif_id_col = ObjectHeader.classif_id.name
+        classif_auto_id_col = ObjectHeader.classif_auto_id.name
         classif_qual_col = ObjectHeader.classif_qual.name
         classif_who_col = ObjectHeader.classif_who.name
         classif_when_col = ObjectHeader.classif_when.name
+        classif_auto_when_col = ObjectHeader.classif_auto_when.name
         for obj_id, v in zip(self.object_ids, classif_ids):
             prev_obj = present[obj_id]
+            # Classification change
             prev_classif_id: Optional[int] = prev_obj['classif_id']
             new_classif_id: Optional[int]
             if v == -1:  # special value from validate all
@@ -418,13 +426,16 @@ class EnumeratedObjectSet(MappedTable):
                 new_classif_id = prev_classif_id
             else:
                 new_classif_id = v
+            # Classification quality (state) change
             prev_classif_qual = prev_obj['classif_qual']
             if wanted_qualif == '=':  # special value for 'keep current qualification'
                 # Arrange that no change can happen for this field
                 target_qualif = prev_classif_qual
+            # Operator change
+            prev_operator_id: Optional[int] = prev_obj['classif_who']
             if (prev_classif_id == new_classif_id
                     and prev_classif_qual == target_qualif
-                    and prev_obj['classif_who'] == user_id):
+                    and prev_operator_id == user_id):
                 continue
             # There was at least 1 field change for this object
             an_update = updates.setdefault((new_classif_id, target_qualif), EnumeratedObjectSet(self.session, []))
@@ -442,14 +453,19 @@ class EnumeratedObjectSet(MappedTable):
 
         # Update of obj_head, grouped by similar operations.
         nb_updated = 0
-        sql_now = text("now()")
         for (new_classif_id, new_wanted_qualif), an_obj_set in updates.items():
             # Historize the updated rows (can be a lot!)
             an_obj_set.historize_classification(only_qual=None)
             row_upd = {classif_id_col: new_classif_id,
-                       classif_qual_col: new_wanted_qualif,
-                       classif_who_col: user_id,
-                       classif_when_col: sql_now}
+                       classif_qual_col: new_wanted_qualif}
+            if new_wanted_qualif in (VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL):
+                row_upd.update({classif_who_col: user_id,
+                                classif_when_col: log_timestamp})
+            else:
+                row_upd.update({classif_auto_id_col: new_classif_id,
+                                classif_auto_when_col: log_timestamp,
+                                classif_who_col: None,
+                                classif_when_col: None})
             # Do the update itsef
             nb_updated += an_obj_set.update_all(row_upd)
 
