@@ -22,7 +22,9 @@ types-orjson==3.6.0
 #graphene==2.1.8
 uvloop==0.16.0
 httptools==0.2.0
-uvicorn==0.15.0
+# With 0.16.0: Error "INFO:     ASGI 'lifespan' protocol appears unsupported." and the process
+# does not exit. Seen with 0.15.0 as well.
+uvicorn==0.14.0
 gunicorn==20.1.0
 httpx==0.18.1
 lxml==4.6.3

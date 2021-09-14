@@ -15,8 +15,8 @@ class DirectoryEntryModel(BaseModel):
     """
     name: str = Field(title="atomic entry name")
     type: str = Field(title="entry type, 'D' for directory, 'F' for file")
-    size: int = Field(Title="Entry size, for zips")
-    mtime: str = Field(Title="Modification time, in ISO format")
+    size: int = Field(title="Entry size, for zips")
+    mtime: str = Field(title="Modification time, in ISO format")
 
 
 class DirectoryModel(BaseModel):
