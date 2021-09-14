@@ -14,7 +14,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.openapi.models import OAuthFlows as OAuthFlowsModel
 from fastapi.security import OAuth2
 from fastapi.security.utils import get_authorization_scheme_param
-from itsdangerous import URLSafeTimedSerializer, TimestampSigner, SignatureExpired, BadSignature
+from itsdangerous import URLSafeTimedSerializer, TimestampSigner, SignatureExpired, BadSignature  # type: ignore
 # noinspection PyPackageRequirements
 from starlette.requests import Request
 # noinspection PyPackageRequirements

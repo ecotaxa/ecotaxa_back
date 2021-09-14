@@ -31,7 +31,7 @@ class ReClassificationBO(object):
         """
             Add a log line. In practice, a previous log might be in already, and erased by a rollback.
         """
-        already_there = session.get(TaxonomyChangeLog, (from_id, to_id, project_id))
+        already_there = session.query(TaxonomyChangeLog).get((from_id, to_id, project_id))
         if already_there is None:
             new_line = TaxonomyChangeLog()
             new_line.from_id = from_id
