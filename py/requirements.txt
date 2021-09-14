@@ -1,8 +1,8 @@
 # In theory, should do SQLAlchemy[mypy], but the typings there depend on SQLA 2.0 interface
-SQLAlchemy==1.4.14
+SQLAlchemy==1.4.23
 # So stick to older stubs from DropBox
 sqlalchemy-stubs==0.4
-psycopg2-binary==2.8.6
+psycopg2-binary==2.9.1
 # LS: Pillow needs manual testing
 Pillow==8.1.0
 astral==2.2
