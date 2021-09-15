@@ -379,6 +379,9 @@ def search_projects(current_user: Optional[int] = Depends(get_optional_current_u
         - `param` instrument_filter: Only return projects where this instrument was used
         - `param` filter_subset: Only return projects having 'subset' in their names
         - `params` order_field, window_start, window_size: See accompanying description.
+
+        Note that, for perfomance reasons, in returned ProjectModels, field 'highest_rank' is NOT valued
+        (unlike in simple query). The same information can be found in 'managers', 'annotators' and 'viewers' lists.
     """
     not_granted = not_granted or also_others
     with ProjectsService() as sce:
