@@ -8,14 +8,14 @@ RUN apt-get update
 # gcc make file cython3 # for uvloop for uvicorn needs cython needs make
 RUN apt-get install \
     python3.8 python3-venv python3.8-dev python3.8-venv \
-    postgresql-client \
+    postgresql-client-10 libpq-dev \
     gcc make file cython3 \
     --no-install-recommends --yes
 
 # Get reqs from host
 COPY py/requirements.txt ./reqs_orig.txt
 # Remove typings
-RUN grep -v stubs reqs_orig.txt > reqs.txt
+RUN grep -Ev "(-stubs|^types-)" reqs_orig.txt > reqs.txt
 
 # Create venv, mandatory as we switched away from the python bundled with the OS
 RUN python3.8 -m venv /venv

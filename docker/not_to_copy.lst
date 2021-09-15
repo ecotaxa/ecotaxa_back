@@ -4,4 +4,6 @@ __pycache__
 .idea
 *.log
 .mypy_cache
+run.build
+run.bin
 
