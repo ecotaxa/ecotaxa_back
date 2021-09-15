@@ -426,6 +426,9 @@ class EnumeratedObjectSet(MappedTable):
                 new_classif_id = prev_classif_id
             else:
                 new_classif_id = v
+            # Prevent inconsistency, cannot classify to nothing
+            if new_classif_id is None:
+                continue
             # Classification quality (state) change
             prev_classif_qual = prev_obj['classif_qual']
             if wanted_qualif == '=':  # special value for 'keep current qualification'
