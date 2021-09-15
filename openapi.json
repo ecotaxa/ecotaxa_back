@@ -2,8 +2,18 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.8"
+    "version":"0.0.16"
   },
+  "servers":[
+    {
+      "url":"/api",
+      "description":"External access"
+    },
+    {
+      "url":"/",
+      "description":"Local access"
+    }
+  ],
   "paths":{
     "/login":{
       "post":{
@@ -71,7 +81,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -82,7 +92,7 @@
           "users"
         ],
         "summary":"Show Current User",
-        "description":"Return currently authenticated user. On top of DB fields, 'can_do' lists the allowed system-wide actions.",
+        "description":"Return currently authenticated user. On top of DB fields, 'can_do' lists the allowed system-wide actions:\n    CREATE_PROJECT = 1\n    ADMINISTRATE_APP = 2\n    ADMINISTRATE_USERS = 3\n    CREATE_TAXON = 4",
         "operationId":"show_current_user_users_me_get",
         "responses":{
           "200":{
@@ -98,7 +108,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -156,7 +166,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       },
@@ -165,7 +175,7 @@
           "users"
         ],
         "summary":"Set Current User Prefs",
-        "description":"Set one preference, for project and currently authenticated user.\n-`key`: The preference key\n-`value`: The value to set this preference to",
+        "description":"Set one preference, for project and currently authenticated user.\n-`key`: The preference key\n-`value`: The value to set this preference to.",
         "operationId":"set_current_user_prefs_users_my_preferences__project_id__put",
         "parameters":[
           {
@@ -218,7 +228,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -270,7 +280,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -318,7 +328,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -363,7 +373,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -373,9 +383,9 @@
         "tags":[
           "collections"
         ],
-        "summary":"Search Collection",
-        "description":"Search for collections.\n\n*Currently only for admins*",
-        "operationId":"search_collection_collections_search_get",
+        "summary":"Search Collections",
+        "description":"Search for collections.\nUse % for searching with 'any char'.\n\n*Currently only for admins*",
+        "operationId":"search_collections_collections_search_get",
         "parameters":[
           {
             "required":true,
@@ -393,7 +403,7 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "title":"Response Search Collection Collections Search Get",
+                  "title":"Response Search Collections Collections Search Get",
                   "type":"array",
                   "items":{
                     "$ref":"#/components/schemas/CollectionModel"
@@ -415,7 +425,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -428,6 +438,49 @@
         "summary":"Collection By Title",
         "description":"Return the single collection with this title.\nFor published datasets.\n!!! DO NOT MODIFY BEHAVIOR !!!",
         "operationId":"collection_by_title_collections_by_title_get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Q",
+              "type":"string"
+            },
+            "name":"q",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/CollectionModel"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections/by_short_title":{
+      "get":{
+        "tags":[
+          "collections"
+        ],
+        "summary":"Collection By Short Title",
+        "description":"Return the single collection with this title.\nFor published datasets.\n!!! DO NOT MODIFY BEHAVIOR !!!",
+        "operationId":"collection_by_short_title_collections_by_short_title_get",
         "parameters":[
           {
             "required":true,
@@ -506,7 +559,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       },
@@ -560,7 +613,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       },
@@ -569,7 +622,7 @@
           "collections"
         ],
         "summary":"Erase Collection",
-        "description":"Delete the collection, i.e. the precious fields, as the projects are just unliked from the collection.",
+        "description":"Delete the collection, i.e. the precious fields, as the projects are just linked-at from the collection.",
         "operationId":"erase_collection_collections__collection_id__delete",
         "parameters":[
           {
@@ -604,7 +657,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -688,7 +741,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -699,17 +752,28 @@
           "projects"
         ],
         "summary":"Search Projects",
-        "description":"Return projects for current user, if any.\n- `param` also_others: Allows to return projects for which given user has no right\n- `param` for_managing: Allows to return project that can be written to (including erased) by the given user\n- `param` title_filter: Use this pattern for matching returned projects names\n- `param` instrument_filter: Only return projects where this instrument was used\n- `param` filter_subset: Only return projects having 'subset' in their names",
+        "description":"Return projects which the current user has explicit permission to access, with search options.\n- `param` not_granted: Return projects on which the current user has _no permission_, but visible to him/her\n- `param` for_managing: Return projects that can be written to (including erased) by the current user\n- `param` title_filter: Use this pattern for matching returned projects names\n- `param` instrument_filter: Only return projects where this instrument was used\n- `param` filter_subset: Only return projects having 'subset' in their names\n- `params` order_field, window_start, window_size: See accompanying description.",
         "operationId":"search_projects_projects_search_get",
         "parameters":[
           {
             "required":false,
+            "deprecated":true,
             "schema":{
               "title":"Also Others",
               "type":"boolean",
               "default":false
             },
             "name":"also_others",
+            "in":"query"
+          },
+          {
+            "required":false,
+            "schema":{
+              "title":"Not Granted",
+              "type":"boolean",
+              "default":false
+            },
+            "name":"not_granted",
             "in":"query"
           },
           {
@@ -751,6 +815,39 @@
             },
             "name":"filter_subset",
             "in":"query"
+          },
+          {
+            "description":"One of ['instrument', 'highest_right', 'license', 'projid', 'title', 'visible', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'projtype', 'rf_models_used', 'cnn_network_id']",
+            "required":false,
+            "schema":{
+              "title":"Order Field",
+              "type":"string",
+              "description":"One of ['instrument', 'highest_right', 'license', 'projid', 'title', 'visible', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'projtype', 'rf_models_used', 'cnn_network_id']"
+            },
+            "name":"order_field",
+            "in":"query"
+          },
+          {
+            "description":"Skip `window_start` before returning data",
+            "required":false,
+            "schema":{
+              "title":"Window Start",
+              "type":"integer",
+              "description":"Skip `window_start` before returning data"
+            },
+            "name":"window_start",
+            "in":"query"
+          },
+          {
+            "description":"Return only `window_size` lines",
+            "required":false,
+            "schema":{
+              "title":"Window Size",
+              "type":"integer",
+              "description":"Return only `window_size` lines"
+            },
+            "name":"window_size",
+            "in":"query"
           }
         ],
         "responses":{
@@ -781,7 +878,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -826,7 +923,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -884,7 +981,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -942,7 +1039,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       },
@@ -996,7 +1093,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       },
@@ -1050,7 +1147,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -1112,7 +1209,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -1123,7 +1220,7 @@
           "projects"
         ],
         "summary":"Project Set Get User Stats",
-        "description":"Read projects user statistics.",
+        "description":"Read projects user statistics, i.e. a summary of the work done by users in the\nrequired projects. The returned values are a detail _per project_, so size of input list\nequals size of output list.",
         "operationId":"project_set_get_user_stats_project_set_user_stats_get",
         "parameters":[
           {
@@ -1164,7 +1261,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -1230,7 +1327,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -1276,7 +1373,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -1322,7 +1419,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -1368,19 +1465,19 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
     },
-    "/import_prep/{project_id}":{
+    "/file_import/{project_id}":{
       "post":{
         "tags":[
           "projects"
         ],
-        "summary":"Import Preparation",
-        "description":"Prepare/validate the import of an EcoTaxa archive or directory.",
-        "operationId":"import_preparation_import_prep__project_id__post",
+        "summary":"Import File",
+        "description":"Validate or do a real import of an EcoTaxa archive or directory.",
+        "operationId":"import_file_file_import__project_id__post",
         "parameters":[
           {
             "required":true,
@@ -1396,7 +1493,7 @@
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/ImportPrepReq"
+                "$ref":"#/components/schemas/ImportReq"
               }
             }
           },
@@ -1408,7 +1505,7 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "$ref":"#/components/schemas/ImportPrepRsp"
+                  "$ref":"#/components/schemas/ImportRsp"
                 }
               }
             }
@@ -1426,65 +1523,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
-          }
-        ]
-      }
-    },
-    "/import_real/{project_id}":{
-      "post":{
-        "tags":[
-          "projects"
-        ],
-        "summary":"Real Import",
-        "description":"Import an EcoTaxa archive or directory.",
-        "operationId":"real_import_import_real__project_id__post",
-        "parameters":[
-          {
-            "required":true,
-            "schema":{
-              "title":"Project Id",
-              "type":"integer"
-            },
-            "name":"project_id",
-            "in":"path"
-          }
-        ],
-        "requestBody":{
-          "content":{
-            "application/json":{
-              "schema":{
-                "$ref":"#/components/schemas/ImportRealReq"
-              }
-            }
-          },
-          "required":true
-        },
-        "responses":{
-          "200":{
-            "description":"Successful Response",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/ImportRealRsp"
-                }
-              }
-            }
-          },
-          "422":{
-            "description":"Validation Error",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security":[
-          {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -1495,7 +1534,7 @@
           "projects"
         ],
         "summary":"Simple Import",
-        "description":"Import images only, with same metadata for all.",
+        "description":"Import images only, with same metadata for all.\n- param `dry_run`: If set, then _only_ a diagnostic of do-ability will be done.\n    In this case, plain value check.\nIf no dry_run, this call will create a background job.",
         "operationId":"simple_import_simple_import__project_id__post",
         "parameters":[
           {
@@ -1506,6 +1545,15 @@
             },
             "name":"project_id",
             "in":"path"
+          },
+          {
+            "required":true,
+            "schema":{
+              "title":"Dry Run",
+              "type":"boolean"
+            },
+            "name":"dry_run",
+            "in":"query"
           }
         ],
         "requestBody":{
@@ -1542,7 +1590,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -1603,7 +1651,59 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/sample_set/taxo_stats":{
+      "get":{
+        "tags":[
+          "samples"
+        ],
+        "summary":"Sample Set Get Stats",
+        "description":"Read classification statistics for a set of samples.\nEXPECT A SLOW RESPONSE. No cache of such information anywhere.\n\n- sample_ids: any(non number)-separated list of sample numbers",
+        "operationId":"sample_set_get_stats_sample_set_taxo_stats_get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Sample Ids",
+              "type":"string"
+            },
+            "name":"sample_ids",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Sample Set Get Stats Sample Set Taxo Stats Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/SampleTaxoStatsModel"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -1648,7 +1748,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -1696,7 +1796,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -1748,7 +1848,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -1793,7 +1893,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -1841,7 +1941,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -1936,7 +2036,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -1984,7 +2084,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -1995,7 +2095,7 @@
           "objects"
         ],
         "summary":"Get Object Set",
-        "description":"Return object ids for the given project with the filters.\n\nOptionally:\n\n    - fields will specify the needed object (and ancilliary entities) fields\n    - order_field will order the result using given field, If prefixed with \"-\" then it will be reversed.\n    - window_start & window_size allows to return only a slice of the result.\n\nFields follow the naming convention: `prefix.field`. Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n    - Column obj.imgcount contains the total count of images for the object.",
+        "description":"Return object ids for the given project with the filters.\n\nOptionally:\n\n    - fields will specify the needed object (and ancilliary entities) fields\n    - order_field will order the result using given field, If prefixed with \"-\" then it will be reversed.\n    - window_start & window_size allows to return only a slice of the result.\n\nFields follow the naming convention: `prefix.field`.\n    Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n    Use a comma to separate fields.\n    - Column obj.imgcount contains the total count of images for the object.",
         "operationId":"get_object_set_object_set__project_id__query_post",
         "parameters":[
           {
@@ -2078,7 +2178,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -2145,7 +2245,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -2201,7 +2301,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -2277,7 +2377,81 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/object_set/{project_id}/reclassify":{
+      "post":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Reclassify Object Set",
+        "description":"Regardless of present classification or state, set the new classification for this object set.\nIf the filter designates \"all with given classification\", add a TaxonomyChangeLog entry.\n:returns the number of affected objects.",
+        "operationId":"reclassify_object_set_object_set__project_id__reclassify_post",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Project Id",
+              "type":"integer"
+            },
+            "name":"project_id",
+            "in":"path"
+          },
+          {
+            "required":true,
+            "schema":{
+              "title":"Forced Id",
+              "type":"integer"
+            },
+            "name":"forced_id",
+            "in":"query"
+          },
+          {
+            "required":true,
+            "schema":{
+              "title":"Reason",
+              "type":"string"
+            },
+            "name":"reason",
+            "in":"query"
+          }
+        ],
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/ProjectFilters"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -2322,7 +2496,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -2367,7 +2541,52 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/object_set/classify_auto":{
+      "post":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Classify Auto Object Set",
+        "description":"Set automatic classification of a set of objects.\n - `params`: None, all is in the Request body.",
+        "operationId":"classify_auto_object_set_object_set_classify_auto_post",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/ClassifyAutoReq"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -2418,7 +2637,54 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/object_set/export":{
+      "post":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Export Object Set",
+        "description":"Start an export job for the given object set and options.",
+        "operationId":"export_object_set_object_set_export_post",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/Body_export_object_set_object_set_export_post"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/ExportRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -2467,7 +2733,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -2515,7 +2781,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -2567,7 +2833,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -2620,7 +2886,105 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/taxa/reclassification_stats":{
+      "get":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Reclassif Stats",
+        "description":"Dig into reclassification logs and, for each input category id, determine the most chosen target category,\nexcluding the advised one.\nBy convention, if nothing relevant is found, the input category itself is returned. So one can expect\nthat the returned list has the same size as the required one.",
+        "operationId":"reclassif_stats_taxa_reclassification_stats_get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Taxa Ids",
+              "type":"string"
+            },
+            "name":"taxa_ids",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Reclassif Stats Taxa Reclassification Stats Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/TaxonModel"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/taxa/reclassification_history/{project_id}":{
+      "get":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Reclassif Project Stats",
+        "description":"Dig into reclassification logs and return the associations source->target for previous reclassifications.",
+        "operationId":"reclassif_project_stats_taxa_reclassification_history__project_id__get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Project Id",
+              "type":"integer"
+            },
+            "name":"project_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -2668,7 +3032,59 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/taxon/{taxon_id}/usage":{
+      "get":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Query Taxa Usage",
+        "description":"Where a given taxon is used. Only validated uses are returned.",
+        "operationId":"query_taxa_usage_taxon__taxon_id__usage_get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Taxon Id",
+              "type":"integer"
+            },
+            "name":"taxon_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Query Taxa Usage Taxon  Taxon Id  Usage Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/TaxonUsageModel"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -2692,7 +3108,7 @@
             "in":"query"
           },
           {
-            "required":true,
+            "required":false,
             "schema":{
               "title":"Project Id",
               "type":"integer"
@@ -2729,7 +3145,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -2781,7 +3197,681 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/taxon/central/{taxon_id}":{
+      "get":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Get Taxon In Central",
+        "description":"Get EcoTaxoServer full record for this taxon.",
+        "operationId":"get_taxon_in_central_taxon_central__taxon_id__get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Taxon Id",
+              "type":"integer"
+            },
+            "name":"taxon_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/taxon/central":{
+      "put":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Add Taxon In Central",
+        "description":"Create a taxon on EcoTaxoServer.\nLogged user must be manager (on any project) or application admin.",
+        "operationId":"add_taxon_in_central_taxon_central_put",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Name",
+              "type":"string"
+            },
+            "name":"name",
+            "in":"query"
+          },
+          {
+            "required":true,
+            "schema":{
+              "title":"Parent Id",
+              "type":"integer"
+            },
+            "name":"parent_id",
+            "in":"query"
+          },
+          {
+            "required":true,
+            "schema":{
+              "title":"Taxotype",
+              "type":"string"
+            },
+            "name":"taxotype",
+            "in":"query"
+          },
+          {
+            "required":true,
+            "schema":{
+              "title":"Creator Email",
+              "type":"string"
+            },
+            "name":"creator_email",
+            "in":"query"
+          },
+          {
+            "required":false,
+            "schema":{
+              "title":"Source Desc",
+              "type":"string"
+            },
+            "name":"source_desc",
+            "in":"query"
+          },
+          {
+            "required":false,
+            "schema":{
+              "title":"Source Url",
+              "type":"string"
+            },
+            "name":"source_url",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/taxa/stats/push_to_central":{
+      "get":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Push Taxa Stats In Central",
+        "description":"Push present instance stats into EcoTaxoServer.",
+        "operationId":"push_taxa_stats_in_central_taxa_stats_push_to_central_get",
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/taxa/pull_from_central":{
+      "get":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Pull Taxa Update From Central",
+        "description":"Get what changed in EcoTaxoServer managed tree and update local tree accordingly.",
+        "operationId":"pull_taxa_update_from_central_taxa_pull_from_central_get",
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/jobs/":{
+      "get":{
+        "tags":[
+          "jobs"
+        ],
+        "summary":"List Jobs",
+        "description":"Return the jobs for current user, or all of them if admin and asked for.",
+        "operationId":"list_jobs_jobs__get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"For Admin",
+              "type":"boolean"
+            },
+            "name":"for_admin",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response List Jobs Jobs  Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/JobModel"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/jobs/{job_id}/":{
+      "get":{
+        "tags":[
+          "jobs"
+        ],
+        "summary":"Get Job",
+        "description":"Return the job by its id.",
+        "operationId":"get_job_jobs__job_id___get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Job Id",
+              "type":"integer"
+            },
+            "name":"job_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/JobModel"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/jobs/{job_id}/answer":{
+      "post":{
+        "tags":[
+          "jobs"
+        ],
+        "summary":"Reply Job Question",
+        "description":"Send answers to last question. The job resumes after it receives the reply.\nNote: It's only about data storage here.\nIf the data is technically NOK e.g. not a JS object, standard 422 error should be thrown.\nIf the data is incorrect from consistency point of view, the job will return in Asking state.",
+        "operationId":"reply_job_question_jobs__job_id__answer_post",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Job Id",
+              "type":"integer"
+            },
+            "name":"job_id",
+            "in":"path"
+          }
+        ],
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "title":"Reply",
+                "type":"object"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/jobs/{job_id}/restart":{
+      "get":{
+        "tags":[
+          "jobs"
+        ],
+        "summary":"Restart Job",
+        "description":"Restart the job by its id.\nThe job must be in a restartable state, and be accessible to current user.",
+        "operationId":"restart_job_jobs__job_id__restart_get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Job Id",
+              "type":"integer"
+            },
+            "name":"job_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/jobs/{job_id}/log":{
+      "get":{
+        "tags":[
+          "jobs"
+        ],
+        "summary":"Get Job Log File",
+        "description":"Return the log file produced by given task.\nThe task must belong to requester.",
+        "operationId":"get_job_log_file_jobs__job_id__log_get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Job Id",
+              "type":"integer"
+            },
+            "name":"job_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/jobs/{job_id}/file":{
+      "get":{
+        "tags":[
+          "jobs"
+        ],
+        "summary":"Get Job File",
+        "description":"Return the file produced by given task.\nThe task must belong to requester.",
+        "operationId":"get_job_file_jobs__job_id__file_get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Job Id",
+              "type":"integer"
+            },
+            "name":"job_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Return the produced file.",
+            "content":{
+              "application/json":{
+                "schema":{}
+              },
+              "application/zip":{},
+              "text/tab-separated-values":{}
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/jobs/{job_id}":{
+      "delete":{
+        "tags":[
+          "jobs"
+        ],
+        "summary":"Erase Job",
+        "description":"Delete the job, from DB and with associated storage.\nIf the job is running then kill it.",
+        "operationId":"erase_job_jobs__job_id__delete",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Job Id",
+              "type":"integer"
+            },
+            "name":"job_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/my_files/{sub_path}":{
+      "get":{
+        "tags":[
+          "Files"
+        ],
+        "summary":"List User Files",
+        "description":"List the private files which are usable for some file-related operations e.g. import.",
+        "operationId":"list_user_files_my_files__sub_path__get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Sub Path",
+              "type":"string"
+            },
+            "name":"sub_path",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/DirectoryModel"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/my_files/":{
+      "post":{
+        "tags":[
+          "Files"
+        ],
+        "summary":"Put User File",
+        "description":"Upload a file for the current user. The returned text will contain a serve-side path\nwhich is usable for some file-related operations e.g. import.",
+        "operationId":"put_user_file_my_files__post",
+        "requestBody":{
+          "content":{
+            "multipart/form-data":{
+              "schema":{
+                "$ref":"#/components/schemas/Body_put_user_file_my_files__post"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Put User File My Files  Post",
+                  "type":"string"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/common_files/":{
+      "get":{
+        "tags":[
+          "Files"
+        ],
+        "summary":"List Common Files",
+        "description":"List the common files which are usable for some file-related operations e.g. import.",
+        "operationId":"list_common_files_common_files__get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Path",
+              "type":"string"
+            },
+            "name":"path",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/DirectoryModel"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -2806,54 +3896,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
-          }
-        ]
-      }
-    },
-    "/tasks/{task_id}/file":{
-      "get":{
-        "tags":[
-          "task"
-        ],
-        "summary":"Get Task File",
-        "description":"Return the file produced by given task.\nThe task must belong to requester.",
-        "operationId":"get_task_file_tasks__task_id__file_get",
-        "parameters":[
-          {
-            "required":true,
-            "schema":{
-              "title":"Task Id",
-              "type":"integer"
-            },
-            "name":"task_id",
-            "in":"path"
-          }
-        ],
-        "responses":{
-          "200":{
-            "description":"Return the file.",
-            "content":{
-              "application/json":{
-                "schema":{}
-              },
-              "application/zip":{}
-            }
-          },
-          "422":{
-            "description":"Validation Error",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security":[
-          {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -2878,7 +3921,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -2913,7 +3956,7 @@
         },
         "security":[
           {
-            "HTTPBearer":[]
+            "BearerOrCookieAuth":[]
           }
         ]
       }
@@ -2974,6 +4017,44 @@
           }
         }
       },
+      "Body_export_object_set_object_set_export_post":{
+        "title":"Body_export_object_set_object_set_export_post",
+        "required":[
+          "filters",
+          "request"
+        ],
+        "type":"object",
+        "properties":{
+          "filters":{
+            "$ref":"#/components/schemas/ProjectFilters"
+          },
+          "request":{
+            "$ref":"#/components/schemas/ExportReq"
+          }
+        }
+      },
+      "Body_put_user_file_my_files__post":{
+        "title":"Body_put_user_file_my_files__post",
+        "required":[
+          "file"
+        ],
+        "type":"object",
+        "properties":{
+          "file":{
+            "title":"File",
+            "type":"string",
+            "format":"binary"
+          },
+          "path":{
+            "title":"Path",
+            "type":"string"
+          },
+          "tag":{
+            "title":"Tag",
+            "type":"string"
+          }
+        }
+      },
       "BulkUpdateReq":{
         "title":"BulkUpdateReq",
         "required":[
@@ -2994,6 +4075,61 @@
             "type":"array",
             "items":{}
           }
+        }
+      },
+      "ClassifyAutoReq":{
+        "title":"ClassifyAutoReq",
+        "required":[
+          "target_ids",
+          "classifications",
+          "scores",
+          "keep_log"
+        ],
+        "type":"object",
+        "properties":{
+          "target_ids":{
+            "title":"The IDs of the target objects",
+            "type":"array",
+            "items":{
+              "type":"integer"
+            }
+          },
+          "classifications":{
+            "title":"The wanted new classifications, i.e. taxon ID, one for each object. ",
+            "type":"array",
+            "items":{
+              "type":"integer"
+            }
+          },
+          "scores":{
+            "title":"The classification scores, generally b/w 0 and 1. ",
+            "type":"array",
+            "items":{
+              "type":"number"
+            }
+          },
+          "keep_log":{
+            "title":"Set if former automatic classification history is needed. ",
+            "type":"boolean"
+          }
+        },
+        "example":{
+          "target_ids":[
+            634509,
+            6234516,
+            976544
+          ],
+          "classifications":[
+            7546,
+            3421,
+            788
+          ],
+          "scores":[
+            0.4,
+            0.56,
+            0.38
+          ],
+          "keep_log":false
         }
       },
       "ClassifyReq":{
@@ -3107,6 +4243,10 @@
             "title":"Title",
             "type":"string"
           },
+          "short_title":{
+            "title":"Short Title",
+            "type":"string"
+          },
           "citation":{
             "title":"Citation",
             "type":"string"
@@ -3204,6 +4344,57 @@
           }
         }
       },
+      "DirectoryEntryModel":{
+        "title":"DirectoryEntryModel",
+        "required":[
+          "name",
+          "type",
+          "size",
+          "mtime"
+        ],
+        "type":"object",
+        "properties":{
+          "name":{
+            "title":"atomic entry name",
+            "type":"string"
+          },
+          "type":{
+            "title":"entry type, 'D' for directory, 'F' for file",
+            "type":"string"
+          },
+          "size":{
+            "title":"Entry size, for zips",
+            "type":"integer"
+          },
+          "mtime":{
+            "title":"Modification time, in ISO format",
+            "type":"string"
+          }
+        },
+        "description":"Something inside a directory, i.e. a sub-directory or a file"
+      },
+      "DirectoryModel":{
+        "title":"DirectoryModel",
+        "required":[
+          "path",
+          "entries"
+        ],
+        "type":"object",
+        "properties":{
+          "path":{
+            "title":"A /-separated path from root to this directory",
+            "type":"string"
+          },
+          "entries":{
+            "title":"Entries, i.e. subdirectories or contained files. All entries are readable, i.e. can be used as input or navigated into.",
+            "type":"array",
+            "items":{
+              "$ref":"#/components/schemas/DirectoryEntryModel"
+            }
+          }
+        },
+        "description":"A path + list of entries inside. The path is relative to an implied root."
+      },
       "EMODnetExportRsp":{
         "title":"EMODnetExportRsp",
         "type":"object",
@@ -3224,13 +4415,130 @@
             },
             "default":[]
           },
-          "task_id":{
-            "title":"The created task, 0 if there were problems.",
+          "job_id":{
+            "title":"The created job, 0 if there were problems.",
             "type":"integer",
             "default":0
           }
         },
         "description":"EMODNet format export response."
+      },
+      "ExportReq":{
+        "title":"ExportReq",
+        "required":[
+          "project_id",
+          "exp_type",
+          "tsv_entities",
+          "split_by",
+          "coma_as_separator",
+          "format_dates_times",
+          "with_images",
+          "with_internal_ids",
+          "only_first_image",
+          "sum_subtotal",
+          "out_to_ftp"
+        ],
+        "type":"object",
+        "properties":{
+          "project_id":{
+            "title":"The project to export",
+            "type":"integer"
+          },
+          "exp_type":{
+            "title":"The export type: 'TSV', 'BAK', 'DOI' or 'SUM'.",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/ExportTypeEnum"
+              }
+            ]
+          },
+          "tsv_entities":{
+            "title":"For 'TSV' type, the entities to export, one letter for each of O(bject), P(rocess), A(cquisition), S(ample), classification H(istory), C(omments).",
+            "type":"string"
+          },
+          "split_by":{
+            "title":"For 'TSV' type, inside archives, split in one directory per... 'sample', 'taxo' or '' (no split)",
+            "type":"string"
+          },
+          "coma_as_separator":{
+            "title":"For 'TSV' type, use a , instead of . for decimal separator.",
+            "type":"boolean"
+          },
+          "format_dates_times":{
+            "title":"For 'TSV' type, format dates and times using - and : respectively.",
+            "type":"boolean"
+          },
+          "with_images":{
+            "title":"For 'BAK' and 'DOI' types, export images as well.",
+            "type":"boolean"
+          },
+          "with_internal_ids":{
+            "title":"For 'BAK' and 'DOI' types, export internal DB IDs.",
+            "type":"boolean"
+          },
+          "only_first_image":{
+            "title":"For 'DOI' type, export only first (displayed) image.",
+            "type":"boolean"
+          },
+          "sum_subtotal":{
+            "title":"For 'SUM' type, how subtotals should be calculated. Per A(cquisition) or S(ample) or ''",
+            "type":"string"
+          },
+          "out_to_ftp":{
+            "title":"Copy result file to FTP area. Original file is still available.",
+            "type":"boolean"
+          }
+        },
+        "description":"Export request."
+      },
+      "ExportRsp":{
+        "title":"ExportRsp",
+        "type":"object",
+        "properties":{
+          "errors":{
+            "title":"Showstopper problems found while building the archive.",
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "default":[]
+          },
+          "warnings":{
+            "title":"Problems found while building the archive, which do not prevent producing it.",
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "default":[]
+          },
+          "job_id":{
+            "title":"The created job, 0 if there were problems.",
+            "type":"integer",
+            "default":0
+          }
+        },
+        "description":"Export response.\nTODO: Should inherit the other way round."
+      },
+      "ExportTypeEnum":{
+        "title":"ExportTypeEnum",
+        "enum":[
+          "TSV",
+          "BAK",
+          "DOI",
+          "SUM"
+        ],
+        "type":"string",
+        "description":"An enumeration."
+      },
+      "GroupDefinitions":{
+        "title":"GroupDefinitions",
+        "enum":[
+          "C",
+          "S",
+          "A"
+        ],
+        "type":"string",
+        "description":"An enumeration."
       },
       "HTTPValidationError":{
         "title":"HTTPValidationError",
@@ -3325,6 +4633,13 @@
       },
       "ImageModel":{
         "title":"ImageModel",
+        "required":[
+          "imgrank",
+          "file_name",
+          "orig_file_name",
+          "width",
+          "height"
+        ],
         "type":"object",
         "properties":{
           "imgid":{
@@ -3369,24 +4684,19 @@
           }
         }
       },
-      "ImportPrepReq":{
-        "title":"ImportPrepReq",
+      "ImportReq":{
+        "title":"ImportReq",
         "required":[
-          "task_id",
           "source_path"
         ],
         "type":"object",
         "properties":{
-          "task_id":{
-            "title":"The existing task to use",
-            "type":"integer"
-          },
           "source_path":{
-            "title":"Source path on server, to zip or plain directory",
+            "title":"Source path on server, to zip or plain directory. The path can be returned by a file upload (absolute), otherwise it's relative to shared file area root.",
             "type":"string"
           },
           "taxo_mappings":{
-            "title":"Optional taxonomy mapping",
+            "title":"Optional taxonomy mapping, key=taxo ID found in file, value=final taxo ID to write",
             "type":"object",
             "additionalProperties":{
               "type":"string"
@@ -3409,55 +4719,18 @@
             "default":""
           }
         },
-        "description":"Import preparation, request. "
+        "description":"Import request, from UI choices. "
       },
-      "ImportPrepRsp":{
-        "title":"ImportPrepRsp",
+      "ImportRsp":{
+        "title":"ImportRsp",
         "required":[
-          "source_path"
+          "job_id"
         ],
         "type":"object",
         "properties":{
-          "source_path":{
-            "title":"Eventually amended source path on server",
-            "type":"string"
-          },
-          "mappings":{
-            "title":"Fields mapping",
-            "type":"object",
-            "additionalProperties":{
-              "type":"object",
-              "additionalProperties":{
-                "type":"string"
-              }
-            },
-            "default":{}
-          },
-          "found_users":{
-            "title":"Users found in TSV files",
-            "type":"object",
-            "additionalProperties":{
-              "type":"object"
-            },
-            "description":"key = user name; value = dict with (key = 'id' if resolved, else 'email')",
-            "default":{}
-          },
-          "found_taxa":{
-            "title":"Taxa found without ID in TSV files",
-            "type":"object",
-            "additionalProperties":{
-              "type":"integer"
-            },
-            "description":"key = taxon NAME; value = taxon ID if resolved, else None",
-            "default":{}
-          },
-          "warnings":{
-            "title":"Warnings from analysis",
-            "type":"array",
-            "items":{
-              "type":"string"
-            },
-            "default":[]
+          "job_id":{
+            "title":"The job which was created for the run",
+            "type":"integer"
           },
           "errors":{
             "title":"Errors from analysis",
@@ -3465,98 +4738,103 @@
             "items":{
               "type":"string"
             },
-            "description":"Do NOT proceed to real import if not empty.",
             "default":[]
-          },
-          "rowcount":{
-            "title":"Number of TSV rows, counted during validation",
-            "type":"integer",
-            "default":0
           }
         },
-        "description":"Import preparation, response. "
+        "description":"Import response. "
       },
-      "ImportRealReq":{
-        "title":"ImportRealReq",
+      "JobModel":{
+        "title":"JobModel",
         "required":[
-          "task_id",
-          "source_path"
+          "owner_id",
+          "type",
+          "creation_date",
+          "updated_on"
         ],
         "type":"object",
         "properties":{
-          "task_id":{
-            "title":"The existing task to use",
-            "type":"integer"
-          },
-          "source_path":{
-            "title":"Source path on server, to plain directory",
-            "type":"string"
-          },
-          "taxo_mappings":{
-            "title":"Optional taxonomy mapping",
+          "params":{
+            "title":"Creation parameters",
             "type":"object",
-            "additionalProperties":{
+            "default":{}
+          },
+          "result":{
+            "title":"Final result of the run",
+            "type":"object",
+            "default":{}
+          },
+          "errors":{
+            "title":"The errors seen during last step",
+            "type":"array",
+            "items":{
               "type":"string"
             },
+            "default":[]
+          },
+          "question":{
+            "title":"The data provoking job move to Asking state",
+            "type":"object",
             "default":{}
           },
-          "skip_loaded_files":{
-            "title":"Skip Loaded Files",
-            "type":"boolean",
-            "default":false
+          "reply":{
+            "title":"The data provided as a reply to the question",
+            "type":"object",
+            "default":{}
           },
-          "skip_existing_objects":{
-            "title":"Skip Existing Objects",
-            "type":"boolean",
-            "default":false
+          "inside":{
+            "title":"Internal state of the job",
+            "type":"object",
+            "default":{}
           },
-          "update_mode":{
-            "title":"Update data ('Yes'), including classification ('Cla')",
+          "id":{
+            "title":"Id",
+            "type":"integer"
+          },
+          "owner_id":{
+            "title":"Owner Id",
+            "type":"integer"
+          },
+          "type":{
+            "title":"Type",
+            "type":"string"
+          },
+          "state":{
+            "title":"State",
+            "type":"string"
+          },
+          "step":{
+            "title":"Step",
+            "type":"integer"
+          },
+          "progress_pct":{
+            "title":"Progress Pct",
+            "type":"integer"
+          },
+          "progress_msg":{
+            "title":"Progress Msg",
+            "type":"string"
+          },
+          "creation_date":{
+            "title":"Creation Date",
             "type":"string",
-            "default":""
+            "format":"date-time"
           },
-          "mappings":{
-            "title":"Fields mapping",
-            "type":"object",
-            "additionalProperties":{
-              "type":"object",
-              "additionalProperties":{
-                "type":"string"
-              }
-            },
-            "default":{}
-          },
-          "found_users":{
-            "title":"Users found in TSV files",
-            "type":"object",
-            "additionalProperties":{
-              "type":"object"
-            },
-            "description":"key = user name; value = dict with (key = 'id' if resolved, else 'email')",
-            "default":{}
-          },
-          "found_taxa":{
-            "title":"Taxa found in TSV files",
-            "type":"object",
-            "additionalProperties":{
-              "type":"integer"
-            },
-            "description":"key = taxon NAME; value = taxon ID if resolved, else None",
-            "default":{}
-          },
-          "rowcount":{
-            "title":"Number of TSV rows, counted during validation",
-            "type":"integer",
-            "default":0
+          "updated_on":{
+            "title":"Updated On",
+            "type":"string",
+            "format":"date-time"
           }
         },
-        "description":"Import for real, request. "
+        "description":"All from DB table"
       },
-      "ImportRealRsp":{
-        "title":"ImportRealRsp",
-        "type":"object",
-        "properties":{},
-        "description":"Import for real, response. "
+      "LimitMethods":{
+        "title":"LimitMethods",
+        "enum":[
+          "P",
+          "V"
+        ],
+        "type":"string",
+        "description":"An enumeration."
       },
       "LoginReq":{
         "title":"LoginReq",
@@ -4133,6 +5411,10 @@
             },
             "default":[]
           },
+          "instrument":{
+            "title":"This project's instrument. Transitory: if several of them, then coma-separated",
+            "type":"string"
+          },
           "contact":{
             "title":"The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.",
             "allOf":[
@@ -4258,7 +5540,7 @@
             "type":"integer"
           },
           "used_taxa":{
-            "title":"The taxa/category ids used inside the project",
+            "title":"The taxa/category ids used inside the project. An id of -1 means some unclassified objects",
             "type":"array",
             "items":{
               "type":"integer"
@@ -4292,10 +5574,17 @@
             "type":"integer"
           },
           "annotators":{
-            "title":"The users who decided on present classification of objects",
+            "title":"The users who ever decided on classification or state of objects",
             "type":"array",
             "items":{
               "$ref":"#/components/schemas/MinimalUserBO"
+            }
+          },
+          "activities":{
+            "title":"More details on annotators' activities",
+            "type":"array",
+            "items":{
+              "$ref":"#/components/schemas/UserActivity"
             }
           }
         }
@@ -4338,25 +5627,53 @@
           }
         }
       },
+      "SampleTaxoStatsModel":{
+        "title":"SampleTaxoStatsModel",
+        "type":"object",
+        "properties":{
+          "sample_id":{
+            "title":"The sample id",
+            "type":"integer"
+          },
+          "used_taxa":{
+            "title":"The taxa/category ids used inside the sample. -1 for unclassified objects",
+            "type":"array",
+            "items":{
+              "type":"integer"
+            }
+          },
+          "nb_unclassified":{
+            "title":"The number of unclassified objects inside the sample",
+            "type":"integer"
+          },
+          "nb_validated":{
+            "title":"The number of validated objects inside the sample",
+            "type":"integer"
+          },
+          "nb_dubious":{
+            "title":"The number of dubious objects inside the sample",
+            "type":"integer"
+          },
+          "nb_predicted":{
+            "title":"The number of predicted objects inside the sample",
+            "type":"integer"
+          }
+        }
+      },
       "SimpleImportReq":{
         "title":"SimpleImportReq",
         "required":[
-          "task_id",
           "source_path",
           "values"
         ],
         "type":"object",
         "properties":{
-          "task_id":{
-            "title":"The existing task to use, if 0 then it's a dry run",
-            "type":"integer"
-          },
           "source_path":{
             "title":"Source path on server, to zip or plain directory",
             "type":"string"
           },
           "values":{
-            "title":"Constant values, per field, to write for all images.",
+            "title":"Constant values, per field, to write for all images. If a field has no value don't include it.",
             "type":"object",
             "additionalProperties":{
               "type":"string"
@@ -4382,26 +5699,26 @@
             ]
           }
         },
-        "description":"Simple Import preparation, request. "
+        "description":"Simple Import request. "
       },
       "SimpleImportRsp":{
         "title":"SimpleImportRsp",
         "required":[
-          "errors",
-          "nb_images"
+          "job_id",
+          "errors"
         ],
         "type":"object",
         "properties":{
+          "job_id":{
+            "title":"The job which was created for the run. 0 if called with dry_run option.",
+            "type":"integer"
+          },
           "errors":{
-            "title":"Validation, copy or insert errors",
+            "title":"Validation errors, dry_run or not.",
             "type":"array",
             "items":{
               "type":"string"
             }
-          },
-          "nb_images":{
-            "title":"Number of successfully imported images",
-            "type":"integer"
           }
         },
         "description":"Simple Import, response. "
@@ -4409,18 +5726,14 @@
       "SubsetReq":{
         "title":"SubsetReq",
         "required":[
-          "task_id",
           "dest_prj_id",
+          "group_type",
           "limit_type",
           "limit_value",
           "do_images"
         ],
         "type":"object",
         "properties":{
-          "task_id":{
-            "title":"The existing task to use.",
-            "type":"integer"
-          },
           "filters":{
             "title":"The filters to apply to project",
             "type":"object",
@@ -4433,16 +5746,24 @@
             "title":"The destination project ID.",
             "type":"integer"
           },
+          "group_type":{
+            "title":"Define the groups in which to apply limits. C for categories, S for samples, A for acquisitions.",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/GroupDefinitions"
+              }
+            ]
+          },
           "limit_type":{
-            "title":"The type of limit_value: P for %, V for constant, both per category.",
-            "enum":[
-              "P",
-              "V"
-            ],
-            "type":"string"
+            "title":"The type of limit_value: P for %, V for constant, both per group.",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/LimitMethods"
+              }
+            ]
           },
           "limit_value":{
-            "title":"Limit value, e.g. 20% or 5 per copepoda.",
+            "title":"Limit value, e.g. 20% or 5 per copepoda or 5% per sample.",
             "type":"number"
           },
           "do_images":{
@@ -4454,15 +5775,14 @@
       },
       "SubsetRsp":{
         "title":"SubsetRsp",
+        "required":[
+          "job_id"
+        ],
         "type":"object",
         "properties":{
-          "errors":{
-            "title":"The errors found during processing",
-            "type":"array",
-            "items":{
-              "type":"string"
-            },
-            "default":[]
+          "job_id":{
+            "title":"The job created for this operation.",
+            "type":"integer"
           }
         },
         "description":"Subset response. "
@@ -4480,6 +5800,10 @@
             "title":"The taxon/category IDs.",
             "type":"integer"
           },
+          "renm_id":{
+            "title":"The advised replacement ID iif the taxon/category is deprecated.",
+            "type":"integer"
+          },
           "text":{
             "title":"The taxon name, display one.",
             "type":"string"
@@ -4495,6 +5819,7 @@
         "required":[
           "id",
           "name",
+          "type",
           "nb_objects",
           "nb_children_objects",
           "display_name",
@@ -4508,8 +5833,16 @@
             "title":"The taxon/category IDs.",
             "type":"integer"
           },
+          "renm_id":{
+            "title":"The advised replacement ID iif the taxon/category is deprecated.",
+            "type":"integer"
+          },
           "name":{
             "title":"The taxon/category verbatim name.",
+            "type":"string"
+          },
+          "type":{
+            "title":"The taxon/category type, 'M' or 'P'",
             "type":"string"
           },
           "nb_objects":{
@@ -4547,12 +5880,53 @@
           }
         }
       },
+      "TaxonUsageModel":{
+        "title":"TaxonUsageModel",
+        "required":[
+          "projid",
+          "title",
+          "nb_validated"
+        ],
+        "type":"object",
+        "properties":{
+          "projid":{
+            "title":"Project unique identifier",
+            "type":"integer"
+          },
+          "title":{
+            "title":"Project title",
+            "type":"string"
+          },
+          "nb_validated":{
+            "title":"How many validated objects in this category in this project",
+            "type":"integer"
+          }
+        }
+      },
       "TaxonomyTreeStatus":{
         "title":"TaxonomyTreeStatus",
         "type":"object",
         "properties":{
           "last_refresh":{
             "title":"Taxonomy tree last refresh/sync from taxonomy server. Date, with format YYYY-MM-DDThh:mm:ss.",
+            "type":"string"
+          }
+        }
+      },
+      "UserActivity":{
+        "title":"UserActivity",
+        "type":"object",
+        "properties":{
+          "id":{
+            "title":"Id",
+            "type":"integer"
+          },
+          "nb_actions":{
+            "title":"Nb Actions",
+            "type":"integer"
+          },
+          "last_annot":{
+            "title":"Last Annot",
             "type":"string"
           }
         }
@@ -4687,9 +6061,14 @@
       }
     },
     "securitySchemes":{
-      "HTTPBearer":{
-        "type":"http",
-        "scheme":"bearer"
+      "BearerOrCookieAuth":{
+        "type":"oauth2",
+        "flows":{
+          "password":{
+            "scopes":{},
+            "tokenUrl":"/token"
+          }
+        }
       }
     }
   }
