@@ -59,7 +59,7 @@ from BO.Object import ObjectBO
 from BO.ObjectSet import ObjectIDListT
 from BO.Preferences import Preferences
 from BO.Process import ProcessBO
-from BO.Project import ProjectBO, ProjectTaxoStats, ProjectUserStats
+from BO.Project import ProjectBO, ProjectUserStats
 from BO.Rights import RightsBO
 from BO.Sample import SampleBO
 from BO.Taxonomy import TaxonBO
@@ -436,7 +436,8 @@ def project_query(project_id: int,
 @app.get("/project_set/taxo_stats", tags=['projects'], response_model=List[ProjectTaxoStatsModel])  # type: ignore
 def project_set_get_stats(ids: str,
                           taxa_ids: Optional[str] = "",
-                          current_user: Optional[int] = Depends(get_optional_current_user)) -> List[ProjectTaxoStats]:
+                          current_user: Optional[int] = Depends(get_optional_current_user)
+                          ) -> MyORJSONResponse:  # List[ProjectTaxoStats]
     """
         Read projects statistics, i.e. used taxa and classification states.
 
@@ -452,7 +453,7 @@ def project_set_get_stats(ids: str,
             num_taxa_ids = _split_num_list(taxa_ids)
         with RightsThrower():
             ret = sce.read_stats(current_user, num_prj_ids, num_taxa_ids)
-        return ret
+        return MyORJSONResponse(ret)
 
 
 @app.get("/project_set/user_stats", tags=['projects'], response_model=List[ProjectUserStatsModel])  # type: ignore
