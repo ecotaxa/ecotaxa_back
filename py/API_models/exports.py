@@ -41,6 +41,8 @@ class ExportReq(BaseModel):
     """
     project_id: int = Field(title="The project to export")
     exp_type: ExportTypeEnum = Field(title="The export type: 'TSV', 'BAK', 'DOI' or 'SUM'.")
+    use_latin1: bool = Field(default=False,
+                             title="Export using latin 1 character set, AKA iso-8859-1. Default is utf-8.")
     tsv_entities: str = Field(title="For 'TSV' type, the entities to export, one letter for each of "
                                     "O(bject), P(rocess), A(cquisition), S(ample), "
                                     "classification H(istory), C(omments).")

@@ -62,6 +62,11 @@ class TSVFile(object):
     # noinspection PyAttributeOutsideInit
     def open(self):
         csv_file = open(self.path.as_posix(), encoding='latin_1')
+        first_3 = csv_file.read(3)
+        if (first_3 == 'ï»¿'):
+            # BOM in latin-1 in unicode...
+            csv_file.close()
+            csv_file = open(self.path.as_posix(), encoding='utf-8-sig')
         # Read as a dict, first line gives the format
         self.rdr = csv.DictReader(csv_file, delimiter='\t', quotechar='"')
         # Cleanup field names, keeping original ones as key.
@@ -771,7 +776,7 @@ class TSVFile(object):
                 continue
             if a_field == 'object_lat':
                 vf = convert_degree_minute_float_to_decimal_degree(csv_val)
-                if vf < -90 or vf > 90:
+                if vf is None or vf < -90 or vf > 90:
                     diag.error("Invalid Lat. value '%s' for Field '%s' in file %s. "
                                "Incorrect range -90/+90°."
                                % (csv_val, raw_field, self.relative_name))
@@ -780,7 +785,7 @@ class TSVFile(object):
                     latitude_was_seen = True
             elif a_field == 'object_lon':
                 vf = convert_degree_minute_float_to_decimal_degree(csv_val)
-                if vf < -180 or vf > 180:
+                if vf is None or vf < -180 or vf > 180:
                     diag.error("Invalid Long. value '%s' for Field '%s' in file %s. "
                                "Incorrect range -180/+180°."
                                % (csv_val, raw_field, self.relative_name))

@@ -364,7 +364,10 @@ class ProjectExport(JobServiceBase):
                 if splitcsv:
                     prev_value = a_row[split_field]
                 logger.info("Writing into file %s", csv_path)
-                csv_fd = open(csv_path, 'w', encoding='latin_1')
+                if req.use_latin1:
+                    csv_fd = open(csv_path, 'w', encoding='latin_1')
+                else:
+                    csv_fd = open(csv_path, 'w', encoding='utf-8-sig')
                 csv_wtr = csv.DictWriter(csv_fd, tsv_cols,
                                          delimiter='\t', quotechar='"', lineterminator='\n',
                                          quoting=csv.QUOTE_NONNUMERIC)

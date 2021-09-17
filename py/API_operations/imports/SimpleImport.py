@@ -138,7 +138,7 @@ class SimpleImport(ImportServiceBase):
         """
         # TODO: Duplicated code
         dest_file = Path(self.temp_for_jobs.in_base_dir_for(self.job_id, "import_meta.tsv"))
-        with open(dest_file, "w", encoding='latin_1') as fp:
+        with open(dest_file, "w", encoding='utf-8-sig') as fp:
             fp.write(self.make_header())
             for an_image in images:
                 tsv_line = self.make_line(str(an_image))
