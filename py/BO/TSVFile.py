@@ -63,10 +63,13 @@ class TSVFile(object):
     def open(self):
         csv_file = open(self.path.as_posix(), encoding='latin_1')
         first_3 = csv_file.read(3)
-        if (first_3 == 'ï»¿'):
+        if first_3 == 'ï»¿':
             # BOM in latin-1 in unicode...
             csv_file.close()
             csv_file = open(self.path.as_posix(), encoding='utf-8-sig')
+        else:
+            # Rewind stream to avoid damaging the header
+            csv_file.seek(0)
         # Read as a dict, first line gives the format
         self.rdr = csv.DictReader(csv_file, delimiter='\t', quotechar='"')
         # Cleanup field names, keeping original ones as key.

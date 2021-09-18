@@ -166,7 +166,7 @@ def unzip_and_check(zip_content, ref_dir: str, only_hdr: bool):
 
 
 def one_tsv_check(content_bin, name, only_hdr, ref_dir_path):
-    file_content = TextIOWrapper(BytesIO(content_bin), "utf-8").readlines()
+    file_content = TextIOWrapper(BytesIO(content_bin), "utf-8-sig").readlines()
     ref_content = open(ref_dir_path / name).readlines()
     assert len(file_content) == len(ref_content), "For %s, not same number of lines" % name
     num_line = 1
