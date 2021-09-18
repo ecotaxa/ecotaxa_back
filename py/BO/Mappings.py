@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from collections import OrderedDict, namedtuple
-from typing import Dict, Tuple, List, Union, Type, Optional
+from typing import Dict, Tuple, List, Union, Type, Optional, Set
 
 from BO.helpers.TSVHelpers import encode_equal_list
 from DB.Acquisition import Acquisition
@@ -113,6 +113,8 @@ class ProjectMapping(object):
         By convention, numerical columns have 'n' as first column name, text ones have 't'.
 
     """
+    __slots__ = ["object_mappings", "sample_mappings", "acquisition_mappings", "process_mappings",
+                 "all", "by_table_name", "by_table", "was_empty"]
 
     def __init__(self):
         self.object_mappings: TableMapping = TableMapping(ObjectFields)
@@ -125,9 +127,6 @@ class ProjectMapping(object):
         # for 'generic' access to mappings
         self.by_table_name: Dict[str, TableMapping] = {a_mapping.table_name: a_mapping for a_mapping in self.all}
         self.by_table: Dict[MappedTableTypeT, TableMapping] = {a_mapping.table: a_mapping for a_mapping in self.all}
-        # for fast lookup from TSV analysis
-        # key = TSV full column, val = ( TableMapping, DB col )
-        self.all_fields: Dict[str, Tuple[TableMapping, str]] = dict()
         # to track emptiness after load
         self.was_empty = False
 
@@ -148,7 +147,7 @@ class ProjectMapping(object):
         self.sample_mappings.load_from_equal_list(prj.mappingsample)
         self.acquisition_mappings.load_from_equal_list(prj.mappingacq)
         self.process_mappings.load_from_equal_list(prj.mappingprocess)
-        self.build_all_fields()
+        self.was_empty = self.is_empty()
         return self
 
     def as_dict(self):
@@ -165,7 +164,7 @@ class ProjectMapping(object):
         """
         for a_mapping in self.all:
             a_mapping.load_from_dict(in_dict[a_mapping.table_name])
-        self.build_all_fields()
+        self.was_empty = self.is_empty()
         return self
 
     def add_column(self, target_table: str, tsv_table: str, tsv_field: str, sel_type) -> Tuple[bool, str]:
@@ -176,38 +175,49 @@ class ProjectMapping(object):
         for_table: TableMapping = self.by_table_name[target_table]
         ok_exists = for_table.add_column_for_table(tsv_field, sel_type)
         real_col = for_table.tsv_cols_to_real[tsv_field]
-        self.all_fields["%s_%s" % (tsv_table, tsv_field)] = (for_table, real_col)
         return ok_exists, real_col
 
     def search_field(self, full_tsv_field: str) -> Optional[Dict]:
         """
             Return the storage (i.e. target of mapping) for a custom field in given table.
+            e.g. acq_operator -> {'acquisition', 't02', 't'}
         """
-        lookup = self.all_fields.get(full_tsv_field)
-        if lookup is None:
-            return None
-        (mping, real_col) = lookup
-        return {'table': mping.table_name, 'field': real_col, 'type': real_col[0]}
+        try:
+            prfx, tsv_col = full_tsv_field.split("_", 1)
+        except ValueError:
+            return None  # Not the expected separator
+        table_name = GlobalMapping.PREFIX_TO_TABLE.get(prfx)
+        if table_name is None:
+            return None  # Not a known prefix
+        mping = self.by_table_name[table_name]
+        real_col = mping.tsv_cols_to_real.get(tsv_col)
+        if real_col is None:
+            return None  # Not a known column for this prefix
+        return {'table': table_name, 'field': real_col, 'type': real_col[0]}
 
-    def build_all_fields(self):
+    def all_field_names(self) -> Set[str]:
         """
-            Build cache all_fields for lookup.
+            Return all mapped field names.
         """
-        all_fields = {}
+        ret = set()
         for a_mapping in self.all:
             tbl = a_mapping.table_name
             prfx = GlobalMapping.TABLE_TO_PREFIX.get(tbl, tbl)
-            for real_col, tsv_col in a_mapping.real_cols_to_tsv.items():
-                all_fields["%s_%s" % (prfx, tsv_col)] = (a_mapping, real_col)
-        self.all_fields = all_fields
-        self.was_empty = len(all_fields) == 0
+            ret.update(a_mapping.tsv_cols_prefixed(prfx))
+        return ret
+
+    def is_empty(self):
+        for a_mapping in self.all:
+            if len(a_mapping.tsv_cols_to_real) > 0:
+                return False
+        return True
 
 
 class TableMapping(object):
     """
         The mapping for a given DB table, i.e. from TSV columns to DB ones.
     """
-    __slots__ = ['table', 'table_name', 'real_cols_to_tsv', 'tsv_cols_to_real', 'max_by_type']
+    __slots__ = ['table', 'table_name', 'real_cols_to_tsv', 'tsv_cols_to_real']
 
     def __init__(self, table: MappedTableTypeT):
         self.table: MappedTableTypeT = table
@@ -216,7 +226,6 @@ class TableMapping(object):
         self.real_cols_to_tsv: Dict[str, str] = OrderedDict()
         # key = TSV field name WITHOUT table prefix, val = DB column
         self.tsv_cols_to_real: Dict[str, str] = OrderedDict()
-        self.max_by_type = {'n': 0, 't': 0}
 
     def load_from_equal_list(self, str_mapping: Optional[str]):
         """
@@ -231,7 +240,6 @@ class TableMapping(object):
             return
         real_cols_to_tsv = self.real_cols_to_tsv
         tsv_cols_to_real = self.tsv_cols_to_real
-        vals_by_type: Dict[str, List[int]] = {'n': [0], 't': [0]}
         for a_map in str_mapping.splitlines():
             if not a_map:
                 # Empty lines are tolerated
@@ -241,12 +249,6 @@ class TableMapping(object):
             # Above is too slow for many (all!) projects, below is an equivalent rewrite
             real_cols_to_tsv[db_col] = tsv_col_no_prfx
             tsv_cols_to_real[tsv_col_no_prfx] = db_col
-            db_col_type = db_col[0]  # i.e. 't' or 'n'
-            db_col_ndx = int(db_col[1:])
-            # Store values instead of recomputing maximum for each addition
-            vals_by_type[db_col_type].append(db_col_ndx)
-        for a_col_type, vals_for_type in vals_by_type.items():
-            self.max_by_type[a_col_type] = max(vals_for_type)
         return self
 
     def load_from_dict(self, dict_mapping: dict):
@@ -259,21 +261,22 @@ class TableMapping(object):
     def add_association(self, db_col, tsv_col_no_prfx):
         self.real_cols_to_tsv[db_col] = tsv_col_no_prfx
         self.tsv_cols_to_real[tsv_col_no_prfx] = db_col
-        self.adjust_max(db_col, self.max_by_type)
-
-    @staticmethod
-    def adjust_max(db_col, max_by_type):
-        # Adjust maximum for type
-        db_col_type = db_col[0]  # i.e. 't' or 'n'
-        db_col_ndx = int(db_col[1:])
-        if db_col_ndx > max_by_type[db_col_type]:
-            max_by_type[db_col_type] = db_col_ndx
 
     def __len__(self):
         return len(self.real_cols_to_tsv)
 
     def is_empty(self):
         return len(self.real_cols_to_tsv) == 0
+
+    def max_by_type(self, sel_type: str) -> int:
+        """
+            Return the present maximum value for column type, either 't' or 'n'.
+        """
+        vals = [int(a_col[1:]) for a_col in self.real_cols_to_tsv.keys() if a_col[0] == sel_type]
+        if len(vals) == 0:
+            return 0
+        else:
+            return max(vals)
 
     def add_column_for_table(self, tsv_col_no_prfx: str, sel_type: str) -> bool:
         """
@@ -283,7 +286,7 @@ class TableMapping(object):
             :return: True if the target column exists in table.
         """
         assert sel_type in ('n', 't')
-        new_max = self.max_by_type[sel_type] + 1
+        new_max = self.max_by_type(sel_type) + 1
         db_col = "%s%02d" % (sel_type, new_max)
         self.add_association(db_col, tsv_col_no_prfx)
         return db_col in self.table.__dict__
@@ -367,3 +370,7 @@ class TableMapping(object):
             if real_col is not None:
                 ret[a_tsv_col] = real_col
         return ret
+
+    def tsv_cols_prefixed(self, prfx: str) -> List[str]:
+        return [prfx + "_" + tsv_col
+                for tsv_col in self.real_cols_to_tsv.values()]

@@ -236,7 +236,7 @@ class TSVFile(object):
             :return:
         """
         ok_fields = set([field for field in field_set
-                         if field in how.custom_mapping.all_fields
+                         if how.custom_mapping.search_field(field) is not None
                          or field in GlobalMapping.PREDEFINED_FIELDS
                          or field in GlobalMapping.DOUBLED_FIELDS])
         # Remove classification fields if updating but not classification

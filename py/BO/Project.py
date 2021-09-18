@@ -57,6 +57,11 @@ class ProjectBO(object):
         A Project business object. So far (but less and less...) mainly a container
         for static API_operations involving it.
     """
+    __slots__ = ["_project", "instrument", "highest_right",
+                 "obj_free_cols", "sample_free_cols",
+                 "acquisition_free_cols", "process_free_cols",
+                 "init_classif_list",
+                 "contact", "viewers", "annotators", "managers"]
 
     def __init__(self, project: Project):
         self._project = project
@@ -100,20 +105,21 @@ class ProjectBO(object):
         db_list = db_list if db_list else ""
         self.init_classif_list = [int(x) for x in db_list.split(",") if x.isdigit()]
         # Dispatch members by right
-        by_right = {ProjectPrivilegeBO.MANAGE: self.managers,
-                    ProjectPrivilegeBO.ANNOTATE: self.annotators,
-                    ProjectPrivilegeBO.VIEW: self.viewers}
+        by_right_fct = {ProjectPrivilegeBO.MANAGE: self.managers.append,
+                        ProjectPrivilegeBO.ANNOTATE: self.annotators.append,
+                        ProjectPrivilegeBO.VIEW: self.viewers.append}
         a_priv: ProjectPrivilege
         # noinspection PyTypeChecker
-        for a_priv in self._project.privs_for_members:
-            if a_priv.user is None:  # TODO: There is a line with NULL somewhere in DB
+        for a_priv in self._project.privs_for_members:  # Use ORM to navigate in relationship
+            priv_user = a_priv.user
+            if priv_user is None:  # TODO: There is a line with NULL somewhere in DB
                 continue
-            if not a_priv.user.active:
+            if not priv_user.active:
                 continue
             # noinspection PyTypeChecker
-            by_right[a_priv.privilege].append(a_priv.user)
+            by_right_fct[a_priv.privilege](priv_user)
             if 'C' == a_priv.extra:
-                self.contact = a_priv.user
+                self.contact = priv_user
         return self
 
     def update(self, session: Session, title: str, visible: bool, status: str, projtype: str,
@@ -205,9 +211,9 @@ class ProjectBO(object):
          WHERE pts.projid = :prjid;
         INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
         SELECT sam.projid, COALESCE(obh.classif_id, -1) id, COUNT(*) nbr, 
-               COUNT(CASE WHEN obh.classif_qual = '"""+VALIDATED_CLASSIF_QUAL+"""' THEN 1 END) nbr_v,
-               COUNT(CASE WHEN obh.classif_qual = '"""+DUBIOUS_CLASSIF_QUAL+"""' THEN 1 END) nbr_d, 
-               COUNT(CASE WHEN obh.classif_qual = '"""+PREDICTED_CLASSIF_QUAL+"""' THEN 1 END) nbr_p
+               COUNT(CASE WHEN obh.classif_qual = '""" + VALIDATED_CLASSIF_QUAL + """' THEN 1 END) nbr_v,
+               COUNT(CASE WHEN obh.classif_qual = '""" + DUBIOUS_CLASSIF_QUAL + """' THEN 1 END) nbr_d, 
+               COUNT(CASE WHEN obh.classif_qual = '""" + PREDICTED_CLASSIF_QUAL + """' THEN 1 END) nbr_p
           FROM obj_head obh
           JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
           JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prjid 
@@ -402,7 +408,7 @@ class ProjectBO(object):
             sql += """
                          AND NOT prj.title ILIKE '%%subset%%'  """
 
-        with CodeTimer("Projects query:", logger):
+        with CodeTimer("Projects.projects_for_user query (ids):", logger):
             res: Result = session.execute(text(sql), sql_params)
             # single-element tuple :( DBAPI
             ret = [an_id for an_id, in res.fetchall()]
@@ -589,9 +595,9 @@ class ProjectBO(object):
             # TODO: We can't lock what does not exists, so it can fail here.
             pts_ins = """INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
                              SELECT :prj, COALESCE(obh.classif_id, -1), COUNT(*) nbr, 
-                                    COUNT(CASE WHEN obh.classif_qual = '"""+VALIDATED_CLASSIF_QUAL+"""' THEN 1 END) nbr_v,
-                                    COUNT(CASE WHEN obh.classif_qual = '"""+DUBIOUS_CLASSIF_QUAL+"""' THEN 1 END) nbr_d,
-                                    COUNT(CASE WHEN obh.classif_qual = '"""+PREDICTED_CLASSIF_QUAL+"""' THEN 1 END) nbr_p
+                                    COUNT(CASE WHEN obh.classif_qual = '""" + VALIDATED_CLASSIF_QUAL + """' THEN 1 END) nbr_v,
+                                    COUNT(CASE WHEN obh.classif_qual = '""" + DUBIOUS_CLASSIF_QUAL + """' THEN 1 END) nbr_d,
+                                    COUNT(CASE WHEN obh.classif_qual = '""" + PREDICTED_CLASSIF_QUAL + """' THEN 1 END) nbr_p
                                FROM obj_head obh
                                JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
                                JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prj 
@@ -658,24 +664,33 @@ class ProjectBOSet(object):
     """
 
     def __init__(self, session: Session, prj_ids: ProjectIDListT, public: bool = False):
-        # Query the project and load neighbours as well
-        qry: Query = session.query(Project, ProjectPrivilege)
+        # Query the project and ORM-load neighbours as well, as they will be needed in enrich()
+        qry: Query = session.query(Project, ProjectPrivilege, User)
         qry = qry.outerjoin(ProjectPrivilege, Project.privs_for_members).options(
             contains_eager(Project.privs_for_members))
         qry = qry.outerjoin(User, ProjectPrivilege.user).options(
             contains_eager(ProjectPrivilege.user))
         qry = qry.filter(Project.projid == any_(prj_ids))
-        self.projects = []
+        self.projects: List[ProjectBO] = []
+        # De-duplicate
         done = set()
-        with CodeTimer("%s BO projects query & init:" % len(prj_ids), logger):
-            for a_proj, a_pp in qry.all():
+        projs = []
+        nb_rows = 0
+        with CodeTimer("%s BO projects query:" % len(prj_ids), logger):
+            for a_proj, _a_pp, _a_usr in qry.all():
+                nb_rows += 1
                 # The query yields duplicates so we need to filter
                 if a_proj.projid not in done:
-                    if public:
-                        self.projects.append(ProjectBO(a_proj))
-                    else:
-                        self.projects.append(ProjectBO(a_proj).enrich())
+                    projs.append(a_proj)
                     done.add(a_proj.projid)
+        # Build BOs and enrich
+        with CodeTimer("%s filtered -> %s BO projects init:" % (nb_rows, len(projs)), logger):
+            self_projects_append = self.projects.append
+            for a_proj in projs:
+                if public:
+                    self_projects_append(ProjectBO(a_proj))
+                else:
+                    self_projects_append(ProjectBO(a_proj).enrich())
         # Add instruments
         with CodeTimer("%s set instruments:" % len(prj_ids), logger):
             instruments = DescribedInstrumentSet(session, prj_ids)

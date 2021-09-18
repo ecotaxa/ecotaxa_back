@@ -185,7 +185,7 @@ class InBundle(object):
 
         logger.info("Taxo Found = %s", how.found_taxa)
         logger.info("Users Found = %s", how.found_users)
-        not_seen_fields = how.custom_mapping.all_fields.keys() - diag.cols_seen
+        not_seen_fields = how.custom_mapping.all_field_names() - diag.cols_seen
         if len(not_seen_fields) > 0:
             diag.warn("Some fields configured in the project are not seen in this import {0} "
                       .format(", ".join(not_seen_fields)))
