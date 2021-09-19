@@ -22,7 +22,7 @@ from DB.Project import ProjectIDT, ProjectIDListT
 from DB.User import Role
 from DB.helpers import Session, Result
 from DB.helpers.Direct import text
-from DB.helpers.ORM import Delete, Query, any_, and_, contains_eager, minimal_table_of, func
+from DB.helpers.ORM import Delete, Query, any_, and_, subqueryload, minimal_table_of, func
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -665,26 +665,18 @@ class ProjectBOSet(object):
 
     def __init__(self, session: Session, prj_ids: ProjectIDListT, public: bool = False):
         # Query the project and ORM-load neighbours as well, as they will be needed in enrich()
-        qry: Query = session.query(Project, ProjectPrivilege, User)
-        qry = qry.outerjoin(ProjectPrivilege, Project.privs_for_members).options(
-            contains_eager(Project.privs_for_members))
-        qry = qry.outerjoin(User, ProjectPrivilege.user).options(
-            contains_eager(ProjectPrivilege.user))
+        qry: Query = session.query(Project)
+        qry = qry.options(subqueryload(Project.privs_for_members))
+        qry = qry.options(subqueryload(Project.members))
         qry = qry.filter(Project.projid == any_(prj_ids))
         self.projects: List[ProjectBO] = []
         # De-duplicate
-        done = set()
         projs = []
-        nb_rows = 0
         with CodeTimer("%s BO projects query:" % len(prj_ids), logger):
-            for a_proj, _a_pp, _a_usr in qry.all():
-                nb_rows += 1
-                # The query yields duplicates so we need to filter
-                if a_proj.projid not in done:
-                    projs.append(a_proj)
-                    done.add(a_proj.projid)
+            for a_proj in qry.all():
+                projs.append(a_proj)
         # Build BOs and enrich
-        with CodeTimer("%s filtered -> %s BO projects init:" % (nb_rows, len(projs)), logger):
+        with CodeTimer("%s BO projects init:" % len(projs), logger):
             self_projects_append = self.projects.append
             for a_proj in projs:
                 if public:

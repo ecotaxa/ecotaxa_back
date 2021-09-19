@@ -64,6 +64,7 @@ class Project(Model):
     # The users involved somehow in this project
     privs_for_members: relationship
     # owner: relationship
+    members: relationship
     # The twin EcoPart project
     ecopart_project: relationship
 

@@ -61,7 +61,9 @@ ProjectPrivilege.project = relationship(Project, cascade="all, delete-orphan", s
 Project.privs_for_members = relationship(ProjectPrivilege, viewonly=True)
 
 ProjectPrivilege.user = relationship(User, cascade="all, delete-orphan", single_parent=True)
-User.privs_on_projects = relationship(ProjectPrivilege, viewonly=True, )
+User.privs_on_projects = relationship(ProjectPrivilege, viewonly=True)
+
+Project.members = relationship(User, secondary=ProjectPrivilege.__tablename__, viewonly=True)
 
 # Object
 ObjectHeader.fields = relationship(ObjectFields, uselist=False, viewonly=True)

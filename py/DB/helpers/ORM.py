@@ -11,7 +11,7 @@ from sqlalchemy import Column, inspect, MetaData, Table, any_ as _pg_any, all_ a
 from sqlalchemy.engine.result import Result  # type: ignore
 from sqlalchemy.ext.declarative import declarative_base
 # noinspection PyUnresolvedReferences
-from sqlalchemy.orm import Query, make_transient, contains_eager, joinedload, subqueryload
+from sqlalchemy.orm import Query, make_transient, contains_eager, joinedload, subqueryload, selectinload
 # For exporting
 # noinspection PyUnresolvedReferences
 from sqlalchemy.orm import relationship, RelationshipProperty, aliased
