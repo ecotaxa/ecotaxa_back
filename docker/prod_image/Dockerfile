@@ -19,8 +19,8 @@ RUN grep -Ev "(-stubs|^types-)" reqs_orig.txt > reqs.txt
 
 # Create venv, mandatory as we switched away from the python bundled with the OS
 RUN python3.8 -m venv /venv
-# Install
-RUN PATH=/venv/bin pip3 install wheel
+# Install wheel & upgrade pip which is pip-9.0.1 thus knows only manylinux1 repository
+RUN PATH=/venv/bin pip3 install --upgrade pip wheel
 RUN PATH=/venv/bin:$PATH pip3 install -r reqs.txt
 
 # Strip a bit...
