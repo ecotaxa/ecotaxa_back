@@ -262,7 +262,7 @@ class MyORJSONResponse(JSONResponse):
                                     default=MyORJSONResponse.orjson_default)
             except TypeError:
                 logging.warning("Problem encoding %s", content)
-                return json.dumps(content)
+                return json.dumps(content).encode("utf-8")
 
     except ImportError:
         # noinspection PyUnusedLocal
