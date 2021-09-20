@@ -4,6 +4,8 @@
 #
 # Utils for configuring fastApi
 #
+import json
+import logging
 import sys
 import traceback
 from os.path import dirname
@@ -255,8 +257,12 @@ class MyORJSONResponse(JSONResponse):
         import orjson
 
         def render(self, content: Any) -> bytes:
-            return orjson.dumps(content, option=orjson.OPT_NON_STR_KEYS,
-                                default=MyORJSONResponse.orjson_default)
+            try:
+                return orjson.dumps(content, option=orjson.OPT_NON_STR_KEYS,
+                                    default=MyORJSONResponse.orjson_default)
+            except TypeError:
+                logging.warning("Problem encoding %s", content)
+                return json.dumps(content)
 
     except ImportError:
         # noinspection PyUnusedLocal

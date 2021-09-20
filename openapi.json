@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.16"
+    "version":"0.0.17"
   },
   "servers":[
     {
@@ -752,7 +752,7 @@
           "projects"
         ],
         "summary":"Search Projects",
-        "description":"Return projects which the current user has explicit permission to access, with search options.\n- `param` not_granted: Return projects on which the current user has _no permission_, but visible to him/her\n- `param` for_managing: Return projects that can be written to (including erased) by the current user\n- `param` title_filter: Use this pattern for matching returned projects names\n- `param` instrument_filter: Only return projects where this instrument was used\n- `param` filter_subset: Only return projects having 'subset' in their names\n- `params` order_field, window_start, window_size: See accompanying description.",
+        "description":"Return projects which the current user has explicit permission to access, with search options.\n- `param` not_granted: Return projects on which the current user has _no permission_, but visible to him/her\n- `param` for_managing: Return projects that can be written to (including erased) by the current user\n- `param` title_filter: Use this pattern for matching returned projects names\n- `param` instrument_filter: Only return projects where this instrument was used\n- `param` filter_subset: Only return projects having 'subset' in their names\n- `params` order_field, window_start, window_size: See accompanying description.\n\nNote that, for performance reasons, in returned ProjectModels, field 'highest_rank' is NOT valued\n(unlike in simple query). The same information can be found in 'managers', 'annotators' and 'viewers' lists.",
         "operationId":"search_projects_projects_search_get",
         "parameters":[
           {
@@ -4451,6 +4451,11 @@
                 "$ref":"#/components/schemas/ExportTypeEnum"
               }
             ]
+          },
+          "use_latin1":{
+            "title":"Export using latin 1 character set, AKA iso-8859-1. Default is utf-8.",
+            "type":"boolean",
+            "default":false
           },
           "tsv_entities":{
             "title":"For 'TSV' type, the entities to export, one letter for each of O(bject), P(rocess), A(cquisition), S(ample), classification H(istory), C(omments).",
