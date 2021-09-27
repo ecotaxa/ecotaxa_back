@@ -21,16 +21,16 @@ class GroupDefinitions(str, Enum):
 
 class SubsetReq(BaseModel):
     """ Subset request. """
-    filters: Dict[str, str] = Field(title="The filters to apply to project", default={})
-    dest_prj_id: int = Field(title="The destination project ID.")
-    group_type: GroupDefinitions = Field(title="Define the groups in which to apply limits. C for categories, S for samples, A for acquisitions.")
-    limit_type: LimitMethods = Field(title="The type of limit_value: P for %, V for constant, both per group.")
-    limit_value: float = Field(title="Limit value, e.g. 20% or 5 per copepoda or 5% per sample.")
-    do_images: bool = Field(title="If set, also clone images.")
+    filters: Dict[str, str] = Field(title="Filters", description="The filters to apply to project", default={}, example={"freenum": "n01", "freenumst": "0"})
+    dest_prj_id: int = Field(title="Destination project id", description="The destination project ID.", example=22)
+    group_type: GroupDefinitions = Field(title="Group type", description="Define the groups in which to apply limits. C for categories, S for samples, A for acquisitions.", example=GroupDefinitions.acquisitions)
+    limit_type: LimitMethods = Field(title="Limit type", description="The type of limit_value: P for %, V for constant, both per group.", example=LimitMethods.percent)
+    limit_value: float = Field(title="Limit value", description="Limit value, e.g. 20% or 5 per copepoda or 5% per sample.", example=10.0)
+    do_images: bool = Field(title="Do images", description="If set, also clone images.", example=True)
 
 
 class SubsetRsp(BaseModel):
     """ Subset response. """
-    job_id: int = Field(title="The job created for this operation.")
+    job_id: int = Field(title="Job Id", description="The job created for this operation.",example=143)
     # errors: List[str] = Field(title="The errors found during processing",
     #                           default=[])

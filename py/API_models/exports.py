@@ -20,12 +20,12 @@ class EMODnetExportRsp(BaseModel):
     """
         EMODNet format export response.
     """
-    errors: List[str] = Field(title="Showstopper problems found while building the archive.",
-                              default=[])
-    warnings: List[str] = Field(title="Problems found while building the archive, which do not prevent producing it.",
-                                default=[])
-    job_id: int = Field(title="The created job, 0 if there were problems.",
-                        default=0)
+    errors: List[str] = Field(title="Errors", description="Showstopper problems found while building the archive.", 
+                                example=[], default=[])
+    warnings: List[str] = Field(title="Warnings", description="Problems found while building the archive, which do not prevent producing it.", 
+                                example=[], default=[])
+    job_id: int = Field(title="Job Id", description="The created job, 0 if there were problems.", 
+                                example=1, default=0)
 
 
 class ExportTypeEnum(str, Enum):

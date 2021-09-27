@@ -24,7 +24,7 @@ class DataclassConfig(BaseConfig):
 T = TypeVar('T')
 
 
-def dataclass_to_model(clazz: T, add_suffix: bool = False, titles: Optional[Dict[str, str]] = None) -> PydanticModelT:
+def dataclass_to_model(clazz: T, add_suffix: bool = False, titles: Optional[Dict[str, str]] = None, descriptions: Optional[Dict[str, str]] = None ) -> PydanticModelT:
     model_fields = {}
     a_field: dataclasses.Field
     for a_field in dataclasses.fields(clazz):
@@ -61,4 +61,10 @@ def dataclass_to_model(clazz: T, add_suffix: bool = False, titles: Optional[Dict
         for a_field_name, a_title in titles.items():
             the_field: ModelField = ret.__fields__[a_field_name]
             the_field.field_info.title = a_title
+    if descriptions is not None:
+        # Amend with descriptions, for doc. Let crash (KeyError) if descriptions are not up-to-date with base.
+        for a_field_name, a_description in descriptions.items():
+            the_field: ModelField = ret.__fields__[a_field_name]
+            the_field.field_info.description = a_description
+
     return ret
