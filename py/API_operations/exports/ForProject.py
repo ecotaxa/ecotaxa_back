@@ -196,7 +196,8 @@ class ProjectExport(JobServiceBase):
         #     mpg[""]
         #     assert a_fld in GlobalMapping.PREDEFINED_FIELDS, "%s is not a mapped column" % a_fld
         date_fmt, time_fmt = "YYYYMMDD", "HH24MISS"
-        if req.format_dates_times:
+        if req.format_dates_times and not (req.exp_type == ExportTypeEnum.backup):
+            # Do not make nice dates for backup
             date_fmt, time_fmt = "YYYY-MM-DD", "HH24:MI:SS"
 
         select_clause = "select "
