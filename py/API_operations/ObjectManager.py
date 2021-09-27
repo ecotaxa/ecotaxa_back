@@ -15,7 +15,7 @@ from BO.ReClassifyLog import ReClassificationBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
 from BO.User import UserIDT
-from DB import Project, ObjectHeader, ObjectFields, Image, Taxonomy, Sample, User
+from DB import Project, ObjectHeader, ObjectFields, Image, Taxonomy, Sample, User, Acquisition
 from DB.Object import VALIDATED_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, CLASSIF_QUALS
 from DB.Project import ProjectIDT
 from DB.helpers.Direct import text
@@ -193,6 +193,9 @@ class ObjectManager(Service):
                 return a_field
         elif prfx == "sam":
             if name in Sample.__dict__:
+                return a_field
+        elif prfx == "acq":
+            if name in Acquisition.__dict__:
                 return a_field
         elif prfx == "usr":
             if name in User.__dict__:
