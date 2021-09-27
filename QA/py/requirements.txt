@@ -38,7 +38,7 @@ passlib==1.7.4
 jinja2==3.0.1
 aiofiles==0.7.0
 # Analyzis of XLSX data sources
-openpyxl==3.0.8
+openpyxl==3.0.9
 openpyxl-stubs==0.1.19
 # END OF BACK-END REQUIREMENTS
 # Testing & QA additions
