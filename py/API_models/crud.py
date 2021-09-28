@@ -106,12 +106,11 @@ _DBAcquisitionDescription = {
 _AcquisitionModelFromDB = sqlalchemy_to_pydantic(Acquisition,
                                                  exclude=["t%02d" % i for i in range(1, ACQUISITION_FREE_COLUMNS)],
                                                  field_infos=_DBAcquisitionDescription)
-_DBProcessDescription = {
-    # TODO
-}
+# _DBProcessDescription = {
+#     # TODO
+# }
 _ProcessModelFromDB = sqlalchemy_to_pydantic(Process,
-                                             exclude=["t%02d" % i for i in range(1, PROCESS_FREE_COLUMNS)],
-                                             field_infos=_DBProcessDescription)
+                                             exclude=["t%02d" % i for i in range(1, PROCESS_FREE_COLUMNS)])
 _DBCollectionDescription = {
     "id": Field(title="Id", description="The collection Id", default=None, example=1),
     "external_id": Field(title="External Id", description="The external Id", default=None, example=""),

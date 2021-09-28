@@ -4,9 +4,8 @@
 #
 #  Attempt to map as automatically as possible the DB model into CRUD objects.
 #
-from typing import Type, TypeVar, Dict, Optional
+from typing import Type, TypeVar, Dict, Optional, Any
 
-from pydantic import Field
 from pydantic.fields import ModelField
 from sqlalchemy import inspect
 from sqlalchemy.orm import ColumnProperty
@@ -26,7 +25,7 @@ T = TypeVar('T')
 def sqlalchemy_to_pydantic(db_model: T, *,
                            config: Type[BaseConfig] = OrmConfig,
                            exclude=None,
-                           field_infos: Optional[Dict[str, Field]] = None) -> PydanticModelT:
+                           field_infos: Optional[Dict[str, Any]] = None) -> PydanticModelT:
     if exclude is None:
         exclude = []
     fields = {}
