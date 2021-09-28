@@ -453,7 +453,7 @@ def search_projects(current_user: Optional[int] = Depends(get_optional_current_u
                     for_managing: bool = Query(default=False, title="Nor managing",
                                                description="Return projects that can be written to (including erased) by the current user",
                                                example=False),
-                    title_filter: str = Query(default=None, title="Title filter",
+                    title_filter: str = Query(default="", title="Title filter",
                                               description="Use this pattern for matching returned projects names",
                                               example="Tara"),
                     instrument_filter: str = Query(default='', title="Instrument filter",
