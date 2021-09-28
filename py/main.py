@@ -450,13 +450,13 @@ def search_projects(current_user: Optional[int] = Depends(get_optional_current_u
                     not_granted: bool = Query(default=False, title="Not granted",
                                               description="Return projects on which the current user has _no permission_, but visible to him/her",
                                               example=False),
-                    for_managing: bool = Query(default=False, title="Nor managing",
+                    for_managing: bool = Query(default=False, title="For managing",
                                                description="Return projects that can be written to (including erased) by the current user",
                                                example=False),
                     title_filter: str = Query(default="", title="Title filter",
                                               description="Use this pattern for matching returned projects names",
                                               example="Tara"),
-                    instrument_filter: str = Query(default='', title="Instrument filter",
+                    instrument_filter: str = Query(default="", title="Instrument filter",
                                                    description="Only return projects where this instrument was used",
                                                    example="uvp5"),
                     filter_subset: bool = Query(default=False, title="Filter subset",
@@ -531,7 +531,7 @@ def project_subset(project_id: int,
 @app.get("/projects/{project_id}", tags=['projects'], response_model=ProjectModel)
 def project_query(project_id: int,
                   for_managing: Optional[bool] = Query(title="For managinig", description="For managing this project.",
-                                                       default=None, example=False),
+                                                       default=False, example=False),
                   current_user: Optional[int] = Depends(get_optional_current_user)) -> ProjectBO:
     """
         **Returns project** if it exists for current user, eventually for managing it.

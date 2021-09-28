@@ -832,7 +832,7 @@
             "description":"Return projects that can be written to (including erased) by the current user",
             "required":false,
             "schema":{
-              "title":"Nor managing",
+              "title":"For managing",
               "type":"boolean",
               "description":"Return projects that can be written to (including erased) by the current user",
               "default":false
@@ -847,7 +847,8 @@
             "schema":{
               "title":"Title filter",
               "type":"string",
-              "description":"Use this pattern for matching returned projects names"
+              "description":"Use this pattern for matching returned projects names",
+              "default":""
             },
             "example":"Tara",
             "name":"title_filter",
@@ -1080,7 +1081,8 @@
             "schema":{
               "title":"For managinig",
               "type":"boolean",
-              "description":"For managing this project."
+              "description":"For managing this project.",
+              "default":false
             },
             "example":false,
             "name":"for_managing",
