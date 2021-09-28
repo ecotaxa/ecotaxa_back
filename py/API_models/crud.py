@@ -4,12 +4,11 @@
 #
 #  Models used in CRUD API_operations.
 #
-from datetime import datetime
 from typing import Optional, Dict, Type, List, Any
 
 from typing_extensions import TypedDict
 
-from BO.ColumnUpdate import ColUpdateList, ColUpdate
+from BO.ColumnUpdate import ColUpdateList
 from BO.DataLicense import LicenseEnum
 from BO.Project import ProjectUserStats
 from BO.Sample import SampleTaxoStats
@@ -27,10 +26,46 @@ from .helpers.TypedDictToModel import typed_dict_to_model
 FreeColT = Dict[str, str]
 
 # Direct mirror of DB models
+_DBUserDescription = {
+    "id": Field(title="Id", description="Unique user identifier", default=None, example=1),
+    "email": Field(title="Email", description="User's email used during registration", default=None,
+                   example="user@email.com"),
+    "name": Field(title="Name", description="User's full name", default=None, example="userName"),
+    "organisation": Field(title="Organisation", description="User's organisation", default=None,
+                          example="Oceanographic Laboratory of Villefranche sur Mer - LOV"),
+    "active": Field(title="Account status", description="User's Account status", default=None, example=True),
+    "country": Field(title="Country", description="User's country", default=None, example="France"),
+    "usercreationdate": Field(title="User creation date", description="User account creation date", default=None,
+                              example="2020-11-05T12:31:48.299713"),
+    "usercreationreason": Field(title="User creation reason",
+                                description="The reason of creation of this user account",
+                                default=None, example="Analysis of size and shapes of plastic particles")
+}
 _UserModelFromDB = sqlalchemy_to_pydantic(User, exclude=[User.password.name,
                                                          User.preferences.name,
                                                          User.mail_status.name,
-                                                         User.mail_status_date.name])
+                                                         User.mail_status_date.name], field_infos=_DBUserDescription)
+_DBProjectDescription = {
+    "projid": Field(title="Project Id", description="The project Id", example=4824),
+    "title": Field(title="Title", description="The project title", example="MyProject"),
+    "visible": Field(title="Visible", description="The project visibility", example=False),
+    "status": Field(title="Status", description="The project status", example="Annotate"),
+    "objcount": Field(title="Object count", description="The number of objects", example=32292.0),
+    "pctvalidated": Field(title="Percentage validated", description="Percentage of validated images.",
+                          example=0.015483711135885049),
+    "pctclassified": Field(title="Percentage classified", description="Percentage of classified images.",
+                           example=100.0),
+    "classifsettings": Field(title="Classification settings", description="",
+                             example="baseproject=1602\ncritvar=%area,angle,area,area_exc,bx,by,cdexc,centroids,circ.,circex,convarea,convperim,cv,elongation,esd,fcons,feret,feretareaexc,fractal,height,histcum1,histcum2,histcum3,intden,kurt,lat_end,lon_end,major,max,mean,meanpos,median,min,minor,mode,nb1,nb2,perim.,perimareaexc,perimferet,perimmajor,range,skelarea,skew,slope,sr,stddev,symetrieh,symetriehc,symetriev,symetrievc,thickr,width,x,xm,xstart,y,ym,ystart\nposttaxomapping=\nseltaxo=45074,84963,61990,13333,82399,61973,62005,25930,25932,61996,78426,81941,11514,85076,85061,30815,85185,92230,85079,84993,25824,85115,85004,26525,25944,11509,26524,92112,84976,25942,84980,85078,78418,84977,85060,61993,61991,85069,81871,74144,11758,72431,13381,11518,5,18758,85117,92042,84968,84997,87826,92236,92237,92039,84989,85193,83281,78412,92239,71617,81977,45071,12865,85044,81940,85067,12908,85116,56693,85008,92139,92068\nusemodel_foldername=testln1"),
+    "classiffieldlist": Field(title="Classification field list", description="",
+                              example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]"),
+    "popoverfieldlist": Field(title="Pop over field list", description="",
+                              example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]"),
+    "comments": Field(title="Comments", description="The project comments", example=""),
+    "projtype": Field(title="Project type", description="The type of the project", example=""),
+    "rf_models_used": Field(title="Rf models used", description="", example=""),
+    "cnn_network_id": Field(title="Cnn network id", description="", example="SCN_zooscan_group1")
+}
 _ProjectModelFromDB: Type = sqlalchemy_to_pydantic(Project, exclude=[Project.mappingobj.name,
                                                                      Project.mappingacq.name,
                                                                      Project.mappingprocess.name,
@@ -39,7 +74,7 @@ _ProjectModelFromDB: Type = sqlalchemy_to_pydantic(Project, exclude=[Project.map
                                                                      ] + [
                                                                         # Not replaced yet but LOTS of data
                                                                         Project.fileloaded.name
-                                                                    ])
+                                                                    ], field_infos=_DBProjectDescription)
 
 
 class ProjectSummaryModel(BaseModel):
@@ -48,91 +83,121 @@ class ProjectSummaryModel(BaseModel):
 
 
 # We exclude free columns from base model, they will be mapped in a dedicated sub-entity
+_DBSampleDescription = {
+    "sampleid": Field(title="Sample Id", description="The sample Id", example=100),
+    "projid": Field(title="Project Id", description="The project Id", example=4),
+    "orig_id": Field(title="Origine Id", description="The origine Id", example="dewex_leg2_19"),
+    "latitude": Field(title="Latitude", description="The latitude", example=42.0231666666667),
+    "longitude": Field(title="Longitude", description="The longitude", example=4.71766666666667),
+    "dataportal_descriptor": Field(title="Dataportal descriptor", description="", example=""),
+
+}
 _SampleModelFromDB = sqlalchemy_to_pydantic(Sample,
-                                            exclude=["t%02d" % i for i in range(1, SAMPLE_FREE_COLUMNS)])
+                                            exclude=["t%02d" % i for i in range(1, SAMPLE_FREE_COLUMNS)],
+                                            field_infos=_DBSampleDescription)
+_DBAcquisitionDescription = {
+    "acquisid": Field(title="Acquisition Id", description="The acquisition Id", example=144, default=None),
+    "acq_sample_id": Field(title="Acquisition sample Id", description="The acquisition sample Id", example=1039,
+                           default=None),
+    "orig_id": Field(title="Origin Id", description="The origin Id", example="uvp5_station1_cast1b", default=None),
+    "instrument": Field(title="Instrument", description="Instrument used", example="uvp5", default=None),
+
+}
 _AcquisitionModelFromDB = sqlalchemy_to_pydantic(Acquisition,
-                                                 exclude=["t%02d" % i for i in range(1, ACQUISITION_FREE_COLUMNS)])
+                                                 exclude=["t%02d" % i for i in range(1, ACQUISITION_FREE_COLUMNS)],
+                                                 field_infos=_DBAcquisitionDescription)
+_DBProcessDescription = {
+    # TODO
+}
 _ProcessModelFromDB = sqlalchemy_to_pydantic(Process,
-                                             exclude=["t%02d" % i for i in range(1, PROCESS_FREE_COLUMNS)])
+                                             exclude=["t%02d" % i for i in range(1, PROCESS_FREE_COLUMNS)],
+                                             field_infos=_DBProcessDescription)
+_DBCollectionDescription = {
+    "id": Field(title="Id", description="The collection Id", default=None, example=1),
+    "external_id": Field(title="External Id", description="The external Id", default=None, example=""),
+    "external_id_system": Field(title="External id system", description="The external Id system", default=None,
+                                example=""),
+    "title": Field(title="Title", description="The collection title", default=None, example="My collection"),
+    "short_title": Field(title="Short title", description="The collection short title", default=None,
+                         example="My coll"),
+    "citation": Field(title="Citation", description="The collection citation", default=None, example=""),
+    "license": Field(title="License", description="The collection license", default=None, example=LicenseEnum.CC_BY),
+    "abstract": Field(title="Abstract", description="The collection abstract", default=None, example=""),
+    "description": Field(title="Description", description="The collection description", default=None, example=""),
+
+}
 _CollectionModelFromDB = sqlalchemy_to_pydantic(Collection,
                                                 exclude=[Collection.contact_user_id.name,
-                                                         Collection.provider_user_id.name])
+                                                         Collection.provider_user_id.name],
+                                                field_infos=_DBCollectionDescription)
 
 
 class UserModel(_UserModelFromDB):  # type:ignore
-    id: int = Field(title="Id", description="Unique user identifier", default=None, example=1)
-    email: str = Field(title="Email", description="User's email used during registration", default=None, example="user@email.com")
-    name: str = Field(title="Name", description="User's full name", default=None, example="userName")
-    organisation: str = Field(title="Organisation", description="User's organisation", default=None, example="Oceanographic Laboratory of Villefranche sur Mer - LOV")
-    active: bool = Field(title="Account status", description="User's Account status", default=None, example=True)
-    country: str = Field(title="Country", description="User's country", default=None, example="France")
-    usercreationdate: datetime = Field(title="User creation date", description="User account creation date", default=None, example="2020-11-05T12:31:48.299713")
-    usercreationreason: str = Field(title="User creation reason", description="The reason of creation of this user account", default=None, example="Analysis of size and shapes of plastic particles")
-    #pass
+    pass
 
 
 class UserModelWithRights(UserModel):  # type:ignore
-    can_do: List[int] = Field(title="User's permissions", description="List of User's allowed actions : 1 create a project, 2 administrate the app, 3 administrate users, 4 create taxon", default=[], example=[1,4])
-    last_used_projects: List[ProjectSummaryModel] = Field(title="Last used projects", description="List of User's last used projects", default=[], 
-    example= [
-        {
-            "projid": 3,
-            "title": "Zooscan point B"
-        },
-        {
-            "projid": 1,
-            "title": "Zooscan Tara Med"
-        }
-    ])
+    can_do: List[int] = Field(title="User's permissions",
+                              description="List of User's allowed actions : 1 create a project, 2 administrate the app, 3 administrate users, 4 create taxon",
+                              default=[], example=[1, 4])
+    last_used_projects: List[ProjectSummaryModel] = Field(title="Last used projects",
+                                                          description="List of User's last used projects", default=[],
+                                                          example=[
+                                                              {
+                                                                  "projid": 3,
+                                                                  "title": "Zooscan point B"
+                                                              },
+                                                              {
+                                                                  "projid": 1,
+                                                                  "title": "Zooscan Tara Med"
+                                                              }
+                                                          ])
+
 
 class _AddedToProject(BaseModel):
-    obj_free_cols: FreeColT = Field(title="Object free cols", description="Object free columns", default={}, example={"area": "n01", "esd": "n02"})
-    sample_free_cols: FreeColT = Field(title="Sample free cols", description="Sample free columns", default={}, example={"barcode": "t01"})
-    acquisition_free_cols: FreeColT = Field(title="Acquisition free cols", description="Acquisition free columns", default={}, example={"flash_delay": "t01"})
-    process_free_cols: FreeColT = Field(title="Process free cols", description="Process free columns", default={}, example={"nb_images": "t01"})
-    init_classif_list: List[int] = Field(title="Init classification list", description="Favorite taxa used in classification", default=[], example=[5,11493,11498,11509])
+    obj_free_cols: FreeColT = Field(title="Object free cols", description="Object free columns", default={},
+                                    example={"area": "n01", "esd": "n02"})
+    sample_free_cols: FreeColT = Field(title="Sample free cols", description="Sample free columns", default={},
+                                       example={"barcode": "t01"})
+    acquisition_free_cols: FreeColT = Field(title="Acquisition free cols", description="Acquisition free columns",
+                                            default={}, example={"flash_delay": "t01"})
+    process_free_cols: FreeColT = Field(title="Process free cols", description="Process free columns", default={},
+                                        example={"nb_images": "t01"})
+    init_classif_list: List[int] = Field(title="Init classification list",
+                                         description="Favorite taxa used in classification", default=[],
+                                         example=[5, 11493, 11498, 11509])
 
     managers: List[UserModel] = Field(title="Managers", description="Managers of this project", default=[])
-    annotators: List[UserModel] = Field(title="Annotators", description="Annotators of this project, if not manager", default=[])
-    viewers: List[UserModel] = Field(title="Viewers", description="Viewers of this project, if not manager nor annotator", default=[])
-    instrument: Optional[str] = Field(title="Instrument", description="This project's instrument. Transitory: if several of them, then coma-separated", example="zooscan")
-    contact: Optional[UserModel] = Field(title="Contact", description="The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.")
+    annotators: List[UserModel] = Field(title="Annotators", description="Annotators of this project, if not manager",
+                                        default=[])
+    viewers: List[UserModel] = Field(title="Viewers",
+                                     description="Viewers of this project, if not manager nor annotator", default=[])
+    instrument: Optional[str] = Field(title="Instrument",
+                                      description="This project's instrument. Transitory: if several of them, then coma-separated",
+                                      example="zooscan")
+    contact: Optional[UserModel] = Field(title="Contact",
+                                         description="The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.")
 
-    highest_right: str = Field( title="Highest right", description="The highest right for requester on this project. One of 'Manage', 'Annotate', 'View'.", default="", example="View")
-    license: LicenseEnum = Field(title="License", description="Data licence", default=LicenseEnum.Copyright, example=LicenseEnum.CC_BY)
+    highest_right: str = Field(title="Highest right",
+                               description="The highest right for requester on this project. One of 'Manage', 'Annotate', 'View'.",
+                               default="", example="View")
+    license: LicenseEnum = Field(title="License", description="Data licence", default=LicenseEnum.Copyright,
+                                 example=LicenseEnum.CC_BY)
 
     # owner: UserModel = Field(title="Owner of this project")
+
 
 # TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
 class ProjectModel(_ProjectModelFromDB, _AddedToProject):  # type:ignore
     """
         Project + computed
     """
-    projid:int = Field(title="Project Id", description="The project Id", example=4824)
-    title: str = Field(title="Title", description="The project title", example="MyProject")
-    visible: bool = Field(title="Visible", description="The project visibility", example=False)
-    status: str = Field(title="Status", description="The project status", example="Annotate")
-    objcount: float = Field(title="Object count", description="The number of objects", example=32292.0)
-    pctvalidated: float = Field(title="Percentage validated", description="Percentage of validated images.", example=0.015483711135885049)
-    pctclassified: float = Field(title="Percentage classified", description="Percentage of classified images.", example=100.0)
-    classifsettings: str = Field(title="Classification settings", description="", example="baseproject=1602\ncritvar=%area,angle,area,area_exc,bx,by,cdexc,centroids,circ.,circex,convarea,convperim,cv,elongation,esd,fcons,feret,feretareaexc,fractal,height,histcum1,histcum2,histcum3,intden,kurt,lat_end,lon_end,major,max,mean,meanpos,median,min,minor,mode,nb1,nb2,perim.,perimareaexc,perimferet,perimmajor,range,skelarea,skew,slope,sr,stddev,symetrieh,symetriehc,symetriev,symetrievc,thickr,width,x,xm,xstart,y,ym,ystart\nposttaxomapping=\nseltaxo=45074,84963,61990,13333,82399,61973,62005,25930,25932,61996,78426,81941,11514,85076,85061,30815,85185,92230,85079,84993,25824,85115,85004,26525,25944,11509,26524,92112,84976,25942,84980,85078,78418,84977,85060,61993,61991,85069,81871,74144,11758,72431,13381,11518,5,18758,85117,92042,84968,84997,87826,92236,92237,92039,84989,85193,83281,78412,92239,71617,81977,45071,12865,85044,81940,85067,12908,85116,56693,85008,92139,92068\nusemodel_foldername=testln1")
-    classiffieldlist: str = Field(title="Classification field list", description="", example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]")
-    popoverfieldlist: str = Field(title="Pop over field list", description="", example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]")
-    comments: str = Field(title="Comments", description="The project comments", example="")
-    projtype: str = Field(title="Project type", description="The type of the project", example="")
-    rf_models_used: str = Field(title="Rf models used", description="", example="")
-    cnn_network_id: str = Field(title="Cnn network id", description="", example="SCN_zooscan_group1")
 
 
 class SampleModel(_SampleModelFromDB):  # type:ignore
-    sampleid : int = Field(title="Sample Id", description="The sample Id", example=100) 
-    projid : int = Field(title="Project Id", description="The project Id", example=4) 
-    orig_id : str = Field(title="Origine Id", description="The origine Id", example="dewex_leg2_19") 
-    latitude : float = Field(title="Latitude", description="The latitude", example=42.0231666666667) 
-    longitude : float = Field(title="Longitude", description="The longitude", example=4.71766666666667) 
-    dataportal_descriptor : str = Field(title="Dataportal descriptor", description="", example="") 
-    free_columns: Dict[str, Any] = Field(title="Free columns", description="Free columns from sample mapping in project", 
-                                        default={}, example={"flash_delay": "t01"})
+    free_columns: Dict[str, Any] = Field(title="Free columns",
+                                         description="Free columns from sample mapping in project",
+                                         default={}, example={"flash_delay": "t01"})
 
 
 SampleTaxoStatsModel = dataclass_to_model(SampleTaxoStats, add_suffix=True,
@@ -144,21 +209,18 @@ SampleTaxoStatsModel = dataclass_to_model(SampleTaxoStats, add_suffix=True,
                                                   "nb_predicted": "Number predicted"
                                                   },
                                           descriptions={'sample_id': "The sample id",
-                                                  'used_taxa': "The taxa/category ids used inside the sample. -1 for unclassified objects",
-                                                  "nb_unclassified": "The number of unclassified objects inside the sample",
-                                                  "nb_validated": "The number of validated objects inside the sample",
-                                                  "nb_dubious": "The number of dubious objects inside the sample",
-                                                  "nb_predicted": "The number of predicted objects inside the sample"
-                                                  })
+                                                        'used_taxa': "The taxa/category ids used inside the sample. -1 for unclassified objects",
+                                                        "nb_unclassified": "The number of unclassified objects inside the sample",
+                                                        "nb_validated": "The number of validated objects inside the sample",
+                                                        "nb_dubious": "The number of dubious objects inside the sample",
+                                                        "nb_predicted": "The number of predicted objects inside the sample"
+                                                        })
 
 
 class AcquisitionModel(_AcquisitionModelFromDB):  # type:ignore
-    acquisid : int = Field(title="Acquisition Id", description="The acquisition Id", example=144, default=None)
-    acq_sample_id : int = Field(title="Acquisition sample Id", description="The acquisition sample Id", example=1039, default=None)
-    orig_id : str = Field(title="Origine Id", description="The origine Id", example="uvp5_station1_cast1b", default=None)
-    instrument : str = Field(title="Instrument", description="Instrument used", example="uvp5", default=None)
-    free_columns: Dict[str, Any] = Field(title="Free columns", description="Free columns from acquisition mapping in project",
-                                         default={}, example={"bottomdepth": 322,"ship": "suroit"})
+    free_columns: Dict[str, Any] = Field(title="Free columns",
+                                         description="Free columns from acquisition mapping in project",
+                                         default={}, example={"bottomdepth": 322, "ship": "suroit"})
 
 
 class ProcessModel(_ProcessModelFromDB):  # type:ignore
@@ -167,9 +229,11 @@ class ProcessModel(_ProcessModelFromDB):  # type:ignore
 
 
 class CreateProjectReq(BaseModel):
-    clone_of_id: int = Field(title="Clone of id", description="If set, clone specified Project", default=None, example=2)
+    clone_of_id: int = Field(title="Clone of id", description="If set, clone specified Project", default=None,
+                             example=2)
     title: str = Field(title="Title", description="The project title", example="My new project title")
-    visible: bool = Field(title="Visible", description="If True, the project is created visible", default=True, example=True)
+    visible: bool = Field(title="Visible", description="If True, the project is created visible", default=True,
+                          example=True)
 
 
 class ProjectFilters(TypedDict, total=False):
@@ -245,52 +309,56 @@ ProjectFiltersModel = typed_dict_to_model(ProjectFilters)
 
 class BulkUpdateReq(BaseModel):
     # TODO: A Union of possible types?
-    target_ids: List[int] = Field(title="Target Id", description="The IDs of the target entities", example=[1,5,290])
+    target_ids: List[int] = Field(title="Target Id", description="The IDs of the target entities", example=[1, 5, 290])
     updates: ColUpdateList = Field(title="Updates", description="The list of updates, to do on all impacted entities. \n\n \
     { \n\n \
         ucol : A column name, pseudo-columns AKA free ones, are OK. \n\n \
         uval : The new value to set, always as a string \n\n \
-    }", 
-    example=[{"ucol": "sub_part", "uval": "2"}])
+    }",
+                                   example=[{"ucol": "sub_part", "uval": "2"}])
     # updates: List[ColUpdate] = Field(title="Updates", description="The updates, to do on all impacted entities") 
 
 
 # TODO: Derive from ProjectTaxoStats
 class ProjectTaxoStatsModel(BaseModel):
-    projid: int = Field(title="projid", description = "The project id", example=1)
-    used_taxa: List[int] = Field(title="used_taxa", description = "The taxa/category ids used inside the project."
-                                       " An id of -1 means some unclassified objects", default=[], example=[45072, 78418, 84963, 85011, 85012, 85078])
-    nb_unclassified: int = Field(title="nb_unclassified", description = "The number of unclassified objects inside the project", example=0)
-    nb_validated: int = Field(title="nb_validated", description = "The number of validated objects inside the project", example=5000)
-    nb_dubious: int = Field(title="nb_dubious", description = "The number of dubious objects inside the project", example=56)
-    nb_predicted: int = Field(title="nb_predicted", description = "The number of predicted objects inside the project", example=1345)
-
+    projid: int = Field(title="projid", description="The project id", example=1)
+    used_taxa: List[int] = Field(title="used_taxa", description="The taxa/category ids used inside the project."
+                                                                " An id of -1 means some unclassified objects",
+                                 default=[], example=[45072, 78418, 84963, 85011, 85012, 85078])
+    nb_unclassified: int = Field(title="nb_unclassified",
+                                 description="The number of unclassified objects inside the project", example=0)
+    nb_validated: int = Field(title="nb_validated", description="The number of validated objects inside the project",
+                              example=5000)
+    nb_dubious: int = Field(title="nb_dubious", description="The number of dubious objects inside the project",
+                            example=56)
+    nb_predicted: int = Field(title="nb_predicted", description="The number of predicted objects inside the project",
+                              example=1345)
 
 
 ProjectUserStatsModel = dataclass_to_model(ProjectUserStats, add_suffix=True,
                                            titles={'projid': "Project id",
                                                    'annotators': "Annotators",
                                                    'activities': "Activities"},
-                                            descriptions={
-                                                'projid': "The project id",
-                                                'annotators': "The users who ever decided on classification or state of objects",
-                                                'activities': "More details on annotators' activities"
-                                            })
+                                           descriptions={
+                                               'projid': "The project id",
+                                               'annotators': "The users who ever decided on classification or state of objects",
+                                               'activities': "More details on annotators' activities"
+                                           })
 
 
 class CreateCollectionReq(BaseModel):
-    title: str = Field(title="Title", description="The collection title", 
-        example="My collection")
-    project_ids: List[int] = Field(title="Project ids", description="The list of composing project IDs", 
-        example=[1], min_items=1)
+    title: str = Field(title="Title", description="The collection title",
+                       example="My collection")
+    project_ids: List[int] = Field(title="Project ids", description="The list of composing project IDs",
+                                   example=[1], min_items=1)
 
 
 class _AddedToCollection(BaseModel):
     """
         What's added to Collection comparing to the plain DB record.
     """
-    project_ids: List[int] = Field(title="Project ids", description="The list of composing project IDs", 
-        example=[1], min_items=1)
+    project_ids: List[int] = Field(title="Project ids", description="The list of composing project IDs",
+                                   example=[1], min_items=1)
     provider_user: Optional[UserModel] = Field(title="Provider user", description="""Is the person who 
         is responsible for the content of this metadata record. Writer of the title and abstract.""")
     contact_user: Optional[UserModel] = Field(title="Contact user", description="""Is the person who 
@@ -312,15 +380,6 @@ class CollectionModel(_CollectionModelFromDB, _AddedToCollection):  # type:ignor
     """
         Collection + computed
     """
-    id: int = Field(title="Id", description="The collection Id", default=None, example=1)
-    external_id: str = Field(title="External Id", description="The external Id", default=None, example="")
-    external_id_system: str = Field(title="External id system", description="The external Id system", default=None, example="")
-    title:  str = Field(title="Title", description="The collection title", default=None, example="My collection")
-    short_title:  str = Field(title="Short title", description="The collection short title", default=None, example="My coll")
-    citation:  str = Field(title="Citation", description="The collection citation", default=None, example="")
-    license:  str = Field(title="License", description="The collection license", default=None, example=LicenseEnum.CC_BY)
-    abstract:  str = Field(title="Abstract", description="The collection abstract", default=None, example="")
-    description: str = Field(title="Description", description="The collection description", default=None, example="")
 
 
 _JobModelFromDB = sqlalchemy_to_pydantic(Job, exclude=[Job.params.name,

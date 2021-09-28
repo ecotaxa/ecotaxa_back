@@ -8,13 +8,12 @@ import os
 from logging import INFO
 from typing import Union, Tuple
 
-from sqlalchemy.sql.expression import null
-
 from fastapi import FastAPI, Request, Response, status, Depends, HTTPException, UploadFile, File, Query, Form
 from fastapi.logger import logger as fastapi_logger
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi_utils.timing import add_timing_middleware
+from sqlalchemy.sql.expression import null
 
 from API_models.constants import Constants
 from API_models.crud import *
@@ -116,10 +115,10 @@ app.mount("/api", app)
 
 # noinspection PyUnusedLocal
 @app.post(
-    "/login", 
+    "/login",
     tags=['authentification'],
     responses={
-        200 : {
+        200: {
             "content": {
                 "application/json": {
                     "example": "eyJ1c2VyX2lkIjo5OTN9.YUmHHw.-X4tsLsYbwldKL6vDgO3o4-aAxE"
@@ -168,10 +167,10 @@ def show_current_user(current_user: int = Depends(get_current_user)):
 
 
 @app.get(
-    "/users/my_preferences/{project_id}", 
-    tags=['users'], 
+    "/users/my_preferences/{project_id}",
+    tags=['users'],
     responses={
-        200 : {
+        200: {
             "content": {
                 "application/json": {
                     "example": "{\"dispfield\": \" dispfield_orig_id dispfield_classif_auto_score dispfield_classif_when\", \"ipp\": \"1000\", \"magenabled\": \"1\", \"popupenabled\": \"1\", \"sortby\": \"orig_id\", \"sortorder\": \"asc\", \"statusfilter\": \"P\", \"zoom\": \"90\"}"
@@ -181,7 +180,8 @@ def show_current_user(current_user: int = Depends(get_current_user)):
     },
     response_model=str)
 def get_current_user_prefs(project_id: int,
-                           key: str= Query(default=None,title="Key", description="The preference key.", example="filters"),
+                           key: str = Query(default=None, title="Key", description="The preference key.",
+                                            example="filters"),
                            current_user: int = Depends(get_current_user)) -> str:
     """
         **Returns one preference**, for a project and the currently authenticated user.
@@ -193,18 +193,21 @@ def get_current_user_prefs(project_id: int,
 
 
 @app.put("/users/my_preferences/{project_id}", tags=['users'],
-    responses={
-        200 : {
-            "content": {
-                "application/json": {
-                    "example": null
-                }
-            }
-        }
-    })
+         responses={
+             200: {
+                 "content": {
+                     "application/json": {
+                         "example": null
+                     }
+                 }
+             }
+         })
 def set_current_user_prefs(project_id: int,
-                           key: str = Query(default=None,title="Key", description="The preference key.", example="filters"),
-                           value: str = Query(default=None,title="Value", description="The value to set this preference to.", example="{\"dispfield\": \" dispfield_orig_id dispfield_classif_auto_score dispfield_classif_when dispfield_random_value\", \"ipp\": \"500\", \"magenabled\": \"1\", \"popupenabled\": \"1\", \"sortby\": \"orig_id\", \"sortorder\": \"asc\", \"statusfilter\": \"\", \"zoom\": \"90\"}"),
+                           key: str = Query(default=None, title="Key", description="The preference key.",
+                                            example="filters"),
+                           value: str = Query(default=None, title="Value",
+                                              description="The value to set this preference to.",
+                                              example="{\"dispfield\": \" dispfield_orig_id dispfield_classif_auto_score dispfield_classif_when dispfield_random_value\", \"ipp\": \"500\", \"magenabled\": \"1\", \"popupenabled\": \"1\", \"sortby\": \"orig_id\", \"sortorder\": \"asc\", \"statusfilter\": \"\", \"zoom\": \"90\"}"),
                            current_user: int = Depends(get_current_user)):
     """
         **Sets one preference**, for a project and for the currently authenticated user.
@@ -219,7 +222,9 @@ def set_current_user_prefs(project_id: int,
 
 @app.get("/users/search", tags=['users'], response_model=List[UserModel])
 def search_user(current_user: int = Depends(get_current_user),
-                by_name: Optional[str] = Query(default=None, title="search by name", description="Search by name, use % for searching with 'any char'.", example="%userNa%")):
+                by_name: Optional[str] = Query(default=None, title="search by name",
+                                               description="Search by name, use % for searching with 'any char'.",
+                                               example="%userNa%")):
     """
         **Search users using various criteria**, search is case insensitive and might contain % chars.
     """
@@ -243,18 +248,18 @@ def get_user(user_id: int,
 
 # ######################## END OF USER
 
-@app.post("/collections/create", 
-    tags=['collections'], 
-    responses={
-        200 : {
-            "content": {
-                "application/json": {
-                    "example": 1
-                }
-            }
-        }
-    },
-    response_model = int)
+@app.post("/collections/create",
+          tags=['collections'],
+          responses={
+              200: {
+                  "content": {
+                      "application/json": {
+                          "example": 1
+                      }
+                  }
+              }
+          },
+          response_model=int)
 def create_collection(params: CreateCollectionReq,
                       current_user: int = Depends(get_current_user)) -> Union[int, str]:
     """
@@ -274,7 +279,9 @@ def create_collection(params: CreateCollectionReq,
 
 
 @app.get("/collections/search", tags=['collections'], response_model=List[CollectionModel])
-def search_collections(title: str= Query(default=None, title="Title", description="Search by title, use % for searching with 'any char'.", example="%coll%"),
+def search_collections(title: str = Query(default=None, title="Title",
+                                          description="Search by title, use % for searching with 'any char'.",
+                                          example="%coll%"),
                        current_user: int = Depends(get_current_user)):
     """
         **Search for collections.**
@@ -288,7 +295,8 @@ def search_collections(title: str= Query(default=None, title="Title", descriptio
 
 
 @app.get("/collections/by_title", tags=['collections'], response_model=CollectionModel)
-def collection_by_title(q: str= Query(default=None, title="Title", description="Search by **exact** title", example="My collection")):
+def collection_by_title(
+        q: str = Query(default=None, title="Title", description="Search by **exact** title", example="My collection")):
     """
         Return the **single collection with this title**.
         
@@ -303,7 +311,9 @@ def collection_by_title(q: str= Query(default=None, title="Title", description="
 
 
 @app.get("/collections/by_short_title", tags=['collections'], response_model=CollectionModel)
-def collection_by_short_title(q: str= Query(default=None, title="Short title", description="Search by **exact** short title", example="My coll")):
+def collection_by_short_title(
+        q: str = Query(default=None, title="Short title", description="Search by **exact** short title",
+                       example="My coll")):
     """
         Return the **single collection with this short title**.
 
@@ -334,15 +344,15 @@ def get_collection(collection_id: int,
 
 
 @app.put("/collections/{collection_id}", tags=['collections'],
-    responses={
-        200 : {
-            "content": {
-                "application/json": {
-                    "example": null
-                }
-            }
-        }
-    })
+         responses={
+             200: {
+                 "content": {
+                     "application/json": {
+                         "example": null
+                     }
+                 }
+             }
+         })
 def update_collection(collection_id: int,
                       collection: CollectionModel,
                       current_user: int = Depends(get_current_user)):
@@ -372,10 +382,18 @@ def update_collection(collection_id: int,
 
 @app.get("/collections/{collection_id}/export/emodnet", tags=['collections'], response_model=EMODnetExportRsp)
 def emodnet_format_export(collection_id: int,
-                          dry_run: bool = Query(default=None, title="Dry run", description="If set, then only a diagnostic of doability will be done.", example=False),
-                          with_zeroes: bool = Query(default=None, title="With zeroes", description="If set, then *absent* records will be generated, in the relevant samples, for categories present in other samples.", example=False),
-                          auto_morpho: bool = Query(default=None, title="Auto morpho", description="If set, then any object classified on a Morpho category will be added to the count of the nearest Phylo parent, upward in the tree.", example=False),
-                          with_computations: bool = Query(default=None, title="With computations", description="If set, then an attempt will be made to compute organisms concentrations and biovolumes.", example=False),
+                          dry_run: bool = Query(default=None, title="Dry run",
+                                                description="If set, then only a diagnostic of doability will be done.",
+                                                example=False),
+                          with_zeroes: bool = Query(default=None, title="With zeroes",
+                                                    description="If set, then *absent* records will be generated, in the relevant samples, for categories present in other samples.",
+                                                    example=False),
+                          auto_morpho: bool = Query(default=None, title="Auto morpho",
+                                                    description="If set, then any object classified on a Morpho category will be added to the count of the nearest Phylo parent, upward in the tree.",
+                                                    example=False),
+                          with_computations: bool = Query(default=None, title="With computations",
+                                                          description="If set, then an attempt will be made to compute organisms concentrations and biovolumes.",
+                                                          example=False),
                           current_user: int = Depends(get_current_user)) -> EMODnetExportRsp:
     """
         **Export the collection in EMODnet format**, @see https://www.emodnet-ingestion.eu
@@ -392,16 +410,16 @@ def emodnet_format_export(collection_id: int,
 
 
 @app.delete("/collections/{collection_id}", tags=['collections'],
-    responses={
-        200 : {
-            "content": {
-                "application/json": {
-                    "example": 0
+            responses={
+                200: {
+                    "content": {
+                        "application/json": {
+                            "example": 0
+                        }
+                    }
                 }
-            }
-        }
-    },
-    response_model= int)
+            },
+            response_model=int)
 def erase_collection(collection_id: int,
                      current_user: int = Depends(get_current_user)) -> int:
     """
@@ -427,15 +445,31 @@ project_model_columns = plain_columns(ProjectModel)
 # TODO TODO TODO: No verification of GET query parameters by FastAPI. pydantic does POST models OK.
 @app.get("/projects/search", tags=['projects'], response_model=List[ProjectModel])
 def search_projects(current_user: Optional[int] = Depends(get_optional_current_user),
-                    also_others: bool = Query(default=False, deprecated=True, title="Also others", description="", example=False),
-                    not_granted: bool = Query(default=False, title="Not granted", description="Return projects on which the current user has _no permission_, but visible to him/her", example=False),
-                    for_managing: bool = Query(default=False, title="Nor managing", description="Return projects that can be written to (including erased) by the current user", example=False),
-                    title_filter: str =  Query(default=None, title="Title filter", description="Use this pattern for matching returned projects names", example="Tara"),
-                    instrument_filter: str = Query(default='', title="Instrument filter", description="Only return projects where this instrument was used", example="uvp5"),
-                    filter_subset: bool = Query(default=False, title="Filter subset", description="Only return projects having 'subset' in their names", example=True),
-                    order_field: Optional[str] = Query(default=None, title="Order field", description="One of %s" % list(project_model_columns.keys()), example="instrument"), 
-                    window_start: Optional[int] = Query(default=None, title="Window start", description="Skip `window_start` before returning data", example="0"),
-                    window_size: Optional[int] = Query(default=None, title="Window size", description="Return only `window_size` lines", example="100"), 
+                    also_others: bool = Query(default=False, deprecated=True, title="Also others", description="",
+                                              example=False),
+                    not_granted: bool = Query(default=False, title="Not granted",
+                                              description="Return projects on which the current user has _no permission_, but visible to him/her",
+                                              example=False),
+                    for_managing: bool = Query(default=False, title="Nor managing",
+                                               description="Return projects that can be written to (including erased) by the current user",
+                                               example=False),
+                    title_filter: str = Query(default=None, title="Title filter",
+                                              description="Use this pattern for matching returned projects names",
+                                              example="Tara"),
+                    instrument_filter: str = Query(default='', title="Instrument filter",
+                                                   description="Only return projects where this instrument was used",
+                                                   example="uvp5"),
+                    filter_subset: bool = Query(default=False, title="Filter subset",
+                                                description="Only return projects having 'subset' in their names",
+                                                example=True),
+                    order_field: Optional[str] = Query(default=None, title="Order field",
+                                                       description="One of %s" % list(project_model_columns.keys()),
+                                                       example="instrument"),
+                    window_start: Optional[int] = Query(default=None, title="Window start",
+                                                        description="Skip `window_start` before returning data",
+                                                        example="0"),
+                    window_size: Optional[int] = Query(default=None, title="Window size",
+                                                       description="Return only `window_size` lines", example="100"),
                     ) -> MyORJSONResponse:  # List[ProjectBO]
     """
         Returns **projects which the current user has explicit permission to access, with search options.**
@@ -453,16 +487,16 @@ def search_projects(current_user: Optional[int] = Depends(get_optional_current_u
 
 
 @app.post("/projects/create", tags=['projects'],
-responses={
-        200 : {
-            "content": {
-                "application/json": {
-                    "example": 44
-                }
-            }
-        }
-    },
-    response_model= Union[int, str])
+          responses={
+              200: {
+                  "content": {
+                      "application/json": {
+                          "example": 44
+                      }
+                  }
+              }
+          },
+          response_model=int)
 def create_project(params: CreateProjectReq,
                    current_user: int = Depends(get_current_user)) -> Union[int, str]:
     """
@@ -483,7 +517,7 @@ def create_project(params: CreateProjectReq,
 
 @app.post("/projects/{project_id}/subset", tags=['projects'], response_model=SubsetRsp)
 def project_subset(project_id: int,
-                   params: SubsetReq ,
+                   params: SubsetReq,
                    current_user: int = Depends(get_current_user)):
     """
         **Subset a project into another one.**
@@ -496,7 +530,8 @@ def project_subset(project_id: int,
 
 @app.get("/projects/{project_id}", tags=['projects'], response_model=ProjectModel)
 def project_query(project_id: int,
-                  for_managing: Optional[bool] = Query(title= "For managinig", description="For managing this project.", default=None, example=False),
+                  for_managing: Optional[bool] = Query(title="For managinig", description="For managing this project.",
+                                                       default=None, example=False),
                   current_user: Optional[int] = Depends(get_optional_current_user)) -> ProjectBO:
     """
         **Returns project** if it exists for current user, eventually for managing it.
@@ -509,8 +544,12 @@ def project_query(project_id: int,
 
 
 @app.get("/project_set/taxo_stats", tags=['projects'], response_model=List[ProjectTaxoStatsModel])  # type: ignore
-def project_set_get_stats(ids: str = Query(title="Ids", description="String containing the list of one or more id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.", default=None, example="1"),
-                          taxa_ids: Optional[str] = Query(title="Taxa Ids", description="**If several taxa_ids are provided**, one stat record will be returned per requested taxa, if populated.\n \n **If taxa_ids is all**, all valued taxa in the project(s) are returned.", default="", example="all"),
+def project_set_get_stats(ids: str = Query(title="Ids",
+                                           description="String containing the list of one or more id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
+                                           default=None, example="1"),
+                          taxa_ids: Optional[str] = Query(title="Taxa Ids",
+                                                          description="**If several taxa_ids are provided**, one stat record will be returned per requested taxa, if populated.\n \n **If taxa_ids is all**, all valued taxa in the project(s) are returned.",
+                                                          default="", example="all"),
                           current_user: Optional[int] = Depends(get_optional_current_user)
                           ) -> MyORJSONResponse:  # List[ProjectTaxoStats]
     """
@@ -528,30 +567,30 @@ def project_set_get_stats(ids: str = Query(title="Ids", description="String cont
 
 
 @app.get("/project_set/user_stats", tags=['projects'],
-responses={
-        200 : {
-            "content": {
-                "application/json": {
-                    "example": [{
-                        "projid":1,
-                        "annotators":[{
-                            "id":1267,
-                            "name":"User Name"
-                        }],
-                        "activities":[{
-                            "id":1267,
-                            "nb_actions":605,
-                            "last_annot":"2021-09-27T13:08:54"
-                        }]
-                    }]
-                }
-            }
-        }
-    }, response_model=List[ProjectUserStatsModel])  # type: ignore
-def project_set_get_user_stats(ids: str = Query(title="Ids", 
-    description="String containing the list of one or more id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.", 
-    default=None, example="1"),
-    current_user: int = Depends(get_current_user)) -> List[ProjectUserStats]:
+         responses={
+             200: {
+                 "content": {
+                     "application/json": {
+                         "example": [{
+                             "projid": 1,
+                             "annotators": [{
+                                 "id": 1267,
+                                 "name": "User Name"
+                             }],
+                             "activities": [{
+                                 "id": 1267,
+                                 "nb_actions": 605,
+                                 "last_annot": "2021-09-27T13:08:54"
+                             }]
+                         }]
+                     }
+                 }
+             }
+         }, response_model=List[ProjectUserStatsModel])  # type: ignore
+def project_set_get_user_stats(ids: str = Query(title="Ids",
+                                                description="String containing the list of one or more id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
+                                                default=None, example="1"),
+                               current_user: int = Depends(get_current_user)) -> List[ProjectUserStats]:
     """
         **Returns projects user statistics**, i.e. a summary of the work done by users in the
         required projects. 
@@ -581,8 +620,12 @@ def project_dump(project_id: int,
 
 @app.post("/projects/{project_id}/merge", tags=['projects'], response_model=MergeRsp)
 def project_merge(project_id: int,
-                  source_project_id: int = Query(title="Source project Id", description="Id of the other project. This source project will see all its objects gone and will be erased.", default=None, example=2),
-                  dry_run: bool = Query(title="Dry run", description="If set, then only a diagnostic of doability will be done.", default=None, example=True),
+                  source_project_id: int = Query(title="Source project Id",
+                                                 description="Id of the other project. This source project will see all its objects gone and will be erased.",
+                                                 default=None, example=2),
+                  dry_run: bool = Query(title="Dry run",
+                                        description="If set, then only a diagnostic of doability will be done.",
+                                        default=None, example=True),
                   current_user: int = Depends(get_current_user)) -> MergeRsp:
     """
         **Merge another project into this one.**
@@ -596,19 +639,19 @@ def project_merge(project_id: int,
 
 
 @app.get("/projects/{project_id}/check", tags=['projects'],
-    responses={
-        200 : {
-            "content": {
-                "application/json": {
-                    "example": []
-                }
-            }
-        }
-    },
-    response_model=List[str]
-)
+         responses={
+             200: {
+                 "content": {
+                     "application/json": {
+                         "example": []
+                     }
+                 }
+             }
+         },
+         response_model=List[str]
+         )
 def project_check(project_id: int,
-                  current_user: int = Depends(get_current_user))->List[str]:
+                  current_user: int = Depends(get_current_user)) -> List[str]:
     """
         **Check consistency of a project**.
         
@@ -632,15 +675,15 @@ def project_stats(project_id: int,
 
 
 @app.post("/projects/{project_id}/recompute_geo", tags=['projects'],
-    responses={
-        200 : {
-            "content": {
-                "application/json": {
-                    "example": null
-                }
-            }
-        }
-    })
+          responses={
+              200: {
+                  "content": {
+                      "application/json": {
+                          "example": null
+                      }
+                  }
+              }
+          })
 def project_recompute_geography(project_id: int,
                                 current_user: int = Depends(get_current_user)) -> None:
     """
@@ -683,18 +726,20 @@ def simple_import(project_id: int,
     return ret
 
 
-@app.delete("/projects/{project_id}", tags=['projects'], 
-    responses={
-        200 : {
-            "content": {
-                "application/json": {
-                    "example": (100, 0, 10, 10)
+@app.delete("/projects/{project_id}", tags=['projects'],
+            responses={
+                200: {
+                    "content": {
+                        "application/json": {
+                            "example": (100, 0, 10, 10)
+                        }
+                    }
                 }
-            }
-        }
-    })
+            })
 def erase_project(project_id: int,
-                  only_objects: bool = Query(title="Only objects", description="If set, the project structure is kept, but emptied from any object, sample, acquisition and process.", example=False, default = False),
+                  only_objects: bool = Query(title="Only objects",
+                                             description="If set, the project structure is kept, but emptied from any object, sample, acquisition and process.",
+                                             example=False, default=False),
                   current_user: int = Depends(get_current_user)) -> Tuple[int, int, int, int]:
     """
         **Delete the project.**
@@ -712,15 +757,15 @@ def erase_project(project_id: int,
 
 
 @app.put("/projects/{project_id}", tags=['projects'],
-    responses={
-        200 : {
-            "content": {
-                "application/json": {
-                    "example": null
-                }
-            }
-        }
-    })
+         responses={
+             200: {
+                 "content": {
+                     "application/json": {
+                         "example": null
+                     }
+                 }
+             }
+         })
 def update_project(project_id: int,
                    project: ProjectModel,
                    current_user: int = Depends(get_current_user)):
@@ -752,8 +797,12 @@ def update_project(project_id: int,
 # ######################## END OF PROJECT
 
 @app.get("/samples/search", tags=['samples'], response_model=List[SampleModel])
-def samples_search(project_ids: str = Query(default=None, title="Project Ids", description="String containing the list of one or more project id separated by non-num char.", example="1,55"),
-                   id_pattern: str = Query(default=None, title="Pattern Id", description="Sample id textual pattern. Use * or '' for 'any matches'. Match is case-insensitive.", example="*"),
+def samples_search(project_ids: str = Query(default=None, title="Project Ids",
+                                            description="String containing the list of one or more project id separated by non-num char.",
+                                            example="1,55"),
+                   id_pattern: str = Query(default=None, title="Pattern Id",
+                                           description="Sample id textual pattern. Use * or '' for 'any matches'. Match is case-insensitive.",
+                                           example="*"),
                    current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> List[SampleBO]:
     """
@@ -767,22 +816,24 @@ def samples_search(project_ids: str = Query(default=None, title="Project Ids", d
 
 
 @app.get("/sample_set/taxo_stats", tags=['samples'],
-    responses={
-            200 : {
-                "content": {
-                    "application/json": {
-                        "example": {'nb_dubious': 56, 
-                                    'nb_predicted': 5500, 
-                                    'nb_unclassified': 0, 
-                                    'nb_validated': 1345,
-                                    'projid': 1,
-                                    'used_taxa': [45072, 78418, 84963, 85011, 85012, 85078]
-                                    }
-                    }
-                }
-            }
-        }, response_model=List[SampleTaxoStatsModel])  # type:ignore
-def sample_set_get_stats(sample_ids: str = Query(default=None, title="Sample Ids", description="String containing the list of one or more sample ids separated by non-num char.", example="15,5"),
+         responses={
+             200: {
+                 "content": {
+                     "application/json": {
+                         "example": {'nb_dubious': 56,
+                                     'nb_predicted': 5500,
+                                     'nb_unclassified': 0,
+                                     'nb_validated': 1345,
+                                     'projid': 1,
+                                     'used_taxa': [45072, 78418, 84963, 85011, 85012, 85078]
+                                     }
+                     }
+                 }
+             }
+         }, response_model=List[SampleTaxoStatsModel])  # type:ignore
+def sample_set_get_stats(sample_ids: str = Query(default=None, title="Sample Ids",
+                                                 description="String containing the list of one or more sample ids separated by non-num char.",
+                                                 example="15,5"),
                          current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> List[SampleTaxoStats]:
     """
@@ -797,17 +848,17 @@ def sample_set_get_stats(sample_ids: str = Query(default=None, title="Sample Ids
         return ret
 
 
-@app.post("/sample_set/update", tags=['samples'], 
-    responses={
-        200 : {
-            "content": {
-                "application/json": {
-                    "example": 1
-                }
-            }
-        }
-    },
-    response_model = int)
+@app.post("/sample_set/update", tags=['samples'],
+          responses={
+              200: {
+                  "content": {
+                      "application/json": {
+                          "example": 1
+                      }
+                  }
+              }
+          },
+          response_model=int)
 def update_samples(req: BulkUpdateReq,
                    current_user: int = Depends(get_current_user)) -> int:
     """
@@ -840,8 +891,9 @@ def sample_query(sample_id: int,
 # ######################## END OF SAMPLE
 
 @app.get("/acquisitions/search", tags=['acquisitions'], response_model=List[AcquisitionModel])
-def acquisitions_search(project_id: int = Query(title="Project id", description="The project id", default=None, example=1),
-                        current_user: Optional[int] = Depends(get_optional_current_user)) \
+def acquisitions_search(
+        project_id: int = Query(title="Project id", description="The project id", default=None, example=1),
+        current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> List[AcquisitionBO]:
     """
         Returns the **list of all acquisitions for a given project**.
@@ -852,18 +904,18 @@ def acquisitions_search(project_id: int = Query(title="Project id", description=
         return ret
 
 
-@app.post("/acquisition_set/update", 
-    tags=['acquisitions'], 
-    responses={
-        200 : {
-            "content": {
-                "application/json": {
-                    "example": 2
-                }
-            }
-        }
-    },
-    response_model=int)
+@app.post("/acquisition_set/update",
+          tags=['acquisitions'],
+          responses={
+              200: {
+                  "content": {
+                      "application/json": {
+                          "example": 2
+                      }
+                  }
+              }
+          },
+          response_model=int)
 def update_acquisitions(req: BulkUpdateReq,
                         current_user: int = Depends(get_current_user)) -> int:
     """
@@ -893,25 +945,25 @@ def acquisition_query(acquisition_id: int,
 
 # ######################## END OF ACQUISITION
 
-@app.get("/instruments/", 
-    tags=['instrument'], 
-    response_model=List[str],
-    responses={
-        200 : {
-            "content": {
-                "application/json": {
-                    "example": [
-                        "uvp5",
-                        "zooscan"
-                    ]
-                }
-            }
-        }
-    }
-)
-def instrument_query(project_ids: str = Query(title="Projects ids", 
-        description="String containing the list of one or more project id separated by non-num char.", 
-        default=None, example="1,2,3")) \
+@app.get("/instruments/",
+         tags=['instrument'],
+         response_model=List[str],
+         responses={
+             200: {
+                 "content": {
+                     "application/json": {
+                         "example": [
+                             "uvp5",
+                             "zooscan"
+                         ]
+                     }
+                 }
+             }
+         }
+         )
+def instrument_query(project_ids: str = Query(title="Projects ids",
+                                              description="String containing the list of one or more project id separated by non-num char.",
+                                              default=None, example="1,2,3")) \
         -> List[str]:
     """
         Returns the list of instruments, inside specific project(s).
@@ -1640,7 +1692,7 @@ def system_error(_current_user: int = Depends(get_current_user)):
         assert False
 
 
-@app.get("/noop", tags=['misc'], response_model=Union[ObjectHeaderModel,HistoricalClassificationModel]) # type: ignore
+@app.get("/noop", tags=['misc'], response_model=Union[ObjectHeaderModel, HistoricalClassificationModel])  # type: ignore
 def do_nothing(_current_user: int = Depends(get_current_user)):
     """
         This entry point will just do nothing.

@@ -7,10 +7,12 @@
 import dataclasses
 import datetime
 from typing import Optional, TypeVar, Dict, List
-# noinspection PyUnresolvedReferences
+# noinspection PyUnresolvedReferences,PyProtectedMember
 from typing import _GenericAlias  # type: ignore
 
+# noinspection PyPackageRequirements
 from pydantic import create_model, BaseConfig
+# noinspection PyPackageRequirements
 from pydantic.fields import ModelField
 
 from API_models.helpers import PydanticModelT
@@ -24,7 +26,8 @@ class DataclassConfig(BaseConfig):
 T = TypeVar('T')
 
 
-def dataclass_to_model(clazz: T, add_suffix: bool = False, titles: Optional[Dict[str, str]] = None, descriptions: Optional[Dict[str, str]] = None ) -> PydanticModelT:
+def dataclass_to_model(clazz: T, add_suffix: bool = False, titles: Optional[Dict[str, str]] = None,
+                       descriptions: Optional[Dict[str, str]] = None) -> PydanticModelT:
     model_fields = {}
     a_field: dataclasses.Field
     for a_field in dataclasses.fields(clazz):
@@ -44,7 +47,7 @@ def dataclass_to_model(clazz: T, add_suffix: bool = False, titles: Optional[Dict
                     globs: Dict = {}
                     exec("import " + to_import, globs)
                     contained_class = eval(contained_class_full_name, globs)
-                    fld_type = List[dataclass_to_model(contained_class)] # type: ignore
+                    fld_type = List[dataclass_to_model(contained_class)]  # type: ignore
                 except ValueError:
                     pass
             # Pydantic maps everything to object, no doc or fields or types
@@ -64,7 +67,7 @@ def dataclass_to_model(clazz: T, add_suffix: bool = False, titles: Optional[Dict
     if descriptions is not None:
         # Amend with descriptions, for doc. Let crash (KeyError) if descriptions are not up-to-date with base.
         for a_field_name, a_description in descriptions.items():
-            the_field: ModelField = ret.__fields__[a_field_name]
-            the_field.field_info.description = a_description
+            the_desc_field: ModelField = ret.__fields__[a_field_name]
+            the_desc_field.field_info.description = a_description
 
     return ret

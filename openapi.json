@@ -974,14 +974,7 @@
               "application/json":{
                 "schema":{
                   "title":"Response Create Project Projects Create Post",
-                  "anyOf":[
-                    {
-                      "type":"integer"
-                    },
-                    {
-                      "type":"string"
-                    }
-                  ]
+                  "type":"integer"
                 },
                 "example":44
               }
@@ -4160,6 +4153,11 @@
     "schemas":{
       "AcquisitionModel":{
         "title":"AcquisitionModel",
+        "required":[
+          "acquisid",
+          "acq_sample_id",
+          "orig_id"
+        ],
         "type":"object",
         "properties":{
           "acquisid":{
@@ -4175,9 +4173,9 @@
             "example":1039
           },
           "orig_id":{
-            "title":"Origine Id",
+            "title":"Origin Id",
             "type":"string",
-            "description":"The origine Id",
+            "description":"The origin Id",
             "example":"uvp5_station1_cast1b"
           },
           "instrument":{
@@ -4358,7 +4356,11 @@
       "CollectionModel":{
         "title":"CollectionModel",
         "required":[
-          "project_ids"
+          "project_ids",
+          "id",
+          "external_id",
+          "external_id_system",
+          "title"
         ],
         "type":"object",
         "properties":{
@@ -4882,6 +4884,7 @@
       "ImageModel":{
         "title":"ImageModel",
         "required":[
+          "imgid",
           "imgrank",
           "file_name",
           "orig_file_name",
@@ -4994,6 +4997,7 @@
       "JobModel":{
         "title":"JobModel",
         "required":[
+          "id",
           "owner_id",
           "type",
           "creation_date",
@@ -5135,6 +5139,7 @@
       "ObjectHeaderModel":{
         "title":"ObjectHeaderModel",
         "required":[
+          "objid",
           "acquisid",
           "orig_id"
         ],
@@ -5237,6 +5242,7 @@
       "ObjectModel":{
         "title":"ObjectModel",
         "required":[
+          "objid",
           "acquisid",
           "orig_id",
           "sample_id",
@@ -5594,20 +5600,9 @@
       "ProjectModel":{
         "title":"ProjectModel",
         "required":[
+          "license",
           "projid",
-          "title",
-          "visible",
-          "status",
-          "objcount",
-          "pctvalidated",
-          "pctclassified",
-          "classifsettings",
-          "classiffieldlist",
-          "popoverfieldlist",
-          "comments",
-          "projtype",
-          "rf_models_used",
-          "cnn_network_id"
+          "title"
         ],
         "type":"object",
         "properties":{
@@ -5919,11 +5914,7 @@
         "title":"SampleModel",
         "required":[
           "sampleid",
-          "projid",
-          "orig_id",
-          "latitude",
-          "longitude",
-          "dataportal_descriptor"
+          "orig_id"
         ],
         "type":"object",
         "properties":{
@@ -6304,6 +6295,11 @@
       },
       "UserModel":{
         "title":"UserModel",
+        "required":[
+          "id",
+          "email",
+          "name"
+        ],
         "type":"object",
         "properties":{
           "id":{
@@ -6359,6 +6355,11 @@
       },
       "UserModelWithRights":{
         "title":"UserModelWithRights",
+        "required":[
+          "id",
+          "email",
+          "name"
+        ],
         "type":"object",
         "properties":{
           "id":{
