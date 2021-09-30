@@ -137,7 +137,7 @@ def test_update_prj(config, database, fastapi, caplog):
                                       'software': 't01',
                                       'time': 't03'},
                 'projid': prj_id,
-                'projtype': None,
+                'description': None,
                 'rf_models_used': None,
                 'sample_free_cols': {'argoid': 't17',
                                      'barcode': 't14',

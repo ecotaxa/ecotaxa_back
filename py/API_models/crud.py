@@ -62,7 +62,7 @@ _DBProjectDescription = {
     "popoverfieldlist": Field(title="Pop over field list", description="",
                               example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]"),
     "comments": Field(title="Comments", description="The project comments", example=""),
-    "projtype": Field(title="Project type", description="The type of the project", example=""),
+    "description": Field(title="Description", description="The project description, i.e. main traits", example=""),
     "rf_models_used": Field(title="Rf models used", description="", example=""),
     "cnn_network_id": Field(title="Cnn network id", description="", example="SCN_zooscan_group1")
 }

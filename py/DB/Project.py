@@ -50,7 +50,7 @@ class Project(Model):
     classiffieldlist = Column(VARCHAR)  # Fields available on sort & displayed field of Manual classif screen
     popoverfieldlist = Column(VARCHAR)  # Fields available on popover of Manual classif screen
     comments = Column(VARCHAR)
-    projtype = Column(VARCHAR(50))
+    description = Column(VARCHAR)
     # Note: It's loaded file_s_
     fileloaded = Column(VARCHAR)
     rf_models_used = Column(VARCHAR)

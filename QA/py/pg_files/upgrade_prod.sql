@@ -1040,6 +1040,22 @@ UPDATE alembic_version SET version_num='a4c0d0c48e5a' WHERE alembic_version.vers
 
 COMMIT;
 
+-- INFO  [alembic.runtime.migration] Running upgrade a4c0d0c48e5a -> beaa3e8e4033, empty message
+-- Running upgrade a4c0d0c48e5a -> beaa3e8e4033
+
+ALTER TABLE projects ADD COLUMN description VARCHAR;
+
+BEGIN;
+UPDATE projects
+   SET description = projtype;
+COMMIT;;
+
+ALTER TABLE projects DROP COLUMN projtype;
+
+UPDATE alembic_version SET version_num='beaa3e8e4033' WHERE alembic_version.version_num = 'a4c0d0c48e5a';
+
+COMMIT;
+
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;

@@ -81,7 +81,7 @@ logger = get_logger(__name__)
 fastapi_logger.setLevel(INFO)
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.17",
+              version="0.0.18",
               # openapi URL as seen from navigator, this is included when /docs is required
               # which serves swagger-ui JS app. Stay in /api sub-path.
               openapi_url="/api/openapi.json",
@@ -782,7 +782,7 @@ def update_project(project_id: int,
             # noinspection PyUnresolvedReferences
             present_project.update(session=sce.session,
                                    title=project.title, visible=project.visible, status=project.status,
-                                   projtype=project.projtype,
+                                   description=project.description,
                                    init_classif_list=project.init_classif_list,
                                    classiffieldlist=project.classiffieldlist, popoverfieldlist=project.popoverfieldlist,
                                    cnn_network_id=project.cnn_network_id, comments=project.comments,

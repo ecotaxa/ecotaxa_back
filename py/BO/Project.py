@@ -122,7 +122,7 @@ class ProjectBO(object):
                 self.contact = priv_user
         return self
 
-    def update(self, session: Session, title: str, visible: bool, status: str, projtype: str,
+    def update(self, session: Session, title: str, visible: bool, status: str, description: str,
                init_classif_list: List[int],
                classiffieldlist: str, popoverfieldlist: str,
                cnn_network_id: str, comments: str,
@@ -145,7 +145,7 @@ class ProjectBO(object):
         self._project.title = title
         self._project.visible = visible
         self._project.status = status
-        self._project.projtype = projtype
+        self._project.description = description
         self._project.classiffieldlist = classiffieldlist
         self._project.popoverfieldlist = popoverfieldlist
         self._project.cnn_network_id = cnn_network_id
