@@ -51,13 +51,14 @@ class TaxonomyService(Service):
         query = query.lower()
         # " " and "*" mean "any chars"
         query = query.replace("*", "%").replace(" ", "%")
+        # Old sophisticated version which allowed lineage search using '<' separator
         # It's possible to ask for both child & parent at the same time, using "<"
         # So "<" is kind of operator "descending of"
-        terms = [sub + r"%" if (not sub or sub[-1] != '%') else sub  # Semantic is 'start with'
-                 for sub in query.split("<")]
+        # terms = [sub + r"%" if (not sub or sub[-1] != '%') else sub  # Semantic is 'start with'
+        #          for sub in query.split("<")]
         # Conventionally, the first term is a filter on display_name
-        display_name_term = terms[0]
-        name_terms = terms[1:]
+        display_name_term = query + "%"  # terms[0]
+        name_terms = []  # terms[1:]
 
         # Compose the query from different case
         limit_ids_to = None
@@ -149,7 +150,7 @@ class TaxonomyService(Service):
         ret_dict = {a_taxon.id: a_taxon for a_taxon in TaxonBOSet(self.ro_session, ret_taxa).taxa}
         return [ret_dict[txid] for txid in ret_taxa]
 
-    def reclassification_history(self,  _current_user_id: Optional[UserIDT], project_id: ProjectIDT):
+    def reclassification_history(self, _current_user_id: Optional[UserIDT], project_id: ProjectIDT):
         history = ReClassificationBO.history_for_project(self.ro_session, project_id)
         return history
 
