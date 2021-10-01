@@ -72,6 +72,30 @@ class Vault(object):
         sub_path = "%s/%s" % (folder, filename)
         return sub_path
 
+    BASE_URL = "https://ecotaxa.obs-vlfr.fr/vault/%s"
+
+    def ensure_there(self, sub_path: str):
+        """
+            For devs, to ensure an image exists. If it doesn't, get it from main site.
+        """
+        img_maybe = self.path.joinpath(sub_path)
+        is_there = img_maybe.exists()
+        if not is_there:
+            import requests
+            import tempfile
+            from os import unlink
+            fout = tempfile.mktemp(suffix=sub_path[-4:])
+            r = requests.get(self.BASE_URL % sub_path, stream=True)
+            if r.status_code != 200:
+                return
+            with open(fout, 'wb') as f:
+                for chunk in r.iter_content(1024):
+                    f.write(chunk)
+            f.close()
+            img_id = int(sub_path[:-4].replace("/", ""))
+            self.store_image(Path(fout), img_id)
+            unlink(fout)
+
     def path_to(self, sub_path: str) -> str:
         """
             Return absolute path to given relative subpath.
