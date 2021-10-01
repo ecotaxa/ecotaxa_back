@@ -58,7 +58,7 @@ class TaxonomyService(Service):
         #          for sub in query.split("<")]
         # Conventionally, the first term is a filter on display_name
         display_name_term = query + "%"  # terms[0]
-        name_terms = []  # terms[1:]
+        name_terms: List[str] = []  # terms[1:]
 
         # Compose the query from different case
         limit_ids_to = None

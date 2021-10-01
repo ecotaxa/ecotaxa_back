@@ -21,14 +21,25 @@ def test_taxotree_query(config, database, fastapi, caplog):
     # Security barrier
     assert rsp.status_code == status.HTTP_200_OK
 
-    url = TAXA_SEARCH_URL.format(project_id=prj_id, query=quote_plus("cyano<living"))
+    # url = TAXA_SEARCH_URL.format(project_id=prj_id, query=quote_plus("cyano<living"))
+    # # Unauthenticated call
+    # rsp = fastapi.get(url, json={})
+    # assert rsp.json() == [{'id': 233, 'pr': 0, 'renm_id': None, 'text': 'Cyanobacteria<Bacteria'},
+    #                       {'id': 849, 'pr': 0, 'renm_id': None, 'text': 'Cyanobacteria<Proteobacteria'},
+    #                       {'id': 2396, 'pr': 0, 'renm_id': None, 'text': 'Cyanophora'},
+    #                       {'id': 1680, 'pr': 0, 'renm_id': None, 'text': 'Cyanophyceae'},
+    #                       {'id': 2395, 'pr': 0, 'renm_id': None, 'text': 'Cyanoptyche'}]
+
+    url = TAXA_SEARCH_URL.format(project_id=prj_id, query=quote_plus(" cyano "))
     # Unauthenticated call
     rsp = fastapi.get(url, json={})
-    assert rsp.json() == [{'id': 233, 'pr': 0, 'renm_id': None, 'text': 'Cyanobacteria<Bacteria'},
+    assert rsp.json() == [{'id': 4941, 'pr': 0, 'renm_id': None, 'text': 'Actinoalloteichus cyanogriseus'},
+                          {'id': 233, 'pr': 0, 'renm_id': None, 'text': 'Cyanobacteria<Bacteria'},
                           {'id': 849, 'pr': 0, 'renm_id': None, 'text': 'Cyanobacteria<Proteobacteria'},
                           {'id': 2396, 'pr': 0, 'renm_id': None, 'text': 'Cyanophora'},
                           {'id': 1680, 'pr': 0, 'renm_id': None, 'text': 'Cyanophyceae'},
-                          {'id': 2395, 'pr': 0, 'renm_id': None, 'text': 'Cyanoptyche'}]
+                          {'id': 2395, 'pr': 0, 'renm_id': None, 'text': 'Cyanoptyche'},
+                          {'id': 3522, 'pr': 0, 'renm_id': None, 'text': 'Streptomyces cyanoalbus'}]
 
 
 def test_taxo_query(config, database, fastapi, caplog):
