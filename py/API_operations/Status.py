@@ -16,7 +16,7 @@ class StatusService(Service):
     def __init__(self):
         super().__init__()
 
-    PATHS_IN_CONF = ['serverloadarea', 'ftpexportarea']
+    PATHS_IN_CONF = ['serverloadarea', 'ftpexportarea', 'modelsarea']
 
     def run(self):
         """

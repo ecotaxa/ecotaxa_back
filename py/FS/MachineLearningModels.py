@@ -4,7 +4,7 @@
 #
 import os
 from pathlib import Path
-from typing import Set
+from typing import Any
 
 
 class SavedModels(object):
@@ -12,10 +12,12 @@ class SavedModels(object):
          The ML models are in memory during their building/usage, but they can be serialized.
          They also need temporary storage while they build.
     """
+    MODELS_CONFIG_KEY = 'MODELSAREA'
 
-    def __init__(self, path: str):
-        self.path: Path = Path(path)
-        self.ok_subs: Set[str] = set()
+    def __init__(self, config: Any):
+        base_path = config[self.MODELS_CONFIG_KEY]
+        base_path = base_path.strip("'")
+        self.path: Path = Path(base_path)
 
     def get_checkpoints_dir(self, model_name: str) -> Path:
         # directory to save training checkpoints

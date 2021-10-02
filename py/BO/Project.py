@@ -567,6 +567,22 @@ class ProjectBO(object):
         return [an_id for an_id, in qry.all()]
 
     @classmethod
+    def get_all_object_ids_with_first_image(cls, session: Session, prj_id: int) -> Dict[Any, str]:  # ObjectIDT
+        """
+            Return the full list of objects IDs and first image file name inside a project.
+        """
+        sql = text("""
+        SELECT obh.objid, img.file_name
+          FROM obj_head obh
+          JOIN images img ON obh.objid = img.objid 
+                         AND img.imgrank = (SELECT MIN(img3.imgrank) FROM images img3 WHERE img3.objid = obh.objid)
+          JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
+          JOIN samples sam ON sam.sampleid = acq.acq_sample_id
+         WHERE sam.projid = :prj""")
+        res: Result = session.execute(sql, {"prj": prj_id})
+        return {objid: file_name for (objid, file_name) in res.fetchall()}
+
+    @classmethod
     def incremental_update_taxo_stats(cls, session: Session, prj_id: int, collated_changes: Dict):
         """
             Do not recompute the full stats for a project (which can be long).

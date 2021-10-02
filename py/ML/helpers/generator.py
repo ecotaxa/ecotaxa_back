@@ -3,7 +3,7 @@
 #
 # (c) 2021 Thelma Panaiotis, Jean-Olivier Irisson, GNU General Public License v3
 
-#import lycon  # image loading, manipulation
+# import lycon  # image loading, manipulation
 import cv2 as cv
 import numpy as np
 from imgaug import augmenters as iaa  # image manipulation
@@ -132,7 +132,7 @@ class EcoTaxaGenerator(utils.Sequence):
 
         # select and load images from this batch
         batch_paths = [self.images_paths[i] for i in indexes]
-        #batch_orig_images = [lycon.load(p) / 255 for p in batch_paths]
+        # batch_orig_images = [lycon.load(p) / 255 for p in batch_paths]
         # TODO: No idea why the 255
         batch_orig_images = [cv.imread(p) / 255 for p in batch_paths]
 

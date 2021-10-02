@@ -13,10 +13,11 @@
 
 import pickle
 from io import StringIO
-from typing import IO
+from typing import IO, Dict
 
 import pandas as pd  # type: ignore
 
+from BO.Object import ObjectIDT
 from FS.MachineLearningModels import SavedModels
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger
@@ -42,24 +43,24 @@ class DeepFeaturesExtractor(MachineLearningBase):
         """
         super().__init__(vault, model_dir)
 
-    def run(self, model_name: str):
+    def run(self, ids_and_images: Dict[ObjectIDT, str], model_name: str):
         logger.info('Load feature extractor and dimensionality reducer')
 
         input_shape, my_fe, pca = self.load_model(model_name)
 
         logger.info('Load data')
 
-        source = "foobarremoveme"  # TODO: Lol
-
-        # read DataFrame with image ids, paths and labels
-        # NB: those would be in the database in EcoTaxa
-        df = pd.read_csv('data/' + source + '_labels.csv', index_col='id')
+        # Prepare a df with input data
+        # TODO: Maybe a generator would help for big projects
+        df = pd.DataFrame([(obj, fil, None) for obj, fil in ids_and_images.items()],
+                          columns=["id", "img_path", "label"])
+        df.set_index(["id"])
 
         logger.info('Extract features')
 
-        reduced_features_df = self.predict_dataframe(df, input_shape, my_fe, pca)
+        features_df = self.predict_dataframe(df, input_shape, my_fe, pca)
 
-        reduced_features_df.to_csv('data/' + source + '_deep_features.csv')
+        return features_df
 
     def predict_dataframe(self, in_df, input_shape, my_fe, pca):
         """
@@ -76,7 +77,7 @@ class DeepFeaturesExtractor(MachineLearningBase):
         full_features = my_fe.predict(batches, max_queue_size=max(10, self.WORKERS * 2), workers=self.WORKERS)
         # and reduce their dimension
         reduced_features = pca.transform(full_features)
-        # save them to disk
+        # make a result dataframe
         reduced_features_df = pd.DataFrame(reduced_features, index=in_df.index)
         return reduced_features_df
 

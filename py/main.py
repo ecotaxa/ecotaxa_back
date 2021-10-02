@@ -41,7 +41,7 @@ from API_operations.DBSyncService import DBSyncService
 from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
 from API_operations.ObjectManager import ObjectManager
-from API_operations.Prediction import PredictForProject
+from API_operations.Prediction import PredictForProject, CNNForProject
 from API_operations.Stats import ProjectStatsFetcher
 from API_operations.Status import StatusService
 from API_operations.Subset import SubsetServiceOnProject
@@ -1223,6 +1223,17 @@ def predict_object_set(filters: ProjectFiltersModel = Body(title="Filters",
     """
     with PredictForProject(request, filters) as sce:
         rsp = sce.run(current_user)
+    return rsp
+
+
+@app.get("/project/do_cnn", tags=['objects'], response_model=str)
+def compute_project_cnn(proj_id: int,
+                        current_user: Optional[int] = Depends(get_optional_current_user)) -> str:
+    """
+        Generate CNN features for the requested project.
+    """
+    with CNNForProject() as sce:
+        rsp = sce.run(current_user, proj_id)
     return rsp
 
 

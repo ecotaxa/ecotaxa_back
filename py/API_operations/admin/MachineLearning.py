@@ -34,7 +34,7 @@ class MachineLearningService(Service):
     def __init__(self):
         super().__init__()
         self.vault = Vault(join(self.link_src, 'vault'))
-        self.models_dir = SavedModels("/tmp/models")
+        self.models_dir = SavedModels(self.config)
 
     def train(self, current_user_id: UserIDT,
               prj_id: ProjectIDT,
@@ -47,11 +47,10 @@ class MachineLearningService(Service):
             obj_with_parents, details, total = mgr.query(current_user_id=current_user_id, proj_id=prj_id,
                                                          return_fields=["txo.display_name", "img.file_name"],
                                                          order_field="obj.objid",
-                                                         window_size=200,
+                                                         window_size=2000,
                                                          filters=obj_filter)
         # Prepare input data, in the form of CSV text:
-        #
-        # 1,data/images/1.jpg,Cladocera
+        # e.g. 1,data/images/1.jpg,Cladocera
         pd_csv = StringIO()
         pd_csv.write("id,img_path,label\n")
         for an_obj_with_parents, fields in zip(obj_with_parents, details):
