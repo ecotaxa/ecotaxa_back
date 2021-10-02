@@ -10,12 +10,13 @@
 #
 
 import pickle
-from pathlib import Path
+from typing import IO
 
 import pandas as pd  # type: ignore
 import tensorflow as tf  # type: ignore
 from sklearn.decomposition import PCA  # type: ignore
 
+from FS.MachineLearningModels import SavedModels
 from FS.Vault import Vault
 from ML.Base_ML import MachineLearningBase
 from ML.helpers import generator  # type: ignore
@@ -29,14 +30,14 @@ class DimensionReducer(MachineLearningBase):
         PCA on dimensions
     """
 
-    def __init__(self, vault: Vault, model_dir: Path):
+    def __init__(self, vault: Vault, model_dir: SavedModels):
         """
         :param vault: the vault for finding images
         :param model_dir: directory to read previous model
         """
         super().__init__(vault, model_dir)
 
-    def run(self, csv_in):
+    def run(self, csv_in: IO, model_name: str):
         logger.info('Set options')
 
         batch_size = 16  # size of images batches in GPU memory
@@ -46,7 +47,7 @@ class DimensionReducer(MachineLearningBase):
         logger.info('Load feature extractor')
 
         # save feature extractor
-        my_fe = tf.keras.models.load_model(self.extractor_path())
+        my_fe = tf.keras.models.load_model(self.model_dir.extractor_path(model_name))
 
         # get model input shape
         input_shape = my_fe.layers[0].input_shape
@@ -76,5 +77,5 @@ class DimensionReducer(MachineLearningBase):
         pca.fit(features)
 
         # save it for later application
-        with open(self.reducer_pickle_path(), 'wb') as pca_file:
+        with open(self.model_dir.reducer_pickle_path(model_name), 'wb') as pca_file:
             pickle.dump(pca, pca_file)

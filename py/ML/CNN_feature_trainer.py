@@ -9,20 +9,19 @@
 #
 
 # https://github.com/ThelmaPana/plankton_classif_benchmark/blob/8a601ecbaffa3071289329fef647ade2a36fc7a6/models.py#L399
-
-import os
-from pathlib import Path
+from typing import IO, Optional, Dict
 
 import numpy as np
 import pandas as pd  # type: ignore
-import tensorflow as tf  # type: ignore
 from sklearn import metrics  # type: ignore
 
+from FS.MachineLearningModels import SavedModels
 from FS.Vault import Vault
 from ML.Base_ML import MachineLearningBase
 from ML.helpers import cnn  # type: ignore # custom functions for CNN generation
 from ML.helpers import generator  # type: ignore # custom data generator
 from helpers.DynamicLogs import get_logger
+from .helpers.tensorflow_cfg import configured_tf as tf  # type: ignore
 
 logger = get_logger(__name__)
 
@@ -32,20 +31,18 @@ class CNNFeatureTrainer(MachineLearningBase):
     Train a deep network for plankton image classification.
     """
 
-    def __init__(self, vault: Vault, output_dir: Path):
+    def __init__(self, vault: Vault, model_dir: SavedModels):
         """
         :param vault: the vault for finding images
-        :param output_dir: directory to save data/models
+        :param model_dir: directory to save data/models
         """
-        # I/O
-        super().__init__(vault, output_dir)
-        # directory to save training checkpoints
-        self.ckpt_dir = output_dir / 'checkpoints'
-        os.makedirs(self.ckpt_dir, exist_ok=True)
+        super().__init__(vault, model_dir)
 
-    def run(self, csv_in):
+    def run(self, csv_in: IO, model_name: str):
 
         logger.info('Set options')
+
+        ckpt_dir = self.model_dir.get_checkpoints_dir(model_name)
 
         # Data generator parameters (see generator.EcoTaxaGenerator)
         batch_size = 16
@@ -90,6 +87,7 @@ class CNNFeatureTrainer(MachineLearningBase):
 
         # generate categories weights
         # i.e. a dict with format { class number : class weight }
+        class_weight: Optional[Dict[float, float]]
         if use_class_weight:
             max_count = np.max(class_counts)
             class_weight = {}
@@ -98,7 +96,7 @@ class CNNFeatureTrainer(MachineLearningBase):
         else:
             class_weight = None
 
-        # define numnber of  classes to train on
+        # define number of classes to train on
         nb_of_classes = len(classes)
 
         # define data generators
@@ -124,7 +122,7 @@ class CNNFeatureTrainer(MachineLearningBase):
         logger.info('Prepare model')
 
         # try loading the model from a previous training checkpoint
-        my_cnn, initial_epoch = cnn.Load(self.ckpt_dir.as_posix())
+        my_cnn, initial_epoch = cnn.Load(ckpt_dir.as_posix())
 
         # if nothing is loaded this means the model was never trained
         # in this case, define it
@@ -167,7 +165,7 @@ class CNNFeatureTrainer(MachineLearningBase):
             epochs=epochs,
             initial_epoch=initial_epoch,
             class_weight=class_weight,
-            output_dir=self.ckpt_dir.as_posix(),
+            output_dir=ckpt_dir.as_posix(),
             workers=workers
         )
         # TODO deal with history for restarts
@@ -191,7 +189,8 @@ class CNNFeatureTrainer(MachineLearningBase):
         logger.info('Create feature extractor')
 
         # save model
-        my_cnn.save(self.best_model_path())
+        # TODO: Seems not really needed
+        my_cnn.save(self.model_dir.best_model_path(model_name))
 
         # drop the Dense and Dropout layers to get only the feature extractor
         my_fe = tf.keras.models.Sequential(
@@ -199,7 +198,7 @@ class CNNFeatureTrainer(MachineLearningBase):
              if not (isinstance(layer, tf.keras.layers.Dense) |
                      isinstance(layer, tf.keras.layers.Dropout))
              ])
-        my_fe.summary()
+        my_fe.summary(print_fn=logger.info)
 
         # save feature extractor
-        my_fe.save(self.extractor_path())
+        my_fe.save(self.model_dir.extractor_path(model_name))

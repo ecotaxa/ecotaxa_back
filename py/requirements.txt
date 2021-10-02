@@ -36,7 +36,7 @@ aiofiles==0.7.0
 # Analyzis of XLSX data sources
 openpyxl==3.0.9
 openpyxl-stubs==0.1.19
-# Image processing. Not needed for production.
+# Image processing libs.
 lycon==0.2.0
 imgaug==0.4.0
 # Machine learning. NOT automatically regression-tested so to upgrade with caution.

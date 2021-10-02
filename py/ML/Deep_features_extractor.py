@@ -12,63 +12,106 @@
 #
 
 import pickle
+from io import StringIO
+from typing import IO
 
-import dataset  # custom data generator
-import pandas as pd
+import pandas as pd  # type: ignore
 
+from FS.MachineLearningModels import SavedModels
+from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger
+from .Base_ML import MachineLearningBase
+from .helpers import generator  # type: ignore # custom data generator
 # Import the library, only after having tweaked it
-from .helpers.tensorflow_cfg import configured_tf
+from .helpers.tensorflow_cfg import configured_tf  # type: ignore
 
 logger = get_logger(__name__)
 
 
-class DeepFeaturesExtractor(object):
+class DeepFeaturesExtractor(MachineLearningBase):
     """
-        Input: a set of images, from a set of objects.
-        Ouput: stored CNN features for the images.
-        Configuration: from files
+        Extract CNN features from a set of objects for which renew is necessary.
     """
     BATCH_SIZE = 16  # size of images batches in GPU memory
     WORKERS = 10  # number of parallel threads to prepare batches
 
-    def __init__(self):
-        pass
+    def __init__(self, vault: Vault, model_dir: SavedModels):
+        """
+        :param vault: the vault for finding images
+        :param model_dir: directory to read stored models
+        """
+        super().__init__(vault, model_dir)
 
-    def run(self):
-        logger.info('Set options')
-
+    def run(self, model_name: str):
         logger.info('Load feature extractor and dimensionality reducer')
 
-        my_fe = configured_tf.keras.models.load_model('out/feature_extractor')
+        input_shape, my_fe, pca = self.load_model(model_name)
+
+        logger.info('Load data')
+
+        source = "foobarremoveme"  # TODO: Lol
+
+        # read DataFrame with image ids, paths and labels
+        # NB: those would be in the database in EcoTaxa
+        df = pd.read_csv('data/' + source + '_labels.csv', index_col='id')
+
+        logger.info('Extract features')
+
+        reduced_features_df = self.predict_dataframe(df, input_shape, my_fe, pca)
+
+        reduced_features_df.to_csv('data/' + source + '_deep_features.csv')
+
+    def predict_dataframe(self, in_df, input_shape, my_fe, pca):
+        """
+            Predict what's in in_df and return the result dataframe.
+        """
+        # prepare data batches
+        batches = generator.EcoTaxaGenerator(
+            images_paths=self.full_img_paths(in_df.img_path.values),
+            input_shape=input_shape,
+            labels=None, classes=None,
+            # NB: we don't need the labels here, we just run images through the network
+            batch_size=self.BATCH_SIZE, augment=False, shuffle=False)
+        # extract features by going through the batches
+        full_features = my_fe.predict(batches, max_queue_size=max(10, self.WORKERS * 2), workers=self.WORKERS)
+        # and reduce their dimension
+        reduced_features = pca.transform(full_features)
+        # save them to disk
+        reduced_features_df = pd.DataFrame(reduced_features, index=in_df.index)
+        return reduced_features_df
+
+    def load_model(self, model_name):
+        """
+            Load saved model and PCA params, for the given model.
+        """
+        my_fe = configured_tf.keras.models.load_model(self.model_dir.extractor_path(model_name))
         # get model input shape
         input_shape = my_fe.layers[0].input_shape
         # remove the None element at the start (which is where the batch size goes)
         input_shape = tuple(x for x in input_shape if x is not None)
-
-        with open('out/dim_reducer.pickle', 'rb') as pca_file:
+        with open(self.model_dir.reducer_pickle_path(model_name), 'rb') as pca_file:
             pca = pickle.load(pca_file)
+        return input_shape, my_fe, pca
 
-        logger.info('Load data and extract features')
+    def test(self, csv_in: IO, model_name: str) -> StringIO:
+        """
+            Try the model.
+        """
+        logger.info('TEST: Load feature extractor and dimensionality reducer')
 
-        for source in ['training', 'unknown']:
-            # read DataFrame with image ids, paths and labels
-            # NB: those would be in the database in EcoTaxa
-            df = pd.read_csv('data/' + source + '_labels.csv', index_col='id')
+        input_shape, my_fe, pca = self.load_model(model_name)
 
-            # prepare data batches
-            batches = dataset.EcoTaxaGenerator(
-                images_paths=df.img_path.values,
-                input_shape=input_shape,
-                labels=None, classes=None,
-                # NB: we don't need the labels here, we just run images through the network
-                batch_size=self.BATCH_SIZE, augment=False, shuffle=False)
+        logger.info('TEST: Load data and extract features')
 
-            # extract features by going through the batches
-            full_features = my_fe.predict(batches, max_queue_size=max(10, self.WORKERS * 2), workers=self.WORKERS)
-            # and reduce their dimension
-            reduced_features = pca.transform(full_features)
+        # read DataFrame with image ids, paths and labels
+        # NB: those would be in the database in EcoTaxa
+        df = pd.read_csv(csv_in, index_col='id')
 
-            # save them to disk
-            reduced_features_df = pd.DataFrame(reduced_features, index=df.index)
-            reduced_features_df.to_csv('data/' + source + '_deep_features.csv')
+        reduced_features_df = self.predict_dataframe(df, input_shape, my_fe, pca)
+
+        logger.info('TEST: Dumping a few rows')
+
+        ret = StringIO()
+        reduced_features_df.to_csv(ret)
+
+        return ret

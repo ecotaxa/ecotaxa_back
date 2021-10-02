@@ -9,6 +9,7 @@ from typing import Any, List, Tuple
 
 DirEntryT = Tuple[str, str, int, str]
 
+
 class CommonFolder(object):
     """
          The directory where files can be read by everyone.

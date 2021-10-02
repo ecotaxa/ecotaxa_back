@@ -19,6 +19,7 @@ from DB.Project import ProjectIDT
 from FS.MachineLearningModels import SavedModels
 from FS.Vault import Vault
 from ML.CNN_feature_trainer import CNNFeatureTrainer
+from ML.Deep_features_extractor import DeepFeaturesExtractor
 from ML.Dimension_reducer import DimensionReducer
 from helpers.DynamicLogs import get_logger
 
@@ -45,6 +46,7 @@ class MachineLearningService(Service):
             # Query like the API would do
             obj_with_parents, details, total = mgr.query(current_user_id=current_user_id, proj_id=prj_id,
                                                          return_fields=["txo.display_name", "img.file_name"],
+                                                         order_field="obj.objid",
                                                          window_size=200,
                                                          filters=obj_filter)
         # Prepare input data, in the form of CSV text:
@@ -56,12 +58,21 @@ class MachineLearningService(Service):
             objid = an_obj_with_parents[0]
             taxo, img_path = fields
             pd_csv.write("%d,%s,%s\n" % (objid, img_path, taxo))
-        trainer = CNNFeatureTrainer(vault=self.vault, output_dir=self.models_dir.path)
+        trainer = CNNFeatureTrainer(vault=self.vault, model_dir=self.models_dir)
         pd_csv.seek(0)
-        trainer.run(pd_csv)
-        #
+        trainer.run(pd_csv, out_model)
         # PCA
-        reducer = DimensionReducer(vault=self.vault, model_dir=self.models_dir.path)
+        reducer = DimensionReducer(vault=self.vault, model_dir=self.models_dir)
         pd_csv.seek(0)
-        reducer.run(pd_csv)
-        return "OK"
+        reducer.run(pd_csv, out_model)
+        # Try a bit
+        extractor = DeepFeaturesExtractor(vault=self.vault, model_dir=self.models_dir)
+        pd_csv.seek(0)
+        csv_out = extractor.test(pd_csv, out_model)
+        csv_out.seek(0)
+        ret = []
+        for a_line in csv_out.readlines():
+            ret.append(a_line)
+            if len(ret) > 100:
+                break
+        return "".join(ret)

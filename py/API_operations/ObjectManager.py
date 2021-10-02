@@ -168,7 +168,8 @@ class ObjectManager(Service):
         if alias == "obf":
             ret.add_expression("obf", "objfid", asc_desc)
         else:
-            ret.add_expression("obh", "objid", asc_desc)
+            if "obh.objid" not in ret.referenced_columns():
+                ret.add_expression("obh", "objid", asc_desc)
         return ret
 
     @staticmethod

@@ -8,7 +8,7 @@ import os
 from logging import INFO
 from typing import Union, Tuple
 
-from fastapi import FastAPI, Request, Response, status, Depends, HTTPException, UploadFile, File, Query, Form
+from fastapi import FastAPI, Request, Response, status, Depends, HTTPException, UploadFile, File, Query, Form, Body
 from fastapi.logger import logger as fastapi_logger
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
@@ -25,6 +25,7 @@ from API_models.login import LoginReq
 from API_models.merge import MergeRsp
 from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp, ClassifyReq, ObjectModel, \
     ObjectHeaderModel, HistoricalClassificationModel, ObjectSetSummaryRsp, ClassifyAutoReq
+from API_models.prediction import PredictionRsp, PredictionReq
 from API_models.subset import SubsetReq, SubsetRsp
 from API_models.taxonomy import TaxaSearchRsp, TaxonModel, TaxonomyTreeStatus, TaxonUsageModel
 from API_operations.CRUD.Collections import CollectionsService
@@ -40,6 +41,7 @@ from API_operations.DBSyncService import DBSyncService
 from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
 from API_operations.ObjectManager import ObjectManager
+from API_operations.Prediction import PredictForProject
 from API_operations.Stats import ProjectStatsFetcher
 from API_operations.Status import StatusService
 from API_operations.Subset import SubsetServiceOnProject
@@ -1208,6 +1210,22 @@ def export_object_set(filters: ProjectFiltersModel,
     return rsp
 
 
+@app.post("/object_set/predict", tags=['objects'], response_model=PredictionRsp)
+def predict_object_set(filters: ProjectFiltersModel = Body(title="Filters",
+                                                           description="Description of how to reduce project data.",
+                                                           default=None),
+                       request: PredictionReq = Body(title="Prediction Request",
+                                                     description="How to predict, in details.",
+                                                     default=None),
+                       current_user: Optional[int] = Depends(get_optional_current_user)) -> PredictionRsp:
+    """
+        Start a prediction AKA automatic classification for the given object set and options.
+    """
+    with PredictForProject(request, filters) as sce:
+        rsp = sce.run(current_user)
+    return rsp
+
+
 @app.delete("/object_set/", tags=['objects'])
 def erase_object_set(object_ids: ObjectIDListT,
                      current_user: int = Depends(get_current_user)) -> Tuple[int, int, int, int]:
@@ -1539,12 +1557,13 @@ def machine_learning_train(project_id: int = Query(default=None, title="Input pr
                                                    example="1040"),
                            model_name: str = Query(default=None, title="Produced model name",
                                                    description="File where the CNN model will be written.",
-                                                   example="zooscan_cnn"),
+                                                   example="zooscan"),
                            current_user: int = Depends(get_current_user)) -> str:
     """
         Entry point for training the CNN features, from a reference project.
     """
     assert project_id is not None, "Please provide a project_id e.g. ?project_id=1234"
+    assert model_name is not None, "Please provide a model name e.g. &model_name=zooscan"
     # Import here only because of numpy version conflict b/w lycon and tensorflow
     from API_operations.admin.MachineLearning import MachineLearningService
     with MachineLearningService() as sce:

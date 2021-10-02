@@ -2,10 +2,12 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # (c) 2021 Jean-Olivier Irisson, GNU General Public License v3
 #
-import os
-from pathlib import Path
 
+from FS.MachineLearningModels import SavedModels
 from FS.Vault import Vault
+from helpers.DynamicLogs import get_logger
+
+logger = get_logger(__name__)
 
 
 class MachineLearningBase(object):
@@ -14,25 +16,18 @@ class MachineLearningBase(object):
         and produce data, either in FS or in memory.
     """
 
-    def __init__(self, vault: Vault, model_dir: Path):
+    def __init__(self, vault: Vault, model_dir: SavedModels):
         self.vault = vault
         self.model_dir = model_dir
-        os.makedirs(model_dir, exist_ok=True)
 
     def full_img_paths(self, paths):
         """
             Prefix image paths to get the physical full path.
         """
+        nb_loaded = 0
         for an_img in paths:
-            self.vault.ensure_there(an_img)
+            nb_loaded += 0 if self.vault.ensure_there(an_img) else 1
         vault_def = self.vault.path_to
+        if nb_loaded != len(paths):
+            logger.info("Downloaded %d images", nb_loaded)
         return [vault_def(an_img) for an_img in paths]
-
-    def extractor_path(self) -> Path:
-        return self.model_dir / "extractor"
-
-    def best_model_path(self) -> Path:
-        return self.model_dir / "best_model"
-
-    def reducer_pickle_path(self) -> Path:
-        return self.model_dir / "dim_reducer.pickle"
