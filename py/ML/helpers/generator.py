@@ -3,7 +3,8 @@
 #
 # (c) 2021 Thelma Panaiotis, Jean-Olivier Irisson, GNU General Public License v3
 
-import lycon  # image loading, manipulation
+#import lycon  # image loading, manipulation
+import cv2 as cv
 import numpy as np
 from imgaug import augmenters as iaa  # image manipulation
 from sklearn.preprocessing import MultiLabelBinarizer  # one-hot encoder
@@ -117,6 +118,12 @@ class EcoTaxaGenerator(utils.Sequence):
         )
         return seq(images=images)
 
+    @staticmethod
+    def dbg_save(img, path):
+        for_save = 255 * (img - img.min()) / (img.max() - img.min())
+        for_save = np.array(for_save, np.int)
+        cv.imwrite(path, for_save)
+
     def __getitem__(self, index):
         """Generate one batch of data"""
 
@@ -125,7 +132,9 @@ class EcoTaxaGenerator(utils.Sequence):
 
         # select and load images from this batch
         batch_paths = [self.images_paths[i] for i in indexes]
-        batch_orig_images = [lycon.load(p) / 255 for p in batch_paths]
+        #batch_orig_images = [lycon.load(p) / 255 for p in batch_paths]
+        # TODO: No idea why the 255
+        batch_orig_images = [cv.imread(p) / 255 for p in batch_paths]
 
         # resize images to the input dimension of the network
         batch_prepared_images = []
@@ -145,11 +154,17 @@ class EcoTaxaGenerator(utils.Sequence):
             # upscale small images or downscale large ones
             if (self.upscale) or (dim_max > input_size):
                 # resize image so that largest dim is now equal to input_size
-                img = lycon.resize(
-                    img,
-                    height=max(h * input_size // dim_max, 1),
-                    width=max(w * input_size // dim_max, 1),
-                    interpolation=lycon.Interpolation.AREA
+                # img = lycon.resize(
+                #     img,
+                #     height=max(h * input_size // dim_max, 1),
+                #     width=max(w * input_size // dim_max, 1),
+                #     interpolation=lycon.Interpolation.AREA
+                # )
+                new_height = max(h * input_size // dim_max, 1)
+                new_width = max(w * input_size // dim_max, 1)
+                img = cv.resize(
+                    img, (new_width, new_height),
+                    interpolation=cv.INTER_AREA
                 )
                 h, w = img.shape[0:2]
 
@@ -166,6 +181,8 @@ class EcoTaxaGenerator(utils.Sequence):
             # replace pixels by input image
             img_square[offset_ver:offset_ver + h, offset_hor:offset_hor + w] = img
             batch_prepared_images.append(img_square)
+
+            # self.dbg_save(img_square, "/tmp/out_rsz.jpg")
 
         # convert to array of images
         batch_prepared_images = np.array([img for img in batch_prepared_images], dtype='float32')

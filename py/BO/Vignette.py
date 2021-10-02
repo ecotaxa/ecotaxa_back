@@ -6,7 +6,7 @@ from configparser import ConfigParser
 from os.path import realpath, dirname, join
 from pathlib import Path
 
-import numpy as np
+import numpy as np  # type: ignore
 from PIL import Image, ImageDraw, ImageFont  # type: ignore
 
 HERE = dirname(realpath(__file__))

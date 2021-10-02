@@ -11,7 +11,7 @@
 # https://github.com/ThelmaPana/plankton_classif_benchmark/blob/8a601ecbaffa3071289329fef647ade2a36fc7a6/models.py#L399
 from typing import IO, Optional, Dict
 
-import numpy as np
+import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
 from sklearn import metrics  # type: ignore
 
