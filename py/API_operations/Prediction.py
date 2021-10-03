@@ -85,7 +85,7 @@ class PredictForProject(JobServiceBase):
 
 class CNNForProject(Service):
     """
-        CNN generation for a project
+        CNN features generation for a project
     """
 
     def __init__(self):
@@ -109,6 +109,8 @@ class CNNForProject(Service):
         model_name = 'zooscan'
         # Get data i.e objects ID and images from the project
         ids_and_images = ProjectBO.get_all_object_ids_with_first_image(self.ro_session, proj_id)
+        if len(ids_and_images) == 0:
+            return "No image!"
         # Call feature extractor
         extractor = DeepFeaturesExtractor(self.vault, self.models_dir)
         features = extractor.run(ids_and_images, model_name)
@@ -118,6 +120,6 @@ class CNNForProject(Service):
         logger.info("%d previous CNN rows erased", nb_previous)
         self.session.commit()
         with CodeTimer("Saving new CNN ", logger):
-            AutomatedFeatures.save(self.session, features)
+            nb_rows = AutomatedFeatures.save(self.session, features)
         self.session.commit()
-        return "OK"
+        return "OK, %d CNN features computed and written" % nb_rows

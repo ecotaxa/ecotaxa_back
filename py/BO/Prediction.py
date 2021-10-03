@@ -46,7 +46,7 @@ class AutomatedFeatures(object):
         return nb_deleted
 
     @classmethod
-    def save(cls, session: Session, features: Any):
+    def save(cls, session: Session, features: Any) -> int:
         """
             Insert CNN features to DB.
             Features is an iterable dict-like, a pandas dataframe for the moment.
@@ -63,3 +63,4 @@ class AutomatedFeatures(object):
             if nb_rows % cls.SAVE_EVERY == 0:
                 writer.do_bulk_save()
         writer.do_bulk_save()
+        return nb_rows
