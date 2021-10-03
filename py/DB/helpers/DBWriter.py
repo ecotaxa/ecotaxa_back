@@ -9,8 +9,9 @@ from .Bean import Bean
 from .Direct import text
 from .ORM import Session, Table, MetaData, minimal_table_of
 from .Postgres import SequenceCache
+from ..CNNFeature import ObjectCNNFeature
 from ..Image import Image
-from ..Object import ObjectHeader, ObjectFields, ObjectCNNFeature
+from ..Object import ObjectHeader, ObjectFields
 
 logger = get_logger(__name__)
 

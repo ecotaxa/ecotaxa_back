@@ -9,7 +9,7 @@ from typing import Dict, Set
 # noinspection PyPackageRequirements
 from sqlalchemy import Index, Column, ForeignKey, Sequence, Integer
 # noinspection PyPackageRequirements
-from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, INTEGER, REAL, DOUBLE_PRECISION, DATE, TIME, FLOAT, CHAR, \
+from sqlalchemy.dialects.postgresql import BIGINT, VARCHAR, INTEGER, DOUBLE_PRECISION, DATE, TIME, FLOAT, CHAR, \
     TIMESTAMP
 # noinspection PyPackageRequirements
 from sqlalchemy.orm import relationship, Session
@@ -180,17 +180,6 @@ for i in range(1, 501):
 for i in range(1, 21):
     setattr(ObjectFields, "t%02d" % i, Column(VARCHAR(250)))
 
-
-class ObjectCNNFeature(Model):
-    __tablename__ = 'obj_cnn_features'
-    objcnnid = Column(BIGINT, ForeignKey('obj_head.objid', ondelete="CASCADE"), primary_key=True)
-    # The relationships are created in Relations.py but the typing here helps the IDE
-    object: relationship
-
-
-# Ajout des colonnes numériques & textuelles libres
-for i in range(1, 51):
-    setattr(ObjectCNNFeature, "cnn%02d" % i, Column(REAL))
 
 Index('is_objectsacqclassifqual', ObjectHeader.__table__.c.acquisid, ObjectHeader.__table__.c.classif_id,
       ObjectHeader.__table__.c.classif_qual)

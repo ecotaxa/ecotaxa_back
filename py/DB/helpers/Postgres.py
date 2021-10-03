@@ -12,7 +12,7 @@ from typing import List, Tuple
 # noinspection PyUnresolvedReferences
 from sqlalchemy import VARCHAR, INTEGER, CHAR
 # noinspection PyUnresolvedReferences
-from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, DATE, TIMESTAMP, BIGINT, BYTEA
+from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, REAL, DATE, TIMESTAMP, BIGINT, BYTEA
 # noinspection PyUnresolvedReferences
 from sqlalchemy.dialects.postgresql import dialect as pg_dialect
 # noinspection PyUnresolvedReferences

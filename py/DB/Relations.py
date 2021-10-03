@@ -6,10 +6,11 @@
 #
 
 from .Acquisition import Acquisition
+from .CNNFeature import ObjectCNNFeature
 from .Collection import Collection, CollectionProject, CollectionUserRole, CollectionOrgaRole
 from .Image import Image
 from .Job import Job
-from .Object import ObjectHeader, ObjectFields, ObjectCNNFeature, ObjectsClassifHisto
+from .Object import ObjectHeader, ObjectFields, ObjectsClassifHisto
 # Particle project
 from .ParticleProject import ParticleProject, ParticleSample
 from .Process import Process

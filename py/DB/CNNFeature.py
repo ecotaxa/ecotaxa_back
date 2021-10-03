@@ -1,0 +1,21 @@
+# -*- coding: utf-8 -*-
+# This file is part of Ecotaxa, see license.md in the application root directory for license informations.
+# Copyright (C) 2015-2021  Picheral, Colin, Irisson (UPMC-CNRS)
+#
+
+from DB import Model
+from .helpers.DDL import ForeignKey
+from .helpers.ORM import Column, relationship
+from .helpers.Postgres import BIGINT, REAL
+
+
+class ObjectCNNFeature(Model):
+    __tablename__ = 'obj_cnn_features'
+    objcnnid = Column(BIGINT, ForeignKey('obj_head.objid', ondelete="CASCADE"), primary_key=True)
+    # The relationships are created in Relations.py but the typing here helps the IDE
+    object: relationship
+
+
+# Ajout des colonnes numériques & textuelles libres
+for i in range(1, 51):
+    setattr(ObjectCNNFeature, "cnn%02d" % i, Column(REAL))
