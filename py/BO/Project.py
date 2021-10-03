@@ -11,12 +11,12 @@ from typing import List, Dict, Any, Iterable, Optional, Union
 from BO.Classification import ClassifIDListT
 from BO.Instrument import DescribedInstrumentSet
 from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping, TableMapping
+from BO.Prediction import AutomatedFeatures
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.User import MinimalUserBO, UserActivity, UserIDT
 from BO.helpers.DataclassAsDict import DataclassAsDict
 from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFields, Acquisition, Process, \
-    ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram, ObjectCNNFeature, \
-    ObjectsClassifHisto
+    ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram, ObjectsClassifHisto
 from DB.Object import VALIDATED_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL
 from DB.Project import ProjectIDT, ProjectIDListT
 from DB.User import Role
@@ -133,14 +133,8 @@ class ProjectBO(object):
         proj_id = self._project.projid
         # Field reflexes
         if cnn_network_id != self._project.cnn_network_id:
-            sub_qry: Query = session.query(ObjectHeader.objid)
-            sub_qry = sub_qry.join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
-            sub_qry = sub_qry.join(Sample, and_(Sample.sampleid == Acquisition.acq_sample_id,
-                                                Sample.projid == proj_id))
             # Delete CNN features which depend on the CNN network
-            qry: Query = session.query(ObjectCNNFeature)
-            qry = qry.filter(ObjectCNNFeature.objcnnid.in_(sub_qry.subquery()))
-            qry.delete(synchronize_session=False)
+            AutomatedFeatures.delete_all(session, proj_id)
         # Fields update
         self._project.title = title
         self._project.visible = visible

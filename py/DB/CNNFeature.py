@@ -4,6 +4,7 @@
 #
 
 from DB import Model
+from .helpers.Bean import Bean
 from .helpers.DDL import ForeignKey
 from .helpers.ORM import Column, relationship
 from .helpers.Postgres import BIGINT, REAL
@@ -16,6 +17,17 @@ class ObjectCNNFeature(Model):
     object: relationship
 
 
-# Ajout des colonnes numériques & textuelles libres
-for i in range(1, 51):
-    setattr(ObjectCNNFeature, "cnn%02d" % i, Column(REAL))
+# The features in _each_ row
+_FEATURES = ["cnn%02d" % i for i in range(1, 51)]
+
+for a_feat in _FEATURES:
+    setattr(ObjectCNNFeature, a_feat, Column(REAL))
+
+
+class ObjectCNNFeaturesBean(Bean):
+    """
+        A bean for feeding DBWriter.
+    """
+    def __init__(self, obj_id, features):
+        super().__init__(zip(_FEATURES, features))
+        self["objcnnid"] = obj_id

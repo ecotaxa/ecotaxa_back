@@ -38,7 +38,8 @@ class SequenceCache(object):
         self.seq_name = seq_name
         self.size = size
         self.store: List[int] = []
-        populate(self.store, self.sess, self.seq_name, self.size)
+        # Do not consume sequence during __init__, so if the cache is not used, no useless seq consumption
+        # populate(self.store, self.sess, self.seq_name, self.size)
 
     def next(self):
         try:

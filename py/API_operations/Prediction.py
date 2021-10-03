@@ -10,6 +10,7 @@ from typing import Dict
 
 from API_models.crud import ProjectFilters
 from API_models.prediction import PredictionReq, PredictionRsp
+from BO.Prediction import AutomatedFeatures
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
@@ -20,6 +21,7 @@ from FS.Vault import Vault
 from ML.Deep_features_extractor import DeepFeaturesExtractor
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 # TODO: Move somewhere else
+from helpers.Timer import CodeTimer
 from .helpers.JobService import JobServiceBase
 from .helpers.Service import Service
 
@@ -111,4 +113,11 @@ class CNNForProject(Service):
         extractor = DeepFeaturesExtractor(self.vault, self.models_dir)
         features = extractor.run(ids_and_images, model_name)
         # Save CNN
-        return str(features[0])
+        with CodeTimer("Erasing previous CNN ", logger):
+            nb_previous = AutomatedFeatures.delete_all(self.session, proj_id)
+        logger.info("%d previous CNN rows erased", nb_previous)
+        self.session.commit()
+        with CodeTimer("Saving new CNN ", logger):
+            AutomatedFeatures.save(self.session, features)
+        self.session.commit()
+        return "OK"

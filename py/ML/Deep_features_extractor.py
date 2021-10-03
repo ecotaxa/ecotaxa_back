@@ -52,9 +52,9 @@ class DeepFeaturesExtractor(MachineLearningBase):
 
         # Prepare a df with input data
         # TODO: Maybe a generator would help for big projects
-        df = pd.DataFrame([(obj, fil, None) for obj, fil in ids_and_images.items()],
-                          columns=["id", "img_path", "label"])
-        df.set_index(["id"])
+        df_data = [(obj, fil, None) for obj, fil in ids_and_images.items()]
+        df = pd.DataFrame(df_data, columns=["id", "img_path", "label"])
+        df.set_index(["id"], inplace=True, verify_integrity=True)
 
         logger.info('Extract features')
 

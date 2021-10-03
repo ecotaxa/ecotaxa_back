@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 
 class DBWriter(object):
     """
-        Database writer for import (with optimizations).
+        Database writer for import/subset/CNN (with optimizations).
         @see SQLAlchemy Core documentation for principles.
     """
     SEQUENCE_CACHE_SIZE = 100
@@ -139,6 +139,9 @@ class DBWriter(object):
 
     def add_cnn_features(self, object_head_to_write, cnn_features: Bean):
         cnn_features.objcnnid = object_head_to_write.objid
+        self.obj_cnn_bulks.append(cnn_features)
+
+    def add_cnn_features_with_pk(self, cnn_features: Bean):
         self.obj_cnn_bulks.append(cnn_features)
 
     def persist(self):
