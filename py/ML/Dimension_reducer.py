@@ -13,7 +13,6 @@ import pickle
 from typing import IO
 
 import pandas as pd  # type: ignore
-import tensorflow as tf  # type: ignore
 from sklearn.decomposition import PCA  # type: ignore
 
 from FS.MachineLearningModels import SavedModels
@@ -21,6 +20,7 @@ from FS.Vault import Vault
 from ML.Base_ML import MachineLearningBase
 from ML.helpers import generator  # type: ignore
 from helpers.DynamicLogs import get_logger
+from .helpers.tensorflow_cfg import configured_tf as tf  # type: ignore
 
 logger = get_logger(__name__)
 

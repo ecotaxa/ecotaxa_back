@@ -29,7 +29,7 @@ class AutomatedFeatures(object):
          @see https://en.wikipedia.org/wiki/Convolutional_neural_network
         These other features are stored in a dedicated DB table @see ObjectCNNFeature.
     """
-    SAVE_EVERY = 100
+    SAVE_EVERY = 500
 
     @staticmethod
     def delete_all(session: Session, proj_id: ProjectIDT) -> int:
