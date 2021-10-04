@@ -3,6 +3,10 @@
 #
 # (c) 2021 Thelma Panaiotis, Jean-Olivier Irisson, GNU General Public License v3
 
+#
+# TODO: Implement crop for scale bar from https://github.com/ThelmaPana/plankton_classif_benchmark/blob/main/datasets.py
+#
+
 # import lycon  # image loading, manipulation
 import cv2 as cv
 import numpy as np
@@ -184,7 +188,7 @@ class EcoTaxaGenerator(utils.Sequence):
 
             # self.dbg_save(img_square, "/tmp/out_rsz.jpg")
 
-        # convert to array of images
+        # convert to array of _float32_ images, for efficiency
         batch_prepared_images = np.array([img for img in batch_prepared_images], dtype='float32')
 
         # augment images

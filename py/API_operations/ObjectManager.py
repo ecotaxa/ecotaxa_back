@@ -8,6 +8,7 @@ from API_models.crud import ProjectFilters
 from BO.Classification import HistoricalLastClassif, ClassifIDSetT, ClassifIDListT, ClassifIDT
 from BO.ColumnUpdate import ColUpdateList
 from BO.Mappings import TableMapping
+from BO.Object import ObjectBO
 from BO.ObjectSet import DescribedObjectSet, ObjectIDListT, EnumeratedObjectSet, ObjectIDWithParentsListT, \
     ObjectSetFilter
 from BO.Project import ProjectBO
@@ -15,7 +16,7 @@ from BO.ReClassifyLog import ReClassificationBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
 from BO.User import UserIDT
-from DB import Project, ObjectHeader, ObjectFields, Image, Taxonomy, Sample, User, Acquisition
+from DB import Project, ObjectFields
 from DB.Object import VALIDATED_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, CLASSIF_QUALS
 from DB.Project import ProjectIDT
 from DB.helpers.Direct import text
@@ -159,7 +160,7 @@ class ObjectManager(Service):
         if order_field[0] == "-":
             asc_desc = "DESC"
             order_field = order_field[1:]
-        order_expr = ObjectManager._field_to_db_col(order_field, mappings)
+        order_expr = ObjectBO._field_to_db_col(order_field, mappings)
         if order_expr is None:
             return None
         alias, order_col = order_expr.split(".", 1)
@@ -172,54 +173,17 @@ class ObjectManager(Service):
                 ret.add_expression("obh", "objid", asc_desc)
         return ret
 
-    @staticmethod
-    def _field_to_db_col(a_field: str, mappings: TableMapping) -> Optional[str]:
-        try:
-            prfx, name = a_field.split(".", 1)
-        except ValueError:
-            return None
-        if prfx == "obj":
-            if name in ObjectHeader.__dict__:
-                return "obh." + name
-            elif name == 'imgcount':
-                return "(SELECT COUNT(img2.imgrank) FROM images img2 WHERE img2.objid = obh.objid) AS imgcount"
-        elif prfx == "fre":
-            if name in mappings.tsv_cols_to_real:
-                return "obf." + mappings.tsv_cols_to_real[name]
-        elif prfx == "img":
-            if name in Image.__dict__:
-                return a_field
-        elif prfx in ("txo", "txp"):
-            if name in Taxonomy.__dict__:
-                return a_field
-        elif prfx == "sam":
-            if name in Sample.__dict__:
-                return a_field
-        elif prfx == "acq":
-            if name in Acquisition.__dict__:
-                return a_field
-        elif prfx == "usr":
-            if name in User.__dict__:
-                return a_field
-        return None
-
-    @staticmethod
-    def _add_return_fields(return_fields: Optional[List[str]],
+    @classmethod
+    def _add_return_fields(cls, return_fields: Optional[List[str]],
                            mappings: TableMapping) -> str:
         """
             From an API-named list of columns, return the real text for the SELECT to return them
         :param return_fields:
         :return:
         """
-        if return_fields is None or len(return_fields) == 0:
+        vals = ObjectBO.resolve_fields(return_fields, mappings)
+        if len(vals) == 0:
             return ""
-        vals = []
-        for a_field in return_fields:
-            a_col = ObjectManager._field_to_db_col(a_field, mappings)
-            if a_col is None:
-                logger.warning("Dropped unknown %s in query", a_field)
-                continue
-            vals.append(a_col)
         return ",\n" + ", ".join(vals)
 
     def parents_by_id(self, current_user_id: UserIDT, object_ids: ObjectIDListT) -> ObjectIDWithParentsListT:

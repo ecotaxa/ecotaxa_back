@@ -15,7 +15,7 @@ from BO.Classification import HistoricalClassificationListT, HistoricalClassific
 from BO.Mappings import TableMapping
 from BO.Sample import SampleIDT
 from BO.helpers.MappedEntity import MappedEntity
-from DB import ObjectHeader, ObjectFields, Image, ObjectsClassifHisto, User, Taxonomy
+from DB import ObjectHeader, ObjectFields, Image, ObjectsClassifHisto, User, Taxonomy, Sample, Acquisition
 from DB.Project import ProjectIDT
 from DB.helpers.ORM import Session, Query, joinedload, subqueryload, Model, minimal_model_of
 from helpers.DynamicLogs import get_logger
@@ -75,6 +75,51 @@ class ObjectBO(MappedEntity):
         qry = qry.outerjoin(User)
         qry = qry.outerjoin(Taxonomy, Taxonomy.id == och.classif_id)
         ret = [HistoricalClassification(rec) for rec in qry.all()]
+        return ret
+
+    @staticmethod
+    def _field_to_db_col(a_field: str, mappings: TableMapping) -> Optional[str]:
+        try:
+            prfx, name = a_field.split(".", 1)
+        except ValueError:
+            return None
+        if prfx == "obj":
+            if name in ObjectHeader.__dict__:
+                return "obh." + name
+            elif name == 'imgcount':
+                return "(SELECT COUNT(img2.imgrank) FROM images img2 WHERE img2.objid = obh.objid) AS imgcount"
+        elif prfx == "fre":
+            if name in mappings.tsv_cols_to_real:
+                return "obf." + mappings.tsv_cols_to_real[name]
+        elif prfx == "img":
+            if name in Image.__dict__:
+                return a_field
+        elif prfx in ("txo", "txp"):
+            if name in Taxonomy.__dict__:
+                return a_field
+        elif prfx == "sam":
+            if name in Sample.__dict__:
+                return a_field
+        elif prfx == "acq":
+            if name in Acquisition.__dict__:
+                return a_field
+        elif prfx == "usr":
+            if name in User.__dict__:
+                return a_field
+        return None
+
+    @classmethod
+    def resolve_fields(cls, fields_list: Optional[List[str]],
+                       mappings: TableMapping) -> List[str]:
+        if fields_list is None or len(fields_list) == 0:
+            return []
+        ret = []
+        for a_field in fields_list:
+            a_col = ObjectBO._field_to_db_col(a_field, mappings)
+            if a_col is None:
+                logger.warning("Dropped unknown %s during resolve", a_field)
+                continue
+            ret.append(a_col)
         return ret
 
     def __getattr__(self, item):

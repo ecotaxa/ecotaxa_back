@@ -7,7 +7,7 @@ from typing import List, Union, Tuple, Optional
 from API_models.crud import CreateProjectReq
 from BO.Classification import ClassifIDListT
 from BO.ObjectSet import EnumeratedObjectSet
-from BO.Project import ProjectBO, ProjectBOSet, ProjectTaxoStats, ProjectUserStats
+from BO.Project import ProjectBO, ProjectBOSet, ProjectTaxoStats, ProjectUserStats, ProjectSetColumnStats
 from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
 from DB import Sample
@@ -143,4 +143,14 @@ class ProjectsService(Service):
         [RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, prj_id)
          for prj_id in prj_ids]
         ret = ProjectBO.read_user_stats(self.session, prj_ids)
+        return ret
+
+    def read_columns_stats(self, current_user_id: int,
+                           prj_ids: ProjectIDListT,
+                           column_names: List[str]) -> ProjectSetColumnStats:
+        """
+            Read data statistics for these projects.
+        """
+        # No security barrier because there is no private information inside
+        ret = ProjectBO.read_columns_stats(self.session, prj_ids, column_names)
         return ret

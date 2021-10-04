@@ -606,6 +606,42 @@ def project_set_get_user_stats(ids: str = Query(title="Ids",
         return ret
 
 
+@app.get("/project_set/column_stats", tags=['projects'],
+         responses={
+             200: {
+                 "content": {
+                     "application/json": {
+                         "example": {"proj_ids": [1040, 4702],
+                                     "total": 54169,
+                                     "columns": ["fre.area", "obj.depth_min"],
+                                     "counts": [54169, 54169],
+                                     "variances": [1895031198.64, 0.000258]}
+                     }
+                 }
+             }
+         }, response_model=ProjectSetColumnStatsModel)  # type: ignore
+def project_set_get_column_stats(ids: str = Query(title="Project ids",
+                                                  description="String containing the list of one or more id separated by non-num char.",
+                                                  default=None, example="1400+1453"),
+                                 names: str = Query(title="Column names",
+                                                    description="Coma-separated prefixed columns, on which stats are needed.",
+                                                    default=None, example="fre.area,obj.depth_min,fre.nb2"),
+                                 current_user: int = Depends(get_current_user)
+                                 ) -> ProjectSetColumnStats:
+    """
+        **Returns projects validated data statistics**, for all named columns, in all given projects.
+
+        The free columns here are named by the alias e.g. 'area', not technical name e.g. 'n43'.
+        This allows getting stats on projects with different mappings, but common names.
+    """
+    with ProjectsService() as sce:
+        num_ids = _split_num_list(ids)
+        name_list = names.split(",")
+        with RightsThrower():
+            ret = sce.read_columns_stats(current_user, num_ids, name_list)
+        return ret
+
+
 @app.post("/projects/{project_id}/dump", tags=['projects'], include_in_schema=False)  # pragma:nocover
 def project_dump(project_id: int,
                  filters: ProjectFiltersModel,
@@ -634,6 +670,7 @@ def project_merge(project_id: int,
         
         It's more a phagocytosis than a merge, as the source will see
         all its objects gone and will be erased.
+        TODO: Explain a bit with it might fail (too many free columns, unique orig_ids collision)
     """
     with MergeService(project_id, source_project_id, dry_run) as sce:
         with RightsThrower():

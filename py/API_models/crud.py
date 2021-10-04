@@ -10,7 +10,7 @@ from typing_extensions import TypedDict
 
 from BO.ColumnUpdate import ColUpdateList
 from BO.DataLicense import LicenseEnum
-from BO.Project import ProjectUserStats
+from BO.Project import ProjectUserStats, ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
 from DB import User, Project, Sample, Acquisition, Process, Job
 from DB.Acquisition import ACQUISITION_FREE_COLUMNS
@@ -343,6 +343,20 @@ ProjectUserStatsModel = dataclass_to_model(ProjectUserStats, add_suffix=True,
                                                'annotators': "The users who ever decided on classification or state of objects",
                                                'activities': "More details on annotators' activities"
                                            })
+
+ProjectSetColumnStatsModel = dataclass_to_model(ProjectSetColumnStats, add_suffix=True,
+                                                titles={'proj_ids': "Projects IDs",
+                                                        'columns': "Columns",
+                                                        'total': "Total of rows",
+                                                        'counts': "Counts",
+                                                        'variances': "Variances"},
+                                                descriptions={
+                                                    'proj_ids': "Projects IDs from the call",
+                                                    'columns': "Column names from the call",
+                                                    'total': "All rows regardless of emptiness",
+                                                    'counts': "Counts of non-empty values, one per column",
+                                                    'variances': "Variances of values, one per column"
+                                                })
 
 
 class CreateCollectionReq(BaseModel):

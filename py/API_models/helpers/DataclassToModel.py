@@ -46,8 +46,14 @@ def dataclass_to_model(clazz: T, add_suffix: bool = False, titles: Optional[Dict
                     to_import, contained_class_name = contained_class_full_name.rsplit(".", 1)
                     globs: Dict = {}
                     exec("import " + to_import, globs)
-                    contained_class = eval(contained_class_full_name, globs)
-                    fld_type = List[dataclass_to_model(contained_class)]  # type: ignore
+                    if contained_class_full_name == "typing.Union[float, NoneType]":
+                        fld_type = List[Optional[float]]
+                    else:
+                        try:
+                            contained_class = eval(contained_class_full_name, globs)
+                        except NameError:
+                            raise
+                        fld_type = List[dataclass_to_model(contained_class)]  # type: ignore
                 except ValueError:
                     pass
             # Pydantic maps everything to object, no doc or fields or types

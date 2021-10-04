@@ -11,6 +11,7 @@ from typing import List, Dict, Any, Iterable, Optional, Union
 from BO.Classification import ClassifIDListT
 from BO.Instrument import DescribedInstrumentSet
 from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping, TableMapping
+from BO.Object import ObjectBO
 from BO.Prediction import AutomatedFeatures
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.User import MinimalUserBO, UserActivity, UserIDT
@@ -50,6 +51,18 @@ class ProjectUserStats(DataclassAsDict):
     projid: ProjectIDT
     annotators: List[MinimalUserBO]
     activities: List[UserActivity]
+
+
+@dataclass(init=False)
+class ProjectSetColumnStats(DataclassAsDict):
+    """
+        Column statistics for a set of projects.
+    """
+    proj_ids: ProjectIDListT
+    total: int
+    columns: List[str]
+    counts: List[int]
+    variances: List[Optional[float]]
 
 
 class ProjectBO(object):
@@ -330,6 +343,41 @@ class ProjectBO(object):
                     user_activity = UserActivity((user_id, cnt, last_date_str))
                     prj_stat.activities.append(user_activity)
                     user_activities[user_id] = user_activity
+        return ret
+
+    @staticmethod
+    def read_columns_stats(session: Session, prj_ids: ProjectIDListT, column_names: List[str]) \
+            -> ProjectSetColumnStats:
+        """
+            Do some basic stats on the given columns, for all given projects.
+        """
+        prj_sql = ("(SELECT {0} "
+                   "  FROM obj_head obh"
+                   "  JOIN obj_field obf ON obf.objfid = obh.objid"
+                   "  JOIN acquisitions acq ON acq.acquisid = obh.acquisid"
+                   "  JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = {1}"
+                   " WHERE obh.classif_qual='V' LIMIT 50000)")
+        qry: Query = session.query(Project)
+        qry = qry.filter(Project.projid == any_(prj_ids))
+        sels_for_prjs = []
+        # We have to alias the column in order to have a consistent naming of the CTE
+        col_aliases = ["c%d" % num for num in range(len(column_names))]
+        for a_proj in qry.all():
+            free_columns_mappings = TableMapping(ObjectFields).load_from_equal_list(a_proj.mappingobj)
+            mapped = ObjectBO.resolve_fields(column_names, free_columns_mappings)
+            assert len(mapped) == len(column_names), "Project %d does not contain all columns" % a_proj.projid
+            mapped_with_aliases = ["%s AS %s" % (col, als) for col, als in zip(mapped, col_aliases)]
+            sels_for_prjs.append(prj_sql.format(",".join(mapped_with_aliases), a_proj.projid))
+        sql = "SET LOCAL enable_seqscan=FALSE;"
+        sql += "WITH flat AS (" + " UNION ALL ".join(sels_for_prjs) + " ) "
+        exprs = ",".join(["COUNT(%s), VARIANCE(%s)" % (als, als) for als in col_aliases])
+        sql += "SELECT COUNT(1), " + exprs + " FROM flat "
+        res: Result = session.execute(sql)
+        vals = res.first()
+        total = vals[0]
+        counts = vals[1::2]
+        variances = vals[2::2]
+        ret = ProjectSetColumnStats([prj_ids, total, column_names, counts, variances])
         return ret
 
     @staticmethod
