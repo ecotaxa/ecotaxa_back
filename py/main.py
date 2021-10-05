@@ -659,7 +659,7 @@ def project_dump(project_id: int,
 @app.post("/projects/{project_id}/merge", tags=['projects'], response_model=MergeRsp)
 def project_merge(project_id: int,
                   source_project_id: int = Query(title="Source project Id",
-                                                 description="Id of the other project. This source project will see all its objects gone and will be erased.",
+                                                 description="Id of the other project. All objects from this source project will be moved to the project_id above and the source project itself will be deleted.",
                                                  default=None, example=2),
                   dry_run: bool = Query(title="Dry run",
                                         description="If set, then only a diagnostic of doability will be done.",
@@ -668,8 +668,9 @@ def project_merge(project_id: int,
     """
         **Merge another project into this one.**
         
-        It's more a phagocytosis than a merge, as the source will see
-        all its objects gone and will be erased.
+        It's more a phagocytosis than a merge, as all objects from this source project will
+        be moved to the project_id above and the source project itself will be deleted.
+
         TODO: Explain a bit with it might fail (too many free columns, unique orig_ids collision)
     """
     with MergeService(project_id, source_project_id, dry_run) as sce:
