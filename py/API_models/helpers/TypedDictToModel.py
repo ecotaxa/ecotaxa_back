@@ -9,18 +9,20 @@
 #
 # https://github.com/samuelcolvin/pydantic/issues/760
 #
-from typing import Optional, TypeVar
+from typing import Optional, TypeVar, Dict, Any
 
 # noinspection PyPackageRequirements
 from pydantic import create_model
 
 from API_models.helpers import PydanticModelT
+# noinspection PyPackageRequirements
+from pydantic.fields import ModelField
 
 # Generify the def with input type
 T = TypeVar('T')
 
 
-def typed_dict_to_model(typed_dict: T):  # TODO -> Type[BaseModel]:
+def typed_dict_to_model(typed_dict: T, field_infos:  Optional[Dict[str, Any]] = None):  # TODO -> Type[BaseModel]:
     annotations = {}
     for name, field in typed_dict.__annotations__.items():
         if field == Optional[str]:
@@ -35,4 +37,10 @@ def typed_dict_to_model(typed_dict: T):  # TODO -> Type[BaseModel]:
     # Make the model get-able
     # noinspection PyTypeHints
     ret.get = lambda self, k, d: getattr(self, k, d)  # type: ignore
+
+    if field_infos is not None:
+        # Amend with Field() calls, for doc. Let crash (KeyError) if desync with base.
+        for a_field_name, a_field_info in field_infos.items():
+            the_desc_field: ModelField = ret.__fields__[a_field_name]
+            the_desc_field.field_info = a_field_info
     return ret

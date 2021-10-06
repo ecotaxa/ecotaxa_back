@@ -11,16 +11,16 @@ class PredictionReq(BaseModel):
     """
         Prediction, AKA Auto Classification, request.
     """
-    project_id: int = Field(title="The destination project, of which objects will be predicted.")
-    source_project_ids: List[int] = Field(title="The source projects, objects in them will serve as reference.",
-                                          min_items=1)
-    features: List[str] = Field(title="The object features AKA free column, to use in the algorithm. "
-                                      "Features must be common to all projects, source ones and destination one",
+    project_id: int = Field(title="Project Id", description="The destination project, of which objects will be predicted.")
+    source_project_ids: List[int] = Field(title="Source project Ids", description="The source projects, objects in them will serve as reference.",
+                                    min_items=1)
+    features: List[str] = Field(title="Features", description="The object features AKA free column, to use in the algorithm. "
+                                "Features must be common to all projects, source ones and destination one",
                                 min_items=1)
-    categories: List[int] = Field(title="In source projects, only objects validated with these categories "
-                                        "will be considered.",
+    categories: List[int] = Field(title="Categories", description="In source projects, only objects validated with these categories "
+                                  "will be considered.",
                                   min_items=1)
-    use_scn: bool = Field(title="Use extra features, generated using the image, for improving the prediction.",
+    use_scn: bool = Field(title="Use scn", description="Use extra features, generated using the image, for improving the prediction.",
                           default=False)
 
     class Config:

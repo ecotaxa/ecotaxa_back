@@ -9,6 +9,6 @@ from helpers.pydantic import BaseModel, Field
 
 
 class LoginReq(BaseModel):
-    password: str = Field(title="User's password" , default=None, description="User password", example="UserPassword!")
-    username: str = Field(title="User's eamil", default=None, description="User email used during registration", example="user@email.com")
+    password: str = Field(title="User's password" , default=None, description="User password", example="test!")
+    username: str = Field(title="User's eamil", default=None, description="User email used during registration", example="ecotaxa.api.user@gmail.com")
 

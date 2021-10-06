@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.17"
+    "version":"0.0.18"
   },
   "servers":[
     {
@@ -27,11 +27,15 @@
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/LoginReq"
+                "title":"Login request Model",
+                "allOf":[
+                  {
+                    "$ref":"#/components/schemas/LoginReq"
+                  }
+                ]
               }
             }
-          },
-          "required":true
+          }
         },
         "responses":{
           "200":{
@@ -96,7 +100,7 @@
           "users"
         ],
         "summary":"Show Current User",
-        "description":"Returns **currently authenticated user's** information, permissions and last used projects.",
+        "description":"Returns **currently authenticated user's** (i.e. you) information, permissions and last used projects.",
         "operationId":"show_current_user_users_me_get",
         "responses":{
           "200":{
@@ -127,21 +131,24 @@
         "operationId":"get_current_user_prefs_users_my_preferences__project_id__get",
         "parameters":[
           {
+            "description":"Internal, numeric id of the project.",
             "required":true,
             "schema":{
               "title":"Project Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
             },
+            "example":1,
             "name":"project_id",
             "in":"path"
           },
           {
-            "description":"The preference key.",
+            "description":"The preference key, as text.",
             "required":false,
             "schema":{
               "title":"Key",
               "type":"string",
-              "description":"The preference key."
+              "description":"The preference key, as text."
             },
             "example":"filters",
             "name":"key",
@@ -183,37 +190,40 @@
           "users"
         ],
         "summary":"Set Current User Prefs",
-        "description":"**Sets one preference**, for a project and for the currently authenticated user.\n\nAvailable keys are **cwd**, **img_import** and **filters**.\n\nThe key disappears if set to empty string.",
+        "description":"**Sets one preference**, for a project and for the currently authenticated user.\n\nAvailable keys are **cwd**, **img_import** and **filters**.\n\nThe key disappears if set to empty string.\n\n**Returns NULL upon success.**",
         "operationId":"set_current_user_prefs_users_my_preferences__project_id__put",
         "parameters":[
           {
+            "description":"Internal, numeric id of the project.",
             "required":true,
             "schema":{
               "title":"Project Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
             },
+            "example":1,
             "name":"project_id",
             "in":"path"
           },
           {
-            "description":"The preference key.",
+            "description":"The preference key, as text.",
             "required":false,
             "schema":{
               "title":"Key",
               "type":"string",
-              "description":"The preference key."
+              "description":"The preference key, as text."
             },
             "example":"filters",
             "name":"key",
             "in":"query"
           },
           {
-            "description":"The value to set this preference to.",
+            "description":"The value to set this preference to, as text.",
             "required":false,
             "schema":{
               "title":"Value",
               "type":"string",
-              "description":"The value to set this preference to."
+              "description":"The value to set this preference to, as text."
             },
             "example":"{\"dispfield\": \" dispfield_orig_id dispfield_classif_auto_score dispfield_classif_when dispfield_random_value\", \"ipp\": \"500\", \"magenabled\": \"1\", \"popupenabled\": \"1\", \"sortby\": \"orig_id\", \"sortorder\": \"asc\", \"statusfilter\": \"\", \"zoom\": \"90\"}",
             "name":"value",
@@ -313,11 +323,14 @@
         "operationId":"get_user_users__user_id__get",
         "parameters":[
           {
+            "description":"Internal, the unique numeric id of this user.",
             "required":true,
             "schema":{
               "title":"User Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this user."
             },
+            "example":1,
             "name":"user_id",
             "in":"path"
           }
@@ -363,11 +376,15 @@
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/CreateCollectionReq"
+                "title":"Create collection request Model",
+                "allOf":[
+                  {
+                    "$ref":"#/components/schemas/CreateCollectionReq"
+                  }
+                ]
               }
             }
-          },
-          "required":true
+          }
         },
         "responses":{
           "200":{
@@ -557,11 +574,14 @@
         "operationId":"get_collection_collections__collection_id__get",
         "parameters":[
           {
+            "description":"Internal, the unique numeric id of this collection.",
             "required":true,
             "schema":{
               "title":"Collection Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this collection."
             },
+            "example":1,
             "name":"collection_id",
             "in":"path"
           }
@@ -599,15 +619,18 @@
           "collections"
         ],
         "summary":"Update Collection",
-        "description":"**Update the collection**. Note that some updates are silently failing when not compatible\n with the composing projects.\n\n 🔒 *For admins only.*",
+        "description":"**Update the collection**. Note that some updates are silently failing when not compatible\n with the composing projects.\n\n **Returns NULL upon success.**\n\n 🔒 *For admins only.*",
         "operationId":"update_collection_collections__collection_id__put",
         "parameters":[
           {
+            "description":"Internal, the unique numeric id of this collection.",
             "required":true,
             "schema":{
               "title":"Collection Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this collection."
             },
+            "example":1,
             "name":"collection_id",
             "in":"path"
           }
@@ -616,11 +639,15 @@
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/CollectionModel"
+                "title":"Collection Model",
+                "allOf":[
+                  {
+                    "$ref":"#/components/schemas/CollectionModel"
+                  }
+                ]
               }
             }
-          },
-          "required":true
+          }
         },
         "responses":{
           "200":{
@@ -658,11 +685,14 @@
         "operationId":"erase_collection_collections__collection_id__delete",
         "parameters":[
           {
+            "description":"Internal, the unique numeric id of this collection.",
             "required":true,
             "schema":{
               "title":"Collection Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this collection."
             },
+            "example":1,
             "name":"collection_id",
             "in":"path"
           }
@@ -708,11 +738,14 @@
         "operationId":"emodnet_format_export_collections__collection_id__export_emodnet_get",
         "parameters":[
           {
+            "description":"Internal, the unique numeric id of this collection.",
             "required":true,
             "schema":{
               "title":"Collection Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this collection."
             },
+            "example":1,
             "name":"collection_id",
             "in":"path"
           },
@@ -881,12 +914,12 @@
             "in":"query"
           },
           {
-            "description":"One of ['instrument', 'highest_right', 'license', 'projid', 'title', 'visible', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'projtype', 'rf_models_used', 'cnn_network_id']",
+            "description":"One of ['instrument', 'highest_right', 'license', 'projid', 'title', 'visible', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id']",
             "required":false,
             "schema":{
               "title":"Order field",
               "type":"string",
-              "description":"One of ['instrument', 'highest_right', 'license', 'projid', 'title', 'visible', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'projtype', 'rf_models_used', 'cnn_network_id']"
+              "description":"One of ['instrument', 'highest_right', 'license', 'projid', 'title', 'visible', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id']"
             },
             "example":"instrument",
             "name":"order_field",
@@ -956,17 +989,21 @@
           "projects"
         ],
         "summary":"Create Project",
-        "description":"**Create an empty project with only a title,** and **return its id**.\n\nThe project will be managed by current user.\n\n🔒 The user has to be *app administrator* or *project creator*.",
+        "description":"**Create an empty project with only a title,** and **return the numeric id of this newly created project**.\n\nThe project will be managed by current user.\n\n🔒 The user has to be *app administrator* or *project creator*.",
         "operationId":"create_project_projects_create_post",
         "requestBody":{
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/CreateProjectReq"
+                "title":"Create project request Model",
+                "allOf":[
+                  {
+                    "$ref":"#/components/schemas/CreateProjectReq"
+                  }
+                ]
               }
             }
-          },
-          "required":true
+          }
         },
         "responses":{
           "200":{
@@ -1009,11 +1046,14 @@
         "operationId":"project_subset_projects__project_id__subset_post",
         "parameters":[
           {
+            "description":"Internal, numeric id of the project.",
             "required":true,
             "schema":{
               "title":"Project Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
             },
+            "example":1,
             "name":"project_id",
             "in":"path"
           }
@@ -1022,11 +1062,15 @@
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/SubsetReq"
+                "title":"Subset request Model",
+                "allOf":[
+                  {
+                    "$ref":"#/components/schemas/SubsetReq"
+                  }
+                ]
               }
             }
-          },
-          "required":true
+          }
         },
         "responses":{
           "200":{
@@ -1067,11 +1111,14 @@
         "operationId":"project_query_projects__project_id__get",
         "parameters":[
           {
+            "description":"Internal, numeric id of the project.",
             "required":true,
             "schema":{
               "title":"Project Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
             },
+            "example":1,
             "name":"project_id",
             "in":"path"
           },
@@ -1122,15 +1169,18 @@
           "projects"
         ],
         "summary":"Update Project",
-        "description":"**Update the project**.\n\nNote that some fields will **NOT** be updated and simply ignored, e.g. *free_cols*.",
+        "description":"**Update the project**, return **NULL upon success.**\n\nNote that some fields will **NOT** be updated and simply ignored, e.g. *free_cols*.",
         "operationId":"update_project_projects__project_id__put",
         "parameters":[
           {
+            "description":"Internal, numeric id of the project.",
             "required":true,
             "schema":{
               "title":"Project Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
             },
+            "example":1,
             "name":"project_id",
             "in":"path"
           }
@@ -1181,11 +1231,14 @@
         "operationId":"erase_project_projects__project_id__delete",
         "parameters":[
           {
+            "description":"Internal, numeric id of the project.",
             "required":true,
             "schema":{
               "title":"Project Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
             },
+            "example":1,
             "name":"project_id",
             "in":"path"
           },
@@ -1377,31 +1430,116 @@
         ]
       }
     },
+    "/project_set/column_stats":{
+      "get":{
+        "tags":[
+          "projects"
+        ],
+        "summary":"Project Set Get Column Stats",
+        "description":"**Returns projects validated data statistics**, for all named columns, in all given projects.\n\nThe free columns here are named by the alias e.g. 'area', not technical name e.g. 'n43'.\nThis allows getting stats on projects with different mappings, but common names.",
+        "operationId":"project_set_get_column_stats_project_set_column_stats_get",
+        "parameters":[
+          {
+            "description":"String containing the list of one or more id separated by non-num char.",
+            "required":false,
+            "schema":{
+              "title":"Project ids",
+              "type":"string",
+              "description":"String containing the list of one or more id separated by non-num char."
+            },
+            "example":"1400+1453",
+            "name":"ids",
+            "in":"query"
+          },
+          {
+            "description":"Coma-separated prefixed columns, on which stats are needed.",
+            "required":false,
+            "schema":{
+              "title":"Column names",
+              "type":"string",
+              "description":"Coma-separated prefixed columns, on which stats are needed."
+            },
+            "example":"fre.area,obj.depth_min,fre.nb2",
+            "name":"names",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/ProjectSetColumnStatsModel"
+                },
+                "example":{
+                  "proj_ids":[
+                    1040,
+                    4702
+                  ],
+                  "total":54169,
+                  "columns":[
+                    "fre.area",
+                    "obj.depth_min"
+                  ],
+                  "counts":[
+                    54169,
+                    54169
+                  ],
+                  "variances":[
+                    1895031198.64,
+                    0.000258
+                  ]
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
     "/projects/{project_id}/merge":{
       "post":{
         "tags":[
           "projects"
         ],
         "summary":"Project Merge",
-        "description":"**Merge another project into this one.**\n\nIt's more a phagocytosis than a merge, as the source will see\nall its objects gone and will be erased.",
+        "description":"**Merge another project into this one.**\n\nIt's more a phagocytosis than a merge, as all objects from this source project will\nbe moved to the project_id above and the source project itself will be deleted.\n\nTODO: Explain a bit with it might fail (too many free columns, unique orig_ids collision)",
         "operationId":"project_merge_projects__project_id__merge_post",
         "parameters":[
           {
+            "description":"Internal, numeric id of the project.",
             "required":true,
             "schema":{
               "title":"Project Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
             },
+            "example":1,
             "name":"project_id",
             "in":"path"
           },
           {
-            "description":"Id of the other project. This source project will see all its objects gone and will be erased.",
+            "description":"Id of the other project. All objects from this source project will be moved to the project_id above and the source project itself will be deleted.",
             "required":false,
             "schema":{
               "title":"Source project Id",
               "type":"integer",
-              "description":"Id of the other project. This source project will see all its objects gone and will be erased."
+              "description":"Id of the other project. All objects from this source project will be moved to the project_id above and the source project itself will be deleted."
             },
             "example":2,
             "name":"source_project_id",
@@ -1459,11 +1597,14 @@
         "operationId":"project_check_projects__project_id__check_get",
         "parameters":[
           {
+            "description":"Internal, numeric id of the project.",
             "required":true,
             "schema":{
               "title":"Project Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
             },
+            "example":1,
             "name":"project_id",
             "in":"path"
           }
@@ -1512,11 +1653,14 @@
         "operationId":"project_stats_projects__project_id__stats_get",
         "parameters":[
           {
+            "description":"Internal, numeric id of the project.",
             "required":true,
             "schema":{
               "title":"Project Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
             },
+            "example":1,
             "name":"project_id",
             "in":"path"
           }
@@ -1554,15 +1698,18 @@
           "projects"
         ],
         "summary":"Project Recompute Geography",
-        "description":"**Recompute geography information** for all samples in project.\n\n🔒 The user has to be *project manager*.",
+        "description":"**Recompute geography information** for all samples in project.\n\n**Returns NULL upon success.**\n\n🔒 The user has to be *project manager*.",
         "operationId":"project_recompute_geography_projects__project_id__recompute_geo_post",
         "parameters":[
           {
+            "description":"Internal, numeric id of the project.",
             "required":true,
             "schema":{
               "title":"Project Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
             },
+            "example":1,
             "name":"project_id",
             "in":"path"
           }
@@ -1605,11 +1752,14 @@
         "operationId":"import_file_file_import__project_id__post",
         "parameters":[
           {
+            "description":"Internal, numeric id of the project.",
             "required":true,
             "schema":{
               "title":"Project Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
             },
+            "example":1,
             "name":"project_id",
             "in":"path"
           }
@@ -1618,11 +1768,15 @@
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/ImportReq"
+                "title":"Import request Model",
+                "allOf":[
+                  {
+                    "$ref":"#/components/schemas/ImportReq"
+                  }
+                ]
               }
             }
-          },
-          "required":true
+          }
         },
         "responses":{
           "200":{
@@ -1659,24 +1813,30 @@
           "projects"
         ],
         "summary":"Simple Import",
-        "description":"Import images only, with same metadata for all.\n- param `dry_run`: If set, then _only_ a diagnostic of do-ability will be done.\n    In this case, plain value check.\nIf no dry_run, this call will create a background job.",
+        "description":"**Import images only**, with same metadata for all.",
         "operationId":"simple_import_simple_import__project_id__post",
         "parameters":[
           {
+            "description":"Internal, numeric id of the project.",
             "required":true,
             "schema":{
               "title":"Project Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
             },
+            "example":1,
             "name":"project_id",
             "in":"path"
           },
           {
-            "required":true,
+            "description":"If set, then only a diagnostic of doability will be done. In this case, plain value check. If no dry_run, this call will create a background job.",
+            "required":false,
             "schema":{
-              "title":"Dry Run",
-              "type":"boolean"
+              "title":"Dry run",
+              "type":"boolean",
+              "description":"If set, then only a diagnostic of doability will be done. In this case, plain value check. If no dry_run, this call will create a background job."
             },
+            "example":true,
             "name":"dry_run",
             "in":"query"
           }
@@ -1685,11 +1845,15 @@
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/SimpleImportReq"
+                "title":"Simple import request Model",
+                "allOf":[
+                  {
+                    "$ref":"#/components/schemas/SimpleImportReq"
+                  }
+                ]
               }
             }
-          },
-          "required":true
+          }
         },
         "responses":{
           "200":{
@@ -1869,11 +2033,15 @@
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/BulkUpdateReq"
+                "title":"Update request Model",
+                "allOf":[
+                  {
+                    "$ref":"#/components/schemas/BulkUpdateReq"
+                  }
+                ]
               }
             }
-          },
-          "required":true
+          }
         },
         "responses":{
           "200":{
@@ -1916,11 +2084,14 @@
         "operationId":"sample_query_sample__sample_id__get",
         "parameters":[
           {
+            "description":"Internal, the unique numeric id of this sample.",
             "required":true,
             "schema":{
               "title":"Sample Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this sample."
             },
+            "example":1,
             "name":"sample_id",
             "in":"path"
           }
@@ -2015,17 +2186,21 @@
           "acquisitions"
         ],
         "summary":"Update Acquisitions",
-        "description":"Do the required **update for each acquisition in the set**.\n\nReturn the number of updated entities.",
+        "description":"Do the required **update for each acquisition in the set**.\n\n**Return the number of updated entities.**",
         "operationId":"update_acquisitions_acquisition_set_update_post",
         "requestBody":{
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/BulkUpdateReq"
+                "title":"Update request Model",
+                "allOf":[
+                  {
+                    "$ref":"#/components/schemas/BulkUpdateReq"
+                  }
+                ]
               }
             }
-          },
-          "required":true
+          }
         },
         "responses":{
           "200":{
@@ -2068,11 +2243,14 @@
         "operationId":"acquisition_query_acquisition__acquisition_id__get",
         "parameters":[
           {
+            "description":"Internal, the unique numeric id of this acquisition.",
             "required":true,
             "schema":{
               "title":"Acquisition Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this acquisition."
             },
+            "example":1,
             "name":"acquisition_id",
             "in":"path"
           }
@@ -2166,17 +2344,21 @@
           "processes"
         ],
         "summary":"Update Processes",
-        "description":"Do the required update for each process in the set.\n    Return the number of updated entities.",
+        "description":"Do the required **update for each process in the set.**\n\n**Returns the number of updated entities.**",
         "operationId":"update_processes_process_set_update_post",
         "requestBody":{
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/BulkUpdateReq"
+                "title":"Update request Model",
+                "allOf":[
+                  {
+                    "$ref":"#/components/schemas/BulkUpdateReq"
+                  }
+                ]
               }
             }
-          },
-          "required":true
+          }
         },
         "responses":{
           "200":{
@@ -2186,7 +2368,8 @@
                 "schema":{
                   "title":"Response Update Processes Process Set Update Post",
                   "type":"integer"
-                }
+                },
+                "example":1
               }
             }
           },
@@ -2214,15 +2397,18 @@
           "processes"
         ],
         "summary":"Process Query",
-        "description":"Read a single object.",
+        "description":"Returns **information about the process** corresponding to the given id.",
         "operationId":"process_query_process__process_id__get",
         "parameters":[
           {
+            "description":"Internal, the unique numeric id of this process.",
             "required":true,
             "schema":{
               "title":"Process Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this process."
             },
+            "example":1,
             "name":"process_id",
             "in":"path"
           }
@@ -2262,51 +2448,66 @@
           "objects"
         ],
         "summary":"Get Object Set",
-        "description":"Return object ids for the given project with the filters.\n\nOptionally:\n\n    - fields will specify the needed object (and ancilliary entities) fields\n    - order_field will order the result using given field, If prefixed with \"-\" then it will be reversed.\n    - window_start & window_size allows to return only a slice of the result.\n\nFields follow the naming convention: `prefix.field`.\n    Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n    Use a comma to separate fields.\n    - Column obj.imgcount contains the total count of images for the object.",
+        "description":"Returns **filtred object Ids** for the given project.",
         "operationId":"get_object_set_object_set__project_id__query_post",
         "parameters":[
           {
+            "description":"Internal, numeric id of the project.",
             "required":true,
             "schema":{
               "title":"Project Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
             },
+            "example":1,
             "name":"project_id",
             "in":"path"
           },
           {
+            "description":"\n\nSpecify the needed object (and ancilliary entities) fields.\n                   \nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.                   \n                   ",
             "required":false,
             "schema":{
               "title":"Fields",
-              "type":"string"
+              "type":"string",
+              "description":"\n\nSpecify the needed object (and ancilliary entities) fields.\n                   \nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.                   \n                   "
             },
+            "example":"obj.longitude, obj.latitude, obj.imgcount",
             "name":"fields",
             "in":"query"
           },
           {
+            "description":"order_field will order the result using given field. If prefixed with \"-\" then it will be reversed.",
             "required":false,
             "schema":{
-              "title":"Order Field",
-              "type":"string"
+              "title":"Order field",
+              "type":"string",
+              "description":"order_field will order the result using given field. If prefixed with \"-\" then it will be reversed."
             },
+            "example":"obj.imgcount",
             "name":"order_field",
             "in":"query"
           },
           {
+            "description":"Allows to return only a slice of the result. Skip window_start before returning data.",
             "required":false,
             "schema":{
-              "title":"Window Start",
-              "type":"integer"
+              "title":"Window start",
+              "type":"integer",
+              "description":"Allows to return only a slice of the result. Skip window_start before returning data."
             },
+            "example":"10",
             "name":"window_start",
             "in":"query"
           },
           {
+            "description":"Allows to return only a slice of the result. Return only window_size lines.",
             "required":false,
             "schema":{
-              "title":"Window Size",
-              "type":"integer"
+              "title":"Window size",
+              "type":"integer",
+              "description":"Allows to return only a slice of the result. Return only window_size lines."
             },
+            "example":"100",
             "name":"window_size",
             "in":"query"
           }
@@ -2315,11 +2516,15 @@
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/ProjectFilters"
+                "title":"Project filters Model",
+                "allOf":[
+                  {
+                    "$ref":"#/components/schemas/ProjectFilters"
+                  }
+                ]
               }
             }
-          },
-          "required":true
+          }
         },
         "responses":{
           "200":{
@@ -2360,19 +2565,24 @@
         "operationId":"get_object_set_summary_object_set__project_id__summary_post",
         "parameters":[
           {
+            "description":"Internal, numeric id of the project.",
             "required":true,
             "schema":{
               "title":"Project Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
             },
+            "example":1,
             "name":"project_id",
             "in":"path"
           },
           {
-            "required":true,
+            "description":"#TODO JCE",
+            "required":false,
             "schema":{
-              "title":"Only Total",
-              "type":"boolean"
+              "title":"Only total",
+              "type":"boolean",
+              "description":"#TODO JCE"
             },
             "name":"only_total",
             "in":"query"
@@ -2382,11 +2592,15 @@
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/ProjectFilters"
+                "title":"Project filters Model",
+                "allOf":[
+                  {
+                    "$ref":"#/components/schemas/ProjectFilters"
+                  }
+                ]
               }
             }
-          },
-          "required":true
+          }
         },
         "responses":{
           "200":{
@@ -2427,11 +2641,14 @@
         "operationId":"reset_object_set_to_predicted_object_set__project_id__reset_to_predicted_post",
         "parameters":[
           {
+            "description":"Internal, numeric id of the project.",
             "required":true,
             "schema":{
               "title":"Project Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
             },
+            "example":1,
             "name":"project_id",
             "in":"path"
           }
@@ -2440,11 +2657,15 @@
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/ProjectFilters"
+                "title":"Project filters Model",
+                "allOf":[
+                  {
+                    "$ref":"#/components/schemas/ProjectFilters"
+                  }
+                ]
               }
             }
-          },
-          "required":true
+          }
         },
         "responses":{
           "200":{
@@ -2483,16 +2704,19 @@
         "operationId":"revert_object_set_to_history_object_set__project_id__revert_to_history_post",
         "parameters":[
           {
+            "description":"Internal, numeric id of the project.",
             "required":true,
             "schema":{
               "title":"Project Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
             },
+            "example":1,
             "name":"project_id",
             "in":"path"
           },
           {
-            "required":true,
+            "required":false,
             "schema":{
               "title":"Dry Run",
               "type":"boolean"
@@ -2514,11 +2738,15 @@
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/ProjectFilters"
+                "title":"Project filters Model",
+                "allOf":[
+                  {
+                    "$ref":"#/components/schemas/ProjectFilters"
+                  }
+                ]
               }
             }
-          },
-          "required":true
+          }
         },
         "responses":{
           "200":{
@@ -2559,16 +2787,19 @@
         "operationId":"reclassify_object_set_object_set__project_id__reclassify_post",
         "parameters":[
           {
+            "description":"Internal, numeric id of the project.",
             "required":true,
             "schema":{
               "title":"Project Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
             },
+            "example":1,
             "name":"project_id",
             "in":"path"
           },
           {
-            "required":true,
+            "required":false,
             "schema":{
               "title":"Forced Id",
               "type":"integer"
@@ -2577,7 +2808,7 @@
             "in":"query"
           },
           {
-            "required":true,
+            "required":false,
             "schema":{
               "title":"Reason",
               "type":"string"
@@ -2590,11 +2821,15 @@
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/ProjectFilters"
+                "title":"Project filters Model",
+                "allOf":[
+                  {
+                    "$ref":"#/components/schemas/ProjectFilters"
+                  }
+                ]
               }
             }
-          },
-          "required":true
+          }
         },
         "responses":{
           "200":{
@@ -2629,17 +2864,21 @@
           "objects"
         ],
         "summary":"Update Object Set",
-        "description":"Update all the objects with given IDs and values\nCurrent user needs Manage right on all projects of specified objects.",
+        "description":"Update all the objects with given IDs and values\nCurrent user needs Manage right on all projects of specified objects.\n\n**Returns the number of updated entities.**",
         "operationId":"update_object_set_object_set_update_post",
         "requestBody":{
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/BulkUpdateReq"
+                "title":"Update request Model",
+                "allOf":[
+                  {
+                    "$ref":"#/components/schemas/BulkUpdateReq"
+                  }
+                ]
               }
             }
-          },
-          "required":true
+          }
         },
         "responses":{
           "200":{
@@ -2680,11 +2919,15 @@
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/ClassifyReq"
+                "title":"Classify request Model",
+                "allOf":[
+                  {
+                    "$ref":"#/components/schemas/ClassifyReq"
+                  }
+                ]
               }
             }
-          },
-          "required":true
+          }
         },
         "responses":{
           "200":{
@@ -2725,11 +2968,15 @@
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/ClassifyAutoReq"
+                "title":"Classify auto request Model",
+                "allOf":[
+                  {
+                    "$ref":"#/components/schemas/ClassifyAutoReq"
+                  }
+                ]
               }
             }
-          },
-          "required":true
+          }
         },
         "responses":{
           "200":{
@@ -2824,8 +3071,7 @@
                 "$ref":"#/components/schemas/Body_export_object_set_object_set_export_post"
               }
             }
-          },
-          "required":true
+          }
         },
         "responses":{
           "200":{
@@ -2834,6 +3080,52 @@
               "application/json":{
                 "schema":{
                   "$ref":"#/components/schemas/ExportRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/object_set/predict":{
+      "post":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Predict Object Set",
+        "description":"Start a prediction AKA automatic classification for the given object set and options.",
+        "operationId":"predict_object_set_object_set_predict_post",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/Body_predict_object_set_object_set_predict_post"
+              }
+            }
+          }
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/PredictionRsp"
                 }
               }
             }
@@ -2911,15 +3203,18 @@
           "object"
         ],
         "summary":"Object Query",
-        "description":"Read a single object. Anonymous reader can do if the project has the right rights :)",
+        "description":"Returns **information about the object** corresponding to the given id.\n \n🔒 Anonymous reader can do if the project has the right rights :)",
         "operationId":"object_query_object__object_id__get",
         "parameters":[
           {
+            "description":"Internal, the unique numeric id of this object.",
             "required":true,
             "schema":{
               "title":"Object Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this object."
             },
+            "example":1,
             "name":"object_id",
             "in":"path"
           }
@@ -2959,15 +3254,18 @@
           "object"
         ],
         "summary":"Object Query History",
-        "description":"Read a single object's history.",
+        "description":"Returns **information about the object's history** corresponding to the given id.",
         "operationId":"object_query_history_object__object_id__history_get",
         "parameters":[
           {
+            "description":"Internal, the unique numeric id of this object.",
             "required":true,
             "schema":{
               "title":"Object Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this object."
             },
+            "example":1,
             "name":"object_id",
             "in":"path"
           }
@@ -2983,7 +3281,31 @@
                   "items":{
                     "$ref":"#/components/schemas/HistoricalClassification"
                   }
-                }
+                },
+                "example":[
+                  {
+                    "objid":264409236,
+                    "classif_id":82399,
+                    "classif_date":"2021-09-21T14:59:01.007110",
+                    "classif_who":"null",
+                    "classif_type":"A",
+                    "classif_qual":"P",
+                    "classif_score":0.085,
+                    "user_name":"null",
+                    "taxon_name":"Penilia avirostris"
+                  },
+                  {
+                    "objid":264409236,
+                    "classif_id":25828,
+                    "classif_date":"2021-09-29T08:25:37.968095",
+                    "classif_who":1267,
+                    "classif_type":"M",
+                    "classif_qual":"V",
+                    "classif_score":"null",
+                    "user_name":"User name",
+                    "taxon_name":"Copepoda"
+                  }
+                ]
               }
             }
           },
@@ -3120,11 +3442,14 @@
         "operationId":"reclassif_project_stats_taxa_reclassification_history__project_id__get",
         "parameters":[
           {
+            "description":"Internal, numeric id of the project.",
             "required":true,
             "schema":{
               "title":"Project Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
             },
+            "example":1,
             "name":"project_id",
             "in":"path"
           }
@@ -3166,11 +3491,14 @@
         "operationId":"query_taxa_taxon__taxon_id__get",
         "parameters":[
           {
+            "description":"Internal, the unique numeric id of this taxon.",
             "required":true,
             "schema":{
               "title":"Taxon Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this taxon."
             },
+            "example":1,
             "name":"taxon_id",
             "in":"path"
           }
@@ -3214,11 +3542,14 @@
         "operationId":"query_taxa_usage_taxon__taxon_id__usage_get",
         "parameters":[
           {
+            "description":"Internal, the unique numeric id of this taxon.",
             "required":true,
             "schema":{
               "title":"Taxon Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this taxon."
             },
+            "example":1,
             "name":"taxon_id",
             "in":"path"
           }
@@ -3275,10 +3606,12 @@
             "in":"query"
           },
           {
+            "description":"Internal, numeric id of the project.",
             "required":false,
             "schema":{
               "title":"Project Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
             },
             "name":"project_id",
             "in":"query"
@@ -3379,11 +3712,14 @@
         "operationId":"get_taxon_in_central_taxon_central__taxon_id__get",
         "parameters":[
           {
+            "description":"Internal, the unique numeric id of this taxon.",
             "required":true,
             "schema":{
               "title":"Taxon Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this taxon."
             },
+            "example":1,
             "name":"taxon_id",
             "in":"path"
           }
@@ -3537,7 +3873,7 @@
           "Taxonomy Tree"
         ],
         "summary":"Pull Taxa Update From Central",
-        "description":"Get what changed in EcoTaxoServer managed tree and update local tree accordingly.",
+        "description":"**Returns what changed in EcoTaxoServer managed tree** and update local tree accordingly.",
         "operationId":"pull_taxa_update_from_central_taxa_pull_from_central_get",
         "responses":{
           "200":{
@@ -3562,15 +3898,18 @@
           "jobs"
         ],
         "summary":"List Jobs",
-        "description":"Return the jobs for current user, or all of them if admin and asked for.",
+        "description":"**Return the jobs** for current user, or all of them if admin is asked for.",
         "operationId":"list_jobs_jobs__get",
         "parameters":[
           {
-            "required":true,
+            "description":"If FALSE return the jobs for current user, else return all of them.",
+            "required":false,
             "schema":{
-              "title":"For Admin",
-              "type":"boolean"
+              "title":"For admin",
+              "type":"boolean",
+              "description":"If FALSE return the jobs for current user, else return all of them."
             },
+            "example":false,
             "name":"for_admin",
             "in":"query"
           }
@@ -3614,15 +3953,18 @@
           "jobs"
         ],
         "summary":"Get Job",
-        "description":"Return the job by its id.",
+        "description":"Returns **information about the job** corresponding to the given id.",
         "operationId":"get_job_jobs__job_id___get",
         "parameters":[
           {
+            "description":"Internal, the unique numeric id of this job.",
             "required":true,
             "schema":{
               "title":"Job Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this job."
             },
+            "example":47445,
             "name":"job_id",
             "in":"path"
           }
@@ -3662,15 +4004,18 @@
           "jobs"
         ],
         "summary":"Reply Job Question",
-        "description":"Send answers to last question. The job resumes after it receives the reply.\nNote: It's only about data storage here.\nIf the data is technically NOK e.g. not a JS object, standard 422 error should be thrown.\nIf the data is incorrect from consistency point of view, the job will return in Asking state.",
+        "description":"**Send answers to last question.** The job resumes after it receives the reply.\n\nReturn **NULL upon success.**\n\n*Note: It's only about data storage here.*\n\n\nIf the data is technically NOK e.g. not a JS object, standard 422 error should be thrown.\n\nIf the data is incorrect from consistency point of view, the job will return in Asking state.",
         "operationId":"reply_job_question_jobs__job_id__answer_post",
         "parameters":[
           {
+            "description":"Internal, the unique numeric id of this job.",
             "required":true,
             "schema":{
               "title":"Job Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this job."
             },
+            "example":47445,
             "name":"job_id",
             "in":"path"
           }
@@ -3679,19 +4024,19 @@
           "content":{
             "application/json":{
               "schema":{
-                "title":"Reply",
+                "title":"#TODO JCE Reply Model",
                 "type":"object"
               }
             }
-          },
-          "required":true
+          }
         },
         "responses":{
           "200":{
             "description":"Successful Response",
             "content":{
               "application/json":{
-                "schema":{}
+                "schema":{},
+                "example":{}
               }
             }
           },
@@ -3719,15 +4064,18 @@
           "jobs"
         ],
         "summary":"Restart Job",
-        "description":"Restart the job by its id.\nThe job must be in a restartable state, and be accessible to current user.",
+        "description":"**Restart the job related to the given id.**\n\nReturn **NULL upon success.**\n\n🔒 The job must be in a restartable state, and be accessible to current user.",
         "operationId":"restart_job_jobs__job_id__restart_get",
         "parameters":[
           {
+            "description":"Internal, the unique numeric id of this job.",
             "required":true,
             "schema":{
               "title":"Job Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this job."
             },
+            "example":47445,
             "name":"job_id",
             "in":"path"
           }
@@ -3737,7 +4085,8 @@
             "description":"Successful Response",
             "content":{
               "application/json":{
-                "schema":{}
+                "schema":{},
+                "example":{}
               }
             }
           },
@@ -3765,15 +4114,18 @@
           "jobs"
         ],
         "summary":"Get Job Log File",
-        "description":"Return the log file produced by given task.\nThe task must belong to requester.",
+        "description":"**Return the log file produced by given job.**\n\n🔒 The job must be accessible to current user.",
         "operationId":"get_job_log_file_jobs__job_id__log_get",
         "parameters":[
           {
+            "description":"Internal, the unique numeric id of this job.",
             "required":true,
             "schema":{
               "title":"Job Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this job."
             },
+            "example":47445,
             "name":"job_id",
             "in":"path"
           }
@@ -3811,15 +4163,18 @@
           "jobs"
         ],
         "summary":"Get Job File",
-        "description":"Return the file produced by given task.\nThe task must belong to requester.",
+        "description":"**Return the file produced by given job.**\n\n🔒 The job must be accessible to current user.",
         "operationId":"get_job_file_jobs__job_id__file_get",
         "parameters":[
           {
+            "description":"Internal, the unique numeric id of this job.",
             "required":true,
             "schema":{
               "title":"Job Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this job."
             },
+            "example":47445,
             "name":"job_id",
             "in":"path"
           }
@@ -3859,15 +4214,18 @@
           "jobs"
         ],
         "summary":"Erase Job",
-        "description":"Delete the job, from DB and with associated storage.\nIf the job is running then kill it.",
+        "description":"**Delete the job** from DB, with associated storage.\n\nIf the job is running then kill it.\n\n🔒 The job must be accessible to current user.",
         "operationId":"erase_job_jobs__job_id__delete",
         "parameters":[
           {
+            "description":"Internal, the unique numeric id of this job.",
             "required":true,
             "schema":{
               "title":"Job Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this job."
             },
+            "example":47445,
             "name":"job_id",
             "in":"path"
           }
@@ -4049,7 +4407,7 @@
           "WIP"
         ],
         "summary":"System Status",
-        "description":"Report the status, mainly used for verifying that the server is up.",
+        "description":"**Report the status**, mainly used for verifying that the server is up.",
         "operationId":"system_status_status_get",
         "responses":{
           "200":{
@@ -4074,7 +4432,7 @@
           "misc"
         ],
         "summary":"System Error",
-        "description":"This entry point will return a 500 internal error, on purpose so the stack trace is visible and client\ncan see what it gives.",
+        "description":"**Return a 500 internal error**, on purpose so the stack trace is visible and client\ncan see what it gives.",
         "operationId":"system_error_error_get",
         "responses":{
           "200":{
@@ -4099,7 +4457,7 @@
           "misc"
         ],
         "summary":"Do Nothing",
-        "description":"This entry point will just do nothing.\n    It's also used for exporting models we need on client side.",
+        "description":"**This entry point will just do nothing.**\n\nIt's also used for exporting models we need on client side.",
         "operationId":"do_nothing_noop_get",
         "responses":{
           "200":{
@@ -4134,7 +4492,7 @@
           "misc"
         ],
         "summary":"Used Constants",
-        "description":"This entry point will return useful strings for user dialog.\nNow also used for values extracted from Config.",
+        "description":"**Return useful strings for user dialog.**\n\nNow also used for values extracted from Config.",
         "operationId":"used_constants_constants_get",
         "responses":{
           "200":{
@@ -4175,9 +4533,9 @@
             "example":1039
           },
           "orig_id":{
-            "title":"Origin Id",
+            "title":"Original id",
             "type":"string",
-            "description":"The origin Id",
+            "description":"Original acquisition ID from initial TSV load",
             "example":"uvp5_station1_cast1b"
           },
           "instrument":{
@@ -4200,17 +4558,47 @@
       },
       "Body_export_object_set_object_set_export_post":{
         "title":"Body_export_object_set_object_set_export_post",
-        "required":[
-          "filters",
-          "request"
-        ],
         "type":"object",
         "properties":{
           "filters":{
-            "$ref":"#/components/schemas/ProjectFilters"
+            "title":"Project filters Model",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/ProjectFilters"
+              }
+            ]
           },
           "request":{
-            "$ref":"#/components/schemas/ExportReq"
+            "title":"Export request Model",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/ExportReq"
+              }
+            ]
+          }
+        }
+      },
+      "Body_predict_object_set_object_set_predict_post":{
+        "title":"Body_predict_object_set_object_set_predict_post",
+        "type":"object",
+        "properties":{
+          "filters":{
+            "title":"Filters",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/ProjectFilters"
+              }
+            ],
+            "description":"Description of how to reduce project data."
+          },
+          "request":{
+            "title":"Prediction Request",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/PredictionReq"
+              }
+            ],
+            "description":"How to predict, in details."
           }
         }
       },
@@ -4282,29 +4670,33 @@
         "type":"object",
         "properties":{
           "target_ids":{
-            "title":"The IDs of the target objects",
+            "title":"Target Ids",
             "type":"array",
             "items":{
               "type":"integer"
-            }
+            },
+            "description":"The IDs of the target objects"
           },
           "classifications":{
-            "title":"The wanted new classifications, i.e. taxon ID, one for each object. ",
+            "title":"Classifications",
             "type":"array",
             "items":{
               "type":"integer"
-            }
+            },
+            "description":"The wanted new classifications, i.e. taxon ID, one for each object."
           },
           "scores":{
-            "title":"The classification scores, generally b/w 0 and 1. ",
+            "title":"Scores",
             "type":"array",
             "items":{
               "type":"number"
-            }
+            },
+            "description":"The classification score is generally between 0 and 1. It indicates the probability that the taxon prediction of this object is correct."
           },
           "keep_log":{
-            "title":"Set if former automatic classification history is needed. ",
-            "type":"boolean"
+            "title":"Keep log",
+            "type":"boolean",
+            "description":"Set if former automatic classification history is needed."
           }
         },
         "example":{
@@ -4336,22 +4728,35 @@
         "type":"object",
         "properties":{
           "target_ids":{
-            "title":"The IDs of the target objects",
+            "title":"Target Ids",
             "type":"array",
             "items":{
               "type":"integer"
-            }
+            },
+            "description":"The IDs of the target objects",
+            "example":[
+              634509,
+              6234516,
+              976544
+            ]
           },
           "classifications":{
-            "title":"The wanted new classifications, i.e. taxon ID, one for each object.  Use -1 to keep present one.",
+            "title":"Classifications",
             "type":"array",
             "items":{
               "type":"integer"
-            }
+            },
+            "description":"The wanted new classifications, i.e. taxon ID, one for each object. Use -1 to keep present one.",
+            "example":[
+              7546,
+              3421,
+              788
+            ]
           },
           "wanted_qualification":{
-            "title":"The wanted qualifications for all objects. 'V' and 'P'.",
-            "type":"string"
+            "title":"Wanted qualification",
+            "type":"string",
+            "description":"The wanted qualifications for all objects. 'V' and 'P'."
           }
         }
       },
@@ -4487,19 +4892,27 @@
             "example":""
           }
         },
-        "description":"Collection + computed"
+        "description":"Basic and computed information about the Collection"
       },
       "Constants":{
         "title":"Constants",
         "type":"object",
         "properties":{
           "license_texts":{
-            "title":"The supported licenses and help text/links",
+            "title":"License texts",
             "type":"object",
             "additionalProperties":{
               "type":"string"
             },
+            "description":"The supported licenses and help text/links",
             "default":{
+              "CC0 1.0":"<a href=\"https://creativecommons.org/publicdomain/zero/1.0/\" rel=\"nofollow\"><strong>CC-0</strong></a>: all registered EcoTaxa users are free to download, redistribute, modify, and build upon the data, with no conditions. Other databases can index the data. The data falls into the worldwide public domain. This is the license preferred by <a href=\"https://obis.org/manual/policy/\" rel=\"nofollow\">OBIS</a> and <a href=\"https://www.gbif.org/terms\" rel=\"nofollow\">GBIF</a>.",
+              "CC BY 4.0":"<a href=\"https://creativecommons.org/licenses/by/4.0/\" rel=\"nofollow\"><strong>CC-BY</strong></a>: all registered EcoTaxa users are free to download, redistribute, modify, and build upon the data, as long as they cite the dataset and its authors. Other databases can index the data.",
+              "CC BY-NC 4.0":"<a href=\"https://creativecommons.org/licenses/by-nc/4.0/\" rel=\"nofollow\"><strong>CC-BY-NC</strong></a>: all registered EcoTaxa users are free to download, redistribute, modify, and build upon the data, as long as they cite the dataset and its authors, and do not use it for commercial purpose (\"primarily intended for or directed toward commercial advantage or monetary compensation\"). Other databases can index the data.",
+              "Copyright":"<strong>Copyright</strong>: only contributors to this project have rights on this data. This prevents its distribution in any kind of database.",
+              "":"Not chosen"
+            },
+            "example":{
               "CC0 1.0":"<a href=\"https://creativecommons.org/publicdomain/zero/1.0/\" rel=\"nofollow\"><strong>CC-0</strong></a>: all registered EcoTaxa users are free to download, redistribute, modify, and build upon the data, with no conditions. Other databases can index the data. The data falls into the worldwide public domain. This is the license preferred by <a href=\"https://obis.org/manual/policy/\" rel=\"nofollow\">OBIS</a> and <a href=\"https://www.gbif.org/terms\" rel=\"nofollow\">GBIF</a>.",
               "CC BY 4.0":"<a href=\"https://creativecommons.org/licenses/by/4.0/\" rel=\"nofollow\"><strong>CC-BY</strong></a>: all registered EcoTaxa users are free to download, redistribute, modify, and build upon the data, as long as they cite the dataset and its authors. Other databases can index the data.",
               "CC BY-NC 4.0":"<a href=\"https://creativecommons.org/licenses/by-nc/4.0/\" rel=\"nofollow\"><strong>CC-BY-NC</strong></a>: all registered EcoTaxa users are free to download, redistribute, modify, and build upon the data, as long as they cite the dataset and its authors, and do not use it for commercial purpose (\"primarily intended for or directed toward commercial advantage or monetary compensation\"). Other databases can index the data.",
@@ -4508,16 +4921,21 @@
             }
           },
           "app_manager":{
-            "title":"The application manager identity (name, mail), from config file",
+            "title":"Application manager",
             "maxItems":2,
             "minItems":2,
             "type":"array",
             "items":{
               "type":"string"
             },
+            "description":"The application manager identity (name, mail), from config file",
             "default":[
               "",
               ""
+            ],
+            "example":[
+              "App manager Name",
+              "app.manager@email.fr"
             ]
           }
         },
@@ -4561,19 +4979,19 @@
           "clone_of_id":{
             "title":"Clone of id",
             "type":"integer",
-            "description":"If set, clone specified Project",
+            "description":"Internal, numeric id of a project to clone as a new one. By default it does not clone anything.",
             "example":2
           },
           "title":{
             "title":"Title",
             "type":"string",
-            "description":"The project title",
+            "description":"The project title, as text.",
             "example":"My new project title"
           },
           "visible":{
             "title":"Visible",
             "type":"boolean",
-            "description":"If True, the project is created visible",
+            "description":"When TRUE, the project is created visible by all users.",
             "default":true,
             "example":true
           }
@@ -4810,41 +5228,59 @@
         "type":"object",
         "properties":{
           "objid":{
-            "title":"Objid",
-            "type":"integer"
+            "title":"Object Id",
+            "type":"integer",
+            "description":"The object Id.",
+            "example":264409236
           },
           "classif_id":{
-            "title":"Classif Id",
-            "type":"integer"
+            "title":"Classification Id",
+            "type":"integer",
+            "description":"The classification Id.",
+            "example":82399
           },
           "classif_date":{
-            "title":"Classif Date",
+            "title":"Classification date",
             "type":"string",
-            "format":"date-time"
+            "description":"The classification date.",
+            "format":"date-time",
+            "example":"2021-09-21T14:59:01.007110"
           },
           "classif_who":{
-            "title":"Classif Who",
-            "type":"integer"
+            "title":"Classification who",
+            "type":"integer",
+            "description":"The user who manualy classify this object.",
+            "example":"null"
           },
           "classif_type":{
-            "title":"Classif Type",
-            "type":"string"
+            "title":"Classification type",
+            "type":"string",
+            "description":"The type of classification. Could be **A** for Automatic or **M** for Manual.",
+            "example":"A"
           },
           "classif_qual":{
-            "title":"Classif Qual",
-            "type":"string"
+            "title":"Classification qualification",
+            "type":"string",
+            "description":"The classification qualification. Could be **P** for predicted, **V** for validated or **D** for Dubious.",
+            "example":"P"
           },
           "classif_score":{
-            "title":"Classif Score",
-            "type":"number"
+            "title":"Classification score",
+            "type":"number",
+            "description":"The classification score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
+            "example":0.085
           },
           "user_name":{
-            "title":"User Name",
-            "type":"string"
+            "title":"User name",
+            "type":"string",
+            "description":"The name of the user who classified this object.",
+            "example":"null"
           },
           "taxon_name":{
-            "title":"Taxon Name",
-            "type":"string"
+            "title":"Taxon name",
+            "type":"string",
+            "description":"The taxon name of the object.",
+            "example":"Penilia avirostris"
           }
         }
       },
@@ -4896,44 +5332,56 @@
         "type":"object",
         "properties":{
           "imgid":{
-            "title":"Imgid",
-            "type":"integer"
+            "title":"Image Id",
+            "type":"integer",
+            "description":"The id of the image",
+            "example":376456
           },
           "objid":{
-            "title":"Objid",
-            "type":"integer"
+            "title":"Object Id",
+            "type":"integer",
+            "description":"The id of the object related to the image",
+            "example":376456
           },
           "imgrank":{
-            "title":"Imgrank",
-            "type":"integer"
+            "title":"Image rank",
+            "type":"integer",
+            "example":0
           },
           "file_name":{
-            "title":"File Name",
-            "type":"string"
+            "title":"File name",
+            "type":"string",
+            "example":"0037/6456.jpg"
           },
           "orig_file_name":{
-            "title":"Orig File Name",
-            "type":"string"
+            "title":"Original file name",
+            "type":"string",
+            "example":"dewex_leg2_63_689.jpg"
           },
           "width":{
             "title":"Width",
-            "type":"integer"
+            "type":"integer",
+            "example":98
           },
           "height":{
             "title":"Height",
-            "type":"integer"
+            "type":"integer",
+            "example":63
           },
           "thumb_file_name":{
-            "title":"Thumb File Name",
-            "type":"string"
+            "title":"Thumb file name",
+            "type":"string",
+            "example":"null"
           },
           "thumb_width":{
-            "title":"Thumb Width",
-            "type":"integer"
+            "title":"Thumb width",
+            "type":"integer",
+            "example":"null"
           },
           "thumb_height":{
-            "title":"Thumb Height",
-            "type":"integer"
+            "title":"Thumb height",
+            "type":"integer",
+            "example":"null"
           }
         }
       },
@@ -5008,78 +5456,123 @@
         "type":"object",
         "properties":{
           "params":{
-            "title":"Creation parameters",
+            "title":"params",
             "type":"object",
-            "default":{}
+            "description":"Creation parameters",
+            "default":{},
+            "example":{
+              "prj_id":1,
+              "req":{
+                "filters":{
+                  "taxo":"85067",
+                  "taxochild":"N"
+                },
+                "dest_prj_id":1,
+                "group_type":"S",
+                "limit_type":"P",
+                "limit_value":100.0,
+                "do_images":true
+              }
+            }
           },
           "result":{
-            "title":"Final result of the run",
+            "title":"result",
             "type":"object",
-            "default":{}
+            "description":"Final result of the run",
+            "default":{},
+            "example":{
+              "rowcount":3
+            }
           },
           "errors":{
-            "title":"The errors seen during last step",
+            "title":"errors",
             "type":"array",
             "items":{
               "type":"string"
             },
-            "default":[]
+            "description":"The errors seen during last step",
+            "default":[],
+            "example":[]
           },
           "question":{
-            "title":"The data provoking job move to Asking state",
+            "title":"question",
             "type":"object",
-            "default":{}
+            "description":"The data provoking job move to Asking state",
+            "default":{},
+            "example":{}
           },
           "reply":{
-            "title":"The data provided as a reply to the question",
+            "title":"reply",
             "type":"object",
-            "default":{}
+            "description":"The data provided as a reply to the question",
+            "default":{},
+            "example":{}
           },
           "inside":{
-            "title":"Internal state of the job",
+            "title":"inside",
             "type":"object",
-            "default":{}
+            "description":"Internal state of the job",
+            "default":{},
+            "example":{}
           },
           "id":{
-            "title":"Id",
-            "type":"integer"
+            "title":"id",
+            "type":"integer",
+            "description":"Job unique identifier",
+            "example":47445
           },
           "owner_id":{
-            "title":"Owner Id",
-            "type":"integer"
+            "title":"owner_id",
+            "type":"integer",
+            "description":"The user who created and thus owns the job ",
+            "example":1
           },
           "type":{
-            "title":"Type",
-            "type":"string"
+            "title":"type",
+            "type":"string",
+            "description":"The job type, e.g. import, export... ",
+            "example":"Subset"
           },
           "state":{
-            "title":"State",
-            "type":"string"
+            "title":"state",
+            "type":"string",
+            "description":"What the job is doing. Could be 'P' for Pending (Waiting for an execution thread), 'R' for Running (Being executed inside a thread), 'A' for Asking (Needing user information before resuming), 'E' for Error (Stopped with error), 'F' for Finished (Done).",
+            "example":"F"
           },
           "step":{
-            "title":"Step",
-            "type":"integer"
+            "title":"step",
+            "type":"integer",
+            "description":"Where in the workflow the job is ",
+            "example":"null"
           },
           "progress_pct":{
-            "title":"Progress Pct",
-            "type":"integer"
+            "title":"progress_pct",
+            "type":"integer",
+            "description":"The progress percentage for UI ",
+            "example":100
           },
           "progress_msg":{
-            "title":"Progress Msg",
-            "type":"string"
+            "title":"progress_msg",
+            "type":"string",
+            "description":"The message for UI, short version ",
+            "example":"Done"
           },
           "creation_date":{
-            "title":"Creation Date",
+            "title":"creation_date",
             "type":"string",
-            "format":"date-time"
+            "description":"The date of creation of the Job, as text formatted according to the ISO 8601 standard.",
+            "format":"date-time",
+            "example":"2021-09-28T08:43:20.196061"
           },
           "updated_on":{
-            "title":"Updated On",
+            "title":"updated_on",
             "type":"string",
-            "format":"date-time"
+            "description":"Last time that anything changed in present line ",
+            "format":"date-time",
+            "example":"2021-09-28T08:43:21.441969"
           }
         },
-        "description":"All from DB table"
+        "description":"All information about the Job"
       },
       "LimitMethods":{
         "title":"LimitMethods",
@@ -5098,13 +5591,13 @@
             "title":"User's password",
             "type":"string",
             "description":"User password",
-            "example":"UserPassword!"
+            "example":"test!"
           },
           "username":{
             "title":"User's eamil",
             "type":"string",
             "description":"User email used during registration",
-            "example":"user@email.com"
+            "example":"ecotaxa.api.user@gmail.com"
           }
         }
       },
@@ -5148,96 +5641,132 @@
         "type":"object",
         "properties":{
           "objid":{
-            "title":"Objid",
-            "type":"integer"
+            "title":"Object Id",
+            "type":"integer",
+            "description":"The object Id.",
+            "example":264409236
           },
           "acquisid":{
-            "title":"Acquisid",
-            "type":"integer"
+            "title":"Acquisition Id",
+            "type":"integer",
+            "description":"The parent acquisition Id.",
+            "example":144
           },
           "orig_id":{
-            "title":"Orig Id",
-            "type":"string"
+            "title":"Original id",
+            "type":"string",
+            "description":"Original object ID from initial TSV load",
+            "example":"deex_leg1_48_406"
           },
           "objdate":{
-            "title":"Objdate",
+            "title":"Object date",
             "type":"string",
             "format":"date"
           },
           "objtime":{
-            "title":"Objtime",
+            "title":"Object time",
             "type":"string",
             "format":"time"
           },
           "latitude":{
             "title":"Latitude",
-            "type":"number"
+            "type":"number",
+            "description":"The latitude",
+            "example":42.0231666666667
           },
           "longitude":{
             "title":"Longitude",
-            "type":"number"
+            "type":"number",
+            "description":"The longitude",
+            "example":4.71766666666667
           },
           "depth_min":{
-            "title":"Depth Min",
-            "type":"number"
+            "title":"Depth min",
+            "type":"number",
+            "description":"The min depth",
+            "example":0
           },
           "depth_max":{
-            "title":"Depth Max",
-            "type":"number"
+            "title":"Depth max",
+            "type":"number",
+            "description":"The min depth",
+            "example":300
           },
           "sunpos":{
-            "title":"Sunpos",
-            "type":"string"
+            "title":"Sun position",
+            "type":"string",
+            "description":"Sun position, from date, time and coords",
+            "example":"N"
           },
           "classif_id":{
-            "title":"Classif Id",
-            "type":"integer"
+            "title":"Classification Id",
+            "type":"integer",
+            "description":"The classification Id.",
+            "example":82399
           },
           "classif_qual":{
-            "title":"Classif Qual",
-            "type":"string"
+            "title":"Classification qualification",
+            "type":"string",
+            "description":"The classification qualification. Could be **P** for predicted, **V** for validated or **D** for Dubious.",
+            "example":"P"
           },
           "classif_who":{
-            "title":"Classif Who",
-            "type":"integer"
+            "title":"Classification who",
+            "type":"integer",
+            "description":"The user who manualy classify this object.",
+            "example":"null"
           },
           "classif_when":{
-            "title":"Classif When",
+            "title":"Classification when",
             "type":"string",
-            "format":"date-time"
+            "description":"The classification date.",
+            "format":"date-time",
+            "example":"2021-09-21T14:59:01.007110"
           },
           "classif_auto_id":{
-            "title":"Classif Auto Id",
-            "type":"integer"
+            "title":"Classification auto Id",
+            "type":"integer",
+            "description":"Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. "
           },
           "classif_auto_score":{
-            "title":"Classif Auto Score",
-            "type":"number"
+            "title":"Classification auto score",
+            "type":"number",
+            "description":"Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification auto score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
+            "example":0.085
           },
           "classif_auto_when":{
-            "title":"Classif Auto When",
+            "title":"Classification auto when",
             "type":"string",
-            "format":"date-time"
+            "description":"Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification date.",
+            "format":"date-time",
+            "example":"2021-09-21T14:59:01.007110"
           },
           "classif_crossvalidation_id":{
-            "title":"Classif Crossvalidation Id",
-            "type":"integer"
+            "title":"Classification crossvalidation Id",
+            "type":"integer",
+            "description":"Always NULL in prod",
+            "example":"null"
           },
           "complement_info":{
-            "title":"Complement Info",
-            "type":"string"
+            "title":"Complement info",
+            "type":"string",
+            "example":"Part of ostracoda"
           },
           "similarity":{
             "title":"Similarity",
-            "type":"number"
+            "type":"number",
+            "description":"Always NULL in prod",
+            "example":"null"
           },
           "random_value":{
-            "title":"Random Value",
+            "title":"random_value",
             "type":"integer"
           },
           "object_link":{
-            "title":"Object Link",
-            "type":"string"
+            "title":"Object link",
+            "type":"string",
+            "description":"Object link",
+            "example":"http://www.zooscan.obs-vlfr.fr//"
           }
         }
       },
@@ -5253,117 +5782,164 @@
         "type":"object",
         "properties":{
           "objid":{
-            "title":"Objid",
-            "type":"integer"
+            "title":"Object Id",
+            "type":"integer",
+            "description":"The object Id.",
+            "example":264409236
           },
           "acquisid":{
-            "title":"Acquisid",
-            "type":"integer"
+            "title":"Acquisition Id",
+            "type":"integer",
+            "description":"The parent acquisition Id.",
+            "example":144
           },
           "orig_id":{
-            "title":"Original object ID from initial TSV load",
-            "type":"string"
+            "title":"Original id",
+            "type":"string",
+            "description":"Original object ID from initial TSV load",
+            "example":"deex_leg1_48_406"
           },
           "objdate":{
-            "title":"Objdate",
+            "title":"Object date",
             "type":"string",
             "format":"date"
           },
           "objtime":{
-            "title":"Objtime",
+            "title":"Object time",
             "type":"string",
             "format":"time"
           },
           "latitude":{
             "title":"Latitude",
-            "type":"number"
+            "type":"number",
+            "description":"The latitude",
+            "example":42.0231666666667
           },
           "longitude":{
             "title":"Longitude",
-            "type":"number"
+            "type":"number",
+            "description":"The longitude",
+            "example":4.71766666666667
           },
           "depth_min":{
-            "title":"Depth Min",
-            "type":"number"
+            "title":"Depth min",
+            "type":"number",
+            "description":"The min depth",
+            "example":0
           },
           "depth_max":{
-            "title":"Depth Max",
-            "type":"number"
+            "title":"Depth max",
+            "type":"number",
+            "description":"The min depth",
+            "example":300
           },
           "sunpos":{
-            "title":"Sunpos",
-            "type":"string"
+            "title":"Sun position",
+            "type":"string",
+            "description":"Sun position, from date, time and coords",
+            "example":"N"
           },
           "classif_id":{
-            "title":"Classif Id",
-            "type":"integer"
+            "title":"Classification Id",
+            "type":"integer",
+            "description":"The classification Id.",
+            "example":82399
           },
           "classif_qual":{
-            "title":"Classif Qual",
-            "type":"string"
+            "title":"Classification qualification",
+            "type":"string",
+            "description":"The classification qualification. Could be **P** for predicted, **V** for validated or **D** for Dubious.",
+            "example":"P"
           },
           "classif_who":{
-            "title":"Classif Who",
-            "type":"integer"
+            "title":"Classification who",
+            "type":"integer",
+            "description":"The user who manualy classify this object.",
+            "example":"null"
           },
           "classif_when":{
-            "title":"Classif When",
+            "title":"Classification when",
             "type":"string",
-            "format":"date-time"
+            "description":"The classification date.",
+            "format":"date-time",
+            "example":"2021-09-21T14:59:01.007110"
           },
           "classif_auto_id":{
-            "title":"Classif Auto Id",
-            "type":"integer"
+            "title":"Classification auto Id",
+            "type":"integer",
+            "description":"Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. "
           },
           "classif_auto_score":{
-            "title":"Classif Auto Score",
-            "type":"number"
+            "title":"Classification auto score",
+            "type":"number",
+            "description":"Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification auto score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
+            "example":0.085
           },
           "classif_auto_when":{
-            "title":"Classif Auto When",
+            "title":"Classification auto when",
             "type":"string",
-            "format":"date-time"
+            "description":"Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification date.",
+            "format":"date-time",
+            "example":"2021-09-21T14:59:01.007110"
           },
           "classif_crossvalidation_id":{
-            "title":"Classif Crossvalidation Id",
-            "type":"integer"
+            "title":"Classification crossvalidation Id",
+            "type":"integer",
+            "description":"Always NULL in prod",
+            "example":"null"
           },
           "complement_info":{
-            "title":"Complement Info",
-            "type":"string"
+            "title":"Complement info",
+            "type":"string",
+            "example":"Part of ostracoda"
           },
           "similarity":{
             "title":"Similarity",
-            "type":"number"
+            "type":"number",
+            "description":"Always NULL in prod",
+            "example":"null"
           },
           "random_value":{
-            "title":"Random Value",
+            "title":"random_value",
             "type":"integer"
           },
           "object_link":{
             "title":"Object link",
-            "type":"string"
+            "type":"string",
+            "description":"Object link",
+            "example":"http://www.zooscan.obs-vlfr.fr//"
           },
           "sample_id":{
-            "title":"Sample (i.e. parent of parent acquisition) ID",
-            "type":"integer"
+            "title":"Sample id",
+            "type":"integer",
+            "description":"Sample (i.e. parent of parent acquisition) ID",
+            "example":12
           },
           "project_id":{
-            "title":"Project (i.e. parent of sample) ID",
-            "type":"integer"
+            "title":"Project id",
+            "type":"integer",
+            "description":"Project (i.e. parent of sample) ID",
+            "example":76
           },
           "images":{
-            "title":"Images for this object",
+            "title":"Images",
             "type":"array",
             "items":{
               "$ref":"#/components/schemas/ImageModel"
             },
+            "description":"Images for this object",
             "default":[]
           },
           "free_columns":{
-            "title":"Free columns from object mapping in project",
+            "title":"Free columns",
             "type":"object",
-            "default":{}
+            "description":"Free columns from object mapping in project",
+            "default":{},
+            "example":{
+              "area":49.0,
+              "mean":232.27,
+              "stddev":2.129
+            }
           }
         }
       },
@@ -5372,50 +5948,76 @@
         "type":"object",
         "properties":{
           "object_ids":{
-            "title":"Matching object IDs",
+            "title":"Object Ids",
             "type":"array",
             "items":{
               "type":"integer"
             },
-            "default":[]
+            "description":"Matching object IDs",
+            "default":[],
+            "example":[
+              634509,
+              6234516,
+              976544
+            ]
           },
           "acquisition_ids":{
-            "title":"Parent (acquisition) IDs",
+            "title":"Acquisition Ids",
             "type":"array",
             "items":{
               "type":"integer"
             },
-            "default":[]
+            "description":"Parent (acquisition) IDs",
+            "default":[],
+            "example":[
+              23,
+              987,
+              89
+            ]
           },
           "sample_ids":{
-            "title":"Parent (sample) IDs",
+            "title":"Sample Ids",
             "type":"array",
             "items":{
               "type":"integer"
             },
-            "default":[]
+            "description":"Parent (sample) IDs",
+            "default":[],
+            "example":[
+              234,
+              194,
+              12
+            ]
           },
           "project_ids":{
-            "title":"Project IDs",
+            "title":"Project Ids",
             "type":"array",
             "items":{
               "type":"integer"
             },
-            "default":[]
+            "description":"Project Ids",
+            "default":[],
+            "example":[
+              22,
+              43
+            ]
           },
           "details":{
-            "title":"Requested fields, in request order",
+            "title":"Details",
             "type":"array",
             "items":{
               "type":"array",
               "items":{}
             },
+            "description":"Requested fields, in request order",
             "default":[]
           },
           "total_ids":{
-            "title":"Total rows returned by the query, even if it was window-ed",
+            "title":"Total Ids",
             "type":"integer",
-            "default":0
+            "description":"Total rows returned by the query, even if it was window-ed",
+            "default":0,
+            "example":1000
           }
         },
         "description":"Tuned model for faster serialization out.\nTODO: A bit useless in the context as FastAPI does _not_ use ser/deser from the model.\n      Instead, it produces what needs to be sent over the wire and calls a JSON encoder onto it.\n      So 1) It calls def jsonable_encoder (in FastAPI encoders.py)\n         2) It calls an encoder (presently ORJSONEncoder in main.py)"
@@ -5425,16 +6027,18 @@
         "type":"object",
         "properties":{
           "last_entries":{
-            "title":"Object + last classification",
+            "title":"Last entries",
             "type":"array",
             "items":{
               "$ref":"#/components/schemas/HistoricalLastClassif"
             },
+            "description":"Object + last classification",
             "default":[]
           },
           "classif_info":{
-            "title":"Classification names (self+parent) for involved IDs",
+            "title":"Classification info",
             "type":"object",
+            "description":"Classification names (self+parent) for involved IDs",
             "default":{}
           }
         }
@@ -5444,23 +6048,130 @@
         "type":"object",
         "properties":{
           "total_objects":{
-            "title":"Total number of objects in the set",
-            "type":"integer"
+            "title":"Total objects",
+            "type":"integer",
+            "description":"Total number of objects in the set",
+            "example":400
           },
           "validated_objects":{
-            "title":"Number of validated objects in the set",
-            "type":"integer"
+            "title":"Validated objects",
+            "type":"integer",
+            "description":"Number of validated objects in the set",
+            "example":100
           },
           "dubious_objects":{
-            "title":"Number of dubious objects in the set",
-            "type":"integer"
+            "title":"Dubious objects",
+            "type":"integer",
+            "description":"Number of dubious objects in the set",
+            "example":100
           },
           "predicted_objects":{
-            "title":"Number of predicted objects in the set",
-            "type":"integer"
+            "title":"Predicted objects",
+            "type":"integer",
+            "description":"Number of predicted objects in the set",
+            "example":100
           }
         },
         "description":"Tuned model for faster serialization out.\nTODO: A bit useless in the context as FastAPI does _not_ use ser/deser from the model.\n      Instead, it produces what needs to be sent over the wire and calls a JSON encoder onto it.\n      So 1) It calls def jsonable_encoder (in FastAPI encoders.py)\n         2) It calls an encoder (presently ORJSONEncoder in main.py)"
+      },
+      "PredictionReq":{
+        "title":"PredictionReq",
+        "required":[
+          "project_id",
+          "source_project_ids",
+          "features",
+          "categories"
+        ],
+        "type":"object",
+        "properties":{
+          "project_id":{
+            "title":"Project Id",
+            "type":"integer",
+            "description":"The destination project, of which objects will be predicted."
+          },
+          "source_project_ids":{
+            "title":"Source project Ids",
+            "minItems":1,
+            "type":"array",
+            "items":{
+              "type":"integer"
+            },
+            "description":"The source projects, objects in them will serve as reference."
+          },
+          "features":{
+            "title":"Features",
+            "minItems":1,
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "description":"The object features AKA free column, to use in the algorithm. Features must be common to all projects, source ones and destination one"
+          },
+          "categories":{
+            "title":"Categories",
+            "minItems":1,
+            "type":"array",
+            "items":{
+              "type":"integer"
+            },
+            "description":"In source projects, only objects validated with these categories will be considered."
+          },
+          "use_scn":{
+            "title":"Use scn",
+            "type":"boolean",
+            "description":"Use extra features, generated using the image, for improving the prediction.",
+            "default":false
+          }
+        },
+        "description":"Prediction, AKA Auto Classification, request.",
+        "example":{
+          "project_id":[
+            3426
+          ],
+          "source_project_ids":[
+            1040,
+            1820
+          ],
+          "features":[
+            "area",
+            "esd"
+          ],
+          "use_scn":true
+        }
+      },
+      "PredictionRsp":{
+        "title":"PredictionRsp",
+        "type":"object",
+        "properties":{
+          "errors":{
+            "title":"Errors",
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "description":"Showstopper problems found while preparing the prediction.",
+            "default":[],
+            "example":[]
+          },
+          "warnings":{
+            "title":"Warnings",
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "description":"Problems found while preparing the prediction.",
+            "default":[],
+            "example":[]
+          },
+          "job_id":{
+            "title":"Job Id",
+            "type":"integer",
+            "description":"The created job, 0 if there were problems.",
+            "default":0,
+            "example":482
+          }
+        },
+        "description":"Prediction response."
       },
       "ProcessModel":{
         "title":"ProcessModel",
@@ -5471,17 +6182,25 @@
         "type":"object",
         "properties":{
           "processid":{
-            "title":"Processid",
-            "type":"integer"
+            "title":"Process id",
+            "type":"integer",
+            "description":"The process Id",
+            "example":1000
           },
           "orig_id":{
-            "title":"Orig Id",
-            "type":"string"
+            "title":"Original id",
+            "type":"string",
+            "description":"Original process ID from initial TSV load",
+            "example":"zooprocess_045"
           },
           "free_columns":{
             "title":"Free columns from process mapping in project",
             "type":"object",
-            "default":{}
+            "default":{},
+            "example":{
+              "software":"zooprocess_pid_to_ecotaxa_7.26_2017/12/19",
+              "pressure_gain":"10"
+            }
           }
         }
       },
@@ -5491,111 +6210,165 @@
         "properties":{
           "taxo":{
             "title":"Taxo",
-            "type":"string"
+            "type":"string",
+            "description":"Coma-separated list of numeric taxonomy/category ids. Only include objects classified with one of them",
+            "example":"12,7654,5409"
           },
           "taxochild":{
-            "title":"Taxochild",
-            "type":"string"
+            "title":"Taxo child",
+            "type":"string",
+            "description":"If 'Y' and taxo is set, also include children of each member of 'taxo' list in taxonomy tree",
+            "example":"Y"
           },
           "statusfilter":{
             "title":"Statusfilter",
-            "type":"string"
+            "type":"string",
+            "description":"Include objects with given status:\n            'NV': Not validated \n            'PV': Predicted or Validated \n            'PVD': Predicted or Validated or Dubious\n            'NVM': Validated, but not by me \n            'VM': Validated by me \n            'U': Not classified\n            other: direct equality comparison with DB value \n        ",
+            "example":"NV"
           },
           "MapN":{
-            "title":"Mapn",
-            "type":"string"
+            "title":"Map North",
+            "type":"string",
+            "description":"If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
+            "example":44.34
           },
           "MapW":{
-            "title":"Mapw",
-            "type":"string"
+            "title":"Map West",
+            "type":"string",
+            "description":"If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
+            "example":3.88
           },
           "MapE":{
-            "title":"Mape",
-            "type":"string"
+            "title":"Map East",
+            "type":"string",
+            "description":"If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
+            "example":7.94
           },
           "MapS":{
-            "title":"Maps",
-            "type":"string"
+            "title":"Map South",
+            "type":"string",
+            "description":"If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
+            "example":42.42
           },
           "depthmin":{
             "title":"Depthmin",
-            "type":"string"
+            "type":"string",
+            "description":"Positive values. If both are set (depthmin, depthmax), include objects for which both depths (min and max) are inside the range",
+            "example":"10"
           },
           "depthmax":{
             "title":"Depthmax",
-            "type":"string"
+            "type":"string",
+            "description":"Positive values. If both are set (depthmin, depthmax), include objects for which both depths (min and max) are inside the range",
+            "example":"110"
           },
           "samples":{
             "title":"Samples",
-            "type":"string"
+            "type":"string",
+            "description":"Coma-separated list of sample IDs, include only objects for these samples",
+            "example":"10987,3456,987,38"
           },
           "instrum":{
-            "title":"Instrum",
-            "type":"string"
+            "title":"Instrument",
+            "type":"string",
+            "description":"Instrument name, include objects for which sampling was done using this instrument",
+            "example":"uvp5"
           },
           "daytime":{
-            "title":"Daytime",
-            "type":"string"
+            "title":"Day time",
+            "type":"string",
+            "description":"Coma-separated list of sun position values: D for Day, U for Dusk, N for Night, A for Dawn (Aube in French)",
+            "example":"N,A"
           },
           "month":{
             "title":"Month",
-            "type":"string"
+            "type":"string",
+            "description":"Coma-separated list of month numbers, 1=Jan and so on",
+            "example":"11,12"
           },
           "fromdate":{
-            "title":"Fromdate",
-            "type":"string"
+            "title":"From date",
+            "type":"string",
+            "description":"Format is 'YYYY-MM-DD', include objects collected after this date",
+            "example":"2020-10-09"
           },
           "todate":{
-            "title":"Todate",
-            "type":"string"
+            "title":"To date",
+            "type":"string",
+            "description":"Format is 'YYYY-MM-DD', include objects collected before this date",
+            "example":"2021-10-09"
           },
           "fromtime":{
-            "title":"Fromtime",
-            "type":"string"
+            "title":"From time",
+            "type":"string",
+            "description":"Format is 'HH24:MM:SS', include objects collected after this time of day",
+            "example":"1:17:00"
           },
           "totime":{
-            "title":"Totime",
-            "type":"string"
+            "title":"To time",
+            "type":"string",
+            "description":"Format is 'HH24:MM:SS', include objects collected before this time of day",
+            "example":"23:32:00"
           },
           "inverttime":{
-            "title":"Inverttime",
-            "type":"string"
+            "title":"Invert time",
+            "type":"string",
+            "description":"If '1', include objects outside fromtime and totime range",
+            "example":"0"
           },
           "validfromdate":{
-            "title":"Validfromdate",
-            "type":"string"
+            "title":"Valid from date",
+            "type":"string",
+            "description":"Format is 'YYYY-MM-DD HH24:MI', include objects validated/set to dubious after this date+time",
+            "example":"2020-10-09 10:00:00"
           },
           "validtodate":{
-            "title":"Validtodate",
-            "type":"string"
+            "title":"Valid to date",
+            "type":"string",
+            "description":"Format is 'YYYY-MM-DD HH24:MI', include objects validated/set to dubious before this date+time",
+            "example":"2021-10-09 10:00:00"
           },
           "freenum":{
-            "title":"Freenum",
-            "type":"string"
+            "title":"Free num",
+            "type":"string",
+            "description":"Numerical DB column number in Object as basis for the 2 following criteria (freenumst, freenumend)",
+            "example":""
           },
           "freenumst":{
-            "title":"Freenumst",
-            "type":"string"
+            "title":"Freenum start",
+            "type":"string",
+            "description":"Start of included range for the column defined by freenum, in which objects are included",
+            "example":""
           },
           "freenumend":{
-            "title":"Freenumend",
-            "type":"string"
+            "title":"Free num end",
+            "type":"string",
+            "description":"End of included range for the column defined by freenum, in which objects are included",
+            "example":""
           },
           "freetxt":{
-            "title":"Freetxt",
-            "type":"string"
+            "title":"Free text",
+            "type":"string",
+            "description":" Textual DB column number as basis for following criteria \n            If starts with 's' then it's a text column in Sample\n            If starts with 'a' then it's a text column in Acquisition \n            If starts with 'p' then it's a text column in Process \n            If starts with 'o' then it's a text column in Object \n        ",
+            "example":""
           },
           "freetxtval":{
-            "title":"Freetxtval",
-            "type":"string"
+            "title":"Free text val",
+            "type":"string",
+            "description":"Text to match in the column defined by freetxt, for an object to be include",
+            "example":""
           },
           "filt_annot":{
-            "title":"Filt Annot",
-            "type":"string"
+            "title":"Filter annotator",
+            "type":"string",
+            "description":"Coma-separated list of annotator, i.e. person who validated the classification at any point in time. ",
+            "example":""
           },
           "filt_last_annot":{
-            "title":"Filt Last Annot",
-            "type":"string"
+            "title":"Filter last annotator",
+            "type":"string",
+            "description":"Coma-separated list of annotator, i.e. person who validated the classification in last. ",
+            "example":""
           }
         }
       },
@@ -5788,10 +6561,10 @@
             "description":"The project comments",
             "example":""
           },
-          "projtype":{
-            "title":"Project type",
+          "description":{
+            "title":"Description",
             "type":"string",
-            "description":"The type of the project",
+            "description":"The project description, i.e. main traits",
             "example":""
           },
           "rf_models_used":{
@@ -5805,7 +6578,50 @@
             "example":"SCN_zooscan_group1"
           }
         },
-        "description":"Project + computed"
+        "description":"Basic and computed information about the Project"
+      },
+      "ProjectSetColumnStatsModel":{
+        "title":"ProjectSetColumnStatsModel",
+        "type":"object",
+        "properties":{
+          "proj_ids":{
+            "title":"Projects IDs",
+            "type":"array",
+            "items":{
+              "type":"integer"
+            },
+            "description":"Projects IDs from the call"
+          },
+          "total":{
+            "title":"Total of rows",
+            "type":"integer",
+            "description":"All rows regardless of emptiness"
+          },
+          "columns":{
+            "title":"Columns",
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "description":"Column names from the call"
+          },
+          "counts":{
+            "title":"Counts",
+            "type":"array",
+            "items":{
+              "type":"integer"
+            },
+            "description":"Counts of non-empty values, one per column"
+          },
+          "variances":{
+            "title":"Variances",
+            "type":"array",
+            "items":{
+              "type":"number"
+            },
+            "description":"Variances of values, one per column"
+          }
+        }
       },
       "ProjectSummaryModel":{
         "title":"ProjectSummaryModel",
@@ -5933,9 +6749,9 @@
             "example":4
           },
           "orig_id":{
-            "title":"Origine Id",
+            "title":"Original id",
             "type":"string",
-            "description":"The origine Id",
+            "description":"Original sample ID from initial TSV load",
             "example":"dewex_leg2_19"
           },
           "latitude":{
@@ -6307,50 +7123,50 @@
           "id":{
             "title":"Id",
             "type":"integer",
-            "description":"Unique user identifier",
+            "description":"The unique numeric id of this user.",
             "example":1
           },
           "email":{
             "title":"Email",
             "type":"string",
-            "description":"User's email used during registration",
-            "example":"user@email.com"
+            "description":"User's email address, as text, used during registration.",
+            "example":"ecotaxa.api.user@gmail.com"
           },
           "name":{
             "title":"Name",
             "type":"string",
-            "description":"User's full name",
+            "description":"User's full name, as text.",
             "example":"userName"
           },
           "organisation":{
             "title":"Organisation",
             "type":"string",
-            "description":"User's organisation",
+            "description":"User's organisation name, as text.",
             "example":"Oceanographic Laboratory of Villefranche sur Mer - LOV"
           },
           "active":{
             "title":"Account status",
             "type":"boolean",
-            "description":"User's Account status",
+            "description":"Whether the user is still active.",
             "example":true
           },
           "country":{
             "title":"Country",
             "type":"string",
-            "description":"User's country",
+            "description":"The country name, as text (but chosen in a consistent list).",
             "example":"France"
           },
           "usercreationdate":{
             "title":"User creation date",
             "type":"string",
-            "description":"User account creation date",
+            "description":"The date of creation of the user, as text formatted according to the ISO 8601 standard.",
             "format":"date-time",
             "example":"2020-11-05T12:31:48.299713"
           },
           "usercreationreason":{
             "title":"User creation reason",
             "type":"string",
-            "description":"The reason of creation of this user account",
+            "description":"Paragraph describing the usage of EcoTaxa made by the user.",
             "example":"Analysis of size and shapes of plastic particles"
           }
         }
@@ -6367,50 +7183,50 @@
           "id":{
             "title":"Id",
             "type":"integer",
-            "description":"Unique user identifier",
+            "description":"The unique numeric id of this user.",
             "example":1
           },
           "email":{
             "title":"Email",
             "type":"string",
-            "description":"User's email used during registration",
-            "example":"user@email.com"
+            "description":"User's email address, as text, used during registration.",
+            "example":"ecotaxa.api.user@gmail.com"
           },
           "name":{
             "title":"Name",
             "type":"string",
-            "description":"User's full name",
+            "description":"User's full name, as text.",
             "example":"userName"
           },
           "organisation":{
             "title":"Organisation",
             "type":"string",
-            "description":"User's organisation",
+            "description":"User's organisation name, as text.",
             "example":"Oceanographic Laboratory of Villefranche sur Mer - LOV"
           },
           "active":{
             "title":"Account status",
             "type":"boolean",
-            "description":"User's Account status",
+            "description":"Whether the user is still active.",
             "example":true
           },
           "country":{
             "title":"Country",
             "type":"string",
-            "description":"User's country",
+            "description":"The country name, as text (but chosen in a consistent list).",
             "example":"France"
           },
           "usercreationdate":{
             "title":"User creation date",
             "type":"string",
-            "description":"User account creation date",
+            "description":"The date of creation of the user, as text formatted according to the ISO 8601 standard.",
             "format":"date-time",
             "example":"2020-11-05T12:31:48.299713"
           },
           "usercreationreason":{
             "title":"User creation reason",
             "type":"string",
-            "description":"The reason of creation of this user account",
+            "description":"Paragraph describing the usage of EcoTaxa made by the user.",
             "example":"Analysis of size and shapes of plastic particles"
           },
           "can_do":{
