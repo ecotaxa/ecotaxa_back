@@ -28,6 +28,9 @@ class SubsetReq(BaseModel):
     limit_value: float = Field(title="Limit value", description="Limit value, e.g. 20% or 5 per copepoda or 5% per sample.", example=10.0)
     do_images: bool = Field(title="Do images", description="If set, also clone images.", example=True)
 
+    class Config:
+        schema_extra = {"title": "Subset request Model"}
+
 
 class SubsetRsp(BaseModel):
     """ Subset response. """

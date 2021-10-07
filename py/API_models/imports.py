@@ -20,6 +20,9 @@ class ImportReq(BaseModel):
     update_mode: str = Field(title="Update data ('Yes'), including classification ('Cla')",
                              default="")
 
+    class Config:
+        schema_extra = {"title": "Import request Model"}
+
 
 class ImportRsp(BaseModel):
     """ Import response. """
@@ -83,6 +86,9 @@ class SimpleImportReq(BaseModel):
     # possible_values: List[str] = Field(title="Possible field values", const=True,
     #                                    default=[v for v in PossibleSimpleImportFields.__members__])
     possible_values: List[str] = [v for v in SimpleImportFields.__members__]
+
+    class Config:
+        schema_extra = {"title": "Simple import request Model"}
 
 
 class SimpleImportRsp(BaseModel):

@@ -8,7 +8,8 @@ import os
 from logging import INFO
 from typing import Union, Tuple
 
-from fastapi import FastAPI, Request, Response, status, Depends, HTTPException, UploadFile, File, Query, Form, Body, Path
+from fastapi import FastAPI, Request, Response, status, Depends, HTTPException, UploadFile, File, Query, Form, Body, \
+    Path
 from fastapi.logger import logger as fastapi_logger
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
@@ -83,7 +84,7 @@ logger = get_logger(__name__)
 fastapi_logger.setLevel(INFO)
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.18",
+              version="0.0.19",
               # openapi URL as seen from navigator, this is included when /docs is required
               # which serves swagger-ui JS app. Stay in /api sub-path.
               openapi_url="/api/openapi.json",
@@ -130,7 +131,7 @@ app.mount("/api", app)
     },
     response_model=str
 )
-async def login(params: LoginReq=Body(title="Login request Model", default=None)) -> str:
+async def login(params: LoginReq = Body(...)) -> str:
     """
         **Login barrier,** 
         
@@ -181,10 +182,11 @@ def show_current_user(current_user: int = Depends(get_current_user)):
         }
     },
     response_model=str)
-def get_current_user_prefs(project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
-                           key: str = Query(default=None, title="Key", description="The preference key, as text.",
-                                            example="filters"),
-                           current_user: int = Depends(get_current_user)) -> str:
+def get_current_user_prefs(
+        project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
+        key: str = Query(default=None, title="Key", description="The preference key, as text.",
+                         example="filters"),
+        current_user: int = Depends(get_current_user)) -> str:
     """
         **Returns one preference**, for a project and the currently authenticated user.
 
@@ -204,13 +206,14 @@ def get_current_user_prefs(project_id: int = Path(description="Internal, numeric
                  }
              }
          })
-def set_current_user_prefs(project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
-                           key: str = Query(default=None, title="Key", description="The preference key, as text.",
-                                            example="filters"),
-                           value: str = Query(default=None, title="Value",
-                                              description="The value to set this preference to, as text.",
-                                              example="{\"dispfield\": \" dispfield_orig_id dispfield_classif_auto_score dispfield_classif_when dispfield_random_value\", \"ipp\": \"500\", \"magenabled\": \"1\", \"popupenabled\": \"1\", \"sortby\": \"orig_id\", \"sortorder\": \"asc\", \"statusfilter\": \"\", \"zoom\": \"90\"}"),
-                           current_user: int = Depends(get_current_user)):
+def set_current_user_prefs(
+        project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
+        key: str = Query(default=None, title="Key", description="The preference key, as text.",
+                         example="filters"),
+        value: str = Query(default=None, title="Value",
+                           description="The value to set this preference to, as text.",
+                           example="{\"dispfield\": \" dispfield_orig_id dispfield_classif_auto_score dispfield_classif_when dispfield_random_value\", \"ipp\": \"500\", \"magenabled\": \"1\", \"popupenabled\": \"1\", \"sortby\": \"orig_id\", \"sortorder\": \"asc\", \"statusfilter\": \"\", \"zoom\": \"90\"}"),
+        current_user: int = Depends(get_current_user)):
     """
         **Sets one preference**, for a project and for the currently authenticated user.
 
@@ -264,7 +267,7 @@ def get_user(user_id: int = Path(description="Internal, the unique numeric id of
               }
           },
           response_model=int)
-def create_collection(params: CreateCollectionReq=Body(title="Create collection request Model", default=None),
+def create_collection(params: CreateCollectionReq = Body(...),
                       current_user: int = Depends(get_current_user)) -> Union[int, str]:
     """
         **Create a collection** with at least one project inside.
@@ -332,8 +335,10 @@ def collection_by_short_title(
 
 
 @app.get("/collections/{collection_id}", tags=['collections'], response_model=CollectionModel)
-def get_collection(collection_id: int = Path(description="Internal, the unique numeric id of this collection.", default=None, example=1),
-                   current_user: int = Depends(get_current_user)):
+def get_collection(
+        collection_id: int = Path(description="Internal, the unique numeric id of this collection.", default=None,
+                                  example=1),
+        current_user: int = Depends(get_current_user)):
     """
        Returns **information about the collection** corresponding to the given id.
 
@@ -357,8 +362,9 @@ def get_collection(collection_id: int = Path(description="Internal, the unique n
                  }
              }
          })
-def update_collection(collection: CollectionModel = Body(title="Collection Model", default=None),
-                      collection_id: int = Path(description="Internal, the unique numeric id of this collection.", default=None, example=1),
+def update_collection(collection: CollectionModel = Body(...),
+                      collection_id: int = Path(description="Internal, the unique numeric id of this collection.",
+                                                default=None, example=1),
                       current_user: int = Depends(get_current_user)):
     """
        **Update the collection**. Note that some updates are silently failing when not compatible
@@ -387,20 +393,22 @@ def update_collection(collection: CollectionModel = Body(title="Collection Model
 
 
 @app.get("/collections/{collection_id}/export/emodnet", tags=['collections'], response_model=EMODnetExportRsp)
-def emodnet_format_export(collection_id: int = Path(description="Internal, the unique numeric id of this collection.", default=None, example=1),
-                          dry_run: bool = Query(default=None, title="Dry run",
-                                                description="If set, then only a diagnostic of doability will be done.",
-                                                example=False),
-                          with_zeroes: bool = Query(default=None, title="With zeroes",
-                                                    description="If set, then *absent* records will be generated, in the relevant samples, for categories present in other samples.",
-                                                    example=False),
-                          auto_morpho: bool = Query(default=None, title="Auto morpho",
-                                                    description="If set, then any object classified on a Morpho category will be added to the count of the nearest Phylo parent, upward in the tree.",
-                                                    example=False),
-                          with_computations: bool = Query(default=None, title="With computations",
-                                                          description="If set, then an attempt will be made to compute organisms concentrations and biovolumes.",
-                                                          example=False),
-                          current_user: int = Depends(get_current_user)) -> EMODnetExportRsp:
+def emodnet_format_export(
+        collection_id: int = Path(description="Internal, the unique numeric id of this collection.", default=None,
+                                  example=1),
+        dry_run: bool = Query(default=None, title="Dry run",
+                              description="If set, then only a diagnostic of doability will be done.",
+                              example=False),
+        with_zeroes: bool = Query(default=None, title="With zeroes",
+                                  description="If set, then *absent* records will be generated, in the relevant samples, for categories present in other samples.",
+                                  example=False),
+        auto_morpho: bool = Query(default=None, title="Auto morpho",
+                                  description="If set, then any object classified on a Morpho category will be added to the count of the nearest Phylo parent, upward in the tree.",
+                                  example=False),
+        with_computations: bool = Query(default=None, title="With computations",
+                                        description="If set, then an attempt will be made to compute organisms concentrations and biovolumes.",
+                                        example=False),
+        current_user: int = Depends(get_current_user)) -> EMODnetExportRsp:
     """
         **Export the collection in EMODnet format**, @see https://www.emodnet-ingestion.eu
 
@@ -426,8 +434,10 @@ def emodnet_format_export(collection_id: int = Path(description="Internal, the u
                 }
             },
             response_model=int)
-def erase_collection(collection_id: int = Path(description="Internal, the unique numeric id of this collection.", default=None, example=1),
-                     current_user: int = Depends(get_current_user)) -> int:
+def erase_collection(
+        collection_id: int = Path(description="Internal, the unique numeric id of this collection.", default=None,
+                                  example=1),
+        current_user: int = Depends(get_current_user)) -> int:
     """
         **Delete the collection**, 
         
@@ -503,7 +513,7 @@ def search_projects(current_user: Optional[int] = Depends(get_optional_current_u
               }
           },
           response_model=int)
-def create_project(params: CreateProjectReq  = Body(title="Create project request Model", default=None),
+def create_project(params: CreateProjectReq = Body(...),
                    current_user: int = Depends(get_current_user)) -> Union[int, str]:
     """
         **Create an empty project with only a title,** and **return the numeric id of this newly created project**.
@@ -522,8 +532,8 @@ def create_project(params: CreateProjectReq  = Body(title="Create project reques
 
 
 @app.post("/projects/{project_id}/subset", tags=['projects'], response_model=SubsetRsp)
-def project_subset(project_id: int  = Path(description="Internal, numeric id of the project.", default=None, example=1),
-                   params: SubsetReq = Body(title="Subset request Model", default=None),
+def project_subset(project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
+                   params: SubsetReq = Body(...),
                    current_user: int = Depends(get_current_user)):
     """
         **Subset a project into another one.**
@@ -648,7 +658,7 @@ def project_set_get_column_stats(ids: str = Query(title="Project ids",
 
 @app.post("/projects/{project_id}/dump", tags=['projects'], include_in_schema=False)  # pragma:nocover
 def project_dump(project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
-                 filters: ProjectFiltersModel = Body(title="Project filters Model", default=None),
+                 filters: ProjectFiltersModel = Body(...),
                  current_user: int = Depends(get_current_user)):
     """
         Dump the project in JSON form. Internal so far.
@@ -728,8 +738,9 @@ def project_stats(project_id: int = Path(description="Internal, numeric id of th
                   }
               }
           })
-def project_recompute_geography(project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
-                                current_user: int = Depends(get_current_user)) -> None:
+def project_recompute_geography(
+        project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
+        current_user: int = Depends(get_current_user)) -> None:
     """
         **Recompute geography information** for all samples in project.
 
@@ -744,7 +755,7 @@ def project_recompute_geography(project_id: int = Path(description="Internal, nu
 
 @app.post("/file_import/{project_id}", tags=['projects'], response_model=ImportRsp)
 def import_file(project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
-                params: ImportReq = Body(title="Import request Model", default=None),
+                params: ImportReq = Body(...),
                 current_user: int = Depends(get_current_user)):
     """
         Validate or do a real import of an EcoTaxa archive or directory.
@@ -757,7 +768,7 @@ def import_file(project_id: int = Path(description="Internal, numeric id of the 
 
 @app.post("/simple_import/{project_id}", tags=['projects'], response_model=SimpleImportRsp)
 def simple_import(project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
-                  params: SimpleImportReq = Body(title="Simple import request Model", default=None),
+                  params: SimpleImportReq = Body(...),
                   dry_run: bool = Query(title="Dry run",
                                         description="If set, then only a diagnostic of doability will be done. In this case, plain value check. If no dry_run, this call will create a background job.",
                                         default=None, example=True),
@@ -904,7 +915,7 @@ def sample_set_get_stats(sample_ids: str = Query(default=None, title="Sample Ids
               }
           },
           response_model=int)
-def update_samples(req: BulkUpdateReq = Body(title="Update request Model", default=None),
+def update_samples(req: BulkUpdateReq = Body(...),
                    current_user: int = Depends(get_current_user)) -> int:
     """
         Do the required **update for each sample in the set.** 
@@ -919,8 +930,9 @@ def update_samples(req: BulkUpdateReq = Body(title="Update request Model", defau
 
 
 @app.get("/sample/{sample_id}", tags=['samples'], response_model=SampleModel)
-def sample_query(sample_id: int = Path(description="Internal, the unique numeric id of this sample.", default=None, example=1),
-                 current_user: Optional[int] = Depends(get_optional_current_user)) \
+def sample_query(
+        sample_id: int = Path(description="Internal, the unique numeric id of this sample.", default=None, example=1),
+        current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> SampleBO:
     """
         Returns **information about the sample** corresponding to the given id.
@@ -961,7 +973,7 @@ def acquisitions_search(
               }
           },
           response_model=int)
-def update_acquisitions(req: BulkUpdateReq = Body(title="Update request Model", default=None),
+def update_acquisitions(req: BulkUpdateReq = Body(...),
                         current_user: int = Depends(get_current_user)) -> int:
     """
         Do the required **update for each acquisition in the set**.
@@ -974,8 +986,10 @@ def update_acquisitions(req: BulkUpdateReq = Body(title="Update request Model", 
 
 
 @app.get("/acquisition/{acquisition_id}", tags=['acquisitions'], response_model=AcquisitionModel)
-def acquisition_query(acquisition_id: int = Path(description="Internal, the unique numeric id of this acquisition.", default=None, example=1),
-                      current_user: Optional[int] = Depends(get_optional_current_user)) \
+def acquisition_query(
+        acquisition_id: int = Path(description="Internal, the unique numeric id of this acquisition.", default=None,
+                                   example=1),
+        current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> AcquisitionBO:
     """
         Returns **information about the acquisition** corresponding to the given id.
@@ -1022,8 +1036,8 @@ def instrument_query(project_ids: str = Query(title="Projects ids",
 
 # ######################## END OF INSTRUMENT
 
-@app.post("/process_set/update", tags=['processes'], 
-responses={
+@app.post("/process_set/update", tags=['processes'],
+          responses={
               200: {
                   "content": {
                       "application/json": {
@@ -1033,8 +1047,8 @@ responses={
               }
           },
           response_model=int
-)
-def update_processes(req: BulkUpdateReq = Body(title="Update request Model", default=None),
+          )
+def update_processes(req: BulkUpdateReq = Body(...),
                      current_user: int = Depends(get_current_user)) -> int:
     """
         Do the required **update for each process in the set.**
@@ -1047,8 +1061,9 @@ def update_processes(req: BulkUpdateReq = Body(title="Update request Model", def
 
 
 @app.get("/process/{process_id}", tags=['processes'], response_model=ProcessModel)
-def process_query(process_id: int = Path(description="Internal, the unique numeric id of this process.", default=None, example=1),
-                  current_user: Optional[int] = Depends(get_optional_current_user)) \
+def process_query(
+        process_id: int = Path(description="Internal, the unique numeric id of this process.", default=None, example=1),
+        current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> ProcessBO:
     """
         Returns **information about the process** corresponding to the given id.
@@ -1071,8 +1086,8 @@ def process_query(process_id: int = Path(description="Internal, the unique numer
 @app.post("/object_set/{project_id}/query", tags=['objects'], response_model=ObjectSetQueryRsp,
           response_class=MyORJSONResponse  # Force the ORJSON encoder
           )
-def get_object_set(project_id: int  = Path(description="Internal, numeric id of the project.", default=None, example=1),
-                   filters: ProjectFiltersModel = Body(title="Project filters Model", default=None),
+def get_object_set(project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
+                   filters: ProjectFiltersModel = Body(...),
                    fields: Optional[str] = Query(title="Fields", description='''
 
 Specify the needed object (and ancilliary entities) fields.
@@ -1083,10 +1098,16 @@ The column obj.imgcount contains the total count of images for the object.
 
 Use a comma to separate fields.                   
                    ''', default=None, example="obj.longitude, obj.latitude, obj.imgcount"),
-                   order_field: Optional[str] = Query(title="Order field", description='order_field will order the result using given field. If prefixed with "-" then it will be reversed.', default=None, example="obj.imgcount"),
+                   order_field: Optional[str] = Query(title="Order field",
+                                                      description='order_field will order the result using given field. If prefixed with "-" then it will be reversed.',
+                                                      default=None, example="obj.imgcount"),
                    # TODO: order_field should be a user-visible field name, not nXXX, in case of free field
-                   window_start: Optional[int] = Query(default=None, title="Window start", description="Allows to return only a slice of the result. Skip window_start before returning data.", example="10"),
-                   window_size: Optional[int] = Query(default=None, title="Window size", description="Allows to return only a slice of the result. Return only window_size lines.", example="100"),
+                   window_start: Optional[int] = Query(default=None, title="Window start",
+                                                       description="Allows to return only a slice of the result. Skip window_start before returning data.",
+                                                       example="10"),
+                   window_size: Optional[int] = Query(default=None, title="Window size",
+                                                      description="Allows to return only a slice of the result. Return only window_size lines.",
+                                                      example="100"),
                    current_user: Optional[int] = Depends(get_optional_current_user)) -> ObjectSetQueryRsp:
     """
         Returns **filtred object Ids** for the given project.
@@ -1112,10 +1133,11 @@ Use a comma to separate fields.
 
 
 @app.post("/object_set/{project_id}/summary", tags=['objects'], response_model=ObjectSetSummaryRsp)
-def get_object_set_summary(project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
-                           only_total: bool = Query(title="Only total", description="#TODO JCE", default=None),
-                           filters: ProjectFiltersModel = Body(title="Project filters Model", default=None),
-                           current_user: Optional[int] = Depends(get_optional_current_user)) -> ObjectSetSummaryRsp:
+def get_object_set_summary(
+        project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
+        only_total: bool = Query(title="Only total", description="#TODO JCE", default=None),
+        filters: ProjectFiltersModel = Body(...),
+        current_user: Optional[int] = Depends(get_optional_current_user)) -> ObjectSetSummaryRsp:
     """
         For the given project, with given filters, return the classification summary, i.e.:
             - Total number of objects
@@ -1133,9 +1155,10 @@ def get_object_set_summary(project_id: int = Path(description="Internal, numeric
 
 
 @app.post("/object_set/{project_id}/reset_to_predicted", tags=['objects'], response_model=None)
-def reset_object_set_to_predicted(project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
-                                  filters: ProjectFiltersModel = Body(title="Project filters Model", default=None),
-                                  current_user: int = Depends(get_current_user)) -> None:
+def reset_object_set_to_predicted(
+        project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
+        filters: ProjectFiltersModel = Body(...),
+        current_user: int = Depends(get_current_user)) -> None:
     """
         Reset to Predicted all objects for the given project with the filters.
     """
@@ -1146,11 +1169,12 @@ def reset_object_set_to_predicted(project_id: int = Path(description="Internal, 
 
 @app.post("/object_set/{project_id}/revert_to_history", tags=['objects'],
           response_model=ObjectSetRevertToHistoryRsp)
-def revert_object_set_to_history(project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
-                                 filters: ProjectFiltersModel= Body(title="Project filters Model", default=None),
-                                 dry_run: bool=Query(default=None),
-                                 target: Optional[int] = None,
-                                 current_user: int = Depends(get_current_user)) -> ObjectSetRevertToHistoryRsp:
+def revert_object_set_to_history(
+        project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
+        filters: ProjectFiltersModel = Body(...),
+        dry_run: bool = Query(default=None),
+        target: Optional[int] = None,
+        current_user: int = Depends(get_current_user)) -> ObjectSetRevertToHistoryRsp:
     """
         Revert all objects for the given project, with the filters, to the target.
         - param `filters`: The set of filters to apply to get the target objects.
@@ -1166,11 +1190,12 @@ def revert_object_set_to_history(project_id: int = Path(description="Internal, n
 
 
 @app.post("/object_set/{project_id}/reclassify", tags=['objects'])
-def reclassify_object_set(project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
-                          filters: ProjectFiltersModel = Body(title="Project filters Model", default=None),
-                          forced_id: ClassifIDT = Query(title="", default=None),
-                          reason: str = Query(title="", default=None),
-                          current_user: int = Depends(get_current_user)) -> int:
+def reclassify_object_set(
+        project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
+        filters: ProjectFiltersModel = Body(...),
+        forced_id: ClassifIDT = Query(title="", default=None),
+        reason: str = Query(title="", default=None),
+        current_user: int = Depends(get_current_user)) -> int:
     """
         Regardless of present classification or state, set the new classification for this object set.
         If the filter designates "all with given classification", add a TaxonomyChangeLog entry.
@@ -1183,7 +1208,7 @@ def reclassify_object_set(project_id: int = Path(description="Internal, numeric 
 
 
 @app.post("/object_set/update", tags=['objects'])
-def update_object_set(req: BulkUpdateReq = Body(title="Update request Model", default=None),
+def update_object_set(req: BulkUpdateReq = Body(...),
                       current_user: int = Depends(get_current_user)) -> int:
     """
         Update all the objects with given IDs and values
@@ -1197,12 +1222,12 @@ def update_object_set(req: BulkUpdateReq = Body(title="Update request Model", de
 
 
 @app.post("/object_set/classify", tags=['objects'])
-def classify_object_set(req: ClassifyReq = Body(title="Classify request Model", default=None),
+def classify_object_set(req: ClassifyReq = Body(...),
                         current_user: int = Depends(get_current_user)) -> int:
     """
         Change classification and/or qualification for a set of objects.
         Current user needs at least Annotate right on all projects of specified objects.
-    """##**Returns the number of updated entities.**NULL upon success.
+    """  ##**Returns the number of updated entities.**NULL upon success.
     # TODO: Cannot classify anymore to deprecated taxon/category
     assert len(req.target_ids) == len(req.classifications), "Need the same number of objects and classifications"
     with ObjectManager() as sce:
@@ -1216,7 +1241,7 @@ def classify_object_set(req: ClassifyReq = Body(title="Classify request Model", 
 
 
 @app.post("/object_set/classify_auto", tags=['objects'])
-def classify_auto_object_set(req: ClassifyAutoReq = Body(title="Classify auto request Model", default=None),
+def classify_auto_object_set(req: ClassifyAutoReq = Body(...),
                              current_user: int = Depends(get_current_user)) -> int:
     """
         Set automatic classification of a set of objects.
@@ -1254,8 +1279,8 @@ def query_object_set_parents(object_ids: ObjectIDListT,
 
 
 @app.post("/object_set/export", tags=['objects'], response_model=ExportRsp)
-def export_object_set(filters: ProjectFiltersModel = Body(title="Project filters Model", default=None),
-                      request: ExportReq = Body(title="Export request Model", default=None),
+def export_object_set(filters: ProjectFiltersModel = Body(...),
+                      request: ExportReq = Body(...),
                       current_user: Optional[int] = Depends(get_optional_current_user)) -> ExportRsp:
     """
         Start an export job for the given object set and options.
@@ -1266,12 +1291,8 @@ def export_object_set(filters: ProjectFiltersModel = Body(title="Project filters
 
 
 @app.post("/object_set/predict", tags=['objects'], response_model=PredictionRsp)
-def predict_object_set(filters: ProjectFiltersModel = Body(title="Filters",
-                                                           description="Description of how to reduce project data.",
-                                                           default=None),
-                       request: PredictionReq = Body(title="Prediction Request",
-                                                     description="How to predict, in details.",
-                                                     default=None),
+def predict_object_set(filters: ProjectFiltersModel = Body(...),
+                       request: PredictionReq = Body(...),
                        current_user: Optional[int] = Depends(get_optional_current_user)) -> PredictionRsp:
     """
         Start a prediction AKA automatic classification for the given object set and options.
@@ -1305,8 +1326,9 @@ def erase_object_set(object_ids: ObjectIDListT,
 
 
 @app.get("/object/{object_id}", tags=['object'], response_model=ObjectModel)
-def object_query(object_id: int = Path(description="Internal, the unique numeric id of this object.", default=None, example=1),
-                 current_user: Optional[int] = Depends(get_optional_current_user)) \
+def object_query(
+        object_id: int = Path(description="Internal, the unique numeric id of this object.", default=None, example=1),
+        current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> ObjectBO:
     """
         Returns **information about the object** corresponding to the given id.
@@ -1322,37 +1344,38 @@ def object_query(object_id: int = Path(description="Internal, the unique numeric
 
 
 @app.get("/object/{object_id}/history", tags=['object'],
-        responses={
+         responses={
              200: {
                  "content": {
                      "application/json": {
                          "example": [{
-                                "objid":264409236,
-                                "classif_id":82399,
-                                "classif_date":"2021-09-21T14:59:01.007110",
-                                "classif_who":"null",
-                                "classif_type":"A",
-                                "classif_qual":"P",
-                                "classif_score":0.085,
-                                "user_name":"null",
-                                "taxon_name":"Penilia avirostris"
-                            },{
-                                "objid":264409236,
-                                "classif_id":25828,
-                                "classif_date":"2021-09-29T08:25:37.968095",
-                                "classif_who":1267,
-                                "classif_type":"M",
-                                "classif_qual":"V",
-                                "classif_score":"null",
-                                "user_name":"User name",
-                                "taxon_name":"Copepoda"
-                            }]
+                             "objid": 264409236,
+                             "classif_id": 82399,
+                             "classif_date": "2021-09-21T14:59:01.007110",
+                             "classif_who": "null",
+                             "classif_type": "A",
+                             "classif_qual": "P",
+                             "classif_score": 0.085,
+                             "user_name": "null",
+                             "taxon_name": "Penilia avirostris"
+                         }, {
+                             "objid": 264409236,
+                             "classif_id": 25828,
+                             "classif_date": "2021-09-29T08:25:37.968095",
+                             "classif_who": 1267,
+                             "classif_type": "M",
+                             "classif_qual": "V",
+                             "classif_score": "null",
+                             "user_name": "User name",
+                             "taxon_name": "Copepoda"
+                         }]
                      }
                  }
              }
-         },response_model=List[HistoricalClassificationModel])  # type:ignore
-def object_query_history(object_id: int = Path(description="Internal, the unique numeric id of this object.", default=None, example=1),
-                         current_user: Optional[int] = Depends(get_optional_current_user)) \
+         }, response_model=List[HistoricalClassificationModel])  # type:ignore
+def object_query_history(
+        object_id: int = Path(description="Internal, the unique numeric id of this object.", default=None, example=1),
+        current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> List[HistoricalClassification]:
     """
         Returns **information about the object's history** corresponding to the given id.
@@ -1406,8 +1429,9 @@ async def reclassif_stats(taxa_ids: str,
 
 
 @app.get("/taxa/reclassification_history/{project_id}", tags=['Taxonomy Tree'])
-async def reclassif_project_stats(project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
-                                  current_user: Optional[int] = Depends(get_optional_current_user)) \
+async def reclassif_project_stats(
+        project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
+        current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> List[TaxonBO]:
     """
         Dig into reclassification logs and return the associations source->target for previous reclassifications.
@@ -1419,8 +1443,9 @@ async def reclassif_project_stats(project_id: int = Path(description="Internal, 
 
 
 @app.get("/taxon/{taxon_id}", tags=['Taxonomy Tree'], response_model=TaxonModel)
-async def query_taxa(taxon_id: int = Path(description="Internal, the unique numeric id of this taxon.", default=None, example=1),
-                     _current_user: Optional[int] = Depends(get_optional_current_user)) \
+async def query_taxa(
+        taxon_id: int = Path(description="Internal, the unique numeric id of this taxon.", default=None, example=1),
+        _current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> Optional[TaxonBO]:
     """
         Information about a single taxon, including its lineage.
@@ -1431,8 +1456,9 @@ async def query_taxa(taxon_id: int = Path(description="Internal, the unique nume
 
 
 @app.get("/taxon/{taxon_id}/usage", tags=['Taxonomy Tree'], response_model=List[TaxonUsageModel])
-async def query_taxa_usage(taxon_id: int = Path(description="Internal, the unique numeric id of this taxon.", default=None, example=1),
-                           _current_user: Optional[int] = Depends(get_optional_current_user)) \
+async def query_taxa_usage(
+        taxon_id: int = Path(description="Internal, the unique numeric id of this taxon.", default=None, example=1),
+        _current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> List[TaxonUsageModel]:
     """
         Where a given taxon is used. Only validated uses are returned.
@@ -1444,7 +1470,8 @@ async def query_taxa_usage(taxon_id: int = Path(description="Internal, the uniqu
 
 @app.get("/taxon_set/search", tags=['Taxonomy Tree'], response_model=List[TaxaSearchRsp])
 async def search_taxa(query: str,
-                      project_id: Optional[int] = Query(description="Internal, numeric id of the project.", default=None),
+                      project_id: Optional[int] = Query(description="Internal, numeric id of the project.",
+                                                        default=None),
                       current_user: Optional[int] = Depends(get_optional_current_user)):
     """
         Search for taxa by name.
@@ -1480,8 +1507,9 @@ async def query_taxa_set(ids: str,
 
 
 @app.get("/taxon/central/{taxon_id}", tags=['Taxonomy Tree'])
-async def get_taxon_in_central(taxon_id: int = Path(description="Internal, the unique numeric id of this taxon.", default=None, example=1),
-                               _current_user: int = Depends(get_current_user)):
+async def get_taxon_in_central(
+        taxon_id: int = Path(description="Internal, the unique numeric id of this taxon.", default=None, example=1),
+        _current_user: int = Depends(get_current_user)):
     """
         Get EcoTaxoServer full record for this taxon.
     """
@@ -1529,7 +1557,8 @@ async def pull_taxa_update_from_central(_current_user: int = Depends(get_current
 
 
 @app.get("/worms/{aphia_id}", tags=['Taxonomy Tree'], include_in_schema=False, response_model=TaxonModel)
-async def query_taxa_in_worms(aphia_id: int,#= Path(description="Internal, the unique numeric id of this user.", default=None)#TODO JCE
+async def query_taxa_in_worms(aphia_id: int,
+                              # = Path(description="Internal, the unique numeric id of this user.", default=None)#TODO JCE
                               _current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> Optional[TaxonBO]:
     """
@@ -1592,7 +1621,8 @@ async def matching_with_worms_nice(request: Request,
 @app.get("/admin/images/{project_id}/digest", tags=['WIP'], include_in_schema=False,
          response_model=str)
 def digest_project_images(max_digests: Optional[int],
-                          project_id: int = Path(description="Internal, numeric id of the project.", default=None, example=1),
+                          project_id: int = Path(description="Internal, numeric id of the project.", default=None,
+                                                 example=1),
                           current_user: int = Depends(get_current_user)) -> str:
     """
         Compute digests for images referenced from a project.
@@ -1621,9 +1651,10 @@ def digest_images(max_digests: Optional[int],
 
 @app.get("/admin/images/cleanup1", tags=['WIP'], include_in_schema=False,
          response_model=str)
-def cleanup_images_1(project_id: int = Query(description="Internal, numeric id of the project.", default=None, example=1),
-                     max_deletes: Optional[int] = None,
-                     current_user: int = Depends(get_current_user)) -> str:
+def cleanup_images_1(
+        project_id: int = Query(description="Internal, numeric id of the project.", default=None, example=1),
+        max_deletes: Optional[int] = None,
+        current_user: int = Depends(get_current_user)) -> str:
     """
         Remove duplicated images inside same object. Probably due to import update bug.
     """
@@ -1671,7 +1702,9 @@ def machine_learning_train(project_id: int = Query(default=None, title="Input pr
 # ######################## END OF ADMIN
 
 @app.get("/jobs/", tags=['jobs'], response_model=List[JobModel])
-def list_jobs(for_admin: bool = Query(title="For admin", description="If FALSE return the jobs for current user, else return all of them.", default=None, example=False),
+def list_jobs(for_admin: bool = Query(title="For admin",
+                                      description="If FALSE return the jobs for current user, else return all of them.",
+                                      default=None, example=False),
               current_user: int = Depends(get_current_user)) -> List[JobBO]:
     """
         **Return the jobs** for current user, or all of them if admin is asked for.
@@ -1695,18 +1728,19 @@ def get_job(job_id: int = Path(description="Internal, the unique numeric id of t
 
 
 @app.post("/jobs/{job_id}/answer", tags=['jobs'],
-        responses={
-            200: {
-                "content": {
-                    "application/json": {
-                        "example": null
-                    }
-                }
-            }
-        })
-def reply_job_question(job_id: int = Path(description="Internal, the unique numeric id of this job.", default=None, example=47445),
-                       reply: Dict[str, Any]= Body(title="#TODO JCE Reply Model", default=None),
-                       current_user: int = Depends(get_current_user)) -> None:
+          responses={
+              200: {
+                  "content": {
+                      "application/json": {
+                          "example": null
+                      }
+                  }
+              }
+          })
+def reply_job_question(
+        job_id: int = Path(description="Internal, the unique numeric id of this job.", default=None, example=47445),
+        reply: Dict[str, Any] = Body(title="#TODO JCE Reply Model", default=None),
+        current_user: int = Depends(get_current_user)) -> None:
     """
         **Send answers to last question.** The job resumes after it receives the reply.
         
@@ -1725,17 +1759,18 @@ def reply_job_question(job_id: int = Path(description="Internal, the unique nume
 
 
 @app.get("/jobs/{job_id}/restart", tags=['jobs'],
-        responses={
-            200: {
-                "content": {
-                    "application/json": {
-                        "example": null
-                    }
-                }
-            }
-        })
-def restart_job(job_id: int = Path(description="Internal, the unique numeric id of this job.", default=None, example=47445),
-                current_user: int = Depends(get_current_user)):
+         responses={
+             200: {
+                 "content": {
+                     "application/json": {
+                         "example": null
+                     }
+                 }
+             }
+         })
+def restart_job(
+        job_id: int = Path(description="Internal, the unique numeric id of this job.", default=None, example=47445),
+        current_user: int = Depends(get_current_user)):
     """
         **Restart the job related to the given id.**
 
@@ -1749,8 +1784,9 @@ def restart_job(job_id: int = Path(description="Internal, the unique numeric id 
 
 
 @app.get("/jobs/{job_id}/log", tags=['jobs'])
-def get_job_log_file(job_id: int = Path(description="Internal, the unique numeric id of this job.", default=None, example=47445),
-                     current_user: int = Depends(get_current_user)) -> FileResponse:
+def get_job_log_file(
+        job_id: int = Path(description="Internal, the unique numeric id of this job.", default=None, example=47445),
+        current_user: int = Depends(get_current_user)) -> FileResponse:
     """
         **Return the log file produced by given job.**
 
@@ -1769,8 +1805,9 @@ def get_job_log_file(job_id: int = Path(description="Internal, the unique numeri
         "description": "Return the produced file.",
     }
 })
-def get_job_file(job_id: int = Path(description="Internal, the unique numeric id of this job.", default=None, example=47445),
-                 current_user: int = Depends(get_current_user)) -> StreamingResponse:
+def get_job_file(
+        job_id: int = Path(description="Internal, the unique numeric id of this job.", default=None, example=47445),
+        current_user: int = Depends(get_current_user)) -> StreamingResponse:
     """
         **Return the file produced by given job.**
         
@@ -1784,8 +1821,9 @@ def get_job_file(job_id: int = Path(description="Internal, the unique numeric id
 
 
 @app.delete("/jobs/{job_id}", tags=['jobs'])
-def erase_job(job_id: int = Path(description="Internal, the unique numeric id of this job.", default=None, example=47445),
-              current_user: int = Depends(get_current_user)) -> int:
+def erase_job(
+        job_id: int = Path(description="Internal, the unique numeric id of this job.", default=None, example=47445),
+        current_user: int = Depends(get_current_user)) -> int:
     """
         **Delete the job** from DB, with associated storage.
         

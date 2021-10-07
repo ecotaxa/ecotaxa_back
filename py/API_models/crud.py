@@ -10,8 +10,8 @@ from typing_extensions import TypedDict
 
 from BO.ColumnUpdate import ColUpdateList
 from BO.DataLicense import LicenseEnum
-from BO.Project import ProjectUserStats, ProjectSetColumnStats
 from BO.Job import DBJobStateEnum
+from BO.Project import ProjectUserStats, ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
 from DB import User, Project, Sample, Acquisition, Process, Job
 from DB.Acquisition import ACQUISITION_FREE_COLUMNS
@@ -34,9 +34,13 @@ _DBUserDescription = {
     "name": Field(title="Name", description="User's full name, as text.", default=None, example="userName"),
     "organisation": Field(title="Organisation", description="User's organisation name, as text.", default=None,
                           example="Oceanographic Laboratory of Villefranche sur Mer - LOV"),
-    "active": Field(title="Account status", description="Whether the user is still active.", default=None, example=True),
-    "country": Field(title="Country", description="The country name, as text (but chosen in a consistent list).", default=None, example="France"),
-    "usercreationdate": Field(title="User creation date", description="The date of creation of the user, as text formatted according to the ISO 8601 standard.", default=None,
+    "active": Field(title="Account status", description="Whether the user is still active.", default=None,
+                    example=True),
+    "country": Field(title="Country", description="The country name, as text (but chosen in a consistent list).",
+                     default=None, example="France"),
+    "usercreationdate": Field(title="User creation date",
+                              description="The date of creation of the user, as text formatted according to the ISO 8601 standard.",
+                              default=None,
                               example="2020-11-05T12:31:48.299713"),
     "usercreationreason": Field(title="User creation reason",
                                 description="Paragraph describing the usage of EcoTaxa made by the user.",
@@ -87,7 +91,8 @@ class ProjectSummaryModel(BaseModel):
 _DBSampleDescription = {
     "sampleid": Field(title="Sample Id", description="The sample Id", example=100),
     "projid": Field(title="Project Id", description="The project Id", example=4),
-    "orig_id": Field(title="Original id", description="Original sample ID from initial TSV load", example="dewex_leg2_19"),
+    "orig_id": Field(title="Original id", description="Original sample ID from initial TSV load",
+                     example="dewex_leg2_19"),
     "latitude": Field(title="Latitude", description="The latitude", example=42.0231666666667),
     "longitude": Field(title="Longitude", description="The longitude", example=4.71766666666667),
     "dataportal_descriptor": Field(title="Dataportal descriptor", description="", example=""),
@@ -100,7 +105,8 @@ _DBAcquisitionDescription = {
     "acquisid": Field(title="Acquisition Id", description="The acquisition Id", example=144, default=None),
     "acq_sample_id": Field(title="Acquisition sample Id", description="The acquisition sample Id", example=1039,
                            default=None),
-    "orig_id": Field(title="Original id", description="Original acquisition ID from initial TSV load", example="uvp5_station1_cast1b", default=None),
+    "orig_id": Field(title="Original id", description="Original acquisition ID from initial TSV load",
+                     example="uvp5_station1_cast1b", default=None),
     "instrument": Field(title="Instrument", description="Instrument used", example="uvp5", default=None),
 
 }
@@ -108,8 +114,9 @@ _AcquisitionModelFromDB = sqlalchemy_to_pydantic(Acquisition,
                                                  exclude=["t%02d" % i for i in range(1, ACQUISITION_FREE_COLUMNS)],
                                                  field_infos=_DBAcquisitionDescription)
 _DBProcessDescription = {
-    "processid" : Field(title="Process id", description="The process Id", example=1000),
-    "orig_id" : Field(title="Original id", description="Original process ID from initial TSV load", example="zooprocess_045")
+    "processid": Field(title="Process id", description="The process Id", example=1000),
+    "orig_id": Field(title="Original id", description="Original process ID from initial TSV load",
+                     example="zooprocess_045")
 }
 _ProcessModelFromDB = sqlalchemy_to_pydantic(Process,
                                              exclude=["t%02d" % i for i in range(1, PROCESS_FREE_COLUMNS)],
@@ -201,10 +208,13 @@ class SampleModel(_SampleModelFromDB):  # type:ignore
                                          description="Free columns from sample mapping in project",
                                          default={}, example={"flash_delay": "t01"})
 
+
 _DBSampleTaxoStatsDescription = {
     "sample_id": Field(title="Sample id", description="The sample id"),
-    "used_taxa": Field(title="Used taxa", description="The taxa/category ids used inside the sample. -1 for unclassified objects"),
-    "nb_unclassified": Field(title="Number unclassified", description="The number of unclassified objects inside the sample"),
+    "used_taxa": Field(title="Used taxa",
+                       description="The taxa/category ids used inside the sample. -1 for unclassified objects"),
+    "nb_unclassified": Field(title="Number unclassified",
+                             description="The number of unclassified objects inside the sample"),
     "nb_validated": Field(title="Number validated", description="The number of validated objects inside the sample"),
     "nb_dubious": Field(title="Number dubious", description="The number of dubious objects inside the sample"),
     "nb_predicted": Field(title="Number predicted", description="The number of predicted objects inside the sample"),
@@ -221,15 +231,22 @@ class AcquisitionModel(_AcquisitionModelFromDB):  # type:ignore
 
 class ProcessModel(_ProcessModelFromDB):  # type:ignore
     free_columns: Dict[str, Any] = Field(title="Free columns from process mapping in project",
-                                         default={}, example={"software":"zooprocess_pid_to_ecotaxa_7.26_2017/12/19", "pressure_gain":"10"})
+                                         default={}, example={"software": "zooprocess_pid_to_ecotaxa_7.26_2017/12/19",
+                                                              "pressure_gain": "10"})
 
 
 class CreateProjectReq(BaseModel):
-    clone_of_id: int = Field(title="Clone of id", description="Internal, numeric id of a project to clone as a new one. By default it does not clone anything.", default=None,
+    clone_of_id: int = Field(title="Clone of id",
+                             description="Internal, numeric id of a project to clone as a new one. By default it does not clone anything.",
+                             default=None,
                              example=2)
     title: str = Field(title="Title", description="The project title, as text.", example="My new project title")
-    visible: bool = Field(title="Visible", description="When TRUE, the project is created visible by all users.", default=True,
+    visible: bool = Field(title="Visible", description="When TRUE, the project is created visible by all users.",
+                          default=True,
                           example=True)
+
+    class Config:
+        schema_extra = {"title": "Create project request Model"}
 
 
 class ProjectFilters(TypedDict, total=False):
@@ -299,10 +316,15 @@ class ProjectFilters(TypedDict, total=False):
     """ Coma-separated list of annotator, i.e. person who validated the classification
         in last. """
 
-#TODO JCE - examples
+
+# TODO JCE - examples
 _DBProjectFilters = {
-    "taxo": Field(title="Taxo", description="Coma-separated list of numeric taxonomy/category ids. Only include objects classified with one of them", example="12,7654,5409"),
-    "taxochild": Field(title="Taxo child", description="If 'Y' and taxo is set, also include children of each member of 'taxo' list in taxonomy tree", example="Y"),
+    "taxo": Field(title="Taxo",
+                  description="Coma-separated list of numeric taxonomy/category ids. Only include objects classified with one of them",
+                  example="12,7654,5409"),
+    "taxochild": Field(title="Taxo child",
+                       description="If 'Y' and taxo is set, also include children of each member of 'taxo' list in taxonomy tree",
+                       example="Y"),
     "statusfilter": Field(title="", description="""Include objects with given status:
             'NV': Not validated 
             'PV': Predicted or Validated 
@@ -312,37 +334,87 @@ _DBProjectFilters = {
             'U': Not classified
             other: direct equality comparison with DB value 
         """, example="NV"),
-    "MapN": Field(title="Map North", description="If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.", example=44.34),
-    "MapW": Field(title="Map West", description="If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.", example=3.88),
-    "MapE": Field(title="Map East", description="If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.", example=7.94),
-    "MapS": Field(title="Map South", description="If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.", example=42.42),
-    "depthmin": Field(title="Depthmin", description="Positive values. If both are set (depthmin, depthmax), include objects for which both depths (min and max) are inside the range", example="10"),
-    "depthmax": Field(title="Depthmax", description="Positive values. If both are set (depthmin, depthmax), include objects for which both depths (min and max) are inside the range", example="110"),
-    "samples": Field(title="Samples", description="Coma-separated list of sample IDs, include only objects for these samples", example="10987,3456,987,38"),
-    "instrum": Field(title="Instrument", description="Instrument name, include objects for which sampling was done using this instrument", example="uvp5"),
-    "daytime": Field(title="Day time", description="Coma-separated list of sun position values: D for Day, U for Dusk, N for Night, A for Dawn (Aube in French)", example="N,A"),
+    "MapN": Field(title="Map North",
+                  description="If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
+                  example=44.34),
+    "MapW": Field(title="Map West",
+                  description="If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
+                  example=3.88),
+    "MapE": Field(title="Map East",
+                  description="If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
+                  example=7.94),
+    "MapS": Field(title="Map South",
+                  description="If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
+                  example=42.42),
+    "depthmin": Field(title="Depthmin",
+                      description="Positive values. If both are set (depthmin, depthmax), include objects for which both depths (min and max) are inside the range",
+                      example="10"),
+    "depthmax": Field(title="Depthmax",
+                      description="Positive values. If both are set (depthmin, depthmax), include objects for which both depths (min and max) are inside the range",
+                      example="110"),
+    "samples": Field(title="Samples",
+                     description="Coma-separated list of sample IDs, include only objects for these samples",
+                     example="10987,3456,987,38"),
+    "instrum": Field(title="Instrument",
+                     description="Instrument name, include objects for which sampling was done using this instrument",
+                     example="uvp5"),
+    "daytime": Field(title="Day time",
+                     description="Coma-separated list of sun position values: D for Day, U for Dusk, N for Night, A for Dawn (Aube in French)",
+                     example="N,A"),
     "month": Field(title="Month", description="Coma-separated list of month numbers, 1=Jan and so on", example="11,12"),
-    "fromdate": Field(title="From date", description="Format is 'YYYY-MM-DD', include objects collected after this date", example="2020-10-09"),
-    "todate": Field(title="To date", description="Format is 'YYYY-MM-DD', include objects collected before this date", example="2021-10-09"),
-    "fromtime": Field(title="From time", description="Format is 'HH24:MM:SS', include objects collected after this time of day", example="1:17:00"),
-    "totime": Field(title="To time", description="Format is 'HH24:MM:SS', include objects collected before this time of day", example="23:32:00"),
-    "inverttime": Field(title="Invert time", description="If '1', include objects outside fromtime and totime range", example="0"),
-    "validfromdate": Field(title="Valid from date", description="Format is 'YYYY-MM-DD HH24:MI', include objects validated/set to dubious after this date+time", example="2020-10-09 10:00:00"),
-    "validtodate": Field(title="Valid to date", description="Format is 'YYYY-MM-DD HH24:MI', include objects validated/set to dubious before this date+time", example="2021-10-09 10:00:00"),
-    "freenum": Field(title="Free num", description="Numerical DB column number in Object as basis for the 2 following criteria (freenumst, freenumend)", example=""),
-    "freenumst": Field(title="Freenum start", description="Start of included range for the column defined by freenum, in which objects are included", example=""),
-    "freenumend": Field(title="Free num end", description="End of included range for the column defined by freenum, in which objects are included", example=""),
+    "fromdate": Field(title="From date",
+                      description="Format is 'YYYY-MM-DD', include objects collected after this date",
+                      example="2020-10-09"),
+    "todate": Field(title="To date", description="Format is 'YYYY-MM-DD', include objects collected before this date",
+                    example="2021-10-09"),
+    "fromtime": Field(title="From time",
+                      description="Format is 'HH24:MM:SS', include objects collected after this time of day",
+                      example="1:17:00"),
+    "totime": Field(title="To time",
+                    description="Format is 'HH24:MM:SS', include objects collected before this time of day",
+                    example="23:32:00"),
+    "inverttime": Field(title="Invert time", description="If '1', include objects outside fromtime and totime range",
+                        example="0"),
+    "validfromdate": Field(title="Valid from date",
+                           description="Format is 'YYYY-MM-DD HH24:MI', include objects validated/set to dubious after this date+time",
+                           example="2020-10-09 10:00:00"),
+    "validtodate": Field(title="Valid to date",
+                         description="Format is 'YYYY-MM-DD HH24:MI', include objects validated/set to dubious before this date+time",
+                         example="2021-10-09 10:00:00"),
+    "freenum": Field(title="Free num",
+                     description="Numerical DB column number in Object as basis for the 2 following criteria (freenumst, freenumend)",
+                     example=""),
+    "freenumst": Field(title="Freenum start",
+                       description="Start of included range for the column defined by freenum, in which objects are included",
+                       example=""),
+    "freenumend": Field(title="Free num end",
+                        description="End of included range for the column defined by freenum, in which objects are included",
+                        example=""),
     "freetxt": Field(title="Free text", description=""" Textual DB column number as basis for following criteria 
             If starts with 's' then it's a text column in Sample
             If starts with 'a' then it's a text column in Acquisition 
             If starts with 'p' then it's a text column in Process 
             If starts with 'o' then it's a text column in Object 
         """, example=""),
-    "freetxtval": Field(title="Free text val", description="Text to match in the column defined by freetxt, for an object to be include", example=""),
-    "filt_annot": Field(title="Filter annotator", description="Coma-separated list of annotator, i.e. person who validated the classification at any point in time. ", example=""),
-    "filt_last_annot": Field(title="Filter last annotator", description="Coma-separated list of annotator, i.e. person who validated the classification in last. ", example="")
+    "freetxtval": Field(title="Free text val",
+                        description="Text to match in the column defined by freetxt, for an object to be include",
+                        example=""),
+    "filt_annot": Field(title="Filter annotator",
+                        description="Coma-separated list of annotator, i.e. person who validated the classification at any point in time. ",
+                        example=""),
+    "filt_last_annot": Field(title="Filter last annotator",
+                             description="Coma-separated list of annotator, i.e. person who validated the classification in last. ",
+                             example="")
 }
-ProjectFiltersModel = typed_dict_to_model(ProjectFilters,field_infos=_DBProjectFilters)
+
+
+class ProjectFiltersModelConfig:
+    schema_extra = {"title": "Project filters Model",
+                    "description": "How to reduce project data"}
+
+
+ProjectFiltersModel = typed_dict_to_model(ProjectFilters, field_infos=_DBProjectFilters,
+                                          config=ProjectFiltersModelConfig)
 
 
 class BulkUpdateReq(BaseModel):
@@ -354,7 +426,10 @@ class BulkUpdateReq(BaseModel):
         uval : The new value to set, always as a string \n\n \
     }",
                                    example=[{"ucol": "sub_part", "uval": "2"}])
-    # updates: List[ColUpdate] = Field(title="Updates", description="The updates, to do on all impacted entities") 
+
+    # updates: List[ColUpdate] = Field(title="Updates", description="The updates, to do on all impacted entities")
+    class Config:
+        schema_extra = {"title": "Update request Model"}
 
 
 # TODO: Derive from ProjectTaxoStats
@@ -373,25 +448,26 @@ class ProjectTaxoStatsModel(BaseModel):
                               example=1345)
 
 
-_DBProjectUserStatsDescription={
-    "projid" : Field(title="Project id", description="The project id"),
-    "annotators" : Field(title="Annotators", description="The users who ever decided on classification or state of objects"),
-    "activities" : Field(title="Activities", description="More details on annotators' activities")
+_DBProjectUserStatsDescription = {
+    "projid": Field(title="Project id", description="The project id"),
+    "annotators": Field(title="Annotators",
+                        description="The users who ever decided on classification or state of objects"),
+    "activities": Field(title="Activities", description="More details on annotators' activities")
 }
 
 ProjectUserStatsModel = dataclass_to_model(ProjectUserStats, add_suffix=True,
                                            field_infos=_DBProjectUserStatsDescription)
 
-_DBProjectSetColumnStatDescription={
+_DBProjectSetColumnStatDescription = {
     "proj_ids": Field(title="Projects IDs", description="Projects IDs from the call"),
-    "columns": Field(title = "Columns", description="Column names from the call"),
-    "total": Field(title = "Total of rows", description="All rows regardless of emptiness"),
-    "counts": Field(title = "Counts", description="Counts of non-empty values, one per column"),
-    "variances": Field(title = "Variances", description="Variances of values, one per column")
+    "columns": Field(title="Columns", description="Column names from the call"),
+    "total": Field(title="Total of rows", description="All rows regardless of emptiness"),
+    "counts": Field(title="Counts", description="Counts of non-empty values, one per column"),
+    "variances": Field(title="Variances", description="Variances of values, one per column")
 }
 
-ProjectSetColumnStatsModel = dataclass_to_model(ProjectSetColumnStats, add_suffix=True, 
-                                            field_infos=_DBProjectSetColumnStatDescription)
+ProjectSetColumnStatsModel = dataclass_to_model(ProjectSetColumnStats, add_suffix=True,
+                                                field_infos=_DBProjectSetColumnStatDescription)
 
 
 class CreateCollectionReq(BaseModel):
@@ -399,6 +475,9 @@ class CreateCollectionReq(BaseModel):
                        example="My collection")
     project_ids: List[int] = Field(title="Project ids", description="The list of composing project IDs",
                                    example=[1], min_items=1)
+
+    class Config:
+        schema_extra = {"title": "Create collection request Model"}
 
 
 class _AddedToCollection(BaseModel):
@@ -429,16 +508,25 @@ class CollectionModel(_CollectionModelFromDB, _AddedToCollection):  # type:ignor
         Basic and computed information about the Collection
     """
 
+    class Config:
+        schema_extra = {"title": "Collection Model"}
+
+
 _DBJobDescription = {
-    "id" : Field(title="id",description="Job unique identifier", example=47445), 
-    "owner_id" : Field(title="owner_id",description="The user who created and thus owns the job ", example=1), 
-    "type" : Field(title="type",description="The job type, e.g. import, export... ", example="Subset"), 
-    "state" : Field(title="state",description="What the job is doing. Could be 'P' for Pending (Waiting for an execution thread), 'R' for Running (Being executed inside a thread), 'A' for Asking (Needing user information before resuming), 'E' for Error (Stopped with error), 'F' for Finished (Done).", example=DBJobStateEnum.Finished), 
-    "step" : Field(title="step",description="Where in the workflow the job is ", example="null"), 
-    "progress_pct" : Field(title="progress_pct",description="The progress percentage for UI ", example=100), 
-    "progress_msg" : Field(title="progress_msg",description="The message for UI, short version ", example="Done"), 
-    "creation_date" : Field(title="creation_date",description="The date of creation of the Job, as text formatted according to the ISO 8601 standard.", example="2021-09-28T08:43:20.196061"), 
-    "updated_on" : Field(title="updated_on",description="Last time that anything changed in present line ", example="2021-09-28T08:43:21.441969")
+    "id": Field(title="id", description="Job unique identifier", example=47445),
+    "owner_id": Field(title="owner_id", description="The user who created and thus owns the job ", example=1),
+    "type": Field(title="type", description="The job type, e.g. import, export... ", example="Subset"),
+    "state": Field(title="state",
+                   description="What the job is doing. Could be 'P' for Pending (Waiting for an execution thread), 'R' for Running (Being executed inside a thread), 'A' for Asking (Needing user information before resuming), 'E' for Error (Stopped with error), 'F' for Finished (Done).",
+                   example=DBJobStateEnum.Finished),
+    "step": Field(title="step", description="Where in the workflow the job is ", example="null"),
+    "progress_pct": Field(title="progress_pct", description="The progress percentage for UI ", example=100),
+    "progress_msg": Field(title="progress_msg", description="The message for UI, short version ", example="Done"),
+    "creation_date": Field(title="creation_date",
+                           description="The date of creation of the Job, as text formatted according to the ISO 8601 standard.",
+                           example="2021-09-28T08:43:20.196061"),
+    "updated_on": Field(title="updated_on", description="Last time that anything changed in present line ",
+                        example="2021-09-28T08:43:21.441969")
 }
 _JobModelFromDB = sqlalchemy_to_pydantic(Job, exclude=[Job.params.name,
                                                        Job.result.name,
@@ -446,18 +534,30 @@ _JobModelFromDB = sqlalchemy_to_pydantic(Job, exclude=[Job.params.name,
                                                        Job.question.name,
                                                        Job.reply.name,
                                                        Job.inside.name],
-                                                       field_infos=_DBJobDescription)
+                                         field_infos=_DBJobDescription)
 
 
 class _AddedToJob(BaseModel):
     """
         What's added to a Job compared to the plain DB record.
     """
-    params: Dict[str, Any] = Field(title="params", description="Creation parameters", default={}, example={"prj_id":1,"req":{"filters":{"taxo":"85067","taxochild":"N"},"dest_prj_id":1,"group_type":"S","limit_type":"P","limit_value":100.0,"do_images":True}})
-    result: Dict[str, Any] = Field(title="result", description="Final result of the run", default={}, example={"rowcount":3})
+    params: Dict[str, Any] = Field(title="params", description="Creation parameters", default={}, example={"prj_id": 1,
+                                                                                                           "req": {
+                                                                                                               "filters": {
+                                                                                                                   "taxo": "85067",
+                                                                                                                   "taxochild": "N"},
+                                                                                                               "dest_prj_id": 1,
+                                                                                                               "group_type": "S",
+                                                                                                               "limit_type": "P",
+                                                                                                               "limit_value": 100.0,
+                                                                                                               "do_images": True}})
+    result: Dict[str, Any] = Field(title="result", description="Final result of the run", default={},
+                                   example={"rowcount": 3})
     errors: List[str] = Field(title="errors", description="The errors seen during last step", default=[], example=[])
-    question: Dict[str, Any] = Field(title="question", description="The data provoking job move to Asking state", default={}, example={})
-    reply: Dict[str, Any] = Field(title="reply", description="The data provided as a reply to the question", default={}, example={})
+    question: Dict[str, Any] = Field(title="question", description="The data provoking job move to Asking state",
+                                     default={}, example={})
+    reply: Dict[str, Any] = Field(title="reply", description="The data provided as a reply to the question", default={},
+                                  example={})
     inside: Dict[str, Any] = Field(title="inside", description="Internal state of the job", default={}, example={})
 
 

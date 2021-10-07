@@ -57,6 +57,8 @@ class ExportReq(BaseModel):
                                     "Per A(cquisition) or S(ample) or ''")
     out_to_ftp: bool = Field(title="Copy result file to FTP area. Original file is still available.")
 
+    class Config:
+        schema_extra = {"title": "Export request Model"}
 
 class ExportRsp(EMODnetExportRsp):
     """

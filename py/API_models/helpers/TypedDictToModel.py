@@ -13,16 +13,17 @@ from typing import Optional, TypeVar, Dict, Any
 
 # noinspection PyPackageRequirements
 from pydantic import create_model
-
-from API_models.helpers import PydanticModelT
 # noinspection PyPackageRequirements
 from pydantic.fields import ModelField
+
+from API_models.helpers import PydanticModelT
 
 # Generify the def with input type
 T = TypeVar('T')
 
 
-def typed_dict_to_model(typed_dict: T, field_infos:  Optional[Dict[str, Any]] = None):  # TODO -> Type[BaseModel]:
+def typed_dict_to_model(typed_dict: T, field_infos:  Optional[Dict[str, Any]] = None,
+                        config: Any = None):  # TODO -> Type[BaseModel], and type for config:
     annotations = {}
     for name, field in typed_dict.__annotations__.items():
         if field == Optional[str]:
@@ -32,7 +33,7 @@ def typed_dict_to_model(typed_dict: T, field_infos:  Optional[Dict[str, Any]] = 
             raise Exception("Not managed yet")  # pragma:nocover
 
     ret: PydanticModelT = create_model(
-        typed_dict.__name__, **annotations  # type: ignore
+        typed_dict.__name__, __config__=config, **annotations  # type: ignore
     )
     # Make the model get-able
     # noinspection PyTypeHints
