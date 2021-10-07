@@ -6,7 +6,7 @@
 #
 import dataclasses
 import datetime
-from typing import Optional, TypeVar, Dict, List
+from typing import Optional, TypeVar, Dict, List, Any
 # noinspection PyUnresolvedReferences,PyProtectedMember
 from typing import _GenericAlias  # type: ignore
 
@@ -26,8 +26,7 @@ class DataclassConfig(BaseConfig):
 T = TypeVar('T')
 
 
-def dataclass_to_model(clazz: T, add_suffix: bool = False, titles: Optional[Dict[str, str]] = None,
-                       descriptions: Optional[Dict[str, str]] = None) -> PydanticModelT:
+def dataclass_to_model(clazz: T, add_suffix: bool = False, field_infos:  Optional[Dict[str, Any]] = None) -> PydanticModelT:
     model_fields = {}
     a_field: dataclasses.Field
     for a_field in dataclasses.fields(clazz):
@@ -65,15 +64,9 @@ def dataclass_to_model(clazz: T, add_suffix: bool = False, titles: Optional[Dict
     ret: PydanticModelT = create_model(
         model_name, __config__=DataclassConfig, **model_fields  # type: ignore
     )
-    if titles is not None:
-        # Amend with title, for doc. Let crash (KeyError) if titles are not up-to-date with base.
-        for a_field_name, a_title in titles.items():
-            the_field: ModelField = ret.__fields__[a_field_name]
-            the_field.field_info.title = a_title
-    if descriptions is not None:
-        # Amend with descriptions, for doc. Let crash (KeyError) if descriptions are not up-to-date with base.
-        for a_field_name, a_description in descriptions.items():
+    if field_infos is not None:
+        # Amend with Field() calls, for doc. Let crash (KeyError) if desync with base.
+        for a_field_name, a_field_info in field_infos.items():
             the_desc_field: ModelField = ret.__fields__[a_field_name]
-            the_desc_field.field_info.description = a_description
-
+            the_desc_field.field_info = a_field_info
     return ret
