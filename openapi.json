@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.19"
+    "version":"0.0.20"
   },
   "servers":[
     {
@@ -140,7 +140,7 @@
           },
           {
             "description":"The preference key, as text.",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Key",
               "type":"string",
@@ -203,7 +203,7 @@
           },
           {
             "description":"The preference key, as text.",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Key",
               "type":"string",
@@ -215,7 +215,7 @@
           },
           {
             "description":"The value to set this preference to, as text.",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Value",
               "type":"string",
@@ -420,7 +420,7 @@
         "parameters":[
           {
             "description":"Search by title, use % for searching with 'any char'.",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Title",
               "type":"string",
@@ -475,7 +475,7 @@
         "parameters":[
           {
             "description":"Search by **exact** title",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Title",
               "type":"string",
@@ -521,7 +521,7 @@
         "parameters":[
           {
             "description":"Search by **exact** short title",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Short title",
               "type":"string",
@@ -739,7 +739,7 @@
           },
           {
             "description":"If set, then only a diagnostic of doability will be done.",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Dry run",
               "type":"boolean",
@@ -751,7 +751,7 @@
           },
           {
             "description":"If set, then *absent* records will be generated, in the relevant samples, for categories present in other samples.",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"With zeroes",
               "type":"boolean",
@@ -763,7 +763,7 @@
           },
           {
             "description":"If set, then any object classified on a Morpho category will be added to the count of the nearest Phylo parent, upward in the tree.",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Auto morpho",
               "type":"boolean",
@@ -775,7 +775,7 @@
           },
           {
             "description":"If set, then an attempt will be made to compute organisms concentrations and biovolumes.",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"With computations",
               "type":"boolean",
@@ -1280,7 +1280,7 @@
         "parameters":[
           {
             "description":"String containing the list of one or more id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Ids",
               "type":"string",
@@ -1348,7 +1348,7 @@
         "parameters":[
           {
             "description":"String containing the list of one or more id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Ids",
               "type":"string",
@@ -1421,7 +1421,7 @@
         "parameters":[
           {
             "description":"String containing the list of one or more id separated by non-num char.",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Project ids",
               "type":"string",
@@ -1433,7 +1433,7 @@
           },
           {
             "description":"Coma-separated prefixed columns, on which stats are needed.",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Column names",
               "type":"string",
@@ -1515,7 +1515,7 @@
           },
           {
             "description":"Id of the other project. All objects from this source project will be moved to the project_id above and the source project itself will be deleted.",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Source project Id",
               "type":"integer",
@@ -1527,7 +1527,7 @@
           },
           {
             "description":"If set, then only a diagnostic of doability will be done.",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Dry run",
               "type":"boolean",
@@ -1806,7 +1806,7 @@
           },
           {
             "description":"If set, then only a diagnostic of doability will be done. In this case, plain value check. If no dry_run, this call will create a background job.",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Dry run",
               "type":"boolean",
@@ -1867,7 +1867,7 @@
         "parameters":[
           {
             "description":"String containing the list of one or more project id separated by non-num char.",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Project Ids",
               "type":"string",
@@ -1879,7 +1879,7 @@
           },
           {
             "description":"Sample id textual pattern. Use * or '' for 'any matches'. Match is case-insensitive.",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Pattern Id",
               "type":"string",
@@ -1934,7 +1934,7 @@
         "parameters":[
           {
             "description":"String containing the list of one or more sample ids separated by non-num char.",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Sample Ids",
               "type":"string",
@@ -2104,7 +2104,7 @@
         "parameters":[
           {
             "description":"The project id",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Project id",
               "type":"integer",
@@ -2259,7 +2259,7 @@
         "parameters":[
           {
             "description":"String containing the list of one or more project id separated by non-num char.",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Projects ids",
               "type":"string",
@@ -2534,7 +2534,7 @@
           },
           {
             "description":"#TODO JCE",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Only total",
               "type":"boolean",
@@ -2664,7 +2664,7 @@
             "in":"path"
           },
           {
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Dry Run",
               "type":"boolean"
@@ -2743,7 +2743,7 @@
             "in":"path"
           },
           {
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Forced Id",
               "type":"integer"
@@ -2752,7 +2752,7 @@
             "in":"query"
           },
           {
-            "required":false,
+            "required":true,
             "schema":{
               "title":"Reason",
               "type":"string"
@@ -3882,7 +3882,7 @@
         "parameters":[
           {
             "description":"If FALSE return the jobs for current user, else return all of them.",
-            "required":false,
+            "required":true,
             "schema":{
               "title":"For admin",
               "type":"boolean",
@@ -4004,7 +4004,8 @@
             "application/json":{
               "schema":{
                 "title":"#TODO JCE Reply Model",
-                "type":"object"
+                "type":"object",
+                "default":{}
               }
             }
           }
