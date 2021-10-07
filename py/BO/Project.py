@@ -12,7 +12,7 @@ from BO.Classification import ClassifIDListT
 from BO.Instrument import DescribedInstrumentSet
 from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping, TableMapping
 from BO.Object import ObjectBO
-from BO.Prediction import AutomatedFeatures
+from BO.Prediction import DeepFeatures
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.User import MinimalUserBO, UserActivity, UserIDT
 from BO.helpers.DataclassAsDict import DataclassAsDict
@@ -147,7 +147,7 @@ class ProjectBO(object):
         # Field reflexes
         if cnn_network_id != self._project.cnn_network_id:
             # Delete CNN features which depend on the CNN network
-            AutomatedFeatures.delete_all(session, proj_id)
+            DeepFeatures.delete_all(session, proj_id)
         # Fields update
         self._project.title = title
         self._project.visible = visible

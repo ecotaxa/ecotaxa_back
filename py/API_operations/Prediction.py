@@ -10,7 +10,7 @@ from typing import Dict
 
 from API_models.crud import ProjectFilters
 from API_models.prediction import PredictionReq, PredictionRsp
-from BO.Prediction import AutomatedFeatures
+from BO.Prediction import DeepFeatures
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
@@ -116,10 +116,10 @@ class CNNForProject(Service):
         features = extractor.run(ids_and_images, model_name)
         # Save CNN
         with CodeTimer("Erasing previous CNN ", logger):
-            nb_previous = AutomatedFeatures.delete_all(self.session, proj_id)
+            nb_previous = DeepFeatures.delete_all(self.session, proj_id)
         logger.info("%d previous CNN rows erased", nb_previous)
         self.session.commit()
         with CodeTimer("Saving new CNN ", logger):
-            nb_rows = AutomatedFeatures.save(self.session, features)
+            nb_rows = DeepFeatures.save(self.session, features)
         self.session.commit()
         return "OK, %d CNN features computed and written" % nb_rows

@@ -20,12 +20,12 @@ from helpers.DynamicLogs import get_logger
 logger = get_logger(__name__)
 
 
-class AutomatedFeatures(object):
+class DeepFeatures(object):
     """
         ML predicting algorithm takes as input "features" which can be either input into EcoTaxa, and correspond
         to various measurements on the image and arbitrary data. @See ObjectFields.
 
-        OTOH, it can also generate features, using another class of machine learning algorithm: CNN
+        OTOH, it can also _generate_ features, using another class of machine learning algorithm: CNN
          @see https://en.wikipedia.org/wiki/Convolutional_neural_network
         These other features are stored in a dedicated DB table @see ObjectCNNFeature.
     """
