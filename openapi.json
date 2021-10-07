@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.18"
+    "version":"0.0.19"
   },
   "servers":[
     {
@@ -27,15 +27,11 @@
           "content":{
             "application/json":{
               "schema":{
-                "title":"Login request Model",
-                "allOf":[
-                  {
-                    "$ref":"#/components/schemas/LoginReq"
-                  }
-                ]
+                "$ref":"#/components/schemas/LoginReq"
               }
             }
-          }
+          },
+          "required":true
         },
         "responses":{
           "200":{
@@ -376,15 +372,11 @@
           "content":{
             "application/json":{
               "schema":{
-                "title":"Create collection request Model",
-                "allOf":[
-                  {
-                    "$ref":"#/components/schemas/CreateCollectionReq"
-                  }
-                ]
+                "$ref":"#/components/schemas/CreateCollectionReq"
               }
             }
-          }
+          },
+          "required":true
         },
         "responses":{
           "200":{
@@ -639,15 +631,11 @@
           "content":{
             "application/json":{
               "schema":{
-                "title":"Collection Model",
-                "allOf":[
-                  {
-                    "$ref":"#/components/schemas/CollectionModel"
-                  }
-                ]
+                "$ref":"#/components/schemas/CollectionModel"
               }
             }
-          }
+          },
+          "required":true
         },
         "responses":{
           "200":{
@@ -995,15 +983,11 @@
           "content":{
             "application/json":{
               "schema":{
-                "title":"Create project request Model",
-                "allOf":[
-                  {
-                    "$ref":"#/components/schemas/CreateProjectReq"
-                  }
-                ]
+                "$ref":"#/components/schemas/CreateProjectReq"
               }
             }
-          }
+          },
+          "required":true
         },
         "responses":{
           "200":{
@@ -1062,15 +1046,11 @@
           "content":{
             "application/json":{
               "schema":{
-                "title":"Subset request Model",
-                "allOf":[
-                  {
-                    "$ref":"#/components/schemas/SubsetReq"
-                  }
-                ]
+                "$ref":"#/components/schemas/SubsetReq"
               }
             }
-          }
+          },
+          "required":true
         },
         "responses":{
           "200":{
@@ -1768,15 +1748,11 @@
           "content":{
             "application/json":{
               "schema":{
-                "title":"Import request Model",
-                "allOf":[
-                  {
-                    "$ref":"#/components/schemas/ImportReq"
-                  }
-                ]
+                "$ref":"#/components/schemas/ImportReq"
               }
             }
-          }
+          },
+          "required":true
         },
         "responses":{
           "200":{
@@ -1845,15 +1821,11 @@
           "content":{
             "application/json":{
               "schema":{
-                "title":"Simple import request Model",
-                "allOf":[
-                  {
-                    "$ref":"#/components/schemas/SimpleImportReq"
-                  }
-                ]
+                "$ref":"#/components/schemas/SimpleImportReq"
               }
             }
-          }
+          },
+          "required":true
         },
         "responses":{
           "200":{
@@ -2033,15 +2005,11 @@
           "content":{
             "application/json":{
               "schema":{
-                "title":"Update request Model",
-                "allOf":[
-                  {
-                    "$ref":"#/components/schemas/BulkUpdateReq"
-                  }
-                ]
+                "$ref":"#/components/schemas/BulkUpdateReq"
               }
             }
-          }
+          },
+          "required":true
         },
         "responses":{
           "200":{
@@ -2192,15 +2160,11 @@
           "content":{
             "application/json":{
               "schema":{
-                "title":"Update request Model",
-                "allOf":[
-                  {
-                    "$ref":"#/components/schemas/BulkUpdateReq"
-                  }
-                ]
+                "$ref":"#/components/schemas/BulkUpdateReq"
               }
             }
-          }
+          },
+          "required":true
         },
         "responses":{
           "200":{
@@ -2350,15 +2314,11 @@
           "content":{
             "application/json":{
               "schema":{
-                "title":"Update request Model",
-                "allOf":[
-                  {
-                    "$ref":"#/components/schemas/BulkUpdateReq"
-                  }
-                ]
+                "$ref":"#/components/schemas/BulkUpdateReq"
               }
             }
-          }
+          },
+          "required":true
         },
         "responses":{
           "200":{
@@ -2516,15 +2476,11 @@
           "content":{
             "application/json":{
               "schema":{
-                "title":"Project filters Model",
-                "allOf":[
-                  {
-                    "$ref":"#/components/schemas/ProjectFilters"
-                  }
-                ]
+                "$ref":"#/components/schemas/ProjectFilters"
               }
             }
-          }
+          },
+          "required":true
         },
         "responses":{
           "200":{
@@ -2592,15 +2548,11 @@
           "content":{
             "application/json":{
               "schema":{
-                "title":"Project filters Model",
-                "allOf":[
-                  {
-                    "$ref":"#/components/schemas/ProjectFilters"
-                  }
-                ]
+                "$ref":"#/components/schemas/ProjectFilters"
               }
             }
-          }
+          },
+          "required":true
         },
         "responses":{
           "200":{
@@ -2657,15 +2609,11 @@
           "content":{
             "application/json":{
               "schema":{
-                "title":"Project filters Model",
-                "allOf":[
-                  {
-                    "$ref":"#/components/schemas/ProjectFilters"
-                  }
-                ]
+                "$ref":"#/components/schemas/ProjectFilters"
               }
             }
-          }
+          },
+          "required":true
         },
         "responses":{
           "200":{
@@ -2738,15 +2686,11 @@
           "content":{
             "application/json":{
               "schema":{
-                "title":"Project filters Model",
-                "allOf":[
-                  {
-                    "$ref":"#/components/schemas/ProjectFilters"
-                  }
-                ]
+                "$ref":"#/components/schemas/ProjectFilters"
               }
             }
-          }
+          },
+          "required":true
         },
         "responses":{
           "200":{
@@ -2821,15 +2765,11 @@
           "content":{
             "application/json":{
               "schema":{
-                "title":"Project filters Model",
-                "allOf":[
-                  {
-                    "$ref":"#/components/schemas/ProjectFilters"
-                  }
-                ]
+                "$ref":"#/components/schemas/ProjectFilters"
               }
             }
-          }
+          },
+          "required":true
         },
         "responses":{
           "200":{
@@ -2870,15 +2810,11 @@
           "content":{
             "application/json":{
               "schema":{
-                "title":"Update request Model",
-                "allOf":[
-                  {
-                    "$ref":"#/components/schemas/BulkUpdateReq"
-                  }
-                ]
+                "$ref":"#/components/schemas/BulkUpdateReq"
               }
             }
-          }
+          },
+          "required":true
         },
         "responses":{
           "200":{
@@ -2919,15 +2855,11 @@
           "content":{
             "application/json":{
               "schema":{
-                "title":"Classify request Model",
-                "allOf":[
-                  {
-                    "$ref":"#/components/schemas/ClassifyReq"
-                  }
-                ]
+                "$ref":"#/components/schemas/ClassifyReq"
               }
             }
-          }
+          },
+          "required":true
         },
         "responses":{
           "200":{
@@ -2968,15 +2900,11 @@
           "content":{
             "application/json":{
               "schema":{
-                "title":"Classify auto request Model",
-                "allOf":[
-                  {
-                    "$ref":"#/components/schemas/ClassifyAutoReq"
-                  }
-                ]
+                "$ref":"#/components/schemas/ClassifyAutoReq"
               }
             }
-          }
+          },
+          "required":true
         },
         "responses":{
           "200":{
@@ -3071,7 +2999,8 @@
                 "$ref":"#/components/schemas/Body_export_object_set_object_set_export_post"
               }
             }
-          }
+          },
+          "required":true
         },
         "responses":{
           "200":{
@@ -3117,7 +3046,8 @@
                 "$ref":"#/components/schemas/Body_predict_object_set_object_set_predict_post"
               }
             }
-          }
+          },
+          "required":true
         },
         "responses":{
           "200":{
@@ -3126,6 +3056,55 @@
               "application/json":{
                 "schema":{
                   "$ref":"#/components/schemas/PredictionRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/project/do_cnn":{
+      "get":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Compute Project Cnn",
+        "description":"Generate CNN features for the requested project.",
+        "operationId":"compute_project_cnn_project_do_cnn_get",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Proj Id",
+              "type":"integer"
+            },
+            "name":"proj_id",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Compute Project Cnn Project Do Cnn Get",
+                  "type":"string"
                 }
               }
             }
@@ -4558,47 +4537,33 @@
       },
       "Body_export_object_set_object_set_export_post":{
         "title":"Body_export_object_set_object_set_export_post",
+        "required":[
+          "filters",
+          "request"
+        ],
         "type":"object",
         "properties":{
           "filters":{
-            "title":"Project filters Model",
-            "allOf":[
-              {
-                "$ref":"#/components/schemas/ProjectFilters"
-              }
-            ]
+            "$ref":"#/components/schemas/ProjectFilters"
           },
           "request":{
-            "title":"Export request Model",
-            "allOf":[
-              {
-                "$ref":"#/components/schemas/ExportReq"
-              }
-            ]
+            "$ref":"#/components/schemas/ExportReq"
           }
         }
       },
       "Body_predict_object_set_object_set_predict_post":{
         "title":"Body_predict_object_set_object_set_predict_post",
+        "required":[
+          "filters",
+          "request"
+        ],
         "type":"object",
         "properties":{
           "filters":{
-            "title":"Filters",
-            "allOf":[
-              {
-                "$ref":"#/components/schemas/ProjectFilters"
-              }
-            ],
-            "description":"Description of how to reduce project data."
+            "$ref":"#/components/schemas/ProjectFilters"
           },
           "request":{
-            "title":"Prediction Request",
-            "allOf":[
-              {
-                "$ref":"#/components/schemas/PredictionReq"
-              }
-            ],
-            "description":"How to predict, in details."
+            "$ref":"#/components/schemas/PredictionReq"
           }
         }
       },
@@ -4625,7 +4590,7 @@
         }
       },
       "BulkUpdateReq":{
-        "title":"BulkUpdateReq",
+        "title":"Update request Model",
         "required":[
           "target_ids",
           "updates"
@@ -4660,7 +4625,7 @@
         }
       },
       "ClassifyAutoReq":{
-        "title":"ClassifyAutoReq",
+        "title":"Classify auto request Model",
         "required":[
           "target_ids",
           "classifications",
@@ -4719,7 +4684,7 @@
         }
       },
       "ClassifyReq":{
-        "title":"ClassifyReq",
+        "title":"Classify request Model",
         "required":[
           "target_ids",
           "classifications",
@@ -4761,7 +4726,7 @@
         }
       },
       "CollectionModel":{
-        "title":"CollectionModel",
+        "title":"Collection Model",
         "required":[
           "project_ids",
           "id",
@@ -4942,7 +4907,7 @@
         "description":"Values which can be considered identical over the lifetime of the back-end "
       },
       "CreateCollectionReq":{
-        "title":"CreateCollectionReq",
+        "title":"Create collection request Model",
         "required":[
           "title",
           "project_ids"
@@ -4970,7 +4935,7 @@
         }
       },
       "CreateProjectReq":{
-        "title":"CreateProjectReq",
+        "title":"Create project request Model",
         "required":[
           "title"
         ],
@@ -5083,7 +5048,7 @@
         "description":"EMODNet format export response."
       },
       "ExportReq":{
-        "title":"ExportReq",
+        "title":"Export request Model",
         "required":[
           "project_id",
           "exp_type",
@@ -5386,7 +5351,7 @@
         }
       },
       "ImportReq":{
-        "title":"ImportReq",
+        "title":"Import request Model",
         "required":[
           "source_path"
         ],
@@ -5584,7 +5549,7 @@
         "description":"An enumeration."
       },
       "LoginReq":{
-        "title":"LoginReq",
+        "title":"Login request Model",
         "type":"object",
         "properties":{
           "password":{
@@ -5594,7 +5559,7 @@
             "example":"test!"
           },
           "username":{
-            "title":"User's eamil",
+            "title":"User's email",
             "type":"string",
             "description":"User email used during registration",
             "example":"ecotaxa.api.user@gmail.com"
@@ -6075,7 +6040,7 @@
         "description":"Tuned model for faster serialization out.\nTODO: A bit useless in the context as FastAPI does _not_ use ser/deser from the model.\n      Instead, it produces what needs to be sent over the wire and calls a JSON encoder onto it.\n      So 1) It calls def jsonable_encoder (in FastAPI encoders.py)\n         2) It calls an encoder (presently ORJSONEncoder in main.py)"
       },
       "PredictionReq":{
-        "title":"PredictionReq",
+        "title":"Prediction Request",
         "required":[
           "project_id",
           "source_project_ids",
@@ -6123,7 +6088,7 @@
             "default":false
           }
         },
-        "description":"Prediction, AKA Auto Classification, request.",
+        "description":"How to predict, in details.",
         "example":{
           "project_id":[
             3426
@@ -6205,7 +6170,7 @@
         }
       },
       "ProjectFilters":{
-        "title":"ProjectFilters",
+        "title":"Project filters Model",
         "type":"object",
         "properties":{
           "taxo":{
@@ -6370,7 +6335,8 @@
             "description":"Coma-separated list of annotator, i.e. person who validated the classification in last. ",
             "example":""
           }
-        }
+        },
+        "description":"How to reduce project data"
       },
       "ProjectModel":{
         "title":"ProjectModel",
@@ -6822,7 +6788,7 @@
         }
       },
       "SimpleImportReq":{
-        "title":"SimpleImportReq",
+        "title":"Simple import request Model",
         "required":[
           "source_path",
           "values"
@@ -6885,7 +6851,7 @@
         "description":"Simple Import, response. "
       },
       "SubsetReq":{
-        "title":"SubsetReq",
+        "title":"Subset request Model",
         "required":[
           "dest_prj_id",
           "group_type",
