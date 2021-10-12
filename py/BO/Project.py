@@ -390,8 +390,18 @@ class ProjectBO(object):
         counts = vals[1::2]  # then count() every second column
         variances = vals[2::2]  # and variance() the other one
         ret = ProjectSetColumnStats([prj_ids, total, column_names, counts, variances])
-        cls.read_median_values(session, prj_ids, column_names, None)
+        # cls.read_median_values(session, prj_ids, column_names, 5000)
         return ret
+
+    ACQ_CTE = (" acq{0} AS (SELECT acq.* "
+               "  FROM acquisitions acq"
+               "  JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = {0})")
+
+    PRJ_SQL_USING_CTE = ("SELECT {0} "
+                         "  FROM obj_head obh"
+                         "  JOIN obj_field obf ON obf.objfid = obh.objid"
+                         "  JOIN acq{1} ON acq{1}.acquisid = obh.acquisid"
+                         " WHERE obh.classif_qual = 'V' ")
 
     # noinspection PyIncorrectDocstring
     @classmethod
@@ -407,24 +417,26 @@ class ProjectBO(object):
         # We have to alias the column in order to have a consistent naming of the UNION
         col_aliases = ["c%d" % num for num in range(len(column_names))]
         # Compose a query for each project with its mapped columns
+        acq_ctes = []
         sel_by_prj = []
         for a_proj, mapped in cls.projects_with_mappings(session, prj_ids, column_names):
+            acq_ctes.append(cls.ACQ_CTE.format(a_proj.projid))
             expr_with_alias = ["PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY %s) AS %s"
                                % (col, als) for col, als in zip(mapped, col_aliases)]
             sel_for_prj = " %s AS projid, " % a_proj.projid + ",".join(expr_with_alias)
-            sel_by_prj.append(cls.PRJ_SQL.format(sel_for_prj, a_proj.projid))
+            sel_by_prj.append(cls.PRJ_SQL_USING_CTE.format(sel_for_prj, a_proj.projid))
             if random_limit is not None:
                 sel_by_prj[-1] += (" AND obh.objid IN "
                                    " ( SELECT q.objid FROM "
                                    " ( SELECT obh2.objid, ROW_NUMBER() OVER (PARTITION BY obh2.classif_id "
                                    "                                         ORDER BY obh2.random_value) rank "
                                    "     FROM obj_head obh2"
-                                   "     JOIN acquisitions acq2 ON acq2.acquisid = obh2.acquisid"
-                                   "     JOIN samples sam2 ON sam2.sampleid = acq2.acq_sample_id AND sam2.projid = %s"
+                                   "     JOIN acq{0} ON acq{0}.acquisid = obh2.acquisid"
                                    "    WHERE obh2.classif_qual = 'V' ) q"
-                                   "   WHERE rank <= %s )") % (a_proj.projid, random_limit)
+                                   "   WHERE rank <= {1} )").format(a_proj.projid, random_limit)
         # Final SQL
-        sql = "SET LOCAL enable_seqscan=FALSE;"  # Anyway we need many rows
+        sql = "SET LOCAL enable_seqscan=FALSE;"
+        sql += "WITH " + ",".join(acq_ctes)
         sql += " UNION ALL ".join(sel_by_prj)
         # Format output
         logger.info("median SQL: %s", sql)
