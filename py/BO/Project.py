@@ -6,7 +6,7 @@ import typing
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Dict, Any, Iterable, Optional, Union
+from typing import List, Dict, Any, Iterable, Optional, Union, Generator, Tuple
 
 from BO.Classification import ClassifIDListT
 from BO.Instrument import DescribedInstrumentSet
@@ -65,6 +65,7 @@ class ProjectSetColumnStats(DataclassAsDict):
     variances: List[Optional[float]]
 
 
+# noinspection SqlDialectInspection
 class ProjectBO(object):
     """
         A Project business object. So far (but less and less...) mainly a container
@@ -345,39 +346,93 @@ class ProjectBO(object):
                     user_activities[user_id] = user_activity
         return ret
 
-    @staticmethod
-    def read_columns_stats(session: Session, prj_ids: ProjectIDListT, column_names: List[str]) \
-            -> ProjectSetColumnStats:
-        """
-            Do some basic stats on the given columns, for all given projects.
-        """
-        prj_sql = ("(SELECT {0} "
-                   "  FROM obj_head obh"
-                   "  JOIN obj_field obf ON obf.objfid = obh.objid"
-                   "  JOIN acquisitions acq ON acq.acquisid = obh.acquisid"
-                   "  JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = {1}"
-                   " WHERE obh.classif_qual='V' LIMIT 50000)")
+    @classmethod
+    def projects_with_mappings(cls, session: Session, prj_ids: ProjectIDListT, column_names: List[str]) \
+            -> Generator[Tuple[Project, List[str]], None, None]:
+        """ Iterator over a list of project, returning them + mapped free columns """
         qry: Query = session.query(Project)
         qry = qry.filter(Project.projid == any_(prj_ids))
-        sels_for_prjs = []
-        # We have to alias the column in order to have a consistent naming of the CTE
-        col_aliases = ["c%d" % num for num in range(len(column_names))]
         for a_proj in qry.all():
             free_columns_mappings = TableMapping(ObjectFields).load_from_equal_list(a_proj.mappingobj)
             mapped = ObjectBO.resolve_fields(column_names, free_columns_mappings)
             assert len(mapped) == len(column_names), "Project %d does not contain all columns" % a_proj.projid
+            yield a_proj, mapped
+
+    PRJ_SQL = ("SELECT {0} "
+               "  FROM obj_head obh"
+               "  JOIN obj_field obf ON obf.objfid = obh.objid"
+               "  JOIN acquisitions acq ON acq.acquisid = obh.acquisid"
+               "  JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = {1}"
+               " WHERE obh.classif_qual = 'V' ")
+
+    @classmethod
+    def read_columns_stats(cls, session: Session, prj_ids: ProjectIDListT, column_names: List[str]) \
+            -> ProjectSetColumnStats:
+        """
+            Do some basic stats on the given columns, for validated lines in all given projects.
+        """
+        prj_sql = "(" + cls.PRJ_SQL + " LIMIT 50000)"
+        sels_for_prjs = []
+        # We have to alias the column in order to have a consistent naming of the CTE
+        col_aliases = ["c%d" % num for num in range(len(column_names))]
+        # Compose a CTE for each project with its mapped columns
+        for a_proj, mapped in cls.projects_with_mappings(session, prj_ids, column_names):
             mapped_with_aliases = ["%s AS %s" % (col, als) for col, als in zip(mapped, col_aliases)]
             sels_for_prjs.append(prj_sql.format(",".join(mapped_with_aliases), a_proj.projid))
+        # Final SQL
         sql = "SET LOCAL enable_seqscan=FALSE;"
         sql += "WITH flat AS (" + " UNION ALL ".join(sels_for_prjs) + " ) "
         exprs = ",".join(["COUNT(%s), VARIANCE(%s)" % (als, als) for als in col_aliases])
         sql += "SELECT COUNT(1), " + exprs + " FROM flat "
         res: Result = session.execute(sql)
         vals = res.first()
-        total = vals[0]
-        counts = vals[1::2]
-        variances = vals[2::2]
+        total = vals[0]  # first in result line is the count
+        counts = vals[1::2]  # then count() every second column
+        variances = vals[2::2]  # and variance() the other one
         ret = ProjectSetColumnStats([prj_ids, total, column_names, counts, variances])
+        cls.read_median_values(session, prj_ids, column_names, None)
+        return ret
+
+    # noinspection PyIncorrectDocstring
+    @classmethod
+    def read_median_values(cls, session: Session, prj_ids: ProjectIDListT, column_names: List[str],
+                           random_limit: Optional[int] = None) \
+            -> Dict[int, Dict[str, Optional[float]]]:
+        """
+            Compute median value of columns, for all given projects.
+            :param random_limit: If set, pick only 'fixed random' objects number from each category, inside
+             each project from the dataset.
+             Return a dict key=project id, value = dict with key=column name, value=median for column
+        """
+        # We have to alias the column in order to have a consistent naming of the UNION
+        col_aliases = ["c%d" % num for num in range(len(column_names))]
+        # Compose a query for each project with its mapped columns
+        sel_by_prj = []
+        for a_proj, mapped in cls.projects_with_mappings(session, prj_ids, column_names):
+            expr_with_alias = ["PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY %s) AS %s"
+                               % (col, als) for col, als in zip(mapped, col_aliases)]
+            sel_for_prj = " %s AS projid, " % a_proj.projid + ",".join(expr_with_alias)
+            sel_by_prj.append(cls.PRJ_SQL.format(sel_for_prj, a_proj.projid))
+            if random_limit is not None:
+                sel_by_prj[-1] += (" AND obh.objid IN "
+                                   " ( SELECT q.objid FROM "
+                                   " ( SELECT obh2.objid, ROW_NUMBER() OVER (PARTITION BY obh2.classif_id "
+                                   "                                         ORDER BY obh2.random_value) rank "
+                                   "     FROM obj_head obh2"
+                                   "     JOIN acquisitions acq2 ON acq2.acquisid = obh2.acquisid"
+                                   "     JOIN samples sam2 ON sam2.sampleid = acq2.acq_sample_id AND sam2.projid = %s"
+                                   "    WHERE obh2.classif_qual = 'V' ) q"
+                                   "   WHERE rank <= %s )") % (a_proj.projid, random_limit)
+        # Final SQL
+        sql = "SET LOCAL enable_seqscan=FALSE;"  # Anyway we need many rows
+        sql += " UNION ALL ".join(sel_by_prj)
+        # Format output
+        logger.info("median SQL: %s", sql)
+        res: Result = session.execute(sql)
+        ret = {}
+        for a_res in res:
+            projid, *vals = a_res
+            ret[projid] = {col_name: a_val for col_name, a_val in zip(column_names, vals)}
         return ret
 
     @staticmethod
@@ -405,16 +460,16 @@ class ProjectBO(object):
         # Default query: all projects, eventually with first manager information
         # noinspection SqlResolve
         sql = """SELECT prj.projid
-                   FROM projects prj
-                   LEFT JOIN ( """ + ProjectPrivilegeBO.first_manager_by_project() + """ ) fpm 
-                          ON fpm.projid = prj.projid """
+               FROM projects prj
+               LEFT JOIN ( """ + ProjectPrivilegeBO.first_manager_by_project() + """ ) fpm 
+                      ON fpm.projid = prj.projid """
         if not_granted:
             if not user.has_role(Role.APP_ADMINISTRATOR):
                 # Add the projects for which no entry is found in ProjectPrivilege
                 sql += """
-                           LEFT JOIN projectspriv prp ON prj.projid = prp.projid AND prp.member = :user_id
-                          WHERE prp.member is null 
-                            AND prj.visible """
+                       LEFT JOIN projectspriv prp ON prj.projid = prp.projid AND prp.member = :user_id
+                      WHERE prp.member is null 
+                        AND prj.visible """
                 if for_managing:
                     # No right so no possibility to manage
                     sql += " AND False "
@@ -425,30 +480,30 @@ class ProjectBO(object):
             if not user.has_role(Role.APP_ADMINISTRATOR):
                 # Not an admin, so restrict to projects which current user can work on, or view
                 sql += """
-                            JOIN projectspriv prp 
-                              ON prj.projid = prp.projid 
-                             AND prp.member = :user_id """
+                        JOIN projectspriv prp 
+                          ON prj.projid = prp.projid 
+                         AND prp.member = :user_id """
                 if for_managing:
                     sql += """
-                             AND prp.privilege = '%s' """ % ProjectPrivilegeBO.MANAGE
+                         AND prp.privilege = '%s' """ % ProjectPrivilegeBO.MANAGE
             sql += " WHERE 1 = 1 "
 
         if title_filter != '':
             sql += """ 
-                        AND ( prj.title ILIKE '%%'|| :title ||'%%'
-                              OR TO_CHAR(prj.projid,'999999') LIKE '%%'|| :title ) """
+                    AND ( prj.title ILIKE '%%'|| :title ||'%%'
+                          OR TO_CHAR(prj.projid,'999999') LIKE '%%'|| :title ) """
             sql_params["title"] = title_filter
 
         if instrument_filter != '':
             sql += """
-                         AND prj.projid IN (SELECT DISTINCT sam.projid FROM samples sam, acquisitions acq
-                                             WHERE acq.acq_sample_id = sam.sampleid
-                                               AND acq.instrument ILIKE '%%'|| :instrum ||'%%' ) """
+                     AND prj.projid IN (SELECT DISTINCT sam.projid FROM samples sam, acquisitions acq
+                                         WHERE acq.acq_sample_id = sam.sampleid
+                                           AND acq.instrument ILIKE '%%'|| :instrum ||'%%' ) """
             sql_params["instrum"] = instrument_filter
 
         if filter_subset:
             sql += """
-                         AND NOT prj.title ILIKE '%%subset%%'  """
+                     AND NOT prj.title ILIKE '%%subset%%'  """
 
         with CodeTimer("Projects.projects_for_user query (ids):", logger):
             res: Result = session.execute(text(sql), sql_params)
@@ -597,7 +652,8 @@ class ProjectBO(object):
         logger.info("Remap query for %s: %s", table.__tablename__, qry)
 
     @classmethod
-    def get_all_object_ids(cls, session: Session, prj_id: int):  # TODO: Problem with recursive import -> ObjetIdListT:
+    def get_all_object_ids(cls, session: Session,
+                           prj_id: int):  # TODO: Problem with recursive import -> ObjetIdListT:
         """
             Return the full list of objects IDs inside a project.
             TODO: Maybe better in ObjectBO
@@ -614,13 +670,13 @@ class ProjectBO(object):
             Return the full list of objects IDs and first image file name inside a project.
         """
         sql = text("""
-        SELECT obh.objid, img.file_name
-          FROM obj_head obh
-          JOIN images img ON obh.objid = img.objid 
-                         AND img.imgrank = (SELECT MIN(img3.imgrank) FROM images img3 WHERE img3.objid = obh.objid)
-          JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
-          JOIN samples sam ON sam.sampleid = acq.acq_sample_id
-         WHERE sam.projid = :prj""")
+    SELECT obh.objid, img.file_name
+      FROM obj_head obh
+      JOIN images img ON obh.objid = img.objid 
+                     AND img.imgrank = (SELECT MIN(img3.imgrank) FROM images img3 WHERE img3.objid = obh.objid)
+      JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
+      JOIN samples sam ON sam.sampleid = acq.acq_sample_id
+     WHERE sam.projid = :prj""")
         res: Result = session.execute(sql, {"prj": prj_id})
         return {objid: file_name for (objid, file_name) in res.fetchall()}
 
@@ -634,17 +690,17 @@ class ProjectBO(object):
         needed_ids = list(collated_changes.keys())
         # Lock taxo lines to prevent re-entering, during validation it's often a handful of them.
         pts_sql = """SELECT id
-                           FROM taxonomy
-                          WHERE id = ANY(:ids)
-                         FOR NO KEY UPDATE
-            """
+                       FROM taxonomy
+                      WHERE id = ANY(:ids)
+                     FOR NO KEY UPDATE
+        """
         session.execute(text(pts_sql), {"ids": needed_ids})
         # Lock the rows we are going to update, including -1 for unclassified
         pts_sql = """SELECT id, nbr
-                           FROM projects_taxo_stat 
-                          WHERE projid = :prj
-                            AND id = ANY(:ids)
-                         FOR NO KEY UPDATE"""
+                       FROM projects_taxo_stat 
+                      WHERE projid = :prj
+                        AND id = ANY(:ids)
+                     FOR NO KEY UPDATE"""
         res = session.execute(text(pts_sql), {"prj": prj_id, "ids": needed_ids})
         ids_in_db = {classif_id: nbr for (classif_id, nbr) in res.fetchall()}
         ids_not_in_db = set(needed_ids).difference(ids_in_db.keys())
@@ -652,15 +708,15 @@ class ProjectBO(object):
             # Insert rows for missing IDs
             # TODO: We can't lock what does not exists, so it can fail here.
             pts_ins = """INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
-                             SELECT :prj, COALESCE(obh.classif_id, -1), COUNT(*) nbr, 
-                                    COUNT(CASE WHEN obh.classif_qual = '""" + VALIDATED_CLASSIF_QUAL + """' THEN 1 END) nbr_v,
-                                    COUNT(CASE WHEN obh.classif_qual = '""" + DUBIOUS_CLASSIF_QUAL + """' THEN 1 END) nbr_d,
-                                    COUNT(CASE WHEN obh.classif_qual = '""" + PREDICTED_CLASSIF_QUAL + """' THEN 1 END) nbr_p
-                               FROM obj_head obh
-                               JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
-                               JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prj 
-                              WHERE COALESCE(obh.classif_id, -1) = ANY(:ids)
-                           GROUP BY obh.classif_id"""
+                         SELECT :prj, COALESCE(obh.classif_id, -1), COUNT(*) nbr, 
+                                COUNT(CASE WHEN obh.classif_qual = '""" + VALIDATED_CLASSIF_QUAL + """' THEN 1 END) nbr_v,
+                                COUNT(CASE WHEN obh.classif_qual = '""" + DUBIOUS_CLASSIF_QUAL + """' THEN 1 END) nbr_d,
+                                COUNT(CASE WHEN obh.classif_qual = '""" + PREDICTED_CLASSIF_QUAL + """' THEN 1 END) nbr_p
+                           FROM obj_head obh
+                           JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
+                           JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prj 
+                          WHERE COALESCE(obh.classif_id, -1) = ANY(:ids)
+                       GROUP BY obh.classif_id"""
             session.execute(text(pts_ins), {'prj': prj_id, 'ids': list(ids_not_in_db)})
         # Apply delta
         for classif_id, chg in collated_changes.items():
@@ -671,7 +727,7 @@ class ProjectBO(object):
                 # The delta means 0 for this taxon in this project, delete the line
                 sqlparam = {'prj': prj_id, 'cid': classif_id}
                 ts_sql = """DELETE FROM projects_taxo_stat 
-                                 WHERE projid = :prj AND id = :cid"""
+                             WHERE projid = :prj AND id = :cid"""
             else:
                 # General case
                 sqlparam = {'prj': prj_id, 'cid': classif_id,
@@ -680,8 +736,8 @@ class ProjectBO(object):
                             'dub': chg[DUBIOUS_CLASSIF_QUAL],
                             'prd': chg[PREDICTED_CLASSIF_QUAL]}
                 ts_sql = """UPDATE projects_taxo_stat 
-                                   SET nbr=nbr+:nul, nbr_v=nbr_v+:val, nbr_d=nbr_d+:dub, nbr_p=nbr_p+:prd 
-                                 WHERE projid = :prj AND id = :cid"""
+                               SET nbr=nbr+:nul, nbr_v=nbr_v+:val, nbr_d=nbr_d+:dub, nbr_p=nbr_p+:prd 
+                             WHERE projid = :prj AND id = :cid"""
             session.execute(text(ts_sql), sqlparam)
 
     @classmethod
