@@ -1343,7 +1343,7 @@ def classify_auto_object_set(req: ClassifyAutoReq = Body(...),
 @app.post("/object_set/parents", tags=['objects'], response_model=ObjectSetQueryRsp,
           response_class=MyORJSONResponse  # Force the ORJSON encoder
           )
-def query_object_set_parents(object_ids: ObjectIDListT = Query(..., title="Object IDs list",
+def query_object_set_parents(object_ids: ObjectIDListT = Body(..., title="Object IDs list",
                                            description="The list of object ids.",
                                            example=[634509,6234516,976544]),
                              current_user: int = Depends(get_current_user)) -> ObjectSetQueryRsp:
@@ -1417,7 +1417,7 @@ def compute_project_cnn(proj_id: int = Path(..., description="Internal, numeric 
                     }
                 }
             })
-def erase_object_set(object_ids: ObjectIDListT = Query(..., title="Object IDs list",
+def erase_object_set(object_ids: ObjectIDListT = Body(..., title="Object IDs list",
                                            description="The list of object ids.",
                                            example=[634509,6234516,976544]),
                      current_user: int = Depends(get_current_user)) -> Tuple[int, int, int, int]:

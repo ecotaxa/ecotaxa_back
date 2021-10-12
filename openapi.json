@@ -2987,27 +2987,26 @@
         "summary":"Query Object Set Parents",
         "description":"**Return object ids, with parent ones and projects** for the objects in given list.",
         "operationId":"query_object_set_parents_object_set_parents_post",
-        "parameters":[
-          {
-            "description":"The list of object ids.",
-            "required":true,
-            "schema":{
-              "title":"Object IDs list",
-              "type":"array",
-              "items":{
-                "type":"integer"
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "title":"Object IDs list",
+                "type":"array",
+                "items":{
+                  "type":"integer"
+                },
+                "description":"The list of object ids."
               },
-              "description":"The list of object ids."
-            },
-            "example":[
-              634509,
-              6234516,
-              976544
-            ],
-            "name":"object_ids",
-            "in":"query"
-          }
-        ],
+              "example":[
+                634509,
+                6234516,
+                976544
+              ]
+            }
+          },
+          "required":true
+        },
         "responses":{
           "200":{
             "description":"Successful Response",
@@ -3192,27 +3191,26 @@
         "summary":"Erase Object Set",
         "description":"**Delete the objects with given object ids.** \n\n**Returns** the number of  : **deleted objects**, 0, **deleated image rows** and **deleated image files**.\n\n🔒 Current user needs *Manage* right on all projects of specified objects.",
         "operationId":"erase_object_set_object_set__delete",
-        "parameters":[
-          {
-            "description":"The list of object ids.",
-            "required":true,
-            "schema":{
-              "title":"Object IDs list",
-              "type":"array",
-              "items":{
-                "type":"integer"
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "title":"Object IDs list",
+                "type":"array",
+                "items":{
+                  "type":"integer"
+                },
+                "description":"The list of object ids."
               },
-              "description":"The list of object ids."
-            },
-            "example":[
-              634509,
-              6234516,
-              976544
-            ],
-            "name":"object_ids",
-            "in":"query"
-          }
-        ],
+              "example":[
+                634509,
+                6234516,
+                976544
+              ]
+            }
+          },
+          "required":true
+        },
         "responses":{
           "200":{
             "description":"Successful Response",
