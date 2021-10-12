@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.20"
+    "version":"0.0.21"
   },
   "servers":[
     {
@@ -1852,6 +1852,68 @@
                 "schema":{
                   "$ref":"#/components/schemas/SimpleImportRsp"
                 }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/projects/{project_id}/prediction_settings":{
+      "put":{
+        "tags":[
+          "projects"
+        ],
+        "summary":"Set Project Predict Settings",
+        "description":"**Update the project's prediction settings**, return **NULL upon success.**\n\nUnlike during full project update above, which needs high permissions, this entry point is accessible\nto project annotators, as it mirrors the prediction privileges.",
+        "operationId":"set_project_predict_settings_projects__project_id__prediction_settings_put",
+        "parameters":[
+          {
+            "description":"Internal, numeric id of the project.",
+            "required":true,
+            "schema":{
+              "title":"Project Id",
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
+            },
+            "example":4223,
+            "name":"project_id",
+            "in":"path"
+          },
+          {
+            "description":"The new prediction settings",
+            "required":true,
+            "schema":{
+              "title":"Settings",
+              "type":"string",
+              "description":"The new prediction settings"
+            },
+            "example":"seltaxo=84963,59996,56545 baseproject=2562,2571",
+            "name":"settings",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{},
+                "example":{}
               }
             }
           },

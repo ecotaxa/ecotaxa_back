@@ -10,7 +10,6 @@ from typing import Union, Tuple
 
 from fastapi import FastAPI, Request, Response, status, Depends, HTTPException, UploadFile, File, Query, Form, Body, \
     Path
-from fastapi import responses
 from fastapi.logger import logger as fastapi_logger
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
@@ -85,7 +84,7 @@ logger = get_logger(__name__)
 fastapi_logger.setLevel(INFO)
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.20",
+              version="0.0.21",
               # openapi URL as seen from navigator, this is included when /docs is required
               # which serves swagger-ui JS app. Stay in /api sub-path.
               openapi_url="/api/openapi.json",
@@ -458,7 +457,8 @@ MyORJSONResponse.register(User, UserModel)
 
 project_model_columns = plain_columns(ProjectModel)
 
-#TODO JCE - description
+
+# TODO JCE - description
 # TODO TODO TODO: No verification of GET query parameters by FastAPI. pydantic does POST models OK.
 @app.get("/projects/search", tags=['projects'], response_model=List[ProjectModel])
 def search_projects(current_user: Optional[int] = Depends(get_optional_current_user),
@@ -699,7 +699,8 @@ def project_merge(project_id: int = Path(..., description="Internal, numeric id 
              200: {
                  "content": {
                      "application/json": {
-                         "example": ["Acquisition '765' is nested in several samples: [1234,7697]", "Acquisition '766' has no associated Process "]
+                         "example": ["Acquisition '765' is nested in several samples: [1234,7697]",
+                                     "Acquisition '766' has no associated Process "]
                      }
                  }
              }
@@ -720,11 +721,14 @@ def project_check(project_id: int = Path(..., description="Internal, numeric id 
 
 
 @app.get("/projects/{project_id}/stats", tags=['projects'],
-responses={
+         responses={
              200: {
                  "content": {
                      "application/json": {
-                        "example": ["Project name", "OrderedDict([('lat_end', 'n01'), ('lon_end', 'n02')])", "(0):", "Total: 0 values, dup 0 values","tot_rg20180314 (1): [43.685,43.685,#1,u1],[7.3156666667,7.3156666667,#1,u1],[9357,9357,#1,u1],[231.45,231.45,#1,u1],[10.249,10.249,#1,u1],[243,243,#1,u1],[179,179,#1,u1],[255,255,#1,u1],[171.59,171.59,#1,u1],[188.42,188.42,#1,u1],[171.2,171.2,#1,u1],[188.9,188.9,#1,u1],[3557.33,3557.33,#1,u1],[3932,3932,#1,u1],[698,698,#1,u1],[373,373,#1,u1],[350,350,#1,u1],[122.1,122.1,#1,u1],[97.6,97.6,#1,u1],[67.7,67.7,#1,u1],[0.009,0.009,#1,u1],[373.3,373.3,#1,u1],[2165655,2165655,#1,u1],[232,232,#1,u1],[-0.89,-0.89,#1,u1],[1.909,1.909,#1,u1],[4.94,4.94,#1,u1],[4196,4196,#1,u1],[698,698,#1,u1],[8895,8895,#1,u1],[1.336,1.336,#1,u1],[1766,1766,#1,u1],[1.359,1.359,#1,u1],[225,225,#1,u1],[231,231,#1,u1],[237,237,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[16,16,#1,u1],[26,26,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[19.066,19.066,#1,u1],[19.122,19.122,#1,u1],[21,21,#1,u1],[21,21,#1,u1],[1441,1441,#1,u1],[86088,86088,#1,u1],[412.756,412.756,#1,u1],[4.556,4.556,#1,u1],[1,1,#1,u1],[109.1499080169,109.1499080169,#1,u1],[1.2448979592,1.2448979592,#1,u1],[76,76,#1,u1],[-0.4489990467,-0.4489990467,#1,u1],[1.4142135624,1.4142135624,#1,u1],[4.3205875999,4.3205875999,#1,u1],[13.1578947368,13.1578947368,#1,u1],[37.7147201027,37.7147201027,#1,u1],[3.9549031764,3.9549031764,#1,u1],[9.5361930295,9.5361930295,#1,u1],[29.1557377049,29.1557377049,#1,u1],[0.0088346243,0.0088346243,#1,u1],[0.0149948464,0.0149948464,#1,u1]","Total: 69 values, dup 69 values"]
+                         "example": ["Project name", "OrderedDict([('lat_end', 'n01'), ('lon_end', 'n02')])", "(0):",
+                                     "Total: 0 values, dup 0 values",
+                                     "tot_rg20180314 (1): [43.685,43.685,#1,u1],[7.3156666667,7.3156666667,#1,u1],[9357,9357,#1,u1],[231.45,231.45,#1,u1],[10.249,10.249,#1,u1],[243,243,#1,u1],[179,179,#1,u1],[255,255,#1,u1],[171.59,171.59,#1,u1],[188.42,188.42,#1,u1],[171.2,171.2,#1,u1],[188.9,188.9,#1,u1],[3557.33,3557.33,#1,u1],[3932,3932,#1,u1],[698,698,#1,u1],[373,373,#1,u1],[350,350,#1,u1],[122.1,122.1,#1,u1],[97.6,97.6,#1,u1],[67.7,67.7,#1,u1],[0.009,0.009,#1,u1],[373.3,373.3,#1,u1],[2165655,2165655,#1,u1],[232,232,#1,u1],[-0.89,-0.89,#1,u1],[1.909,1.909,#1,u1],[4.94,4.94,#1,u1],[4196,4196,#1,u1],[698,698,#1,u1],[8895,8895,#1,u1],[1.336,1.336,#1,u1],[1766,1766,#1,u1],[1.359,1.359,#1,u1],[225,225,#1,u1],[231,231,#1,u1],[237,237,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[16,16,#1,u1],[26,26,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[19.066,19.066,#1,u1],[19.122,19.122,#1,u1],[21,21,#1,u1],[21,21,#1,u1],[1441,1441,#1,u1],[86088,86088,#1,u1],[412.756,412.756,#1,u1],[4.556,4.556,#1,u1],[1,1,#1,u1],[109.1499080169,109.1499080169,#1,u1],[1.2448979592,1.2448979592,#1,u1],[76,76,#1,u1],[-0.4489990467,-0.4489990467,#1,u1],[1.4142135624,1.4142135624,#1,u1],[4.3205875999,4.3205875999,#1,u1],[13.1578947368,13.1578947368,#1,u1],[37.7147201027,37.7147201027,#1,u1],[3.9549031764,3.9549031764,#1,u1],[9.5361930295,9.5361930295,#1,u1],[29.1557377049,29.1557377049,#1,u1],[0.0088346243,0.0088346243,#1,u1],[0.0149948464,0.0149948464,#1,u1]",
+                                     "Total: 69 values, dup 69 values"]
                      }
                  }
              }
@@ -872,6 +876,34 @@ def update_project(project: ProjectModel,
 
     with DBSyncService(Project, Project.projid, project_id) as ssce: ssce.wait()
     with DBSyncService(ProjectPrivilege, ProjectPrivilege.projid, project_id) as ssce: ssce.wait()
+
+
+@app.put("/projects/{project_id}/prediction_settings", tags=['projects'],
+         responses={
+             200: {
+                 "content": {
+                     "application/json": {
+                         "example": null
+                     }
+                 }
+             }
+         })
+def set_project_predict_settings(settings: str = Query(..., description="The new prediction settings",
+                                                       example="seltaxo=84963,59996,56545 baseproject=2562,2571"),
+                                 project_id: int = Path(..., description="Internal, numeric id of the project.",
+                                                        example=4223),
+                                 current_user: int = Depends(get_current_user)):
+    """
+        **Update the project's prediction settings**, return **NULL upon success.**
+
+        Unlike during full project update above, which needs high permissions, this entry point is accessible
+        to project annotators, as it mirrors the prediction privileges.
+    """
+    with ProjectsService() as sce:
+        with RightsThrower():
+            sce.update_prediction_settings(current_user, project_id, settings=settings)
+
+    with DBSyncService(Project, Project.projid, project_id) as ssce: ssce.wait()
 
 
 # ######################## END OF PROJECT
@@ -1158,7 +1190,8 @@ Use a comma to separate fields.
 
 @app.post("/object_set/{project_id}/summary", tags=['objects'], response_model=ObjectSetSummaryRsp)
 def get_object_set_summary(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
-                           only_total: bool = Query(..., title="Only total", description="If True, returns only the **Total number of objects**. Else returns also the **Number of validated ones**, the **number of Dubious ones** and the number of **predicted ones**."),
+                           only_total: bool = Query(..., title="Only total",
+                                                    description="If True, returns only the **Total number of objects**. Else returns also the **Number of validated ones**, the **number of Dubious ones** and the number of **predicted ones**."),
                            filters: ProjectFiltersModel = Body(...),
                            current_user: Optional[int] = Depends(get_optional_current_user)) -> ObjectSetSummaryRsp:
     """ For the given project, with given filters, **return the classification summary**.
@@ -1182,7 +1215,7 @@ And optionnaly
 
 
 @app.post("/object_set/{project_id}/reset_to_predicted", tags=['objects'], response_model=None,
-responses={
+          responses={
               200: {
                   "content": {
                       "application/json": {
@@ -1191,9 +1224,10 @@ responses={
                   }
               }
           })
-def reset_object_set_to_predicted(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
-                                  filters: ProjectFiltersModel = Body(...),
-                                  current_user: int = Depends(get_current_user)) -> None:
+def reset_object_set_to_predicted(
+        project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
+        filters: ProjectFiltersModel = Body(...),
+        current_user: int = Depends(get_current_user)) -> None:
     """
         **Reset to Predicted** all objects for the given project with the filters.
 
@@ -1206,14 +1240,16 @@ def reset_object_set_to_predicted(project_id: int = Path(..., description="Inter
 
 @app.post("/object_set/{project_id}/revert_to_history", tags=['objects'],
           response_model=ObjectSetRevertToHistoryRsp)
-def revert_object_set_to_history(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
-                                 filters: ProjectFiltersModel= Body(...),
-                                 dry_run: bool = Query(..., title="Dry run",
-                                                description="If set, then no real write but consequences of the revert will be replied.",
-                                                example=False),                                 
-                                 target: Optional[int] = Query(title="Target", description = "Use null/None for reverting using the last annotation from anyone, or a user id for the last annotation from this user.", 
-                                                         default=None, example=465),
-                                 current_user: int = Depends(get_current_user)) -> ObjectSetRevertToHistoryRsp:
+def revert_object_set_to_history(
+        project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
+        filters: ProjectFiltersModel = Body(...),
+        dry_run: bool = Query(..., title="Dry run",
+                              description="If set, then no real write but consequences of the revert will be replied.",
+                              example=False),
+        target: Optional[int] = Query(title="Target",
+                                      description="Use null/None for reverting using the last annotation from anyone, or a user id for the last annotation from this user.",
+                                      default=None, example=465),
+        current_user: int = Depends(get_current_user)) -> ObjectSetRevertToHistoryRsp:
     """
         **Revert all objects for the given project**, with the filters, to the target.
     """
@@ -1225,20 +1261,22 @@ def revert_object_set_to_history(project_id: int = Path(..., description="Intern
 
 
 @app.post("/object_set/{project_id}/reclassify", tags=['objects'],
-        responses={
-            200: {
-                "content": {
-                    "application/json": {
-                        "example": 298
-                    }
-                }
-            }
-        },
-        response_model=int)
+          responses={
+              200: {
+                  "content": {
+                      "application/json": {
+                          "example": 298
+                      }
+                  }
+              }
+          },
+          response_model=int)
 def reclassify_object_set(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
                           filters: ProjectFiltersModel = Body(...),
-                          forced_id: ClassifIDT = Query(..., title="Forced Id", description="The new classification Id.", example=23025),
-                          reason: str = Query(..., title="Reason", description="The reason of this new classification.", example="W"),
+                          forced_id: ClassifIDT = Query(..., title="Forced Id",
+                                                        description="The new classification Id.", example=23025),
+                          reason: str = Query(..., title="Reason", description="The reason of this new classification.",
+                                              example="W"),
                           current_user: int = Depends(get_current_user)) -> int:
     """
         Regardless of present classification or state, **set the new classification for this object set.**
@@ -1316,8 +1354,8 @@ def classify_object_set(req: ClassifyReq = Body(...),
               200: {
                   "content": {
                       "application/json": {
-                          "example": 3                      
-                        }
+                          "example": 3
+                      }
                   }
               }
           },
@@ -1344,8 +1382,8 @@ def classify_auto_object_set(req: ClassifyAutoReq = Body(...),
           response_class=MyORJSONResponse  # Force the ORJSON encoder
           )
 def query_object_set_parents(object_ids: ObjectIDListT = Body(..., title="Object IDs list",
-                                           description="The list of object ids.",
-                                           example=[634509,6234516,976544]),
+                                                              description="The list of object ids.",
+                                                              example=[634509, 6234516, 976544]),
                              current_user: int = Depends(get_current_user)) -> ObjectSetQueryRsp:
     """
         **Return object ids, with parent ones and projects** for the objects in given list.
@@ -1387,15 +1425,15 @@ def predict_object_set(filters: ProjectFiltersModel = Body(...),
 
 
 @app.get("/project/do_cnn", tags=['objects'],
-          responses={
-              200: {
-                  "content": {
-                      "application/json": {
-                          "example": "OK, 50 CNN features computed and written"                     
-                        }
-                  }
-              }
-          }, response_model=str)
+         responses={
+             200: {
+                 "content": {
+                     "application/json": {
+                         "example": "OK, 50 CNN features computed and written"
+                     }
+                 }
+             }
+         }, response_model=str)
 def compute_project_cnn(proj_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
                         current_user: Optional[int] = Depends(get_optional_current_user)) -> str:
     """
@@ -1406,6 +1444,7 @@ def compute_project_cnn(proj_id: int = Path(..., description="Internal, numeric 
     with CNNForProject() as sce:
         rsp = sce.run(current_user, proj_id)
     return rsp
+
 
 @app.delete("/object_set/", tags=['objects'],
             responses={
@@ -1418,8 +1457,8 @@ def compute_project_cnn(proj_id: int = Path(..., description="Internal, numeric 
                 }
             })
 def erase_object_set(object_ids: ObjectIDListT = Body(..., title="Object IDs list",
-                                           description="The list of object ids.",
-                                           example=[634509,6234516,976544]),
+                                                      description="The list of object ids.",
+                                                      example=[634509, 6234516, 976544]),
                      current_user: int = Depends(get_current_user)) -> Tuple[int, int, int, int]:
     """
         **Delete the objects with given object ids.** 
@@ -1519,19 +1558,24 @@ async def taxa_tree_status(current_user: int = Depends(get_current_user)):
         return TaxonomyTreeStatus(last_refresh=refresh_date.isoformat() if refresh_date else None)
 
 
-@app.get("/taxa/reclassification_stats", tags=['Taxonomy Tree'], 
-responses={
-    200: {
-            "content": {
-                "application/json": {
-                    "example": [{"id":12876,"renm_id":null,"name":"Echinodermata X","type":"P","nb_objects":24,"nb_children_objects":759,"display_name":"Echinodermata X","lineage":["Echinodermata X","Echinodermata","Metazoa","Holozoa","Opisthokonta","Eukaryota","living"],"id_lineage":[12876,11509,2367,382,8,2,1],"children":[16710]}]
-                }
-            }
-        }},
-response_model=List[TaxonModel])
-async def reclassif_stats(taxa_ids: str= Query(..., title="Taxa ids",
-                                              description="String containing the list of one or more taxa id separated by non-num char.",
-                                              example="12876"),
+@app.get("/taxa/reclassification_stats", tags=['Taxonomy Tree'],
+         responses={
+             200: {
+                 "content": {
+                     "application/json": {
+                         "example": [
+                             {"id": 12876, "renm_id": null, "name": "Echinodermata X", "type": "P", "nb_objects": 24,
+                              "nb_children_objects": 759, "display_name": "Echinodermata X",
+                              "lineage": ["Echinodermata X", "Echinodermata", "Metazoa", "Holozoa", "Opisthokonta",
+                                          "Eukaryota", "living"], "id_lineage": [12876, 11509, 2367, 382, 8, 2, 1],
+                              "children": [16710]}]
+                     }
+                 }
+             }},
+         response_model=List[TaxonModel])
+async def reclassif_stats(taxa_ids: str = Query(..., title="Taxa ids",
+                                                description="String containing the list of one or more taxa id separated by non-num char.",
+                                                example="12876"),
                           current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> List[TaxonBO]:
     """
@@ -1563,14 +1607,18 @@ async def reclassif_project_stats(
 
 
 @app.get("/taxon/{taxon_id}", tags=['Taxonomy Tree'],
-responses={
-    200: {
-            "content": {
-                "application/json": {
-                    "example": {"id":12876,"renm_id":null,"name":"Echinodermata X","type":"P","nb_objects":24,"nb_children_objects":759,"display_name":"Echinodermata X","lineage":["Echinodermata X","Echinodermata","Metazoa","Holozoa","Opisthokonta","Eukaryota","living"],"id_lineage":[12876,11509,2367,382,8,2,1],"children":[16710]}
-                }
-            }
-        }}, response_model=TaxonModel)
+         responses={
+             200: {
+                 "content": {
+                     "application/json": {
+                         "example": {"id": 12876, "renm_id": null, "name": "Echinodermata X", "type": "P",
+                                     "nb_objects": 24, "nb_children_objects": 759, "display_name": "Echinodermata X",
+                                     "lineage": ["Echinodermata X", "Echinodermata", "Metazoa", "Holozoa",
+                                                 "Opisthokonta", "Eukaryota", "living"],
+                                     "id_lineage": [12876, 11509, 2367, 382, 8, 2, 1], "children": [16710]}
+                     }
+                 }
+             }}, response_model=TaxonModel)
 async def query_taxa(
         taxon_id: int = Path(..., description="Internal, the unique numeric id of this taxon.", example=12876),
         _current_user: Optional[int] = Depends(get_optional_current_user)) \
@@ -1599,10 +1647,11 @@ async def query_taxa_usage(
 
 
 @app.get("/taxon_set/search", tags=['Taxonomy Tree'], response_model=List[TaxaSearchRsp])
-async def search_taxa(query: str = Query(..., description="Use this query for matching returned taxa names.", example="Ban"),
-                      project_id: Optional[int] = Query(default=None,
-                                                        description="Internal, numeric id of the project.", example=1),
-                      current_user: Optional[int] = Depends(get_optional_current_user)):
+async def search_taxa(
+        query: str = Query(..., description="Use this query for matching returned taxa names.", example="Ban"),
+        project_id: Optional[int] = Query(default=None,
+                                          description="Internal, numeric id of the project.", example=1),
+        current_user: Optional[int] = Depends(get_optional_current_user)):
     """
         **Search for taxa by name.**
 
@@ -1624,7 +1673,9 @@ async def search_taxa(query: str = Query(..., description="Use this query for ma
 
 
 @app.get("/taxon_set/query", tags=['Taxonomy Tree'], response_model=List[TaxonModel])
-async def query_taxa_set(ids: str = Query(..., title="Ids", description="The separator between numbers is arbitrary non-digit, e.g. ':', '|' or ','.", example="1:2:3"),
+async def query_taxa_set(ids: str = Query(..., title="Ids",
+                                          description="The separator between numbers is arbitrary non-digit, e.g. ':', '|' or ','.",
+                                          example="1:2:3"),
                          _current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> List[TaxonBO]:
     """
@@ -1651,14 +1702,18 @@ async def get_taxon_in_central(
 # Below pragma is because we need the same params as EcoTaxoServer, but we just relay them
 # noinspection PyUnusedLocal
 @app.put("/taxon/central", tags=['Taxonomy Tree'])
-async def add_taxon_in_central(name: str = Query(..., title="Name", description="The taxon/category verbatim name.", example="Echinodermata"),
-                               parent_id: int = Query(..., title="Parent Id", description="It's not possible to create a root taxon.", example=2367),
-                               taxotype: str = Query(..., title="Taxo Type", description="The taxon/category type, 'M' or 'P'.", example="P"),
-                               creator_email: str = Query(..., title="Creator email", description="The email of the taxo creator.", example="user.creator@email.com"),
-                               request: Request = Query(..., title="Request", description=""),
-                               source_desc: Optional[str] = Query(default=None, title="Source desc", description="", example=""),
-                               source_url: Optional[str] = Query(default=None, title="Source url", description="The source url.", example="http://www.google.fr/"),
-                               current_user: int = Depends(get_current_user)):
+async def add_taxon_in_central(
+        name: str = Query(..., title="Name", description="The taxon/category verbatim name.", example="Echinodermata"),
+        parent_id: int = Query(..., title="Parent Id", description="It's not possible to create a root taxon.",
+                               example=2367),
+        taxotype: str = Query(..., title="Taxo Type", description="The taxon/category type, 'M' or 'P'.", example="P"),
+        creator_email: str = Query(..., title="Creator email", description="The email of the taxo creator.",
+                                   example="user.creator@email.com"),
+        request: Request = Query(..., title="Request", description=""),
+        source_desc: Optional[str] = Query(default=None, title="Source desc", description="", example=""),
+        source_url: Optional[str] = Query(default=None, title="Source url", description="The source url.",
+                                          example="http://www.google.fr/"),
+        current_user: int = Depends(get_current_user)):
     """
         **Create a taxon** on EcoTaxoServer.
 
@@ -1973,7 +2028,7 @@ def erase_job(
 
 
 # ######################## END OF JOBS
-#TODO JCE - description example
+# TODO JCE - description example
 @app.get("/my_files/{sub_path:path}", tags=['Files'], response_model=DirectoryModel)
 async def list_user_files(sub_path: str = Query(..., title="Sub path", description="", example=""),
                           current_user: int = Depends(get_current_user)) -> DirectoryModel:
@@ -2005,7 +2060,8 @@ async def put_user_file(file: UploadFile = File(...),
             file_name = await sce.store(current_user, file, path, tag)
         return file_name
 
-#TODO JCE - description example
+
+# TODO JCE - description example
 @app.get("/common_files/", tags=['Files'], response_model=DirectoryModel)
 async def list_common_files(path: str = Query(..., title="path", description="", example=""),
                             current_user: int = Depends(get_current_user)) -> DirectoryModel:

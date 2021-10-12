@@ -1,12 +1,15 @@
 import logging
 from copy import deepcopy
+from urllib.parse import urlencode, quote
 
 from starlette import status
 
-from tests.credentials import ADMIN_AUTH, ORDINARY_USER_USER_ID, ORDINARY_USER2_USER_ID
+from tests.credentials import ADMIN_AUTH, ORDINARY_USER_USER_ID, ORDINARY_USER2_USER_ID, USER2_AUTH, USER_AUTH
 from tests.test_fastapi import PROJECT_QUERY_URL
 
 PROJECT_UPDATE_URL = "/projects/{project_id}"
+
+PROJECT_SETTINGS_UPDATE_URL = "/projects/{project_id}/prediction_settings?settings={settings}"
 
 
 def test_update_prj(config, database, fastapi, caplog):
@@ -111,15 +114,6 @@ def test_update_prj(config, database, fastapi, caplog):
                                   'y': 'n08',
                                   'ym': 'n10'},
                 'objcount': 15.0,
-                # 'owner': {'active': True,
-                #           'country': None,
-                #           'email': 'admin',
-                #           'id': 1,
-                #           'name': 'Application Administrator',
-                #           'organisation': None,
-                #           'usercreationdate': '2020-05-12T08:59:48.701060',
-                #           'usercreationreason': None},
-                # 'owner_id': 0,
                 'pctclassified': None,
                 'pctvalidated': 0.0,
                 'popoverfieldlist': None,
@@ -204,3 +198,39 @@ def test_update_prj(config, database, fastapi, caplog):
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=wrong_contact_upd)
     assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
     assert rsp.text == '{"detail":"Could not set Contact, the designated user is not in Managers list."}'
+
+
+def test_update_prj_pred_settings(config, database, fastapi, caplog):
+    caplog.set_level(logging.ERROR)
+    from tests.test_import import test_import_uvp6
+    prj_id = test_import_uvp6(config, database, caplog, "Test Project Settings Updates")
+    # Do like in legacy app, i.e. fetch/modify/resend
+    qry_url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
+    rsp = fastapi.get(qry_url, headers=ADMIN_AUTH)
+    read_json = rsp.json()
+    assert read_json['classifsettings'] is None
+
+    # Not possible if not a project member
+    new_settings = "My new project settings"
+    sett_url = PROJECT_SETTINGS_UPDATE_URL.format(project_id=prj_id, settings=quote(new_settings))
+    rsp = fastapi.put(sett_url, headers=USER_AUTH)
+    assert rsp.status_code == status.HTTP_403_FORBIDDEN
+
+    # Grant an ordinary user the annotator right
+    usr = {"id": ORDINARY_USER_USER_ID, "email": "ignored", "name": "see email"}
+    mgr = {"id": ORDINARY_USER2_USER_ID, "email": "ignored", "name": "see email"}
+    read_json['annotators'].append(usr)
+    read_json['managers'].append(mgr)
+    read_json['contact'] = mgr  # Setting a manager and a contact is mandatory
+    upd_url = PROJECT_UPDATE_URL.format(project_id=prj_id)
+    rsp = fastapi.put(upd_url, headers=ADMIN_AUTH, json=read_json)
+    assert rsp.status_code == status.HTTP_200_OK
+
+    # Now it should be OK
+    rsp = fastapi.put(sett_url, headers=USER_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+
+    # Check
+    rsp = fastapi.get(qry_url, headers=ADMIN_AUTH)
+    read_json = rsp.json()
+    assert read_json['classifsettings'] == new_settings
