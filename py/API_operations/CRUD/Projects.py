@@ -87,6 +87,14 @@ class ProjectsService(Service):
         ret.highest_right = highest_right
         return ret
 
+    def update_prediction_settings(self, current_user_id: UserIDT,
+                                   prj_id: int,
+                                   settings: str):
+        assert prj_id is not None
+        current_user, project = RightsBO.user_wants(self.session, current_user_id, Action.ANNOTATE, prj_id)
+        project.classifsettings = settings
+        self.session.commit()
+
     DELETE_CHUNK_SIZE = 400
 
     def delete(self, current_user_id: int,
