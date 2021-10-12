@@ -474,12 +474,12 @@
         "operationId":"collection_by_title_collections_by_title_get",
         "parameters":[
           {
-            "description":"Search by **exact** title",
+            "description":"Search by **exact** title.",
             "required":true,
             "schema":{
               "title":"Title",
               "type":"string",
-              "description":"Search by **exact** title"
+              "description":"Search by **exact** title."
             },
             "example":"My collection",
             "name":"q",
@@ -520,12 +520,12 @@
         "operationId":"collection_by_short_title_collections_by_short_title_get",
         "parameters":[
           {
-            "description":"Search by **exact** short title",
+            "description":"Search by **exact** short title.",
             "required":true,
             "schema":{
               "title":"Short title",
               "type":"string",
-              "description":"Search by **exact** short title"
+              "description":"Search by **exact** short title."
             },
             "example":"My coll",
             "name":"q",
@@ -837,12 +837,12 @@
             "in":"query"
           },
           {
-            "description":"Return projects on which the current user has _no permission_, but visible to him/her",
+            "description":"Return projects on which the current user has _no permission_, but visible to him/her.",
             "required":false,
             "schema":{
               "title":"Not granted",
               "type":"boolean",
-              "description":"Return projects on which the current user has _no permission_, but visible to him/her",
+              "description":"Return projects on which the current user has _no permission_, but visible to him/her.",
               "default":false
             },
             "example":false,
@@ -850,12 +850,12 @@
             "in":"query"
           },
           {
-            "description":"Return projects that can be written to (including erased) by the current user",
+            "description":"Return projects that can be written to (including erased) by the current user.",
             "required":false,
             "schema":{
               "title":"For managing",
               "type":"boolean",
-              "description":"Return projects that can be written to (including erased) by the current user",
+              "description":"Return projects that can be written to (including erased) by the current user.",
               "default":false
             },
             "example":false,
@@ -863,12 +863,12 @@
             "in":"query"
           },
           {
-            "description":"Use this pattern for matching returned projects names",
+            "description":"Use this pattern for matching returned projects names.",
             "required":false,
             "schema":{
               "title":"Title filter",
               "type":"string",
-              "description":"Use this pattern for matching returned projects names",
+              "description":"Use this pattern for matching returned projects names.",
               "default":""
             },
             "example":"Tara",
@@ -876,12 +876,12 @@
             "in":"query"
           },
           {
-            "description":"Only return projects where this instrument was used",
+            "description":"Only return projects where this instrument was used.",
             "required":false,
             "schema":{
               "title":"Instrument filter",
               "type":"string",
-              "description":"Only return projects where this instrument was used",
+              "description":"Only return projects where this instrument was used.",
               "default":""
             },
             "example":"uvp5",
@@ -889,12 +889,12 @@
             "in":"query"
           },
           {
-            "description":"Only return projects having 'subset' in their names",
+            "description":"Only return projects having 'subset' in their names.",
             "required":false,
             "schema":{
               "title":"Filter subset",
               "type":"boolean",
-              "description":"Only return projects having 'subset' in their names",
+              "description":"Only return projects having 'subset' in their names.",
               "default":false
             },
             "example":true,
@@ -914,24 +914,24 @@
             "in":"query"
           },
           {
-            "description":"Skip `window_start` before returning data",
+            "description":"Skip `window_start` before returning data.",
             "required":false,
             "schema":{
               "title":"Window start",
               "type":"integer",
-              "description":"Skip `window_start` before returning data"
+              "description":"Skip `window_start` before returning data."
             },
             "example":"0",
             "name":"window_start",
             "in":"query"
           },
           {
-            "description":"Return only `window_size` lines",
+            "description":"Return only `window_size` lines.",
             "required":false,
             "schema":{
               "title":"Window size",
               "type":"integer",
-              "description":"Return only `window_size` lines"
+              "description":"Return only `window_size` lines."
             },
             "example":"100",
             "name":"window_size",
@@ -1416,7 +1416,7 @@
           "projects"
         ],
         "summary":"Project Set Get Column Stats",
-        "description":"**Returns projects validated data statistics**, for all named columns, in all given projects.\n\nThe free columns here are named by the alias e.g. 'area', not technical name e.g. 'n43'.\nThis allows getting stats on projects with different mappings, but common names.",
+        "description":"**Returns projects validated data statistics**, for all named columns, in all given projects.\n\nThe free columns here are named by the alias e.g. 'area', not technical name e.g. 'n43'.\n\nThis allows getting stats on projects with different mappings, but common names.",
         "operationId":"project_set_get_column_stats_project_set_column_stats_get",
         "parameters":[
           {
@@ -1601,7 +1601,10 @@
                     "type":"string"
                   }
                 },
-                "example":[]
+                "example":[
+                  "Acquisition '765' is nested in several samples: [1234,7697]",
+                  "Acquisition '766' has no associated Process "
+                ]
               }
             }
           },
@@ -1629,7 +1632,7 @@
           "projects"
         ],
         "summary":"Project Stats",
-        "description":"Check consistency of a project.",
+        "description":"**Returns stats** for a project.\n\nThese stats will be returned as a list containing at index :\n- 0 : The **title** of the project, \n- 1 : A string containing all **freecols name and related column number**,\n\n- 2 : **\"(0):\"**\n- 3 :  **\"Total: 0 values, dup 0 values\"**\n\nThen for each acquisition a pair of strings will be added to the list :\n-  A string containing the **acquisition origin id** (the **number of objects for this acquisition**) : and then **small stats for an acquisition of a free column values inside** : [ min of values ; max of values ; distribution of the different values ; mode, i.e. freq of most frequent value]\n-  A string containing the **number of total values** and the **number of duplicates values** \"Total: ... values, dup ... values\"\n\n    ",
         "operationId":"project_stats_projects__project_id__stats_get",
         "parameters":[
           {
@@ -1650,7 +1653,21 @@
             "description":"Successful Response",
             "content":{
               "application/json":{
-                "schema":{}
+                "schema":{
+                  "title":"Response Project Stats Projects  Project Id  Stats Get",
+                  "type":"array",
+                  "items":{
+                    "type":"string"
+                  }
+                },
+                "example":[
+                  "Project name",
+                  "OrderedDict([('lat_end', 'n01'), ('lon_end', 'n02')])",
+                  "(0):",
+                  "Total: 0 values, dup 0 values",
+                  "tot_rg20180314 (1): [43.685,43.685,#1,u1],[7.3156666667,7.3156666667,#1,u1],[9357,9357,#1,u1],[231.45,231.45,#1,u1],[10.249,10.249,#1,u1],[243,243,#1,u1],[179,179,#1,u1],[255,255,#1,u1],[171.59,171.59,#1,u1],[188.42,188.42,#1,u1],[171.2,171.2,#1,u1],[188.9,188.9,#1,u1],[3557.33,3557.33,#1,u1],[3932,3932,#1,u1],[698,698,#1,u1],[373,373,#1,u1],[350,350,#1,u1],[122.1,122.1,#1,u1],[97.6,97.6,#1,u1],[67.7,67.7,#1,u1],[0.009,0.009,#1,u1],[373.3,373.3,#1,u1],[2165655,2165655,#1,u1],[232,232,#1,u1],[-0.89,-0.89,#1,u1],[1.909,1.909,#1,u1],[4.94,4.94,#1,u1],[4196,4196,#1,u1],[698,698,#1,u1],[8895,8895,#1,u1],[1.336,1.336,#1,u1],[1766,1766,#1,u1],[1.359,1.359,#1,u1],[225,225,#1,u1],[231,231,#1,u1],[237,237,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[16,16,#1,u1],[26,26,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[19.066,19.066,#1,u1],[19.122,19.122,#1,u1],[21,21,#1,u1],[21,21,#1,u1],[1441,1441,#1,u1],[86088,86088,#1,u1],[412.756,412.756,#1,u1],[4.556,4.556,#1,u1],[1,1,#1,u1],[109.1499080169,109.1499080169,#1,u1],[1.2448979592,1.2448979592,#1,u1],[76,76,#1,u1],[-0.4489990467,-0.4489990467,#1,u1],[1.4142135624,1.4142135624,#1,u1],[4.3205875999,4.3205875999,#1,u1],[13.1578947368,13.1578947368,#1,u1],[37.7147201027,37.7147201027,#1,u1],[3.9549031764,3.9549031764,#1,u1],[9.5361930295,9.5361930295,#1,u1],[29.1557377049,29.1557377049,#1,u1],[0.0088346243,0.0088346243,#1,u1],[0.0149948464,0.0149948464,#1,u1]",
+                  "Total: 69 values, dup 69 values"
+                ]
               }
             }
           },
@@ -1728,7 +1745,7 @@
           "projects"
         ],
         "summary":"Import File",
-        "description":"Validate or do a real import of an EcoTaxa archive or directory.",
+        "description":"**Validate or do a real import** of an EcoTaxa archive or directory.",
         "operationId":"import_file_file_import__project_id__post",
         "parameters":[
           {
@@ -1862,7 +1879,7 @@
           "samples"
         ],
         "summary":"Samples Search",
-        "description":"**Search for samples**",
+        "description":"**Search for samples.**",
         "operationId":"samples_search_samples_search_get",
         "parameters":[
           {
@@ -2103,12 +2120,12 @@
         "operationId":"acquisitions_search_acquisitions_search_get",
         "parameters":[
           {
-            "description":"The project id",
+            "description":"The project id.",
             "required":true,
             "schema":{
               "title":"Project id",
               "type":"integer",
-              "description":"The project id"
+              "description":"The project id."
             },
             "example":1,
             "name":"project_id",
@@ -2248,14 +2265,14 @@
         ]
       }
     },
-    "/instruments/":{
+    "/instruments":{
       "get":{
         "tags":[
-          "instrument"
+          "instruments"
         ],
         "summary":"Instrument Query",
         "description":"Returns the list of instruments, inside specific project(s).",
-        "operationId":"instrument_query_instruments__get",
+        "operationId":"instrument_query_instruments_get",
         "parameters":[
           {
             "description":"String containing the list of one or more project id separated by non-num char.",
@@ -2276,7 +2293,7 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "title":"Response Instrument Query Instruments  Get",
+                  "title":"Response Instrument Query Instruments Get",
                   "type":"array",
                   "items":{
                     "type":"string"
@@ -2431,7 +2448,7 @@
               "type":"string",
               "description":"\n\nSpecify the needed object (and ancilliary entities) fields.\n                   \nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.                   \n                   "
             },
-            "example":"obj.longitude, obj.latitude, obj.imgcount",
+            "example":"obj.longitude,fre.feret",
             "name":"fields",
             "in":"query"
           },
@@ -2443,7 +2460,7 @@
               "type":"string",
               "description":"order_field will order the result using given field. If prefixed with \"-\" then it will be reversed."
             },
-            "example":"obj.imgcount",
+            "example":"obj.longitude",
             "name":"order_field",
             "in":"query"
           },
@@ -2517,7 +2534,7 @@
           "objects"
         ],
         "summary":"Get Object Set Summary",
-        "description":"For the given project, with given filters, return the classification summary, i.e.:\n    - Total number of objects\nAlso if 'only_total' is not set:\n    - Number of Validated ones\n    - Number of Dubious ones\n    - Number of Predicted ones",
+        "description":"For the given project, with given filters, **return the classification summary**.\n        \ni.e.:\n            \n- Total number of objects\n\nAnd optionnaly\n\n- Number of Validated ones\n- Number of Dubious ones\n- Number of Predicted ones\n    ",
         "operationId":"get_object_set_summary_object_set__project_id__summary_post",
         "parameters":[
           {
@@ -2533,12 +2550,12 @@
             "in":"path"
           },
           {
-            "description":"#TODO JCE",
+            "description":"If True, returns only the **Total number of objects**. Else returns also the **Number of validated ones**, the **number of Dubious ones** and the number of **predicted ones**.",
             "required":true,
             "schema":{
               "title":"Only total",
               "type":"boolean",
-              "description":"#TODO JCE"
+              "description":"If True, returns only the **Total number of objects**. Else returns also the **Number of validated ones**, the **number of Dubious ones** and the number of **predicted ones**."
             },
             "name":"only_total",
             "in":"query"
@@ -2589,7 +2606,7 @@
           "objects"
         ],
         "summary":"Reset Object Set To Predicted",
-        "description":"Reset to Predicted all objects for the given project with the filters.",
+        "description":"**Reset to Predicted** all objects for the given project with the filters.\n\nReturn **NULL upon success.**",
         "operationId":"reset_object_set_to_predicted_object_set__project_id__reset_to_predicted_post",
         "parameters":[
           {
@@ -2620,7 +2637,8 @@
             "description":"Successful Response",
             "content":{
               "application/json":{
-                "schema":{}
+                "schema":{},
+                "example":{}
               }
             }
           },
@@ -2648,7 +2666,7 @@
           "objects"
         ],
         "summary":"Revert Object Set To History",
-        "description":"Revert all objects for the given project, with the filters, to the target.\n- param `filters`: The set of filters to apply to get the target objects.\n- param `dry_run`: If set, then no real write but consequences of the revert will be replied.\n- param `target`: Use null/None for reverting using the last annotation from anyone, or a user id\n    for the last annotation from this user.",
+        "description":"**Revert all objects for the given project**, with the filters, to the target.",
         "operationId":"revert_object_set_to_history_object_set__project_id__revert_to_history_post",
         "parameters":[
           {
@@ -2664,20 +2682,26 @@
             "in":"path"
           },
           {
+            "description":"If set, then no real write but consequences of the revert will be replied.",
             "required":true,
             "schema":{
-              "title":"Dry Run",
-              "type":"boolean"
+              "title":"Dry run",
+              "type":"boolean",
+              "description":"If set, then no real write but consequences of the revert will be replied."
             },
+            "example":false,
             "name":"dry_run",
             "in":"query"
           },
           {
+            "description":"Use null/None for reverting using the last annotation from anyone, or a user id for the last annotation from this user.",
             "required":false,
             "schema":{
               "title":"Target",
-              "type":"integer"
+              "type":"integer",
+              "description":"Use null/None for reverting using the last annotation from anyone, or a user id for the last annotation from this user."
             },
+            "example":465,
             "name":"target",
             "in":"query"
           }
@@ -2727,7 +2751,7 @@
           "objects"
         ],
         "summary":"Reclassify Object Set",
-        "description":"Regardless of present classification or state, set the new classification for this object set.\nIf the filter designates \"all with given classification\", add a TaxonomyChangeLog entry.\n:returns the number of affected objects.",
+        "description":"Regardless of present classification or state, **set the new classification for this object set.**\n\nIf the filter designates \"all with given classification\", add a TaxonomyChangeLog entry.\n\n**Returns the number of affected objects.**",
         "operationId":"reclassify_object_set_object_set__project_id__reclassify_post",
         "parameters":[
           {
@@ -2743,20 +2767,26 @@
             "in":"path"
           },
           {
+            "description":"The new classification Id.",
             "required":true,
             "schema":{
               "title":"Forced Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"The new classification Id."
             },
+            "example":23025,
             "name":"forced_id",
             "in":"query"
           },
           {
+            "description":"The reason of this new classification.",
             "required":true,
             "schema":{
               "title":"Reason",
-              "type":"string"
+              "type":"string",
+              "description":"The reason of this new classification."
             },
+            "example":"W",
             "name":"reason",
             "in":"query"
           }
@@ -2776,7 +2806,11 @@
             "description":"Successful Response",
             "content":{
               "application/json":{
-                "schema":{}
+                "schema":{
+                  "title":"Response Reclassify Object Set Object Set  Project Id  Reclassify Post",
+                  "type":"integer"
+                },
+                "example":298
               }
             }
           },
@@ -2804,7 +2838,7 @@
           "objects"
         ],
         "summary":"Update Object Set",
-        "description":"Update all the objects with given IDs and values\nCurrent user needs Manage right on all projects of specified objects.\n\n**Returns the number of updated entities.**",
+        "description":"Do the required **update for each objects in the set.** \n\n**Returns the number of updated entities.**\n\n🔒 Current user needs *Manage* right on all projects of specified objects.",
         "operationId":"update_object_set_object_set_update_post",
         "requestBody":{
           "content":{
@@ -2821,7 +2855,11 @@
             "description":"Successful Response",
             "content":{
               "application/json":{
-                "schema":{}
+                "schema":{
+                  "title":"Response Update Object Set Object Set Update Post",
+                  "type":"integer"
+                },
+                "example":2
               }
             }
           },
@@ -2849,7 +2887,7 @@
           "objects"
         ],
         "summary":"Classify Object Set",
-        "description":"Change classification and/or qualification for a set of objects.\nCurrent user needs at least Annotate right on all projects of specified objects.",
+        "description":"**Change classification and/or qualification for a set of objects.**\n\n**Returns the number of updated entities.**\n\n🔒 Current user needs at *least Annotate* right on all projects of specified objects.",
         "operationId":"classify_object_set_object_set_classify_post",
         "requestBody":{
           "content":{
@@ -2866,7 +2904,11 @@
             "description":"Successful Response",
             "content":{
               "application/json":{
-                "schema":{}
+                "schema":{
+                  "title":"Response Classify Object Set Object Set Classify Post",
+                  "type":"integer"
+                },
+                "example":3
               }
             }
           },
@@ -2894,7 +2936,7 @@
           "objects"
         ],
         "summary":"Classify Auto Object Set",
-        "description":"Set automatic classification of a set of objects.\n - `params`: None, all is in the Request body.",
+        "description":"**Set automatic classification** of a set of objects.\n\n**Returns the number of updated entities.**",
         "operationId":"classify_auto_object_set_object_set_classify_auto_post",
         "requestBody":{
           "content":{
@@ -2911,7 +2953,11 @@
             "description":"Successful Response",
             "content":{
               "application/json":{
-                "schema":{}
+                "schema":{
+                  "title":"Response Classify Auto Object Set Object Set Classify Auto Post",
+                  "type":"integer"
+                },
+                "example":3
               }
             }
           },
@@ -2939,22 +2985,29 @@
           "objects"
         ],
         "summary":"Query Object Set Parents",
-        "description":"Return object ids, with parent ones and projects for the objects in given list.",
+        "description":"**Return object ids, with parent ones and projects** for the objects in given list.",
         "operationId":"query_object_set_parents_object_set_parents_post",
-        "requestBody":{
-          "content":{
-            "application/json":{
-              "schema":{
-                "title":"Object Ids",
-                "type":"array",
-                "items":{
-                  "type":"integer"
-                }
-              }
-            }
-          },
-          "required":true
-        },
+        "parameters":[
+          {
+            "description":"The list of object ids.",
+            "required":true,
+            "schema":{
+              "title":"Object IDs list",
+              "type":"array",
+              "items":{
+                "type":"integer"
+              },
+              "description":"The list of object ids."
+            },
+            "example":[
+              634509,
+              6234516,
+              976544
+            ],
+            "name":"object_ids",
+            "in":"query"
+          }
+        ],
         "responses":{
           "200":{
             "description":"Successful Response",
@@ -2990,7 +3043,7 @@
           "objects"
         ],
         "summary":"Export Object Set",
-        "description":"Start an export job for the given object set and options.",
+        "description":"**Start an export job for the given object set and options.**",
         "operationId":"export_object_set_object_set_export_post",
         "requestBody":{
           "content":{
@@ -3037,7 +3090,7 @@
           "objects"
         ],
         "summary":"Predict Object Set",
-        "description":"Start a prediction AKA automatic classification for the given object set and options.",
+        "description":"**Start a prediction** AKA automatic classification for the given object set and options.",
         "operationId":"predict_object_set_object_set_predict_post",
         "requestBody":{
           "content":{
@@ -3084,17 +3137,20 @@
           "objects"
         ],
         "summary":"Compute Project Cnn",
-        "description":"Generate CNN features for the requested project.",
+        "description":"**Generate CNN features** for the requested project.\n\n**Returns a string containing the number of generated features.**",
         "operationId":"compute_project_cnn_project_do_cnn_get",
         "parameters":[
           {
+            "description":"Internal, numeric id of the project.",
             "required":true,
             "schema":{
               "title":"Proj Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
             },
+            "example":1,
             "name":"proj_id",
-            "in":"query"
+            "in":"path"
           }
         ],
         "responses":{
@@ -3105,7 +3161,8 @@
                 "schema":{
                   "title":"Response Compute Project Cnn Project Do Cnn Get",
                   "type":"string"
-                }
+                },
+                "example":"OK, 50 CNN features computed and written"
               }
             }
           },
@@ -3127,34 +3184,47 @@
         ]
       }
     },
-    "/object_set/":{
+    "/object_set":{
       "delete":{
         "tags":[
           "objects"
         ],
         "summary":"Erase Object Set",
-        "description":"Delete the objects with given object ids.\nCurrent user needs Manage right on all projects of specified objects.",
-        "operationId":"erase_object_set_object_set__delete",
-        "requestBody":{
-          "content":{
-            "application/json":{
-              "schema":{
-                "title":"Object Ids",
-                "type":"array",
-                "items":{
-                  "type":"integer"
-                }
-              }
-            }
-          },
-          "required":true
-        },
+        "description":"**Delete the objects with given object ids.** \n\n**Returns** the number of  : **deleted objects**, 0, **deleated image rows** and **deleated image files**.\n\n🔒 Current user needs *Manage* right on all projects of specified objects.",
+        "operationId":"erase_object_set_object_set_delete",
+        "parameters":[
+          {
+            "description":"The list of object ids.",
+            "required":true,
+            "schema":{
+              "title":"Object IDs list",
+              "type":"array",
+              "items":{
+                "type":"integer"
+              },
+              "description":"The list of object ids."
+            },
+            "example":[
+              634509,
+              6234516,
+              976544
+            ],
+            "name":"object_ids",
+            "in":"query"
+          }
+        ],
         "responses":{
           "200":{
             "description":"Successful Response",
             "content":{
               "application/json":{
-                "schema":{}
+                "schema":{},
+                "example":[
+                  100,
+                  0,
+                  10,
+                  10
+                ]
               }
             }
           },
@@ -3312,7 +3382,7 @@
           "Taxonomy Tree"
         ],
         "summary":"Query Root Taxa",
-        "description":"Return all taxa with no parent.",
+        "description":"**Return all taxa with no parent.**",
         "operationId":"query_root_taxa_taxa_get",
         "responses":{
           "200":{
@@ -3338,7 +3408,7 @@
           "Taxonomy Tree"
         ],
         "summary":"Taxa Tree Status",
-        "description":"Return the status of taxonomy tree w/r to freshness.",
+        "description":"**Return the status of taxonomy tree** w/r to freshness.",
         "operationId":"taxa_tree_status_taxa_status_get",
         "responses":{
           "200":{
@@ -3365,15 +3435,18 @@
           "Taxonomy Tree"
         ],
         "summary":"Reclassif Stats",
-        "description":"Dig into reclassification logs and, for each input category id, determine the most chosen target category,\nexcluding the advised one.\nBy convention, if nothing relevant is found, the input category itself is returned. So one can expect\nthat the returned list has the same size as the required one.",
+        "description":"Dig into reclassification logs and, for each input category id, **determine the most chosen target category,\nexcluding the advised one.**\n\nBy convention, if nothing relevant is found, the input category itself is returned. So one can expect\nthat the returned list has the same size as the required one.",
         "operationId":"reclassif_stats_taxa_reclassification_stats_get",
         "parameters":[
           {
+            "description":"String containing the list of one or more taxa id separated by non-num char.",
             "required":true,
             "schema":{
-              "title":"Taxa Ids",
-              "type":"string"
+              "title":"Taxa ids",
+              "type":"string",
+              "description":"String containing the list of one or more taxa id separated by non-num char."
             },
+            "example":"12876",
             "name":"taxa_ids",
             "in":"query"
           }
@@ -3389,7 +3462,39 @@
                   "items":{
                     "$ref":"#/components/schemas/TaxonModel"
                   }
-                }
+                },
+                "example":[
+                  {
+                    "id":12876,
+                    "renm_id":{},
+                    "name":"Echinodermata X",
+                    "type":"P",
+                    "nb_objects":24,
+                    "nb_children_objects":759,
+                    "display_name":"Echinodermata X",
+                    "lineage":[
+                      "Echinodermata X",
+                      "Echinodermata",
+                      "Metazoa",
+                      "Holozoa",
+                      "Opisthokonta",
+                      "Eukaryota",
+                      "living"
+                    ],
+                    "id_lineage":[
+                      12876,
+                      11509,
+                      2367,
+                      382,
+                      8,
+                      2,
+                      1
+                    ],
+                    "children":[
+                      16710
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -3417,7 +3522,7 @@
           "Taxonomy Tree"
         ],
         "summary":"Reclassif Project Stats",
-        "description":"Dig into reclassification logs and return the associations source->target for previous reclassifications.",
+        "description":"Dig into reclassification logs and **return the associations source → target for previous reclassifications.**",
         "operationId":"reclassif_project_stats_taxa_reclassification_history__project_id__get",
         "parameters":[
           {
@@ -3466,7 +3571,7 @@
           "Taxonomy Tree"
         ],
         "summary":"Query Taxa",
-        "description":"Information about a single taxon, including its lineage.",
+        "description":"Returns **information about the taxon** corresponding to the given id, including its lineage.",
         "operationId":"query_taxa_taxon__taxon_id__get",
         "parameters":[
           {
@@ -3477,7 +3582,7 @@
               "type":"integer",
               "description":"Internal, the unique numeric id of this taxon."
             },
-            "example":1,
+            "example":12876,
             "name":"taxon_id",
             "in":"path"
           }
@@ -3489,6 +3594,36 @@
               "application/json":{
                 "schema":{
                   "$ref":"#/components/schemas/TaxonModel"
+                },
+                "example":{
+                  "id":12876,
+                  "renm_id":{},
+                  "name":"Echinodermata X",
+                  "type":"P",
+                  "nb_objects":24,
+                  "nb_children_objects":759,
+                  "display_name":"Echinodermata X",
+                  "lineage":[
+                    "Echinodermata X",
+                    "Echinodermata",
+                    "Metazoa",
+                    "Holozoa",
+                    "Opisthokonta",
+                    "Eukaryota",
+                    "living"
+                  ],
+                  "id_lineage":[
+                    12876,
+                    11509,
+                    2367,
+                    382,
+                    8,
+                    2,
+                    1
+                  ],
+                  "children":[
+                    16710
+                  ]
                 }
               }
             }
@@ -3517,7 +3652,7 @@
           "Taxonomy Tree"
         ],
         "summary":"Query Taxa Usage",
-        "description":"Where a given taxon is used. Only validated uses are returned.",
+        "description":"**Where a given taxon is used.**\n\nOnly validated uses are returned.",
         "operationId":"query_taxa_usage_taxon__taxon_id__usage_get",
         "parameters":[
           {
@@ -3528,7 +3663,7 @@
               "type":"integer",
               "description":"Internal, the unique numeric id of this taxon."
             },
-            "example":1,
+            "example":12876,
             "name":"taxon_id",
             "in":"path"
           }
@@ -3572,15 +3707,18 @@
           "Taxonomy Tree"
         ],
         "summary":"Search Taxa",
-        "description":"Search for taxa by name.\n\nQueries can be 'small', i.e. of length < 3 and even zero-length.\nFor a public, unauthenticated call:\n- zero-length and small queries always return nothing.\n- otherwise, a full search is done and results are returned in alphabetical order.\n\nBehavior for an authenticated call:\n- zero-length queries: return the MRU list in full.\n- small queries: the MRU list is searched, so that taxa in the recent list are returned, if matching.\n- otherwise, a full search is done. Results are ordered so that taxa in the project list are in first,\n    and are signalled as such in the response.",
+        "description":"**Search for taxa by name.**\n\nQueries can be 'small', i.e. of length ﹤3 and even zero-length.\n\n🔓 For a public, unauthenticated call :\n- zero-length and small queries always return nothing.\n- otherwise, a full search is done and results are returned in alphabetical order.\n\n🔒 For an authenticated call :\n- zero-length queries: return the MRU list in full.\n- small queries: the MRU list is searched, so that taxa in the recent list are returned, if matching.\n- otherwise, a full search is done. Results are ordered so that taxa in the project list are in first,\n    and are signalled as such in the response.",
         "operationId":"search_taxa_taxon_set_search_get",
         "parameters":[
           {
+            "description":"Use this query for matching returned taxa names.",
             "required":true,
             "schema":{
               "title":"Query",
-              "type":"string"
+              "type":"string",
+              "description":"Use this query for matching returned taxa names."
             },
+            "example":"Ban",
             "name":"query",
             "in":"query"
           },
@@ -3592,6 +3730,7 @@
               "type":"integer",
               "description":"Internal, numeric id of the project."
             },
+            "example":1,
             "name":"project_id",
             "in":"query"
           }
@@ -3635,15 +3774,18 @@
           "Taxonomy Tree"
         ],
         "summary":"Query Taxa Set",
-        "description":"Information about several taxa, including their lineage.\nThe separator between numbers is arbitrary non-digit, e.g. \":\", \"|\" or \",\"",
+        "description":"Returns **information about several taxa**, including their lineage.",
         "operationId":"query_taxa_set_taxon_set_query_get",
         "parameters":[
           {
+            "description":"The separator between numbers is arbitrary non-digit, e.g. ':', '|' or ','.",
             "required":true,
             "schema":{
               "title":"Ids",
-              "type":"string"
+              "type":"string",
+              "description":"The separator between numbers is arbitrary non-digit, e.g. ':', '|' or ','."
             },
+            "example":"1:2:3",
             "name":"ids",
             "in":"query"
           }
@@ -3736,60 +3878,76 @@
           "Taxonomy Tree"
         ],
         "summary":"Add Taxon In Central",
-        "description":"Create a taxon on EcoTaxoServer.\nLogged user must be manager (on any project) or application admin.",
+        "description":"**Create a taxon** on EcoTaxoServer.\n\n🔒 Logged user must be manager (on any project) or application admin.",
         "operationId":"add_taxon_in_central_taxon_central_put",
         "parameters":[
           {
+            "description":"The taxon/category verbatim name.",
             "required":true,
             "schema":{
               "title":"Name",
-              "type":"string"
+              "type":"string",
+              "description":"The taxon/category verbatim name."
             },
+            "example":"Echinodermata",
             "name":"name",
             "in":"query"
           },
           {
+            "description":"It's not possible to create a root taxon.",
             "required":true,
             "schema":{
               "title":"Parent Id",
-              "type":"integer"
+              "type":"integer",
+              "description":"It's not possible to create a root taxon."
             },
+            "example":2367,
             "name":"parent_id",
             "in":"query"
           },
           {
+            "description":"The taxon/category type, 'M' or 'P'.",
             "required":true,
             "schema":{
-              "title":"Taxotype",
-              "type":"string"
+              "title":"Taxo Type",
+              "type":"string",
+              "description":"The taxon/category type, 'M' or 'P'."
             },
+            "example":"P",
             "name":"taxotype",
             "in":"query"
           },
           {
+            "description":"The email of the taxo creator.",
             "required":true,
             "schema":{
-              "title":"Creator Email",
-              "type":"string"
+              "title":"Creator email",
+              "type":"string",
+              "description":"The email of the taxo creator."
             },
+            "example":"user.creator@email.com",
             "name":"creator_email",
             "in":"query"
           },
           {
             "required":false,
             "schema":{
-              "title":"Source Desc",
+              "title":"Source desc",
               "type":"string"
             },
+            "example":"",
             "name":"source_desc",
             "in":"query"
           },
           {
+            "description":"The source url.",
             "required":false,
             "schema":{
-              "title":"Source Url",
-              "type":"string"
+              "title":"Source url",
+              "type":"string",
+              "description":"The source url."
             },
+            "example":"http://www.google.fr/",
             "name":"source_url",
             "in":"query"
           }
@@ -3827,7 +3985,7 @@
           "Taxonomy Tree"
         ],
         "summary":"Push Taxa Stats In Central",
-        "description":"Push present instance stats into EcoTaxoServer.",
+        "description":"**Push present instance stats**, into EcoTaxoServer.",
         "operationId":"push_taxa_stats_in_central_taxa_stats_push_to_central_get",
         "responses":{
           "200":{
@@ -3852,7 +4010,7 @@
           "Taxonomy Tree"
         ],
         "summary":"Pull Taxa Update From Central",
-        "description":"**Returns what changed in EcoTaxoServer managed tree** and update local tree accordingly.",
+        "description":"**Returns what changed in EcoTaxoServer managed tree** and update local tree accordingly.\n\ni.e. : the number of inserts as nbr_inserts, updates as nbr_updates and errors as errors.",
         "operationId":"pull_taxa_update_from_central_taxa_pull_from_central_get",
         "responses":{
           "200":{
@@ -3871,14 +4029,14 @@
         ]
       }
     },
-    "/jobs/":{
+    "/jobs":{
       "get":{
         "tags":[
           "jobs"
         ],
         "summary":"List Jobs",
         "description":"**Return the jobs** for current user, or all of them if admin is asked for.",
-        "operationId":"list_jobs_jobs__get",
+        "operationId":"list_jobs_jobs_get",
         "parameters":[
           {
             "description":"If FALSE return the jobs for current user, else return all of them.",
@@ -3899,7 +4057,7 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "title":"Response List Jobs Jobs  Get",
+                  "title":"Response List Jobs Jobs Get",
                   "type":"array",
                   "items":{
                     "$ref":"#/components/schemas/JobModel"
@@ -3926,14 +4084,14 @@
         ]
       }
     },
-    "/jobs/{job_id}/":{
+    "/jobs/{job_id}":{
       "get":{
         "tags":[
           "jobs"
         ],
         "summary":"Get Job",
         "description":"Returns **information about the job** corresponding to the given id.",
-        "operationId":"get_job_jobs__job_id___get",
+        "operationId":"get_job_jobs__job_id__get",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this job.",
@@ -3956,6 +4114,53 @@
                 "schema":{
                   "$ref":"#/components/schemas/JobModel"
                 }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      },
+      "delete":{
+        "tags":[
+          "jobs"
+        ],
+        "summary":"Erase Job",
+        "description":"**Delete the job** from DB, with associated storage.\n\nIf the job is running then kill it.\n\n🔒 The job must be accessible to current user.",
+        "operationId":"erase_job_jobs__job_id__delete",
+        "parameters":[
+          {
+            "description":"Internal, the unique numeric id of this job.",
+            "required":true,
+            "schema":{
+              "title":"Job Id",
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this job."
+            },
+            "example":47445,
+            "name":"job_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
               }
             }
           },
@@ -4188,62 +4393,13 @@
         ]
       }
     },
-    "/jobs/{job_id}":{
-      "delete":{
-        "tags":[
-          "jobs"
-        ],
-        "summary":"Erase Job",
-        "description":"**Delete the job** from DB, with associated storage.\n\nIf the job is running then kill it.\n\n🔒 The job must be accessible to current user.",
-        "operationId":"erase_job_jobs__job_id__delete",
-        "parameters":[
-          {
-            "description":"Internal, the unique numeric id of this job.",
-            "required":true,
-            "schema":{
-              "title":"Job Id",
-              "type":"integer",
-              "description":"Internal, the unique numeric id of this job."
-            },
-            "example":47445,
-            "name":"job_id",
-            "in":"path"
-          }
-        ],
-        "responses":{
-          "200":{
-            "description":"Successful Response",
-            "content":{
-              "application/json":{
-                "schema":{}
-              }
-            }
-          },
-          "422":{
-            "description":"Validation Error",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security":[
-          {
-            "BearerOrCookieAuth":[]
-          }
-        ]
-      }
-    },
     "/my_files/{sub_path}":{
       "get":{
         "tags":[
           "Files"
         ],
         "summary":"List User Files",
-        "description":"List the private files which are usable for some file-related operations e.g. import.",
+        "description":"**List the private files** which are usable for some file-related operations.\n\n*e.g. import.*",
         "operationId":"list_user_files_my_files__sub_path__get",
         "parameters":[
           {
@@ -4285,19 +4441,19 @@
         ]
       }
     },
-    "/my_files/":{
+    "/my_files":{
       "post":{
         "tags":[
           "Files"
         ],
         "summary":"Put User File",
-        "description":"Upload a file for the current user. The returned text will contain a serve-side path\nwhich is usable for some file-related operations e.g. import.",
-        "operationId":"put_user_file_my_files__post",
+        "description":"**Upload a file for the current user.**\n\nThe returned text will contain a serve-side path which is usable for some file-related operations.\n\n*e.g. import.*",
+        "operationId":"put_user_file_my_files_post",
         "requestBody":{
           "content":{
             "multipart/form-data":{
               "schema":{
-                "$ref":"#/components/schemas/Body_put_user_file_my_files__post"
+                "$ref":"#/components/schemas/Body_put_user_file_my_files_post"
               }
             }
           },
@@ -4309,7 +4465,7 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "title":"Response Put User File My Files  Post",
+                  "title":"Response Put User File My Files Post",
                   "type":"string"
                 }
               }
@@ -4333,21 +4489,22 @@
         ]
       }
     },
-    "/common_files/":{
+    "/common_files":{
       "get":{
         "tags":[
           "Files"
         ],
         "summary":"List Common Files",
-        "description":"List the common files which are usable for some file-related operations e.g. import.",
-        "operationId":"list_common_files_common_files__get",
+        "description":"**List the common files** which are usable for some file-related operations.\n\n*e.g. import.*",
+        "operationId":"list_common_files_common_files_get",
         "parameters":[
           {
             "required":true,
             "schema":{
-              "title":"Path",
+              "title":"path",
               "type":"string"
             },
+            "example":"",
             "name":"path",
             "in":"query"
           }
@@ -4503,31 +4660,31 @@
           "acquisid":{
             "title":"Acquisition Id",
             "type":"integer",
-            "description":"The acquisition Id",
+            "description":"The acquisition Id.",
             "example":144
           },
           "acq_sample_id":{
             "title":"Acquisition sample Id",
             "type":"integer",
-            "description":"The acquisition sample Id",
+            "description":"The acquisition sample Id.",
             "example":1039
           },
           "orig_id":{
             "title":"Original id",
             "type":"string",
-            "description":"Original acquisition ID from initial TSV load",
+            "description":"Original acquisition ID from initial TSV load.",
             "example":"uvp5_station1_cast1b"
           },
           "instrument":{
             "title":"Instrument",
             "type":"string",
-            "description":"Instrument used",
+            "description":"Instrument used.",
             "example":"uvp5"
           },
           "free_columns":{
             "title":"Free columns",
             "type":"object",
-            "description":"Free columns from acquisition mapping in project",
+            "description":"Free columns from acquisition mapping in project.",
             "default":{},
             "example":{
               "bottomdepth":322,
@@ -4568,8 +4725,8 @@
           }
         }
       },
-      "Body_put_user_file_my_files__post":{
-        "title":"Body_put_user_file_my_files__post",
+      "Body_put_user_file_my_files_post":{
+        "title":"Body_put_user_file_my_files_post",
         "required":[
           "file"
         ],
@@ -4604,7 +4761,7 @@
             "items":{
               "type":"integer"
             },
-            "description":"The IDs of the target entities",
+            "description":"The IDs of the target entities.",
             "example":[
               1,
               5,
@@ -4641,7 +4798,7 @@
             "items":{
               "type":"integer"
             },
-            "description":"The IDs of the target objects"
+            "description":"The IDs of the target objects."
           },
           "classifications":{
             "title":"Classifications",
@@ -4685,7 +4842,7 @@
         }
       },
       "ClassifyReq":{
-        "title":"Classify request Model",
+        "title":"ClassifyReq",
         "required":[
           "target_ids",
           "classifications",
@@ -4699,7 +4856,7 @@
             "items":{
               "type":"integer"
             },
-            "description":"The IDs of the target objects",
+            "description":"The IDs of the target objects.",
             "example":[
               634509,
               6234516,
@@ -4722,7 +4879,8 @@
           "wanted_qualification":{
             "title":"Wanted qualification",
             "type":"string",
-            "description":"The wanted qualifications for all objects. 'V' and 'P'."
+            "description":"The wanted qualifications for all objects. 'V' or 'P'.",
+            "example":"V"
           }
         }
       },
@@ -4744,7 +4902,7 @@
             "items":{
               "type":"integer"
             },
-            "description":"The list of composing project IDs",
+            "description":"The list of composing project IDs.",
             "example":[
               1
             ]
@@ -4791,7 +4949,7 @@
             "items":{
               "$ref":"#/components/schemas/UserModel"
             },
-            "description":"Other person(s) \n        associated with the collection",
+            "description":"Other person(s) \n        associated with the collection.",
             "default":[]
           },
           "associate_organisations":{
@@ -4800,65 +4958,65 @@
             "items":{
               "type":"string"
             },
-            "description":"Other \n        organisation(s) associated with the collection",
+            "description":"Other \n        organisation(s) associated with the collection.",
             "default":[]
           },
           "id":{
             "title":"Id",
             "type":"integer",
-            "description":"The collection Id",
+            "description":"The collection Id.",
             "example":1
           },
           "external_id":{
             "title":"External Id",
             "type":"string",
-            "description":"The external Id",
+            "description":"The external Id.",
             "example":""
           },
           "external_id_system":{
             "title":"External id system",
             "type":"string",
-            "description":"The external Id system",
+            "description":"The external Id system.",
             "example":""
           },
           "title":{
             "title":"Title",
             "type":"string",
-            "description":"The collection title",
+            "description":"The collection title.",
             "example":"My collection"
           },
           "short_title":{
             "title":"Short title",
             "type":"string",
-            "description":"The collection short title",
+            "description":"The collection short title.",
             "example":"My coll"
           },
           "citation":{
             "title":"Citation",
             "type":"string",
-            "description":"The collection citation",
+            "description":"The collection citation.",
             "example":""
           },
           "license":{
             "title":"License",
             "type":"string",
-            "description":"The collection license",
+            "description":"The collection license.",
             "example":"CC BY 4.0"
           },
           "abstract":{
             "title":"Abstract",
             "type":"string",
-            "description":"The collection abstract",
+            "description":"The collection abstract.",
             "example":""
           },
           "description":{
             "title":"Description",
             "type":"string",
-            "description":"The collection description",
+            "description":"The collection description.",
             "example":""
           }
         },
-        "description":"Basic and computed information about the Collection"
+        "description":"Basic and computed information about the Collection."
       },
       "Constants":{
         "title":"Constants",
@@ -4870,7 +5028,7 @@
             "additionalProperties":{
               "type":"string"
             },
-            "description":"The supported licenses and help text/links",
+            "description":"The supported licenses and help text/links.",
             "default":{
               "CC0 1.0":"<a href=\"https://creativecommons.org/publicdomain/zero/1.0/\" rel=\"nofollow\"><strong>CC-0</strong></a>: all registered EcoTaxa users are free to download, redistribute, modify, and build upon the data, with no conditions. Other databases can index the data. The data falls into the worldwide public domain. This is the license preferred by <a href=\"https://obis.org/manual/policy/\" rel=\"nofollow\">OBIS</a> and <a href=\"https://www.gbif.org/terms\" rel=\"nofollow\">GBIF</a>.",
               "CC BY 4.0":"<a href=\"https://creativecommons.org/licenses/by/4.0/\" rel=\"nofollow\"><strong>CC-BY</strong></a>: all registered EcoTaxa users are free to download, redistribute, modify, and build upon the data, as long as they cite the dataset and its authors. Other databases can index the data.",
@@ -4894,7 +5052,7 @@
             "items":{
               "type":"string"
             },
-            "description":"The application manager identity (name, mail), from config file",
+            "description":"The application manager identity (name, mail), from config file.",
             "default":[
               "",
               ""
@@ -4905,7 +5063,7 @@
             ]
           }
         },
-        "description":"Values which can be considered identical over the lifetime of the back-end "
+        "description":"Values which can be considered identical over the lifetime of the back-end. "
       },
       "CreateCollectionReq":{
         "title":"Create collection request Model",
@@ -4918,7 +5076,7 @@
           "title":{
             "title":"Title",
             "type":"string",
-            "description":"The collection title",
+            "description":"The collection title.",
             "example":"My collection"
           },
           "project_ids":{
@@ -4928,7 +5086,7 @@
             "items":{
               "type":"integer"
             },
-            "description":"The list of composing project IDs",
+            "description":"The list of composing project IDs.",
             "example":[
               1
             ]
@@ -4974,23 +5132,31 @@
         "type":"object",
         "properties":{
           "name":{
-            "title":"atomic entry name",
-            "type":"string"
+            "title":"Name",
+            "type":"string",
+            "description":"atomic entry name.",
+            "example":""
           },
           "type":{
-            "title":"entry type, 'D' for directory, 'F' for file",
-            "type":"string"
+            "title":"Type",
+            "type":"string",
+            "description":"entry type, 'D' for directory, 'F' for file.",
+            "example":""
           },
           "size":{
-            "title":"Entry size, for zips",
-            "type":"integer"
+            "title":"Size",
+            "type":"integer",
+            "description":"Entry size, for zips.",
+            "example":1
           },
           "mtime":{
-            "title":"Modification time, in ISO format",
-            "type":"string"
+            "title":"Modification time",
+            "type":"string",
+            "description":"Modification time, in ISO format.",
+            "example":""
           }
         },
-        "description":"Something inside a directory, i.e. a sub-directory or a file"
+        "description":"Something inside a directory, i.e. a sub-directory or a file."
       },
       "DirectoryModel":{
         "title":"DirectoryModel",
@@ -5001,15 +5167,18 @@
         "type":"object",
         "properties":{
           "path":{
-            "title":"A /-separated path from root to this directory",
-            "type":"string"
+            "title":"Path",
+            "type":"string",
+            "description":"A /-separated path from root to this directory.",
+            "example":""
           },
           "entries":{
-            "title":"Entries, i.e. subdirectories or contained files. All entries are readable, i.e. can be used as input or navigated into.",
+            "title":"Entries",
             "type":"array",
             "items":{
               "$ref":"#/components/schemas/DirectoryEntryModel"
-            }
+            },
+            "description":"Entries, i.e. subdirectories or contained files.All entries are readable, i.e. can be used as input or navigated into."
           }
         },
         "description":"A path + list of entries inside. The path is relative to an implied root."
@@ -5026,7 +5195,10 @@
             },
             "description":"Showstopper problems found while building the archive.",
             "default":[],
-            "example":[]
+            "example":[
+              "No content produced.",
+              " See previous warnings or check the presence of samples in the projects"
+            ]
           },
           "warnings":{
             "title":"Warnings",
@@ -5036,14 +5208,16 @@
             },
             "description":"Problems found while building the archive, which do not prevent producing it.",
             "default":[],
-            "example":[]
+            "example":[
+              "No occurrence added for sample '3456' in 1"
+            ]
           },
           "job_id":{
             "title":"Job Id",
             "type":"integer",
             "description":"The created job, 0 if there were problems.",
             "default":0,
-            "example":1
+            "example":12376
           }
         },
         "description":"EMODNet format export response."
@@ -5066,57 +5240,81 @@
         "type":"object",
         "properties":{
           "project_id":{
-            "title":"The project to export",
-            "type":"integer"
+            "title":"Project Id",
+            "type":"integer",
+            "description":"The project to export.",
+            "example":1
           },
           "exp_type":{
-            "title":"The export type: 'TSV', 'BAK', 'DOI' or 'SUM'.",
+            "title":"Export type",
             "allOf":[
               {
                 "$ref":"#/components/schemas/ExportTypeEnum"
               }
-            ]
+            ],
+            "description":"The export type: 'TSV', 'BAK', 'DOI' or 'SUM'.",
+            "example":"TSV"
           },
           "use_latin1":{
-            "title":"Export using latin 1 character set, AKA iso-8859-1. Default is utf-8.",
+            "title":"Use latin1",
             "type":"boolean",
-            "default":false
+            "description":"Export using latin 1 character set, AKA iso-8859-1. Default is utf-8.",
+            "default":false,
+            "example":false
           },
           "tsv_entities":{
-            "title":"For 'TSV' type, the entities to export, one letter for each of O(bject), P(rocess), A(cquisition), S(ample), classification H(istory), C(omments).",
-            "type":"string"
+            "title":"Tsv entities",
+            "type":"string",
+            "description":"For 'TSV' type, the entities to export, one letter for each of O(bject), P(rocess), A(cquisition), S(ample), classification H(istory), C(omments).",
+            "example":"OPAS"
           },
           "split_by":{
-            "title":"For 'TSV' type, inside archives, split in one directory per... 'sample', 'taxo' or '' (no split)",
-            "type":"string"
+            "title":"Split by",
+            "type":"string",
+            "description":"For 'TSV' type, inside archives, split in one directory per... 'sample', 'taxo' or '' (no split).",
+            "example":"S"
           },
           "coma_as_separator":{
-            "title":"For 'TSV' type, use a , instead of . for decimal separator.",
-            "type":"boolean"
+            "title":"Coma as separator",
+            "type":"boolean",
+            "description":"For 'TSV' type, use a , instead of . for decimal separator.",
+            "example":false
           },
           "format_dates_times":{
-            "title":"For 'TSV' type, format dates and times using - and : respectively.",
-            "type":"boolean"
+            "title":"Format dates times",
+            "type":"boolean",
+            "description":"For 'TSV' type, format dates and times using - and : respectively.",
+            "example":false
           },
           "with_images":{
-            "title":"For 'BAK' and 'DOI' types, export images as well.",
-            "type":"boolean"
+            "title":"With images",
+            "type":"boolean",
+            "description":"For 'BAK' and 'DOI' types, export images as well.",
+            "example":false
           },
           "with_internal_ids":{
-            "title":"For 'BAK' and 'DOI' types, export internal DB IDs.",
-            "type":"boolean"
+            "title":"With internal ids",
+            "type":"boolean",
+            "description":"For 'BAK' and 'DOI' types, export internal DB IDs.",
+            "example":false
           },
           "only_first_image":{
-            "title":"For 'DOI' type, export only first (displayed) image.",
-            "type":"boolean"
+            "title":"Only first image",
+            "type":"boolean",
+            "description":"For 'DOI' type, export only first (displayed) image.",
+            "example":false
           },
           "sum_subtotal":{
-            "title":"For 'SUM' type, how subtotals should be calculated. Per A(cquisition) or S(ample) or ''",
-            "type":"string"
+            "title":"Sum subtotal",
+            "type":"string",
+            "description":"For 'SUM' type, how subtotals should be calculated. Per A(cquisition) or S(ample) or ''.",
+            "example":"A"
           },
           "out_to_ftp":{
-            "title":"Copy result file to FTP area. Original file is still available.",
-            "type":"boolean"
+            "title":"Out to ftp",
+            "type":"boolean",
+            "description":"Copy result file to FTP area. Original file is still available.",
+            "example":false
           }
         },
         "description":"Export request."
@@ -5133,7 +5331,10 @@
             },
             "description":"Showstopper problems found while building the archive.",
             "default":[],
-            "example":[]
+            "example":[
+              "No content produced.",
+              " See previous warnings or check the presence of samples in the projects"
+            ]
           },
           "warnings":{
             "title":"Warnings",
@@ -5143,17 +5344,19 @@
             },
             "description":"Problems found while building the archive, which do not prevent producing it.",
             "default":[],
-            "example":[]
+            "example":[
+              "No occurrence added for sample '3456' in 1"
+            ]
           },
           "job_id":{
             "title":"Job Id",
             "type":"integer",
             "description":"The created job, 0 if there were problems.",
             "default":0,
-            "example":1
+            "example":12376
           }
         },
-        "description":"Export response.\nTODO: Should inherit the other way round."
+        "description":"Export response."
       },
       "ExportTypeEnum":{
         "title":"ExportTypeEnum",
@@ -5255,33 +5458,47 @@
         "type":"object",
         "properties":{
           "objid":{
-            "title":"Objid",
-            "type":"integer"
+            "title":"Object Id",
+            "type":"integer",
+            "description":"The object Id.",
+            "example":264409236
           },
           "classif_id":{
-            "title":"Classif Id",
-            "type":"integer"
+            "title":"Classification Id",
+            "type":"integer",
+            "description":"The classification Id.",
+            "example":82399
           },
           "histo_classif_date":{
-            "title":"Histo Classif Date",
+            "title":"Historical last classification date",
             "type":"string",
-            "format":"date-time"
+            "description":"The classification date.",
+            "format":"date-time",
+            "example":"2021-09-21T14:59:01.007110"
           },
           "histo_classif_type":{
-            "title":"Histo Classif Type",
-            "type":"string"
+            "title":"Historical last classification type",
+            "type":"string",
+            "description":"The type of classification. Could be **A** for Automatic or **M** for Manual.",
+            "example":"M"
           },
           "histo_classif_id":{
-            "title":"Histo Classif Id",
-            "type":"integer"
+            "title":"Historical last classification Id",
+            "type":"integer",
+            "description":"The classification Id.",
+            "example":56
           },
           "histo_classif_qual":{
-            "title":"Histo Classif Qual",
-            "type":"string"
+            "title":"Historical last classification qualification",
+            "type":"string",
+            "description":"The classification qualification. Could be **P** for predicted, **V** for validated or **D** for Dubious.",
+            "example":"V"
           },
           "histo_classif_who":{
-            "title":"Histo Classif Who",
-            "type":"integer"
+            "title":"Historical last classification who",
+            "type":"integer",
+            "description":"The user who manualy classify this object.",
+            "example":3876
           }
         }
       },
@@ -5300,53 +5517,61 @@
           "imgid":{
             "title":"Image Id",
             "type":"integer",
-            "description":"The id of the image",
+            "description":"The id of the image.",
             "example":376456
           },
           "objid":{
             "title":"Object Id",
             "type":"integer",
-            "description":"The id of the object related to the image",
+            "description":"The id of the object related to the image.",
             "example":376456
           },
           "imgrank":{
             "title":"Image rank",
             "type":"integer",
+            "description":"The rank of the image.",
             "example":0
           },
           "file_name":{
             "title":"File name",
             "type":"string",
+            "description":"The file name.",
             "example":"0037/6456.jpg"
           },
           "orig_file_name":{
             "title":"Original file name",
             "type":"string",
+            "description":"The file name of the original image.",
             "example":"dewex_leg2_63_689.jpg"
           },
           "width":{
             "title":"Width",
             "type":"integer",
+            "description":"The width of the image.",
             "example":98
           },
           "height":{
             "title":"Height",
             "type":"integer",
+            "description":"The height of the image.",
             "example":63
           },
           "thumb_file_name":{
             "title":"Thumb file name",
             "type":"string",
+            "description":"Generate thumbnail if image is too large. This generated thumbnail file name.",
             "example":"null"
           },
           "thumb_width":{
             "title":"Thumb width",
             "type":"integer",
+            "description":"Generate thumbnail if image is too large. This generated thumbnail width.",
             "example":"null"
           },
           "thumb_height":{
             "title":"Thumb height",
             "type":"integer",
+            "description":"Generate thumbnail if image is too large. The thumb height of the image.",
             "example":"null"
           }
         }
@@ -5359,31 +5584,41 @@
         "type":"object",
         "properties":{
           "source_path":{
-            "title":"Source path on server, to zip or plain directory. The path can be returned by a file upload (absolute), otherwise it's relative to shared file area root.",
-            "type":"string"
+            "title":"Source path",
+            "type":"string",
+            "description":"Source path on server, to zip or plain directory. \n \n The path can be returned by a file upload (absolute), \n \n otherwise it's relative to shared file area root.",
+            "example":""
           },
           "taxo_mappings":{
-            "title":"Optional taxonomy mapping, key=taxo ID found in file, value=final taxo ID to write",
+            "title":"Taxo mappings",
             "type":"object",
             "additionalProperties":{
               "type":"string"
             },
-            "default":{}
+            "description":"Optional taxonomy mapping, the key specifies the taxonomy ID found in file and the value specifies the final taxonomy ID to write.",
+            "default":{},
+            "example":{
+              "23444":76543
+            }
           },
           "skip_loaded_files":{
-            "title":"Skip Loaded Files",
+            "title":"Skip loaded files",
             "type":"boolean",
-            "default":false
+            "default":false,
+            "example":false
           },
           "skip_existing_objects":{
-            "title":"Skip Existing Objects",
+            "title":"Skip existing objects",
             "type":"boolean",
-            "default":false
+            "default":false,
+            "example":false
           },
           "update_mode":{
-            "title":"Update data ('Yes'), including classification ('Cla')",
+            "title":"Update mode",
             "type":"string",
-            "default":""
+            "description":"Update data ('Yes'), including classification ('Cla').",
+            "default":"",
+            "example":"Yes"
           }
         },
         "description":"Import request, from UI choices. "
@@ -5396,16 +5631,20 @@
         "type":"object",
         "properties":{
           "job_id":{
-            "title":"The job which was created for the run",
-            "type":"integer"
+            "title":"Job Id",
+            "type":"integer",
+            "description":"The job which was created for the run.",
+            "example":1
           },
           "errors":{
-            "title":"Errors from analysis",
+            "title":"Errors",
             "type":"array",
             "items":{
               "type":"string"
             },
-            "default":[]
+            "description":"Errors from analysis.",
+            "default":[],
+            "example":[]
           }
         },
         "description":"Import response. "
@@ -5424,7 +5663,7 @@
           "params":{
             "title":"params",
             "type":"object",
-            "description":"Creation parameters",
+            "description":"Creation parameters.",
             "default":{},
             "example":{
               "prj_id":1,
@@ -5444,7 +5683,7 @@
           "result":{
             "title":"result",
             "type":"object",
-            "description":"Final result of the run",
+            "description":"Final result of the run.",
             "default":{},
             "example":{
               "rowcount":3
@@ -5456,41 +5695,41 @@
             "items":{
               "type":"string"
             },
-            "description":"The errors seen during last step",
+            "description":"The errors seen during last step.",
             "default":[],
             "example":[]
           },
           "question":{
             "title":"question",
             "type":"object",
-            "description":"The data provoking job move to Asking state",
+            "description":"The data provoking job move to Asking state.",
             "default":{},
             "example":{}
           },
           "reply":{
             "title":"reply",
             "type":"object",
-            "description":"The data provided as a reply to the question",
+            "description":"The data provided as a reply to the question.",
             "default":{},
             "example":{}
           },
           "inside":{
             "title":"inside",
             "type":"object",
-            "description":"Internal state of the job",
+            "description":"Internal state of the job.",
             "default":{},
             "example":{}
           },
           "id":{
             "title":"id",
             "type":"integer",
-            "description":"Job unique identifier",
+            "description":"Job unique identifier.",
             "example":47445
           },
           "owner_id":{
             "title":"owner_id",
             "type":"integer",
-            "description":"The user who created and thus owns the job ",
+            "description":"The user who created and thus owns the job. ",
             "example":1
           },
           "type":{
@@ -5508,19 +5747,19 @@
           "step":{
             "title":"step",
             "type":"integer",
-            "description":"Where in the workflow the job is ",
+            "description":"Where in the workflow the job is. ",
             "example":"null"
           },
           "progress_pct":{
             "title":"progress_pct",
             "type":"integer",
-            "description":"The progress percentage for UI ",
+            "description":"The progress percentage for UI. ",
             "example":100
           },
           "progress_msg":{
             "title":"progress_msg",
             "type":"string",
-            "description":"The message for UI, short version ",
+            "description":"The message for UI, short version. ",
             "example":"Done"
           },
           "creation_date":{
@@ -5533,12 +5772,12 @@
           "updated_on":{
             "title":"updated_on",
             "type":"string",
-            "description":"Last time that anything changed in present line ",
+            "description":"Last time that anything changed in present line. ",
             "format":"date-time",
             "example":"2021-09-28T08:43:21.441969"
           }
         },
-        "description":"All information about the Job"
+        "description":"All information about the Job."
       },
       "LimitMethods":{
         "title":"LimitMethods",
@@ -5556,13 +5795,13 @@
           "password":{
             "title":"User's password",
             "type":"string",
-            "description":"User password",
+            "description":"User password.",
             "example":"test!"
           },
           "username":{
             "title":"User's email",
             "type":"string",
-            "description":"User email used during registration",
+            "description":"User email used during registration.",
             "example":"ecotaxa.api.user@gmail.com"
           }
         }
@@ -5621,7 +5860,7 @@
           "orig_id":{
             "title":"Original id",
             "type":"string",
-            "description":"Original object ID from initial TSV load",
+            "description":"Original object ID from initial TSV load.",
             "example":"deex_leg1_48_406"
           },
           "objdate":{
@@ -5637,31 +5876,31 @@
           "latitude":{
             "title":"Latitude",
             "type":"number",
-            "description":"The latitude",
+            "description":"The latitude.",
             "example":42.0231666666667
           },
           "longitude":{
             "title":"Longitude",
             "type":"number",
-            "description":"The longitude",
+            "description":"The longitude.",
             "example":4.71766666666667
           },
           "depth_min":{
             "title":"Depth min",
             "type":"number",
-            "description":"The min depth",
+            "description":"The min depth.",
             "example":0
           },
           "depth_max":{
             "title":"Depth max",
             "type":"number",
-            "description":"The min depth",
+            "description":"The min depth.",
             "example":300
           },
           "sunpos":{
             "title":"Sun position",
             "type":"string",
-            "description":"Sun position, from date, time and coords",
+            "description":"Sun position, from date, time and coords.",
             "example":"N"
           },
           "classif_id":{
@@ -5710,7 +5949,7 @@
           "classif_crossvalidation_id":{
             "title":"Classification crossvalidation Id",
             "type":"integer",
-            "description":"Always NULL in prod",
+            "description":"Always NULL in prod.",
             "example":"null"
           },
           "complement_info":{
@@ -5721,7 +5960,7 @@
           "similarity":{
             "title":"Similarity",
             "type":"number",
-            "description":"Always NULL in prod",
+            "description":"Always NULL in prod.",
             "example":"null"
           },
           "random_value":{
@@ -5731,7 +5970,7 @@
           "object_link":{
             "title":"Object link",
             "type":"string",
-            "description":"Object link",
+            "description":"Object link.",
             "example":"http://www.zooscan.obs-vlfr.fr//"
           }
         }
@@ -5762,7 +6001,7 @@
           "orig_id":{
             "title":"Original id",
             "type":"string",
-            "description":"Original object ID from initial TSV load",
+            "description":"Original object ID from initial TSV load.",
             "example":"deex_leg1_48_406"
           },
           "objdate":{
@@ -5778,31 +6017,31 @@
           "latitude":{
             "title":"Latitude",
             "type":"number",
-            "description":"The latitude",
+            "description":"The latitude.",
             "example":42.0231666666667
           },
           "longitude":{
             "title":"Longitude",
             "type":"number",
-            "description":"The longitude",
+            "description":"The longitude.",
             "example":4.71766666666667
           },
           "depth_min":{
             "title":"Depth min",
             "type":"number",
-            "description":"The min depth",
+            "description":"The min depth.",
             "example":0
           },
           "depth_max":{
             "title":"Depth max",
             "type":"number",
-            "description":"The min depth",
+            "description":"The min depth.",
             "example":300
           },
           "sunpos":{
             "title":"Sun position",
             "type":"string",
-            "description":"Sun position, from date, time and coords",
+            "description":"Sun position, from date, time and coords.",
             "example":"N"
           },
           "classif_id":{
@@ -5851,7 +6090,7 @@
           "classif_crossvalidation_id":{
             "title":"Classification crossvalidation Id",
             "type":"integer",
-            "description":"Always NULL in prod",
+            "description":"Always NULL in prod.",
             "example":"null"
           },
           "complement_info":{
@@ -5862,7 +6101,7 @@
           "similarity":{
             "title":"Similarity",
             "type":"number",
-            "description":"Always NULL in prod",
+            "description":"Always NULL in prod.",
             "example":"null"
           },
           "random_value":{
@@ -5872,19 +6111,19 @@
           "object_link":{
             "title":"Object link",
             "type":"string",
-            "description":"Object link",
+            "description":"Object link.",
             "example":"http://www.zooscan.obs-vlfr.fr//"
           },
           "sample_id":{
             "title":"Sample id",
             "type":"integer",
-            "description":"Sample (i.e. parent of parent acquisition) ID",
+            "description":"Sample (i.e. parent of parent acquisition) ID.",
             "example":12
           },
           "project_id":{
             "title":"Project id",
             "type":"integer",
-            "description":"Project (i.e. parent of sample) ID",
+            "description":"Project (i.e. parent of sample) ID.",
             "example":76
           },
           "images":{
@@ -5893,13 +6132,27 @@
             "items":{
               "$ref":"#/components/schemas/ImageModel"
             },
-            "description":"Images for this object",
-            "default":[]
+            "description":"Images for this object.",
+            "default":[],
+            "example":[
+              {
+                "imgid":376456,
+                "objid":376456,
+                "imgrank":0,
+                "file_name":"0037/6456.jpg",
+                "orig_file_name":"dewex_leg2_63_689.jpg",
+                "width":98,
+                "height":63,
+                "thumb_file_name":"null",
+                "thumb_width":"null",
+                "thumb_height":"null"
+              }
+            ]
           },
           "free_columns":{
             "title":"Free columns",
             "type":"object",
-            "description":"Free columns from object mapping in project",
+            "description":"Free columns from object mapping in project.",
             "default":{},
             "example":{
               "area":49.0,
@@ -5919,7 +6172,7 @@
             "items":{
               "type":"integer"
             },
-            "description":"Matching object IDs",
+            "description":"Matching object IDs.",
             "default":[],
             "example":[
               634509,
@@ -5933,7 +6186,7 @@
             "items":{
               "type":"integer"
             },
-            "description":"Parent (acquisition) IDs",
+            "description":"Parent (acquisition) IDs.",
             "default":[],
             "example":[
               23,
@@ -5947,7 +6200,7 @@
             "items":{
               "type":"integer"
             },
-            "description":"Parent (sample) IDs",
+            "description":"Parent (sample) IDs.",
             "default":[],
             "example":[
               234,
@@ -5961,7 +6214,7 @@
             "items":{
               "type":"integer"
             },
-            "description":"Project Ids",
+            "description":"Project Ids.",
             "default":[],
             "example":[
               22,
@@ -5975,13 +6228,27 @@
               "type":"array",
               "items":{}
             },
-            "description":"Requested fields, in request order",
-            "default":[]
+            "description":"Requested fields, in request order.",
+            "default":[],
+            "example":[
+              [
+                7.315666666666667,
+                43.685
+              ],
+              [
+                7.315666666666667,
+                43.685
+              ],
+              [
+                7.315666666666667,
+                43.685
+              ]
+            ]
           },
           "total_ids":{
             "title":"Total Ids",
             "type":"integer",
-            "description":"Total rows returned by the query, even if it was window-ed",
+            "description":"Total rows returned by the query, even if it was window-ed.",
             "default":0,
             "example":1000
           }
@@ -5999,13 +6266,30 @@
               "$ref":"#/components/schemas/HistoricalLastClassif"
             },
             "description":"Object + last classification",
-            "default":[]
+            "default":[],
+            "example":[
+              {
+                "objid":264409236,
+                "classif_id":82399,
+                "histo_classif_date":"2021-09-21T14:59:01.007110",
+                "histo_classif_type":"M",
+                "histo_classif_id":56,
+                "histo_classif_qual":"V",
+                "histo_classif_who":3876
+              }
+            ]
           },
           "classif_info":{
             "title":"Classification info",
             "type":"object",
-            "description":"Classification names (self+parent) for involved IDs",
-            "default":{}
+            "description":"Classification names (self+parent) for involved IDs.",
+            "default":{},
+            "example":{
+              "25932":[
+                "Oikopleuridae",
+                "Appendicularia"
+              ]
+            }
           }
         }
       },
@@ -6016,29 +6300,29 @@
           "total_objects":{
             "title":"Total objects",
             "type":"integer",
-            "description":"Total number of objects in the set",
-            "example":400
+            "description":"Total number of objects in the set.",
+            "example":300
           },
           "validated_objects":{
             "title":"Validated objects",
             "type":"integer",
-            "description":"Number of validated objects in the set",
+            "description":"Number of validated objects in the set.",
             "example":100
           },
           "dubious_objects":{
             "title":"Dubious objects",
             "type":"integer",
-            "description":"Number of dubious objects in the set",
+            "description":"Number of dubious objects in the set.",
             "example":100
           },
           "predicted_objects":{
             "title":"Predicted objects",
             "type":"integer",
-            "description":"Number of predicted objects in the set",
+            "description":"Number of predicted objects in the set.",
             "example":100
           }
         },
-        "description":"Tuned model for faster serialization out.\nTODO: A bit useless in the context as FastAPI does _not_ use ser/deser from the model.\n      Instead, it produces what needs to be sent over the wire and calls a JSON encoder onto it.\n      So 1) It calls def jsonable_encoder (in FastAPI encoders.py)\n         2) It calls an encoder (presently ORJSONEncoder in main.py)"
+        "description":"Classification summary from object set."
       },
       "PredictionReq":{
         "title":"Prediction Request",
@@ -6071,7 +6355,7 @@
             "items":{
               "type":"string"
             },
-            "description":"The object features AKA free column, to use in the algorithm. Features must be common to all projects, source ones and destination one"
+            "description":"The object features AKA free column, to use in the algorithm. Features must be common to all projects, source ones and destination one."
           },
           "categories":{
             "title":"Categories",
@@ -6150,13 +6434,13 @@
           "processid":{
             "title":"Process id",
             "type":"integer",
-            "description":"The process Id",
+            "description":"The process Id.",
             "example":1000
           },
           "orig_id":{
             "title":"Original id",
             "type":"string",
-            "description":"Original process ID from initial TSV load",
+            "description":"Original process ID from initial TSV load.",
             "example":"zooprocess_045"
           },
           "free_columns":{
@@ -6177,13 +6461,13 @@
           "taxo":{
             "title":"Taxo",
             "type":"string",
-            "description":"Coma-separated list of numeric taxonomy/category ids. Only include objects classified with one of them",
+            "description":"Coma-separated list of numeric taxonomy/category ids. Only include objects classified with one of them.",
             "example":"12,7654,5409"
           },
           "taxochild":{
             "title":"Taxo child",
             "type":"string",
-            "description":"If 'Y' and taxo is set, also include children of each member of 'taxo' list in taxonomy tree",
+            "description":"If 'Y' and taxo is set, also include children of each member of 'taxo' list in taxonomy tree.",
             "example":"Y"
           },
           "statusfilter":{
@@ -6219,125 +6503,125 @@
           "depthmin":{
             "title":"Depthmin",
             "type":"string",
-            "description":"Positive values. If both are set (depthmin, depthmax), include objects for which both depths (min and max) are inside the range",
+            "description":"Positive values. If both are set (depthmin, depthmax), include objects for which both depths (min and max) are inside the range.",
             "example":"10"
           },
           "depthmax":{
             "title":"Depthmax",
             "type":"string",
-            "description":"Positive values. If both are set (depthmin, depthmax), include objects for which both depths (min and max) are inside the range",
+            "description":"Positive values. If both are set (depthmin, depthmax), include objects for which both depths (min and max) are inside the range.",
             "example":"110"
           },
           "samples":{
             "title":"Samples",
             "type":"string",
-            "description":"Coma-separated list of sample IDs, include only objects for these samples",
+            "description":"Coma-separated list of sample IDs, include only objects for these samples.",
             "example":"10987,3456,987,38"
           },
           "instrum":{
             "title":"Instrument",
             "type":"string",
-            "description":"Instrument name, include objects for which sampling was done using this instrument",
+            "description":"Instrument name, include objects for which sampling was done using this instrument.",
             "example":"uvp5"
           },
           "daytime":{
             "title":"Day time",
             "type":"string",
-            "description":"Coma-separated list of sun position values: D for Day, U for Dusk, N for Night, A for Dawn (Aube in French)",
+            "description":"Coma-separated list of sun position values: D for Day, U for Dusk, N for Night, A for Dawn (Aube in French).",
             "example":"N,A"
           },
           "month":{
             "title":"Month",
             "type":"string",
-            "description":"Coma-separated list of month numbers, 1=Jan and so on",
+            "description":"Coma-separated list of month numbers, 1=Jan and so on.",
             "example":"11,12"
           },
           "fromdate":{
             "title":"From date",
             "type":"string",
-            "description":"Format is 'YYYY-MM-DD', include objects collected after this date",
+            "description":"Format is 'YYYY-MM-DD', include objects collected after this date.",
             "example":"2020-10-09"
           },
           "todate":{
             "title":"To date",
             "type":"string",
-            "description":"Format is 'YYYY-MM-DD', include objects collected before this date",
+            "description":"Format is 'YYYY-MM-DD', include objects collected before this date.",
             "example":"2021-10-09"
           },
           "fromtime":{
             "title":"From time",
             "type":"string",
-            "description":"Format is 'HH24:MM:SS', include objects collected after this time of day",
+            "description":"Format is 'HH24:MM:SS', include objects collected after this time of day.",
             "example":"1:17:00"
           },
           "totime":{
             "title":"To time",
             "type":"string",
-            "description":"Format is 'HH24:MM:SS', include objects collected before this time of day",
+            "description":"Format is 'HH24:MM:SS', include objects collected before this time of day.",
             "example":"23:32:00"
           },
           "inverttime":{
             "title":"Invert time",
             "type":"string",
-            "description":"If '1', include objects outside fromtime and totime range",
+            "description":"If '1', include objects outside fromtime and totime range.",
             "example":"0"
           },
           "validfromdate":{
             "title":"Valid from date",
             "type":"string",
-            "description":"Format is 'YYYY-MM-DD HH24:MI', include objects validated/set to dubious after this date+time",
+            "description":"Format is 'YYYY-MM-DD HH24:MI', include objects validated/set to dubious after this date+time.",
             "example":"2020-10-09 10:00:00"
           },
           "validtodate":{
             "title":"Valid to date",
             "type":"string",
-            "description":"Format is 'YYYY-MM-DD HH24:MI', include objects validated/set to dubious before this date+time",
+            "description":"Format is 'YYYY-MM-DD HH24:MI', include objects validated/set to dubious before this date+time.",
             "example":"2021-10-09 10:00:00"
           },
           "freenum":{
             "title":"Free num",
             "type":"string",
-            "description":"Numerical DB column number in Object as basis for the 2 following criteria (freenumst, freenumend)",
-            "example":""
+            "description":"Numerical DB column number in Object as basis for the 2 following criteria (freenumst, freenumend).",
+            "example":"n01"
           },
           "freenumst":{
             "title":"Freenum start",
             "type":"string",
-            "description":"Start of included range for the column defined by freenum, in which objects are included",
-            "example":""
+            "description":"Start of included range for the column defined by freenum, in which objects are included.",
+            "example":"0"
           },
           "freenumend":{
             "title":"Free num end",
             "type":"string",
-            "description":"End of included range for the column defined by freenum, in which objects are included",
-            "example":""
+            "description":"End of included range for the column defined by freenum, in which objects are included.",
+            "example":"999999"
           },
           "freetxt":{
             "title":"Free text",
             "type":"string",
-            "description":" Textual DB column number as basis for following criteria \n            If starts with 's' then it's a text column in Sample\n            If starts with 'a' then it's a text column in Acquisition \n            If starts with 'p' then it's a text column in Process \n            If starts with 'o' then it's a text column in Object \n        ",
-            "example":""
+            "description":" Textual DB column number as basis for following criteria (freetxtval)\n            If starts with 's' then it's a text column in Sample\n            If starts with 'a' then it's a text column in Acquisition \n            If starts with 'p' then it's a text column in Process \n            If starts with 'o' then it's a text column in Object .\n        ",
+            "example":"p01"
           },
           "freetxtval":{
             "title":"Free text val",
             "type":"string",
-            "description":"Text to match in the column defined by freetxt, for an object to be include",
-            "example":""
+            "description":"Text to match in the column defined by freetxt, for an object to be include.",
+            "example":"zooprocess"
           },
           "filt_annot":{
             "title":"Filter annotator",
             "type":"string",
-            "description":"Coma-separated list of annotator, i.e. person who validated the classification at any point in time. ",
-            "example":""
+            "description":"Coma-separated list of annotator, i.e. person who validated the classification at any point in time.",
+            "example":"34,67,67"
           },
           "filt_last_annot":{
             "title":"Filter last annotator",
             "type":"string",
-            "description":"Coma-separated list of annotator, i.e. person who validated the classification in last. ",
-            "example":""
+            "description":"Coma-separated list of annotator, i.e. person who validated the classification in last.",
+            "example":"34,67"
           }
         },
-        "description":"How to reduce project data"
+        "description":"How to reduce project data."
       },
       "ProjectModel":{
         "title":"ProjectModel",
@@ -6354,7 +6638,7 @@
             "additionalProperties":{
               "type":"string"
             },
-            "description":"Object free columns",
+            "description":"Object free columns.",
             "default":{},
             "example":{
               "area":"n01",
@@ -6367,7 +6651,7 @@
             "additionalProperties":{
               "type":"string"
             },
-            "description":"Sample free columns",
+            "description":"Sample free columns.",
             "default":{},
             "example":{
               "barcode":"t01"
@@ -6379,7 +6663,7 @@
             "additionalProperties":{
               "type":"string"
             },
-            "description":"Acquisition free columns",
+            "description":"Acquisition free columns.",
             "default":{},
             "example":{
               "flash_delay":"t01"
@@ -6391,7 +6675,7 @@
             "additionalProperties":{
               "type":"string"
             },
-            "description":"Process free columns",
+            "description":"Process free columns.",
             "default":{},
             "example":{
               "nb_images":"t01"
@@ -6403,7 +6687,7 @@
             "items":{
               "type":"integer"
             },
-            "description":"Favorite taxa used in classification",
+            "description":"Favorite taxa used in classification.",
             "default":[],
             "example":[
               5,
@@ -6418,7 +6702,7 @@
             "items":{
               "$ref":"#/components/schemas/UserModel"
             },
-            "description":"Managers of this project",
+            "description":"Managers of this project.",
             "default":[]
           },
           "annotators":{
@@ -6427,7 +6711,7 @@
             "items":{
               "$ref":"#/components/schemas/UserModel"
             },
-            "description":"Annotators of this project, if not manager",
+            "description":"Annotators of this project, if not manager.",
             "default":[]
           },
           "viewers":{
@@ -6436,13 +6720,13 @@
             "items":{
               "$ref":"#/components/schemas/UserModel"
             },
-            "description":"Viewers of this project, if not manager nor annotator",
+            "description":"Viewers of this project, if not manager nor annotator.",
             "default":[]
           },
           "instrument":{
             "title":"Instrument",
             "type":"string",
-            "description":"This project's instrument. Transitory: if several of them, then coma-separated",
+            "description":"This project's instrument. Transitory: if several of them, then coma-separated.",
             "example":"zooscan"
           },
           "contact":{
@@ -6468,31 +6752,31 @@
           "projid":{
             "title":"Project Id",
             "type":"integer",
-            "description":"The project Id",
+            "description":"The project Id.",
             "example":4824
           },
           "title":{
             "title":"Title",
             "type":"string",
-            "description":"The project title",
+            "description":"The project title.",
             "example":"MyProject"
           },
           "visible":{
             "title":"Visible",
             "type":"boolean",
-            "description":"The project visibility",
+            "description":"The project visibility.",
             "example":false
           },
           "status":{
             "title":"Status",
             "type":"string",
-            "description":"The project status",
+            "description":"The project status.",
             "example":"Annotate"
           },
           "objcount":{
             "title":"Object count",
             "type":"number",
-            "description":"The number of objects",
+            "description":"The number of objects.",
             "example":32292.0
           },
           "pctvalidated":{
@@ -6525,13 +6809,13 @@
           "comments":{
             "title":"Comments",
             "type":"string",
-            "description":"The project comments",
+            "description":"The project comments.",
             "example":""
           },
           "description":{
             "title":"Description",
             "type":"string",
-            "description":"The project description, i.e. main traits",
+            "description":"The project description, i.e. main traits.",
             "example":""
           },
           "rf_models_used":{
@@ -6545,7 +6829,7 @@
             "example":"SCN_zooscan_group1"
           }
         },
-        "description":"Basic and computed information about the Project"
+        "description":"Basic and computed information about the Project."
       },
       "ProjectSetColumnStatsModel":{
         "title":"ProjectSetColumnStatsModel",
@@ -6557,12 +6841,12 @@
             "items":{
               "type":"integer"
             },
-            "description":"Projects IDs from the call"
+            "description":"Projects IDs from the call."
           },
           "total":{
             "title":"Total of rows",
             "type":"integer",
-            "description":"All rows regardless of emptiness"
+            "description":"All rows regardless of emptiness."
           },
           "columns":{
             "title":"Columns",
@@ -6570,7 +6854,7 @@
             "items":{
               "type":"string"
             },
-            "description":"Column names from the call"
+            "description":"Column names from the call."
           },
           "counts":{
             "title":"Counts",
@@ -6578,7 +6862,7 @@
             "items":{
               "type":"integer"
             },
-            "description":"Counts of non-empty values, one per column"
+            "description":"Counts of non-empty values, one per column."
           },
           "variances":{
             "title":"Variances",
@@ -6586,7 +6870,7 @@
             "items":{
               "type":"number"
             },
-            "description":"Variances of values, one per column"
+            "description":"Variances of values, one per column."
           }
         }
       },
@@ -6597,13 +6881,13 @@
           "projid":{
             "title":"Project Id",
             "type":"integer",
-            "description":"Project unique identifier",
+            "description":"Project unique identifier.",
             "example":1
           },
           "title":{
             "title":"Project title",
             "type":"string",
-            "description":"Project's title",
+            "description":"Project's title.",
             "example":"Zooscan Tara Med"
           }
         }
@@ -6622,7 +6906,7 @@
           "projid":{
             "title":"projid",
             "type":"integer",
-            "description":"The project id",
+            "description":"The project id.",
             "example":1
           },
           "used_taxa":{
@@ -6631,7 +6915,7 @@
             "items":{
               "type":"integer"
             },
-            "description":"The taxa/category ids used inside the project. An id of -1 means some unclassified objects",
+            "description":"The taxa/category ids used inside the project. An id of -1 means some unclassified objects.",
             "default":[],
             "example":[
               45072,
@@ -6645,25 +6929,25 @@
           "nb_unclassified":{
             "title":"nb_unclassified",
             "type":"integer",
-            "description":"The number of unclassified objects inside the project",
+            "description":"The number of unclassified objects inside the project.",
             "example":0
           },
           "nb_validated":{
             "title":"nb_validated",
             "type":"integer",
-            "description":"The number of validated objects inside the project",
+            "description":"The number of validated objects inside the project.",
             "example":5000
           },
           "nb_dubious":{
             "title":"nb_dubious",
             "type":"integer",
-            "description":"The number of dubious objects inside the project",
+            "description":"The number of dubious objects inside the project.",
             "example":56
           },
           "nb_predicted":{
             "title":"nb_predicted",
             "type":"integer",
-            "description":"The number of predicted objects inside the project",
+            "description":"The number of predicted objects inside the project.",
             "example":1345
           }
         }
@@ -6675,7 +6959,7 @@
           "projid":{
             "title":"Project id",
             "type":"integer",
-            "description":"The project id"
+            "description":"The project id."
           },
           "annotators":{
             "title":"Annotators",
@@ -6683,7 +6967,7 @@
             "items":{
               "$ref":"#/components/schemas/MinimalUserBO"
             },
-            "description":"The users who ever decided on classification or state of objects"
+            "description":"The users who ever decided on classification or state of objects."
           },
           "activities":{
             "title":"Activities",
@@ -6691,7 +6975,7 @@
             "items":{
               "$ref":"#/components/schemas/UserActivity"
             },
-            "description":"More details on annotators' activities"
+            "description":"More details on annotators' activities."
           }
         }
       },
@@ -6706,42 +6990,42 @@
           "sampleid":{
             "title":"Sample Id",
             "type":"integer",
-            "description":"The sample Id",
+            "description":"The sample Id.",
             "example":100
           },
           "projid":{
             "title":"Project Id",
             "type":"integer",
-            "description":"The project Id",
+            "description":"The project Id.",
             "example":4
           },
           "orig_id":{
             "title":"Original id",
             "type":"string",
-            "description":"Original sample ID from initial TSV load",
+            "description":"Original sample ID from initial TSV load.",
             "example":"dewex_leg2_19"
           },
           "latitude":{
             "title":"Latitude",
             "type":"number",
-            "description":"The latitude",
+            "description":"The latitude.",
             "example":42.0231666666667
           },
           "longitude":{
             "title":"Longitude",
             "type":"number",
-            "description":"The longitude",
+            "description":"The longitude.",
             "example":4.71766666666667
           },
           "dataportal_descriptor":{
-            "title":"Dataportal descriptor",
+            "title":"Dataportal descriptor.",
             "type":"string",
             "example":""
           },
           "free_columns":{
             "title":"Free columns",
             "type":"object",
-            "description":"Free columns from sample mapping in project",
+            "description":"Free columns from sample mapping in project.",
             "default":{},
             "example":{
               "flash_delay":"t01"
@@ -6756,7 +7040,7 @@
           "sample_id":{
             "title":"Sample id",
             "type":"integer",
-            "description":"The sample id"
+            "description":"The sample id."
           },
           "used_taxa":{
             "title":"Used taxa",
@@ -6764,27 +7048,27 @@
             "items":{
               "type":"integer"
             },
-            "description":"The taxa/category ids used inside the sample. -1 for unclassified objects"
+            "description":"The taxa/category ids used inside the sample. -1 for unclassified objects."
           },
           "nb_unclassified":{
             "title":"Number unclassified",
             "type":"integer",
-            "description":"The number of unclassified objects inside the sample"
+            "description":"The number of unclassified objects inside the sample."
           },
           "nb_validated":{
             "title":"Number validated",
             "type":"integer",
-            "description":"The number of validated objects inside the sample"
+            "description":"The number of validated objects inside the sample."
           },
           "nb_dubious":{
             "title":"Number dubious",
             "type":"integer",
-            "description":"The number of dubious objects inside the sample"
+            "description":"The number of dubious objects inside the sample."
           },
           "nb_predicted":{
             "title":"Number predicted",
             "type":"integer",
-            "description":"The number of predicted objects inside the sample"
+            "description":"The number of predicted objects inside the sample."
           }
         }
       },
@@ -6797,8 +7081,10 @@
         "type":"object",
         "properties":{
           "source_path":{
-            "title":"Source path on server, to zip or plain directory",
-            "type":"string"
+            "title":"Source path",
+            "type":"string",
+            "description":"Source path on server, to zip or plain directory.",
+            "example":""
           },
           "values":{
             "title":"Constant values, per field, to write for all images. If a field has no value don't include it.",
@@ -6806,7 +7092,11 @@
             "additionalProperties":{
               "type":"string"
             },
-            "description":":imgdate, imgtime, latitude, longitude, depthmin, depthmax, taxolb, userlb, status"
+            "description":":imgdate, imgtime, latitude, longitude, depthmin, depthmax, taxolb, userlb, status",
+            "example":{
+              "latitude":43.69,
+              "longitude":7.3
+            }
           },
           "possible_values":{
             "title":"Possible Values",
@@ -6838,15 +7128,19 @@
         "type":"object",
         "properties":{
           "job_id":{
-            "title":"The job which was created for the run. 0 if called with dry_run option.",
-            "type":"integer"
+            "title":"Job Id",
+            "type":"integer",
+            "description":"The job which was created for the run. 0 if called with dry_run option.",
+            "example":1
           },
           "errors":{
-            "title":"Validation errors, dry_run or not.",
+            "title":"Errors",
             "type":"array",
             "items":{
               "type":"string"
-            }
+            },
+            "description":"Validation errors, dry_run or not.",
+            "example":[]
           }
         },
         "description":"Simple Import, response. "
@@ -6868,7 +7162,7 @@
             "additionalProperties":{
               "type":"string"
             },
-            "description":"The filters to apply to project",
+            "description":"The filters to apply to project.",
             "default":{},
             "example":{
               "freenum":"n01",
@@ -6942,20 +7236,28 @@
         "type":"object",
         "properties":{
           "id":{
-            "title":"The taxon/category IDs.",
-            "type":"integer"
+            "title":"Id",
+            "type":"integer",
+            "description":"The taxon/category IDs.",
+            "example":14334
           },
           "renm_id":{
-            "title":"The advised replacement ID iif the taxon/category is deprecated.",
-            "type":"integer"
+            "title":"Renm_id",
+            "type":"integer",
+            "description":"The advised replacement ID if the taxon/category is deprecated.",
+            "example":"null"
           },
           "text":{
-            "title":"The taxon name, display one.",
-            "type":"string"
+            "title":"Text",
+            "type":"string",
+            "description":"The taxon name, display one.",
+            "example":"Bangia"
           },
           "pr":{
-            "title":"1 if the taxon is in project list, 0 otherwise.",
-            "type":"integer"
+            "title":"Pr",
+            "type":"integer",
+            "description":"1 if the taxon is in project list, 0 otherwise.",
+            "example":0
           }
         }
       },
@@ -6975,53 +7277,91 @@
         "type":"object",
         "properties":{
           "id":{
-            "title":"The taxon/category IDs.",
-            "type":"integer"
+            "title":"Id",
+            "type":"integer",
+            "description":"The taxon/category IDs.",
+            "example":1
           },
           "renm_id":{
-            "title":"The advised replacement ID iif the taxon/category is deprecated.",
-            "type":"integer"
+            "title":"Renm id",
+            "type":"integer",
+            "description":"The advised replacement ID if the taxon/category is deprecated.",
+            "example":"null"
           },
           "name":{
-            "title":"The taxon/category verbatim name.",
-            "type":"string"
+            "title":"Name",
+            "type":"string",
+            "description":"The taxon/category verbatim name.",
+            "example":"living"
           },
           "type":{
-            "title":"The taxon/category type, 'M' or 'P'",
-            "type":"string"
+            "title":"Type",
+            "type":"string",
+            "description":"The taxon/category type, 'M' or 'P'.",
+            "example":"P"
           },
           "nb_objects":{
-            "title":"How many objects are classified in this category.",
-            "type":"integer"
+            "title":"Nb objects",
+            "type":"integer",
+            "description":"How many objects are classified in this category.",
+            "example":34118
           },
           "nb_children_objects":{
-            "title":"How many objects are classified in this category children (not itself).",
-            "type":"integer"
+            "title":"Nb children objects",
+            "type":"integer",
+            "description":"How many objects are classified in this category children (not itself).",
+            "example":30091727
           },
           "display_name":{
-            "title":"The taxon/category display name.",
-            "type":"string"
+            "title":"Display name",
+            "type":"string",
+            "description":"The taxon/category display name.",
+            "example":"living<"
           },
           "lineage":{
-            "title":"The taxon/category name of ancestors, including self, in first.",
+            "title":"Lineage",
             "type":"array",
             "items":{
               "type":"string"
-            }
+            },
+            "description":"The taxon/category name of ancestors, including self, in first.",
+            "example":[
+              "living"
+            ]
           },
           "id_lineage":{
-            "title":"The taxon/category IDs of ancestors, including self, in first.",
+            "title":"Id lineage",
             "type":"array",
             "items":{
               "type":"integer"
-            }
+            },
+            "description":"The taxon/category IDs of ancestors, including self, in first.",
+            "example":[
+              1
+            ]
           },
           "children":{
-            "title":"The taxon/category IDs of children.",
+            "title":"Children",
             "type":"array",
             "items":{
               "type":"integer"
-            }
+            },
+            "description":"The taxon/category IDs of children.",
+            "example":[
+              92952,
+              2,
+              92329,
+              85048,
+              4,
+              93599,
+              93687,
+              85011,
+              92951,
+              93698,
+              84961,
+              92696,
+              3
+            ]
           }
         }
       },
@@ -7035,18 +7375,20 @@
           "projid":{
             "title":"Project Id",
             "type":"integer",
-            "description":"Project unique identifier",
+            "description":"Project unique identifier.",
             "example":1
           },
           "title":{
             "title":"Project title",
             "type":"string",
-            "description":"Project's title",
+            "description":"Project's title.",
             "example":"Zooscan Tara Med"
           },
           "nb_validated":{
-            "title":"How many validated objects in this category in this project",
-            "type":"integer"
+            "title":"Nb validated",
+            "type":"integer",
+            "description":"How many validated objects in this category in this project.",
+            "example":129
           }
         }
       },
@@ -7055,8 +7397,10 @@
         "type":"object",
         "properties":{
           "last_refresh":{
-            "title":"Taxonomy tree last refresh/sync from taxonomy server. Date, with format YYYY-MM-DDThh:mm:ss.",
-            "type":"string"
+            "title":"Last refresh",
+            "type":"string",
+            "description":"Taxonomy tree last refresh/sync from taxonomy server. Date, with format YYYY-MM-DDThh:mm:ss.",
+            "example":"2021-10-07T01:26:47"
           }
         }
       },
@@ -7202,7 +7546,7 @@
             "items":{
               "type":"integer"
             },
-            "description":"List of User's allowed actions : 1 create a project, 2 administrate the app, 3 administrate users, 4 create taxon",
+            "description":"List of User's allowed actions : 1 create a project, 2 administrate the app, 3 administrate users, 4 create taxon.",
             "default":[],
             "example":[
               1,
@@ -7215,7 +7559,7 @@
             "items":{
               "$ref":"#/components/schemas/ProjectSummaryModel"
             },
-            "description":"List of User's last used projects",
+            "description":"List of User's last used projects.",
             "default":[],
             "example":[
               {

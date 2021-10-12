@@ -10,6 +10,7 @@ from typing import Union, Tuple
 
 from fastapi import FastAPI, Request, Response, status, Depends, HTTPException, UploadFile, File, Query, Form, Body, \
     Path
+from fastapi import responses
 from fastapi.logger import logger as fastapi_logger
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
@@ -303,7 +304,7 @@ def search_collections(title: str = Query(..., title="Title",
 
 @app.get("/collections/by_title", tags=['collections'], response_model=CollectionModel)
 def collection_by_title(
-        q: str = Query(..., title="Title", description="Search by **exact** title", example="My collection")):
+        q: str = Query(..., title="Title", description="Search by **exact** title.", example="My collection")):
     """
         Return the **single collection with this title**.
         
@@ -319,7 +320,7 @@ def collection_by_title(
 
 @app.get("/collections/by_short_title", tags=['collections'], response_model=CollectionModel)
 def collection_by_short_title(
-        q: str = Query(..., title="Short title", description="Search by **exact** short title",
+        q: str = Query(..., title="Short title", description="Search by **exact** short title.",
                        example="My coll")):
     """
         Return the **single collection with this short title**.
@@ -457,35 +458,35 @@ MyORJSONResponse.register(User, UserModel)
 
 project_model_columns = plain_columns(ProjectModel)
 
-
+#TODO JCE - description
 # TODO TODO TODO: No verification of GET query parameters by FastAPI. pydantic does POST models OK.
 @app.get("/projects/search", tags=['projects'], response_model=List[ProjectModel])
 def search_projects(current_user: Optional[int] = Depends(get_optional_current_user),
                     also_others: bool = Query(default=False, deprecated=True, title="Also others", description="",
                                               example=False),
                     not_granted: bool = Query(default=False, title="Not granted",
-                                              description="Return projects on which the current user has _no permission_, but visible to him/her",
+                                              description="Return projects on which the current user has _no permission_, but visible to him/her.",
                                               example=False),
                     for_managing: bool = Query(default=False, title="For managing",
-                                               description="Return projects that can be written to (including erased) by the current user",
+                                               description="Return projects that can be written to (including erased) by the current user.",
                                                example=False),
                     title_filter: str = Query(default="", title="Title filter",
-                                              description="Use this pattern for matching returned projects names",
+                                              description="Use this pattern for matching returned projects names.",
                                               example="Tara"),
                     instrument_filter: str = Query(default="", title="Instrument filter",
-                                                   description="Only return projects where this instrument was used",
+                                                   description="Only return projects where this instrument was used.",
                                                    example="uvp5"),
                     filter_subset: bool = Query(default=False, title="Filter subset",
-                                                description="Only return projects having 'subset' in their names",
+                                                description="Only return projects having 'subset' in their names.",
                                                 example=True),
                     order_field: Optional[str] = Query(default=None, title="Order field",
                                                        description="One of %s" % list(project_model_columns.keys()),
                                                        example="instrument"),
                     window_start: Optional[int] = Query(default=None, title="Window start",
-                                                        description="Skip `window_start` before returning data",
+                                                        description="Skip `window_start` before returning data.",
                                                         example="0"),
                     window_size: Optional[int] = Query(default=None, title="Window size",
-                                                       description="Return only `window_size` lines", example="100"),
+                                                       description="Return only `window_size` lines.", example="100"),
                     ) -> MyORJSONResponse:  # List[ProjectBO]
     """
         Returns **projects which the current user has explicit permission to access, with search options.**
@@ -646,6 +647,7 @@ def project_set_get_column_stats(ids: str = Query(..., title="Project ids",
         **Returns projects validated data statistics**, for all named columns, in all given projects.
 
         The free columns here are named by the alias e.g. 'area', not technical name e.g. 'n43'.
+
         This allows getting stats on projects with different mappings, but common names.
     """
     with ProjectsService() as sce:
@@ -697,7 +699,7 @@ def project_merge(project_id: int = Path(..., description="Internal, numeric id 
              200: {
                  "content": {
                      "application/json": {
-                         "example": []
+                         "example": ["Acquisition '765' is nested in several samples: [1234,7697]", "Acquisition '766' has no associated Process "]
                      }
                  }
              }
@@ -717,11 +719,33 @@ def project_check(project_id: int = Path(..., description="Internal, numeric id 
             return sce.run(current_user)
 
 
-@app.get("/projects/{project_id}/stats", tags=['projects'])
+@app.get("/projects/{project_id}/stats", tags=['projects'],
+responses={
+             200: {
+                 "content": {
+                     "application/json": {
+                        "example": ["Project name", "OrderedDict([('lat_end', 'n01'), ('lon_end', 'n02')])", "(0):", "Total: 0 values, dup 0 values","tot_rg20180314 (1): [43.685,43.685,#1,u1],[7.3156666667,7.3156666667,#1,u1],[9357,9357,#1,u1],[231.45,231.45,#1,u1],[10.249,10.249,#1,u1],[243,243,#1,u1],[179,179,#1,u1],[255,255,#1,u1],[171.59,171.59,#1,u1],[188.42,188.42,#1,u1],[171.2,171.2,#1,u1],[188.9,188.9,#1,u1],[3557.33,3557.33,#1,u1],[3932,3932,#1,u1],[698,698,#1,u1],[373,373,#1,u1],[350,350,#1,u1],[122.1,122.1,#1,u1],[97.6,97.6,#1,u1],[67.7,67.7,#1,u1],[0.009,0.009,#1,u1],[373.3,373.3,#1,u1],[2165655,2165655,#1,u1],[232,232,#1,u1],[-0.89,-0.89,#1,u1],[1.909,1.909,#1,u1],[4.94,4.94,#1,u1],[4196,4196,#1,u1],[698,698,#1,u1],[8895,8895,#1,u1],[1.336,1.336,#1,u1],[1766,1766,#1,u1],[1.359,1.359,#1,u1],[225,225,#1,u1],[231,231,#1,u1],[237,237,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[16,16,#1,u1],[26,26,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[0,0,#1,u1],[19.066,19.066,#1,u1],[19.122,19.122,#1,u1],[21,21,#1,u1],[21,21,#1,u1],[1441,1441,#1,u1],[86088,86088,#1,u1],[412.756,412.756,#1,u1],[4.556,4.556,#1,u1],[1,1,#1,u1],[109.1499080169,109.1499080169,#1,u1],[1.2448979592,1.2448979592,#1,u1],[76,76,#1,u1],[-0.4489990467,-0.4489990467,#1,u1],[1.4142135624,1.4142135624,#1,u1],[4.3205875999,4.3205875999,#1,u1],[13.1578947368,13.1578947368,#1,u1],[37.7147201027,37.7147201027,#1,u1],[3.9549031764,3.9549031764,#1,u1],[9.5361930295,9.5361930295,#1,u1],[29.1557377049,29.1557377049,#1,u1],[0.0088346243,0.0088346243,#1,u1],[0.0149948464,0.0149948464,#1,u1]","Total: 69 values, dup 69 values"]
+                     }
+                 }
+             }
+         },
+         response_model=List[str])
 def project_stats(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
                   current_user: int = Depends(get_current_user)):
     """
-        Check consistency of a project.
+**Returns stats** for a project.
+
+These stats will be returned as a list containing at index :
+- 0 : The **title** of the project, 
+- 1 : A string containing all **freecols name and related column number**,
+
+- 2 : **"(0):"**
+- 3 :  **"Total: 0 values, dup 0 values"**
+
+Then for each acquisition a pair of strings will be added to the list :
+-  A string containing the **acquisition origin id** (the **number of objects for this acquisition**) : and then **small stats for an acquisition of a free column values inside** : [ min of values ; max of values ; distribution of the different values ; mode, i.e. freq of most frequent value]
+-  A string containing the **number of total values** and the **number of duplicates values** "Total: ... values, dup ... values"
+
     """
     with ProjectStatsFetcher(project_id) as sce:
         with RightsThrower():
@@ -758,7 +782,7 @@ def import_file(project_id: int = Path(..., description="Internal, numeric id of
                 params: ImportReq = Body(...),
                 current_user: int = Depends(get_current_user)):
     """
-        Validate or do a real import of an EcoTaxa archive or directory.
+        **Validate or do a real import** of an EcoTaxa archive or directory.
     """
     with FileImport(project_id, params) as sce:
         with RightsThrower():
@@ -862,7 +886,7 @@ def samples_search(project_ids: str = Query(..., title="Project Ids",
                    current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> List[SampleBO]:
     """
-        **Search for samples**
+        **Search for samples.**
     """
     with SamplesService() as sce:
         proj_ids = _split_num_list(project_ids)
@@ -949,7 +973,7 @@ def sample_query(
 
 @app.get("/acquisitions/search", tags=['acquisitions'], response_model=List[AcquisitionModel])
 def acquisitions_search(
-        project_id: int = Query(..., title="Project id", description="The project id", example=1),
+        project_id: int = Query(..., title="Project id", description="The project id.", example=1),
         current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> List[AcquisitionBO]:
     """
@@ -1004,8 +1028,8 @@ def acquisition_query(
 
 # ######################## END OF ACQUISITION
 
-@app.get("/instruments/",
-         tags=['instrument'],
+@app.get("/instruments",
+         tags=['instruments'],
          response_model=List[str],
          responses={
              200: {
@@ -1097,10 +1121,10 @@ It follows the naming convention 'prefix.field' : Prefix is either 'obj' for mai
 The column obj.imgcount contains the total count of images for the object.
 
 Use a comma to separate fields.                   
-                   ''', default=None, example="obj.longitude, obj.latitude, obj.imgcount"),
+                   ''', default=None, example="obj.longitude,fre.feret"),
                    order_field: Optional[str] = Query(title="Order field",
                                                       description='order_field will order the result using given field. If prefixed with "-" then it will be reversed.',
-                                                      default=None, example="obj.imgcount"),
+                                                      default=None, example="obj.longitude"),
                    # TODO: order_field should be a user-visible field name, not nXXX, in case of free field
                    window_start: Optional[int] = Query(default=None, title="Window start",
                                                        description="Allows to return only a slice of the result. Skip window_start before returning data.",
@@ -1133,18 +1157,21 @@ Use a comma to separate fields.
 
 
 @app.post("/object_set/{project_id}/summary", tags=['objects'], response_model=ObjectSetSummaryRsp)
-def get_object_set_summary(
-        project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
-        only_total: bool = Query(..., title="Only total", description="#TODO JCE"),
-        filters: ProjectFiltersModel = Body(...),
-        current_user: Optional[int] = Depends(get_optional_current_user)) -> ObjectSetSummaryRsp:
-    """
-        For the given project, with given filters, return the classification summary, i.e.:
-            - Total number of objects
-        Also if 'only_total' is not set:
-            - Number of Validated ones
-            - Number of Dubious ones
-            - Number of Predicted ones
+def get_object_set_summary(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
+                           only_total: bool = Query(..., title="Only total", description="If True, returns only the **Total number of objects**. Else returns also the **Number of validated ones**, the **number of Dubious ones** and the number of **predicted ones**."),
+                           filters: ProjectFiltersModel = Body(...),
+                           current_user: Optional[int] = Depends(get_optional_current_user)) -> ObjectSetSummaryRsp:
+    """ For the given project, with given filters, **return the classification summary**.
+        
+i.e.:
+            
+- Total number of objects
+
+And optionnaly
+
+- Number of Validated ones
+- Number of Dubious ones
+- Number of Predicted ones
     """
     with ObjectManager() as sce:
         with RightsThrower():
@@ -1154,13 +1181,23 @@ def get_object_set_summary(
         return rsp
 
 
-@app.post("/object_set/{project_id}/reset_to_predicted", tags=['objects'], response_model=None)
-def reset_object_set_to_predicted(
-        project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
-        filters: ProjectFiltersModel = Body(...),
-        current_user: int = Depends(get_current_user)) -> None:
+@app.post("/object_set/{project_id}/reset_to_predicted", tags=['objects'], response_model=None,
+responses={
+              200: {
+                  "content": {
+                      "application/json": {
+                          "example": null
+                      }
+                  }
+              }
+          })
+def reset_object_set_to_predicted(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
+                                  filters: ProjectFiltersModel = Body(...),
+                                  current_user: int = Depends(get_current_user)) -> None:
     """
-        Reset to Predicted all objects for the given project with the filters.
+        **Reset to Predicted** all objects for the given project with the filters.
+
+        Return **NULL upon success.**
     """
     with ObjectManager() as sce:
         with RightsThrower():
@@ -1169,18 +1206,16 @@ def reset_object_set_to_predicted(
 
 @app.post("/object_set/{project_id}/revert_to_history", tags=['objects'],
           response_model=ObjectSetRevertToHistoryRsp)
-def revert_object_set_to_history(
-        project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
-        filters: ProjectFiltersModel = Body(...),
-        dry_run: bool = Query(...),
-        target: Optional[int] = None,
-        current_user: int = Depends(get_current_user)) -> ObjectSetRevertToHistoryRsp:
+def revert_object_set_to_history(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
+                                 filters: ProjectFiltersModel= Body(...),
+                                 dry_run: bool = Query(..., title="Dry run",
+                                                description="If set, then no real write but consequences of the revert will be replied.",
+                                                example=False),                                 
+                                 target: Optional[int] = Query(title="Target", description = "Use null/None for reverting using the last annotation from anyone, or a user id for the last annotation from this user.", 
+                                                         default=None, example=465),
+                                 current_user: int = Depends(get_current_user)) -> ObjectSetRevertToHistoryRsp:
     """
-        Revert all objects for the given project, with the filters, to the target.
-        - param `filters`: The set of filters to apply to get the target objects.
-        - param `dry_run`: If set, then no real write but consequences of the revert will be replied.
-        - param `target`: Use null/None for reverting using the last annotation from anyone, or a user id
-            for the last annotation from this user.
+        **Revert all objects for the given project**, with the filters, to the target.
     """
     with ObjectManager() as sce:
         with RightsThrower():
@@ -1189,17 +1224,28 @@ def revert_object_set_to_history(
                                            classif_info=classif_info)
 
 
-@app.post("/object_set/{project_id}/reclassify", tags=['objects'])
-def reclassify_object_set(
-        project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
-        filters: ProjectFiltersModel = Body(...),
-        forced_id: ClassifIDT = Query(..., title=""),
-        reason: str = Query(..., title=""),
-        current_user: int = Depends(get_current_user)) -> int:
+@app.post("/object_set/{project_id}/reclassify", tags=['objects'],
+        responses={
+            200: {
+                "content": {
+                    "application/json": {
+                        "example": 298
+                    }
+                }
+            }
+        },
+        response_model=int)
+def reclassify_object_set(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
+                          filters: ProjectFiltersModel = Body(...),
+                          forced_id: ClassifIDT = Query(..., title="Forced Id", description="The new classification Id.", example=23025),
+                          reason: str = Query(..., title="Reason", description="The reason of this new classification.", example="W"),
+                          current_user: int = Depends(get_current_user)) -> int:
     """
-        Regardless of present classification or state, set the new classification for this object set.
+        Regardless of present classification or state, **set the new classification for this object set.**
+
         If the filter designates "all with given classification", add a TaxonomyChangeLog entry.
-        :returns the number of affected objects.
+
+        **Returns the number of affected objects.**
     """
     with ObjectManager() as sce:
         with RightsThrower():
@@ -1207,26 +1253,51 @@ def reclassify_object_set(
         return nb_impacted
 
 
-@app.post("/object_set/update", tags=['objects'])
+@app.post("/object_set/update", tags=['objects'],
+          responses={
+              200: {
+                  "content": {
+                      "application/json": {
+                          "example": 2
+                      }
+                  }
+              }
+          },
+          response_model=int)
 def update_object_set(req: BulkUpdateReq = Body(...),
                       current_user: int = Depends(get_current_user)) -> int:
     """
-        Update all the objects with given IDs and values
-        Current user needs Manage right on all projects of specified objects.
+        Do the required **update for each objects in the set.** 
         
         **Returns the number of updated entities.**
+
+        🔒 Current user needs *Manage* right on all projects of specified objects.
+
     """
     with ObjectManager() as sce:
         with RightsThrower():
             return sce.update_set(current_user, req.target_ids, req.updates)
 
 
-@app.post("/object_set/classify", tags=['objects'])
+@app.post("/object_set/classify", tags=['objects'],
+          responses={
+              200: {
+                  "content": {
+                      "application/json": {
+                          "example": 3
+                      }
+                  }
+              }
+          },
+          response_model=int)
 def classify_object_set(req: ClassifyReq = Body(...),
                         current_user: int = Depends(get_current_user)) -> int:
     """
-        Change classification and/or qualification for a set of objects.
-        Current user needs at least Annotate right on all projects of specified objects.
+        **Change classification and/or qualification for a set of objects.**
+
+        **Returns the number of updated entities.**
+
+        🔒 Current user needs at *least Annotate* right on all projects of specified objects.
     """  ##**Returns the number of updated entities.**NULL upon success.
     # TODO: Cannot classify anymore to deprecated taxon/category
     assert len(req.target_ids) == len(req.classifications), "Need the same number of objects and classifications"
@@ -1240,12 +1311,23 @@ def classify_object_set(req: ClassifyReq = Body(...),
         return ret
 
 
-@app.post("/object_set/classify_auto", tags=['objects'])
+@app.post("/object_set/classify_auto", tags=['objects'],
+          responses={
+              200: {
+                  "content": {
+                      "application/json": {
+                          "example": 3                      
+                        }
+                  }
+              }
+          },
+          response_model=int)
 def classify_auto_object_set(req: ClassifyAutoReq = Body(...),
                              current_user: int = Depends(get_current_user)) -> int:
     """
-        Set automatic classification of a set of objects.
-         - `params`: None, all is in the Request body.
+        **Set automatic classification** of a set of objects.
+
+        **Returns the number of updated entities.**
     """
     assert len(req.target_ids) == len(req.classifications) == len(req.scores), \
         "Need the same number of objects, classifications and scores"
@@ -1261,10 +1343,12 @@ def classify_auto_object_set(req: ClassifyAutoReq = Body(...),
 @app.post("/object_set/parents", tags=['objects'], response_model=ObjectSetQueryRsp,
           response_class=MyORJSONResponse  # Force the ORJSON encoder
           )
-def query_object_set_parents(object_ids: ObjectIDListT,
+def query_object_set_parents(object_ids: ObjectIDListT = Query(..., title="Object IDs list",
+                                           description="The list of object ids.",
+                                           example=[634509,6234516,976544]),
                              current_user: int = Depends(get_current_user)) -> ObjectSetQueryRsp:
     """
-        Return object ids, with parent ones and projects for the objects in given list.
+        **Return object ids, with parent ones and projects** for the objects in given list.
     """
     with ObjectManager() as sce:
         with RightsThrower():
@@ -1283,7 +1367,7 @@ def export_object_set(filters: ProjectFiltersModel = Body(...),
                       request: ExportReq = Body(...),
                       current_user: Optional[int] = Depends(get_optional_current_user)) -> ExportRsp:
     """
-        Start an export job for the given object set and options.
+        **Start an export job for the given object set and options.**
     """
     with ProjectExport(request, filters) as sce:
         rsp = sce.run(current_user)
@@ -1295,30 +1379,54 @@ def predict_object_set(filters: ProjectFiltersModel = Body(...),
                        request: PredictionReq = Body(...),
                        current_user: Optional[int] = Depends(get_optional_current_user)) -> PredictionRsp:
     """
-        Start a prediction AKA automatic classification for the given object set and options.
+        **Start a prediction** AKA automatic classification for the given object set and options.
     """
     with PredictForProject(request, filters) as sce:
         rsp = sce.run(current_user)
     return rsp
 
 
-@app.get("/project/do_cnn", tags=['objects'], response_model=str)
-def compute_project_cnn(proj_id: int,
+@app.get("/project/do_cnn", tags=['objects'],
+          responses={
+              200: {
+                  "content": {
+                      "application/json": {
+                          "example": "OK, 50 CNN features computed and written"                     
+                        }
+                  }
+              }
+          }, response_model=str)
+def compute_project_cnn(proj_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
                         current_user: Optional[int] = Depends(get_optional_current_user)) -> str:
     """
-        Generate CNN features for the requested project.
+        **Generate CNN features** for the requested project.
+        
+        **Returns a string containing the number of generated features.**
     """
     with CNNForProject() as sce:
         rsp = sce.run(current_user, proj_id)
     return rsp
 
-
-@app.delete("/object_set/", tags=['objects'])
-def erase_object_set(object_ids: ObjectIDListT,
+@app.delete("/object_set", tags=['objects'],
+            responses={
+                200: {
+                    "content": {
+                        "application/json": {
+                            "example": (100, 0, 10, 10)
+                        }
+                    }
+                }
+            })
+def erase_object_set(object_ids: ObjectIDListT = Query(..., title="Object IDs list",
+                                           description="The list of object ids.",
+                                           example=[634509,6234516,976544]),
                      current_user: int = Depends(get_current_user)) -> Tuple[int, int, int, int]:
     """
-        Delete the objects with given object ids.
-        Current user needs Manage right on all projects of specified objects.
+        **Delete the objects with given object ids.** 
+ 
+        **Returns** the number of  : **deleted objects**, 0, **deleated image rows** and **deleated image files**.
+        
+        🔒 Current user needs *Manage* right on all projects of specified objects.
     """
     with ObjectManager() as sce:
         with RightsThrower():
@@ -1394,7 +1502,7 @@ def object_query_history(
 async def query_root_taxa() \
         -> List[TaxonBO]:
     """
-        Return all taxa with no parent.
+        **Return all taxa with no parent.**
     """
     with TaxonomyService() as sce:
         ret = sce.query_roots()
@@ -1404,20 +1512,32 @@ async def query_root_taxa() \
 @app.get("/taxa/status", tags=['Taxonomy Tree'], response_model=TaxonomyTreeStatus)
 async def taxa_tree_status(current_user: int = Depends(get_current_user)):
     """
-        Return the status of taxonomy tree w/r to freshness.
+        **Return the status of taxonomy tree** w/r to freshness.
     """
     with TaxonomyService() as sce:
         refresh_date = sce.status(_current_user_id=current_user)
         return TaxonomyTreeStatus(last_refresh=refresh_date.isoformat() if refresh_date else None)
 
 
-@app.get("/taxa/reclassification_stats", tags=['Taxonomy Tree'], response_model=List[TaxonModel])
-async def reclassif_stats(taxa_ids: str,
+@app.get("/taxa/reclassification_stats", tags=['Taxonomy Tree'], 
+responses={
+    200: {
+            "content": {
+                "application/json": {
+                    "example": [{"id":12876,"renm_id":null,"name":"Echinodermata X","type":"P","nb_objects":24,"nb_children_objects":759,"display_name":"Echinodermata X","lineage":["Echinodermata X","Echinodermata","Metazoa","Holozoa","Opisthokonta","Eukaryota","living"],"id_lineage":[12876,11509,2367,382,8,2,1],"children":[16710]}]
+                }
+            }
+        }},
+response_model=List[TaxonModel])
+async def reclassif_stats(taxa_ids: str= Query(..., title="Taxa ids",
+                                              description="String containing the list of one or more taxa id separated by non-num char.",
+                                              example="12876"),
                           current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> List[TaxonBO]:
     """
-        Dig into reclassification logs and, for each input category id, determine the most chosen target category,
-        excluding the advised one.
+        Dig into reclassification logs and, for each input category id, **determine the most chosen target category,
+        excluding the advised one.**
+
         By convention, if nothing relevant is found, the input category itself is returned. So one can expect
         that the returned list has the same size as the required one.
     """
@@ -1434,7 +1554,7 @@ async def reclassif_project_stats(
         current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> List[TaxonBO]:
     """
-        Dig into reclassification logs and return the associations source->target for previous reclassifications.
+        Dig into reclassification logs and **return the associations source → target for previous reclassifications.**
     """
     with TaxonomyService() as sce:
         with RightsThrower():
@@ -1442,13 +1562,21 @@ async def reclassif_project_stats(
         return ret
 
 
-@app.get("/taxon/{taxon_id}", tags=['Taxonomy Tree'], response_model=TaxonModel)
+@app.get("/taxon/{taxon_id}", tags=['Taxonomy Tree'],
+responses={
+    200: {
+            "content": {
+                "application/json": {
+                    "example": {"id":12876,"renm_id":null,"name":"Echinodermata X","type":"P","nb_objects":24,"nb_children_objects":759,"display_name":"Echinodermata X","lineage":["Echinodermata X","Echinodermata","Metazoa","Holozoa","Opisthokonta","Eukaryota","living"],"id_lineage":[12876,11509,2367,382,8,2,1],"children":[16710]}
+                }
+            }
+        }}, response_model=TaxonModel)
 async def query_taxa(
-        taxon_id: int = Path(..., description="Internal, the unique numeric id of this taxon.", example=1),
+        taxon_id: int = Path(..., description="Internal, the unique numeric id of this taxon.", example=12876),
         _current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> Optional[TaxonBO]:
     """
-        Information about a single taxon, including its lineage.
+        Returns **information about the taxon** corresponding to the given id, including its lineage.
     """
     with TaxonomyService() as sce:
         ret = sce.query(taxon_id)
@@ -1457,11 +1585,13 @@ async def query_taxa(
 
 @app.get("/taxon/{taxon_id}/usage", tags=['Taxonomy Tree'], response_model=List[TaxonUsageModel])
 async def query_taxa_usage(
-        taxon_id: int = Path(..., description="Internal, the unique numeric id of this taxon.", example=1),
+        taxon_id: int = Path(..., description="Internal, the unique numeric id of this taxon.", example=12876),
         _current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> List[TaxonUsageModel]:
     """
-        Where a given taxon is used. Only validated uses are returned.
+        **Where a given taxon is used.**
+        
+        Only validated uses are returned.
     """
     with TaxonomyService() as sce:
         ret = sce.query_usage(taxon_id)
@@ -1469,19 +1599,20 @@ async def query_taxa_usage(
 
 
 @app.get("/taxon_set/search", tags=['Taxonomy Tree'], response_model=List[TaxaSearchRsp])
-async def search_taxa(query: str,
+async def search_taxa(query: str = Query(..., description="Use this query for matching returned taxa names.", example="Ban"),
                       project_id: Optional[int] = Query(default=None,
-                                                        description="Internal, numeric id of the project."),
+                                                        description="Internal, numeric id of the project.", example=1),
                       current_user: Optional[int] = Depends(get_optional_current_user)):
     """
-        Search for taxa by name.
+        **Search for taxa by name.**
 
-        Queries can be 'small', i.e. of length < 3 and even zero-length.
-        For a public, unauthenticated call:
+        Queries can be 'small', i.e. of length ﹤3 and even zero-length.
+
+        🔓 For a public, unauthenticated call :
         - zero-length and small queries always return nothing.
         - otherwise, a full search is done and results are returned in alphabetical order.
 
-        Behavior for an authenticated call:
+        🔒 For an authenticated call :
         - zero-length queries: return the MRU list in full.
         - small queries: the MRU list is searched, so that taxa in the recent list are returned, if matching.
         - otherwise, a full search is done. Results are ordered so that taxa in the project list are in first,
@@ -1493,12 +1624,11 @@ async def search_taxa(query: str,
 
 
 @app.get("/taxon_set/query", tags=['Taxonomy Tree'], response_model=List[TaxonModel])
-async def query_taxa_set(ids: str,
+async def query_taxa_set(ids: str = Query(..., title="Ids", description="The separator between numbers is arbitrary non-digit, e.g. ':', '|' or ','.", example="1:2:3"),
                          _current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> List[TaxonBO]:
     """
-        Information about several taxa, including their lineage.
-        The separator between numbers is arbitrary non-digit, e.g. ":", "|" or ","
+        Returns **information about several taxa**, including their lineage.
     """
     with TaxonomyService() as sce:
         num_ids = _split_num_list(ids)
@@ -1517,20 +1647,22 @@ async def get_taxon_in_central(
         return sce.get_taxon_by_id(taxon_id)
 
 
+# TODO JCE - examples description
 # Below pragma is because we need the same params as EcoTaxoServer, but we just relay them
 # noinspection PyUnusedLocal
 @app.put("/taxon/central", tags=['Taxonomy Tree'])
-async def add_taxon_in_central(name: str,
-                               parent_id: int,  # We don't let users create a root taxon
-                               taxotype: str,
-                               creator_email: str,
-                               request: Request,
-                               source_desc: Optional[str] = None,
-                               source_url: Optional[str] = None,
+async def add_taxon_in_central(name: str = Query(..., title="Name", description="The taxon/category verbatim name.", example="Echinodermata"),
+                               parent_id: int = Query(..., title="Parent Id", description="It's not possible to create a root taxon.", example=2367),
+                               taxotype: str = Query(..., title="Taxo Type", description="The taxon/category type, 'M' or 'P'.", example="P"),
+                               creator_email: str = Query(..., title="Creator email", description="The email of the taxo creator.", example="user.creator@email.com"),
+                               request: Request = Query(..., title="Request", description=""),
+                               source_desc: Optional[str] = Query(default=None, title="Source desc", description="", example=""),
+                               source_url: Optional[str] = Query(default=None, title="Source url", description="The source url.", example="http://www.google.fr/"),
                                current_user: int = Depends(get_current_user)):
     """
-        Create a taxon on EcoTaxoServer.
-        Logged user must be manager (on any project) or application admin.
+        **Create a taxon** on EcoTaxoServer.
+
+        🔒 Logged user must be manager (on any project) or application admin.
     """
     with CentralTaxonomyService() as sce:
         # Clone params which are immutable
@@ -1541,7 +1673,7 @@ async def add_taxon_in_central(name: str,
 @app.get("/taxa/stats/push_to_central", tags=['Taxonomy Tree'])
 async def push_taxa_stats_in_central(_current_user: int = Depends(get_current_user)):
     """
-        Push present instance stats into EcoTaxoServer.
+        **Push present instance stats**, into EcoTaxoServer.
     """
     with CentralTaxonomyService() as sce:
         return sce.push_stats()
@@ -1551,6 +1683,8 @@ async def push_taxa_stats_in_central(_current_user: int = Depends(get_current_us
 async def pull_taxa_update_from_central(_current_user: int = Depends(get_current_user)):
     """
         **Returns what changed in EcoTaxoServer managed tree** and update local tree accordingly.
+
+        i.e. : the number of inserts as nbr_inserts, updates as nbr_updates and errors as errors.
     """
     with CentralTaxonomyService() as sce:
         return sce.pull_updates()
@@ -1558,7 +1692,7 @@ async def pull_taxa_update_from_central(_current_user: int = Depends(get_current
 
 @app.get("/worms/{aphia_id}", tags=['Taxonomy Tree'], include_in_schema=False, response_model=TaxonModel)
 async def query_taxa_in_worms(aphia_id: int,
-                              # = Path(..., description="Internal, the unique numeric id of this user.", default=None)#TODO JCE
+                              # = Path(..., description="Internal, the unique numeric id of this user.", default=None)
                               _current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> Optional[TaxonBO]:
     """
@@ -1703,7 +1837,7 @@ def machine_learning_train(project_id: int = Query(..., title="Input project #",
 
 # ######################## END OF ADMIN
 
-@app.get("/jobs/", tags=['jobs'], response_model=List[JobModel])
+@app.get("/jobs", tags=['jobs'], response_model=List[JobModel])
 def list_jobs(for_admin: bool = Query(..., title="For admin",
                                       description="If FALSE return the jobs for current user, else return all of them.",
                                       example=False),
@@ -1717,7 +1851,7 @@ def list_jobs(for_admin: bool = Query(..., title="For admin",
     return ret
 
 
-@app.get("/jobs/{job_id}/", tags=['jobs'], response_model=JobModel)
+@app.get("/jobs/{job_id}", tags=['jobs'], response_model=JobModel)
 def get_job(job_id: int = Path(..., description="Internal, the unique numeric id of this job.", example=47445),
             current_user: int = Depends(get_current_user)) -> JobBO:
     """
@@ -1839,12 +1973,14 @@ def erase_job(
 
 
 # ######################## END OF JOBS
-
+#TODO JCE - description example
 @app.get("/my_files/{sub_path:path}", tags=['Files'], response_model=DirectoryModel)
-async def list_user_files(sub_path: str,
+async def list_user_files(sub_path: str = Query(..., title="Sub path", description="", example=""),
                           current_user: int = Depends(get_current_user)) -> DirectoryModel:
     """
-        List the private files which are usable for some file-related operations e.g. import.
+        **List the private files** which are usable for some file-related operations.
+        
+        *e.g. import.*
     """
     with UserFolderService() as sce:
         with RightsThrower():
@@ -1852,26 +1988,31 @@ async def list_user_files(sub_path: str,
     return file_list
 
 
-@app.post("/my_files/", tags=['Files'], response_model=str)
+@app.post("/my_files", tags=['Files'], response_model=str)
 async def put_user_file(file: UploadFile = File(...),
                         path: Optional[str] = Form(None),
                         tag: Optional[str] = Form(None),
                         current_user: int = Depends(get_current_user)):
     """
-        Upload a file for the current user. The returned text will contain a serve-side path
-        which is usable for some file-related operations e.g. import.
+        **Upload a file for the current user.**
+        
+        The returned text will contain a serve-side path which is usable for some file-related operations.
+        
+        *e.g. import.*
     """
     with UserFolderService() as sce:
         with RightsThrower():
             file_name = await sce.store(current_user, file, path, tag)
         return file_name
 
-
-@app.get("/common_files/", tags=['Files'], response_model=DirectoryModel)
-async def list_common_files(path: str,
+#TODO JCE - description example
+@app.get("/common_files", tags=['Files'], response_model=DirectoryModel)
+async def list_common_files(path: str = Query(..., title="path", description="", example=""),
                             current_user: int = Depends(get_current_user)) -> DirectoryModel:
     """
-        List the common files which are usable for some file-related operations e.g. import.
+        **List the common files** which are usable for some file-related operations.
+        
+        *e.g. import.*
     """
     with CommonFolderService() as sce:
         with RightsThrower():

@@ -21,7 +21,7 @@ class GroupDefinitions(str, Enum):
 
 class SubsetReq(BaseModel):
     """ Subset request. """
-    filters: Dict[str, str] = Field(title="Filters", description="The filters to apply to project", default={}, example={"freenum": "n01", "freenumst": "0"})
+    filters: Dict[str, str] = Field(title="Filters", description="The filters to apply to project.", default={}, example={"freenum": "n01", "freenumst": "0"})
     dest_prj_id: int = Field(title="Destination project id", description="The destination project ID.", example=22)
     group_type: GroupDefinitions = Field(title="Group type", description="Define the groups in which to apply limits. C for categories, S for samples, A for acquisitions.", example=GroupDefinitions.acquisitions)
     limit_type: LimitMethods = Field(title="Limit type", description="The type of limit_value: P for %, V for constant, both per group.", example=LimitMethods.percent)

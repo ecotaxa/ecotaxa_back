@@ -18,7 +18,7 @@ class PredictionReq(BaseModel):
                                           min_items=1)
     features: List[str] = Field(title="Features",
                                 description="The object features AKA free column, to use in the algorithm. "
-                                            "Features must be common to all projects, source ones and destination one",
+                                            "Features must be common to all projects, source ones and destination one.",
                                 min_items=1)
     categories: List[int] = Field(title="Categories",
                                   description="In source projects, only objects validated with these categories "
