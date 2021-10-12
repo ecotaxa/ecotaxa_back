@@ -2265,14 +2265,14 @@
         ]
       }
     },
-    "/instruments":{
+    "/instruments/":{
       "get":{
         "tags":[
           "instruments"
         ],
         "summary":"Instrument Query",
         "description":"Returns the list of instruments, inside specific project(s).",
-        "operationId":"instrument_query_instruments_get",
+        "operationId":"instrument_query_instruments__get",
         "parameters":[
           {
             "description":"String containing the list of one or more project id separated by non-num char.",
@@ -2293,7 +2293,7 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "title":"Response Instrument Query Instruments Get",
+                  "title":"Response Instrument Query Instruments  Get",
                   "type":"array",
                   "items":{
                     "type":"string"
@@ -3184,14 +3184,14 @@
         ]
       }
     },
-    "/object_set":{
+    "/object_set/":{
       "delete":{
         "tags":[
           "objects"
         ],
         "summary":"Erase Object Set",
         "description":"**Delete the objects with given object ids.** \n\n**Returns** the number of  : **deleted objects**, 0, **deleated image rows** and **deleated image files**.\n\n🔒 Current user needs *Manage* right on all projects of specified objects.",
-        "operationId":"erase_object_set_object_set_delete",
+        "operationId":"erase_object_set_object_set__delete",
         "parameters":[
           {
             "description":"The list of object ids.",
@@ -4029,14 +4029,14 @@
         ]
       }
     },
-    "/jobs":{
+    "/jobs/":{
       "get":{
         "tags":[
           "jobs"
         ],
         "summary":"List Jobs",
         "description":"**Return the jobs** for current user, or all of them if admin is asked for.",
-        "operationId":"list_jobs_jobs_get",
+        "operationId":"list_jobs_jobs__get",
         "parameters":[
           {
             "description":"If FALSE return the jobs for current user, else return all of them.",
@@ -4057,7 +4057,7 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "title":"Response List Jobs Jobs Get",
+                  "title":"Response List Jobs Jobs  Get",
                   "type":"array",
                   "items":{
                     "$ref":"#/components/schemas/JobModel"
@@ -4084,14 +4084,14 @@
         ]
       }
     },
-    "/jobs/{job_id}":{
+    "/jobs/{job_id}/":{
       "get":{
         "tags":[
           "jobs"
         ],
         "summary":"Get Job",
         "description":"Returns **information about the job** corresponding to the given id.",
-        "operationId":"get_job_jobs__job_id__get",
+        "operationId":"get_job_jobs__job_id___get",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this job.",
@@ -4114,53 +4114,6 @@
                 "schema":{
                   "$ref":"#/components/schemas/JobModel"
                 }
-              }
-            }
-          },
-          "422":{
-            "description":"Validation Error",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security":[
-          {
-            "BearerOrCookieAuth":[]
-          }
-        ]
-      },
-      "delete":{
-        "tags":[
-          "jobs"
-        ],
-        "summary":"Erase Job",
-        "description":"**Delete the job** from DB, with associated storage.\n\nIf the job is running then kill it.\n\n🔒 The job must be accessible to current user.",
-        "operationId":"erase_job_jobs__job_id__delete",
-        "parameters":[
-          {
-            "description":"Internal, the unique numeric id of this job.",
-            "required":true,
-            "schema":{
-              "title":"Job Id",
-              "type":"integer",
-              "description":"Internal, the unique numeric id of this job."
-            },
-            "example":47445,
-            "name":"job_id",
-            "in":"path"
-          }
-        ],
-        "responses":{
-          "200":{
-            "description":"Successful Response",
-            "content":{
-              "application/json":{
-                "schema":{}
               }
             }
           },
@@ -4393,6 +4346,55 @@
         ]
       }
     },
+    "/jobs/{job_id}":{
+      "delete":{
+        "tags":[
+          "jobs"
+        ],
+        "summary":"Erase Job",
+        "description":"**Delete the job** from DB, with associated storage.\n\nIf the job is running then kill it.\n\n🔒 The job must be accessible to current user.",
+        "operationId":"erase_job_jobs__job_id__delete",
+        "parameters":[
+          {
+            "description":"Internal, the unique numeric id of this job.",
+            "required":true,
+            "schema":{
+              "title":"Job Id",
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this job."
+            },
+            "example":47445,
+            "name":"job_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
     "/my_files/{sub_path}":{
       "get":{
         "tags":[
@@ -4441,19 +4443,19 @@
         ]
       }
     },
-    "/my_files":{
+    "/my_files/":{
       "post":{
         "tags":[
           "Files"
         ],
         "summary":"Put User File",
         "description":"**Upload a file for the current user.**\n\nThe returned text will contain a serve-side path which is usable for some file-related operations.\n\n*e.g. import.*",
-        "operationId":"put_user_file_my_files_post",
+        "operationId":"put_user_file_my_files__post",
         "requestBody":{
           "content":{
             "multipart/form-data":{
               "schema":{
-                "$ref":"#/components/schemas/Body_put_user_file_my_files_post"
+                "$ref":"#/components/schemas/Body_put_user_file_my_files__post"
               }
             }
           },
@@ -4465,7 +4467,7 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "title":"Response Put User File My Files Post",
+                  "title":"Response Put User File My Files  Post",
                   "type":"string"
                 }
               }
@@ -4489,14 +4491,14 @@
         ]
       }
     },
-    "/common_files":{
+    "/common_files/":{
       "get":{
         "tags":[
           "Files"
         ],
         "summary":"List Common Files",
         "description":"**List the common files** which are usable for some file-related operations.\n\n*e.g. import.*",
-        "operationId":"list_common_files_common_files_get",
+        "operationId":"list_common_files_common_files__get",
         "parameters":[
           {
             "required":true,
@@ -4725,8 +4727,8 @@
           }
         }
       },
-      "Body_put_user_file_my_files_post":{
-        "title":"Body_put_user_file_my_files_post",
+      "Body_put_user_file_my_files__post":{
+        "title":"Body_put_user_file_my_files__post",
         "required":[
           "file"
         ],

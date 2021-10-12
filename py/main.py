@@ -1028,7 +1028,7 @@ def acquisition_query(
 
 # ######################## END OF ACQUISITION
 
-@app.get("/instruments",
+@app.get("/instruments/",
          tags=['instruments'],
          response_model=List[str],
          responses={
@@ -1407,7 +1407,7 @@ def compute_project_cnn(proj_id: int = Path(..., description="Internal, numeric 
         rsp = sce.run(current_user, proj_id)
     return rsp
 
-@app.delete("/object_set", tags=['objects'],
+@app.delete("/object_set/", tags=['objects'],
             responses={
                 200: {
                     "content": {
@@ -1837,7 +1837,7 @@ def machine_learning_train(project_id: int = Query(..., title="Input project #",
 
 # ######################## END OF ADMIN
 
-@app.get("/jobs", tags=['jobs'], response_model=List[JobModel])
+@app.get("/jobs/", tags=['jobs'], response_model=List[JobModel])
 def list_jobs(for_admin: bool = Query(..., title="For admin",
                                       description="If FALSE return the jobs for current user, else return all of them.",
                                       example=False),
@@ -1851,7 +1851,7 @@ def list_jobs(for_admin: bool = Query(..., title="For admin",
     return ret
 
 
-@app.get("/jobs/{job_id}", tags=['jobs'], response_model=JobModel)
+@app.get("/jobs/{job_id}/", tags=['jobs'], response_model=JobModel)
 def get_job(job_id: int = Path(..., description="Internal, the unique numeric id of this job.", example=47445),
             current_user: int = Depends(get_current_user)) -> JobBO:
     """
@@ -1988,7 +1988,7 @@ async def list_user_files(sub_path: str = Query(..., title="Sub path", descripti
     return file_list
 
 
-@app.post("/my_files", tags=['Files'], response_model=str)
+@app.post("/my_files/", tags=['Files'], response_model=str)
 async def put_user_file(file: UploadFile = File(...),
                         path: Optional[str] = Form(None),
                         tag: Optional[str] = Form(None),
@@ -2006,7 +2006,7 @@ async def put_user_file(file: UploadFile = File(...),
         return file_name
 
 #TODO JCE - description example
-@app.get("/common_files", tags=['Files'], response_model=DirectoryModel)
+@app.get("/common_files/", tags=['Files'], response_model=DirectoryModel)
 async def list_common_files(path: str = Query(..., title="path", description="", example=""),
                             current_user: int = Depends(get_current_user)) -> DirectoryModel:
     """
