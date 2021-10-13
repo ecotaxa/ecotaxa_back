@@ -10,6 +10,7 @@ from typing import Union, Tuple
 
 from fastapi import FastAPI, Request, Response, status, Depends, HTTPException, UploadFile, File, Query, Form, Body, \
     Path
+from fastapi import responses
 from fastapi.logger import logger as fastapi_logger
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
@@ -888,7 +889,7 @@ def update_project(project: ProjectModel,
                  }
              }
          })
-def set_project_predict_settings(settings: str = Query(..., description="The new prediction settings",
+def set_project_predict_settings(settings: str = Query(..., description="The new prediction settings.",
                                                        example="seltaxo=84963,59996,56545 baseproject=2562,2571"),
                                  project_id: int = Path(..., description="Internal, numeric id of the project.",
                                                         example=4223),
@@ -896,8 +897,8 @@ def set_project_predict_settings(settings: str = Query(..., description="The new
     """
         **Update the project's prediction settings**, return **NULL upon success.**
 
-        Unlike during full project update above, which needs high permissions, this entry point is accessible
-        to project annotators, as it mirrors the prediction privileges.
+        🔒 Unlike during full project update above, which needs high permissions, this entry point is accessible
+        to **project annotators**, as it mirrors the prediction privileges.
     """
     with ProjectsService() as sce:
         with RightsThrower():
@@ -1152,10 +1153,31 @@ It follows the naming convention 'prefix.field' : Prefix is either 'obj' for mai
 
 The column obj.imgcount contains the total count of images for the object.
 
-Use a comma to separate fields.                   
+Use a comma to separate fields.      
+
+💡 More help :
+
+You can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.
+
+**Note that the following fields must be prefixed with the header "obj."** (for example → obj.orig_id):
+
+acquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id, classif_qual, classif_qual,
+classif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,
+latitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.
+
+**Note that the following fields must be prefixed with the header "img."** (for example → img.file_name):
+
+file_name, height, imgid, imgrank, file_name, orig, objid, file_name thumb_file_name, thumb_height, thumb_width, width.
+
+**Note that the following fields must be prefixed with the header "txo."** (for example → txo.display_name):
+
+creation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,
+name, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatus, taxotype.
+
+**All other fields must be prefixed by the header "fre."** (for example → fre.circ.).
                    ''', default=None, example="obj.longitude,fre.feret"),
                    order_field: Optional[str] = Query(title="Order field",
-                                                      description='order_field will order the result using given field. If prefixed with "-" then it will be reversed.',
+                                                      description='Order the result using given field. If prefixed with "-" then it will be reversed.',
                                                       default=None, example="obj.longitude"),
                    # TODO: order_field should be a user-visible field name, not nXXX, in case of free field
                    window_start: Optional[int] = Query(default=None, title="Window start",
@@ -1591,14 +1613,14 @@ async def reclassif_stats(taxa_ids: str = Query(..., title="Taxa ids",
             ret = sce.most_used_non_advised(current_user, num_taxa_ids)
         return ret
 
-
-@app.get("/taxa/reclassification_history/{project_id}", tags=['Taxonomy Tree'])
+#TODO JCE
+@app.get("/taxa/reclassification_history/{project_id}", tags=['Taxonomy Tree'], response_model=List[Dict])
 async def reclassif_project_stats(
         project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
         current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> List[TaxonBO]:
     """
-        Dig into reclassification logs and **return the associations source → target for previous reclassifications.**
+        Dig into reclassification logs and **return the associations (source → target) for previous reclassifications.**
     """
     with TaxonomyService() as sce:
         with RightsThrower():
@@ -1930,7 +1952,7 @@ def get_job(job_id: int = Path(..., description="Internal, the unique numeric id
           })
 def reply_job_question(
         job_id: int = Path(..., description="Internal, the unique numeric id of this job.", example=47445),
-        reply: Dict[str, Any] = Body(default={}, title="#TODO JCE Reply Model"),
+        reply: Dict[str, Any] = Body(default={}, title="Reply job question"),
         current_user: int = Depends(get_current_user)) -> None:
     """
         **Send answers to last question.** The job resumes after it receives the reply.

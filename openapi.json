@@ -1879,7 +1879,7 @@
           "projects"
         ],
         "summary":"Set Project Predict Settings",
-        "description":"**Update the project's prediction settings**, return **NULL upon success.**\n\nUnlike during full project update above, which needs high permissions, this entry point is accessible\nto project annotators, as it mirrors the prediction privileges.",
+        "description":"**Update the project's prediction settings**, return **NULL upon success.**\n\n🔒 Unlike during full project update above, which needs high permissions, this entry point is accessible\nto **project annotators**, as it mirrors the prediction privileges.",
         "operationId":"set_project_predict_settings_projects__project_id__prediction_settings_put",
         "parameters":[
           {
@@ -1895,12 +1895,12 @@
             "in":"path"
           },
           {
-            "description":"The new prediction settings",
+            "description":"The new prediction settings.",
             "required":true,
             "schema":{
               "title":"Settings",
               "type":"string",
-              "description":"The new prediction settings"
+              "description":"The new prediction settings."
             },
             "example":"seltaxo=84963,59996,56545 baseproject=2562,2571",
             "name":"settings",
@@ -2503,24 +2503,24 @@
             "in":"path"
           },
           {
-            "description":"\n\nSpecify the needed object (and ancilliary entities) fields.\n                   \nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.                   \n                   ",
+            "description":"\n\nSpecify the needed object (and ancilliary entities) fields.\n                   \nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.      \n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id, classif_qual, classif_qual,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, orig, objid, file_name thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
             "required":false,
             "schema":{
               "title":"Fields",
               "type":"string",
-              "description":"\n\nSpecify the needed object (and ancilliary entities) fields.\n                   \nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.                   \n                   "
+              "description":"\n\nSpecify the needed object (and ancilliary entities) fields.\n                   \nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.      \n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id, classif_qual, classif_qual,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, orig, objid, file_name thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
             },
             "example":"obj.longitude,fre.feret",
             "name":"fields",
             "in":"query"
           },
           {
-            "description":"order_field will order the result using given field. If prefixed with \"-\" then it will be reversed.",
+            "description":"Order the result using given field. If prefixed with \"-\" then it will be reversed.",
             "required":false,
             "schema":{
               "title":"Order field",
               "type":"string",
-              "description":"order_field will order the result using given field. If prefixed with \"-\" then it will be reversed."
+              "description":"Order the result using given field. If prefixed with \"-\" then it will be reversed."
             },
             "example":"obj.longitude",
             "name":"order_field",
@@ -3582,7 +3582,7 @@
           "Taxonomy Tree"
         ],
         "summary":"Reclassif Project Stats",
-        "description":"Dig into reclassification logs and **return the associations source → target for previous reclassifications.**",
+        "description":"Dig into reclassification logs and **return the associations (source → target) for previous reclassifications.**",
         "operationId":"reclassif_project_stats_taxa_reclassification_history__project_id__get",
         "parameters":[
           {
@@ -3603,7 +3603,13 @@
             "description":"Successful Response",
             "content":{
               "application/json":{
-                "schema":{}
+                "schema":{
+                  "title":"Response Reclassif Project Stats Taxa Reclassification History  Project Id  Get",
+                  "type":"array",
+                  "items":{
+                    "type":"object"
+                  }
+                }
               }
             }
           },
@@ -4221,7 +4227,7 @@
           "content":{
             "application/json":{
               "schema":{
-                "title":"#TODO JCE Reply Model",
+                "title":"Reply job question",
                 "type":"object",
                 "default":{}
               }
@@ -5649,7 +5655,7 @@
             "title":"Source path",
             "type":"string",
             "description":"Source path on server, to zip or plain directory. \n \n The path can be returned by a file upload (absolute), \n \n otherwise it's relative to shared file area root.",
-            "example":""
+            "example":"/import_test.zip"
           },
           "taxo_mappings":{
             "title":"Taxo mappings",
@@ -5666,12 +5672,14 @@
           "skip_loaded_files":{
             "title":"Skip loaded files",
             "type":"boolean",
+            "description":"If true skip loaded files, else don't.",
             "default":false,
             "example":false
           },
           "skip_existing_objects":{
             "title":"Skip existing objects",
             "type":"boolean",
+            "description":"If true skip existing objects, else don't.",
             "default":false,
             "example":false
           },
@@ -5706,7 +5714,9 @@
             },
             "description":"Errors from analysis.",
             "default":[],
-            "example":[]
+            "example":[
+              "new TSV file(s) are not compliant"
+            ]
           }
         },
         "description":"Import response. "
@@ -7146,7 +7156,7 @@
             "title":"Source path",
             "type":"string",
             "description":"Source path on server, to zip or plain directory.",
-            "example":""
+            "example":"/import_test"
           },
           "values":{
             "title":"Constant values, per field, to write for all images. If a field has no value don't include it.",
@@ -7202,7 +7212,11 @@
               "type":"string"
             },
             "description":"Validation errors, dry_run or not.",
-            "example":[]
+            "example":[
+              "'abcde' is not a valid value for SimpleImportFields.latitude",
+              "'456.5' is not a valid value for SimpleImportFields.longitude",
+              "'very very low' is not a valid value for SimpleImportFields.depthmin"
+            ]
           }
         },
         "description":"Simple Import, response. "
