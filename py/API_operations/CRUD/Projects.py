@@ -7,7 +7,8 @@ from typing import List, Union, Tuple, Optional
 from API_models.crud import CreateProjectReq
 from BO.Classification import ClassifIDListT
 from BO.ObjectSet import EnumeratedObjectSet
-from BO.Project import ProjectBO, ProjectBOSet, ProjectTaxoStats, ProjectUserStats, ProjectSetColumnStats
+from BO.Project import ProjectBO, ProjectBOSet, ProjectTaxoStats, ProjectUserStats
+from BO.ProjectSet import FeatureConsistentProjectSet, ProjectSetColumnStats
 from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
 from DB import Sample
@@ -160,5 +161,5 @@ class ProjectsService(Service):
             Read data statistics for these projects.
         """
         # No security barrier because there is no private information inside
-        ret = ProjectBO.read_columns_stats(self.session, prj_ids, column_names)
+        ret = FeatureConsistentProjectSet.read_columns_stats(self.session, prj_ids, column_names)
         return ret

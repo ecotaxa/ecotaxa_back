@@ -65,6 +65,7 @@ from BO.ObjectSet import ObjectIDListT
 from BO.Preferences import Preferences
 from BO.Process import ProcessBO
 from BO.Project import ProjectBO, ProjectUserStats
+from BO.ProjectSet import ProjectSetColumnStats
 from BO.Rights import RightsBO
 from BO.Sample import SampleBO
 from BO.Taxonomy import TaxonBO

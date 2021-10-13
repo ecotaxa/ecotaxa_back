@@ -11,7 +11,8 @@ from typing_extensions import TypedDict
 from BO.ColumnUpdate import ColUpdateList
 from BO.DataLicense import LicenseEnum
 from BO.Job import DBJobStateEnum
-from BO.Project import ProjectUserStats, ProjectSetColumnStats
+from BO.Project import ProjectUserStats
+from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
 from DB import User, Project, Sample, Acquisition, Process, Job
 from DB.Acquisition import ACQUISITION_FREE_COLUMNS
