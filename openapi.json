@@ -22,7 +22,7 @@
         ],
         "summary":"Login",
         "description":"**Login barrier,** \n\nIf successful, the login will returns a **JWT** which will have to be used\nin bearer authentication scheme for subsequent calls.",
-        "operationId":"login_login_post",
+        "operationId":"login",
         "requestBody":{
           "content":{
             "application/json":{
@@ -66,7 +66,7 @@
         ],
         "summary":"Get Users",
         "description":"Returns the list of **all users** with their information. \n\n🔒 *For admins only.*",
-        "operationId":"get_users_users_get",
+        "operationId":"get_users",
         "responses":{
           "200":{
             "description":"Successful Response",
@@ -97,7 +97,7 @@
         ],
         "summary":"Show Current User",
         "description":"Returns **currently authenticated user's** (i.e. you) information, permissions and last used projects.",
-        "operationId":"show_current_user_users_me_get",
+        "operationId":"show_current_user",
         "responses":{
           "200":{
             "description":"Successful Response",
@@ -124,7 +124,7 @@
         ],
         "summary":"Get Current User Prefs",
         "description":"**Returns one preference**, for a project and the currently authenticated user.\n\nAvailable keys are **cwd**, **img_import** and **filters**.",
-        "operationId":"get_current_user_prefs_users_my_preferences__project_id__get",
+        "operationId":"get_current_user_prefs",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -187,7 +187,7 @@
         ],
         "summary":"Set Current User Prefs",
         "description":"**Sets one preference**, for a project and for the currently authenticated user.\n\nAvailable keys are **cwd**, **img_import** and **filters**.\n\nThe key disappears if set to empty string.\n\n**Returns NULL upon success.**",
-        "operationId":"set_current_user_prefs_users_my_preferences__project_id__put",
+        "operationId":"set_current_user_prefs",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -261,7 +261,7 @@
         ],
         "summary":"Search User",
         "description":"**Search users using various criteria**, search is case insensitive and might contain % chars.",
-        "operationId":"search_user_users_search_get",
+        "operationId":"search_user",
         "parameters":[
           {
             "description":"Search by name, use % for searching with 'any char'.",
@@ -316,7 +316,7 @@
         ],
         "summary":"Get User",
         "description":"Returns **information about the user** corresponding to the given id.",
-        "operationId":"get_user_users__user_id__get",
+        "operationId":"get_user",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this user.",
@@ -367,7 +367,7 @@
         ],
         "summary":"Create Collection",
         "description":"**Create a collection** with at least one project inside.\n\nReturns the created collection Id.\n\n🔒 *For admins only.*",
-        "operationId":"create_collection_collections_create_post",
+        "operationId":"create_collection",
         "requestBody":{
           "content":{
             "application/json":{
@@ -416,7 +416,7 @@
         ],
         "summary":"Search Collections",
         "description":"**Search for collections.**\n\n🔒 *For admins only.*",
-        "operationId":"search_collections_collections_search_get",
+        "operationId":"search_collections",
         "parameters":[
           {
             "description":"Search by title, use % for searching with 'any char'.",
@@ -471,7 +471,7 @@
         ],
         "summary":"Collection By Title",
         "description":"Return the **single collection with this title**.\n\n*For published datasets.*\n\n⚠️ DO NOT MODIFY BEHAVIOR ⚠️ ",
-        "operationId":"collection_by_title_collections_by_title_get",
+        "operationId":"collection_by_title",
         "parameters":[
           {
             "description":"Search by **exact** title.",
@@ -517,7 +517,7 @@
         ],
         "summary":"Collection By Short Title",
         "description":"Return the **single collection with this short title**.\n\n*For published datasets.*\n\n⚠️ DO NOT MODIFY BEHAVIOR ⚠️ ",
-        "operationId":"collection_by_short_title_collections_by_short_title_get",
+        "operationId":"collection_by_short_title",
         "parameters":[
           {
             "description":"Search by **exact** short title.",
@@ -563,7 +563,7 @@
         ],
         "summary":"Get Collection",
         "description":"Returns **information about the collection** corresponding to the given id.\n\n 🔒 *For admins only.*",
-        "operationId":"get_collection_collections__collection_id__get",
+        "operationId":"get_collection",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this collection.",
@@ -612,7 +612,7 @@
         ],
         "summary":"Update Collection",
         "description":"**Update the collection**. Note that some updates are silently failing when not compatible\n with the composing projects.\n\n **Returns NULL upon success.**\n\n 🔒 *For admins only.*",
-        "operationId":"update_collection_collections__collection_id__put",
+        "operationId":"update_collection",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this collection.",
@@ -670,7 +670,7 @@
         ],
         "summary":"Erase Collection",
         "description":"**Delete the collection**, \n\ni.e. the precious fields, as the projects are just linked-at from the collection.\n\n🔒 *For admins only.*",
-        "operationId":"erase_collection_collections__collection_id__delete",
+        "operationId":"erase_collection",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this collection.",
@@ -723,7 +723,7 @@
         ],
         "summary":"Emodnet Format Export",
         "description":"**Export the collection in EMODnet format**, @see https://www.emodnet-ingestion.eu\n\nProduces a DwC-A archive into a temporary directory, ready for download.\n\nMaybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html\n\n🔒 *For admins only.*",
-        "operationId":"emodnet_format_export_collections__collection_id__export_emodnet_get",
+        "operationId":"emodnet_format_export",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this collection.",
@@ -822,7 +822,7 @@
         ],
         "summary":"Search Projects",
         "description":"Returns **projects which the current user has explicit permission to access, with search options.**\n\nNote that, for performance reasons, in returned ProjectModels, field 'highest_rank' is NOT valued\n(unlike in simple query). The same information can be found in 'managers', 'annotators' and 'viewers' lists.",
-        "operationId":"search_projects_projects_search_get",
+        "operationId":"search_projects",
         "parameters":[
           {
             "required":false,
@@ -978,7 +978,7 @@
         ],
         "summary":"Create Project",
         "description":"**Create an empty project with only a title,** and **return the numeric id of this newly created project**.\n\nThe project will be managed by current user.\n\n🔒 The user has to be *app administrator* or *project creator*.",
-        "operationId":"create_project_projects_create_post",
+        "operationId":"create_project",
         "requestBody":{
           "content":{
             "application/json":{
@@ -1027,7 +1027,7 @@
         ],
         "summary":"Project Subset",
         "description":"**Subset a project into another one.**",
-        "operationId":"project_subset_projects__project_id__subset_post",
+        "operationId":"project_subset",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -1088,7 +1088,7 @@
         ],
         "summary":"Project Query",
         "description":"**Returns project** if it exists for current user, eventually for managing it.",
-        "operationId":"project_query_projects__project_id__get",
+        "operationId":"project_query",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -1150,7 +1150,7 @@
         ],
         "summary":"Update Project",
         "description":"**Update the project**, return **NULL upon success.**\n\nNote that some fields will **NOT** be updated and simply ignored, e.g. *free_cols*.",
-        "operationId":"update_project_projects__project_id__put",
+        "operationId":"update_project",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -1208,7 +1208,7 @@
         ],
         "summary":"Erase Project",
         "description":"**Delete the project.**\n    \nOptionally, if \"only_objects\" is set, the project structure is kept,\nbut emptied from any object, sample, acquisition and process.\n\nOtherwise, no trace of the project will remain in the database.\n\n**Returns** the number of  : **deleted objects**, 0, **deleated image rows** and **deleated image files**.",
-        "operationId":"erase_project_projects__project_id__delete",
+        "operationId":"erase_project",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -1276,7 +1276,7 @@
         ],
         "summary":"Project Set Get Stats",
         "description":"**Returns projects statistics**, i.e. used taxa and classification states.",
-        "operationId":"project_set_get_stats_project_set_taxo_stats_get",
+        "operationId":"project_set_get_stats",
         "parameters":[
           {
             "description":"String containing the list of one or more id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
@@ -1344,7 +1344,7 @@
         ],
         "summary":"Project Set Get User Stats",
         "description":"**Returns projects user statistics**, i.e. a summary of the work done by users in the\nrequired projects. \n\nThe returned values are a detail per project, so size of input list equals size of output list.",
-        "operationId":"project_set_get_user_stats_project_set_user_stats_get",
+        "operationId":"project_set_get_user_stats",
         "parameters":[
           {
             "description":"String containing the list of one or more id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
@@ -1417,7 +1417,7 @@
         ],
         "summary":"Project Set Get Column Stats",
         "description":"**Returns projects validated data statistics**, for all named columns, in all given projects.\n\nThe free columns here are named by the alias e.g. 'area', not technical name e.g. 'n43'.\n\nThis allows getting stats on projects with different mappings, but common names.",
-        "operationId":"project_set_get_column_stats_project_set_column_stats_get",
+        "operationId":"project_set_get_column_stats",
         "parameters":[
           {
             "description":"String containing the list of one or more id separated by non-num char.",
@@ -1499,7 +1499,7 @@
         ],
         "summary":"Project Merge",
         "description":"**Merge another project into this one.**\n\nIt's more a phagocytosis than a merge, as all objects from this source project will\nbe moved to the project_id above and the source project itself will be deleted.\n\nTODO: Explain a bit with it might fail (too many free columns, unique orig_ids collision)",
-        "operationId":"project_merge_projects__project_id__merge_post",
+        "operationId":"project_merge",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -1574,7 +1574,7 @@
         ],
         "summary":"Project Check",
         "description":"**Check consistency of a project**.\n\nWith time and bugs, some consistency problems could be introduced in projects.\nThis service aims at listing them.",
-        "operationId":"project_check_projects__project_id__check_get",
+        "operationId":"project_check",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -1633,7 +1633,7 @@
         ],
         "summary":"Project Stats",
         "description":"**Returns stats** for a project.\n\nThese stats will be returned as a list containing at index :\n- 0 : The **title** of the project, \n- 1 : A string containing all **freecols name and related column number**,\n\n- 2 : **\"(0):\"**\n- 3 :  **\"Total: 0 values, dup 0 values\"**\n\nThen for each acquisition a pair of strings will be added to the list :\n-  A string containing the **acquisition origin id** (the **number of objects for this acquisition**) : and then **small stats for an acquisition of a free column values inside** : [ min of values ; max of values ; distribution of the different values ; mode, i.e. freq of most frequent value]\n-  A string containing the **number of total values** and the **number of duplicates values** \"Total: ... values, dup ... values\"\n\n    ",
-        "operationId":"project_stats_projects__project_id__stats_get",
+        "operationId":"project_stats",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -1696,7 +1696,7 @@
         ],
         "summary":"Project Recompute Geography",
         "description":"**Recompute geography information** for all samples in project.\n\n**Returns NULL upon success.**\n\n🔒 The user has to be *project manager*.",
-        "operationId":"project_recompute_geography_projects__project_id__recompute_geo_post",
+        "operationId":"project_recompute_geography",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -1746,7 +1746,7 @@
         ],
         "summary":"Import File",
         "description":"**Validate or do a real import** of an EcoTaxa archive or directory.",
-        "operationId":"import_file_file_import__project_id__post",
+        "operationId":"import_file",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -1807,7 +1807,7 @@
         ],
         "summary":"Simple Import",
         "description":"**Import images only**, with same metadata for all.",
-        "operationId":"simple_import_simple_import__project_id__post",
+        "operationId":"simple_import",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -1880,7 +1880,7 @@
         ],
         "summary":"Set Project Predict Settings",
         "description":"**Update the project's prediction settings**, return **NULL upon success.**\n\n🔒 Unlike during full project update above, which needs high permissions, this entry point is accessible\nto **project annotators**, as it mirrors the prediction privileges.",
-        "operationId":"set_project_predict_settings_projects__project_id__prediction_settings_put",
+        "operationId":"set_project_predict_settings",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -1942,7 +1942,7 @@
         ],
         "summary":"Samples Search",
         "description":"**Search for samples.**",
-        "operationId":"samples_search_samples_search_get",
+        "operationId":"samples_search",
         "parameters":[
           {
             "description":"String containing the list of one or more project id separated by non-num char.",
@@ -2009,7 +2009,7 @@
         ],
         "summary":"Sample Set Get Stats",
         "description":"Returns **classification statistics** for the given set of samples.\n\nEXPECT A SLOW RESPONSE : No cache of such information anywhere.",
-        "operationId":"sample_set_get_stats_sample_set_taxo_stats_get",
+        "operationId":"sample_set_get_stats",
         "parameters":[
           {
             "description":"String containing the list of one or more sample ids separated by non-num char.",
@@ -2079,7 +2079,7 @@
         ],
         "summary":"Update Samples",
         "description":"Do the required **update for each sample in the set.** \n\nAny non-null field in the model is written to every impacted sample.\n\n**Returns the number of updated entities.**",
-        "operationId":"update_samples_sample_set_update_post",
+        "operationId":"update_samples",
         "requestBody":{
           "content":{
             "application/json":{
@@ -2128,7 +2128,7 @@
         ],
         "summary":"Sample Query",
         "description":"Returns **information about the sample** corresponding to the given id.",
-        "operationId":"sample_query_sample__sample_id__get",
+        "operationId":"sample_query",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this sample.",
@@ -2179,7 +2179,7 @@
         ],
         "summary":"Acquisitions Search",
         "description":"Returns the **list of all acquisitions for a given project**.",
-        "operationId":"acquisitions_search_acquisitions_search_get",
+        "operationId":"acquisitions_search",
         "parameters":[
           {
             "description":"The project id.",
@@ -2234,7 +2234,7 @@
         ],
         "summary":"Update Acquisitions",
         "description":"Do the required **update for each acquisition in the set**.\n\n**Return the number of updated entities.**",
-        "operationId":"update_acquisitions_acquisition_set_update_post",
+        "operationId":"update_acquisitions",
         "requestBody":{
           "content":{
             "application/json":{
@@ -2283,7 +2283,7 @@
         ],
         "summary":"Acquisition Query",
         "description":"Returns **information about the acquisition** corresponding to the given id.",
-        "operationId":"acquisition_query_acquisition__acquisition_id__get",
+        "operationId":"acquisition_query",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this acquisition.",
@@ -2334,7 +2334,7 @@
         ],
         "summary":"Instrument Query",
         "description":"Returns the list of instruments, inside specific project(s).",
-        "operationId":"instrument_query_instruments__get",
+        "operationId":"instrument_query",
         "parameters":[
           {
             "description":"String containing the list of one or more project id separated by non-num char.",
@@ -2388,7 +2388,7 @@
         ],
         "summary":"Update Processes",
         "description":"Do the required **update for each process in the set.**\n\n**Returns the number of updated entities.**",
-        "operationId":"update_processes_process_set_update_post",
+        "operationId":"update_processes",
         "requestBody":{
           "content":{
             "application/json":{
@@ -2437,7 +2437,7 @@
         ],
         "summary":"Process Query",
         "description":"Returns **information about the process** corresponding to the given id.",
-        "operationId":"process_query_process__process_id__get",
+        "operationId":"process_query",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this process.",
@@ -2488,7 +2488,7 @@
         ],
         "summary":"Get Object Set",
         "description":"Returns **filtred object Ids** for the given project.",
-        "operationId":"get_object_set_object_set__project_id__query_post",
+        "operationId":"get_object_set",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -2597,7 +2597,7 @@
         ],
         "summary":"Get Object Set Summary",
         "description":"For the given project, with given filters, **return the classification summary**.\n        \ni.e.:\n            \n- Total number of objects\n\nAnd optionnaly\n\n- Number of Validated ones\n- Number of Dubious ones\n- Number of Predicted ones\n    ",
-        "operationId":"get_object_set_summary_object_set__project_id__summary_post",
+        "operationId":"get_object_set_summary",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -2669,7 +2669,7 @@
         ],
         "summary":"Reset Object Set To Predicted",
         "description":"**Reset to Predicted** all objects for the given project with the filters.\n\nReturn **NULL upon success.**",
-        "operationId":"reset_object_set_to_predicted_object_set__project_id__reset_to_predicted_post",
+        "operationId":"reset_object_set_to_predicted",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -2729,7 +2729,7 @@
         ],
         "summary":"Revert Object Set To History",
         "description":"**Revert all objects for the given project**, with the filters, to the target.",
-        "operationId":"revert_object_set_to_history_object_set__project_id__revert_to_history_post",
+        "operationId":"revert_object_set_to_history",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -2814,7 +2814,7 @@
         ],
         "summary":"Reclassify Object Set",
         "description":"Regardless of present classification or state, **set the new classification for this object set.**\n\nIf the filter designates \"all with given classification\", add a TaxonomyChangeLog entry.\n\n**Returns the number of affected objects.**",
-        "operationId":"reclassify_object_set_object_set__project_id__reclassify_post",
+        "operationId":"reclassify_object_set",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -2901,7 +2901,7 @@
         ],
         "summary":"Update Object Set",
         "description":"Do the required **update for each objects in the set.** \n\n**Returns the number of updated entities.**\n\n🔒 Current user needs *Manage* right on all projects of specified objects.",
-        "operationId":"update_object_set_object_set_update_post",
+        "operationId":"update_object_set",
         "requestBody":{
           "content":{
             "application/json":{
@@ -2950,7 +2950,7 @@
         ],
         "summary":"Classify Object Set",
         "description":"**Change classification and/or qualification for a set of objects.**\n\n**Returns the number of updated entities.**\n\n🔒 Current user needs at *least Annotate* right on all projects of specified objects.",
-        "operationId":"classify_object_set_object_set_classify_post",
+        "operationId":"classify_object_set",
         "requestBody":{
           "content":{
             "application/json":{
@@ -2999,7 +2999,7 @@
         ],
         "summary":"Classify Auto Object Set",
         "description":"**Set automatic classification** of a set of objects.\n\n**Returns the number of updated entities.**",
-        "operationId":"classify_auto_object_set_object_set_classify_auto_post",
+        "operationId":"classify_auto_object_set",
         "requestBody":{
           "content":{
             "application/json":{
@@ -3048,7 +3048,7 @@
         ],
         "summary":"Query Object Set Parents",
         "description":"**Return object ids, with parent ones and projects** for the objects in given list.",
-        "operationId":"query_object_set_parents_object_set_parents_post",
+        "operationId":"query_object_set_parents",
         "requestBody":{
           "content":{
             "application/json":{
@@ -3105,7 +3105,7 @@
         ],
         "summary":"Export Object Set",
         "description":"**Start an export job for the given object set and options.**",
-        "operationId":"export_object_set_object_set_export_post",
+        "operationId":"export_object_set",
         "requestBody":{
           "content":{
             "application/json":{
@@ -3152,7 +3152,7 @@
         ],
         "summary":"Predict Object Set",
         "description":"**Start a prediction** AKA automatic classification for the given object set and options.",
-        "operationId":"predict_object_set_object_set_predict_post",
+        "operationId":"predict_object_set",
         "requestBody":{
           "content":{
             "application/json":{
@@ -3199,7 +3199,7 @@
         ],
         "summary":"Compute Project Cnn",
         "description":"**Generate CNN features** for the requested project.\n\n**Returns a string containing the number of generated features.**",
-        "operationId":"compute_project_cnn_project_do_cnn_get",
+        "operationId":"compute_project_cnn",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -3252,7 +3252,7 @@
         ],
         "summary":"Erase Object Set",
         "description":"**Delete the objects with given object ids.** \n\n**Returns** the number of  : **deleted objects**, 0, **deleated image rows** and **deleated image files**.\n\n🔒 Current user needs *Manage* right on all projects of specified objects.",
-        "operationId":"erase_object_set_object_set__delete",
+        "operationId":"erase_object_set",
         "requestBody":{
           "content":{
             "application/json":{
@@ -3313,7 +3313,7 @@
         ],
         "summary":"Object Query",
         "description":"Returns **information about the object** corresponding to the given id.\n \n🔒 Anonymous reader can do if the project has the right rights :)",
-        "operationId":"object_query_object__object_id__get",
+        "operationId":"object_query",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this object.",
@@ -3364,7 +3364,7 @@
         ],
         "summary":"Object Query History",
         "description":"Returns **information about the object's history** corresponding to the given id.",
-        "operationId":"object_query_history_object__object_id__history_get",
+        "operationId":"object_query_history",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this object.",
@@ -3443,7 +3443,7 @@
         ],
         "summary":"Query Root Taxa",
         "description":"**Return all taxa with no parent.**",
-        "operationId":"query_root_taxa_taxa_get",
+        "operationId":"query_root_taxa",
         "responses":{
           "200":{
             "description":"Successful Response",
@@ -3469,7 +3469,7 @@
         ],
         "summary":"Taxa Tree Status",
         "description":"**Return the status of taxonomy tree** w/r to freshness.",
-        "operationId":"taxa_tree_status_taxa_status_get",
+        "operationId":"taxa_tree_status",
         "responses":{
           "200":{
             "description":"Successful Response",
@@ -3496,7 +3496,7 @@
         ],
         "summary":"Reclassif Stats",
         "description":"Dig into reclassification logs and, for each input category id, **determine the most chosen target category,\nexcluding the advised one.**\n\nBy convention, if nothing relevant is found, the input category itself is returned. So one can expect\nthat the returned list has the same size as the required one.",
-        "operationId":"reclassif_stats_taxa_reclassification_stats_get",
+        "operationId":"reclassif_stats",
         "parameters":[
           {
             "description":"String containing the list of one or more taxa id separated by non-num char.",
@@ -3583,7 +3583,7 @@
         ],
         "summary":"Reclassif Project Stats",
         "description":"Dig into reclassification logs and **return the associations (source → target) for previous reclassifications.**",
-        "operationId":"reclassif_project_stats_taxa_reclassification_history__project_id__get",
+        "operationId":"reclassif_project_stats",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -3638,7 +3638,7 @@
         ],
         "summary":"Query Taxa",
         "description":"Returns **information about the taxon** corresponding to the given id, including its lineage.",
-        "operationId":"query_taxa_taxon__taxon_id__get",
+        "operationId":"query_taxa",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this taxon.",
@@ -3719,7 +3719,7 @@
         ],
         "summary":"Query Taxa Usage",
         "description":"**Where a given taxon is used.**\n\nOnly validated uses are returned.",
-        "operationId":"query_taxa_usage_taxon__taxon_id__usage_get",
+        "operationId":"query_taxa_usage",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this taxon.",
@@ -3774,7 +3774,7 @@
         ],
         "summary":"Search Taxa",
         "description":"**Search for taxa by name.**\n\nQueries can be 'small', i.e. of length ﹤3 and even zero-length.\n\n🔓 For a public, unauthenticated call :\n- zero-length and small queries always return nothing.\n- otherwise, a full search is done and results are returned in alphabetical order.\n\n🔒 For an authenticated call :\n- zero-length queries: return the MRU list in full.\n- small queries: the MRU list is searched, so that taxa in the recent list are returned, if matching.\n- otherwise, a full search is done. Results are ordered so that taxa in the project list are in first,\n    and are signalled as such in the response.",
-        "operationId":"search_taxa_taxon_set_search_get",
+        "operationId":"search_taxa",
         "parameters":[
           {
             "description":"Use this query for matching returned taxa names.",
@@ -3841,7 +3841,7 @@
         ],
         "summary":"Query Taxa Set",
         "description":"Returns **information about several taxa**, including their lineage.",
-        "operationId":"query_taxa_set_taxon_set_query_get",
+        "operationId":"query_taxa_set",
         "parameters":[
           {
             "description":"The separator between numbers is arbitrary non-digit, e.g. ':', '|' or ','.",
@@ -3896,7 +3896,7 @@
         ],
         "summary":"Get Taxon In Central",
         "description":"Return **EcoTaxoServer full record for this taxon**.",
-        "operationId":"get_taxon_in_central_taxon_central__taxon_id__get",
+        "operationId":"get_taxon_in_central",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this taxon.",
@@ -3951,7 +3951,7 @@
         ],
         "summary":"Add Taxon In Central",
         "description":"**Create a taxon** on EcoTaxoServer.\n\n🔒 Logged user must be manager (on any project) or application admin.",
-        "operationId":"add_taxon_in_central_taxon_central_put",
+        "operationId":"add_taxon_in_central",
         "parameters":[
           {
             "description":"The taxon/category verbatim name.",
@@ -4060,7 +4060,7 @@
         ],
         "summary":"Push Taxa Stats In Central",
         "description":"**Push present instance stats**, into EcoTaxoServer.",
-        "operationId":"push_taxa_stats_in_central_taxa_stats_push_to_central_get",
+        "operationId":"push_taxa_stats_in_central",
         "responses":{
           "200":{
             "description":"Successful Response",
@@ -4085,7 +4085,7 @@
         ],
         "summary":"Pull Taxa Update From Central",
         "description":"**Returns what changed in EcoTaxoServer managed tree** and update local tree accordingly.\n\ni.e. : the number of inserts as nbr_inserts, updates as nbr_updates and errors as errors.",
-        "operationId":"pull_taxa_update_from_central_taxa_pull_from_central_get",
+        "operationId":"pull_taxa_update_from_central",
         "responses":{
           "200":{
             "description":"Successful Response",
@@ -4110,7 +4110,7 @@
         ],
         "summary":"List Jobs",
         "description":"**Return the jobs** for current user, or all of them if admin is asked for.",
-        "operationId":"list_jobs_jobs__get",
+        "operationId":"list_jobs",
         "parameters":[
           {
             "description":"If FALSE return the jobs for current user, else return all of them.",
@@ -4165,7 +4165,7 @@
         ],
         "summary":"Get Job",
         "description":"Returns **information about the job** corresponding to the given id.",
-        "operationId":"get_job_jobs__job_id___get",
+        "operationId":"get_job",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this job.",
@@ -4216,7 +4216,7 @@
         ],
         "summary":"Reply Job Question",
         "description":"**Send answers to last question.** The job resumes after it receives the reply.\n\nReturn **NULL upon success.**\n\n*Note: It's only about data storage here.*\n\n\nIf the data is technically NOK e.g. not a JS object, standard 422 error should be thrown.\n\nIf the data is incorrect from consistency point of view, the job will return in Asking state.",
-        "operationId":"reply_job_question_jobs__job_id__answer_post",
+        "operationId":"reply_job_question",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this job.",
@@ -4277,7 +4277,7 @@
         ],
         "summary":"Restart Job",
         "description":"**Restart the job related to the given id.**\n\nReturn **NULL upon success.**\n\n🔒 The job must be in a restartable state, and be accessible to current user.",
-        "operationId":"restart_job_jobs__job_id__restart_get",
+        "operationId":"restart_job",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this job.",
@@ -4327,7 +4327,7 @@
         ],
         "summary":"Get Job Log File",
         "description":"**Return the log file produced by given job.**\n\n🔒 The job must be accessible to current user.",
-        "operationId":"get_job_log_file_jobs__job_id__log_get",
+        "operationId":"get_job_log_file",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this job.",
@@ -4376,7 +4376,7 @@
         ],
         "summary":"Get Job File",
         "description":"**Return the file produced by given job.**\n\n🔒 The job must be accessible to current user.",
-        "operationId":"get_job_file_jobs__job_id__file_get",
+        "operationId":"get_job_file",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this job.",
@@ -4427,7 +4427,7 @@
         ],
         "summary":"Erase Job",
         "description":"**Delete the job** from DB, with associated storage.\n\nReturn **NULL upon success.**\n\nIf the job is running then kill it.\n\n🔒 The job must be accessible to current user.",
-        "operationId":"erase_job_jobs__job_id__delete",
+        "operationId":"erase_job",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this job.",
@@ -4477,7 +4477,7 @@
         ],
         "summary":"List User Files",
         "description":"**List the private files** which are usable for some file-related operations.\n\n*e.g. import.*",
-        "operationId":"list_user_files_my_files__sub_path__get",
+        "operationId":"list_user_files",
         "parameters":[
           {
             "required":true,
@@ -4525,7 +4525,7 @@
         ],
         "summary":"Put User File",
         "description":"**Upload a file for the current user.**\n\nThe returned text will contain a serve-side path which is usable for some file-related operations.\n\n*e.g. import.*",
-        "operationId":"put_user_file_my_files__post",
+        "operationId":"post_user_file",
         "requestBody":{
           "content":{
             "multipart/form-data":{
@@ -4574,7 +4574,7 @@
         ],
         "summary":"List Common Files",
         "description":"**List the common files** which are usable for some file-related operations.\n\n*e.g. import.*",
-        "operationId":"list_common_files_common_files__get",
+        "operationId":"list_common_files",
         "parameters":[
           {
             "required":true,
@@ -4623,7 +4623,7 @@
         ],
         "summary":"System Status",
         "description":"**Report the status**, mainly used for verifying that the server is up.",
-        "operationId":"system_status_status_get",
+        "operationId":"system_status",
         "responses":{
           "200":{
             "description":"Successful Response",
@@ -4649,7 +4649,7 @@
         ],
         "summary":"System Error",
         "description":"**Return a 500 internal error**, on purpose so the stack trace is visible and client\ncan see what it gives.",
-        "operationId":"system_error_error_get",
+        "operationId":"system_error",
         "responses":{
           "200":{
             "description":"Successful Response",
@@ -4674,7 +4674,7 @@
         ],
         "summary":"Do Nothing",
         "description":"**This entry point will just do nothing.**\n\nIt's also used for exporting models we need on client side.",
-        "operationId":"do_nothing_noop_get",
+        "operationId":"do_nothing",
         "responses":{
           "200":{
             "description":"Successful Response",
@@ -4709,7 +4709,7 @@
         ],
         "summary":"Used Constants",
         "description":"**Return useful strings for user dialog.**\n\nNow also used for values extracted from Config.",
-        "operationId":"used_constants_constants_get",
+        "operationId":"used_constants",
         "responses":{
           "200":{
             "description":"Successful Response",
