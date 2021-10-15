@@ -29,7 +29,7 @@ from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp, C
     ObjectHeaderModel, HistoricalClassificationModel, ObjectSetSummaryRsp, ClassifyAutoReq
 from API_models.prediction import PredictionRsp, PredictionReq
 from API_models.subset import SubsetReq, SubsetRsp
-from API_models.taxonomy import TaxaSearchRsp, TaxonModel, TaxonomyTreeStatus, TaxonUsageModel
+from API_models.taxonomy import TaxaSearchRsp, TaxonModel, TaxonomyTreeStatus, TaxonUsageModel, TaxonCentral
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
 from API_operations.CRUD.Instruments import InstrumentsService
@@ -1710,12 +1710,12 @@ async def query_taxa_set(ids: str = Query(..., title="Ids",
         return ret
 
 
-@app.get("/taxon/central/{taxon_id}", tags=['Taxonomy Tree'])
+@app.get("/taxon/central/{taxon_id}", tags=['Taxonomy Tree'], response_model=List[TaxonCentral])
 async def get_taxon_in_central(
-        taxon_id: int = Path(..., description="Internal, the unique numeric id of this taxon.", example=1),
+        taxon_id: int = Path(..., description="Internal, the unique numeric id of this taxon.", example=12876),
         _current_user: int = Depends(get_current_user)):
     """
-        Get EcoTaxoServer full record for this taxon.
+        Return **EcoTaxoServer full record for this taxon**.
     """
     with CentralTaxonomyService() as sce:
         return sce.get_taxon_by_id(taxon_id)
@@ -1729,11 +1729,11 @@ async def add_taxon_in_central(
         name: str = Query(..., title="Name", description="The taxon/category verbatim name.", example="Echinodermata"),
         parent_id: int = Query(..., title="Parent Id", description="It's not possible to create a root taxon.",
                                example=2367),
-        taxotype: str = Query(..., title="Taxo Type", description="The taxon/category type, 'M' or 'P'.", example="P"),
+        taxotype: str = Query(..., title="Taxo Type", description="The taxon type, 'M' for Morpho or 'P' for Phylo.", example="P"),
         creator_email: str = Query(..., title="Creator email", description="The email of the taxo creator.",
                                    example="user.creator@email.com"),
         request: Request = Query(..., title="Request", description=""),
-        source_desc: Optional[str] = Query(default=None, title="Source desc", description="", example=""),
+        source_desc: Optional[str] = Query(default=None, title="Source desc", description="The source description.", example="null"),
         source_url: Optional[str] = Query(default=None, title="Source url", description="The source url.",
                                           example="http://www.google.fr/"),
         current_user: int = Depends(get_current_user)):
@@ -2034,12 +2034,23 @@ def get_job_file(
         return StreamingResponse(file_like, headers=headers, media_type=media_type)
 
 
-@app.delete("/jobs/{job_id}", tags=['jobs'])
+@app.delete("/jobs/{job_id}", tags=['jobs'],
+         responses={
+             200: {
+                 "content": {
+                     "application/json": {
+                         "example": null
+                     }
+                 }
+             }
+         })
 def erase_job(
         job_id: int = Path(..., description="Internal, the unique numeric id of this job.", example=47445),
         current_user: int = Depends(get_current_user)) -> int:
     """
         **Delete the job** from DB, with associated storage.
+        
+        Return **NULL upon success.**
         
         If the job is running then kill it.
 
@@ -2066,10 +2077,19 @@ async def list_user_files(sub_path: str = Query(..., title="Sub path", descripti
     return file_list
 
 
-@app.post("/my_files/", tags=['Files'], response_model=str)
-async def put_user_file(file: UploadFile = File(...),
-                        path: Optional[str] = Form(None),
-                        tag: Optional[str] = Form(None),
+@app.post("/my_files/", tags=['Files'],
+         responses={
+             200: {
+                 "content": {
+                     "application/json": {
+                         "example": "/ftp_plankton/Ecotaxa_Data_to_import/uploadedFile.zip"
+                     }
+                 }
+             }
+         }, response_model=str)
+async def put_user_file(file: UploadFile = File(..., title="File", description=""),
+                        path: Optional[str] = Form(title="Path", description ="The client-side full path of the file.", default=None),
+                        tag: Optional[str] = Form(title="Tag", description ="If a tag is provided, then all files with the same tag are grouped (in a sub-directory). Otherwise, a temp directory with only this file will be created.", default=None),
                         current_user: int = Depends(get_current_user)):
     """
         **Upload a file for the current user.**
@@ -2084,9 +2104,8 @@ async def put_user_file(file: UploadFile = File(...),
         return file_name
 
 
-# TODO JCE - description example
 @app.get("/common_files/", tags=['Files'], response_model=DirectoryModel)
-async def list_common_files(path: str = Query(..., title="path", description="", example=""),
+async def list_common_files(path: str = Query(..., title="path", description="", example="/ftp_plankton/Ecotaxa_Exported_data"),
                             current_user: int = Depends(get_current_user)) -> DirectoryModel:
     """
         **List the common files** which are usable for some file-related operations.
@@ -2101,7 +2120,60 @@ async def list_common_files(path: str = Query(..., title="path", description="",
 
 # ######################## END OF FILES
 
-@app.get("/status", tags=['WIP'])
+system_status_resp="""Config dump:
+  secret_key: *************
+  db_user: postgres
+  db_password: *************
+  db_host: localhost
+  db_port: 5432
+  db_database: ecotaxa
+  ro_db_user: readerole
+  ro_db_password: *************
+  ro_db_host: localhost
+  ro_db_port: 5432
+  ro_db_database: ecotaxa
+  db_toolsdir: /usr/bin
+  sqlalchemy_database_uri: postgresql+psycopg2://+DB_USER+:+DB_PASSWORD+@+DB_HOST+/+DB_DATABASE+?application_name=ecotaxasqla
+  sqlalchemy_echo: False
+  sqlalchemy_pool_size: 50
+  security_password_hash: *************
+  security_password_salt: *************
+  security_changeable: True
+  security_post_change_view: /
+  security_send_password_change_email: *************
+  appmanager_email: marc.picheral@obs-vlfr.fr
+  appmanager_name: Marc Picheral
+  username: 'admin'
+  password: *************
+  thumbsizelimit: 400
+  serverloadarea: '/plankton_rw'
+  pythonexecutable: /home/ecotaxa/venv_ecotaxa/bin/python3
+  serverurl: https://ecotaxa.obs-vlfr.fr
+  part_default_visible_delay: 2
+  part_default_general_export_delay: 24
+  part_default_plankton_export_delay: 36
+  google_analytics_id: UA-100751107-1
+  recaptchaid: 6LcNbXgUAAAAAN683bG-gWlXDhZFyMBePp-SM6t8
+  recaptchasecret: *************
+  scn_enabled: True
+  scn_binary: /home/ecotaxa/ecotaxa/SCN_networks/ecotaxa
+  ftpexportarea: '/plankton_rw/ftp_plankton/Ecotaxa_Exported_data'
+  taxoserver_url: http://ecotaxoserver.obs-vlfr.fr
+  taxoserver_instance_id: 1
+  taxoserver_shared_secret: *************
+Paths:
+  /plankton_rw (from serverloadarea): OK
+  /plankton_rw/ftp_plankton/Ecotaxa_Exported_data (from ftpexportarea): OK"""
+
+@app.get("/status", tags=['WIP'], responses={
+            200: {
+                "content": {
+                    "application/json": {
+                        "example": system_status_resp
+                    }
+                }
+            }
+        })
 def system_status(_current_user: int = Depends(get_current_user)) -> Response:
     """
         **Report the status**, mainly used for verifying that the server is up.

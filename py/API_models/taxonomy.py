@@ -11,6 +11,10 @@ from pydantic.main import BaseModel
 
 from API_models.crud import ProjectSummaryModel
 from API_models.helpers.DBtoModel import OrmConfig
+from DB import Taxonomy
+from API_models.helpers.DBtoModel import sqlalchemy_to_pydantic
+
+
 
 
 class TaxaSearchRsp(BaseModel):
@@ -26,7 +30,7 @@ class TaxonModel(BaseModel):
     id: int = Field(title="Id", description="The taxon/category IDs.", example=1)
     renm_id: Optional[int] = Field(title="Renm id", description="The advised replacement ID if the taxon/category is deprecated.", example="null")
     name: str = Field(title="Name", description="The taxon/category verbatim name.", example="living")
-    type: str = Field(title="Type", description="The taxon/category type, 'M' or 'P'.", example="P")
+    type: str = Field(title="Type", description="The taxon/category type, 'M' for Morpho or 'P' for Phylo.", example="P")
     nb_objects: int = Field(title="Nb objects", description="How many objects are classified in this category.", example=34118)
     nb_children_objects: int = Field(title="Nb children objects", description="How many objects are classified in this category children (not itself).", example=30091727)
     display_name: str = Field(title="Display name", description="The taxon/category display name.", example="living<")
@@ -41,3 +45,25 @@ class TaxonUsageModel(ProjectSummaryModel):
 class TaxonomyTreeStatus(BaseModel):
     last_refresh: Optional[str] = Field(title="Last refresh", description="Taxonomy tree last refresh/sync from taxonomy server. "
                                               "Date, with format YYYY-MM-DDThh:mm:ss.", example="2021-10-07T01:26:47")
+
+
+_DBTaxonCentralDescription={
+    "creation_datetime" : Field(title="Creation datetime", description="Taxon creation date. Date, with format YYYY-MM-DD hh:mm:ss.", example="2021-08-20 09:09:39"),
+    "creator_email" : Field(title="Creator email", description="Email of the creator of the taxon.", example="creator.user@emaim.com"),
+    "display_name" : Field(title="Display name", description="The display name of the taxon. It is suffixed in EcoTaxoServer with (Deprecated) when taxostatus is 'D'", example="Echinodermata X"),
+    "id" : Field(title="Id", description="The unique numeric id of the taxon.", example=12876),
+    "id_instance" : Field(title="Id instance", description="The instance Id.", example=1),
+    "id_source" : Field(title="Id source", description="The source ID.", example="70372"),
+    "lastupdate_datetime" : Field(title="Last update datetime", description="Taxon last update. Date, with format YYYY-MM-DD hh:mm:ss.", example="2021-08-20 09:09:40"),
+    "name" : Field(title="Name", description="The name of the taxon.", example="Echinodermata X"),
+    "parent_id" : Field(title="Parent id", description="The unique numeric id of the taxon parent.", example=11509),
+    "rename_to" : Field(title="Rename to", description="The advised replacement Name if the taxon is deprecated.", example="null"),
+    "source_desc" : Field(title="Source desc", description="The source description.", example="null"),
+    "source_url" : Field(title="Source url", description="The source url.", example="http://www.google.fr/"),
+    "taxostatus" : Field(title="Taxo status", description="The taxon status, N for Not approved, A for Approved or D for Deprecated.", example="A"),
+    "taxotype" : Field(title="Taxo type", description="The taxon type, 'M' for Morpho or 'P' for Phylo.", example="P"),
+}
+
+_TaxonCentralModelFromDB = sqlalchemy_to_pydantic(Taxonomy, field_infos=_DBTaxonCentralDescription)
+class TaxonCentral(_TaxonCentralModelFromDB): # type:ignore
+    pass

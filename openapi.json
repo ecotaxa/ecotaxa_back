@@ -2503,12 +2503,12 @@
             "in":"path"
           },
           {
-            "description":"\n\nSpecify the needed object (and ancilliary entities) fields.\n                   \nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.      \n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id, classif_qual, classif_qual,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, orig, objid, file_name thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
+            "description":"\n\nSpecify the needed object (and ancilliary entities) fields.\n                   \nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.      \n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, orig, objid, file_name thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
             "required":false,
             "schema":{
               "title":"Fields",
               "type":"string",
-              "description":"\n\nSpecify the needed object (and ancilliary entities) fields.\n                   \nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.      \n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id, classif_qual, classif_qual,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, orig, objid, file_name thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
+              "description":"\n\nSpecify the needed object (and ancilliary entities) fields.\n                   \nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.      \n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, orig, objid, file_name thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
             },
             "example":"obj.longitude,fre.feret",
             "name":"fields",
@@ -3895,7 +3895,7 @@
           "Taxonomy Tree"
         ],
         "summary":"Get Taxon In Central",
-        "description":"Get EcoTaxoServer full record for this taxon.",
+        "description":"Return **EcoTaxoServer full record for this taxon**.",
         "operationId":"get_taxon_in_central_taxon_central__taxon_id__get",
         "parameters":[
           {
@@ -3906,7 +3906,7 @@
               "type":"integer",
               "description":"Internal, the unique numeric id of this taxon."
             },
-            "example":1,
+            "example":12876,
             "name":"taxon_id",
             "in":"path"
           }
@@ -3916,7 +3916,13 @@
             "description":"Successful Response",
             "content":{
               "application/json":{
-                "schema":{}
+                "schema":{
+                  "title":"Response Get Taxon In Central Taxon Central  Taxon Id  Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/TaxonCentral"
+                  }
+                }
               }
             }
           },
@@ -3972,12 +3978,12 @@
             "in":"query"
           },
           {
-            "description":"The taxon/category type, 'M' or 'P'.",
+            "description":"The taxon type, 'M' for Morpho or 'P' for Phylo.",
             "required":true,
             "schema":{
               "title":"Taxo Type",
               "type":"string",
-              "description":"The taxon/category type, 'M' or 'P'."
+              "description":"The taxon type, 'M' for Morpho or 'P' for Phylo."
             },
             "example":"P",
             "name":"taxotype",
@@ -3996,12 +4002,14 @@
             "in":"query"
           },
           {
+            "description":"The source description.",
             "required":false,
             "schema":{
               "title":"Source desc",
-              "type":"string"
+              "type":"string",
+              "description":"The source description."
             },
-            "example":"",
+            "example":"null",
             "name":"source_desc",
             "in":"query"
           },
@@ -4418,7 +4426,7 @@
           "jobs"
         ],
         "summary":"Erase Job",
-        "description":"**Delete the job** from DB, with associated storage.\n\nIf the job is running then kill it.\n\n🔒 The job must be accessible to current user.",
+        "description":"**Delete the job** from DB, with associated storage.\n\nReturn **NULL upon success.**\n\nIf the job is running then kill it.\n\n🔒 The job must be accessible to current user.",
         "operationId":"erase_job_jobs__job_id__delete",
         "parameters":[
           {
@@ -4439,7 +4447,8 @@
             "description":"Successful Response",
             "content":{
               "application/json":{
-                "schema":{}
+                "schema":{},
+                "example":{}
               }
             }
           },
@@ -4535,7 +4544,8 @@
                 "schema":{
                   "title":"Response Put User File My Files  Post",
                   "type":"string"
-                }
+                },
+                "example":"/ftp_plankton/Ecotaxa_Data_to_import/uploadedFile.zip"
               }
             }
           },
@@ -4572,7 +4582,7 @@
               "title":"path",
               "type":"string"
             },
-            "example":"",
+            "example":"/ftp_plankton/Ecotaxa_Exported_data",
             "name":"path",
             "in":"query"
           }
@@ -4619,7 +4629,8 @@
             "description":"Successful Response",
             "content":{
               "application/json":{
-                "schema":{}
+                "schema":{},
+                "example":"Config dump:\n  secret_key: *************\n  db_user: postgres\n  db_password: *************\n  db_host: localhost\n  db_port: 5432\n  db_database: ecotaxa\n  ro_db_user: readerole\n  ro_db_password: *************\n  ro_db_host: localhost\n  ro_db_port: 5432\n  ro_db_database: ecotaxa\n  db_toolsdir: /usr/bin\n  sqlalchemy_database_uri: postgresql+psycopg2://+DB_USER+:+DB_PASSWORD+@+DB_HOST+/+DB_DATABASE+?application_name=ecotaxasqla\n  sqlalchemy_echo: False\n  sqlalchemy_pool_size: 50\n  security_password_hash: *************\n  security_password_salt: *************\n  security_changeable: True\n  security_post_change_view: /\n  security_send_password_change_email: *************\n  appmanager_email: marc.picheral@obs-vlfr.fr\n  appmanager_name: Marc Picheral\n  username: 'admin'\n  password: *************\n  thumbsizelimit: 400\n  serverloadarea: '/plankton_rw'\n  pythonexecutable: /home/ecotaxa/venv_ecotaxa/bin/python3\n  serverurl: https://ecotaxa.obs-vlfr.fr\n  part_default_visible_delay: 2\n  part_default_general_export_delay: 24\n  part_default_plankton_export_delay: 36\n  google_analytics_id: UA-100751107-1\n  recaptchaid: 6LcNbXgUAAAAAN683bG-gWlXDhZFyMBePp-SM6t8\n  recaptchasecret: *************\n  scn_enabled: True\n  scn_binary: /home/ecotaxa/ecotaxa/SCN_networks/ecotaxa\n  ftpexportarea: '/plankton_rw/ftp_plankton/Ecotaxa_Exported_data'\n  taxoserver_url: http://ecotaxoserver.obs-vlfr.fr\n  taxoserver_instance_id: 1\n  taxoserver_shared_secret: *************\nPaths:\n  /plankton_rw (from serverloadarea): OK\n  /plankton_rw/ftp_plankton/Ecotaxa_Exported_data (from ftpexportarea): OK"
               }
             }
           }
@@ -4807,11 +4818,13 @@
           },
           "path":{
             "title":"Path",
-            "type":"string"
+            "type":"string",
+            "description":"The client-side full path of the file."
           },
           "tag":{
             "title":"Tag",
-            "type":"string"
+            "type":"string",
+            "description":"If a tag is provided, then all files with the same tag are grouped (in a sub-directory). Otherwise, a temp directory with only this file will be created."
           }
         }
       },
@@ -5203,25 +5216,25 @@
             "title":"Name",
             "type":"string",
             "description":"atomic entry name.",
-            "example":""
+            "example":"task_281167_export_reduced_20200120_15_05.zip"
           },
           "type":{
             "title":"Type",
             "type":"string",
             "description":"entry type, 'D' for directory, 'F' for file.",
-            "example":""
+            "example":"F"
           },
           "size":{
             "title":"Size",
             "type":"integer",
             "description":"Entry size, for zips.",
-            "example":1
+            "example":173804090
           },
           "mtime":{
             "title":"Modification time",
             "type":"string",
             "description":"Modification time, in ISO format.",
-            "example":""
+            "example":"2020-01-20 15:10:54.834571"
           }
         },
         "description":"Something inside a directory, i.e. a sub-directory or a file."
@@ -5238,7 +5251,7 @@
             "title":"Path",
             "type":"string",
             "description":"A /-separated path from root to this directory.",
-            "example":""
+            "example":"/ftp_plankton/Ecotaxa_Exported_data"
           },
           "entries":{
             "title":"Entries",
@@ -7337,6 +7350,112 @@
           }
         }
       },
+      "TaxonCentral":{
+        "title":"TaxonCentral",
+        "required":[
+          "id",
+          "name",
+          "taxotype",
+          "taxostatus"
+        ],
+        "type":"object",
+        "properties":{
+          "id":{
+            "title":"Id",
+            "type":"integer",
+            "description":"The unique numeric id of the taxon.",
+            "example":12876
+          },
+          "parent_id":{
+            "title":"Parent id",
+            "type":"integer",
+            "description":"The unique numeric id of the taxon parent.",
+            "example":11509
+          },
+          "name":{
+            "title":"Name",
+            "type":"string",
+            "description":"The name of the taxon.",
+            "example":"Echinodermata X"
+          },
+          "id_source":{
+            "title":"Id source",
+            "type":"string",
+            "description":"The source ID.",
+            "example":"70372"
+          },
+          "taxotype":{
+            "title":"Taxo type",
+            "type":"string",
+            "description":"The taxon type, 'M' for Morpho or 'P' for Phylo.",
+            "example":"P"
+          },
+          "display_name":{
+            "title":"Display name",
+            "type":"string",
+            "description":"The display name of the taxon. It is suffixed in EcoTaxoServer with (Deprecated) when taxostatus is 'D'",
+            "example":"Echinodermata X"
+          },
+          "lastupdate_datetime":{
+            "title":"Last update datetime",
+            "type":"string",
+            "description":"Taxon last update. Date, with format YYYY-MM-DD hh:mm:ss.",
+            "format":"date-time",
+            "example":"2021-08-20 09:09:40"
+          },
+          "id_instance":{
+            "title":"Id instance",
+            "type":"integer",
+            "description":"The instance Id.",
+            "example":1
+          },
+          "taxostatus":{
+            "title":"Taxo status",
+            "type":"string",
+            "description":"The taxon status, N for Not approved, A for Approved or D for Deprecated.",
+            "example":"A"
+          },
+          "rename_to":{
+            "title":"Rename to",
+            "type":"integer",
+            "description":"The advised replacement Name if the taxon is deprecated.",
+            "example":"null"
+          },
+          "source_url":{
+            "title":"Source url",
+            "type":"string",
+            "description":"The source url.",
+            "example":"http://www.google.fr/"
+          },
+          "source_desc":{
+            "title":"Source desc",
+            "type":"string",
+            "description":"The source description.",
+            "example":"null"
+          },
+          "creator_email":{
+            "title":"Creator email",
+            "type":"string",
+            "description":"Email of the creator of the taxon.",
+            "example":"creator.user@emaim.com"
+          },
+          "creation_datetime":{
+            "title":"Creation datetime",
+            "type":"string",
+            "description":"Taxon creation date. Date, with format YYYY-MM-DD hh:mm:ss.",
+            "format":"date-time",
+            "example":"2021-08-20 09:09:39"
+          },
+          "nbrobj":{
+            "title":"Nbrobj",
+            "type":"integer"
+          },
+          "nbrobjcum":{
+            "title":"Nbrobjcum",
+            "type":"integer"
+          }
+        }
+      },
       "TaxonModel":{
         "title":"TaxonModel",
         "required":[
@@ -7373,7 +7492,7 @@
           "type":{
             "title":"Type",
             "type":"string",
-            "description":"The taxon/category type, 'M' or 'P'.",
+            "description":"The taxon/category type, 'M' for Morpho or 'P' for Phylo.",
             "example":"P"
           },
           "nb_objects":{
