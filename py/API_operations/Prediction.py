@@ -2,7 +2,10 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2021  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-# Predict classification on a project.
+# Predict classification on a project. In details, launch a job which will:
+# - If requested by the user and possible, compute DeepFeatures on the source projects
+# - Use selected features on source projects to train a Random Forest classifier
+# - Use the trained classifier on the target project.
 #
 from os.path import join
 from pathlib import Path
@@ -12,6 +15,7 @@ from API_models.crud import ProjectFilters
 from API_models.prediction import PredictionReq, PredictionRsp
 from BO.Prediction import DeepFeatures
 from BO.Project import ProjectBO
+from BO.ProjectSet import FeatureConsistentProjectSet
 from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
 from DB import Project
@@ -45,6 +49,7 @@ class PredictForProject(JobServiceBase):
             Initial run, do security and consistency checks, then create the job.
         """
         _user, _project = RightsBO.user_wants(self.session, current_user_id, Action.READ, self.req.project_id)
+        # TODO: more checks
         # OK, go background
         self.create_job(self.JOB_TYPE, current_user_id)
         ret = PredictionRsp(job_id=self.job_id)
@@ -58,7 +63,7 @@ class PredictForProject(JobServiceBase):
 
     @staticmethod
     def deser_args(json_args: Dict):
-        json_args["req"] = PredictionRsp(**json_args["req"])
+        json_args["req"] = PredictionReq(**json_args["req"])
         json_args["filters"] = ProjectFilters(**json_args["filters"])  # type:ignore
 
     def do_background(self):
@@ -75,6 +80,12 @@ class PredictForProject(JobServiceBase):
         self.out_path = self.temp_for_jobs.base_dir_for(self.job_id)
         req = self.req
         logger.info("Input Param = %s" % (self.req.__dict__,))
+
+        self.update_progress(10, "Computing learning set medians")
+        medians = FeatureConsistentProjectSet.read_median_values(self.ro_session, req.source_project_ids,
+                                                                 req.features, req.learning_limit, req.categories)
+        logger.info("Medians: %s", medians)
+
 
         nb_rows = 100
         final_message = "Done."

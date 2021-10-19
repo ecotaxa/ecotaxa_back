@@ -10,7 +10,6 @@ from typing import Union, Tuple
 
 from fastapi import FastAPI, Request, Response, status, Depends, HTTPException, UploadFile, File, Query, Form, Body, \
     Path
-from fastapi import responses
 from fastapi.logger import logger as fastapi_logger
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
@@ -86,7 +85,7 @@ logger = get_logger(__name__)
 fastapi_logger.setLevel(INFO)
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.21",
+              version="0.0.22",
               # openapi URL as seen from navigator, this is included when /docs is required
               # which serves swagger-ui JS app. Stay in /api sub-path.
               openapi_url="/api/openapi.json",
@@ -638,11 +637,17 @@ def project_set_get_user_stats(ids: str = Query(..., title="Ids",
              }
          }, response_model=ProjectSetColumnStatsModel)  # type: ignore
 def project_set_get_column_stats(ids: str = Query(..., title="Project ids",
-                                                  description="String containing the list of one or more id separated by non-num char.",
+                                                  description="String containing the Project list, one or more id separated by non-num char.",
                                                   example="1400+1453"),
                                  names: str = Query(..., title="Column names",
                                                     description="Coma-separated prefixed columns, on which stats are needed.",
                                                     example="fre.area,obj.depth_min,fre.nb2"),
+                                 limit: Optional[int] = Query(default=None, title="Stats limit",
+                                                              description="Only compute stats on this number of objects per category.",
+                                                              example=5000),
+                                 categories: Optional[str] = Query(default=None, title="Categories for limit",
+                                                                   description="String containing the Categories, one or more id separated by non-num char.",
+                                                                   example="493,567"),
                                  current_user: int = Depends(get_current_user)
                                  ) -> ProjectSetColumnStats:
     """
@@ -654,9 +659,13 @@ def project_set_get_column_stats(ids: str = Query(..., title="Project ids",
     """
     with ProjectsService() as sce:
         num_ids = _split_num_list(ids)
+        if categories is not None:
+            classif_ids = _split_num_list(categories)
+        else:
+            classif_ids = []
         name_list = names.split(",")
         with RightsThrower():
-            ret = sce.read_columns_stats(current_user, num_ids, name_list)
+            ret = sce.read_columns_stats(current_user, num_ids, name_list, limit, classif_ids)
         return ret
 
 
@@ -1614,7 +1623,8 @@ async def reclassif_stats(taxa_ids: str = Query(..., title="Taxa ids",
             ret = sce.most_used_non_advised(current_user, num_taxa_ids)
         return ret
 
-#TODO JCE
+
+# TODO JCE
 @app.get("/taxa/reclassification_history/{project_id}", tags=['Taxonomy Tree'], response_model=List[Dict])
 async def reclassif_project_stats(
         project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),

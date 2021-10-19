@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.21"
+    "version":"0.0.22"
   },
   "servers":[
     {
@@ -1420,12 +1420,12 @@
         "operationId":"project_set_get_column_stats_project_set_column_stats_get",
         "parameters":[
           {
-            "description":"String containing the list of one or more id separated by non-num char.",
+            "description":"String containing the Project list, one or more id separated by non-num char.",
             "required":true,
             "schema":{
               "title":"Project ids",
               "type":"string",
-              "description":"String containing the list of one or more id separated by non-num char."
+              "description":"String containing the Project list, one or more id separated by non-num char."
             },
             "example":"1400+1453",
             "name":"ids",
@@ -1441,6 +1441,30 @@
             },
             "example":"fre.area,obj.depth_min,fre.nb2",
             "name":"names",
+            "in":"query"
+          },
+          {
+            "description":"Only compute stats on this number of objects per category.",
+            "required":false,
+            "schema":{
+              "title":"Stats limit",
+              "type":"integer",
+              "description":"Only compute stats on this number of objects per category."
+            },
+            "example":5000,
+            "name":"limit",
+            "in":"query"
+          },
+          {
+            "description":"String containing the Categories, one or more id separated by non-num char.",
+            "required":false,
+            "schema":{
+              "title":"Categories for limit",
+              "type":"string",
+              "description":"String containing the Categories, one or more id separated by non-num char."
+            },
+            "example":"493,567",
+            "name":"categories",
             "in":"query"
           }
         ],
@@ -6432,6 +6456,11 @@
               "type":"integer"
             },
             "description":"The source projects, objects in them will serve as reference."
+          },
+          "learning_limit":{
+            "title":"Source projects fetching limit",
+            "type":"integer",
+            "description":"When set (to a positive value), there will be this number  of objects, _per category_, in the learning set."
           },
           "features":{
             "title":"Features",

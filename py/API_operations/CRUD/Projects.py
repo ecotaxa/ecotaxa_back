@@ -5,7 +5,7 @@
 from typing import List, Union, Tuple, Optional
 
 from API_models.crud import CreateProjectReq
-from BO.Classification import ClassifIDListT
+from BO.Classification import ClassifIDListT, ClassifIDT
 from BO.ObjectSet import EnumeratedObjectSet
 from BO.Project import ProjectBO, ProjectBOSet, ProjectTaxoStats, ProjectUserStats
 from BO.ProjectSet import FeatureConsistentProjectSet, ProjectSetColumnStats
@@ -156,10 +156,13 @@ class ProjectsService(Service):
 
     def read_columns_stats(self, current_user_id: int,
                            prj_ids: ProjectIDListT,
-                           column_names: List[str]) -> ProjectSetColumnStats:
+                           column_names: List[str],
+                           random_limit: Optional[int],
+                           categories: List[ClassifIDT]) -> ProjectSetColumnStats:
         """
-            Read data statistics for these projects.
+            Read data statistics for these projects, optionally using a limit and filtering categories.
         """
         # No security barrier because there is no private information inside
-        ret = FeatureConsistentProjectSet.read_columns_stats(self.session, prj_ids, column_names)
+        ret = FeatureConsistentProjectSet.read_columns_stats(self.session, prj_ids, column_names,
+                                                             random_limit, categories)
         return ret

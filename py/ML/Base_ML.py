@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 
 class MachineLearningBase(object):
     """
-        Base class as many ML classes share the same data/behavior, which is to access EcoTaxa images/data,
+        Base class, as many ML classes share the same data/behavior, which is to access EcoTaxa images/data,
         and produce data, either in FS or in memory.
     """
 
