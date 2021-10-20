@@ -15,7 +15,7 @@ from API_models.crud import ProjectFilters
 from API_models.prediction import PredictionReq, PredictionRsp
 from BO.Prediction import DeepFeatures
 from BO.Project import ProjectBO
-from BO.ProjectSet import FeatureConsistentProjectSet
+from BO.ProjectSet import LimitedInCategoriesProjectSet
 from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
 from DB import Project
@@ -82,10 +82,10 @@ class PredictForProject(JobServiceBase):
         logger.info("Input Param = %s" % (self.req.__dict__,))
 
         self.update_progress(10, "Computing learning set medians")
-        medians = FeatureConsistentProjectSet.read_median_values(self.ro_session, req.source_project_ids,
-                                                                 req.features, req.learning_limit, req.categories)
+        learning_set = LimitedInCategoriesProjectSet(self.ro_session, req.source_project_ids,
+                                                     req.features, req.learning_limit, req.categories)
+        medians = learning_set.read_median_values()
         logger.info("Medians: %s", medians)
-
 
         nb_rows = 100
         final_message = "Done."
