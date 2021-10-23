@@ -18,9 +18,9 @@ class ObjectCNNFeature(Model):
 
 
 # The features in _each_ row
-_FEATURES = ["cnn%02d" % i for i in range(1, 51)]
+DEEP_FEATURES = ["cnn%02d" % i for i in range(1, 51)]
 
-for a_feat in _FEATURES:
+for a_feat in DEEP_FEATURES:
     setattr(ObjectCNNFeature, a_feat, Column(REAL))
 
 
@@ -29,5 +29,5 @@ class ObjectCNNFeaturesBean(Bean):
         A bean for feeding DBWriter.
     """
     def __init__(self, obj_id, features):
-        super().__init__(zip(_FEATURES, features))
+        super().__init__(zip(DEEP_FEATURES, features))
         self["objcnnid"] = obj_id

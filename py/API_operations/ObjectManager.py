@@ -73,7 +73,7 @@ class ObjectManager(Service):
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, filters)
 
-        extra_cols = self._add_return_fields(return_fields, free_columns_mappings)
+        extra_cols = self.add_return_fields(return_fields, free_columns_mappings)
 
         from_, where_clause, params = object_set.get_sql(user_id, order_clause, extra_cols)
 
@@ -164,7 +164,13 @@ class ObjectManager(Service):
         if order_expr is None:
             return None
         alias, order_col = order_expr.split(".", 1)
-        ret.add_expression(alias, order_col, asc_desc)
+        # From PG doc: If NULLS LAST is specified, null values sort after all non-null values;
+        # if NULLS FIRST is specified, null values sort before all non-null values.
+        # If neither is specified, the default behavior is NULLS LAST when ASC is specified or implied,
+        #    and NULLS FIRST when DESC is specified
+        #    ***(thus, the default is to act as though nulls are larger than non-nulls)***
+        # From me (LS): This is utterly strange for dates, as it means that unknown is in the future.
+        ret.add_expression(alias, order_col, asc_desc, invert_nulls_first="_when" in order_col)
         # Disambiguate using obj_id, from one object table or the other
         if alias == "obf":
             ret.add_expression("obf", "objfid", asc_desc)
@@ -174,8 +180,8 @@ class ObjectManager(Service):
         return ret
 
     @classmethod
-    def _add_return_fields(cls, return_fields: Optional[List[str]],
-                           mappings: TableMapping) -> str:
+    def add_return_fields(cls, return_fields: Optional[List[str]],
+                          mappings: TableMapping) -> str:
         """
             From an API-named list of columns, return the real text for the SELECT to return them
         :param return_fields:

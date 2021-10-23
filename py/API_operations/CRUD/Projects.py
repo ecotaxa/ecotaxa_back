@@ -8,7 +8,7 @@ from API_models.crud import CreateProjectReq
 from BO.Classification import ClassifIDListT, ClassifIDT
 from BO.ObjectSet import EnumeratedObjectSet
 from BO.Project import ProjectBO, ProjectBOSet, ProjectTaxoStats, ProjectUserStats
-from BO.ProjectSet import FeatureConsistentProjectSet, ProjectSetColumnStats
+from BO.ProjectSet import ProjectSetColumnStats, LimitedInCategoriesProjectSet
 from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
 from DB import Sample
@@ -163,6 +163,7 @@ class ProjectsService(Service):
             Read data statistics for these projects, optionally using a limit and filtering categories.
         """
         # No security barrier because there is no private information inside
-        ret = FeatureConsistentProjectSet.read_columns_stats(self.session, prj_ids, column_names,
-                                                             random_limit, categories)
+        learning_set = LimitedInCategoriesProjectSet(self.session, prj_ids, column_names,
+                                                     random_limit, categories)
+        ret = learning_set.read_columns_stats()
         return ret

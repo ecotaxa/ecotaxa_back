@@ -505,6 +505,9 @@ class EnumeratedObjectSet(MappedTable):
             prev_obj = prev[obj_id]
             prev_classif_id: Optional[int] = prev_obj['classif_id']
             prev_classif_qual = prev_obj['classif_qual']
+            # Skip non-updates
+            if (classif == prev_classif_id) and prev_classif_qual == PREDICTED_CLASSIF_QUAL:
+                continue
             # Whatever, set the auto_* fields, on the object
             an_update: Dict[str, Any] = {objid_param: obj_id,
                                          classif_auto_id_col: classif,
@@ -530,22 +533,22 @@ class EnumeratedObjectSet(MappedTable):
         sql_now = text("now()")
         obj_upd_qry: Update = ObjectHeader.__table__.update()
         obj_upd_qry = obj_upd_qry.where(ObjectHeader.objid == bindparam(objid_param))
-        nb_updated = 0
         if len(full_updates) > 0:
             full_upd_qry = obj_upd_qry.values(classif_id=bindparam(classif_id_col),
                                               classif_qual=bindparam(classif_qual_col),
                                               classif_auto_id=bindparam(classif_auto_id_col),
                                               classif_auto_score=bindparam(classif_auto_score_col),
                                               classif_auto_when=sql_now)
-            nb_updated += self.session.execute(full_upd_qry, full_updates).rowcount
+            self.session.execute(full_upd_qry, full_updates)
         # Partial updates
         if len(partial_updates) > 0:
             part_upd_qry = obj_upd_qry.values(classif_auto_id=bindparam(classif_auto_id_col),
                                               classif_auto_score=bindparam(classif_auto_score_col),
                                               classif_auto_when=sql_now)
-            nb_updated += self.session.execute(part_upd_qry, partial_updates).rowcount
+            self.session.execute(part_upd_qry, partial_updates)
         # TODO: Cache upd
-        logger.info("_auto: %d and %d gives %d rows updated ", len(full_updates), len(partial_updates), nb_updated)
+        logger.info("_auto: %d full updates and %d partial updates ", len(full_updates), len(partial_updates))
+        nb_updated = len(full_updates) + len(partial_updates)
 
         # Return statuses
         return nb_updated, all_changes
@@ -727,6 +730,8 @@ class ObjectSetFilter(object):
                 where_clause *= "obh.classif_who = " + str(user_id)
             elif self.status_filter == "U":
                 where_clause *= "obh.classif_qual IS NULL"
+            elif self.status_filter == "UP":  # Updateable by Prediction
+                where_clause *= "(obh.classif_qual = '%s' OR obh.classif_qual IS NULL)" % PREDICTED_CLASSIF_QUAL
             elif self.status_filter == "PVD":
                 where_clause *= "obh.classif_qual IS NOT NULL"
             else:

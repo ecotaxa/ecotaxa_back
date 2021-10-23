@@ -265,6 +265,7 @@ class ProjectFilters(TypedDict, total=False):
           'NVM': Validated, but not by me 
           'VM': Validated by me 
           'U': Not classified
+          'UP': Updatable by prediction 
            other: direct equality comparison with DB value """
     MapN: Optional[str]
     MapW: Optional[str]

@@ -101,9 +101,12 @@ class OrderClause(object):
         self.expressions: List[str] = []
         self.columns: List[str] = []
 
-    def add_expression(self, alias: Optional[str], expr: str, asc_or_desc: Optional[str] = None) -> None:
+    def add_expression(self, alias: Optional[str], expr: str, asc_or_desc: Optional[str] = None,
+                       invert_nulls_first: bool = False) -> None:
         if asc_or_desc is None:
             asc_or_desc = "ASC"
+        if invert_nulls_first:
+            asc_or_desc += " NULLS FIRST" if asc_or_desc == "ASC" else " NULLS LAST"
         if alias is not None:
             # Refer to a table in select list
             self.expressions.append("%s.%s %s" % (alias, expr, asc_or_desc))
