@@ -10,7 +10,7 @@
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Generator, Tuple
 
-import numpy as np
+import numpy as np  # type: ignore
 from numpy import ndarray
 
 from BO.Classification import ClassifIDT, ClassifIDListT
@@ -139,13 +139,13 @@ class FeatureConsistentProjectSet(object):
         res: Result = self.session.execute(sql)
         return res
 
-    def np_read_all(self) -> Tuple[ndarray, 'ObjectIDListT', ClassifIDListT]:
+    def np_read_all(self) -> Tuple[ndarray, List[int], ClassifIDListT]:  # TODO: ObjectIDListT
         """
             Read the dataset as a numpy array. NULL and infinities become an np NaN.
         """
         res = self.read_all()
-        obj_ids = []
-        classif_ids = []
+        obj_ids: List[int] = []
+        classif_ids: ClassifIDListT = []
         # noinspection PyUnresolvedReferences
         np_table = self.np_read(res, res.rowcount, self.column_names,
                                 obj_ids, classif_ids, {})

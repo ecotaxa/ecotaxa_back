@@ -11,13 +11,14 @@ from os.path import join
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-import numpy as np
-from sklearn.ensemble import RandomForestClassifier
+import numpy as np  # type: ignore
+from sklearn.ensemble import RandomForestClassifier  # type: ignore
 
 from API_models.crud import ProjectFilters
 from API_models.prediction import PredictionReq, PredictionRsp
+from BO.Classification import ClassifIDListT
 from BO.Mappings import TableMapping
-from BO.ObjectSet import DescribedObjectSet, EnumeratedObjectSet
+from BO.ObjectSet import DescribedObjectSet, EnumeratedObjectSet, ObjectIDListT
 from BO.Prediction import DeepFeatures
 from BO.Project import ProjectBO
 from BO.ProjectSet import LimitedInCategoriesProjectSet, FeatureConsistentProjectSet
@@ -187,8 +188,8 @@ class PredictForProject(JobServiceBase):
         res: Result = self.ro_session.execute(sql, params)
         CHUNK_SIZE = 10000
         while True:
-            obj_ids = []
-            unused = []
+            obj_ids: ObjectIDListT = []
+            unused: ClassifIDListT = []
             np_chunk = FeatureConsistentProjectSet.np_read(res, CHUNK_SIZE, features,
                                                            obj_ids, unused, np_medians_per_feat)
             logger.info("One chunk of %d", len(obj_ids))
@@ -203,7 +204,7 @@ class PredictForProject(JobServiceBase):
             target_obj_set = EnumeratedObjectSet(self.session, obj_ids)
             # TODO: Remove the keep_logs flag, once sure the new algo is better
             nb_upd, all_changes = target_obj_set.classify_auto(classif_ids, scores, keep_logs=True)
-            #logger.info("Changes: %s", all_changes)
+            # logger.info("Changes: %s", all_changes)
             # Propagate changes to update projects_taxo_stat
             logger.info("TODO: Propagate changes to stats")
             ObjectManager().propagate_classif_changes(nb_upd, all_changes, prj)
