@@ -174,18 +174,20 @@ class PredictForProject(JobServiceBase):
             Do the classification job itself.
         """
         # Prepare a where clause and parameters from filter
-        src_proj_id = self.req.project_id
+        dst_proj_id = self.req.project_id
         user_id = self._get_owner_id()
         filters = self.filters
         filters['statusfilter'] = 'UP'  # TODO: It overrides other filters
-        user, prj = RightsBO.user_wants(self.session, user_id, Action.READ, src_proj_id)
-        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, src_proj_id, filters)
+        user, prj = RightsBO.user_wants(self.session, user_id, Action.READ, dst_proj_id)
+        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, dst_proj_id, filters)
         free_columns_mappings = TableMapping(ObjectFields).load_from_equal_list(prj.mappingobj)
         sel_cols = ObjectManager.add_return_fields(features, free_columns_mappings)
         from_, where_clause, params = object_set.get_sql(user_id, order_clause=None, select_list=sel_cols)
         sql = "SELECT obh.objid, NULL " + sel_cols + " FROM " + from_.get_sql() + where_clause.get_sql()
         logger.info("Execute SQL : %s" % sql)
         res: Result = self.ro_session.execute(sql, params)
+        total_rows = res.rowcount
+        done_count = 0
         CHUNK_SIZE = 10000
         while True:
             obj_ids: ObjectIDListT = []
@@ -193,8 +195,6 @@ class PredictForProject(JobServiceBase):
             np_chunk = FeatureConsistentProjectSet.np_read(res, CHUNK_SIZE, features,
                                                            obj_ids, unused, np_medians_per_feat)
             logger.info("One chunk of %d", len(obj_ids))
-            if len(obj_ids) == 0:
-                break
             predict_result = classifier.predict_proba(np_chunk)
             max_proba = np.argmax(predict_result, axis=1)
             # SqlParam = [{'cat': int(classifier.classes_[mc]), 'p': r[mc], 'id': int(i)}
@@ -203,11 +203,15 @@ class PredictForProject(JobServiceBase):
             scores = [r[mc] for mc, r in zip(max_proba, predict_result)]
             target_obj_set = EnumeratedObjectSet(self.session, obj_ids)
             # TODO: Remove the keep_logs flag, once sure the new algo is better
-            nb_upd, all_changes = target_obj_set.classify_auto(classif_ids, scores, keep_logs=True)
-            # logger.info("Changes: %s", all_changes)
-            # Propagate changes to update projects_taxo_stat
-            logger.info("TODO: Propagate changes to stats")
-            ObjectManager().propagate_classif_changes(nb_upd, all_changes, prj)
+            _nb_upd, all_changes = target_obj_set.classify_auto(classif_ids, scores, keep_logs=True)
+            logger.info("Changes :%s", str(all_changes))
+            self.session.commit()
+            if len(obj_ids) < CHUNK_SIZE:
+                break
+            done_count += len(obj_ids)
+        # Propagate changes to update projects_taxo_stat
+        ProjectBO.update_taxo_stats(self.session, dst_proj_id)
+        self.session.commit()
         logger.info("Done")
 
 
