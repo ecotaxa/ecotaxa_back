@@ -11,7 +11,6 @@ from typing import List, Dict, Any, Iterable, Optional, Union, Generator, Tuple
 from BO.Classification import ClassifIDListT
 from BO.Instrument import DescribedInstrumentSet
 from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping, TableMapping
-from BO.Object import ObjectBO
 from BO.Prediction import DeepFeatures
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.User import MinimalUserBO, UserActivity, UserIDT

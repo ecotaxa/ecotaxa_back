@@ -94,13 +94,12 @@ class PredictForProject(JobServiceBase):
 
         classifier, features, medians = self.build_classifier(req)
 
-        self.classify(classifier, features, medians)
+        nb_rows = self.classify(classifier, features, medians)
 
-        nb_rows = 100
-        final_message = "Done."
+        final_message = "New category set on %d objects." % nb_rows
         self.update_progress(100, final_message)
         done_infos = {"rowcount": nb_rows}
-        self.set_job_result(errors=["FORCED ERROR"], infos=done_infos)
+        self.set_job_result(errors=[], infos=done_infos)
 
     def build_classifier(self, req) -> Tuple[RandomForestClassifier, List[str], Dict]:
         """
@@ -158,6 +157,13 @@ class PredictForProject(JobServiceBase):
         clean_np_features = np.delete(np_learning_set, to_del_ndx, axis=1)
         logger.info("Dropped features: %s", to_del)
 
+        # In case, add deep features
+        if self.req.use_scn:
+            self.update_progress(15, "Retrieving deep features")
+            logger.info("Adding 50 deep features")
+            np_deep_features = DeepFeatures.np_read_for_objects(self.ro_session, obj_ids)
+            clean_np_features = np.concatenate([clean_np_features, np_deep_features], axis=1)
+
         # Build the classifier
         ret = RandomForestClassifier(n_estimators=300, min_samples_leaf=5, n_jobs=6,
                                      class_weight="balanced",
@@ -168,8 +174,10 @@ class PredictForProject(JobServiceBase):
         logger.info("Done training the classifier")
         return ret, [a_feat for a_feat in features if a_feat not in to_del], np_medians_per_feat
 
+    CHUNK_SIZE = 10000
+
     def classify(self, classifier: RandomForestClassifier, features: List[str],
-                 np_medians_per_feat: Dict):
+                 np_medians_per_feat: Dict) -> int:
         """
             Do the classification job itself.
         """
@@ -188,31 +196,34 @@ class PredictForProject(JobServiceBase):
         res: Result = self.ro_session.execute(sql, params)
         total_rows = res.rowcount
         done_count = 0
-        CHUNK_SIZE = 10000
+        nb_changes = 0
         while True:
             obj_ids: ObjectIDListT = []
             unused: ClassifIDListT = []
-            np_chunk = FeatureConsistentProjectSet.np_read(res, CHUNK_SIZE, features,
+            np_chunk = FeatureConsistentProjectSet.np_read(res, self.CHUNK_SIZE, features,
                                                            obj_ids, unused, np_medians_per_feat)
+            if self.req.use_scn:
+                np_deep_features_chunk = DeepFeatures.np_read_for_objects(self.ro_session, obj_ids)
+                np_chunk = np.concatenate([np_chunk, np_deep_features_chunk], axis=1)
             logger.info("One chunk of %d", len(obj_ids))
             predict_result = classifier.predict_proba(np_chunk)
             max_proba = np.argmax(predict_result, axis=1)
-            # SqlParam = [{'cat': int(classifier.classes_[mc]), 'p': r[mc], 'id': int(i)}
-            #             for i, mc, r in zip(obj_ids, max_proba, predict_result)]
             classif_ids = [int(classifier.classes_[mc]) for mc in max_proba]
             scores = [r[mc] for mc, r in zip(max_proba, predict_result)]
             target_obj_set = EnumeratedObjectSet(self.session, obj_ids)
             # TODO: Remove the keep_logs flag, once sure the new algo is better
-            _nb_upd, all_changes = target_obj_set.classify_auto(classif_ids, scores, keep_logs=True)
+            nb_upd, all_changes = target_obj_set.classify_auto(classif_ids, scores, keep_logs=True)
+            nb_changes += nb_upd
             logger.info("Changes :%s", str(all_changes))
             self.session.commit()
-            if len(obj_ids) < CHUNK_SIZE:
+            if len(obj_ids) < self.CHUNK_SIZE:
                 break
             done_count += len(obj_ids)
         # Propagate changes to update projects_taxo_stat
         ProjectBO.update_taxo_stats(self.session, dst_proj_id)
         self.session.commit()
-        logger.info("Done")
+        logger.info("Classify done.")
+        return nb_changes
 
 
 class CNNForProject(Service):

@@ -7,12 +7,15 @@
 # A prediction is the output of an automatic classification process.
 #    This is heavily based on machine learning algorithms.
 #
-from typing import Any
+from typing import Any, List
 
-from DB import ObjectHeader, Acquisition, Sample, ObjectCNNFeature
+import numpy as np # type: ignore
+from numpy import ndarray
+
+from DB import ObjectHeader, Acquisition, Sample, ObjectCNNFeature, CNNFeature
 from DB.CNNFeature import ObjectCNNFeaturesBean
 from DB.Project import ProjectIDT
-from DB.helpers import Session
+from DB.helpers import Session, Result
 from DB.helpers.DBWriter import DBWriter
 from DB.helpers.ORM import Query, and_
 from helpers.DynamicLogs import get_logger
@@ -64,3 +67,32 @@ class DeepFeatures(object):
                 writer.do_bulk_save()
         writer.do_bulk_save()
         return nb_rows
+
+    @classmethod
+    def read_for_objects(cls, session: Session, oid_lst: List[int]) -> Result:  # TODO: Should be ObjectIDListT
+        """
+            Read CNN lines AKA features, in order, for given object_ids
+        """
+        fk_to_objid = ObjectCNNFeature.objcnnid.name
+        sql = "WITH ordr (seq, objid) AS (select * from UNNEST(:seq, :oids)) "
+        sql += "SELECT " + ",".join(CNNFeature.DEEP_FEATURES)
+        sql += " FROM " + ObjectCNNFeature.__tablename__
+        sql += " JOIN ordr ON " + fk_to_objid + " = ordr.objid "
+        sql += " ORDER BY ordr.seq "
+        params = {"seq": list(range(len(oid_lst))),
+                  "oids": oid_lst}
+        res: Result = session.execute(sql, params=params)
+        return res
+
+    @classmethod
+    def np_read_for_objects(cls, session: Session, oid_lst: List[int]) -> ndarray:
+        """
+            Read CNN lines AKA features, in order, for given object_ids, into a NumPy array
+        """
+        res = cls.read_for_objects(session, oid_lst)
+        ret = np.ndarray(shape=(len(oid_lst), len(res.keys())), dtype=np.float32)
+        ndx = 0
+        for a_row in res:
+            ret[ndx] = a_row
+            ndx += 1
+        return ret

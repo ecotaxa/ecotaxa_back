@@ -501,12 +501,14 @@ class EnumeratedObjectSet(MappedTable):
         full_updates = []
         partial_updates = []
         objid_param = "_objid"
+        impacted_object_ids = set(self.object_ids)
         for obj_id, classif, score in zip(self.object_ids, classif_ids, scores):
             prev_obj = prev[obj_id]
             prev_classif_id: Optional[int] = prev_obj['classif_id']
             prev_classif_qual = prev_obj['classif_qual']
             # Skip non-updates
             if (classif == prev_classif_id) and prev_classif_qual == PREDICTED_CLASSIF_QUAL:
+                impacted_object_ids.discard(obj_id)
                 continue
             # Whatever, set the auto_* fields, on the object
             an_update: Dict[str, Any] = {objid_param: obj_id,
@@ -527,7 +529,8 @@ class EnumeratedObjectSet(MappedTable):
 
         # Historize (auto)
         if keep_logs:
-            self.historize_classification(only_qual=None)
+            impacted_objects = EnumeratedObjectSet(self.session, list(impacted_object_ids))
+            impacted_objects.historize_classification(only_qual=None)
 
         # Bulk (or sort of) update of obj_head
         sql_now = text("now()")
