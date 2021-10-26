@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.22"
+    "version":"0.0.23"
   },
   "servers":[
     {
@@ -6439,7 +6439,8 @@
           "project_id",
           "source_project_ids",
           "features",
-          "categories"
+          "categories",
+          "pre_mapping"
         ],
         "type":"object",
         "properties":{
@@ -6485,6 +6486,14 @@
             "type":"boolean",
             "description":"Use extra features, generated using the image, for improving the prediction.",
             "default":false
+          },
+          "pre_mapping":{
+            "title":"Categories pre-mapping",
+            "type":"object",
+            "additionalProperties":{
+              "type":"integer"
+            },
+            "description":"Categories in keys become value one before launching the ML algorithm. Any unknown value is ignored."
           }
         },
         "description":"How to predict, in details.",
@@ -7269,8 +7278,7 @@
           "dest_prj_id",
           "group_type",
           "limit_type",
-          "limit_value",
-          "do_images"
+          "limit_value"
         ],
         "type":"object",
         "properties":{
@@ -7318,12 +7326,6 @@
             "type":"number",
             "description":"Limit value, e.g. 20% or 5 per copepoda or 5% per sample.",
             "example":10.0
-          },
-          "do_images":{
-            "title":"Do images",
-            "type":"boolean",
-            "description":"If set, also clone images.",
-            "example":true
           }
         },
         "description":"Subset request. "
