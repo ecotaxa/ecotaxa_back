@@ -29,7 +29,6 @@ from DB.Project import ProjectIDT
 from DB.helpers import Result
 from FS.MachineLearningModels import SavedModels
 from FS.Vault import Vault
-from ML.Deep_features_extractor import DeepFeaturesExtractor
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 # TODO: Move somewhere else
 from helpers.Timer import CodeTimer
@@ -257,6 +256,8 @@ class CNNForProject(Service):
         if len(ids_and_images) == 0:
             return "No image!"
         # Call feature extractor
+        # TODO: Temporarily here to get rid of dependency. Of course, call will fail.
+        from ML.Deep_features_extractor import DeepFeaturesExtractor
         extractor = DeepFeaturesExtractor(self.vault, self.models_dir)
         features = extractor.run(ids_and_images, model_name)
         # Save CNN
