@@ -6,8 +6,8 @@
 from typing import Tuple, List, Set, Dict, TypeVar, Type, Any, Union
 
 # noinspection PyUnresolvedReferences
-from sqlalchemy import Column, inspect, MetaData, Table, any_ as _pg_any, all_ as _pg_all, not_, and_, or_, func, case, \
-    text, select, column, Integer, Float, FLOAT
+from sqlalchemy import Column, inspect, MetaData, Table, any_ as _pg_any, all_ as _pg_all, not_, and_, or_, func, \
+    case, text, select, column, Integer, Float, FLOAT
 from sqlalchemy.engine.result import Result  # type: ignore
 from sqlalchemy.ext.declarative import declarative_base
 # noinspection PyUnresolvedReferences

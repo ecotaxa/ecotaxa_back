@@ -189,9 +189,6 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         assert obj is not None and fields is not None
         # A few fields need adjustment
         obj.img0id = None
-        # Cut images if asked so
-        if not self.req.do_images:
-            image = None
         # Write parent entities
         assert sample and acquisition and process
         dict_of_parents = {Sample.__tablename__: sample,
@@ -212,7 +209,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             if cnn_features is not None:
                 writer.add_cnn_features(obj, cnn_features)
         # Do images
-        if new_records > 0 and self.req.do_images and image and image.file_name is not None:
+        if new_records > 0 and image and image.file_name is not None:
             # We have an image, with a new imgid but old paths have been copied
             old_imgpath = Path(self.vault.path_to(image.file_name))
             image.file_name = None  # In case, don't reference a non-existing file
@@ -220,7 +217,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
                 sub_path = self.vault.store_image(old_imgpath, image.imgid)
                 image.file_name = sub_path
             except FileNotFoundError:
-                pass
+                logger.error("Could not duplicate %s, not found", old_imgpath)
             # Proceed to thumbnail if any
             if image.thumb_file_name is not None:
                 old_thumbnail_path = self.vault.path_to(image.thumb_file_name)
@@ -231,7 +228,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
                     shutil.copyfile(old_thumbnail_path, thumb_full_path)
                     image.thumb_file_name = thumb_relative_path
                 except FileNotFoundError:
-                    pass
+                    logger.error("Could not duplicate thumbnail %s, not found", old_imgpath)
 
     def _find_what_to_clone(self):
         """
