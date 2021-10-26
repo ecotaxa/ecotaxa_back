@@ -170,6 +170,8 @@ class PredictForProject(JobServiceBase):
                                      verbose=True)  # TODO: verbose sends logs we can't see :(
         self.update_progress(20, "Training the classifier")
         logger.info("Training the classifier")
+        # Apply pre-mapping
+        classif_ids = [req.pre_mapping.get(classif_id, classif_id) for classif_id in classif_ids]
         ret.fit(clean_np_features, classif_ids)
         logger.info("Done training the classifier")
         return ret, [a_feat for a_feat in features if a_feat not in to_del], np_medians_per_feat

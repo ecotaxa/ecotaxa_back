@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from helpers.pydantic import BaseModel, Field
 
@@ -30,6 +30,9 @@ class PredictionReq(BaseModel):
     use_scn: bool = Field(title="Use scn",
                           description="Use extra features, generated using the image, for improving the prediction.",
                           default=False)
+    pre_mapping: Dict[int, int] = Field(title="Categories pre-mapping",
+                                        description="Categories in keys become value one before "
+                                                    "launching the ML algorithm. Any unknown value is ignored.")
 
     class Config:
         schema_extra = {
