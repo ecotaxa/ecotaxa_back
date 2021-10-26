@@ -70,6 +70,9 @@ class JobServiceBase(Service, LogEmitter, ABC):
         try:
             self.do_background()
         except Exception as e:
+            # If the exception damaged the session, we might end up in:
+            # sqlalchemy.exc.InternalError: (psycopg2.errors.InFailedSqlTransaction)
+            self.session.rollback()
             with JobBO.get_for_update(self.session, self.job_id) as job_bo:
                 job_bo.state = DBJobStateEnum.Error
                 job_bo.progress_msg = str(e)
