@@ -192,8 +192,9 @@ class PredictForProject(JobServiceBase):
         free_columns_mappings = TableMapping(ObjectFields).load_from_equal_list(prj.mappingobj)
         sel_cols = ObjectManager.add_return_fields(features, free_columns_mappings)
         from_, where_clause, params = object_set.get_sql(user_id, order_clause=None, select_list=sel_cols)
-        sql = "SELECT obh.objid, NULL " + sel_cols + " FROM " + from_.get_sql() + where_clause.get_sql()
+        sql = "SET LOCAL enable_seqscan=FALSE; SELECT obh.objid, NULL " + sel_cols + " FROM " + from_.get_sql() + where_clause.get_sql()
         logger.info("Execute SQL : %s" % sql)
+        self.update_progress(25, "Retrieving objects to classify")
         res: Result = self.ro_session.execute(sql, params)
         total_rows = res.rowcount
         done_count = 0
@@ -215,11 +216,13 @@ class PredictForProject(JobServiceBase):
             # TODO: Remove the keep_logs flag, once sure the new algo is better
             nb_upd, all_changes = target_obj_set.classify_auto(classif_ids, scores, keep_logs=True)
             nb_changes += nb_upd
-            logger.info("Changes :%s", str(all_changes))
+            logger.info("Changes :%s", str(all_changes)[:1000])
             self.session.commit()
             if len(obj_ids) < self.CHUNK_SIZE:
                 break
             done_count += len(obj_ids)
+            progress = 25 + (75 * done_count / total_rows)
+            self.update_progress(progress, "Classified %d rows" % done_count)
         # Propagate changes to update projects_taxo_stat
         ProjectBO.update_taxo_stats(self.session, dst_proj_id)
         self.session.commit()
