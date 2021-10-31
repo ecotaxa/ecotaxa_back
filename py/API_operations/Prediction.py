@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 import numpy as np  # type: ignore
-from sklearn.ensemble import RandomForestClassifier  # type: ignore
 
 from API_models.crud import ProjectFilters
 from API_models.prediction import PredictionReq, PredictionRsp
@@ -29,6 +28,7 @@ from DB.Project import ProjectIDT
 from DB.helpers import Result
 from FS.MachineLearningModels import SavedModels
 from FS.Vault import Vault
+from ML.Random_forest_classifier import OurRandomForestClassifier
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 # TODO: Move somewhere else
 from helpers.Timer import CodeTimer
@@ -91,18 +91,19 @@ class PredictForProject(JobServiceBase):
         req = self.req
         logger.info("Input Param = %s", self.req.__dict__)
 
-        classifier, features, medians = self.build_classifier(req)
+        np_feature_vals, classif_ids, used_features, np_medians_per_feat = self.build_learning_set(req)
+        classifier = self.build_classifier(np_feature_vals, classif_ids)
 
-        nb_rows = self.classify(classifier, features, medians)
+        nb_rows = self.classify(classifier, used_features, np_medians_per_feat)
 
         final_message = "New category set on %d objects." % nb_rows
         self.update_progress(100, final_message)
         done_infos = {"rowcount": nb_rows}
         self.set_job_result(errors=[], infos=done_infos)
 
-    def build_classifier(self, req) -> Tuple[RandomForestClassifier, List[str], Dict]:
+    def build_learning_set(self, req) -> Tuple[np.ndarray, ClassifIDListT, List[str], Dict]:
         """
-            Build the classifier model and return it with the involved features.
+            Build the learning set from DB data & req instructions.
         """
         self.update_progress(10, "Retrieving learning set data")
         learning_set = LimitedInCategoriesProjectSet(self.ro_session, req.source_project_ids,
@@ -155,6 +156,7 @@ class PredictForProject(JobServiceBase):
         to_del_ndx = [features.index(a_feat) for a_feat in to_del.keys()]
         clean_np_features = np.delete(np_learning_set, to_del_ndx, axis=1)
         logger.info("Dropped features: %s", to_del)
+        used_features = [a_feat for a_feat in features if a_feat not in to_del]
 
         # In case, add deep features
         if self.req.use_scn:
@@ -163,21 +165,26 @@ class PredictForProject(JobServiceBase):
             np_deep_features = DeepFeatures.np_read_for_objects(self.ro_session, obj_ids)
             clean_np_features = np.concatenate([clean_np_features, np_deep_features], axis=1)
 
-        # Build the classifier
-        ret = RandomForestClassifier(n_estimators=300, min_samples_leaf=5, n_jobs=6,
-                                     class_weight="balanced",
-                                     verbose=True)  # TODO: verbose sends logs we can't see :(
-        self.update_progress(20, "Training the classifier")
-        logger.info("Training the classifier")
         # Apply pre-mapping
         classif_ids = [req.pre_mapping.get(classif_id, classif_id) for classif_id in classif_ids]
-        ret.fit(clean_np_features, classif_ids)
+
+        return clean_np_features, classif_ids, used_features, np_medians_per_feat
+
+    def build_classifier(self, features: np.ndarray, classif_ids: ClassifIDListT) -> OurRandomForestClassifier:
+        """
+            Build the classifier model and train it with the data & target ids.
+        """
+        self.update_progress(20, "Training the classifier")
+        logger.info("Training the classifier")
+        ret = OurRandomForestClassifier()
+        ret.learn_from(features, classif_ids)
         logger.info("Done training the classifier")
-        return ret, [a_feat for a_feat in features if a_feat not in to_del], np_medians_per_feat
+
+        return ret
 
     CHUNK_SIZE = 10000
 
-    def classify(self, classifier: RandomForestClassifier, features: List[str],
+    def classify(self, classifier: OurRandomForestClassifier, features: List[str],
                  np_medians_per_feat: Dict) -> int:
         """
             Do the classification job itself.
@@ -208,10 +215,7 @@ class PredictForProject(JobServiceBase):
                 np_deep_features_chunk = DeepFeatures.np_read_for_objects(self.ro_session, obj_ids)
                 np_chunk = np.concatenate([np_chunk, np_deep_features_chunk], axis=1)
             logger.info("One chunk of %d", len(obj_ids))
-            predict_result = classifier.predict_proba(np_chunk)
-            max_proba = np.argmax(predict_result, axis=1)
-            classif_ids = [int(classifier.classes_[mc]) for mc in max_proba]
-            scores = [r[mc] for mc, r in zip(max_proba, predict_result)]
+            classif_ids, scores = classifier.predict(np_chunk)
             target_obj_set = EnumeratedObjectSet(self.session, obj_ids)
             # TODO: Remove the keep_logs flag, once sure the new algo is better
             nb_upd, all_changes = target_obj_set.classify_auto(classif_ids, scores, keep_logs=True)
