@@ -1,0 +1,17 @@
+# In theory, should do SQLAlchemy[mypy], but the typings there depend on SQLA 2.0 interface
+SQLAlchemy==1.4.23
+psycopg2-binary==2.9.1
+# Data models, to keep in sync with FastAPI-imported one
+pydantic==1.8.2
+# Image processing libs.
+# Machine learning with no GPU
+scikit-learn==1.0
+# Machine learning with GPU. NOT automatically regression-tested so to upgrade with caution.
+tensorflow==2.6.0
+tensorflow-hub==0.12.0
+tensorflow_addons==0.14.0
+# Used same place as TF, CNN generation
+pandas==1.3.3
+##lycon==0.2.0 # Conflicts with the version required by TF
+opencv-python-headless==4.5.3.56
+imgaug==0.4.0
