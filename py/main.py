@@ -120,6 +120,7 @@ app.mount("/api", app)
 # noinspection PyUnusedLocal
 @app.post(
     "/login",
+    operation_id="login",
     tags=['authentification'],
     responses={
         200: {
@@ -144,7 +145,7 @@ async def login(params: LoginReq = Body(...)) -> str:
             return sce.validate_login(params.username, params.password)
 
 
-@app.get("/users", tags=['users'], response_model=List[UserModel])
+@app.get("/users", operation_id="get_users", tags=['users'], response_model=List[UserModel])
 def get_users(current_user: int = Depends(get_current_user)):
     """
         Returns the list of **all users** with their information. 
@@ -155,7 +156,7 @@ def get_users(current_user: int = Depends(get_current_user)):
         return sce.list(current_user)
 
 
-@app.get("/users/me", tags=['users'], response_model=UserModelWithRights)
+@app.get("/users/me", operation_id="show_current_user", tags=['users'], response_model=UserModelWithRights)
 def show_current_user(current_user: int = Depends(get_current_user)):
     """
         Returns **currently authenticated user's** (i.e. you) information, permissions and last used projects.
@@ -172,6 +173,7 @@ def show_current_user(current_user: int = Depends(get_current_user)):
 
 @app.get(
     "/users/my_preferences/{project_id}",
+    operation_id="get_current_user_prefs",
     tags=['users'],
     responses={
         200: {
@@ -197,7 +199,9 @@ def get_current_user_prefs(
         return sce.get_preferences_per_project(current_user, project_id, key)
 
 
-@app.put("/users/my_preferences/{project_id}", tags=['users'],
+@app.put("/users/my_preferences/{project_id}",
+         operation_id="set_current_user_prefs",
+         tags=['users'],
          responses={
              200: {
                  "content": {
@@ -228,7 +232,7 @@ def set_current_user_prefs(
         return sce.set_preferences_per_project(current_user, project_id, key, value)
 
 
-@app.get("/users/search", tags=['users'], response_model=List[UserModel])
+@app.get("/users/search", operation_id="search_user", tags=['users'], response_model=List[UserModel])
 def search_user(current_user: int = Depends(get_current_user),
                 by_name: Optional[str] = Query(default=None, title="search by name",
                                                description="Search by name, use % for searching with 'any char'.",
@@ -241,7 +245,7 @@ def search_user(current_user: int = Depends(get_current_user),
     return ret
 
 
-@app.get("/users/{user_id}", tags=['users'], response_model=UserModel)
+@app.get("/users/{user_id}", operation_id="get_user", tags=['users'], response_model=UserModel)
 def get_user(user_id: int = Path(..., description="Internal, the unique numeric id of this user.", example=1),
              current_user: int = Depends(get_current_user)):
     """
@@ -257,6 +261,7 @@ def get_user(user_id: int = Path(..., description="Internal, the unique numeric 
 # ######################## END OF USER
 
 @app.post("/collections/create",
+          operation_id="create_collection",
           tags=['collections'],
           responses={
               200: {
@@ -286,7 +291,7 @@ def create_collection(params: CreateCollectionReq = Body(...),
     return ret
 
 
-@app.get("/collections/search", tags=['collections'], response_model=List[CollectionModel])
+@app.get("/collections/search", operation_id="search_collections", tags=['collections'], response_model=List[CollectionModel])
 def search_collections(title: str = Query(..., title="Title",
                                           description="Search by title, use % for searching with 'any char'.",
                                           example="%coll%"),
@@ -302,7 +307,7 @@ def search_collections(title: str = Query(..., title="Title",
     return matching_collections
 
 
-@app.get("/collections/by_title", tags=['collections'], response_model=CollectionModel)
+@app.get("/collections/by_title", operation_id="collection_by_title", tags=['collections'], response_model=CollectionModel)
 def collection_by_title(
         q: str = Query(..., title="Title", description="Search by **exact** title.", example="My collection")):
     """
@@ -318,7 +323,7 @@ def collection_by_title(
     return matching_collection
 
 
-@app.get("/collections/by_short_title", tags=['collections'], response_model=CollectionModel)
+@app.get("/collections/by_short_title", operation_id="collection_by_short_title", tags=['collections'], response_model=CollectionModel)
 def collection_by_short_title(
         q: str = Query(..., title="Short title", description="Search by **exact** short title.",
                        example="My coll")):
@@ -335,7 +340,7 @@ def collection_by_short_title(
     return matching_collection
 
 
-@app.get("/collections/{collection_id}", tags=['collections'], response_model=CollectionModel)
+@app.get("/collections/{collection_id}", operation_id="get_collection", tags=['collections'], response_model=CollectionModel)
 def get_collection(
         collection_id: int = Path(..., description="Internal, the unique numeric id of this collection.",
                                   example=1),
@@ -353,7 +358,7 @@ def get_collection(
         return present_collection
 
 
-@app.put("/collections/{collection_id}", tags=['collections'],
+@app.put("/collections/{collection_id}", operation_id="update_collection", tags=['collections'],
          responses={
              200: {
                  "content": {
@@ -393,7 +398,7 @@ def update_collection(collection: CollectionModel = Body(...),
                                   associate_orgs=collection.associate_organisations)
 
 
-@app.get("/collections/{collection_id}/export/emodnet", tags=['collections'], response_model=EMODnetExportRsp)
+@app.get("/collections/{collection_id}/export/emodnet", operation_id="emodnet_format_export", tags=['collections'], response_model=EMODnetExportRsp)
 def emodnet_format_export(
         collection_id: int = Path(..., description="Internal, the unique numeric id of this collection.",
                                   example=1),
@@ -424,7 +429,7 @@ def emodnet_format_export(
             return sce.run(current_user)
 
 
-@app.delete("/collections/{collection_id}", tags=['collections'],
+@app.delete("/collections/{collection_id}", operation_id="erase_collection", tags=['collections'],
             responses={
                 200: {
                     "content": {
@@ -461,7 +466,7 @@ project_model_columns = plain_columns(ProjectModel)
 
 # TODO JCE - description
 # TODO TODO TODO: No verification of GET query parameters by FastAPI. pydantic does POST models OK.
-@app.get("/projects/search", tags=['projects'], response_model=List[ProjectModel])
+@app.get("/projects/search", operation_id="search_projects", tags=['projects'], response_model=List[ProjectModel])
 def search_projects(current_user: Optional[int] = Depends(get_optional_current_user),
                     also_others: bool = Query(default=False, deprecated=True, title="Also others", description="",
                                               example=False),
@@ -504,7 +509,7 @@ def search_projects(current_user: Optional[int] = Depends(get_optional_current_u
     return MyORJSONResponse(ret)
 
 
-@app.post("/projects/create", tags=['projects'],
+@app.post("/projects/create", operation_id="create_project", tags=['projects'],
           responses={
               200: {
                   "content": {
@@ -533,7 +538,7 @@ def create_project(params: CreateProjectReq = Body(...),
     return ret
 
 
-@app.post("/projects/{project_id}/subset", tags=['projects'], response_model=SubsetRsp)
+@app.post("/projects/{project_id}/subset", operation_id="project_subset", tags=['projects'], response_model=SubsetRsp)
 def project_subset(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
                    params: SubsetReq = Body(...),
                    current_user: int = Depends(get_current_user)):
@@ -546,7 +551,7 @@ def project_subset(project_id: int = Path(..., description="Internal, numeric id
     return ret
 
 
-@app.get("/projects/{project_id}", tags=['projects'], response_model=ProjectModel)
+@app.get("/projects/{project_id}", operation_id="project_query", tags=['projects'], response_model=ProjectModel)
 def project_query(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
                   for_managing: Optional[bool] = Query(title="For managinig", description="For managing this project.",
                                                        default=False, example=False),
@@ -561,7 +566,7 @@ def project_query(project_id: int = Path(..., description="Internal, numeric id 
         return ret
 
 
-@app.get("/project_set/taxo_stats", tags=['projects'], response_model=List[ProjectTaxoStatsModel])  # type: ignore
+@app.get("/project_set/taxo_stats", operation_id="project_set_get_stats", tags=['projects'], response_model=List[ProjectTaxoStatsModel])  # type: ignore
 def project_set_get_stats(ids: str = Query(..., title="Ids",
                                            description="String containing the list of one or more id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
                                            example="1"),
@@ -584,7 +589,7 @@ def project_set_get_stats(ids: str = Query(..., title="Ids",
         return MyORJSONResponse(ret)
 
 
-@app.get("/project_set/user_stats", tags=['projects'],
+@app.get("/project_set/user_stats", operation_id="project_set_get_user_stats", tags=['projects'],
          responses={
              200: {
                  "content": {
@@ -622,7 +627,7 @@ def project_set_get_user_stats(ids: str = Query(..., title="Ids",
         return ret
 
 
-@app.get("/project_set/column_stats", tags=['projects'],
+@app.get("/project_set/column_stats", operation_id="project_set_get_column_stats", tags=['projects'],
          responses={
              200: {
                  "content": {
@@ -637,15 +642,15 @@ def project_set_get_user_stats(ids: str = Query(..., title="Ids",
              }
          }, response_model=ProjectSetColumnStatsModel)  # type: ignore
 def project_set_get_column_stats(ids: str = Query(..., title="Project ids",
-                                                  description="String containing the Project list, one or more id separated by non-num char.",
+                                                  description="String containing the list of one or more id separated by non-num char.",
                                                   example="1400+1453"),
                                  names: str = Query(..., title="Column names",
                                                     description="Coma-separated prefixed columns, on which stats are needed.",
                                                     example="fre.area,obj.depth_min,fre.nb2"),
-                                 limit: Optional[int] = Query(default=None, title="Stats limit",
+                                limit: Optional[int] = Query(default=None, title="Stats limit",
                                                               description="Only compute stats on this number of objects per category.",
                                                               example=5000),
-                                 categories: Optional[str] = Query(default=None, title="Categories for limit",
+                                categories: Optional[str] = Query(default=None, title="Categories for limit",
                                                                    description="String containing the Categories, one or more id separated by non-num char.",
                                                                    example="493,567"),
                                  current_user: int = Depends(get_current_user)
@@ -669,7 +674,7 @@ def project_set_get_column_stats(ids: str = Query(..., title="Project ids",
         return ret
 
 
-@app.post("/projects/{project_id}/dump", tags=['projects'], include_in_schema=False)  # pragma:nocover
+@app.post("/projects/{project_id}/dump", operation_id="project_dump", tags=['projects'], include_in_schema=False)  # pragma:nocover
 def project_dump(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
                  filters: ProjectFiltersModel = Body(...),
                  current_user: int = Depends(get_current_user)):
@@ -683,7 +688,7 @@ def project_dump(project_id: int = Path(..., description="Internal, numeric id o
         return sce.run(sys.stdout)
 
 
-@app.post("/projects/{project_id}/merge", tags=['projects'], response_model=MergeRsp)
+@app.post("/projects/{project_id}/merge", operation_id="project_merge", tags=['projects'], response_model=MergeRsp)
 def project_merge(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
                   source_project_id: int = Query(..., title="Source project Id",
                                                  description="Id of the other project. All objects from this source project will be moved to the project_id above and the source project itself will be deleted.",
@@ -705,7 +710,7 @@ def project_merge(project_id: int = Path(..., description="Internal, numeric id 
             return sce.run(current_user)
 
 
-@app.get("/projects/{project_id}/check", tags=['projects'],
+@app.get("/projects/{project_id}/check", operation_id="project_check", tags=['projects'],
          responses={
              200: {
                  "content": {
@@ -731,7 +736,7 @@ def project_check(project_id: int = Path(..., description="Internal, numeric id 
             return sce.run(current_user)
 
 
-@app.get("/projects/{project_id}/stats", tags=['projects'],
+@app.get("/projects/{project_id}/stats", operation_id="project_stats", tags=['projects'],
          responses={
              200: {
                  "content": {
@@ -767,7 +772,7 @@ Then for each acquisition a pair of strings will be added to the list :
             return sce.run(current_user)
 
 
-@app.post("/projects/{project_id}/recompute_geo", tags=['projects'],
+@app.post("/projects/{project_id}/recompute_geo", operation_id="project_recompute_geography", tags=['projects'],
           responses={
               200: {
                   "content": {
@@ -792,7 +797,7 @@ def project_recompute_geography(
             sce.recompute_geo(current_user, project_id)
 
 
-@app.post("/file_import/{project_id}", tags=['projects'], response_model=ImportRsp)
+@app.post("/file_import/{project_id}", operation_id="import_file", tags=['projects'], response_model=ImportRsp)
 def import_file(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
                 params: ImportReq = Body(...),
                 current_user: int = Depends(get_current_user)):
@@ -805,7 +810,7 @@ def import_file(project_id: int = Path(..., description="Internal, numeric id of
     return ret
 
 
-@app.post("/simple_import/{project_id}", tags=['projects'], response_model=SimpleImportRsp)
+@app.post("/simple_import/{project_id}", operation_id="simple_import", tags=['projects'], response_model=SimpleImportRsp)
 def simple_import(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
                   params: SimpleImportReq = Body(...),
                   dry_run: bool = Query(..., title="Dry run",
@@ -821,7 +826,7 @@ def simple_import(project_id: int = Path(..., description="Internal, numeric id 
     return ret
 
 
-@app.delete("/projects/{project_id}", tags=['projects'],
+@app.delete("/projects/{project_id}", operation_id="erase_project", tags=['projects'],
             responses={
                 200: {
                     "content": {
@@ -851,7 +856,7 @@ def erase_project(project_id: int = Path(..., description="Internal, numeric id 
             return sce.delete(current_user, project_id, only_objects)
 
 
-@app.put("/projects/{project_id}", tags=['projects'],
+@app.put("/projects/{project_id}", operation_id="update_project", tags=['projects'],
          responses={
              200: {
                  "content": {
@@ -889,7 +894,7 @@ def update_project(project: ProjectModel,
     with DBSyncService(ProjectPrivilege, ProjectPrivilege.projid, project_id) as ssce: ssce.wait()
 
 
-@app.put("/projects/{project_id}/prediction_settings", tags=['projects'],
+@app.put("/projects/{project_id}/prediction_settings", operation_id="set_project_predict_settings", tags=['projects'],
          responses={
              200: {
                  "content": {
@@ -919,7 +924,7 @@ def set_project_predict_settings(settings: str = Query(..., description="The new
 
 # ######################## END OF PROJECT
 
-@app.get("/samples/search", tags=['samples'], response_model=List[SampleModel])
+@app.get("/samples/search", operation_id="samples_search", tags=['samples'], response_model=List[SampleModel])
 def samples_search(project_ids: str = Query(..., title="Project Ids",
                                             description="String containing the list of one or more project id separated by non-num char.",
                                             example="1,55"),
@@ -938,7 +943,7 @@ def samples_search(project_ids: str = Query(..., title="Project Ids",
         return ret
 
 
-@app.get("/sample_set/taxo_stats", tags=['samples'],
+@app.get("/sample_set/taxo_stats", operation_id="sample_set_get_stats", tags=['samples'],
          responses={
              200: {
                  "content": {
@@ -971,7 +976,7 @@ def sample_set_get_stats(sample_ids: str = Query(..., title="Sample Ids",
         return ret
 
 
-@app.post("/sample_set/update", tags=['samples'],
+@app.post("/sample_set/update", operation_id="update_samples", tags=['samples'],
           responses={
               200: {
                   "content": {
@@ -996,7 +1001,7 @@ def update_samples(req: BulkUpdateReq = Body(...),
             return sce.update_set(current_user, req.target_ids, req.updates)
 
 
-@app.get("/sample/{sample_id}", tags=['samples'], response_model=SampleModel)
+@app.get("/sample/{sample_id}", operation_id="sample_query", tags=['samples'], response_model=SampleModel)
 def sample_query(
         sample_id: int = Path(..., description="Internal, the unique numeric id of this sample.", example=1),
         current_user: Optional[int] = Depends(get_optional_current_user)) \
@@ -1014,7 +1019,7 @@ def sample_query(
 
 # ######################## END OF SAMPLE
 
-@app.get("/acquisitions/search", tags=['acquisitions'], response_model=List[AcquisitionModel])
+@app.get("/acquisitions/search", operation_id="acquisitions_search", tags=['acquisitions'], response_model=List[AcquisitionModel])
 def acquisitions_search(
         project_id: int = Query(..., title="Project id", description="The project id.", example=1),
         current_user: Optional[int] = Depends(get_optional_current_user)) \
@@ -1029,6 +1034,7 @@ def acquisitions_search(
 
 
 @app.post("/acquisition_set/update",
+          operation_id="update_acquisitions", 
           tags=['acquisitions'],
           responses={
               200: {
@@ -1052,7 +1058,7 @@ def update_acquisitions(req: BulkUpdateReq = Body(...),
             return sce.update_set(current_user, req.target_ids, req.updates)
 
 
-@app.get("/acquisition/{acquisition_id}", tags=['acquisitions'], response_model=AcquisitionModel)
+@app.get("/acquisition/{acquisition_id}", operation_id="acquisition_query", tags=['acquisitions'], response_model=AcquisitionModel)
 def acquisition_query(
         acquisition_id: int = Path(..., description="Internal, the unique numeric id of this acquisition.",
                                    example=1),
@@ -1072,7 +1078,7 @@ def acquisition_query(
 # ######################## END OF ACQUISITION
 
 @app.get("/instruments/",
-         tags=['instruments'],
+         operation_id="instrument_query", tags=['instruments'],
          response_model=List[str],
          responses={
              200: {
@@ -1103,7 +1109,7 @@ def instrument_query(project_ids: str = Query(..., title="Projects ids",
 
 # ######################## END OF INSTRUMENT
 
-@app.post("/process_set/update", tags=['processes'],
+@app.post("/process_set/update", operation_id="update_processes", tags=['processes'],
           responses={
               200: {
                   "content": {
@@ -1127,7 +1133,7 @@ def update_processes(req: BulkUpdateReq = Body(...),
             return sce.update_set(current_user, req.target_ids, req.updates)
 
 
-@app.get("/process/{process_id}", tags=['processes'], response_model=ProcessModel)
+@app.get("/process/{process_id}", operation_id="process_query", tags=['processes'], response_model=ProcessModel)
 def process_query(
         process_id: int = Path(..., description="Internal, the unique numeric id of this process.", example=1),
         current_user: Optional[int] = Depends(get_optional_current_user)) \
@@ -1150,7 +1156,7 @@ def process_query(
 
 # TODO /query pas bon!
 
-@app.post("/object_set/{project_id}/query", tags=['objects'], response_model=ObjectSetQueryRsp,
+@app.post("/object_set/{project_id}/query", operation_id="get_object_set", tags=['objects'], response_model=ObjectSetQueryRsp,
           response_class=MyORJSONResponse  # Force the ORJSON encoder
           )
 def get_object_set(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
@@ -1220,7 +1226,7 @@ name, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatu
         return rsp
 
 
-@app.post("/object_set/{project_id}/summary", tags=['objects'], response_model=ObjectSetSummaryRsp)
+@app.post("/object_set/{project_id}/summary", operation_id="get_object_set_summary", tags=['objects'], response_model=ObjectSetSummaryRsp)
 def get_object_set_summary(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
                            only_total: bool = Query(..., title="Only total",
                                                     description="If True, returns only the **Total number of objects**. Else returns also the **Number of validated ones**, the **number of Dubious ones** and the number of **predicted ones**."),
@@ -1246,7 +1252,7 @@ And optionnaly
         return rsp
 
 
-@app.post("/object_set/{project_id}/reset_to_predicted", tags=['objects'], response_model=None,
+@app.post("/object_set/{project_id}/reset_to_predicted", operation_id="reset_object_set_to_predicted", tags=['objects'], response_model=None,
           responses={
               200: {
                   "content": {
@@ -1270,7 +1276,7 @@ def reset_object_set_to_predicted(
             return sce.reset_to_predicted(current_user, project_id, filters)
 
 
-@app.post("/object_set/{project_id}/revert_to_history", tags=['objects'],
+@app.post("/object_set/{project_id}/revert_to_history", operation_id="revert_object_set_to_history", tags=['objects'],
           response_model=ObjectSetRevertToHistoryRsp)
 def revert_object_set_to_history(
         project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
@@ -1292,7 +1298,7 @@ def revert_object_set_to_history(
                                            classif_info=classif_info)
 
 
-@app.post("/object_set/{project_id}/reclassify", tags=['objects'],
+@app.post("/object_set/{project_id}/reclassify", operation_id="reclassify_object_set", tags=['objects'],
           responses={
               200: {
                   "content": {
@@ -1323,7 +1329,7 @@ def reclassify_object_set(project_id: int = Path(..., description="Internal, num
         return nb_impacted
 
 
-@app.post("/object_set/update", tags=['objects'],
+@app.post("/object_set/update", operation_id="update_object_set", tags=['objects'],
           responses={
               200: {
                   "content": {
@@ -1349,7 +1355,7 @@ def update_object_set(req: BulkUpdateReq = Body(...),
             return sce.update_set(current_user, req.target_ids, req.updates)
 
 
-@app.post("/object_set/classify", tags=['objects'],
+@app.post("/object_set/classify", operation_id="classify_object_set", tags=['objects'],
           responses={
               200: {
                   "content": {
@@ -1381,7 +1387,7 @@ def classify_object_set(req: ClassifyReq = Body(...),
         return ret
 
 
-@app.post("/object_set/classify_auto", tags=['objects'],
+@app.post("/object_set/classify_auto", operation_id="classify_auto_object_set", tags=['objects'],
           responses={
               200: {
                   "content": {
@@ -1410,7 +1416,7 @@ def classify_auto_object_set(req: ClassifyAutoReq = Body(...),
 
 
 # TODO: For small lists we could have a GET
-@app.post("/object_set/parents", tags=['objects'], response_model=ObjectSetQueryRsp,
+@app.post("/object_set/parents", operation_id="query_object_set_parents", tags=['objects'], response_model=ObjectSetQueryRsp,
           response_class=MyORJSONResponse  # Force the ORJSON encoder
           )
 def query_object_set_parents(object_ids: ObjectIDListT = Body(..., title="Object IDs list",
@@ -1432,7 +1438,7 @@ def query_object_set_parents(object_ids: ObjectIDListT = Body(..., title="Object
         return rsp
 
 
-@app.post("/object_set/export", tags=['objects'], response_model=ExportRsp)
+@app.post("/object_set/export", operation_id="export_object_set", tags=['objects'], response_model=ExportRsp)
 def export_object_set(filters: ProjectFiltersModel = Body(...),
                       request: ExportReq = Body(...),
                       current_user: Optional[int] = Depends(get_optional_current_user)) -> ExportRsp:
@@ -1444,7 +1450,7 @@ def export_object_set(filters: ProjectFiltersModel = Body(...),
     return rsp
 
 
-@app.post("/object_set/predict", tags=['objects'], response_model=PredictionRsp)
+@app.post("/object_set/predict", operation_id="predict_object_set", tags=['objects'], response_model=PredictionRsp)
 def predict_object_set(filters: ProjectFiltersModel = Body(...),
                        request: PredictionReq = Body(...),
                        current_user: Optional[int] = Depends(get_optional_current_user)) -> PredictionRsp:
@@ -1456,7 +1462,7 @@ def predict_object_set(filters: ProjectFiltersModel = Body(...),
     return rsp
 
 
-@app.get("/project/do_cnn", tags=['objects'],
+@app.get("/project/do_cnn", operation_id="compute_project_cnn", tags=['objects'],
          responses={
              200: {
                  "content": {
@@ -1478,7 +1484,7 @@ def compute_project_cnn(proj_id: int = Path(..., description="Internal, numeric 
     return rsp
 
 
-@app.delete("/object_set/", tags=['objects'],
+@app.delete("/object_set/", operation_id="erase_object_set", tags=['objects'],
             responses={
                 200: {
                     "content": {
@@ -1504,7 +1510,7 @@ def erase_object_set(object_ids: ObjectIDListT = Body(..., title="Object IDs lis
             return sce.delete(current_user, object_ids)
 
 
-@app.get("/object/{object_id}", tags=['object'], response_model=ObjectModel)
+@app.get("/object/{object_id}", operation_id="object_query", tags=['object'], response_model=ObjectModel)
 def object_query(
         object_id: int = Path(..., description="Internal, the unique numeric id of this object.", example=1),
         current_user: Optional[int] = Depends(get_optional_current_user)) \
@@ -1522,7 +1528,7 @@ def object_query(
         return ret
 
 
-@app.get("/object/{object_id}/history", tags=['object'],
+@app.get("/object/{object_id}/history", operation_id="object_query_history", tags=['object'],
          responses={
              200: {
                  "content": {
@@ -1569,7 +1575,7 @@ def object_query_history(
 
 # ######################## END OF OBJECT
 
-@app.get("/taxa", tags=['Taxonomy Tree'], response_model=List[TaxonModel])
+@app.get("/taxa", operation_id="query_root_taxa", tags=['Taxonomy Tree'], response_model=List[TaxonModel])
 async def query_root_taxa() \
         -> List[TaxonBO]:
     """
@@ -1580,7 +1586,7 @@ async def query_root_taxa() \
         return ret
 
 
-@app.get("/taxa/status", tags=['Taxonomy Tree'], response_model=TaxonomyTreeStatus)
+@app.get("/taxa/status", operation_id="taxa_tree_status", tags=['Taxonomy Tree'], response_model=TaxonomyTreeStatus)
 async def taxa_tree_status(current_user: int = Depends(get_current_user)):
     """
         **Return the status of taxonomy tree** w/r to freshness.
@@ -1590,7 +1596,7 @@ async def taxa_tree_status(current_user: int = Depends(get_current_user)):
         return TaxonomyTreeStatus(last_refresh=refresh_date.isoformat() if refresh_date else None)
 
 
-@app.get("/taxa/reclassification_stats", tags=['Taxonomy Tree'],
+@app.get("/taxa/reclassification_stats", operation_id="reclassif_stats", tags=['Taxonomy Tree'],
          responses={
              200: {
                  "content": {
@@ -1622,10 +1628,10 @@ async def reclassif_stats(taxa_ids: str = Query(..., title="Taxa ids",
         with RightsThrower():
             ret = sce.most_used_non_advised(current_user, num_taxa_ids)
         return ret
-
-
+        
+        
 # TODO JCE
-@app.get("/taxa/reclassification_history/{project_id}", tags=['Taxonomy Tree'], response_model=List[Dict])
+@app.get("/taxa/reclassification_history/{project_id}", operation_id="reclassif_project_stats", tags=['Taxonomy Tree'], response_model=List[Dict])
 async def reclassif_project_stats(
         project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
         current_user: Optional[int] = Depends(get_optional_current_user)) \
@@ -1639,7 +1645,7 @@ async def reclassif_project_stats(
         return ret
 
 
-@app.get("/taxon/{taxon_id}", tags=['Taxonomy Tree'],
+@app.get("/taxon/{taxon_id}", operation_id="query_taxa", tags=['Taxonomy Tree'],
          responses={
              200: {
                  "content": {
@@ -1664,7 +1670,7 @@ async def query_taxa(
         return ret
 
 
-@app.get("/taxon/{taxon_id}/usage", tags=['Taxonomy Tree'], response_model=List[TaxonUsageModel])
+@app.get("/taxon/{taxon_id}/usage", operation_id="query_taxa_usage", tags=['Taxonomy Tree'], response_model=List[TaxonUsageModel])
 async def query_taxa_usage(
         taxon_id: int = Path(..., description="Internal, the unique numeric id of this taxon.", example=12876),
         _current_user: Optional[int] = Depends(get_optional_current_user)) \
@@ -1679,7 +1685,7 @@ async def query_taxa_usage(
         return ret
 
 
-@app.get("/taxon_set/search", tags=['Taxonomy Tree'], response_model=List[TaxaSearchRsp])
+@app.get("/taxon_set/search", operation_id="search_taxa", tags=['Taxonomy Tree'], response_model=List[TaxaSearchRsp])
 async def search_taxa(
         query: str = Query(..., description="Use this query for matching returned taxa names.", example="Ban"),
         project_id: Optional[int] = Query(default=None,
@@ -1705,7 +1711,7 @@ async def search_taxa(
         return ret
 
 
-@app.get("/taxon_set/query", tags=['Taxonomy Tree'], response_model=List[TaxonModel])
+@app.get("/taxon_set/query", operation_id="query_taxa_set", tags=['Taxonomy Tree'], response_model=List[TaxonModel])
 async def query_taxa_set(ids: str = Query(..., title="Ids",
                                           description="The separator between numbers is arbitrary non-digit, e.g. ':', '|' or ','.",
                                           example="1:2:3"),
@@ -1720,7 +1726,7 @@ async def query_taxa_set(ids: str = Query(..., title="Ids",
         return ret
 
 
-@app.get("/taxon/central/{taxon_id}", tags=['Taxonomy Tree'], response_model=List[TaxonCentral])
+@app.get("/taxon/central/{taxon_id}", operation_id="get_taxon_in_central", tags=['Taxonomy Tree'], response_model=List[TaxonCentral])
 async def get_taxon_in_central(
         taxon_id: int = Path(..., description="Internal, the unique numeric id of this taxon.", example=12876),
         _current_user: int = Depends(get_current_user)):
@@ -1734,7 +1740,7 @@ async def get_taxon_in_central(
 # TODO JCE - examples description
 # Below pragma is because we need the same params as EcoTaxoServer, but we just relay them
 # noinspection PyUnusedLocal
-@app.put("/taxon/central", tags=['Taxonomy Tree'])
+@app.put("/taxon/central", operation_id="add_taxon_in_central", tags=['Taxonomy Tree'])
 async def add_taxon_in_central(
         name: str = Query(..., title="Name", description="The taxon/category verbatim name.", example="Echinodermata"),
         parent_id: int = Query(..., title="Parent Id", description="It's not possible to create a root taxon.",
@@ -1758,7 +1764,7 @@ async def add_taxon_in_central(
         return sce.add_taxon(current_user, params)
 
 
-@app.get("/taxa/stats/push_to_central", tags=['Taxonomy Tree'])
+@app.get("/taxa/stats/push_to_central", operation_id="push_taxa_stats_in_central", tags=['Taxonomy Tree'])
 async def push_taxa_stats_in_central(_current_user: int = Depends(get_current_user)):
     """
         **Push present instance stats**, into EcoTaxoServer.
@@ -1767,7 +1773,7 @@ async def push_taxa_stats_in_central(_current_user: int = Depends(get_current_us
         return sce.push_stats()
 
 
-@app.get("/taxa/pull_from_central", tags=['Taxonomy Tree'])
+@app.get("/taxa/pull_from_central", operation_id="pull_taxa_update_from_central", tags=['Taxonomy Tree'])
 async def pull_taxa_update_from_central(_current_user: int = Depends(get_current_user)):
     """
         **Returns what changed in EcoTaxoServer managed tree** and update local tree accordingly.
@@ -1778,7 +1784,7 @@ async def pull_taxa_update_from_central(_current_user: int = Depends(get_current
         return sce.pull_updates()
 
 
-@app.get("/worms/{aphia_id}", tags=['Taxonomy Tree'], include_in_schema=False, response_model=TaxonModel)
+@app.get("/worms/{aphia_id}", operation_id="query_taxa_in_worms", tags=['Taxonomy Tree'], include_in_schema=False, response_model=TaxonModel)
 async def query_taxa_in_worms(aphia_id: int,
                               # = Path(..., description="Internal, the unique numeric id of this user.", default=None)
                               _current_user: Optional[int] = Depends(get_optional_current_user)) \
@@ -1791,7 +1797,7 @@ async def query_taxa_in_worms(aphia_id: int,
         return ret
 
 
-@app.get("/taxa_ref_change/refresh", tags=['WIP'], include_in_schema=False,
+@app.get("/taxa_ref_change/refresh", operation_id="refresh_taxa_db", tags=['WIP'], include_in_schema=False,
          status_code=status.HTTP_200_OK)
 async def refresh_taxa_db(max_requests: int,
                           current_user: int = Depends(get_current_user)) -> StreamingResponse:  # pragma:nocover
@@ -1806,7 +1812,7 @@ async def refresh_taxa_db(max_requests: int,
         return StreamingResponse(log_streamer(sce.temp_log, "Done,"), media_type="text/plain")
 
 
-@app.get("/taxa_ref_change/check/{aphia_id}", tags=['WIP'], include_in_schema=False,
+@app.get("/taxa_ref_change/check/{aphia_id}", operation_id="check_taxa_db", tags=['WIP'], include_in_schema=False,
          status_code=status.HTTP_200_OK)
 async def check_taxa_db(aphia_id: int,
                         current_user: int = Depends(get_current_user)) -> Response:  # pragma:nocover
@@ -1820,7 +1826,7 @@ async def check_taxa_db(aphia_id: int,
         return Response(msg, media_type="text/plain")
 
 
-@app.get("/taxa_ref_change/matches", tags=['WIP'], include_in_schema=False,
+@app.get("/taxa_ref_change/matches", operation_id="matching_with_worms_nice", tags=['WIP'], include_in_schema=False,
          status_code=status.HTTP_200_OK)
 async def matching_with_worms_nice(request: Request,
                                    current_user: int = 0  # Depends(get_current_user)
@@ -1840,7 +1846,7 @@ async def matching_with_worms_nice(request: Request,
 
 # ######################## END OF TAXA_REF
 
-@app.get("/admin/images/{project_id}/digest", tags=['WIP'], include_in_schema=False,
+@app.get("/admin/images/{project_id}/digest", operation_id="digest_project_images", tags=['WIP'], include_in_schema=False,
          response_model=str)
 def digest_project_images(max_digests: Optional[int],
                           project_id: int = Path(..., description="Internal, numeric id of the project.",
@@ -1856,7 +1862,7 @@ def digest_project_images(max_digests: Optional[int],
         return data
 
 
-@app.get("/admin/images/digest", tags=['WIP'], include_in_schema=False,
+@app.get("/admin/images/digest", operation_id="digest_images", tags=['WIP'], include_in_schema=False,
          response_model=str)
 def digest_images(max_digests: Optional[int],
                   project_id: Optional[int] = Query(default=None, description="Internal, numeric id of the project."),
@@ -1871,7 +1877,7 @@ def digest_images(max_digests: Optional[int],
         return data
 
 
-@app.get("/admin/images/cleanup1", tags=['WIP'], include_in_schema=False,
+@app.get("/admin/images/cleanup1", operation_id="cleanup_images_1", tags=['WIP'], include_in_schema=False,
          response_model=str)
 def cleanup_images_1(
         project_id: int = Query(..., description="Internal, numeric id of the project.", example=1),
@@ -1887,7 +1893,7 @@ def cleanup_images_1(
         return data
 
 
-@app.get("/admin/nightly", tags=['WIP'], include_in_schema=False,
+@app.get("/admin/nightly", operation_id="nightly_maintenance", tags=['WIP'], include_in_schema=False,
          response_model=str)
 def nightly_maintenance(current_user: int = Depends(get_current_user)) -> int:
     """
@@ -1899,7 +1905,7 @@ def nightly_maintenance(current_user: int = Depends(get_current_user)) -> int:
         return data
 
 
-@app.get("/admin/machine_learning/train", tags=['WIP'], include_in_schema=False,
+@app.get("/admin/machine_learning/train", operation_id="machine_learning_train", tags=['WIP'], include_in_schema=False,
          response_model=str)
 def machine_learning_train(project_id: int = Query(..., title="Input project #",
                                                    description="Images will be fetched from this project.",
@@ -1925,7 +1931,7 @@ def machine_learning_train(project_id: int = Query(..., title="Input project #",
 
 # ######################## END OF ADMIN
 
-@app.get("/jobs/", tags=['jobs'], response_model=List[JobModel])
+@app.get("/jobs/", operation_id="list_jobs", tags=['jobs'], response_model=List[JobModel])
 def list_jobs(for_admin: bool = Query(..., title="For admin",
                                       description="If FALSE return the jobs for current user, else return all of them.",
                                       example=False),
@@ -1939,7 +1945,7 @@ def list_jobs(for_admin: bool = Query(..., title="For admin",
     return ret
 
 
-@app.get("/jobs/{job_id}/", tags=['jobs'], response_model=JobModel)
+@app.get("/jobs/{job_id}/", operation_id="get_job", tags=['jobs'], response_model=JobModel)
 def get_job(job_id: int = Path(..., description="Internal, the unique numeric id of this job.", example=47445),
             current_user: int = Depends(get_current_user)) -> JobBO:
     """
@@ -1951,7 +1957,7 @@ def get_job(job_id: int = Path(..., description="Internal, the unique numeric id
         return ret
 
 
-@app.post("/jobs/{job_id}/answer", tags=['jobs'],
+@app.post("/jobs/{job_id}/answer", operation_id="reply_job_question", tags=['jobs'],
           responses={
               200: {
                   "content": {
@@ -1982,7 +1988,7 @@ def reply_job_question(
             sce.reply(current_user, job_id, reply)
 
 
-@app.get("/jobs/{job_id}/restart", tags=['jobs'],
+@app.get("/jobs/{job_id}/restart", operation_id="restart_job", tags=['jobs'],
          responses={
              200: {
                  "content": {
@@ -2007,7 +2013,7 @@ def restart_job(
             sce.restart(current_user, job_id)
 
 
-@app.get("/jobs/{job_id}/log", tags=['jobs'])
+@app.get("/jobs/{job_id}/log", operation_id="get_job_log_file", tags=['jobs'])
 def get_job_log_file(
         job_id: int = Path(..., description="Internal, the unique numeric id of this job.", example=47445),
         current_user: int = Depends(get_current_user)) -> FileResponse:
@@ -2022,7 +2028,7 @@ def get_job_log_file(
         return FileResponse(str(path))
 
 
-@app.get("/jobs/{job_id}/file", tags=['jobs'], responses={
+@app.get("/jobs/{job_id}/file", operation_id="get_job_file", tags=['jobs'], responses={
     200: {
         "content": {"application/zip": {},
                     "text/tab-separated-values": {}},
@@ -2044,7 +2050,7 @@ def get_job_file(
         return StreamingResponse(file_like, headers=headers, media_type=media_type)
 
 
-@app.delete("/jobs/{job_id}", tags=['jobs'],
+@app.delete("/jobs/{job_id}", operation_id="erase_job", tags=['jobs'],
          responses={
              200: {
                  "content": {
@@ -2073,7 +2079,7 @@ def erase_job(
 
 # ######################## END OF JOBS
 # TODO JCE - description example
-@app.get("/my_files/{sub_path:path}", tags=['Files'], response_model=DirectoryModel)
+@app.get("/my_files/{sub_path:path}", operation_id="list_user_files", tags=['Files'], response_model=DirectoryModel)
 async def list_user_files(sub_path: str = Query(..., title="Sub path", description="", example=""),
                           current_user: int = Depends(get_current_user)) -> DirectoryModel:
     """
@@ -2087,7 +2093,7 @@ async def list_user_files(sub_path: str = Query(..., title="Sub path", descripti
     return file_list
 
 
-@app.post("/my_files/", tags=['Files'],
+@app.post("/my_files/", operation_id="post_user_file", tags=['Files'],
          responses={
              200: {
                  "content": {
@@ -2114,7 +2120,7 @@ async def put_user_file(file: UploadFile = File(..., title="File", description="
         return file_name
 
 
-@app.get("/common_files/", tags=['Files'], response_model=DirectoryModel)
+@app.get("/common_files/", operation_id="list_common_files", tags=['Files'], response_model=DirectoryModel)
 async def list_common_files(path: str = Query(..., title="path", description="", example="/ftp_plankton/Ecotaxa_Exported_data"),
                             current_user: int = Depends(get_current_user)) -> DirectoryModel:
     """
@@ -2175,7 +2181,7 @@ Paths:
   /plankton_rw (from serverloadarea): OK
   /plankton_rw/ftp_plankton/Ecotaxa_Exported_data (from ftpexportarea): OK"""
 
-@app.get("/status", tags=['WIP'], responses={
+@app.get("/status", operation_id="system_status", tags=['WIP'], responses={
             200: {
                 "content": {
                     "application/json": {
@@ -2194,7 +2200,7 @@ def system_status(_current_user: int = Depends(get_current_user)) -> Response:
 
 # ######################## END OF WIP
 
-@app.get("/error", tags=['misc'])
+@app.get("/error", operation_id="system_error", tags=['misc'])
 def system_error(_current_user: int = Depends(get_current_user)):
     """
         **Return a 500 internal error**, on purpose so the stack trace is visible and client
@@ -2204,7 +2210,7 @@ def system_error(_current_user: int = Depends(get_current_user)):
         assert False
 
 
-@app.get("/noop", tags=['misc'], response_model=Union[ObjectHeaderModel, HistoricalClassificationModel])  # type: ignore
+@app.get("/noop", operation_id="do_nothing", tags=['misc'], response_model=Union[ObjectHeaderModel, HistoricalClassificationModel])  # type: ignore
 def do_nothing(_current_user: int = Depends(get_current_user)):
     """
         **This entry point will just do nothing.**
@@ -2213,7 +2219,7 @@ def do_nothing(_current_user: int = Depends(get_current_user)):
     """
 
 
-@app.get("/constants", tags=['misc'], response_model=Constants)
+@app.get("/constants", operation_id="used_constants", tags=['misc'], response_model=Constants)
 def used_constants() -> Constants:
     """
         **Return useful strings for user dialog.**
