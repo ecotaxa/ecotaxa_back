@@ -91,10 +91,14 @@ class PredictForProject(JobServiceBase):
         req = self.req
         logger.info("Input Param = %s", self.req.__dict__)
 
+        self.update_progress(10, "Retrieving learning set data")
         np_feature_vals, classif_ids, used_features, np_medians_per_feat = self.build_learning_set(req)
+        self.update_progress(20, "Training the classifier")
         classifier = self.build_classifier(np_feature_vals, classif_ids)
 
-        nb_rows = self.classify(classifier, used_features, np_medians_per_feat)
+        self.update_progress(25, "Retrieving objects to classify")
+        target_result = self.select_target(used_features)
+        nb_rows = self.classify(target_result, classifier, used_features, np_medians_per_feat)
 
         final_message = "New category set on %d objects." % nb_rows
         self.update_progress(100, final_message)
@@ -104,8 +108,13 @@ class PredictForProject(JobServiceBase):
     def build_learning_set(self, req) -> Tuple[np.ndarray, ClassifIDListT, List[str], Dict]:
         """
             Build the learning set from DB data & req instructions.
+            :returns - A matrix in which each line contains the features for selected (validated) objects.
+                     - The classification for each object, in a list, same order as the matrix lines of course.
+                     - The object features AKA DB columns used for extraction, e.g. 'fre.feret' or 'fre.circ'.
+                       The same list has to be used for objects to predict.
+                     - Medians of existing values per feature, which was used for replacement of missing values
+                       inside the matrix, and hence needs to be used in objects to predict as well.
         """
-        self.update_progress(10, "Retrieving learning set data")
         learning_set = LimitedInCategoriesProjectSet(self.ro_session, req.source_project_ids,
                                                      req.features, req.learning_limit, req.categories)
         features = list(req.features)
@@ -174,7 +183,6 @@ class PredictForProject(JobServiceBase):
         """
             Build the classifier model and train it with the data & target ids.
         """
-        self.update_progress(20, "Training the classifier")
         logger.info("Training the classifier")
         ret = OurRandomForestClassifier()
         ret.learn_from(features, classif_ids)
@@ -182,12 +190,9 @@ class PredictForProject(JobServiceBase):
 
         return ret
 
-    CHUNK_SIZE = 10000
-
-    def classify(self, classifier: OurRandomForestClassifier, features: List[str],
-                 np_medians_per_feat: Dict) -> int:
+    def select_target(self, features: List[str]) -> Result:
         """
-            Do the classification job itself.
+            Return an opened cursor for looping over objects to classify.
         """
         # Prepare a where clause and parameters from filter
         dst_proj_id = self.req.project_id
@@ -201,15 +206,23 @@ class PredictForProject(JobServiceBase):
         from_, where_clause, params = object_set.get_sql(user_id, order_clause=None, select_list=sel_cols)
         sql = "SET LOCAL enable_seqscan=FALSE; SELECT obh.objid, NULL " + sel_cols + " FROM " + from_.get_sql() + where_clause.get_sql()
         logger.info("Execute SQL : %s" % sql)
-        self.update_progress(25, "Retrieving objects to classify")
         res: Result = self.ro_session.execute(sql, params)
-        total_rows = res.rowcount
+        return res
+
+    CHUNK_SIZE = 10000
+
+    def classify(self, tgt_res: Result, classifier: OurRandomForestClassifier, features: List[str],
+                 np_medians_per_feat: Dict) -> int:
+        """
+            Do the classification job itself, read lines from the DB, classify them and write-back the result.
+        """
+        total_rows = tgt_res.rowcount
         done_count = 0
         nb_changes = 0
         while True:
             obj_ids: ObjectIDListT = []
             unused: ClassifIDListT = []
-            np_chunk = FeatureConsistentProjectSet.np_read(res, self.CHUNK_SIZE, features,
+            np_chunk = FeatureConsistentProjectSet.np_read(tgt_res, self.CHUNK_SIZE, features,
                                                            obj_ids, unused, np_medians_per_feat)
             if self.req.use_scn:
                 np_deep_features_chunk = DeepFeatures.np_read_for_objects(self.ro_session, obj_ids)
@@ -228,7 +241,7 @@ class PredictForProject(JobServiceBase):
             progress = 25 + (75 * done_count / total_rows)
             self.update_progress(progress, "Classified %d rows" % done_count)
         # Propagate changes to update projects_taxo_stat
-        ProjectBO.update_taxo_stats(self.session, dst_proj_id)
+        ProjectBO.update_taxo_stats(self.session, self.req.project_id)
         self.session.commit()
         logger.info("Classify done.")
         return nb_changes

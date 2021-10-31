@@ -28,7 +28,8 @@ class OurRandomForestClassifier(object):
     def __init__(self):
         # We can build the classifier right away, it's just allocation
         self.cls = RandomForestClassifier(n_estimators=self.N_ESTIMATORS,
-                                          min_samples_leaf=self.MIN_SAMPLES_LEAF, n_jobs=self.WORKERS,
+                                          min_samples_leaf=self.MIN_SAMPLES_LEAF,
+                                          n_jobs=self.WORKERS,
                                           class_weight=self.CLASS_WEIGHT,
                                           verbose=True)  # TODO: verbose sends logs we can't see :(
 
@@ -49,4 +50,3 @@ class OurRandomForestClassifier(object):
         classif_ids = [int(self.cls.classes_[mc]) for mc in max_proba]
         scores = [r[mc] for mc, r in zip(max_proba, predict_result)]
         return classif_ids, scores
-
