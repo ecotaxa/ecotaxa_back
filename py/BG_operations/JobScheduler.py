@@ -5,7 +5,7 @@
 import json
 import threading
 from threading import Thread
-from typing import Any, Optional
+from typing import Any, Optional, List
 
 from API_operations.helpers.JobService import JobServiceBase
 from API_operations.helpers.Service import Service
@@ -56,7 +56,10 @@ class JobRunner(Thread):
 class JobScheduler(Service):
     """
         In charge of launching/monitoring sub processes i.e. keep sync b/w processes and their images in jobs DB table.
+        These are not really processes, just threads, so far.
     """
+    # Filter out these job types
+    FILTER: List[str] = []
     # A single runner per process
     the_runner: Optional[JobRunner] = None
     the_timer: Optional[threading.Timer] = None
@@ -74,6 +77,8 @@ class JobScheduler(Service):
                 return
         # Pick the first pending job which is not already managed by another runner
         qry: Query = self.session.query(Job).filter(Job.state == DBJobStateEnum.Pending)
+        for a_type in self.FILTER:
+            qry = qry.filter(Job.type != a_type)
         qry = qry.with_for_update(skip_locked=True)
         the_job: Job = qry.first()
         if the_job is None:
@@ -126,6 +131,7 @@ class JobScheduler(Service):
         """
             Launch a job if possible, then wait a bit before accessing next one.
         """
+
         def launch():
             try:
                 with cls() as sce:
