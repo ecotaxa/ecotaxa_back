@@ -60,6 +60,8 @@ class JobScheduler(Service):
     """
     # Filter out these job types
     FILTER: List[str] = []
+    # Include only these job types
+    INCLUDE: List[str] = []
     # A single runner per process
     the_runner: Optional[JobRunner] = None
     the_timer: Optional[threading.Timer] = None
@@ -77,6 +79,9 @@ class JobScheduler(Service):
                 return
         # Pick the first pending job which is not already managed by another runner
         qry: Query = self.session.query(Job).filter(Job.state == DBJobStateEnum.Pending)
+        if self.INCLUDE:
+            for a_type in self.INCLUDE:
+                qry = qry.filter(Job.type == a_type)
         for a_type in self.FILTER:
             qry = qry.filter(Job.type != a_type)
         qry = qry.with_for_update(skip_locked=True)
