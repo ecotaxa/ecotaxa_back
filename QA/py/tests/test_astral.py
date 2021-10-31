@@ -4,7 +4,7 @@ from unittest import TestCase
 class Testcalc_astral_day_time(TestCase):
 
     def test_calc_astral_day_time(self):
-        from BO.helpers.TSVHelpers import calc_astral_day_time
+        from BO.SpaceTime import calc_astral_day_time
         from datetime import date, time
         Date = date(2015, 1, 1)
         Latitude = 15

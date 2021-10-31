@@ -2,12 +2,14 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import datetime
 from datetime import time, date
 from typing import Optional
 
+from astral import LocationInfo, Depression  # type: ignore
+from astral.sun import sun  # type: ignore
 from typing_extensions import TypedDict
 
-from BO.helpers.TSVHelpers import calc_astral_day_time
 # TODO: Caching a single value is useful, but less than several of them
 # TODO: a TypedDict is more accurate for typing
 from DB.helpers.Bean import Bean
@@ -49,3 +51,36 @@ def compute_sun_position(object_head_to_write: Bean):
                                                  astral_cache['lat'],
                                                  astral_cache['long'])
     return astral_cache['r']
+
+
+def calc_astral_day_time(date: datetime.date, time, latitude, longitude):
+    """
+    Compute sun position for given coordinates and time.
+    :param date: UTC date
+    :param time: UTC time
+    :param latitude: latitude
+    :param longitude: longitude
+    :return: D for Day, U for Dusk, N for Night, A for Dawn (Aube in French)
+    """
+    loc = LocationInfo()
+    loc.latitude = latitude
+    loc.longitude = longitude
+    s = sun(loc.observer, date=date, dawn_dusk_depression=Depression.NAUTICAL)
+    ret = '?'
+    # The intervals and their interpretation
+    interp = ({'from:': s['dusk'].time(), 'to:': s['dawn'].time(), '=>': 'N'},
+              {'from:': s['dawn'].time(), 'to:': s['sunrise'].time(), '=>': 'A'},
+              {'from:': s['sunrise'].time(), 'to:': s['sunset'].time(), '=>': 'D'},
+              {'from:': s['sunset'].time(), 'to:': s['dusk'].time(), '=>': 'U'},
+              )
+    for intrv in interp:
+        if (intrv['from:'] < intrv['to:']
+                and intrv['from:'] <= time <= intrv['to:']):
+            # Normal interval
+            ret = intrv['=>']
+        elif intrv['from:'] > intrv['to:'] \
+                and (time >= intrv['from:'] or time <= intrv['to:']):
+            # Change of day b/w the 2 parts of the interval
+            ret = intrv['=>']
+
+    return ret

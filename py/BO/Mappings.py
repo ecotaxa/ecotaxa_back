@@ -5,7 +5,6 @@
 from collections import OrderedDict, namedtuple
 from typing import Dict, Tuple, List, Union, Type, Optional, Set
 
-from BO.helpers.TSVHelpers import encode_equal_list
 from DB.Acquisition import Acquisition
 from DB.Image import Image
 from DB.Object import ObjectFields, ObjectHeader
@@ -374,3 +373,14 @@ class TableMapping(object):
     def tsv_cols_prefixed(self, prfx: str) -> List[str]:
         return [prfx + "_" + tsv_col
                 for tsv_col in self.real_cols_to_tsv.values()]
+
+
+def encode_equal_list(a_mapping: dict, sep: str):
+    """
+        Turn a dict into a string key=value, with sorted keys.
+    :param a_mapping:
+    :return:
+    """
+    eqs = ["%s=%s" % (k, v) for k, v in a_mapping.items()]
+    eqs.sort()
+    return sep.join(eqs)
