@@ -7,12 +7,13 @@
 # A prediction is the output of an automatic classification process.
 #    This is heavily based on machine learning algorithms.
 #
-from typing import Any, List
+from typing import Any, List, Dict
 
-import numpy as np # type: ignore
+import numpy as np  # type: ignore
 from numpy import ndarray
 
-from DB import ObjectHeader, Acquisition, Sample, ObjectCNNFeature, CNNFeature
+from BO.Object import ObjectIDT
+from DB import ObjectHeader, Acquisition, Sample, ObjectCNNFeature, CNNFeature, Image
 from DB.CNNFeature import ObjectCNNFeaturesBean
 from DB.Project import ProjectIDT
 from DB.helpers import Session, Result
@@ -47,6 +48,30 @@ class DeepFeatures(object):
         qry = qry.filter(ObjectCNNFeature.objcnnid.in_(sub_qry))
         nb_deleted = qry.delete(synchronize_session=False)
         return nb_deleted
+
+    @staticmethod
+    def find_missing(session: Session, proj_id: ProjectIDT) -> Dict[ObjectIDT, str]:
+        """
+            Find missing cnn features for this project.
+        """
+        qry: Query = session.query(ObjectHeader.objid, Image.file_name)
+        qry = qry.join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
+        qry = qry.join(Sample, and_(Sample.sampleid == Acquisition.acq_sample_id,
+                                    Sample.projid == proj_id))
+        qry = qry.outerjoin(Image)  # For detecting missing images
+        qry = qry.outerjoin(ObjectCNNFeature)  # For detecting missing features
+        # noinspection PyComparisonWithNone
+        qry = qry.filter(ObjectCNNFeature.objcnnid == None)  # SQLAlchemy
+        qry = qry.order_by(ObjectHeader.objid, Image.imgrank)
+        ret = {}
+        for a_res in session.execute(qry):
+            objid, img_file = a_res
+            assert img_file is not None, "Object %d has no image in DB" % objid
+            if not objid in ret:
+                ret[objid] = img_file
+            else:  # Only pick the first image
+                pass
+        return ret
 
     @classmethod
     def save(cls, session: Session, features: Any) -> int:
@@ -95,4 +120,5 @@ class DeepFeatures(object):
         for a_row in res:
             ret[ndx] = a_row
             ndx += 1
+        assert ndx == len(oid_lst), "No enough CNN features in DB: expected %d read %d" % (len(oid_lst), ndx)
         return ret
