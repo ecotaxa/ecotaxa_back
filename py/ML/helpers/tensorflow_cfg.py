@@ -31,7 +31,7 @@ root:~# nvidia-modprobe
 
 # or set a predefined memory limit
 # TODO: A parameter.
-if len(gpus) > 0:
-    configured_tf.config.experimental.set_virtual_device_configuration(gpus[0],
-        [configured_tf.config.experimental.VirtualDeviceConfiguration(memory_limit=2300)])
+#if len(gpus) > 0:
+#    configured_tf.config.experimental.set_virtual_device_configuration(gpus[0],
+#        [configured_tf.config.experimental.VirtualDeviceConfiguration(memory_limit=2300)])
 
