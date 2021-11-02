@@ -47,6 +47,7 @@ class DeepFeaturesExtractor(MachineLearningBase):
         logger.info('Load feature extractor and dimensionality reducer')
 
         input_shape, my_fe, pca = self.load_model(model_name)
+        crop = self.read_crop(model_name)
 
         logger.info('Load data')
 
@@ -58,11 +59,11 @@ class DeepFeaturesExtractor(MachineLearningBase):
 
         logger.info('Extract features')
 
-        features_df = self.predict_dataframe(df, input_shape, my_fe, pca)
+        features_df = self.predict_dataframe(df, input_shape, crop, my_fe, pca)
 
         return features_df
 
-    def predict_dataframe(self, in_df, input_shape, my_fe, pca):
+    def predict_dataframe(self, in_df, input_shape, crop, my_fe, pca):
         """
             Predict what's in in_df and return the result dataframe.
         """
@@ -72,7 +73,7 @@ class DeepFeaturesExtractor(MachineLearningBase):
             input_shape=input_shape,
             labels=None, classes=None,
             # NB: we don't need the labels here, we just run images through the network
-            batch_size=self.BATCH_SIZE, augment=False, shuffle=False)
+            batch_size=self.BATCH_SIZE, augment=False, shuffle=False, crop=crop)
         # extract features by going through the batches
         full_features = my_fe.predict(batches, max_queue_size=max(10, self.WORKERS * 2), workers=self.WORKERS)
         # and reduce their dimension

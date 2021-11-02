@@ -48,6 +48,7 @@ class CNNFeatureTrainer(MachineLearningBase):
         batch_size = 16
         augment = True
         # TODO: upscale = True
+        crop = self.read_crop(model_name)
 
         # CNN structure (see cnn.Create and cnn.Compile)
         fe_url = 'https://tfhub.dev/google/imagenet/mobilenet_v2_140_224/feature_vector/4'
@@ -74,9 +75,9 @@ class CNNFeatureTrainer(MachineLearningBase):
 
         # extract a validation set to monitor performance while training
         seed = 1
-        # 75% in train
-        df_train = in_df.groupby('label').sample(frac=0.75, random_state=seed)
-        # the remaining 15% in val
+        # 90% in train
+        df_train = in_df.groupby('label').sample(frac=0.9, random_state=seed)
+        # the remaining 10% in val
         df_val = in_df.loc[set(in_df.index) - set(df_train.index)]
 
         # count nb of examples per class in the training set
@@ -104,20 +105,20 @@ class CNNFeatureTrainer(MachineLearningBase):
             images_paths=self.full_img_paths(df_train['img_path'].values),
             input_shape=input_shape,
             labels=df_train['label'].values, classes=classes,
-            batch_size=batch_size, augment=augment, shuffle=True)
+            batch_size=batch_size, augment=augment, shuffle=True, crop=crop)
 
         val_batches = generator.EcoTaxaGenerator(
             images_paths=self.full_img_paths(df_val['img_path'].values),
             input_shape=input_shape,
             labels=df_val['label'].values, classes=classes,
-            batch_size=batch_size, augment=False, shuffle=False)
+            batch_size=batch_size, augment=False, shuffle=False, crop=crop)
         # NB: do not shuffle or augment data for validation, it is useless
 
         total_batches = generator.EcoTaxaGenerator(
             images_paths=self.full_img_paths(in_df['img_path'].values),
             input_shape=input_shape,
             labels=None, classes=None,
-            batch_size=batch_size, augment=False, shuffle=False)
+            batch_size=batch_size, augment=False, shuffle=False, crop=crop)
 
         logger.info('Prepare model')
 

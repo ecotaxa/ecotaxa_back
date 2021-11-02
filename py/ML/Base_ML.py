@@ -2,6 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # (c) 2021 Jean-Olivier Irisson, GNU General Public License v3
 #
+from typing import Tuple
 
 from FS.MachineLearningModels import SavedModels
 from FS.Vault import Vault
@@ -31,3 +32,12 @@ class MachineLearningBase(object):
         if nb_loaded != len(paths):
             logger.info("Downloaded %d images", nb_loaded)
         return [vault_def(an_img) for an_img in paths]
+
+    def read_crop(self, model_name) -> Tuple[int, int, int, int]:
+        """
+            Read crop value for the model, it's in a text file containing only bottom crop value for now.
+        """
+        crop_file = self.model_dir.crop_values_path(model_name)
+        with open(crop_file) as f:
+            crop = (0, 0, int(f.read()), 0)
+        return crop

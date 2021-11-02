@@ -43,6 +43,7 @@ class DimensionReducer(MachineLearningBase):
         batch_size = 16  # size of images batches in GPU memory
         workers = 10  # number of parallel threads to prepare batches
         n_dims = 50  # number of dimensions to keep after dimensionality reduction
+        crop = self.read_crop(model_name)
 
         logger.info('Load feature extractor')
 
@@ -64,7 +65,7 @@ class DimensionReducer(MachineLearningBase):
             images_paths=self.full_img_paths(df.img_path.values),
             input_shape=input_shape,
             labels=None, classes=None,
-            batch_size=batch_size, augment=False, shuffle=False)
+            batch_size=batch_size, augment=False, shuffle=False, crop=crop)
 
         # extract features by going through the batches
         features = my_fe.predict(batches, max_queue_size=max(10, workers * 2), workers=workers)
