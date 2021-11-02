@@ -42,3 +42,7 @@ class SavedModels(object):
     def reducer_pickle_path(self, model_name: str) -> Path:
         model_name = self._prefix(model_name)
         return self.path / model_name / "dim_reducer.pickle"
+
+    def crop_values_path(self, model_name: str) -> Path:
+        model_name = self._prefix(model_name)
+        return self.path / model_name / "crop.txt"
