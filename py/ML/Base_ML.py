@@ -25,12 +25,13 @@ class MachineLearningBase(object):
         """
             Prefix image paths to get the physical full path.
         """
-        nb_loaded = 0
-        for an_img in paths:
-            nb_loaded += 0 if self.vault.ensure_there(an_img) else 1
+        # UNCOMMENT for dev.
+        # nb_loaded = 0
+        # for an_img in paths:
+        #     nb_loaded += 0 if self.vault.ensure_there(an_img) else 1
+        # if nb_loaded != len(paths):
+        #     logger.info("Downloaded %d images", nb_loaded)
         vault_def = self.vault.path_to
-        if nb_loaded != len(paths):
-            logger.info("Downloaded %d images", nb_loaded)
         return [vault_def(an_img) for an_img in paths]
 
     def read_crop(self, model_name) -> Tuple[int, int, int, int]:

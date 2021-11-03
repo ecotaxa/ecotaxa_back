@@ -8,6 +8,8 @@
 #
 
 # import lycon  # image loading, manipulation
+import sys
+
 import cv2 as cv
 import numpy as np
 from imgaug import augmenters as iaa  # image manipulation
@@ -153,7 +155,7 @@ class EcoTaxaGenerator(utils.Sequence):
             new_h = h - b
             new_w = w - r
             if new_h <= 0 or new_w <= 0:
-                print('Crop would make impossible image for ', its_path)
+                print(sys.stderr, 'Crop would make impossible image for ', its_path)
             else:
                 img = img[t:new_h, l:new_w, :]
             # TODO crop to object, automatically

@@ -109,7 +109,8 @@ class DeepFeaturesExtractor(MachineLearningBase):
         # NB: those would be in the database in EcoTaxa
         df = pd.read_csv(csv_in, index_col='id')
 
-        reduced_features_df = self.predict_dataframe(df, input_shape, my_fe, pca)
+        no_crop = (0, 0, 0, 0)
+        reduced_features_df = self.predict_dataframe(df, input_shape, no_crop, my_fe, pca)
 
         logger.info('TEST: Dumping a few rows')
 
