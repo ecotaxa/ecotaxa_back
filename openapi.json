@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.23"
+    "version":"0.0.24"
   },
   "servers":[
     {
@@ -3195,59 +3195,6 @@
                 "schema":{
                   "$ref":"#/components/schemas/PredictionRsp"
                 }
-              }
-            }
-          },
-          "422":{
-            "description":"Validation Error",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security":[
-          {
-            "BearerOrCookieAuth":[]
-          }
-        ]
-      }
-    },
-    "/project/do_cnn":{
-      "get":{
-        "tags":[
-          "objects"
-        ],
-        "summary":"Compute Project Cnn",
-        "description":"**Generate CNN features** for the requested project.\n\n**Returns a string containing the number of generated features.**",
-        "operationId":"compute_project_cnn",
-        "parameters":[
-          {
-            "description":"Internal, numeric id of the project.",
-            "required":true,
-            "schema":{
-              "title":"Proj Id",
-              "type":"integer",
-              "description":"Internal, numeric id of the project."
-            },
-            "example":1,
-            "name":"proj_id",
-            "in":"path"
-          }
-        ],
-        "responses":{
-          "200":{
-            "description":"Successful Response",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "title":"Response Compute Project Cnn Project Do Cnn Get",
-                  "type":"string"
-                },
-                "example":"OK, 50 CNN features computed and written"
               }
             }
           },
