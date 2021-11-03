@@ -221,9 +221,11 @@ class GPUPredictForProject(PredictForProject):
                               SCN_uvp5ccelter_group1
         """
         model_name = tgt_project.cnn_network_id
-        for a_projid in [tgt_project.projid]+self.req.source_project_ids:
+        for a_projid in [tgt_project.projid] + self.req.source_project_ids:
             diag = self._ensure_deep_features_for(a_projid, model_name)
             logger.info(diag)
+
+    DEEP_EXTRACT_CHUNK = 10000
 
     def _ensure_deep_features_for(self, proj_id: ProjectIDT, model_name: str):
         """
@@ -233,11 +235,21 @@ class GPUPredictForProject(PredictForProject):
         ids_and_images = DeepFeatures.find_missing(self.ro_session, proj_id)
         if len(ids_and_images) == 0:
             return "All CNN present for %d" % proj_id
-        # Call feature extractor
+        # Do reasonable chunks so we can see logs...
+        nb_rows = 0
         extractor = DeepFeaturesExtractor(self.vault, self.models_dir)
-        features = extractor.run(ids_and_images, model_name)
-        # Save CNN
-        with CodeTimer("Saving new CNN ", logger):
-            nb_rows = DeepFeatures.save(self.session, features)
-        self.session.commit()
+        while len(ids_and_images) > 0:
+            chunk = {}
+            for objid, img in ids_and_images.items():
+                chunk[objid] = img
+                if len(chunk) >= self.DEEP_EXTRACT_CHUNK:
+                    break
+            for objid in chunk.keys():
+                del ids_and_images[objid]
+            # Call feature extractor
+            features = extractor.run(chunk, model_name)
+            # Save CNN
+            with CodeTimer("Saving %d new CNN " % self.DEEP_EXTRACT_CHUNK, logger):
+                nb_rows += DeepFeatures.save(self.session, features)
+            self.session.commit()
         return "OK, %d CNN features computed and written for %d" % (nb_rows, proj_id)
