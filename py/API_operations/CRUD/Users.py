@@ -7,7 +7,7 @@ from typing import Optional, List, Any
 from BO.Classification import ClassifIDListT
 from BO.User import UserBO, UserIDT
 from DB.Project import ProjectIDT
-from DB.User import User, Role
+from DB.User import User, Role, UserRole
 from helpers.DynamicLogs import get_logger
 from ..helpers.Service import Service
 
@@ -38,6 +38,18 @@ class UserService(Service):
             qry = qry.filter(User.name.ilike(by_name))
         else:
             return []
+        return [a_rec for a_rec in qry]
+
+    def get_users_admins(self, current_user_id: UserIDT) -> List[User]:
+        """
+            List persons with the USERS_ADMINISTRATOR role.
+        """
+        qry = self.ro_session.query(User)
+        qry = qry.join(UserRole)
+        qry = qry.join(Role)
+        qry = qry.filter(User.active)
+        qry = qry.filter(Role.name == Role.USERS_ADMINISTRATOR)
+
         return [a_rec for a_rec in qry]
 
     def list(self, current_user_id: UserIDT) -> List[User]:
