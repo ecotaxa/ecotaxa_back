@@ -475,6 +475,7 @@ def erase_collection(
 
 MyORJSONResponse.register(ProjectBO, ProjectModel)
 MyORJSONResponse.register(User, UserModel)
+MyORJSONResponse.register(TaxonBO, TaxonModel)
 
 project_model_columns = plain_columns(ProjectModel)
 
@@ -966,13 +967,13 @@ def samples_search(project_ids: str = Query(..., title="Project Ids",
              200: {
                  "content": {
                      "application/json": {
-                         "example": {'nb_dubious': 56,
+                         "example": [{'nb_dubious': 56,
                                      'nb_predicted': 5500,
                                      'nb_unclassified': 0,
                                      'nb_validated': 1345,
-                                     'projid': 1,
+                                     'sample_id': 192456,
                                      'used_taxa': [45072, 78418, 84963, 85011, 85012, 85078]
-                                     }
+                                     }]
                      }
                  }
              }
@@ -983,7 +984,7 @@ def sample_set_get_stats(sample_ids: str = Query(..., title="Sample Ids",
                          current_user: Optional[int] = Depends(get_optional_current_user)) \
         -> List[SampleTaxoStats]:
     """
-        Returns **classification statistics** for the given set of samples.
+        Returns **classification statistics** for each sample of the given list. One block of stats is returned for each input ID.
 
         EXPECT A SLOW RESPONSE : No cache of such information anywhere.
     """
@@ -1739,19 +1740,22 @@ async def search_taxa(
         return ret
 
 
-@app.get("/taxon_set/query", operation_id="query_taxa_set", tags=['Taxonomy Tree'], response_model=List[TaxonModel])
+@app.get("/taxon_set/query", operation_id="query_taxa_set", tags=['Taxonomy Tree'],
+         response_model=List[TaxonModel],
+         response_class=MyORJSONResponse  # Force the ORJSON encoder
+         )
 async def query_taxa_set(ids: str = Query(..., title="Ids",
                                           description="The separator between numbers is arbitrary non-digit, e.g. ':', '|' or ','.",
                                           example="1:2:3"),
                          _current_user: Optional[int] = Depends(get_optional_current_user)) \
-        -> List[TaxonBO]:
+        -> MyORJSONResponse:  # List[TaxonBO]:
     """
         Returns **information about several taxa**, including their lineage.
     """
     with TaxonomyService() as sce:
         num_ids = _split_num_list(ids)
         ret = sce.query_set(num_ids)
-        return ret
+    return MyORJSONResponse(ret)
 
 
 @app.get("/taxon/central/{taxon_id}", operation_id="get_taxon_in_central", tags=['Taxonomy Tree'],

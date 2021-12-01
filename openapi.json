@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.24"
+    "version":"0.0.25"
   },
   "servers":[
     {
@@ -297,6 +297,37 @@
               "application/json":{
                 "schema":{
                   "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/users/admins":{
+      "get":{
+        "tags":[
+          "users"
+        ],
+        "summary":"Get Users Admins",
+        "description":"**List users administrators**, themselves being users.",
+        "operationId":"get_users_admins",
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Get Users Admins Users Admins Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/UserModel"
+                  }
                 }
               }
             }
@@ -2032,7 +2063,7 @@
           "samples"
         ],
         "summary":"Sample Set Get Stats",
-        "description":"Returns **classification statistics** for the given set of samples.\n\nEXPECT A SLOW RESPONSE : No cache of such information anywhere.",
+        "description":"Returns **classification statistics** for each sample of the given list. One block of stats is returned for each input ID.\n\nEXPECT A SLOW RESPONSE : No cache of such information anywhere.",
         "operationId":"sample_set_get_stats",
         "parameters":[
           {
@@ -2060,21 +2091,23 @@
                     "$ref":"#/components/schemas/SampleTaxoStatsModel"
                   }
                 },
-                "example":{
-                  "nb_dubious":56,
-                  "nb_predicted":5500,
-                  "nb_unclassified":0,
-                  "nb_validated":1345,
-                  "projid":1,
-                  "used_taxa":[
-                    45072,
-                    78418,
-                    84963,
-                    85011,
-                    85012,
-                    85078
-                  ]
-                }
+                "example":[
+                  {
+                    "nb_dubious":56,
+                    "nb_predicted":5500,
+                    "nb_unclassified":0,
+                    "nb_validated":1345,
+                    "sample_id":192456,
+                    "used_taxa":[
+                      45072,
+                      78418,
+                      84963,
+                      85011,
+                      85012,
+                      85078
+                    ]
+                  }
+                ]
               }
             }
           },
