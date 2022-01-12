@@ -2,12 +2,16 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import os
 import sys
 from logging import INFO
 
 THE_APP = "main:app"
 APP_PORT = "8000"
 
+# Overload port if provided from env.
+if "APP_PORT" in os.environ:
+    APP_PORT = os.environ["APP_PORT"]
 
 def run_uvicorn():
     import uvicorn
@@ -21,8 +25,8 @@ def run_uvicorn():
     # If reload is True then a single worker is spawned
     # Otherwise, several (multiprocess) processes are forked
     # Note that, unlike Gunicorn below, it's a fresh process from 0 which is created
-    #uvicorn.run(THE_APP, workers=4, log_level=INFO )
-    uvicorn.run(THE_APP, log_level=INFO , reload=True)
+    # uvicorn.run(THE_APP, workers=4, log_level=INFO )
+    uvicorn.run(THE_APP, log_level=INFO, port=int(APP_PORT), reload=True)
 
 
 def run_gunicorn():
@@ -41,7 +45,7 @@ def run_gunicorn():
                 "worker_class": "uvicorn.workers.UvicornWorker",
                 'bind': '%s:%s' % ('0.0.0.0', APP_PORT),
                 # Use WEB_CONCURRENCY env. var
-                #'workers': 16,
+                # 'workers': 16,
                 # https://docs.gunicorn.org/en/stable/settings.html#workers
                 # Below is only for gthread workers type
                 # 'threads': 2,
