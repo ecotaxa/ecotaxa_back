@@ -1098,7 +1098,7 @@ def acquisition_query(
 
 # ######################## END OF ACQUISITION
 
-@app.get("/instruments/",
+@app.get("/instruments",
          operation_id="instrument_query", tags=['instruments'],
          response_model=List[str],
          responses={
@@ -1511,7 +1511,7 @@ def predict_object_set(filters: ProjectFiltersModel = Body(...),
 #     return rsp
 
 
-@app.delete("/object_set/", operation_id="erase_object_set", tags=['objects'],
+@app.delete("/object_set", operation_id="erase_object_set", tags=['objects'],
             responses={
                 200: {
                     "content": {
@@ -1968,7 +1968,7 @@ def machine_learning_train(project_id: int = Query(..., title="Input project #",
 
 # ######################## END OF ADMIN
 
-@app.get("/jobs/", operation_id="list_jobs", tags=['jobs'], response_model=List[JobModel])
+@app.get("/jobs", operation_id="list_jobs", tags=['jobs'], response_model=List[JobModel])
 def list_jobs(for_admin: bool = Query(..., title="For admin",
                                       description="If FALSE return the jobs for current user, else return all of them.",
                                       example=False),
@@ -1982,7 +1982,7 @@ def list_jobs(for_admin: bool = Query(..., title="For admin",
     return ret
 
 
-@app.get("/jobs/{job_id}/", operation_id="get_job", tags=['jobs'], response_model=JobModel)
+@app.get("/jobs/{job_id}", operation_id="get_job", tags=['jobs'], response_model=JobModel)
 def get_job(job_id: int = Path(..., description="Internal, the unique numeric id of this job.", example=47445),
             current_user: int = Depends(get_current_user)) -> JobBO:
     """
@@ -2130,7 +2130,7 @@ async def list_user_files(sub_path: str = Query(..., title="Sub path", descripti
     return file_list
 
 
-@app.post("/my_files/", operation_id="post_user_file", tags=['Files'],
+@app.post("/my_files", operation_id="post_user_file", tags=['Files'],
           responses={
               200: {
                   "content": {
@@ -2160,7 +2160,7 @@ async def put_user_file(file: UploadFile = File(..., title="File", description="
         return file_name
 
 
-@app.get("/common_files/", operation_id="list_common_files", tags=['Files'], response_model=DirectoryModel)
+@app.get("/common_files", operation_id="list_common_files", tags=['Files'], response_model=DirectoryModel)
 async def list_common_files(
         path: str = Query(..., title="path", description="", example="/ftp_plankton/Ecotaxa_Exported_data"),
         current_user: int = Depends(get_current_user)) -> DirectoryModel:

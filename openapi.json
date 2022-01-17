@@ -2384,7 +2384,7 @@
         ]
       }
     },
-    "/instruments/":{
+    "/instruments":{
       "get":{
         "tags":[
           "instruments"
@@ -3249,7 +3249,7 @@
         ]
       }
     },
-    "/object_set/":{
+    "/object_set":{
       "delete":{
         "tags":[
           "objects"
@@ -4107,7 +4107,7 @@
         ]
       }
     },
-    "/jobs/":{
+    "/jobs":{
       "get":{
         "tags":[
           "jobs"
@@ -4162,7 +4162,7 @@
         ]
       }
     },
-    "/jobs/{job_id}/":{
+    "/jobs/{job_id}":{
       "get":{
         "tags":[
           "jobs"
@@ -4192,6 +4192,54 @@
                 "schema":{
                   "$ref":"#/components/schemas/JobModel"
                 }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      },
+      "delete":{
+        "tags":[
+          "jobs"
+        ],
+        "summary":"Erase Job",
+        "description":"**Delete the job** from DB, with associated storage.\n\nReturn **NULL upon success.**\n\nIf the job is running then kill it.\n\n🔒 The job must be accessible to current user.",
+        "operationId":"erase_job",
+        "parameters":[
+          {
+            "description":"Internal, the unique numeric id of this job.",
+            "required":true,
+            "schema":{
+              "title":"Job Id",
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this job."
+            },
+            "example":47445,
+            "name":"job_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{},
+                "example":{}
               }
             }
           },
@@ -4424,56 +4472,6 @@
         ]
       }
     },
-    "/jobs/{job_id}":{
-      "delete":{
-        "tags":[
-          "jobs"
-        ],
-        "summary":"Erase Job",
-        "description":"**Delete the job** from DB, with associated storage.\n\nReturn **NULL upon success.**\n\nIf the job is running then kill it.\n\n🔒 The job must be accessible to current user.",
-        "operationId":"erase_job",
-        "parameters":[
-          {
-            "description":"Internal, the unique numeric id of this job.",
-            "required":true,
-            "schema":{
-              "title":"Job Id",
-              "type":"integer",
-              "description":"Internal, the unique numeric id of this job."
-            },
-            "example":47445,
-            "name":"job_id",
-            "in":"path"
-          }
-        ],
-        "responses":{
-          "200":{
-            "description":"Successful Response",
-            "content":{
-              "application/json":{
-                "schema":{},
-                "example":{}
-              }
-            }
-          },
-          "422":{
-            "description":"Validation Error",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security":[
-          {
-            "BearerOrCookieAuth":[]
-          }
-        ]
-      }
-    },
     "/my_files/{sub_path}":{
       "get":{
         "tags":[
@@ -4522,7 +4520,7 @@
         ]
       }
     },
-    "/my_files/":{
+    "/my_files":{
       "post":{
         "tags":[
           "Files"
@@ -4571,7 +4569,7 @@
         ]
       }
     },
-    "/common_files/":{
+    "/common_files":{
       "get":{
         "tags":[
           "Files"
