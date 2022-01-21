@@ -73,10 +73,12 @@ class JobScheduler(Service):
         """
             Pick first pending job and run it, except if already running.
         """
-        if self.the_runner is not None:
+        cls = JobScheduler
+        if cls.the_runner is not None:
             # A single runner at a time
-            if self.the_runner.is_alive():
+            if cls.the_runner.is_alive():
                 return
+            cls.the_runner = None
         # Pick the first pending job which is not already managed by another runner
         qry: Query = self.session.query(Job).filter(Job.state == DBJobStateEnum.Pending)
         if self.INCLUDE:
@@ -97,8 +99,8 @@ class JobScheduler(Service):
         job_clone = clone_of(the_job)
         job_clone.id = the_job.id
         # Run the service background
-        self.the_runner = JobRunner(JobBO(job_clone))
-        self.the_runner.start()
+        cls.the_runner = JobRunner(JobBO(job_clone))
+        cls.the_runner.start()
 
     def wait_for_stable(self):
         # Not to use outside tests

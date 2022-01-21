@@ -4,9 +4,21 @@
 #
 # A job runner dedicated to (even if only sometimes) GPU-needing operations
 #
+import time
+
 from API_operations.GPU_Prediction import GPUPredictForProject
 from BG_operations.JobScheduler import JobScheduler
 
-if __name__ == '__main__':
+
+def main():
     JobScheduler.INCLUDE = [GPUPredictForProject.JOB_TYPE]
-    JobScheduler.launch_at_interval(1)
+    with JobScheduler() as sce:
+        # As soon as something is running, exit and free all resources
+        # the 'exit' will wait for the thread, i.e. job, to finish.
+        while sce.the_runner is None:
+            sce.run_one()
+            time.sleep(10)
+
+
+if __name__ == '__main__':
+    main()

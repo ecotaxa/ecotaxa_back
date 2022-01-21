@@ -40,7 +40,7 @@ COPY gpu_prod_image/start.sh /app
 
 ##### Switch to target #####
 # Image is for drivers v470
-FROM nvidia/cuda:11.4.1-cudnn8-runtime-ubuntu18.04 as target
+FROM nvidia/cuda:11.4.3-cudnn8-runtime-ubuntu18.04 as target
 
 # Minimum install
 RUN apt-get update && \
