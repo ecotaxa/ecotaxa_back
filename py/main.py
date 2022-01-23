@@ -2296,7 +2296,7 @@ dump_openapi(app, __file__)
 def startup_event():
     # Don't run predictions, they are left to a specialized runner
     JobScheduler.FILTER = [PredictForProject.JOB_TYPE]
-    JobScheduler.launch_at_interval(1)
+    JobScheduler.launch_at_interval(2)
 
 
 @app.on_event("shutdown")

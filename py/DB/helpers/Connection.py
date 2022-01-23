@@ -39,6 +39,7 @@ class Connection(object):
     """
         A connection to the DB via SQLAlchemy.
     """
+    APP_NAME = "ecotaxa_back"
 
     def __init__(self, user, password, db, host, port=5432, read_only=False):
         """
@@ -55,13 +56,17 @@ class Connection(object):
                                           echo=False, echo_pool=False,
                                           # echo=True, echo_pool="debug",
                                           executemany_mode='batch',
-                                          # Not needed anyway it's not async anywhere and default is 5
-                                          # pool_size=20, max_overflow=5,
+                                          # Reminder: QueuePool is default implementation
+                                          # Avoid too many stale sessions, we need at max:
+                                          # - 1 session for serving requests
+                                          # - 1 session for knowing which jobs to run,
+                                          #   _or running the job_ as we don't look for other jobs if one is running
+                                          pool_size=2, max_overflow=1,
                                           # This way we can restart the DB and sessions will re-establish themselves
                                           # the cost is 1 (simple) query per connection pool recycle.
                                           pool_pre_ping=True,
                                           execution_options=exec_options,
-                                          connect_args={"application_name": "ecotaxa_back"})
+                                          connect_args={"application_name": self.APP_NAME})
         self.session_factory = sessionmaker(bind=engine)
         self._meta: MetaData = sqlalchemy.MetaData(bind=engine)
         self._meta.reflect()
@@ -70,5 +75,6 @@ class Connection(object):
         """
             Get a fresh or recycled session from the connection.
         """
+        # logging.error("get session")
         ret = self.session_factory()
         return ret

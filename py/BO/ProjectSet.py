@@ -59,7 +59,8 @@ class FeatureConsistentProjectSet(object):
         for a_proj in qry.all():
             free_columns_mappings = TableMapping(ObjectFields).load_from_equal_list(a_proj.mappingobj)
             mapped = ObjectBO.resolve_fields(self.column_names, free_columns_mappings)
-            assert len(mapped) == len(self.column_names), "Project %d does not contain all columns" % a_proj.projid
+            assert len(mapped) == len(self.column_names), "Project %d does not contain all columns (%s)" \
+                                                          % (a_proj.projid, self.column_names)
             yield a_proj, mapped
 
     # TODO: dup code with DescribedObjectSet.get_sql

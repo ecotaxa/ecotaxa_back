@@ -8,16 +8,18 @@ import time
 
 from API_operations.GPU_Prediction import GPUPredictForProject
 from BG_operations.JobScheduler import JobScheduler
+from DB.helpers.Connection import Connection
 
 
 def main():
+    Connection.APP_NAME = "ecotaxa_gpu_back"
     JobScheduler.INCLUDE = [GPUPredictForProject.JOB_TYPE]
-    with JobScheduler() as sce:
-        # As soon as something is running, exit and free all resources
-        # the 'exit' will wait for the thread, i.e. job, to finish.
-        while sce.the_runner is None:
+    # As soon as something is running, exit and free all resources
+    # the 'exit' will wait for the thread, i.e. job, to finish.
+    while JobScheduler.the_runner is None:
+        with JobScheduler() as sce:
             sce.run_one()
-            time.sleep(10)
+        time.sleep(10)
 
 
 if __name__ == '__main__':
