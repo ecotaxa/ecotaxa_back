@@ -2,6 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from typing import Type
 
 from DB.Acquisition import Acquisition
 from DB.Image import Image
@@ -49,7 +50,7 @@ class AsciiDumper(Service):
                                        "where acq_sample_id in (select sampleid "
                                        "from samples sam where sam.projid=%d)))" % projid)
 
-    def dump_table(self, out, a_table: Model, where):
+    def dump_table(self, out, a_table: Type[Model], where):
         base_table: Table = a_table.__table__
         cols = [a_col.name for a_col in base_table.columns]
         pk = [a_pk_col.name for a_pk_col in base_table.primary_key]

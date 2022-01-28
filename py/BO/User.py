@@ -5,7 +5,7 @@
 
 import json
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final, List
 
 from BO.Classification import ClassifIDListT
 from BO.helpers.DataclassAsDict import DataclassAsDict
@@ -66,8 +66,8 @@ class UserBO(object):
         logger.info("for %s and %d: %s", current_user.name, project_id, prefs_for_proj.json_prefs)
         session.commit()
 
-    CLASSIF_MRU_KEY = "mru"
-    NB_MRU_KEPT = 10
+    CLASSIF_MRU_KEY: Final = "mru"
+    NB_MRU_KEPT: Final = 10
 
     @classmethod
     def merge_mru(cls, before: ClassifIDListT, incoming: ClassifIDListT) \
@@ -105,8 +105,14 @@ class MinimalUserBO(DataclassAsDict):
     name: str
 
 
+MinimalUserBOListT = List[MinimalUserBO]
+
+
 @dataclass(init=False)
 class UserActivity(DataclassAsDict):
     id: UserIDT
     nb_actions: int
     last_annot: str
+
+
+UserActivityListT = List[UserActivity]

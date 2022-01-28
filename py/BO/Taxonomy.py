@@ -5,7 +5,7 @@
 # Taxon/Category/Classification 
 #
 from datetime import datetime
-from typing import List, Set, Dict, Tuple, Optional
+from typing import List, Set, Dict, Tuple, Optional, Final
 
 from BO.Classification import ClassifIDCollT, ClassifIDT, ClassifIDListT
 from DB import Taxonomy, WoRMS
@@ -36,7 +36,7 @@ class TaxonBO(object):
         if children is None:
             children = []
         else:
-            assert isinstance(children, list), "Not a list: %s"%children
+            assert isinstance(children, list), "Not a list: %s" % children
         self.id = id_lineage[0]
         self.renm_id = rename_id
         self.name = lineage[0]
@@ -168,8 +168,8 @@ class TaxonomyBO(object):
                 SELECT * FROM rq WHERE parent_id IS NULL)"""
         return sql
 
-    MAX_MATCHES = 200
-    MAX_TAXONOMY_LEVELS = 20
+    MAX_MATCHES: Final = 200
+    MAX_TAXONOMY_LEVELS: Final = 20
 
     @classmethod
     def query(cls, session: Session,
@@ -425,7 +425,7 @@ class TaxonBOSetFromWoRMS(object):
     """
         Many taxa from WoRMS table, with lineage.
     """
-    MAX_TAXONOMY_LEVELS = 20
+    MAX_TAXONOMY_LEVELS: Final = 20
 
     def __init__(self, session: Session, taxon_ids: ClassifIDListT):
         tf = WoRMS.__table__.alias('tf')

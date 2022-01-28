@@ -6,7 +6,7 @@
 # An Object as seen by the user, i.e. the fields regardless of their storage.
 # An Object cannot exist outside of a project due to "free" columns.
 #
-from typing import Tuple, List, Optional, Any
+from typing import Tuple, List, Optional, Any, ClassVar
 
 from sqlalchemy import MetaData
 
@@ -27,13 +27,17 @@ ObjectIDWithParentsT = Tuple[ObjectIDT, AcquisitionIDT, SampleIDT, ProjectIDT]
 logger = get_logger(__name__)
 
 
+def _get_proj(obj: ObjectHeader):
+    return obj.acquisition.sample.project
+
+
 class ObjectBO(MappedEntity):
     """
         An object, as seen from user. No storage/DB-related distinction here.
     """
-    FREE_COLUMNS_ATTRIBUTE = 'fields'
-    PROJECT_ACCESSOR = lambda obj: obj.acquisition.sample.project
-    MAPPING_IN_PROJECT = 'object_mappings'
+    FREE_COLUMNS_ATTRIBUTE: ClassVar = 'fields'
+    PROJECT_ACCESSOR: ClassVar = _get_proj
+    MAPPING_IN_PROJECT: ClassVar = 'object_mappings'
 
     def __init__(self, session: Session, object_id: ObjectIDT,
                  db_object: Optional[ObjectHeader] = None, db_fields: Optional[Model] = None):

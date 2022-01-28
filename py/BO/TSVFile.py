@@ -8,7 +8,7 @@ import random
 import sys
 from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, Set, Any, Mapping, Tuple
+from typing import Dict, Set, Any, Mapping, Tuple, ClassVar, Optional, cast
 
 # noinspection PyPackageRequirements
 from PIL import Image as PIL_Image  # type: ignore
@@ -73,7 +73,7 @@ class TSVFile(object):
         # Read as a dict, first line gives the format
         self.rdr = csv.DictReader(csv_file, delimiter='\t', quotechar='"')
         # Cleanup field names, keeping original ones as key.
-        clean_fields = OrderedDict()
+        clean_fields: OrderedDict[Optional[str], str] = OrderedDict()
         for raw_field in self.rdr.fieldnames:
             clean_fields[raw_field] = raw_field.strip(" \t").lower()
         self.clean_fields = clean_fields
@@ -83,7 +83,7 @@ class TSVFile(object):
         # When called using "with", the file will be closed on code block leave
         return csv_file
 
-    REPORT_EVERY = 100
+    REPORT_EVERY: ClassVar = 100
 
     def do_import(self, where: ImportWhere, how: ImportHow, stats: ImportStats) -> int:
         """
@@ -114,7 +114,10 @@ class TSVFile(object):
                 row_count_for_csv += 1
                 counter += 1
 
-                lig = {self.clean_fields[field]: v for field, v in rawlig.items()}
+                # Value is wrongly deduced as str from the rdr, it's optional in fact
+                rawlig2 = cast(Dict[str, Optional[str]], rawlig)
+
+                lig = {self.clean_fields[field]: v for field, v in rawlig2.items()}
 
                 if ignore_annotation_category:
                     # Remove category as required, but only if there is really an id value
@@ -424,7 +427,8 @@ class TSVFile(object):
         return ret
 
     @staticmethod
-    def read_fields_to_dicts(how: ImportHow, field_set: Set, lig: Dict[str, str], dicts_to_write, vals_cache: Dict):
+    def read_fields_to_dicts(how: ImportHow, field_set: Set, lig: Dict[str, Optional[str]], dicts_to_write,
+                             vals_cache: Dict):
         """
             Read the data line into target dicts. Values go into the right bucket, i.e. target dict, depending
             on mappings (standard one and per-project custom one).

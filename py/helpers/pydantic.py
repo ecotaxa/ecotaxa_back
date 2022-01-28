@@ -8,7 +8,7 @@ from typing import List, Any, Optional, Dict
 
 # Just to avoid tagging every "pydantic" reference in PyCharm, as pydantic is included in FastAPI
 # noinspection PyUnresolvedReferences
-from pydantic import BaseConfig, BaseModel, Field, create_model, root_validator
+from pydantic import BaseConfig, BaseModel, Field, create_model, root_validator, dataclasses
 
 
 def sort_and_prune(a_list: List[Any], order_field: Optional[str],

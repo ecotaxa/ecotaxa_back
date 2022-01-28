@@ -5,7 +5,7 @@
 import json
 import threading
 from threading import Thread
-from typing import Any, Optional, List
+from typing import Any, Optional, List, ClassVar
 
 from API_operations.helpers.JobService import JobServiceBase
 from API_operations.helpers.Service import Service
@@ -59,9 +59,9 @@ class JobScheduler(Service):
         These are not really processes, just threads, so far.
     """
     # Filter out these job types
-    FILTER: List[str] = []
+    FILTER: ClassVar[List[str]] = []
     # Include only these job types
-    INCLUDE: List[str] = []
+    INCLUDE: ClassVar[List[str]] = []
     # A single runner per process
     the_runner: Optional[JobRunner] = None
     the_timer: Optional[threading.Timer] = None

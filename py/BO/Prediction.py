@@ -7,7 +7,7 @@
 # A prediction is the output of an automatic classification process.
 #    This is heavily based on machine learning algorithms.
 #
-from typing import Any, List, Dict
+from typing import Any, List, Dict, ClassVar
 
 import numpy as np  # type: ignore
 from numpy import ndarray
@@ -33,7 +33,7 @@ class DeepFeatures(object):
          @see https://en.wikipedia.org/wiki/Convolutional_neural_network
         These other features are stored in a dedicated DB table @see ObjectCNNFeature.
     """
-    SAVE_EVERY = 500
+    SAVE_EVERY: ClassVar = 500
 
     @staticmethod
     def delete_all(session: Session, proj_id: ProjectIDT) -> int:

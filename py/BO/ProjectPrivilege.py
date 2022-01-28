@@ -2,6 +2,8 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from typing import Final
+
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Session
 
@@ -11,9 +13,9 @@ class ProjectPrivilegeBO(object):
         Project privilege business object. So far just a container for API_operations involving it.
     """
     # TODO: Put in SQL below
-    MANAGE = 'Manage'
-    ANNOTATE = 'Annotate'
-    VIEW = 'View'
+    MANAGE: Final = 'Manage'
+    ANNOTATE: Final = 'Annotate'
+    VIEW: Final = 'View'
 
     @classmethod
     def managers_by_project(cls) -> str:

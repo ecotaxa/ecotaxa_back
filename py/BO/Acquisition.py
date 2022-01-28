@@ -5,7 +5,7 @@
 #
 # An Acquisition business object
 #
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, ClassVar
 
 from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.ColumnUpdate import ColUpdateList
@@ -25,13 +25,17 @@ AcquisitionOrigIDT = str
 logger = get_logger(__name__)
 
 
+def _get_proj(acq: Acquisition):
+    return acq.sample.project
+
+
 class AcquisitionBO(MappedEntity):
     """
         An Acquisition.
     """
-    FREE_COLUMNS_ATTRIBUTE = 'acquis'
-    PROJECT_ACCESSOR = lambda acq: acq.sample.project
-    MAPPING_IN_PROJECT = 'acquisition_mappings'
+    FREE_COLUMNS_ATTRIBUTE: ClassVar = 'acquis'
+    PROJECT_ACCESSOR: ClassVar = _get_proj
+    MAPPING_IN_PROJECT: ClassVar = 'acquisition_mappings'
 
     def __init__(self, session: Session, acquisition_id: AcquisitionIDT):
         super().__init__(session)

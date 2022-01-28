@@ -8,10 +8,9 @@ from datetime import datetime
 from typing import List, Dict, Tuple
 
 from BO.Classification import ClassifIDT, ClassifIDListT
-from DB import Taxonomy
 from DB.Project import ProjectIDT
-from DB.Taxonomy import TaxonomyChangeLog
-from DB.helpers.ORM import Session, any_, func, and_
+from DB.Taxonomy import Taxonomy, TaxonomyChangeLog
+from DB.helpers.ORM import Session, any_, func
 from helpers.DynamicLogs import get_logger
 
 ClassifSetInfoT = Dict[ClassifIDT, Tuple[str, str]]

@@ -7,7 +7,7 @@
 # A Sample BO + enumerated set of Sample(s)
 #
 from dataclasses import dataclass
-from typing import List
+from typing import List, ClassVar
 
 from DB import Session, Query, Project, Sample, Acquisition
 from DB.Object import VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL
@@ -42,13 +42,17 @@ class SampleTaxoStats(DataclassAsDict):
     nb_predicted: int
 
 
+def _get_proj(sam: Sample):
+    return sam.project
+
+
 class SampleBO(MappedEntity):
     """
         A Sample.
     """
-    FREE_COLUMNS_ATTRIBUTE = 'sample'
-    PROJECT_ACCESSOR = lambda sam: sam.project
-    MAPPING_IN_PROJECT = 'sample_mappings'
+    FREE_COLUMNS_ATTRIBUTE: ClassVar = 'sample'
+    PROJECT_ACCESSOR: ClassVar = _get_proj
+    MAPPING_IN_PROJECT: ClassVar = 'sample_mappings'
 
     def __init__(self, session: Session, sample_id: SampleIDT):
         super().__init__(session)
@@ -124,9 +128,9 @@ class EnumeratedSampleSet(MappedTable):
         SELECT sam.sampleid,
                ARRAY_AGG(DISTINCT COALESCE(obh.classif_id, -1)) as ids,
                SUM(CASE WHEN obh.classif_id <> -1 THEN 0 ELSE 1 END) as nb_u,
-               COUNT(CASE WHEN obh.classif_qual = '"""+VALIDATED_CLASSIF_QUAL+"""' THEN 1 END) nbr_v,
-               COUNT(CASE WHEN obh.classif_qual = '"""+DUBIOUS_CLASSIF_QUAL+"""' THEN 1 END) nbr_d, 
-               COUNT(CASE WHEN obh.classif_qual = '"""+PREDICTED_CLASSIF_QUAL+"""' THEN 1 END) nbr_p
+               COUNT(CASE WHEN obh.classif_qual = '""" + VALIDATED_CLASSIF_QUAL + """' THEN 1 END) nbr_v,
+               COUNT(CASE WHEN obh.classif_qual = '""" + DUBIOUS_CLASSIF_QUAL + """' THEN 1 END) nbr_d, 
+               COUNT(CASE WHEN obh.classif_qual = '""" + PREDICTED_CLASSIF_QUAL + """' THEN 1 END) nbr_p
           FROM obj_head obh
           JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
           JOIN samples sam ON sam.sampleid = acq.acq_sample_id

@@ -6,14 +6,14 @@ import typing
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Dict, Any, Iterable, Optional, Union, Generator, Tuple
+from typing import List, Dict, Any, Iterable, Optional, Union
 
 from BO.Classification import ClassifIDListT
 from BO.Instrument import DescribedInstrumentSet
 from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping, TableMapping
 from BO.Prediction import DeepFeatures
 from BO.ProjectPrivilege import ProjectPrivilegeBO
-from BO.User import MinimalUserBO, UserActivity, UserIDT
+from BO.User import MinimalUserBO, UserActivity, UserIDT, MinimalUserBOListT, UserActivityListT
 from BO.helpers.DataclassAsDict import DataclassAsDict
 from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFields, Acquisition, Process, \
     ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram, ObjectsClassifHisto
@@ -48,8 +48,8 @@ class ProjectUserStats(DataclassAsDict):
         User statistics for a project.
     """
     projid: ProjectIDT
-    annotators: List[MinimalUserBO]
-    activities: List[UserActivity]
+    annotators: MinimalUserBOListT
+    activities: UserActivityListT
 
 
 # noinspection SqlDialectInspection
@@ -283,7 +283,7 @@ class ProjectBO(object):
         user_activities_per_project = {}
         stats_per_project = {}
         with CodeTimer("user present stats for %d projects, qry: %s:" % (len(prj_ids), str(pqry)), logger):
-            last_prj = None
+            last_prj: Optional[int] = None
             for projid, user_id, user_name, cnt, last_date in pqry.all():
                 last_date_str = last_date.replace(microsecond=0).isoformat()
                 if projid != last_prj:

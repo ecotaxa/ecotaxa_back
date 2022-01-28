@@ -2,7 +2,7 @@ import re
 from typing import Optional
 
 
-def clean_value(value: str, is_numeric: bool = False):
+def clean_value(value: Optional[str], is_numeric: bool = False):
     """
         Remove spaces and map 2 special values to empty string, which is _accepted_ like an empty column.
     """

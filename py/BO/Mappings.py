@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from collections import OrderedDict, namedtuple
-from typing import Dict, Tuple, List, Union, Type, Optional, Set
+from typing import Dict, Tuple, List, Union, Type, Optional, Set, Final
 
 from DB.Acquisition import Acquisition
 from DB.Image import Image
@@ -21,7 +21,7 @@ class GlobalMapping(object):
     """
         Information about mapping process (from TSV to DB)
     """
-    ANNOTATION_FIELDS = {
+    ANNOTATION_FIELDS: Final = {
         # !!! 2 TSV fields end up into a single DB column, it's one OR the other
         'object_annotation_category': {'table': ObjectHeader.__tablename__, 'field': 'classif_id', 'type': 't'},
         'object_annotation_category_id': {'table': ObjectHeader.__tablename__, 'field': 'classif_id', 'type': 'n'},
@@ -29,13 +29,13 @@ class GlobalMapping(object):
         'object_annotation_person_name': {'table': ObjectHeader.__tablename__, 'field': 'classif_who', 'type': 't'},
         'object_annotation_status': {'table': ObjectHeader.__tablename__, 'field': 'classif_qual', 'type': 't'},
     }
-    DOUBLED_FIELDS = {
+    DOUBLED_FIELDS: Final = {
         # Added to object_annotation_date
         'object_annotation_time': {'table': ObjectHeader.__tablename__, 'field': 'classif_when', 'type': 't'},
         # Either this one or object_annotation_person_name
         'object_annotation_person_email': {'table': ObjectHeader.__tablename__, 'field': 'classif_who', 'type': 't'},
     }
-    PREDEFINED_FIELDS = {
+    PREDEFINED_FIELDS: Final = {
         **ANNOTATION_FIELDS,
         # A mapping from TSV columns to objects and fields
         'object_id': {'table': ObjectHeader.__tablename__, 'field': 'orig_id', 'type': 't'},
@@ -56,28 +56,28 @@ class GlobalMapping(object):
     }
 
     # C'est un set de table 😁
-    POSSIBLE_TABLES = set([v['table'] for v in PREDEFINED_FIELDS.values()] +
-                          [ObjectFields.__tablename__])  # No hard-coded mapping for this one anymore
+    POSSIBLE_TABLES: Final = set([v['table'] for v in PREDEFINED_FIELDS.values()] +
+                                    [ObjectFields.__tablename__])  # No hard-coded mapping for this one anymore
 
-    PARENT_CLASSES: Dict[str, ParentTableClassT] = OrderedDict([(Sample.__tablename__, Sample),
-                                                                (Acquisition.__tablename__, Acquisition),
-                                                                (Process.__tablename__, Process)])
+    PARENT_CLASSES: Final[Dict[str, ParentTableClassT]] = OrderedDict([(Sample.__tablename__, Sample),
+                                                                          (Acquisition.__tablename__, Acquisition),
+                                                                          (Process.__tablename__, Process)])
 
-    TARGET_CLASSES = {**PARENT_CLASSES,
-                      ObjectHeader.__tablename__: ObjectHeader,
-                      ObjectFields.__tablename__: ObjectFields,
-                      Image.__tablename__: Image}
+    TARGET_CLASSES: Final = {**PARENT_CLASSES,
+                                ObjectHeader.__tablename__: ObjectHeader,
+                                ObjectFields.__tablename__: ObjectFields,
+                                Image.__tablename__: Image}
 
     # (f)loat->(n)umerical
-    POSSIBLE_TYPES = {'[f]': 'n', '[t]': 't'}
+    POSSIBLE_TYPES: Final = {'[f]': 'n', '[t]': 't'}
     # TSV prefix to 'real' table name, only for extendable tables
-    PREFIX_TO_TABLE = {
+    PREFIX_TO_TABLE: Final = {
         'object': ObjectFields.__tablename__,
         'acq': Acquisition.__tablename__,
         'process': Process.__tablename__,
         'sample': Sample.__tablename__,
     }
-    TABLE_TO_PREFIX = {v: k for k, v in PREFIX_TO_TABLE.items()}
+    TABLE_TO_PREFIX: Final = {v: k for k, v in PREFIX_TO_TABLE.items()}
 
     # noinspection PyPep8Naming
     @classmethod

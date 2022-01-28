@@ -10,7 +10,7 @@
 #
 from abc import ABCMeta
 from collections import OrderedDict
-from typing import Any, List, Callable, Tuple, Optional, Dict
+from typing import Any, List, Callable, Tuple, Optional, Dict, ClassVar
 
 from BO.Mappings import TableMapping, ProjectMapping
 from BO.ProjectVars import ProjectVar
@@ -25,11 +25,11 @@ class MappedEntity(metaclass=ABCMeta):
     """
         A mapped entity is included in a project, and shows DB columns possibly differently amongst projects.
     """
-    FREE_COLUMNS_ATTRIBUTE: str
+    FREE_COLUMNS_ATTRIBUTE: ClassVar[str]
     """ Which field/attribute in the subclass contains the DB entity with mapped values """
-    PROJECT_ACCESSOR: Callable[[Any], Project]
+    PROJECT_ACCESSOR: ClassVar[Callable[[Any], Project]]
     """ How to reach the project containing the mapping """
-    MAPPING_IN_PROJECT: str
+    MAPPING_IN_PROJECT: ClassVar[str]
     """ Where in the @See ProjectMapping class are the specific to the subclass """
 
     def __init__(self, session: Session):

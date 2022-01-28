@@ -5,7 +5,7 @@
 #
 # An enumerated set of Process(es)
 #
-from typing import List
+from typing import List, ClassVar
 
 from BO.ColumnUpdate import ColUpdateList
 from BO.helpers.MappedEntity import MappedEntity
@@ -23,13 +23,17 @@ ProcessOrigIDT = str
 logger = get_logger(__name__)
 
 
+def _get_proj(prc: Process):
+    return prc.acquisition.sample.project
+
+
 class ProcessBO(MappedEntity):
     """
         A processing, which is _how_ collected [sub]samples were treated to give images.
     """
-    FREE_COLUMNS_ATTRIBUTE = 'process'
-    PROJECT_ACCESSOR = lambda prc: prc.acquisition.sample.project
-    MAPPING_IN_PROJECT = 'process_mappings'
+    FREE_COLUMNS_ATTRIBUTE: ClassVar = 'process'
+    PROJECT_ACCESSOR: ClassVar = _get_proj
+    MAPPING_IN_PROJECT: ClassVar = 'process_mappings'
 
     def __init__(self, session: Session, process_id: ProcessIDT):
         super().__init__(session)

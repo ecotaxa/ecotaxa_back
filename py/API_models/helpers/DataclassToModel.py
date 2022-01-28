@@ -26,7 +26,8 @@ class DataclassConfig(BaseConfig):
 T = TypeVar('T')
 
 
-def dataclass_to_model(clazz: T, add_suffix: bool = False, field_infos:  Optional[Dict[str, Any]] = None) -> PydanticModelT:
+def dataclass_to_model(clazz: T, add_suffix: bool = False, field_infos:  Optional[Dict[str, Any]] = None) \
+        -> PydanticModelT:
     model_fields = {}
     a_field: dataclasses.Field
     for a_field in dataclasses.fields(clazz):
@@ -39,7 +40,7 @@ def dataclass_to_model(clazz: T, add_suffix: bool = False, field_infos:  Optiona
             # A typing e.g. typing.List[BO.UserBO]
             str_type = str(fld_type)
             if str_type.startswith("typing.List["):
-                # TODO: I did not find how to instrospect a type from typings, so below is a bit ugly
+                # TODO: I did not find how to introspect a type from typings, so below is a bit ugly
                 contained_class_full_name = str_type[12:-1]
                 try:
                     to_import, contained_class_name = contained_class_full_name.rsplit(".", 1)

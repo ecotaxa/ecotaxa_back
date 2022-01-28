@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Dict, Tuple, List, Type, Optional
+from typing import Dict, Tuple, List, Type, Optional, ClassVar
 
 from helpers.DynamicLogs import get_logger
 from .Bean import Bean
@@ -26,7 +26,7 @@ class DBWriter(object):
         Database writer for import/subset/CNN (with optimizations).
         @see SQLAlchemy Core documentation for principles.
     """
-    SEQUENCE_CACHE_SIZE = 100
+    SEQUENCE_CACHE_SIZE: ClassVar = 100
 
     def __init__(self, session: Session):
         self.session = session
@@ -86,28 +86,11 @@ class DBWriter(object):
         # TODO: SQLAlchemy compiled_cache?
         bulk_sets = [self.obj_bulks, self.obj_fields_bulks,
                      self.obj_cnn_bulks, self.img_bulks]
-        # noinspection PyUnreachableCode
-        if True:
-            for a_bulk_set, an_insert in zip(bulk_sets, inserts):
-                if not a_bulk_set:
-                    continue
-                self.session.execute(an_insert, a_bulk_set)
-                a_bulk_set.clear()
-        else:
-            # Experimental code. TODO: Get better or drop
-            db_cnx = self.session.bind.engine.raw_connection()
-            try:
-                for a_bulk_set, an_insert in zip(bulk_sets, inserts):
-                    if not a_bulk_set:
-                        continue
-                    import re
-                    an_insert = re.sub(r':([0-9a-z_]+)', r'%(\1)s', str(an_insert))
-                    with db_cnx.cursor() as cur:
-                        cur.executemany(an_insert, a_bulk_set)
-                        assert cur.rowcount == len(a_bulk_set), "bulk insert failed"
-                    a_bulk_set.clear()
-            finally:
-                db_cnx.close()
+        for a_bulk_set, an_insert in zip(bulk_sets, inserts):
+            if not a_bulk_set:
+                continue
+            self.session.execute(an_insert, a_bulk_set)
+            a_bulk_set.clear()
         logger.info("Batch save objects of %s", nb_bulks)
 
     def add_db_entities(self, object_head_to_write: Bean, object_fields_to_write: Bean,

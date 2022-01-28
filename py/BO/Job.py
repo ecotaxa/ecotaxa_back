@@ -7,7 +7,7 @@
 #
 from datetime import datetime
 from json import loads as json_loads, dumps as json_dumps, JSONDecodeError
-from typing import Dict, Optional, Any, List
+from typing import Dict, Optional, Any, List, Final
 
 from BO.User import UserIDT
 from DB import Job, Session
@@ -22,13 +22,13 @@ class JobBO(object):
         Thin wrapper over DB job.
     """
     # Pending message
-    PENDING_MESSAGE = "Waiting for a slot"
+    PENDING_MESSAGE: Final = "Waiting for a slot"
     # An ack of Asking state
-    REPLIED_MESSAGE = "Proceeding"
+    REPLIED_MESSAGE: Final = "Proceeding"
     # An ack of Restart action
-    RESTARTING_MESSAGE = "Restarting"
+    RESTARTING_MESSAGE: Final = "Restarting"
     # An ack of Kill action
-    KILLED_MESSAGE = "Killed"
+    KILLED_MESSAGE: Final = "Killed"
 
     __slots__ = ['_job', '_session', 'params', 'result', 'errors', 'question', 'reply', 'inside']
 
