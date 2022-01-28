@@ -6,7 +6,7 @@ sqlalchemy-stubs==0.4
 #psycopg[binary]==3.0.8
 psycopg2-binary==2.9.3
 # Pillow needs manual testing
-Pillow==8.1.0
+Pillow==9.0.0
 # astral needs pytz
 astral==2.2
 pytz==2021.1
