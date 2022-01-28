@@ -399,14 +399,12 @@ def update_collection(collection: CollectionModel = Body(...),
             present_collection = sce.query(current_user, collection_id, for_update=True)
         if present_collection is None:
             raise HTTPException(status_code=404, detail="Collection not found")
-        # noinspection PyUnresolvedReferences
         present_collection.update(session=sce.session,
-                                  title=collection.title,
-                                  short_title=collection.short_title,
+                                  title=collection.title, short_title=collection.short_title,  # type: ignore
                                   project_ids=collection.project_ids,
                                   provider_user=collection.provider_user, contact_user=collection.contact_user,
-                                  citation=collection.citation, abstract=collection.abstract,
-                                  description=collection.description,
+                                  citation=collection.citation, abstract=collection.abstract,  # type: ignore
+                                  description=collection.description,  # type: ignore
                                   creator_users=collection.creator_users, associate_users=collection.associate_users,
                                   creator_orgs=collection.creator_organisations,
                                   associate_orgs=collection.associate_organisations)
@@ -898,13 +896,13 @@ def update_project(project: ProjectModel,
             present_project: ProjectBO = sce.query(current_user, project_id, for_managing=True, for_update=True)
 
         with ValidityThrower():
-            # noinspection PyUnresolvedReferences
             present_project.update(session=sce.session,
-                                   title=project.title, visible=project.visible, status=project.status,
-                                   description=project.description,
+                                   title=project.title, visible=project.visible, status=project.status,  # type: ignore
+                                   description=project.description,  # type: ignore
                                    init_classif_list=project.init_classif_list,
-                                   classiffieldlist=project.classiffieldlist, popoverfieldlist=project.popoverfieldlist,
-                                   cnn_network_id=project.cnn_network_id, comments=project.comments,
+                                   classiffieldlist=project.classiffieldlist,  # type: ignore
+                                   popoverfieldlist=project.popoverfieldlist,  # type: ignore
+                                   cnn_network_id=project.cnn_network_id, comments=project.comments,  # type: ignore
                                    contact=project.contact,
                                    managers=project.managers, annotators=project.annotators, viewers=project.viewers,
                                    license_=project.license)
@@ -968,12 +966,12 @@ def samples_search(project_ids: str = Query(..., title="Project Ids",
                  "content": {
                      "application/json": {
                          "example": [{'nb_dubious': 56,
-                                     'nb_predicted': 5500,
-                                     'nb_unclassified': 0,
-                                     'nb_validated': 1345,
-                                     'sample_id': 192456,
-                                     'used_taxa': [45072, 78418, 84963, 85011, 85012, 85078]
-                                     }]
+                                      'nb_predicted': 5500,
+                                      'nb_unclassified': 0,
+                                      'nb_validated': 1345,
+                                      'sample_id': 192456,
+                                      'used_taxa': [45072, 78418, 84963, 85011, 85012, 85078]
+                                      }]
                      }
                  }
              }

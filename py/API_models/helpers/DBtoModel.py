@@ -4,7 +4,7 @@
 #
 #  Attempt to map as automatically as possible the DB model into CRUD objects.
 #
-from typing import Type, TypeVar, Dict, Optional, Any
+from typing import Type, TypeVar, Dict, Optional, Any, Generic, Union, Tuple
 
 from pydantic.fields import ModelField
 from sqlalchemy import inspect
@@ -21,11 +21,24 @@ class OrmConfig(BaseConfig):
 # Generify the def with input type
 T = TypeVar('T')
 
+from pydantic.generics import GenericModel, GenericModelT
 
-def sqlalchemy_to_pydantic(db_model: T, *,
-                           config: Type[BaseConfig] = OrmConfig,
-                           exclude=None,
-                           field_infos: Optional[Dict[str, Any]] = None) -> PydanticModelT:
+DBT = TypeVar('DBT')  # TODO: Should be an SQLA model
+CT = TypeVar('CT')
+
+
+# Ref: https://pydantic-docs.helpmanual.io/usage/models/#generic-models
+class SQLAlchemy2Pydantic(GenericModel, Generic[DBT, CT]):
+    def __class_getitem__(cls: Type[GenericModelT], params: Union[Type[Any], Tuple[Type[Any], ...]]) -> Type[Any]:
+        db_model, how = params  # type:ignore
+        ret = _sqlalchemy_to_pydantic(db_model, exclude=how.exclude, field_infos=how.description)
+        return ret
+
+
+def _sqlalchemy_to_pydantic(db_model: T, *,
+                            config: Type[BaseConfig] = OrmConfig,
+                            exclude=None,
+                            field_infos: Optional[Dict[str, Any]] = None) -> PydanticModelT:
     if exclude is None:
         exclude = []
     fields = {}

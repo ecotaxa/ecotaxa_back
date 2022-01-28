@@ -1,17 +1,23 @@
-# In theory, should do SQLAlchemy[mypy], but the typings there depend on SQLA 2.0 interface
-SQLAlchemy==1.4.23
-# So stick to older stubs from DropBox
+# Typings there depend on SQLA 2.0 interface
+SQLAlchemy==1.4.31
+# So stick (override?) to older stubs from DropBox
 sqlalchemy-stubs==0.4
-psycopg2-binary==2.9.1
-# LS: Pillow needs manual testing
+# When SQLAlchemy moves to 2.0 we'll be able to use psycopg3
+#psycopg[binary]==3.0.8
+psycopg2-binary==2.9.3
+# Pillow needs manual testing
 Pillow==8.1.0
+# astral needs pytz
 astral==2.2
 pytz==2021.1
 types-pytz==2021.1.2
 # Needed by TF EXACTLY
 numpy~=1.19.2
-fastapi==0.68.1
+# Backbone of the app
+fastapi==0.73.0
 fastapi-utils==0.2.1
+# Pin a recent (as of Jan 2022) pydantic
+pydantic==1.9.0
 # Speed up openapi response serialization
 orjson==3.6.3
 types-orjson==3.6.0

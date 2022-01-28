@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 def check_sqlalchemy_version():
     # noinspection PyUnresolvedReferences
     version = sqlalchemy.__version__
-    expected_version = "1.4.23"
+    expected_version = "1.4.31"
     if version != expected_version:  # pragma: no cover
         logger.fatal("Not the expected SQLAlchemy version (%s instead of %s), exiting to avoid data corruption",
                      version, expected_version)

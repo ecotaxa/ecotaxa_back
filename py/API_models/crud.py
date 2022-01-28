@@ -4,7 +4,7 @@
 #
 #  Models used in CRUD API_operations.
 #
-from typing import Optional, Dict, Type, List, Any
+from typing import Optional, Dict, List, Any
 
 from typing_extensions import TypedDict
 
@@ -20,135 +20,169 @@ from DB.Collection import Collection
 from DB.Process import PROCESS_FREE_COLUMNS
 from DB.Sample import SAMPLE_FREE_COLUMNS
 from helpers.pydantic import BaseModel, Field
-from .helpers.DBtoModel import sqlalchemy_to_pydantic
+from .helpers.DBtoModel import SQLAlchemy2Pydantic
 from .helpers.DataclassToModel import dataclass_to_model
 from .helpers.TypedDictToModel import typed_dict_to_model
 
 # Enriched model
 FreeColT = Dict[str, str]
 
+
 # Direct mirror of DB models
-_DBUserDescription = {
-    "id": Field(title="Id", description="The unique numeric id of this user.", default=None, example=1),
-    "email": Field(title="Email", description="User's email address, as text, used during registration.", default=None,
-                   example="ecotaxa.api.user@gmail.com"),
-    "name": Field(title="Name", description="User's full name, as text.", default=None, example="userName"),
-    "organisation": Field(title="Organisation", description="User's organisation name, as text.", default=None,
-                          example="Oceanographic Laboratory of Villefranche sur Mer - LOV"),
-    "active": Field(title="Account status", description="Whether the user is still active.", default=None,
-                    example=True),
-    "country": Field(title="Country", description="The country name, as text (but chosen in a consistent list).",
-                     default=None, example="France"),
-    "usercreationdate": Field(title="User creation date",
-                              description="The date of creation of the user, as text formatted according to the ISO 8601 standard.",
-                              default=None,
-                              example="2020-11-05T12:31:48.299713"),
-    "usercreationreason": Field(title="User creation reason",
-                                description="Paragraph describing the usage of EcoTaxa made by the user.",
-                                default=None, example="Analysis of size and shapes of plastic particles")
-}
-_UserModelFromDB = sqlalchemy_to_pydantic(User, exclude=[User.password.name,
-                                                         User.preferences.name,
-                                                         User.mail_status.name,
-                                                         User.mail_status_date.name], field_infos=_DBUserDescription)
-#TODO JCE - description example
-_DBProjectDescription = {
-    "projid": Field(title="Project Id", description="The project Id.", example=4824),
-    "title": Field(title="Title", description="The project title.", example="MyProject"),
-    "visible": Field(title="Visible", description="The project visibility.", example=False),
-    "status": Field(title="Status", description="The project status.", example="Annotate"),
-    "objcount": Field(title="Object count", description="The number of objects.", example=32292.0),
-    "pctvalidated": Field(title="Percentage validated", description="Percentage of validated images.",
-                          example=0.015483711135885049),
-    "pctclassified": Field(title="Percentage classified", description="Percentage of classified images.",
-                           example=100.0),
-    "classifsettings": Field(title="Classification settings", description="",
-                             example="baseproject=1602\ncritvar=%area,angle,area,area_exc,bx,by,cdexc,centroids,circ.,circex,convarea,convperim,cv,elongation,esd,fcons,feret,feretareaexc,fractal,height,histcum1,histcum2,histcum3,intden,kurt,lat_end,lon_end,major,max,mean,meanpos,median,min,minor,mode,nb1,nb2,perim.,perimareaexc,perimferet,perimmajor,range,skelarea,skew,slope,sr,stddev,symetrieh,symetriehc,symetriev,symetrievc,thickr,width,x,xm,xstart,y,ym,ystart\nposttaxomapping=\nseltaxo=45074,84963,61990,13333,82399,61973,62005,25930,25932,61996,78426,81941,11514,85076,85061,30815,85185,92230,85079,84993,25824,85115,85004,26525,25944,11509,26524,92112,84976,25942,84980,85078,78418,84977,85060,61993,61991,85069,81871,74144,11758,72431,13381,11518,5,18758,85117,92042,84968,84997,87826,92236,92237,92039,84989,85193,83281,78412,92239,71617,81977,45071,12865,85044,81940,85067,12908,85116,56693,85008,92139,92068\nusemodel_foldername=testln1"),
-    "classiffieldlist": Field(title="Classification field list", description="",
-                              example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]"),
-    "popoverfieldlist": Field(title="Pop over field list", description="",
-                              example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]"),
-    "comments": Field(title="Comments", description="The project comments.", example=""),
-    "description": Field(title="Description", description="The project description, i.e. main traits.", example=""),
-    "rf_models_used": Field(title="Rf models used", description="", example=""),
-    "cnn_network_id": Field(title="Cnn network id", description="", example="SCN_zooscan_group1")
-}
-_ProjectModelFromDB: Type = sqlalchemy_to_pydantic(Project, exclude=[Project.mappingobj.name,
-                                                                     Project.mappingacq.name,
-                                                                     Project.mappingprocess.name,
-                                                                     Project.mappingsample.name,
-                                                                     Project.initclassiflist.name,
-                                                                     ] + [
-                                                                        # Not replaced yet but LOTS of data
-                                                                        Project.fileloaded.name
-                                                                    ], field_infos=_DBProjectDescription)
+class _User2Model:
+    description = {
+        "id": Field(title="Id", description="The unique numeric id of this user.", default=None, example=1),
+        "email": Field(title="Email", description="User's email address, as text, used during registration.",
+                       default=None,
+                       example="ecotaxa.api.user@gmail.com"),
+        "name": Field(title="Name", description="User's full name, as text.", default=None, example="userName"),
+        "organisation": Field(title="Organisation", description="User's organisation name, as text.", default=None,
+                              example="Oceanographic Laboratory of Villefranche sur Mer - LOV"),
+        "active": Field(title="Account status", description="Whether the user is still active.", default=None,
+                        example=True),
+        "country": Field(title="Country", description="The country name, as text (but chosen in a consistent list).",
+                         default=None, example="France"),
+        "usercreationdate": Field(title="User creation date",
+                                  description="The date of creation of the user, as text formatted according to the ISO 8601 standard.",
+                                  default=None,
+                                  example="2020-11-05T12:31:48.299713"),
+        "usercreationreason": Field(title="User creation reason",
+                                    description="Paragraph describing the usage of EcoTaxa made by the user.",
+                                    default=None, example="Analysis of size and shapes of plastic particles")
+    }
+    exclude = [User.password.name,
+               User.preferences.name,
+               User.mail_status.name,
+               User.mail_status_date.name]
+
+
+class _UserModelFromDB(SQLAlchemy2Pydantic[User, _User2Model]):
+    pass
+
+
+# TODO JCE - description example
+class _Project2Model:
+    description = {
+        "projid": Field(title="Project Id", description="The project Id.", example=4824),
+        "title": Field(title="Title", description="The project title.", example="MyProject"),
+        "visible": Field(title="Visible", description="The project visibility.", example=False),
+        "status": Field(title="Status", description="The project status.", example="Annotate"),
+        "objcount": Field(title="Object count", description="The number of objects.", example=32292.0),
+        "pctvalidated": Field(title="Percentage validated", description="Percentage of validated images.",
+                              example=0.015483711135885049),
+        "pctclassified": Field(title="Percentage classified", description="Percentage of classified images.",
+                               example=100.0),
+        "classifsettings": Field(title="Classification settings", description="",
+                                 example="baseproject=1602\ncritvar=%area,angle,area,area_exc,bx,by,cdexc,centroids,circ.,circex,convarea,convperim,cv,elongation,esd,fcons,feret,feretareaexc,fractal,height,histcum1,histcum2,histcum3,intden,kurt,lat_end,lon_end,major,max,mean,meanpos,median,min,minor,mode,nb1,nb2,perim.,perimareaexc,perimferet,perimmajor,range,skelarea,skew,slope,sr,stddev,symetrieh,symetriehc,symetriev,symetrievc,thickr,width,x,xm,xstart,y,ym,ystart\nposttaxomapping=\nseltaxo=45074,84963,61990,13333,82399,61973,62005,25930,25932,61996,78426,81941,11514,85076,85061,30815,85185,92230,85079,84993,25824,85115,85004,26525,25944,11509,26524,92112,84976,25942,84980,85078,78418,84977,85060,61993,61991,85069,81871,74144,11758,72431,13381,11518,5,18758,85117,92042,84968,84997,87826,92236,92237,92039,84989,85193,83281,78412,92239,71617,81977,45071,12865,85044,81940,85067,12908,85116,56693,85008,92139,92068\nusemodel_foldername=testln1"),
+        "classiffieldlist": Field(title="Classification field list", description="",
+                                  example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]"),
+        "popoverfieldlist": Field(title="Pop over field list", description="",
+                                  example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]"),
+        "comments": Field(title="Comments", description="The project comments.", example=""),
+        "description": Field(title="Description", description="The project description, i.e. main traits.", example=""),
+        "rf_models_used": Field(title="Rf models used", description="", example=""),
+        "cnn_network_id": Field(title="Cnn network id", description="", example="SCN_zooscan_group1")
+    }
+    exclude = [Project.mappingobj.name,
+               Project.mappingacq.name,
+               Project.mappingprocess.name,
+               Project.mappingsample.name,
+               Project.initclassiflist.name,
+               ] + [
+                  # Not replaced yet but LOTS of data
+                  Project.fileloaded.name
+              ]
+
+
+class _ProjectModelFromDB(SQLAlchemy2Pydantic[Project, _Project2Model]):
+    pass
 
 
 class ProjectSummaryModel(BaseModel):
     projid: int = Field(title="Project Id", description="Project unique identifier.", default=None, example=1)
     title: str = Field(title="Project title", description="Project's title.", default=None, example="Zooscan Tara Med")
 
-#TODO JCE - description example
+
+# TODO JCE - description example
 # We exclude free columns from base model, they will be mapped in a dedicated sub-entity
-_DBSampleDescription = {
-    "sampleid": Field(title="Sample Id", description="The sample Id.", example=100),
-    "projid": Field(title="Project Id", description="The project Id.", example=4),
-    "orig_id": Field(title="Original id", description="Original sample ID from initial TSV load.",
-                     example="dewex_leg2_19"),
-    "latitude": Field(title="Latitude", description="The latitude.", example=42.0231666666667),
-    "longitude": Field(title="Longitude", description="The longitude.", example=4.71766666666667),
-    "dataportal_descriptor": Field(title="Dataportal descriptor.", description="", example=""),
+class _Sample2Model:
+    description = {
+        "sampleid": Field(title="Sample Id", description="The sample Id.", example=100),
+        "projid": Field(title="Project Id", description="The project Id.", example=4),
+        "orig_id": Field(title="Original id", description="Original sample ID from initial TSV load.",
+                         example="dewex_leg2_19"),
+        "latitude": Field(title="Latitude", description="The latitude.", example=42.0231666666667),
+        "longitude": Field(title="Longitude", description="The longitude.", example=4.71766666666667),
+        "dataportal_descriptor": Field(title="Dataportal descriptor.", description="", example=""),
 
-}
-_SampleModelFromDB = sqlalchemy_to_pydantic(Sample,
-                                            exclude=["t%02d" % i for i in range(1, SAMPLE_FREE_COLUMNS)],
-                                            field_infos=_DBSampleDescription)
-_DBAcquisitionDescription = {
-    "acquisid": Field(title="Acquisition Id", description="The acquisition Id.", example=144, default=None),
-    "acq_sample_id": Field(title="Acquisition sample Id", description="The acquisition sample Id.", example=1039,
-                           default=None),
-    "orig_id": Field(title="Original id", description="Original acquisition ID from initial TSV load.",
-                     example="uvp5_station1_cast1b", default=None),
-    "instrument": Field(title="Instrument", description="Instrument used.", example="uvp5", default=None),
-
-}
-_AcquisitionModelFromDB = sqlalchemy_to_pydantic(Acquisition,
-                                                 exclude=["t%02d" % i for i in range(1, ACQUISITION_FREE_COLUMNS)],
-                                                 field_infos=_DBAcquisitionDescription)
-_DBProcessDescription = {
-    "processid": Field(title="Process id", description="The process Id.", example=1000),
-    "orig_id": Field(title="Original id", description="Original process ID from initial TSV load.",
-                     example="zooprocess_045")
-}
-_ProcessModelFromDB = sqlalchemy_to_pydantic(Process,
-                                             exclude=["t%02d" % i for i in range(1, PROCESS_FREE_COLUMNS)],
-                                             field_infos=_DBProcessDescription)
-#TODO JCE - example
-_DBCollectionDescription = {
-    "id": Field(title="Id", description="The collection Id.", default=None, example=1),
-    "external_id": Field(title="External Id", description="The external Id.", default=None, example=""),
-    "external_id_system": Field(title="External id system", description="The external Id system.", default=None,
-                                example=""),
-    "title": Field(title="Title", description="The collection title.", default=None, example="My collection"),
-    "short_title": Field(title="Short title", description="The collection short title.", default=None,
-                         example="My coll"),
-    "citation": Field(title="Citation", description="The collection citation.", default=None, example=""),
-    "license": Field(title="License", description="The collection license.", default=None, example=LicenseEnum.CC_BY),
-    "abstract": Field(title="Abstract", description="The collection abstract.", default=None, example=""),
-    "description": Field(title="Description", description="The collection description.", default=None, example=""),
-
-}
-_CollectionModelFromDB = sqlalchemy_to_pydantic(Collection,
-                                                exclude=[Collection.contact_user_id.name,
-                                                         Collection.provider_user_id.name],
-                                                field_infos=_DBCollectionDescription)
+    }
+    exclude = ["t%02d" % i for i in range(1, SAMPLE_FREE_COLUMNS)]
 
 
-class UserModel(_UserModelFromDB):  # type:ignore
+class _SampleModelFromDB(SQLAlchemy2Pydantic[Sample, _Sample2Model]):
     pass
 
 
-class UserModelWithRights(UserModel):  # type:ignore
+class _Acquisition2Model:
+    description = {
+        "acquisid": Field(title="Acquisition Id", description="The acquisition Id.", example=144, default=None),
+        "acq_sample_id": Field(title="Acquisition sample Id", description="The acquisition sample Id.", example=1039,
+                               default=None),
+        "orig_id": Field(title="Original id", description="Original acquisition ID from initial TSV load.",
+                         example="uvp5_station1_cast1b", default=None),
+        "instrument": Field(title="Instrument", description="Instrument used.", example="uvp5", default=None),
+
+    }
+    exclude = ["t%02d" % i for i in range(1, ACQUISITION_FREE_COLUMNS)]
+
+
+class _AcquisitionModelFromDB(SQLAlchemy2Pydantic[Acquisition, _Acquisition2Model]):
+    pass
+
+
+class _Process2Model:
+    description = {
+        "processid": Field(title="Process id", description="The process Id.", example=1000),
+        "orig_id": Field(title="Original id", description="Original process ID from initial TSV load.",
+                         example="zooprocess_045")
+    }
+    exclude = ["t%02d" % i for i in range(1, PROCESS_FREE_COLUMNS)]
+
+
+class _ProcessModelFromDB(SQLAlchemy2Pydantic[Process, _Process2Model]):
+    pass
+
+
+# TODO JCE - example
+class _Collection2Model:
+    description = {
+        "id": Field(title="Id", description="The collection Id.", default=None, example=1),
+        "external_id": Field(title="External Id", description="The external Id.", default=None, example=""),
+        "external_id_system": Field(title="External id system", description="The external Id system.", default=None,
+                                    example=""),
+        "title": Field(title="Title", description="The collection title.", default=None, example="My collection"),
+        "short_title": Field(title="Short title", description="The collection short title.", default=None,
+                             example="My coll"),
+        "citation": Field(title="Citation", description="The collection citation.", default=None, example=""),
+        "license": Field(title="License", description="The collection license.", default=None,
+                         example=LicenseEnum.CC_BY),
+        "abstract": Field(title="Abstract", description="The collection abstract.", default=None, example=""),
+        "description": Field(title="Description", description="The collection description.", default=None, example=""),
+
+    }
+    exclude = [Collection.contact_user_id.name,
+               Collection.provider_user_id.name]
+
+
+class _CollectionModelFromDB(SQLAlchemy2Pydantic[Collection, _Collection2Model]):
+    pass
+
+
+class UserModel(_UserModelFromDB):
+    pass
+
+
+class UserModelWithRights(UserModel):
     can_do: List[int] = Field(title="User's permissions",
                               description="List of User's allowed actions : 1 create a project, 2 administrate the app, 3 administrate users, 4 create taxon.",
                               default=[], example=[1, 4])
@@ -199,14 +233,13 @@ class _AddedToProject(BaseModel):
     # owner: UserModel = Field(title="Owner of this project")
 
 
-# TODO: when python 3.7+, we can have pydantic generics and remove the ignore below
-class ProjectModel(_ProjectModelFromDB, _AddedToProject):  # type:ignore
+class ProjectModel(_ProjectModelFromDB, _AddedToProject):
     """
         Basic and computed information about the Project.
     """
 
 
-class SampleModel(_SampleModelFromDB):  # type:ignore
+class SampleModel(_SampleModelFromDB):
     free_columns: Dict[str, Any] = Field(title="Free columns",
                                          description="Free columns from sample mapping in project.",
                                          default={}, example={"flash_delay": "t01"})
@@ -226,13 +259,13 @@ SampleTaxoStatsModel = dataclass_to_model(SampleTaxoStats, add_suffix=True,
                                           field_infos=_DBSampleTaxoStatsDescription)
 
 
-class AcquisitionModel(_AcquisitionModelFromDB):  # type:ignore
+class AcquisitionModel(_AcquisitionModelFromDB):
     free_columns: Dict[str, Any] = Field(title="Free columns",
                                          description="Free columns from acquisition mapping in project.",
                                          default={}, example={"bottomdepth": 322, "ship": "suroit"})
 
 
-class ProcessModel(_ProcessModelFromDB):  # type:ignore
+class ProcessModel(_ProcessModelFromDB):
     free_columns: Dict[str, Any] = Field(title="Free columns from process mapping in project",
                                          default={}, example={"software": "zooprocess_pid_to_ecotaxa_7.26_2017/12/19",
                                                               "pressure_gain": "10"})
@@ -364,7 +397,8 @@ _DBProjectFilters = {
     "daytime": Field(title="Day time",
                      description="Coma-separated list of sun position values: D for Day, U for Dusk, N for Night, A for Dawn (Aube in French).",
                      example="N,A"),
-    "month": Field(title="Month", description="Coma-separated list of month numbers, 1=Jan and so on.", example="11,12"),
+    "month": Field(title="Month", description="Coma-separated list of month numbers, 1=Jan and so on.",
+                   example="11,12"),
     "fromdate": Field(title="From date",
                       description="Format is 'YYYY-MM-DD', include objects collected after this date.",
                       example="2020-10-09"),
@@ -506,7 +540,7 @@ class _AddedToCollection(BaseModel):
         organisation(s) associated with the collection.""", default=[])
 
 
-class CollectionModel(_CollectionModelFromDB, _AddedToCollection):  # type:ignore
+class CollectionModel(_CollectionModelFromDB, _AddedToCollection):
     """
         Basic and computed information about the Collection.
     """
@@ -515,56 +549,60 @@ class CollectionModel(_CollectionModelFromDB, _AddedToCollection):  # type:ignor
         schema_extra = {"title": "Collection Model"}
 
 
-_DBJobDescription = {
-    "id": Field(title="id", description="Job unique identifier.", example=47445),
-    "owner_id": Field(title="owner_id", description="The user who created and thus owns the job. ", example=1),
-    "type": Field(title="type", description="The job type, e.g. import, export... ", example="Subset"),
-    "state": Field(title="state",
-                   description="What the job is doing. Could be 'P' for Pending (Waiting for an execution thread), 'R' for Running (Being executed inside a thread), 'A' for Asking (Needing user information before resuming), 'E' for Error (Stopped with error), 'F' for Finished (Done).",
-                   example=DBJobStateEnum.Finished),
-    "step": Field(title="step", description="Where in the workflow the job is. ", example="null"),
-    "progress_pct": Field(title="progress_pct", description="The progress percentage for UI. ", example=100),
-    "progress_msg": Field(title="progress_msg", description="The message for UI, short version. ", example="Done"),
-    "creation_date": Field(title="creation_date",
-                           description="The date of creation of the Job, as text formatted according to the ISO 8601 standard.",
-                           example="2021-09-28T08:43:20.196061"),
-    "updated_on": Field(title="updated_on", description="Last time that anything changed in present line. ",
-                        example="2021-09-28T08:43:21.441969")
-}
-_JobModelFromDB = sqlalchemy_to_pydantic(Job, exclude=[Job.params.name,
-                                                       Job.result.name,
-                                                       Job.messages.name,
-                                                       Job.question.name,
-                                                       Job.reply.name,
-                                                       Job.inside.name],
-                                         field_infos=_DBJobDescription)
+class _Job2Model:
+    description = {
+        "id": Field(title="id", description="Job unique identifier.", example=47445),
+        "owner_id": Field(title="owner_id", description="The user who created and thus owns the job. ", example=1),
+        "type": Field(title="type", description="The job type, e.g. import, export... ", example="Subset"),
+        "state": Field(title="state",
+                       description="What the job is doing. Could be 'P' for Pending (Waiting for an execution thread), 'R' for Running (Being executed inside a thread), 'A' for Asking (Needing user information before resuming), 'E' for Error (Stopped with error), 'F' for Finished (Done).",
+                       example=DBJobStateEnum.Finished),
+        "step": Field(title="step", description="Where in the workflow the job is. ", example="null"),
+        "progress_pct": Field(title="progress_pct", description="The progress percentage for UI. ", example=100),
+        "progress_msg": Field(title="progress_msg", description="The message for UI, short version. ", example="Done"),
+        "creation_date": Field(title="creation_date",
+                               description="The date of creation of the Job, as text formatted according to the ISO 8601 standard.",
+                               example="2021-09-28T08:43:20.196061"),
+        "updated_on": Field(title="updated_on", description="Last time that anything changed in present line. ",
+                            example="2021-09-28T08:43:21.441969")
+    }
+    exclude = [Job.params.name,
+               Job.result.name,
+               Job.messages.name,
+               Job.question.name,
+               Job.reply.name,
+               Job.inside.name]
 
+
+class _JobModelFromDB(SQLAlchemy2Pydantic[Job, _Job2Model]):
+    pass
 
 class _AddedToJob(BaseModel):
     """
         What's added to a Job compared to the plain DB record.
     """
     params: Dict[str, Any] = Field(title="params", description="Creation parameters.", default={}, example={"prj_id": 1,
-                                                                                                           "req": {
-                                                                                                               "filters": {
-                                                                                                                   "taxo": "85067",
-                                                                                                                   "taxochild": "N"},
-                                                                                                               "dest_prj_id": 1,
-                                                                                                               "group_type": "S",
-                                                                                                               "limit_type": "P",
-                                                                                                               "limit_value": 100.0,
-                                                                                                               "do_images": True}})
+                                                                                                            "req": {
+                                                                                                                "filters": {
+                                                                                                                    "taxo": "85067",
+                                                                                                                    "taxochild": "N"},
+                                                                                                                "dest_prj_id": 1,
+                                                                                                                "group_type": "S",
+                                                                                                                "limit_type": "P",
+                                                                                                                "limit_value": 100.0,
+                                                                                                                "do_images": True}})
     result: Dict[str, Any] = Field(title="result", description="Final result of the run.", default={},
                                    example={"rowcount": 3})
     errors: List[str] = Field(title="errors", description="The errors seen during last step.", default=[], example=[])
     question: Dict[str, Any] = Field(title="question", description="The data provoking job move to Asking state.",
                                      default={}, example={})
-    reply: Dict[str, Any] = Field(title="reply", description="The data provided as a reply to the question.", default={},
+    reply: Dict[str, Any] = Field(title="reply", description="The data provided as a reply to the question.",
+                                  default={},
                                   example={})
     inside: Dict[str, Any] = Field(title="inside", description="Internal state of the job.", default={}, example={})
 
 
-class JobModel(_JobModelFromDB, _AddedToJob):  # type:ignore
+class JobModel(_JobModelFromDB, _AddedToJob):
     """
         All information about the Job.
     """
