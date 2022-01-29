@@ -70,6 +70,7 @@ class Connection(object):
         self.session_factory = sessionmaker(bind=engine)
         self._meta: MetaData = sqlalchemy.MetaData(bind=engine)
         self._meta.reflect()
+        self.url = url
 
     def get_session(self) -> Session:
         """

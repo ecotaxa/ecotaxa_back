@@ -45,7 +45,7 @@ def _turn_localhost_for_docker(host: str, _port: str):  # pragma: no cover
         For win & mac0s there is a solution, environment var host.docker.internal
          but https://github.com/docker/for-linux/issues/264
     """
-    if host == "localhost" and os.getcwd() == "/app":
+    if host == "localhost" and os.getcwd().startswith("/app"):
         # noinspection PyBroadException
         try:
             return _get_default_gateway()
