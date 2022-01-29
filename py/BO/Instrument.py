@@ -10,7 +10,7 @@ from typing import List, Dict, Set
 from DB import Session, Acquisition, Sample, Project
 from DB.Project import ProjectIDListT, ProjectIDT
 from DB.helpers.Direct import text
-from DB.helpers.ORM import Query
+from DB.helpers.ORM import Query, any_
 from helpers.DynamicLogs import get_logger
 
 InstrumentIDT = str
@@ -31,7 +31,7 @@ class DescribedInstrumentSet(object):
         # Below SQLAlchemy complains
         # qry = qry.add_columns(Project.projid)
         if len(project_ids) > 0:
-            qry = qry.filter(Project.projid.in_(project_ids))
+            qry = qry.filter(Project.projid == any_(project_ids))
         qry = qry.distinct()
         instruments_by_proj: Dict[ProjectIDT, Set[InstrumentIDT]] = {}
         instrument_names = set()
