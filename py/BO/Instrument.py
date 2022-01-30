@@ -7,9 +7,8 @@
 #
 from typing import List, Dict, Set
 
-from DB import Session, Acquisition, Sample, Project
+from DB import Session, Acquisition, Sample
 from DB.Project import ProjectIDListT, ProjectIDT
-from DB.helpers.Direct import text
 from DB.helpers.ORM import Query, any_
 from helpers.DynamicLogs import get_logger
 
@@ -25,13 +24,9 @@ class DescribedInstrumentSet(object):
 
     def __init__(self, session: Session, project_ids: ProjectIDListT):
         qry: Query = session.query(Acquisition.instrument)
-        qry = qry.join(Sample).join(Project)
-        # TODO: WTF WTF just for adding a column to the select
-        qry = qry.add_columns(text(Project.__table__.name + "." + Project.__table__.c.projid.name))
-        # Below SQLAlchemy complains
-        # qry = qry.add_columns(Project.projid)
-        if len(project_ids) > 0:
-            qry = qry.filter(Project.projid == any_(project_ids))
+        qry = qry.join(Sample.all_acquisitions)
+        qry = qry.add_columns(Sample.projid)
+        qry = qry.filter(Sample.projid == any_(project_ids))
         qry = qry.distinct()
         instruments_by_proj: Dict[ProjectIDT, Set[InstrumentIDT]] = {}
         instrument_names = set()
