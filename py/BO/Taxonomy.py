@@ -115,20 +115,22 @@ class TaxonomyBO(object):
             ret[rec_taxon['id']] = (rec_taxon['name'], rec_taxon['parent_name'])
         return ret
 
+    RQ_CHILDREN = """WITH RECURSIVE rq(id) 
+                    AS (SELECT id 
+                          FROM taxonomy 
+                         WHERE id = ANY(:ids)
+                         UNION
+                        SELECT t.id 
+                          FROM rq 
+                          JOIN taxonomy t ON rq.id = t.parent_id )
+                   SELECT id FROM rq """
+
     @staticmethod
     def children_of(session: Session, id_list: List[int]) -> Set[int]:
         """
-            Get id and children taxa ids for given id.
+            Get id and children taxa ids for given ids.
         """
-        sql = text("""WITH RECURSIVE rq(id) 
-                AS (SELECT id 
-                      FROM taxonomy 
-                     WHERE id = ANY(:ids)
-                     UNION
-                    SELECT t.id 
-                      FROM rq 
-                      JOIN taxonomy t ON rq.id = t.parent_id )
-               SELECT id FROM rq """)
+        sql = text(TaxonomyBO.RQ_CHILDREN)
         res: Result = session.execute(sql, {"ids": id_list})
         return {int(r['id']) for r in res}
 

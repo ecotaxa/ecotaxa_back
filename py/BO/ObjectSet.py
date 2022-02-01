@@ -713,11 +713,12 @@ class ObjectSetFilter(object):
             params['samples'] = samples_ids
 
         if self.taxo:
-            where_clause *= "obh.classif_id = ANY (:taxo)"
             if self.taxo_child:
-                # TODO: Cache if used
-                params['taxo'] = list(TaxonomyBO.children_of(self.session, [int(self.taxo)]))
+                # TODO: In this case a single taxon is allowed. Not very consistent
+                where_clause *= "obh.classif_id IN (" + TaxonomyBO.RQ_CHILDREN.replace(":ids", ":taxo") + ")"
+                params['taxo'] = [int(self.taxo)]
             else:
+                where_clause *= "obh.classif_id = ANY (:taxo)"
                 params['taxo'] = [int(x) for x in self.taxo.split(',')]
 
         if self.status_filter:
