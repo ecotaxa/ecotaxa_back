@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from enum import IntEnum
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict
 
 from DB import User, Role, Project, ProjectPrivilege
 from DB.helpers.ORM import Session
@@ -105,11 +105,11 @@ class RightsBO(object):
         user: Optional[User] = session.query(User).get(user_id)
         assert user is not None, NOT_AUTHORIZED
         # Check
-        assert Action.CREATE_PROJECT in RightsBO.allowed_actions(user), NOT_AUTHORIZED
+        assert Action.CREATE_PROJECT in RightsBO.get_allowed_actions(user), NOT_AUTHORIZED
         return user
 
     @staticmethod
-    def allowed_actions(user: User) -> List[Action]:
+    def get_allowed_actions(user: User) -> List[Action]:
         ret = []
         if user.has_role(Role.APP_ADMINISTRATOR):
             # King of the world
@@ -126,6 +126,22 @@ class RightsBO(object):
                     ret.append(Action.CREATE_TAXON)
                     break
         return ret
+
+    @staticmethod
+    def set_allowed_actions(user: User, actions: List[Action], all_roles: Dict):
+        """ Set roles so that list of actions is possible """
+        roles = set()
+        for an_action in actions:
+            if an_action == Action.CREATE_TAXON:
+                pass
+            elif an_action == Action.CREATE_PROJECT:
+                roles.add(all_roles[Role.PROJECT_CREATOR])
+            elif an_action == Action.ADMINISTRATE_USERS:
+                roles.add(all_roles[Role.USERS_ADMINISTRATOR])
+            elif an_action == Action.ADMINISTRATE_APP:
+                roles.add(all_roles[Role.APP_ADMINISTRATOR])
+        user.roles.clear()
+        user.roles.extend(roles)
 
     @staticmethod
     def anonymous_wants(session: Session, action: Action, prj_id: int) \
@@ -164,7 +180,7 @@ class RightsBO(object):
         user = session.query(User).get(user_id)
         assert user is not None, NOT_FOUND
         # Check
-        assert Action.CREATE_TAXON in RightsBO.allowed_actions(user), NOT_AUTHORIZED
+        assert Action.CREATE_TAXON in RightsBO.get_allowed_actions(user), NOT_AUTHORIZED
         return user
 
     @staticmethod
@@ -177,4 +193,3 @@ class RightsBO(object):
         privilege.project = prj
         privilege.user = user
         session.add(privilege)
-

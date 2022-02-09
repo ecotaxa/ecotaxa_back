@@ -4,8 +4,11 @@
 #
 from typing import Optional, List, Any
 
+from API_models.crud import UserModelWithRights
 from BO.Classification import ClassifIDListT
-from BO.User import UserBO, UserIDT
+from BO.Preferences import Preferences
+from BO.Rights import RightsBO, NOT_AUTHORIZED
+from BO.User import UserBO, UserIDT, UserIDListT
 from DB.Project import ProjectIDT
 from DB.User import User, Role, UserRole
 from helpers.DynamicLogs import get_logger
@@ -19,7 +22,7 @@ class UserService(Service):
         Basic CRUD API_operations on User
     """
 
-    def create(self, name, email) -> UserIDT:
+    def create_user(self, name, email) -> UserIDT:
         usr = User()
         usr.name = name
         usr.email = email
@@ -30,6 +33,19 @@ class UserService(Service):
     def search_by_id(self, current_user_id: UserIDT, user_id: UserIDT) -> Optional[User]:
         # TODO: Not consistent with others e.g. project.query()
         ret = self.ro_session.query(User).get(user_id)
+        return ret
+
+    def get_full_by_id(self, current_user_id: UserIDT, user_id: UserIDT) -> UserModelWithRights:
+        db_usr = self.ro_session.query(User).get(user_id)
+        assert db_usr is not None
+        ret = self._get_full_user(db_usr)
+        return ret
+
+    def _get_full_user(self, db_usr: User) -> UserModelWithRights:
+        ret = UserModelWithRights.from_orm(db_usr)  # type:ignore
+        ret.last_used_projects = Preferences(db_usr).recent_projects(session=self.session)  # type:ignore
+        ret.can_do = RightsBO.get_allowed_actions(db_usr)  # type:ignore
+        ret.password = "?"  # type:ignore
         return ret
 
     def search(self, current_user_id: UserIDT, by_name: Optional[str]) -> List[User]:
@@ -52,16 +68,20 @@ class UserService(Service):
 
         return [a_rec for a_rec in qry]
 
-    def list(self, current_user_id: UserIDT) -> List[User]:
+    def list(self, current_user_id: UserIDT, user_ids: UserIDListT) -> List[UserModelWithRights]:
         """
-            List all users, if requester is admin.
+            List all users, or some of them by their ids, if requester is admin.
         """
         current_user: Optional[User] = self.ro_session.query(User).get(current_user_id)
+
         assert current_user is not None
         ret = []
         if current_user.has_role(Role.APP_ADMINISTRATOR):
-            for usr in self.ro_session.query(User):
-                ret.append(usr)
+            qry = self.ro_session.query(User)
+            if len(user_ids) > 0:
+                qry = qry.filter(User.id.in_(user_ids))
+            for db_usr in qry:
+                ret.append(self._get_full_user(db_usr))
         return ret
 
     def get_preferences_per_project(self, user_id: UserIDT, project_id: ProjectIDT, key: str) -> Any:
@@ -87,3 +107,35 @@ class UserService(Service):
         mru = UserBO.get_mru(self.session, user_id, project_id)
         mru = UserBO.merge_mru(mru, last_used)
         UserBO.set_mru(self.session, user_id, project_id, mru)
+
+    def update_user(self, current_user_id: UserIDT, user_id: UserIDT, updated: UserModelWithRights) -> None:
+        """
+            Update a user.
+        """
+        current_user: Optional[User] = self.ro_session.query(User).get(current_user_id)
+        assert current_user is not None
+        updated_user: Optional[User] = self.session.query(User).get(user_id)
+        assert updated_user is not None
+        assert updated_user.id == user_id
+        if current_user.has_role(Role.APP_ADMINISTRATOR):
+            cols_for_upd = [User.email, User.password, User.name, User.organisation, User.active, User.country,
+                            User.usercreationdate, User.usercreationreason]
+            actions = updated.can_do
+        elif current_user.id == user_id:
+            cols_for_upd = [User.name, User.password]
+            actions = None
+        else:
+            assert False, NOT_AUTHORIZED
+        # Do the in-memory update
+        for a_col in cols_for_upd:
+            col_name = a_col.name  # type:ignore
+            new_val = getattr(updated, col_name)
+            if a_col == User.password and new_val in ("", None):
+                # By policy, don't clear passwords
+                continue
+            setattr(updated_user, col_name, new_val)
+        if actions is not None:
+            # Set roles so that requested actions will be possible
+            all_roles = {a_role.name: a_role for a_role in self.session.query(Role)}
+            RightsBO.set_allowed_actions(updated_user, actions, all_roles)  # type:ignore
+        self.session.commit()

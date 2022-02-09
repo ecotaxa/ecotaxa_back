@@ -89,8 +89,12 @@ class _Taxo2Model:
                             example="A"),
         "taxotype": Field(title="Taxo type", description="The taxon type, 'M' for Morpho or 'P' for Phylo.",
                           example="P"),
+        "nbrobj": Field(title="Number of objects", description="Number of objects in this category exactly.",
+                        example="5800"),
+        "nbrobjcum": Field(title="Number of descendant objects",
+                           description="Number of objects in this category and descendant ones.",
+                           example="54800"),
     }
-    exclude:List[str] = []
 
 
 class _TaxonCentralModelFromDB(SQLAlchemy2Pydantic[Taxonomy, _Taxo2Model]):

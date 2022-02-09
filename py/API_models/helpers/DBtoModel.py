@@ -4,7 +4,7 @@
 #
 #  Attempt to map as automatically as possible the DB model into CRUD objects.
 #
-from typing import Type, TypeVar, Dict, Optional, Any, Generic, Union, Tuple
+from typing import Type, TypeVar, Dict, Any, Generic, Union, Tuple
 
 from pydantic.fields import ModelField
 from sqlalchemy import inspect
@@ -31,14 +31,19 @@ CT = TypeVar('CT')
 class SQLAlchemy2Pydantic(GenericModel, Generic[DBT, CT]):
     def __class_getitem__(cls: Type[GenericModelT], params: Union[Type[Any], Tuple[Type[Any], ...]]) -> Type[Any]:
         db_model, how = params  # type:ignore
-        ret = _sqlalchemy_to_pydantic(db_model, exclude=how.exclude, field_infos=how.description)
+        # TODO: Remove the 'exclude' completely. If no doc, not included.
+        try:
+            exclude = how.exclude
+        except AttributeError:
+            exclude = None
+        ret = _sqlalchemy_to_pydantic(db_model, exclude=exclude, field_infos=how.description)
         return ret
 
 
 def _sqlalchemy_to_pydantic(db_model: T, *,
                             config: Type[BaseConfig] = OrmConfig,
                             exclude=None,
-                            field_infos: Optional[Dict[str, Any]] = None) -> PydanticModelT:
+                            field_infos: Dict[str, Any]) -> PydanticModelT:
     if exclude is None:
         exclude = []
     fields = {}
@@ -53,7 +58,7 @@ def _sqlalchemy_to_pydantic(db_model: T, *,
         column = attr.columns[0]
         python_type = column.type.python_type
         name = attr.key
-        if name in exclude:
+        if name not in field_infos.keys():
             continue
         default = None
         if column.default is None and not column.nullable:

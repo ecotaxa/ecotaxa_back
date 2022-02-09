@@ -39,14 +39,9 @@ def test_update_prj(config, database, fastapi, caplog):
                 'instrument': 'uvp6',
                 'init_classif_list': [],
                 'license': '',
-                'managers': [{'active': True,
-                              'country': None,
-                              'email': 'admin',
+                'managers': [{'email': 'admin',
                               'id': 1,
-                              'name': 'Application Administrator',
-                              'organisation': None,
-                              'usercreationdate': '2020-05-12T08:59:48.701060',
-                              'usercreationreason': None}],
+                              'name': 'Application Administrator'}],
                 'obj_free_cols': {'%area': 'n23',
                                   'angle': 'n16',
                                   'area': 'n01',
@@ -162,9 +157,9 @@ def test_update_prj(config, database, fastapi, caplog):
     upd_json = deepcopy(read_json)
     contact_usr = upd_json["managers"][0]
     # Attempt to reproduce ecotaxa/ecotaxa_dev#596
-    del contact_usr['usercreationdate']
-    contact_usr['usercreationdate'] = None
-    del contact_usr['usercreationreason']
+    # del contact_usr['usercreationdate']
+    # contact_usr['usercreationdate'] = None
+    # del contact_usr['usercreationreason']
 
     url = PROJECT_UPDATE_URL.format(project_id=prj_id)
     upd_json["comments"] = "New comment"

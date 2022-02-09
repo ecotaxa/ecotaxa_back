@@ -61,11 +61,9 @@ from BO.Classification import HistoricalClassification, ClassifIDT
 from BO.Job import JobBO
 from BO.Object import ObjectBO
 from BO.ObjectSet import ObjectIDListT
-from BO.Preferences import Preferences
 from BO.Process import ProcessBO
 from BO.Project import ProjectBO, ProjectUserStats
 from BO.ProjectSet import ProjectSetColumnStats
-from BO.Rights import RightsBO
 from BO.Sample import SampleBO
 from BO.Taxonomy import TaxonBO
 from DB import ProjectPrivilege
@@ -145,15 +143,21 @@ async def login(params: LoginReq = Body(...)) -> str:
             return sce.validate_login(params.username, params.password)
 
 
-@app.get("/users", operation_id="get_users", tags=['users'], response_model=List[UserModel])
-def get_users(current_user: int = Depends(get_current_user)):
+@app.get("/users", operation_id="get_users", tags=['users'], response_model=List[UserModelWithRights])
+def get_users(ids: str = Query("", title="Ids",
+                               description="String containing the list of one or more id separated by non-num char. \n"
+                                           " \n **If several ids are provided**, one full info is returned per user.",
+                               example="1"),
+              current_user: int = Depends(get_current_user)):
     """
-        Returns the list of **all users** with their information. 
+        Returns the list of **all users** with their full information, or just some of them if their ids
+        are provided.
 
         🔒 *For admins only.*
     """
     with UserService() as sce:
-        return sce.list(current_user)
+        usr_ids = _split_num_list(ids)
+        return sce.list(current_user, usr_ids)
 
 
 @app.get("/users/me", operation_id="show_current_user", tags=['users'], response_model=UserModelWithRights)
@@ -162,13 +166,35 @@ def show_current_user(current_user: int = Depends(get_current_user)):
         Returns **currently authenticated user's** (i.e. you) information, permissions and last used projects.
     """
     with UserService() as sce:
-        ret = sce.search_by_id(current_user, current_user)
-        assert ret is not None
-        # noinspection PyTypeHints
-        ret.can_do = RightsBO.allowed_actions(ret)  # type:ignore
-        # noinspection PyTypeHints
-        ret.last_used_projects = Preferences(ret).recent_projects(session=sce.session)  # type:ignore
-        return ret
+        return sce.get_full_by_id(current_user, current_user)
+
+
+@app.put("/users/{user_id}", operation_id="update_user", tags=['users'],
+         responses={
+             200: {
+                 "content": {
+                     "application/json": {
+                         "example": null
+                     }
+                 }
+             }
+         })
+def update_user(user: UserModelWithRights,
+                user_id: int = Path(..., description="Internal, numeric id of the user.", example=760),
+                current_user: int = Depends(get_current_user)):
+    """
+        **Update the user**, return **NULL upon success.**
+
+        🔒 Depending on logged user, different authorizations apply:
+        - An administrator or user administrator can change any field with respect of consistency.
+        - A user can update own password and mail.
+        - An ordinary user cannot update anything for another user.
+    """
+    with UserService() as sce:
+        with RightsThrower():
+            sce.update_user(current_user, user_id, user)
+
+    with DBSyncService(User, User.id, user_id) as ssce: ssce.wait()
 
 
 @app.get(
@@ -232,7 +258,7 @@ def set_current_user_prefs(
         return sce.set_preferences_per_project(current_user, project_id, key, value)
 
 
-@app.get("/users/search", operation_id="search_user", tags=['users'], response_model=List[UserModel])
+@app.get("/users/search", operation_id="search_user", tags=['users'], response_model=List[MinUserModel])
 def search_user(current_user: int = Depends(get_current_user),
                 by_name: Optional[str] = Query(default=None, title="search by name",
                                                description="Search by name, use % for searching with 'any char'.",
@@ -245,7 +271,7 @@ def search_user(current_user: int = Depends(get_current_user),
     return ret
 
 
-@app.get("/users/admins", operation_id="get_users_admins", tags=['users'], response_model=List[UserModel])
+@app.get("/users/admins", operation_id="get_users_admins", tags=['users'], response_model=List[MinUserModel])
 def get_users_admins(current_user: int = Depends(get_current_user)):
     """
         **List users administrators**, themselves being users.
@@ -255,7 +281,7 @@ def get_users_admins(current_user: int = Depends(get_current_user)):
     return ret
 
 
-@app.get("/users/{user_id}", operation_id="get_user", tags=['users'], response_model=UserModel)
+@app.get("/users/{user_id}", operation_id="get_user", tags=['users'], response_model=MinUserModel)
 def get_user(user_id: int = Path(..., description="Internal, the unique numeric id of this user.", example=1),
              current_user: int = Depends(get_current_user)):
     """
@@ -309,7 +335,7 @@ def search_collections(title: str = Query(..., title="Title",
                        current_user: int = Depends(get_current_user)):
     """
         **Search for collections.**
-        
+
         🔒 *For admins only.*
     """
     with CollectionsService() as sce:
@@ -324,10 +350,10 @@ def collection_by_title(
         q: str = Query(..., title="Title", description="Search by **exact** title.", example="My collection")):
     """
         Return the **single collection with this title**.
-        
+
         *For published datasets.*
 
-        ⚠️ DO NOT MODIFY BEHAVIOR ⚠️ 
+        ⚠️ DO NOT MODIFY BEHAVIOR ⚠️
     """
     with CollectionsService() as sce:
         with RightsThrower():
@@ -345,7 +371,7 @@ def collection_by_short_title(
 
         *For published datasets.*
 
-        ⚠️ DO NOT MODIFY BEHAVIOR ⚠️ 
+        ⚠️ DO NOT MODIFY BEHAVIOR ⚠️
     """
     with CollectionsService() as sce:
         with RightsThrower():
@@ -458,10 +484,10 @@ def erase_collection(
                                   example=1),
         current_user: int = Depends(get_current_user)) -> int:
     """
-        **Delete the collection**, 
-        
+        **Delete the collection**,
+
         i.e. the precious fields, as the projects are just linked-at from the collection.
-        
+
         🔒 *For admins only.*
     """
     with CollectionsService() as sce:
@@ -472,7 +498,8 @@ def erase_collection(
 # ######################## END OF COLLECTION
 
 MyORJSONResponse.register(ProjectBO, ProjectModel)
-MyORJSONResponse.register(User, UserModel)
+MyORJSONResponse.register(User, UserModelWithRights)
+MyORJSONResponse.register(User, MinUserModel)
 MyORJSONResponse.register(TaxonBO, TaxonModel)
 
 project_model_columns = plain_columns(ProjectModel)
@@ -631,8 +658,8 @@ def project_set_get_user_stats(ids: str = Query(..., title="Ids",
                                current_user: int = Depends(get_current_user)) -> List[ProjectUserStats]:
     """
         **Returns projects user statistics**, i.e. a summary of the work done by users in the
-        required projects. 
-        
+        required projects.
+
         The returned values are a detail per project, so size of input list equals size of output list.
     """
     with ProjectsService() as sce:
@@ -715,7 +742,7 @@ def project_merge(project_id: int = Path(..., description="Internal, numeric id 
                   current_user: int = Depends(get_current_user)) -> MergeRsp:
     """
         **Merge another project into this one.**
-        
+
         It's more a phagocytosis than a merge, as all objects from this source project will
         be moved to the project_id above and the source project itself will be deleted.
 
@@ -743,7 +770,7 @@ def project_check(project_id: int = Path(..., description="Internal, numeric id 
                   current_user: int = Depends(get_current_user)) -> List[str]:
     """
         **Check consistency of a project**.
-        
+
         With time and bugs, some consistency problems could be introduced in projects.
         This service aims at listing them.
     """
@@ -772,7 +799,7 @@ def project_stats(project_id: int = Path(..., description="Internal, numeric id 
 **Returns stats** for a project.
 
 These stats will be returned as a list containing at index :
-- 0 : The **title** of the project, 
+- 0 : The **title** of the project,
 - 1 : A string containing all **freecols name and related column number**,
 
 - 2 : **"(0):"**
@@ -805,7 +832,7 @@ def project_recompute_geography(
         **Recompute geography information** for all samples in project.
 
         **Returns NULL upon success.**
-        
+
         🔒 The user has to be *project manager*.
     """
     with ProjectsService() as sce:
@@ -860,10 +887,10 @@ def erase_project(project_id: int = Path(..., description="Internal, numeric id 
                   current_user: int = Depends(get_current_user)) -> Tuple[int, int, int, int]:
     """
         **Delete the project.**
-            
+
         Optionally, if "only_objects" is set, the project structure is kept,
         but emptied from any object, sample, acquisition and process.
-        
+
         Otherwise, no trace of the project will remain in the database.
 
         **Returns** the number of  : **deleted objects**, 0, **deleated image rows** and **deleated image files**.
@@ -1007,8 +1034,8 @@ def sample_set_get_stats(sample_ids: str = Query(..., title="Sample Ids",
 def update_samples(req: BulkUpdateReq = Body(...),
                    current_user: int = Depends(get_current_user)) -> int:
     """
-        Do the required **update for each sample in the set.** 
-        
+        Do the required **update for each sample in the set.**
+
         Any non-null field in the model is written to every impacted sample.
 
         **Returns the number of updated entities.**
@@ -1068,7 +1095,7 @@ def update_acquisitions(req: BulkUpdateReq = Body(...),
                         current_user: int = Depends(get_current_user)) -> int:
     """
         Do the required **update for each acquisition in the set**.
-        
+
         **Return the number of updated entities.**
     """
     with AcquisitionsService() as sce:
@@ -1254,9 +1281,9 @@ def get_object_set_summary(project_id: int = Path(..., description="Internal, nu
                            filters: ProjectFiltersModel = Body(...),
                            current_user: Optional[int] = Depends(get_optional_current_user)) -> ObjectSetSummaryRsp:
     """ For the given project, with given filters, **return the classification summary**.
-        
+
 i.e.:
-            
+
 - Total number of objects
 
 And optionnaly
@@ -1365,8 +1392,8 @@ def reclassify_object_set(project_id: int = Path(..., description="Internal, num
 def update_object_set(req: BulkUpdateReq = Body(...),
                       current_user: int = Depends(get_current_user)) -> int:
     """
-        Do the required **update for each objects in the set.** 
-        
+        Do the required **update for each objects in the set.**
+
         **Returns the number of updated entities.**
 
         🔒 Current user needs *Manage* right on all projects of specified objects.
@@ -1524,10 +1551,10 @@ def erase_object_set(object_ids: ObjectIDListT = Body(..., title="Object IDs lis
                                                       example=[634509, 6234516, 976544]),
                      current_user: int = Depends(get_current_user)) -> Tuple[int, int, int, int]:
     """
-        **Delete the objects with given object ids.** 
- 
+        **Delete the objects with given object ids.**
+
         **Returns** the number of  : **deleted objects**, 0, **deleated image rows** and **deleated image files**.
-        
+
         🔒 Current user needs *Manage* right on all projects of specified objects.
     """
     with ObjectManager() as sce:
@@ -1542,7 +1569,7 @@ def object_query(
         -> ObjectBO:
     """
         Returns **information about the object** corresponding to the given id.
-         
+
         🔒 Anonymous reader can do if the project has the right rights :)
     """
     with ObjectService() as sce:
@@ -1704,7 +1731,7 @@ async def query_taxa_usage(
         -> List[TaxonUsageModel]:
     """
         **Where a given taxon is used.**
-        
+
         Only validated uses are returned.
     """
     with TaxonomyService() as sce:
@@ -2008,11 +2035,11 @@ def reply_job_question(
         current_user: int = Depends(get_current_user)) -> None:
     """
         **Send answers to last question.** The job resumes after it receives the reply.
-        
+
         Return **NULL upon success.**
-        
+
         *Note: It's only about data storage here.*
-        
+
 
         If the data is technically NOK e.g. not a JS object, standard 422 error should be thrown.
 
@@ -2075,7 +2102,7 @@ def get_job_file(
         current_user: int = Depends(get_current_user)) -> StreamingResponse:
     """
         **Return the file produced by given job.**
-        
+
         🔒 The job must be accessible to current user.
     """
     with JobCRUDService() as sce:
@@ -2100,9 +2127,9 @@ def erase_job(
         current_user: int = Depends(get_current_user)) -> int:
     """
         **Delete the job** from DB, with associated storage.
-        
+
         Return **NULL upon success.**
-        
+
         If the job is running then kill it.
 
         🔒 The job must be accessible to current user.
@@ -2119,7 +2146,7 @@ async def list_user_files(sub_path: str = Query(..., title="Sub path", descripti
                           current_user: int = Depends(get_current_user)) -> DirectoryModel:
     """
         **List the private files** which are usable for some file-related operations.
-        
+
         *e.g. import.*
     """
     with UserFolderService() as sce:
@@ -2147,9 +2174,9 @@ async def put_user_file(file: UploadFile = File(..., title="File", description="
                         current_user: int = Depends(get_current_user)):
     """
         **Upload a file for the current user.**
-        
+
         The returned text will contain a serve-side path which is usable for some file-related operations.
-        
+
         *e.g. import.*
     """
     with UserFolderService() as sce:
@@ -2164,7 +2191,7 @@ async def list_common_files(
         current_user: int = Depends(get_current_user)) -> DirectoryModel:
     """
         **List the common files** which are usable for some file-related operations.
-        
+
         *e.g. import.*
     """
     with CommonFolderService() as sce:
@@ -2255,7 +2282,7 @@ def system_error(_current_user: int = Depends(get_current_user)):
 def do_nothing(_current_user: int = Depends(get_current_user)):
     """
         **This entry point will just do nothing.**
-        
+
         It's also used for exporting models we need on client side.
     """
 
@@ -2264,7 +2291,7 @@ def do_nothing(_current_user: int = Depends(get_current_user)):
 def used_constants() -> Constants:
     """
         **Return useful strings for user dialog.**
-        
+
         Now also used for values extracted from Config.
     """
     with ConstantsService() as sce:

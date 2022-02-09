@@ -90,7 +90,6 @@ def test_user_search(config, database, fastapi, caplog):
     assert response.status_code == status.HTTP_200_OK
     rsp = response.json()
     assert len(rsp) == 1
-    assert rsp[0]["active"]
 
 
 def test_user_get(config, database, fastapi, caplog):

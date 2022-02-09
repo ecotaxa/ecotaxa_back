@@ -28,14 +28,25 @@ from .helpers.TypedDictToModel import typed_dict_to_model
 FreeColT = Dict[str, str]
 
 
-# Direct mirror of DB models
-class _User2Model:
+# Minimal user information
+class _User2ModelMinimal:
     description = {
         "id": Field(title="Id", description="The unique numeric id of this user.", default=None, example=1),
         "email": Field(title="Email", description="User's email address, as text, used during registration.",
                        default=None,
                        example="ecotaxa.api.user@gmail.com"),
         "name": Field(title="Name", description="User's full name, as text.", default=None, example="userName"),
+    }
+
+
+class MinUserModel(SQLAlchemy2Pydantic[User, _User2ModelMinimal]):
+    pass
+
+
+# Direct mirror of DB models
+class _User2Model:
+    description = dict(_User2ModelMinimal.description)
+    description.update({
         "organisation": Field(title="Organisation", description="User's organisation name, as text.", default=None,
                               example="Oceanographic Laboratory of Villefranche sur Mer - LOV"),
         "active": Field(title="Account status", description="Whether the user is still active.", default=None,
@@ -48,12 +59,11 @@ class _User2Model:
                                   example="2020-11-05T12:31:48.299713"),
         "usercreationreason": Field(title="User creation reason",
                                     description="Paragraph describing the usage of EcoTaxa made by the user.",
-                                    default=None, example="Analysis of size and shapes of plastic particles")
-    }
-    exclude = [User.password.name,
-               User.preferences.name,
-               User.mail_status.name,
-               User.mail_status_date.name]
+                                    default=None, example="Analysis of size and shapes of plastic particles"),
+        "password": Field(title="User's password'",
+                          description="Encrypted (or not) password.",
+                          default=None, example="$foobar45$")
+    })
 
 
 class _UserModelFromDB(SQLAlchemy2Pydantic[User, _User2Model]):
@@ -178,11 +188,7 @@ class _CollectionModelFromDB(SQLAlchemy2Pydantic[Collection, _Collection2Model])
     pass
 
 
-class UserModel(_UserModelFromDB):
-    pass
-
-
-class UserModelWithRights(UserModel):
+class UserModelWithRights(_UserModelFromDB):
     can_do: List[int] = Field(title="User's permissions",
                               description="List of User's allowed actions : 1 create a project, 2 administrate the app, 3 administrate users, 4 create taxon.",
                               default=[], example=[1, 4])
@@ -213,16 +219,18 @@ class _AddedToProject(BaseModel):
                                          description="Favorite taxa used in classification.", default=[],
                                          example=[5, 11493, 11498, 11509])
 
-    managers: List[UserModel] = Field(title="Managers", description="Managers of this project.", default=[])
-    annotators: List[UserModel] = Field(title="Annotators", description="Annotators of this project, if not manager.",
+    managers: List[MinUserModel] = Field(title="Managers", description="Managers of this project.", default=[])
+    annotators: List[MinUserModel] = Field(title="Annotators",
+                                           description="Annotators of this project, if not manager.",
+                                           default=[])
+    viewers: List[MinUserModel] = Field(title="Viewers",
+                                        description="Viewers of this project, if not manager nor annotator.",
                                         default=[])
-    viewers: List[UserModel] = Field(title="Viewers",
-                                     description="Viewers of this project, if not manager nor annotator.", default=[])
     instrument: Optional[str] = Field(title="Instrument",
                                       description="This project's instrument. Transitory: if several of them, then coma-separated.",
                                       example="zooscan")
-    contact: Optional[UserModel] = Field(title="Contact",
-                                         description="The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.")
+    contact: Optional[MinUserModel] = Field(title="Contact",
+                                            description="The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.")
 
     highest_right: str = Field(title="Highest right",
                                description="The highest right for requester on this project. One of 'Manage', 'Annotate', 'View'.",
@@ -523,18 +531,18 @@ class _AddedToCollection(BaseModel):
     """
     project_ids: List[int] = Field(title="Project ids", description="The list of composing project IDs.",
                                    example=[1], min_items=1)
-    provider_user: Optional[UserModel] = Field(title="Provider user", description="""Is the person who 
+    provider_user: Optional[MinUserModel] = Field(title="Provider user", description="""Is the person who 
         is responsible for the content of this metadata record. Writer of the title and abstract.""")
-    contact_user: Optional[UserModel] = Field(title="Contact user", description="""Is the person who 
+    contact_user: Optional[MinUserModel] = Field(title="Contact user", description="""Is the person who 
         should be contacted in cases of questions regarding the content of the dataset or any data restrictions. 
         This is also the person who is most likely to stay involved in the dataset the longest.""")
-    creator_users: List[UserModel] = Field(title="Creator users", description="""All people who 
+    creator_users: List[MinUserModel] = Field(title="Creator users", description="""All people who 
         are responsible for the creation of the collection. Data creators should receive credit 
         for their work and should therefore be included in the citation.""", default=[])
     creator_organisations: List[str] = Field(title="Creator organisations", description="""All 
         organisations who are responsible for the creation of the collection. Data creators should 
         receive credit for their work and should therefore be included in the citation.""", default=[])
-    associate_users: List[UserModel] = Field(title="Associate users", description="""Other person(s) 
+    associate_users: List[MinUserModel] = Field(title="Associate users", description="""Other person(s) 
         associated with the collection.""", default=[])
     associate_organisations: List[str] = Field(title="Associate organisations", description="""Other 
         organisation(s) associated with the collection.""", default=[])
@@ -576,6 +584,7 @@ class _Job2Model:
 
 class _JobModelFromDB(SQLAlchemy2Pydantic[Job, _Job2Model]):
     pass
+
 
 class _AddedToJob(BaseModel):
     """

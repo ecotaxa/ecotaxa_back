@@ -172,6 +172,13 @@ class ObjectFields(Model):
     # The relationships are created in Relations.py but the typing here helps the IDE
     object: relationship
 
+# TODO
+# event.listen(
+#     ObjectsFields.__table__,
+#     "after_create",
+#     DDL("ALTER TABLE obj_field SET (fillfactor = 90, statistics_target = 10000)"
+#         ).execute_if(dialect='postgresql')
+# )
 
 # Ajout des colonnes numériques & textuelles libres
 for i in range(1, 501):

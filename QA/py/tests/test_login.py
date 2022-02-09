@@ -61,6 +61,7 @@ def test_plain_API_login(config, database, caplog):
     assert rsp.status_code == status.HTTP_200_OK
     me_as_user = rsp.json()
     del me_as_user['last_used_projects']
+    del me_as_user['password']
     assert me_as_user == {'active': True,
                           'country': None,
                           'email': 'creator',

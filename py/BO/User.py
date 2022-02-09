@@ -10,10 +10,11 @@ from typing import Any, Final, List
 from BO.Classification import ClassifIDListT
 from BO.helpers.DataclassAsDict import DataclassAsDict
 from DB import User, UserPreferences, Session
-# Typings, to be clear that these are not e.g. object IDs
 from helpers.DynamicLogs import get_logger
 
+# Typings, to be clear that these are not e.g. object IDs
 UserIDT = int
+UserIDListT = List[int]
 
 logger = get_logger(__name__)
 
