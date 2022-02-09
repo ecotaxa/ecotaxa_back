@@ -4,6 +4,7 @@
 #
 # Utils for configuring fastApi
 #
+import decimal
 import json
 import logging
 import sys
@@ -144,8 +145,13 @@ def _get_current_user(token) -> int:  # pragma: no cover
     try:
         payload = build_serializer().loads(token, max_age=MAX_TOKEN_AGE)
         try:
-            ret: int = int(payload["user_id"])
-        except (KeyError, ValueError):
+            for poss_key in ("_user_id", "user_id"):  # recent Flask sets _user_id
+                if poss_key in payload:
+                    ret: int = int(payload[poss_key])
+                    break
+            else:
+                raise _credentials_exception
+        except ValueError:
             raise _credentials_exception
     except (SignatureExpired, BadSignature):
         raise _credentials_exception
@@ -249,6 +255,8 @@ class MyORJSONResponse(JSONResponse):
         # We mimic FastApi behavior of fetching data from the object using the model fields
         fields = cls.type_to_fields.get(obj.__class__)
         if fields is None:
+            if isinstance(obj, decimal.Decimal):
+                return str(obj)
             raise TypeError
         ret = {fld: getattr(obj, fld) for fld in fields}
         return ret
