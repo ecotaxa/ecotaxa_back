@@ -66,6 +66,7 @@ from BO.Project import ProjectBO, ProjectUserStats
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleBO
 from BO.Taxonomy import TaxonBO
+from BO.User import UserIDT
 from DB import ProjectPrivilege
 from DB.Project import ProjectTaxoStat
 from helpers.Asyncio import async_bg_run, log_streamer
@@ -195,6 +196,33 @@ def update_user(user: UserModelWithRights,
             sce.update_user(current_user, user_id, user)
 
     with DBSyncService(User, User.id, user_id) as ssce: ssce.wait()
+
+
+@app.post("/users/create", operation_id="create_user", tags=['users'],
+         responses={
+             200: {
+                 "content": {
+                     "application/json": {
+                         "example": null
+                     }
+                 }
+             }
+         })
+def create_user(user: UserModelWithRights = Body(...),
+                current_user: int = Depends(get_current_user)):
+    """
+        **Create a new user**, return **NULL upon success.**
+
+        🔒 Depending on logged user, different authorizations apply:
+        - An administrator or user administrator can create a user.
+        - An unlogged user can self-create an account.
+        - An ordinary logged user cannot create another account.
+    """
+    with UserService() as sce:
+        with RightsThrower():
+            new_user_id: UserIDT = sce.create_user(current_user, user)
+
+    with DBSyncService(User, User.id, new_user_id) as ssce: ssce.wait()
 
 
 @app.get(
