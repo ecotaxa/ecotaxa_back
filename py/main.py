@@ -49,6 +49,7 @@ from API_operations.Subset import SubsetServiceOnProject
 from API_operations.TaxoManager import TaxonomyChangeService, CentralTaxonomyService
 from API_operations.TaxonomyService import TaxonomyService
 from API_operations.UserFolder import UserFolderService, CommonFolderService
+from API_operations.admin.Database import DatabaseService
 from API_operations.admin.ImageManager import ImageManagerService
 from API_operations.admin.NightlyJob import NightlyJobService
 from API_operations.exports.EMODnet import EMODnetExport
@@ -199,15 +200,15 @@ def update_user(user: UserModelWithRights,
 
 
 @app.post("/users/create", operation_id="create_user", tags=['users'],
-         responses={
-             200: {
-                 "content": {
-                     "application/json": {
-                         "example": null
-                     }
-                 }
-             }
-         })
+          responses={
+              200: {
+                  "content": {
+                      "application/json": {
+                          "example": null
+                      }
+                  }
+              }
+          })
 def create_user(user: UserModelWithRights = Body(...),
                 current_user: int = Depends(get_current_user)):
     """
@@ -2017,6 +2018,22 @@ def machine_learning_train(project_id: int = Query(..., title="Input project #",
         with RightsThrower():
             result = sce.train(current_user, project_id, model_name)
         return result
+
+
+@app.get("/admin/db/query", operation_id="db_direct_query", tags=['admin'], include_in_schema=True,
+         response_class=MyORJSONResponse)
+def direct_db_query(q: str = Query(..., title="Query", description="The SQL to execute.",
+                                   example="select count(1) from objects"),
+                    current_user: int = Depends(get_current_user)) -> MyORJSONResponse:
+    """
+        For making selects on the DB.
+        🔒 Admin only.
+    """
+    with DatabaseService() as sce:
+        with RightsThrower():
+            hdr, data = sce.execute_query(current_user, q)
+        ret = {'header': hdr, 'data': data}
+        return MyORJSONResponse(ret)
 
 
 # ######################## END OF ADMIN
