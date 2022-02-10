@@ -325,6 +325,31 @@ def get_user(user_id: int = Path(..., description="Internal, the unique numeric 
 
 # ######################## END OF USER
 
+@app.get("/organizations/search", operation_id="search_organizations", tags=['users'],
+         responses={
+             200: {
+                 "content": {
+                     "application/json": {
+                         "example": ["Oceanographic Laboratory of Villefranche sur Mer - LOV",
+                                     "Developmental Biology Laboratory of Villefranche sur Mer - LBDV",
+                                     "Sea Institute of Villefranche sur Mer - IMEV"]}
+                 }
+             }
+         }, response_model=List[str])
+def search_organizations(name: str = Query(..., title="Title",
+                                           description="Search by name, use % for searching with 'any char'.",
+                                           example="%vill%")) -> List[str]:
+    """
+        **Search for organizations.**
+        So far, organizations are just names in users table.
+    """
+    with UserService() as sce:
+        org_names = sce.search_organizations(name)
+    return org_names
+
+
+# ######################## END OF ORGANIZATIONS
+
 @app.post("/collections/create",
           operation_id="create_collection",
           tags=['collections'],

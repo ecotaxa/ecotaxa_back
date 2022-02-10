@@ -146,3 +146,11 @@ class UserService(Service):
             RightsBO.set_allowed_actions(updated_user, actions, all_roles)  # type:ignore
         # Commit on DB
         self.session.commit()
+
+    def search_organizations(self, name: str) -> List[str]:
+        """
+            Return the already-used org names with given pattern.
+        """
+        qry = self.ro_session.query(User.organisation).distinct()
+        qry = qry.filter(User.organisation.ilike(name))
+        return [r for r, in qry.all() if r is not None]
