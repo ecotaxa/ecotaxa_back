@@ -24,3 +24,10 @@ I have no name!@5e55ec7508c5:/app/cmds$ ls
 
 I have no name!@d2637e5ae89c:/app/cmds$ PYTHONPATH=.. alembic upgrade
 ```
+
+### Database init scripts
+
+* This will create default admin user and roles.
+
+`PATH=../venv38/bin PYTHONPATH=.. python manage.py SEC_INIT
+`

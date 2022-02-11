@@ -18,6 +18,7 @@ fileConfig(config.config_file_name)
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 from DB import Project
+
 target_metadata = Project.metadata
 
 # other values from the config, defined by the needs of env.py,
@@ -25,11 +26,9 @@ target_metadata = Project.metadata
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 
-# LS: Get SQLAlchemy URL from same config. as the app
-from API_operations.helpers.Service import Service
-from helpers.link_to_legacy import read_config
-app_config = read_config()
-conn = Service.build_connection(app_config)
+
+from db_conn import conn
+
 config.set_main_option('sqlalchemy.url', conn.url)
 
 
