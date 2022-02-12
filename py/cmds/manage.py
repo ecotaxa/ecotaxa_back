@@ -5,7 +5,8 @@
 
 import typer
 
-from DB.User import Role, User
+from DB.User import Role, User, Country
+from data.Countries import countries_by_name
 from db_upg.db_conn import conn
 from helpers.login import LoginService
 
@@ -68,6 +69,19 @@ def reset_sequences():
         for tbl, col, seq in progress:
             sql = f"SELECT setval('{seq}', (SELECT max({col}) FROM {tbl}), true)"
             sess.execute(sql)
+    sess.commit()
+    sess.close()
+
+
+@db_app.command(help="Ensure that static data is present")
+def do_static():
+    sess = conn.get_session()
+    for a_country in countries_by_name.keys():
+        db_country = sess.query(Country).get(a_country)
+        if db_country is None:
+            # noinspection PyArgumentList
+            sess.add(Country(countryname=a_country))
+            typer.echo("Adding country '%s'" % a_country)
     sess.commit()
     sess.close()
 

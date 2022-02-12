@@ -90,3 +90,11 @@ class UserRole(Model):
     __tablename__ = 'users_roles'
     user_id = Column(Integer(), ForeignKey("users.id"), primary_key=True)
     role_id = Column(Integer(), ForeignKey("roles.id"), primary_key=True)
+
+
+class Country(Model):
+    """
+        TODO: There is no FK from users
+    """
+    __tablename__ = 'countrylist'
+    countryname = Column(String(50), primary_key=True, nullable=False)
