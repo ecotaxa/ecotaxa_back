@@ -2,7 +2,6 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2022  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Optional
 
 import typer
 
@@ -15,10 +14,12 @@ THE_ADMIN = "administrator"
 THE_ADMIN_PASSWORD = "ecotaxa"
 
 app = typer.Typer()
+db_app = typer.Typer()
+app.add_typer(db_app, name="db")
 
 
-@app.command(help="Initialize default security, i.e. roles and an administrator")
-def init_security(sec_init: str, force: Optional[bool] = False):
+@db_app.command(help="Initialize default security, roles and an administrator")
+def init_security():
     """
     Create default security in the DB
     """
@@ -46,6 +47,28 @@ def init_security(sec_init: str, force: Optional[bool] = False):
         sess.commit()
     else:
         typer.echo("User '%s' is present" % THE_ADMIN)
+    sess.close()
+
+
+@db_app.command(help="Recreate PG sequences with the right values")
+def reset_sequences():
+    from DB import Project
+    from DB.helpers.DDL import Sequence
+
+    target_metadata = Project.metadata
+    # Collect the sequences and their bindings
+    seqs = []
+    for a_table in target_metadata.sorted_tables:
+        for a_col in a_table.columns:
+            if isinstance(a_col.default, Sequence):
+                seqs.append([a_table.name, a_col.name, a_col.default.name])
+    sess = conn.get_session()
+    # Recompute them
+    with typer.progressbar(seqs) as progress:
+        for tbl, col, seq in progress:
+            sql = f"SELECT setval('{seq}', (SELECT max({col}) FROM {tbl}), true)"
+            sess.execute(sql)
+    sess.commit()
     sess.close()
 
 
