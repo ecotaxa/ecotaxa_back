@@ -6,8 +6,8 @@ from typing import List
 
 from BO.helpers.TSVHelpers import none_to_empty
 from .helpers import Session, Result
-from .helpers.DDL import Column, ForeignKey, Sequence, Integer, String, Boolean, func
-from .helpers.Direct import text
+from .helpers.DDL import Column, ForeignKey, Sequence, Integer, String, Boolean
+from .helpers.Direct import text, func
 from .helpers.ORM import Model, relationship
 from .helpers.Postgres import TIMESTAMP, CHAR
 

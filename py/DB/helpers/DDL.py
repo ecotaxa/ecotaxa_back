@@ -7,4 +7,4 @@
 # noinspection PyUnresolvedReferences
 from sqlalchemy import Column, ForeignKey, Sequence, Index
 # noinspection PyUnresolvedReferences
-from sqlalchemy import Integer, String, Boolean, DateTime, SmallInteger, func
+from sqlalchemy import Integer, String, Boolean, DateTime, SmallInteger

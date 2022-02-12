@@ -3,7 +3,8 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-from .helpers.DDL import Index, Column, Sequence, func, ForeignKey
+from .helpers.DDL import Index, Column, Sequence, ForeignKey
+from .helpers.Direct import func
 from .helpers.ORM import Model
 from .helpers.Postgres import VARCHAR, INTEGER, CHAR, TIMESTAMP
 
