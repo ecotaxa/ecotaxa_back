@@ -8,7 +8,6 @@ from os import environ
 from os.path import join, dirname, realpath
 from pathlib import Path
 
-
 from lib.processes import SyncSubProcess
 import socket
 
@@ -51,6 +50,7 @@ class EcoTaxaExistingDB(object):
 
 
 DB_NAME = 'tecotaxa'
+DB_PASSWORD = "postgres12"
 
 
 class EcoTaxaDBFrom0(object):
@@ -114,7 +114,7 @@ class EcoTaxaDBFrom0(object):
             return False
         return is_port_opened(self.host, PG_PORT)
 
-    def build(self):
+    def build(self, password):
         """
             Build the DB using manage CLI option.
         """
@@ -126,8 +126,8 @@ class EcoTaxaDBFrom0(object):
         link.INI_FILE = TEST_DIR / "link.ini"
         import cmds.manage
 
-        cmds.manage.drop(db_name=DB_NAME)
-        cmds.manage.create(db_name=DB_NAME)
+        cmds.manage.drop(db_name=DB_NAME, password=password)
+        cmds.manage.create(db_name=DB_NAME, password=password)
         cmds.manage.build()
 
     def direct_SQL(self, password):
@@ -158,12 +158,12 @@ class EcoTaxaDBFrom0(object):
         else:
             self.host = PG_HOST
         self.write_config()
-        self.build()
-        self.direct_SQL('postgres12')
+        self.build(DB_PASSWORD)
+        self.direct_SQL(DB_PASSWORD)
 
     CONF = f"""
 DB_USER="postgres"
-DB_PASSWORD="postgres12"
+DB_PASSWORD="{DB_PASSWORD}"
 DB_HOST="%s"
 DB_PORT="%d"
 DB_DATABASE="{DB_NAME}"
