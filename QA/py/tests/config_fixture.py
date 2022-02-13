@@ -30,7 +30,7 @@ class EcoTaxaConfig(object):
 
 @pytest.fixture(scope="session")
 def config() -> EcoTaxaConfig:
-    # Setup
+    # Setup by injecting values inside the app 'link' module
     link.INI_DIR = HERE
     link.INI_FILE = TEST_CONFIG
     conf = EcoTaxaConfig()

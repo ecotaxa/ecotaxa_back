@@ -8,6 +8,7 @@ from os import environ
 from os.path import join, dirname, realpath
 from pathlib import Path
 
+
 from lib.processes import SyncSubProcess
 import socket
 
@@ -20,7 +21,7 @@ PG_PORT = environ.get("POSTGRES_PORT")
 if PG_HOST and PG_PORT:
     PG_PORT = int(PG_PORT)
 else:
-    pg_lib = "/usr/lib/postgresql/12/bin/"
+    pg_lib = "/usr/lib/postgresql/13/bin/"
     pgctl_bin = join(pg_lib, "pg_ctl")
     initdb_bin = join(pg_lib, "initdb")
     mustExist = [pgctl_bin, initdb_bin]
@@ -29,14 +30,6 @@ else:
             print("File/directory %s not found where expected" % aFile)
             sys.exit(-1)
     PG_PORT = 5440
-
-# noinspection SqlResolve,SqlNoDataSourceInspection
-CREATE_DB_SQL = """
-create DATABASE ecotaxa
-WITH ENCODING='LATIN1'
-OWNER=postgres
-TEMPLATE=template0 LC_CTYPE='C' LC_COLLATE='C' CONNECTION LIMIT=-1;
-"""
 
 
 def is_port_opened(host: str, port: int):
@@ -52,9 +45,12 @@ class EcoTaxaExistingDB(object):
     """
 
     @staticmethod
-    def write_config(conf_file: Path, host: str, port: int):
+    def write_config(conf_file: Path, host: str, port: int, shared: str = "/tmp", ftp: str = "/tmp"):
         with open(str(conf_file), "w") as f:
-            f.write(EcoTaxaDBFrom0.CONF % (host, port, host, port))
+            f.write(EcoTaxaDBFrom0.CONF % (host, port, host, port, shared, ftp))
+
+
+DB_NAME = 'tecotaxa'
 
 
 class EcoTaxaDBFrom0(object):
@@ -63,8 +59,9 @@ class EcoTaxaDBFrom0(object):
         self.db_dir = dbdir.resolve()
         self.data_dir = self.db_dir / "Data"
         self.pwd_file = self.db_dir / "pg_pwd.txt"
-        self.schema_creation_file = self.db_dir / "schem_prod.sql"
+        self.v22_schema_creation_file = self.db_dir / "schem_prod.sql"
         self.schema_upgrade_file = self.db_dir / "upgrade_prod.sql"
+        self.data_load_file = self.db_dir / "data_load.sql"
         self.conf_file = conffile
         self.host = None
         self.shared_dir = SHARED_DIR
@@ -73,7 +70,7 @@ class EcoTaxaDBFrom0(object):
     def get_env(self):
         # Return the environment for postgres subprocesses
         ret = {"PGDATA": self.data_dir,
-               "PGDATABASE": "ecotaxa",
+               "PGDATABASE": DB_NAME,
                "PGLOG": self.db_dir / "log.txt"
                }
         return ret
@@ -117,44 +114,64 @@ class EcoTaxaDBFrom0(object):
             return False
         return is_port_opened(self.host, PG_PORT)
 
-    def ddl(self, password):
+    def build(self):
+        """
+            Build the DB using manage CLI option.
+        """
+        # The CLI uses (now) the config, so some monkey-patching is needed
+        TEST_DIR = Path(dirname(realpath(__file__))) / ".." / "tests"
+        # Import setup point
+        import helpers.link_to_legacy as link
+        link.INI_DIR = TEST_DIR
+        link.INI_FILE = TEST_DIR / "link.ini"
+        import cmds.manage
+
+        cmds.manage.drop(db_name=DB_NAME)
+        cmds.manage.create(db_name=DB_NAME)
+        cmds.manage.build()
+
+    def direct_SQL(self, password):
         # -h localhost force use of TCP/IP socket, otherwise psql tries local pipes in /var/run
         env = {'PGPASSWORD': password}
         pg_opts = ['-U', 'postgres', '-h', self.host, '-p', "%d" % PG_PORT]
-        cre_opts = ['-c', CREATE_DB_SQL]
-        cmd = [psql_bin] + pg_opts + cre_opts
-        SyncSubProcess(cmd, env=env, out_file="db_create.log")
-        # Initial build
-        schem_opts = ['-d', 'ecotaxa', '-f', self.schema_creation_file]
+        # Data load
+        schem_opts = ['-d', DB_NAME, '-f', self.data_load_file]
         cmd = [psql_bin] + pg_opts + schem_opts
-        SyncSubProcess(cmd, env=env, out_file="db_build.log")
-        # Upgrade
-        schem_opts = ['-d', 'ecotaxa', '-f', self.schema_upgrade_file]
-        cmd = [psql_bin] + pg_opts + schem_opts
-        SyncSubProcess(cmd, env=env, out_file="db_upgrade.log")
+        SyncSubProcess(cmd, env=env, out_file="data_load.log")
+        # TODO: Upgrade testing
+        # schem_opts = ['-d', DB_NAME, '-f', self.v22_schema_creation_file]
+        # cmd = [psql_bin] + pg_opts + schem_opts
+        # SyncSubProcess(cmd, env=env, out_file="db_build.log")
+        # # Upgrade
+        # schem_opts = ['-d', DB_NAME, '-f', self.schema_upgrade_file]
+        # cmd = [psql_bin] + pg_opts + schem_opts
+        # SyncSubProcess(cmd, env=env, out_file="db_upgrade.log")
 
     def create(self):
         if not (PG_HOST and PG_PORT):
             self.host = 'localhost'
-            self.init()
-            self.launch()
-            # TODO: Password (in call to self.ddl) is ignored in this context
+            if not is_port_opened(self.host, PG_PORT):
+                # Accept to reuse a server if it did not die last time
+                self.init()
+                self.launch()
+            # TODO: Password (in call to self.direct_SQL) is ignored in this context
         else:
             self.host = PG_HOST
-        self.ddl('postgres12')
         self.write_config()
+        self.build()
+        self.direct_SQL('postgres12')
 
-    CONF = """
+    CONF = f"""
 DB_USER="postgres"
 DB_PASSWORD="postgres12"
 DB_HOST="%s"
 DB_PORT="%d"
-DB_DATABASE="ecotaxa"
+DB_DATABASE="{DB_NAME}"
 RO_DB_USER="readerole"
 RO_DB_PASSWORD="Ec0t1x1Rd4"
 RO_DB_HOST="%s"
 RO_DB_PORT="%d"
-RO_DB_DATABASE="ecotaxa"
+RO_DB_DATABASE="{DB_NAME}"
 THUMBSIZELIMIT=99
 SECRET_KEY = 'THIS KEY MUST BE CHANGED'
 serverloadarea = "%s"

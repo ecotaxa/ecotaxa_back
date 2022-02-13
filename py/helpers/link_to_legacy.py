@@ -12,6 +12,7 @@ from os import path
 from os.path import abspath, join
 
 # Base on current file path so the script can be launched from anywhere
+# Note: tests _inject_ the values below
 INI_DIR = path.join(path.dirname(__file__), "../..")
 INI_FILE = path.join(INI_DIR, "link.ini")
 

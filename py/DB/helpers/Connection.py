@@ -70,12 +70,29 @@ class Connection(object):
         self.session_factory = sessionmaker(bind=engine)
         self._meta: MetaData = sqlalchemy.MetaData(bind=engine)
         self._meta.reflect()
-        self.url = url
+        self.engine = engine
+
+    @property
+    def url(self):
+        return self.engine.url
 
     def get_session(self) -> Session:
         """
             Get a fresh or recycled session from the connection.
         """
-        # logging.error("get session")
         ret = self.session_factory()
         return ret
+
+    def exec_outside_transaction(self, statement: str):
+        """
+            Execute raw SQL outside of any transaction (which is created by default by SQLA)
+        """
+        with self.engine.connect() as conn:
+            conn.execute("commit")
+            conn.execute(statement)
+
+    def get_metadata(self) -> MetaData:
+        """
+            Get the metadata (for admin operations).
+        """
+        return self._meta

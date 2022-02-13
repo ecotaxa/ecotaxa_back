@@ -20,7 +20,7 @@ from helpers.fastApiUtils import build_serializer
 class LoginService(Service):
     """
         A service to validate login via the API.
-        TODO: It's crypto, so without cache, it's not fast. Not ready for replacing Flask one.
+        TODO: It's crypto, so without cache, it might not be fast. To measure.
     """
 
     def __init__(self):

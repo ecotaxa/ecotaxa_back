@@ -116,13 +116,23 @@ class Service(BaseService):
             Read a connection from the configuration.
         """
         prfx = "RO_" if read_only else ""
-        port = config.get(prfx + 'DB_PORT')
-        if port is None:
-            port = '5432'
+        port = config.get(prfx + 'DB_PORT', '5432')
         host = _turn_localhost_for_docker(config[prfx + 'DB_HOST'], port)
         conn = Connection(host=host, port=port, db=config[prfx + 'DB_DATABASE'],
                           user=config[prfx + 'DB_USER'], password=config[prfx + 'DB_PASSWORD'],
                           read_only=read_only)
+        return conn
+
+    @staticmethod
+    def build_super_connection(config, user, password):
+        """
+            Build a super-user connection from the configuration, directly to the DB server.
+        """
+        port = config.get('DB_PORT', 5432)
+        host = _turn_localhost_for_docker(config['DB_HOST'], port)
+        conn = Connection(host=host, port=port, db="postgres",
+                          user=user, password=password,
+                          read_only=False)
         return conn
 
     @staticmethod
