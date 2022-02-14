@@ -301,12 +301,24 @@ def search_user(current_user: int = Depends(get_current_user),
 
 
 @app.get("/users/admins", operation_id="get_users_admins", tags=['users'], response_model=List[MinUserModel])
-def get_users_admins(current_user: int = Depends(get_current_user)):
+def get_users_admins():
     """
         **List users administrators**, themselves being users.
+        🔒 Public, no auth.
     """
     with UserService() as sce:
-        ret = sce.get_users_admins(current_user)
+        ret = sce.get_users_admins()
+    return ret
+
+
+@app.get("/users/user_admins", operation_id="get_admin_users", tags=['users'], response_model=List[MinUserModel])
+def get_admin_users(current_user: int = Depends(get_current_user)):
+    """
+        **List application administrators**, themselves being users.
+        🔒 Any authenticated user can access the list.
+    """
+    with UserService() as sce:
+        ret = sce.get_admin_users(current_user)
     return ret
 
 
