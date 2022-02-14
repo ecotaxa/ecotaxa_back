@@ -57,9 +57,9 @@ def test_project_redo_sunpos(config, database, fastapi, caplog):
 
     # Admin imports the project
     from tests.test_import import test_import, test_import_a_bit_more_skipping
-    prj_id = test_import(config, database, caplog, "Stats test project")
+    prj_id = test_import(config, database, caplog, "Sunpos test project")
     # Add a sample spanning 2 days
-    test_import_a_bit_more_skipping(config, database, caplog, "Stats test project")
+    test_import_a_bit_more_skipping(config, database, caplog, "Sunpos test project")
     # Recompure sunpos, should return 0 as all was freshly loaded
     url = PROJECT_RECOMPUTE.format(project_id=prj_id)
     rsp = fastapi.post(url, headers=ADMIN_AUTH)

@@ -684,7 +684,7 @@ class ProjectBO(object):
         qry = qry.join(Sample, and_(Sample.sampleid == Acquisition.acq_sample_id,
                                     Sample.projid == prj_id))
         ret = 0
-        cache = {}
+        cache: Dict[tuple, str] = {}
         for a_line in qry.all():
             objid, sunpos, *vals = a_line
             # A bit of caching
@@ -696,7 +696,9 @@ class ProjectBO(object):
                 new_pos = compute_sun_position(Bean(vals_dict))
                 cache[vals] = new_pos
             if new_pos != sunpos:
-                session.query(ObjectHeader).get(objid).sunpos = new_pos
+                obj = session.query(ObjectHeader).get(objid)
+                assert obj is not None
+                obj.sunpos = new_pos
                 ret += 1
                 if ret % 1000 == 0:
                     # Don't let a too big transaction grow
