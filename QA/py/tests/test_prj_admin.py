@@ -1,13 +1,18 @@
 import logging
 
-from tests.credentials import ADMIN_AUTH
+from starlette import status
+
+from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID
+from API_operations.ObjectManager import ObjectManager
 
 # noinspection PyPackageRequirements
-
+from tests.test_update import OBJECT_SET_UPDATE_URL
 
 PROJECT_CLASSIF_STATS_URL = "/project_set/taxo_stats?ids={prj_ids}"
 
 PROJECT_FREE_COLS_STATS_URL = "/projects/{project_id}/stats"
+
+PROJECT_RECOMPUTE = "/projects/{project_id}/recompute_sunpos"
 
 
 def test_project_stats(config, database, fastapi, caplog):
@@ -45,3 +50,42 @@ def test_project_stats(config, database, fastapi, caplog):
                 ]
     actual = rsp.json()
     assert actual == expected
+
+
+def test_project_redo_sunpos(config, database, fastapi, caplog):
+    caplog.set_level(logging.FATAL)
+
+    # Admin imports the project
+    from tests.test_import import test_import, test_import_a_bit_more_skipping
+    prj_id = test_import(config, database, caplog, "Stats test project")
+    # Add a sample spanning 2 days
+    test_import_a_bit_more_skipping(config, database, caplog, "Stats test project")
+    # Recompure sunpos, should return 0 as all was freshly loaded
+    url = PROJECT_RECOMPUTE.format(project_id=prj_id)
+    rsp = fastapi.post(url, headers=ADMIN_AUTH)
+    assert rsp.status_code == 200
+    assert rsp.json() == 0
+    # Update first 4 objects
+    # TODO: Use the API for querying
+    with ObjectManager() as sce:
+        objs, _details, _total = sce.query(ADMIN_USER_ID, prj_id, {})
+    objs = [an_obj[0] for an_obj in objs]
+    assert len(objs) == 11
+    url = OBJECT_SET_UPDATE_URL.format(project_id=prj_id)
+    req = {"target_ids": objs[0:4],
+           "updates":
+               [{"ucol": "sunpos", "uval": "0"}]
+           }
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == 4
+    # Recompute sunpos, should restore the right value
+    url = PROJECT_RECOMPUTE.format(project_id=prj_id)
+    rsp = fastapi.post(url, headers=ADMIN_AUTH)
+    assert rsp.status_code == 200
+    assert rsp.json() == 4
+    # Another time should return 0
+    url = PROJECT_RECOMPUTE.format(project_id=prj_id)
+    rsp = fastapi.post(url, headers=ADMIN_AUTH)
+    assert rsp.status_code == 200
+    assert rsp.json() == 0

@@ -906,6 +906,31 @@ def project_recompute_geography(
             sce.recompute_geo(current_user, project_id)
 
 
+@app.post("/projects/{project_id}/recompute_sunpos", operation_id="project_recompute_sunpos", tags=['projects'],
+          responses={
+              200: {
+                  "content": {
+                      "application/json": {
+                          "example": null
+                      }
+                  }
+              }
+          })
+def project_recompute_sunpos(
+        project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
+        current_user: int = Depends(get_current_user)) -> int:
+    """
+        **Recompute sun position field** for all objects in project.
+
+        **Returns NULL upon success.**
+
+        🔒 The user has to be *project manager* on the referenced project.
+    """
+    with ProjectsService() as sce:
+        with RightsThrower():
+            return sce.recompute_sunpos(current_user, project_id)
+
+
 @app.post("/file_import/{project_id}", operation_id="import_file", tags=['projects'], response_model=ImportRsp)
 def import_file(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
                 params: ImportReq = Body(...),

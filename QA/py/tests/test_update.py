@@ -5,11 +5,10 @@
 import json
 import logging
 
-from BO.ColumnUpdate import ColUpdate, ColUpdateList
 # Import services
 from API_operations.CRUD.ObjectParents import SamplesService, AcquisitionsService, ProcessesService
-from API_operations.JsonDumper import JsonDumper
 from API_operations.ObjectManager import ObjectManager
+from BO.ColumnUpdate import ColUpdate, ColUpdateList
 from deepdiff import DeepDiff
 from starlette import status
 
@@ -67,15 +66,15 @@ def test_updates(config, database, caplog):
     objs = [an_obj[0] for an_obj in objs]
     assert len(objs) == 15
     # Wrong column
-    with  ObjectManager() as sce:
+    with ObjectManager() as sce:
         nb_upd = sce.update_set(ADMIN_USER_ID, objs, ColUpdateList([upd("chip", "sagitta4")]))
     assert nb_upd == 0
     # Free column
-    with  ObjectManager() as sce:
+    with ObjectManager() as sce:
         nb_upd = sce.update_set(ADMIN_USER_ID, objs, ColUpdateList([upd("area", "10")]))
     assert nb_upd == 15
     # Plain column
-    with  ObjectManager() as sce:
+    with ObjectManager() as sce:
         nb_upd = sce.update_set(ADMIN_USER_ID, objs, ColUpdateList([upd("depth_min", "10")]))
     assert nb_upd == 15
 
@@ -112,65 +111,65 @@ def test_updates(config, database, caplog):
         "root['samples'][0]['acquisitions'][0]['processings'][0]['invert']": {'new_value': 'n',
                                                                               'old_value': 'y'},
         "root['samples'][0]['acquisitions'][0]['objects'][0]['area']": {'new_value': 10.0,
-                                                                                          'old_value': 207.0},
+                                                                        'old_value': 207.0},
         "root['samples'][0]['acquisitions'][0]['objects'][0]['depth_min']": {'new_value': 10.0,
-                                                                                               'old_value': 194.63},
+                                                                             'old_value': 194.63},
         "root['samples'][0]['acquisitions'][0]['objects'][10]['area']": {'new_value': 10.0,
-                                                                                           'old_value': 119.0},
+                                                                         'old_value': 119.0},
         "root['samples'][0]['acquisitions'][0]['objects'][10]['depth_min']": {'new_value': 10.0,
-                                                                                                'old_value': 215.76},
+                                                                              'old_value': 215.76},
         "root['samples'][0]['acquisitions'][0]['objects'][11]['area']": {'new_value': 10.0,
-                                                                                           'old_value': 137.0},
+                                                                         'old_value': 137.0},
         "root['samples'][0]['acquisitions'][0]['objects'][11]['depth_min']": {'new_value': 10.0,
-                                                                                                'old_value': 224.44},
+                                                                              'old_value': 224.44},
         "root['samples'][0]['acquisitions'][0]['objects'][12]['area']": {'new_value': 10.0,
-                                                                                           'old_value': 93.0},
+                                                                         'old_value': 93.0},
         "root['samples'][0]['acquisitions'][0]['objects'][12]['depth_min']": {'new_value': 10.0,
-                                                                                                'old_value': 252.235},
+                                                                              'old_value': 252.235},
         "root['samples'][0]['acquisitions'][0]['objects'][13]['area']": {'new_value': 10.0,
-                                                                                           'old_value': 165.0},
+                                                                         'old_value': 165.0},
         "root['samples'][0]['acquisitions'][0]['objects'][13]['depth_min']": {'new_value': 10.0,
-                                                                                                'old_value': 253.615},
+                                                                              'old_value': 253.615},
         "root['samples'][0]['acquisitions'][0]['objects'][14]['area']": {'new_value': 10.0,
-                                                                                           'old_value': 360.0},
+                                                                         'old_value': 360.0},
         "root['samples'][0]['acquisitions'][0]['objects'][14]['depth_min']": {'new_value': 10.0,
-                                                                                                'old_value': 255.44},
+                                                                              'old_value': 255.44},
         "root['samples'][0]['acquisitions'][0]['objects'][1]['area']": {'new_value': 10.0,
-                                                                                          'old_value': 107.0},
+                                                                        'old_value': 107.0},
         "root['samples'][0]['acquisitions'][0]['objects'][1]['depth_min']": {'new_value': 10.0,
-                                                                                               'old_value': 195.36},
+                                                                             'old_value': 195.36},
         "root['samples'][0]['acquisitions'][0]['objects'][2]['area']": {'new_value': 10.0,
-                                                                                          'old_value': 122.0},
+                                                                        'old_value': 122.0},
         "root['samples'][0]['acquisitions'][0]['objects'][2]['depth_min']": {'new_value': 10.0,
-                                                                                               'old_value': 195.68},
+                                                                             'old_value': 195.68},
         "root['samples'][0]['acquisitions'][0]['objects'][3]['area']": {'new_value': 10.0,
-                                                                                          'old_value': 94.0},
+                                                                        'old_value': 94.0},
         "root['samples'][0]['acquisitions'][0]['objects'][3]['depth_min']": {'new_value': 10.0,
-                                                                                               'old_value': 195.68},
+                                                                             'old_value': 195.68},
         "root['samples'][0]['acquisitions'][0]['objects'][4]['area']": {'new_value': 10.0,
-                                                                                          'old_value': 199.0},
+                                                                        'old_value': 199.0},
         "root['samples'][0]['acquisitions'][0]['objects'][4]['depth_min']": {'new_value': 10.0,
-                                                                                               'old_value': 195.68},
+                                                                             'old_value': 195.68},
         "root['samples'][0]['acquisitions'][0]['objects'][5]['area']": {'new_value': 10.0,
-                                                                                          'old_value': 176.0},
+                                                                        'old_value': 176.0},
         "root['samples'][0]['acquisitions'][0]['objects'][5]['depth_min']": {'new_value': 10.0,
-                                                                                               'old_value': 212.62},
+                                                                             'old_value': 212.62},
         "root['samples'][0]['acquisitions'][0]['objects'][6]['area']": {'new_value': 10.0,
-                                                                                          'old_value': 151.0},
+                                                                        'old_value': 151.0},
         "root['samples'][0]['acquisitions'][0]['objects'][6]['depth_min']": {'new_value': 10.0,
-                                                                                               'old_value': 213.525},
+                                                                             'old_value': 213.525},
         "root['samples'][0]['acquisitions'][0]['objects'][7]['area']": {'new_value': 10.0,
-                                                                                          'old_value': 90.0},
+                                                                        'old_value': 90.0},
         "root['samples'][0]['acquisitions'][0]['objects'][7]['depth_min']": {'new_value': 10.0,
-                                                                                               'old_value': 214.165},
+                                                                             'old_value': 214.165},
         "root['samples'][0]['acquisitions'][0]['objects'][8]['area']": {'new_value': 10.0,
-                                                                                          'old_value': 158.0},
+                                                                        'old_value': 158.0},
         "root['samples'][0]['acquisitions'][0]['objects'][8]['depth_min']": {'new_value': 10.0,
-                                                                                               'old_value': 215.415},
+                                                                             'old_value': 215.415},
         "root['samples'][0]['acquisitions'][0]['objects'][9]['area']": {'new_value': 10.0,
-                                                                                          'old_value': 163.0},
+                                                                        'old_value': 163.0},
         "root['samples'][0]['acquisitions'][0]['objects'][9]['depth_min']": {'new_value': 10.0,
-                                                                                               'old_value': 215.76},
+                                                                             'old_value': 215.76},
         "root['samples'][0]['sampledatetime']": {'new_value': '20200208-111218', 'old_value': '20200205-111218'},
         "root['samples'][0]['ship']": {'new_value': 'sagitta4', 'old_value': 'sagitta3'}}
 
@@ -246,7 +245,7 @@ def test_api_updates(config, database, fastapi, caplog):
 
     # Update first 4 objects
     # TODO: Use the API for querying
-    with  ObjectManager() as sce:
+    with ObjectManager() as sce:
         objs, _details, _total = sce.query(ADMIN_USER_ID, prj_id, {})
     objs = [an_obj[0] for an_obj in objs]
     assert len(objs) == 8

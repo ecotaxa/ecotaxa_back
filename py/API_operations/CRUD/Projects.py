@@ -134,6 +134,15 @@ class ProjectsService(Service):
         _current_user, _project = RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, prj_id)
         Sample.propagate_geo(self.session, prj_id)
 
+    def recompute_sunpos(self, current_user_id: int,
+                         prj_id: ProjectIDT) -> int:
+        """
+            Recompute sun position for every object in the project.
+        """
+        # Security barrier
+        _current_user, _project = RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, prj_id)
+        return ProjectBO.recompute_sunpos(self.session, prj_id)
+
     def read_stats(self, current_user_id: Optional[UserIDT],
                    prj_ids: ProjectIDListT,
                    taxa_ids: Union[str, ClassifIDListT]) -> List[ProjectTaxoStats]:

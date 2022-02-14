@@ -13,6 +13,7 @@ from BO.Instrument import DescribedInstrumentSet
 from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping, TableMapping
 from BO.Prediction import DeepFeatures
 from BO.ProjectPrivilege import ProjectPrivilegeBO
+from BO.SpaceTime import USED_FIELDS_FOR_SUNPOS, compute_sun_position
 from BO.User import MinimalUserBO, UserActivity, UserIDT, MinimalUserBOListT, UserActivityListT
 from BO.helpers.DataclassAsDict import DataclassAsDict
 from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFields, Acquisition, Process, \
@@ -21,6 +22,7 @@ from DB.Object import VALIDATED_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL, DUBIOUS_CL
 from DB.Project import ProjectIDT, ProjectIDListT
 from DB.User import Role
 from DB.helpers import Session, Result
+from DB.helpers.Bean import Bean
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Delete, Query, any_, and_, subqueryload, minimal_table_of, func
 from helpers.DynamicLogs import get_logger
@@ -551,7 +553,7 @@ class ProjectBO(object):
 
     @classmethod
     def get_all_object_ids(cls, session: Session,
-                           prj_id: int):  # TODO: Problem with recursive import -> ObjetIdListT:
+                           prj_id: int):  # TODO: Problem with recursive import -> ObjectIDListT:
         """
             Return the full list of objects IDs inside a project.
             TODO: Maybe better in ObjectBO
@@ -668,6 +670,32 @@ class ProjectBO(object):
             return []
         mpg = mapping.find_tsv_cols(list(sort_list.keys()))
         return list(mpg.values())
+
+    @classmethod
+    def recompute_sunpos(cls, session: Session, prj_id: ProjectIDT) -> int:
+        """
+            Recompute sun position for all objects.
+        """
+        used_fields = sorted(USED_FIELDS_FOR_SUNPOS)
+        qry_cols = [ObjectHeader.objid, ObjectHeader.sunpos] + [getattr(ObjectHeader, fld) for fld in used_fields]
+        qry: Query = session.query(*qry_cols)
+        qry = qry.join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
+        qry = qry.join(Sample, and_(Sample.sampleid == Acquisition.acq_sample_id,
+                                    Sample.projid == prj_id))
+        ret = 0
+        for a_line in qry.all():
+            objid, sunpos, *vals = a_line
+            vals_bean = {fld: val for fld, val in zip(used_fields, vals)}
+            new_pos = compute_sun_position(Bean(vals_bean))
+            if new_pos != sunpos:
+                session.query(ObjectHeader).get(objid).sunpos = new_pos
+                ret += 1
+                if ret % 1000 == 0:
+                    # Don't let a too big transaction grow
+                    session.commit()
+        session.commit()
+        return ret
+
 
 
 class ProjectBOSet(object):
