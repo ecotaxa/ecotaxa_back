@@ -675,6 +675,7 @@ class ProjectBO(object):
     def recompute_sunpos(cls, session: Session, prj_id: ProjectIDT) -> int:
         """
             Recompute sun position for all objects.
+            :return the number of objects with sun position changed
         """
         used_fields = sorted(USED_FIELDS_FOR_SUNPOS)
         qry_cols = [ObjectHeader.objid, ObjectHeader.sunpos] + [getattr(ObjectHeader, fld) for fld in used_fields]
@@ -683,10 +684,17 @@ class ProjectBO(object):
         qry = qry.join(Sample, and_(Sample.sampleid == Acquisition.acq_sample_id,
                                     Sample.projid == prj_id))
         ret = 0
+        cache = {}
         for a_line in qry.all():
             objid, sunpos, *vals = a_line
-            vals_bean = {fld: val for fld, val in zip(used_fields, vals)}
-            new_pos = compute_sun_position(Bean(vals_bean))
+            # A bit of caching
+            vals = tuple(vals)
+            if vals in cache:
+                new_pos = cache[vals]
+            else:
+                vals_dict = {fld: val for fld, val in zip(used_fields, vals)}
+                new_pos = compute_sun_position(Bean(vals_dict))
+                cache[vals] = new_pos
             if new_pos != sunpos:
                 session.query(ObjectHeader).get(objid).sunpos = new_pos
                 ret += 1
@@ -695,7 +703,6 @@ class ProjectBO(object):
                     session.commit()
         session.commit()
         return ret
-
 
 
 class ProjectBOSet(object):
