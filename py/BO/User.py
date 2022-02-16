@@ -99,6 +99,25 @@ class UserBO(object):
         """
         cls.set_preferences_per_project(session, user_id, project_id, cls.CLASSIF_MRU_KEY, mru)
 
+    @classmethod
+    def validate_usr(cls, session: Session, user_model: Any):
+        """
+            Validate basic rules on a user model before setting it into DB.
+            TODO: Not done in pydantic, as there are non-complying values in the DB and that would prevent reading them.
+        """
+        # name & email are mandatory by DB constraints and therefore made so by pydantic model
+        errors: List[str] = []
+        for a_field in (User.name, User.email, User.organisation, User.country):
+            # noinspection PyUnresolvedReferences
+            field_name = a_field.name
+            val = getattr(user_model, field_name)
+            if val is None:
+                continue
+            val = val.strip()
+            if len(val) <= 3:
+                errors.append('%s is too short, 3 chars minimum' % field_name)
+        assert not errors, errors
+
 
 @dataclass(init=False)
 class MinimalUserBO(DataclassAsDict):

@@ -212,13 +212,13 @@ class RightsThrower(object):
                     elif exc_val.args[0] == "Not found":
                         raise _not_found_exception
             # Re-raise
-            raise Exception(str(exc_val)).with_traceback(exc_tb)
+            return False
 
 
 class ValidityThrower(object):
     """
         Transform any AssertionError, during exit block of "with" syntax,
-        into a HTTP 422 error.
+        into an HTTP 422 error.
     """
 
     def __init__(self):
@@ -234,7 +234,7 @@ class ValidityThrower(object):
                 if exc_val.args:
                     raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc_val.args[0])
             # Re-raise
-            raise Exception(str(exc_val)).with_traceback(exc_tb)
+            return False
 
 
 class MyORJSONResponse(JSONResponse):

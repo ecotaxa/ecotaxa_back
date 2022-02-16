@@ -193,7 +193,7 @@ def update_user(user: UserModelWithRights,
         - An ordinary user cannot update anything for another user.
     """
     with UserService() as sce:
-        with RightsThrower():
+        with ValidityThrower(), RightsThrower():
             sce.update_user(current_user, user_id, user)
 
     with DBSyncService(User, User.id, user_id) as ssce: ssce.wait()
@@ -210,7 +210,7 @@ def update_user(user: UserModelWithRights,
               }
           })
 def create_user(user: UserModelWithRights = Body(...),
-                current_user: int = Depends(get_current_user)):
+                current_user: Optional[int] = Depends(get_optional_current_user)):
     """
         **Create a new user**, return **NULL upon success.**
 
@@ -220,7 +220,7 @@ def create_user(user: UserModelWithRights = Body(...),
         - An ordinary logged user cannot create another account.
     """
     with UserService() as sce:
-        with RightsThrower():
+        with ValidityThrower(), RightsThrower():
             new_user_id: UserIDT = sce.create_user(current_user, user)
 
     with DBSyncService(User, User.id, new_user_id) as ssce: ssce.wait()
@@ -2282,7 +2282,7 @@ async def put_user_file(file: UploadFile = File(..., title="File", description="
     """
         **Upload a file for the current user.**
 
-        The returned text will contain a serve-side path which is usable for some file-related operations.
+        The returned text will contain a server-side path which is usable for some file-related operations.
 
         *e.g. import.*
     """
