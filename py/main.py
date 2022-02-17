@@ -567,6 +567,7 @@ MyORJSONResponse.register(ProjectBO, ProjectModel)
 MyORJSONResponse.register(User, UserModelWithRights)
 MyORJSONResponse.register(User, MinUserModel)
 MyORJSONResponse.register(TaxonBO, TaxonModel)
+MyORJSONResponse.register(ObjectSetQueryRsp, ObjectSetQueryRsp)
 
 project_model_columns = plain_columns(ProjectModel)
 
@@ -1340,9 +1341,9 @@ name, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatu
                    window_size: Optional[int] = Query(default=None, title="Window size",
                                                       description="Allows to return only a slice of the result. Return only window_size lines.",
                                                       example="100"),
-                   current_user: Optional[int] = Depends(get_optional_current_user)) -> ObjectSetQueryRsp:
+                   current_user: Optional[int] = Depends(get_optional_current_user)) -> MyORJSONResponse:
     """
-        Returns **filtred object Ids** for the given project.
+        Returns **filtered object Ids** for the given project.
     """
     return_fields = None
     if fields is not None:
@@ -1359,9 +1360,8 @@ name, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatu
         rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
         rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
         rsp.details = details
-        # TODO: Despite the ORJSON encode above, this response is still quite slow due to many calls
-        # to def jsonable_encoder (in FastAPI encoders.py)
-        return rsp
+    # Serialize
+    return MyORJSONResponse(rsp)
 
 
 @app.post("/object_set/{project_id}/summary", operation_id="get_object_set_summary", tags=['objects'],
