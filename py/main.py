@@ -210,20 +210,27 @@ def update_user(user: UserModelWithRights,
               }
           })
 def create_user(user: UserModelWithRights = Body(...),
+                no_bot: Optional[List[str]] = Query(default=None, title="NoBot token", description="not-a-robot proof",
+                                                    example="['127.0.0.1', 'ffqsdfsdf'"),
                 current_user: Optional[int] = Depends(get_optional_current_user)):
     """
         **Create a new user**, return **NULL upon success.**
 
         🔒 Depending on logged user, different authorizations apply:
         - An administrator or user administrator can create a user.
-        - An unlogged user can self-create an account.
+        - An unlogged user can self-create an account. But must eventually provide a no-robot proof.
         - An ordinary logged user cannot create another account.
+
+        If back-end configuration for self-creation check is Google reCAPTCHA,
+        then no_bot is a pair [remote IP, reCAPTCHA response].
     """
     with UserService() as sce:
         with ValidityThrower(), RightsThrower():
-            new_user_id: UserIDT = sce.create_user(current_user, user)
 
-    with DBSyncService(User, User.id, new_user_id) as ssce: ssce.wait()
+            new_user_id: UserIDT = sce.create_user(current_user, user, no_bot)
+
+    with DBSyncService(User, User.id, new_user_id) as ssce:
+        ssce.wait()
 
 
 @app.get(
@@ -1377,7 +1384,7 @@ i.e.:
 
 - Total number of objects
 
-And optionnaly
+And optionally
 
 - Number of Validated ones
 - Number of Dubious ones

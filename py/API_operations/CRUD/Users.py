@@ -12,6 +12,7 @@ from BO.User import UserBO, UserIDT, UserIDListT
 from DB.Project import ProjectIDT
 from DB.User import User, Role, UserRole
 from helpers.DynamicLogs import get_logger
+from providers.Google import ReCAPTCHAClient
 from ..helpers.Service import Service
 
 logger = get_logger(__name__)
@@ -21,12 +22,27 @@ class UserService(Service):
     """
         Basic CRUD API_operations on User
     """
+    # Configuration keys TODO
+
     ADMIN_UPDATABLE_COLS = [User.email, User.password, User.name, User.organisation, User.active, User.country,
                             User.usercreationdate, User.usercreationreason]
 
-    def create_user(self, current_user_id: Optional[UserIDT], new_user: UserModelWithRights) -> UserIDT:
+    def create_user(self, current_user_id: Optional[UserIDT], new_user: UserModelWithRights,
+                    no_bot: List[str]) -> UserIDT:
         if current_user_id is None:
-            # Unauthenticated user tries to create an account, of course with no right at all
+            # Unauthenticated user tries to create an account
+            # Verify not a robot
+            captcha_secret, captcha_id = self.config.get("RECAPTCHASECRET"), self.config.get('RECAPTCHAID')
+            if captcha_secret and captcha_id:
+                # Basic verification on input
+                assert no_bot is not None, "reCaptcha verif needs data"
+                assert len(no_bot) == 2, 'invalid no_bot'
+                for a_str in no_bot:
+                    assert len(a_str) < 512, 'invalid no_bot'
+                verifier = ReCAPTCHAClient(captcha_id, captcha_secret)
+                error = verifier.validate(no_bot[0], no_bot[1])
+                assert error is None, error
+            # No right at all
             actions = None
         else:
             # Must be admin to create an account
