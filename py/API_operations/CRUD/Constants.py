@@ -4,8 +4,9 @@
 #
 
 from API_models.constants import Constants
-from ..helpers.Service import Service
 from DB.helpers.Postgres import text
+from ..helpers.Service import Service
+
 
 class ConstantsService(Service):
     """

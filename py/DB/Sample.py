@@ -17,7 +17,7 @@ class Sample(Model):
     # Historical (plural) name of the table
     __tablename__ = 'samples'
     sampleid = Column(INTEGER, Sequence('seq_samples'), primary_key=True)
-    projid = Column(INTEGER, ForeignKey('projects.projid'))
+    projid = Column(INTEGER, ForeignKey('projects.projid'), nullable=False)
     # i.e. sample_id from TSV
     orig_id = Column(VARCHAR(255), nullable=False)
     latitude = Column(DOUBLE_PRECISION)

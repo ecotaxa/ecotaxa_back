@@ -17,7 +17,8 @@ INI_DIR = path.join(path.dirname(__file__), "../..")
 INI_FILE = path.join(INI_DIR, "link.ini")
 
 # Optional env. variable
-ENV_KEY= "LEGACY_APP"
+ENV_KEY = "LEGACY_APP"
+
 
 def read_link():
     config = configparser.ConfigParser()
