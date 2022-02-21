@@ -9,7 +9,6 @@
 #
 # Here is just the job registering part, the rest is in GPU_Prediction class.
 #
-from os.path import join
 from pathlib import Path
 from typing import Dict
 
@@ -39,7 +38,7 @@ class PredictForProject(JobServiceBase):
         self.req = req
         self.filters = filters
         self.out_path: Path = Path("")
-        self.vault = Vault(join(self.link_src, 'vault'))
+        self.vault = Vault(self.config.vault_dir())
         self.models_dir = SavedModels(self.config)
 
     def run(self, current_user_id: UserIDT) -> PredictionRsp:

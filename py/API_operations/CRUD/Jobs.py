@@ -70,7 +70,7 @@ class JobCRUDService(Service):
         """
         # Sanity & security checks
         with self._query_for_update(current_user_id, job_id) as job_bo:
-            temp_for_job = TempDirForTasks(self.link_src)
+            temp_for_job = TempDirForTasks(self.config.jobs_dir())
             temp_dir = temp_for_job.base_dir_for(job_id)
             # Get the job in its state...
             with JobScheduler.instantiate(job_bo) as sce:
@@ -94,7 +94,7 @@ class JobCRUDService(Service):
     def get_log_path(self, current_user_id: UserIDT, job_id: JobIDT) -> Path:
         # Sanity & security checks
         job: JobBO = self.query(current_user_id, job_id)
-        temp_for_job = TempDirForTasks(self.link_src)
+        temp_for_job = TempDirForTasks(self.config.jobs_dir())
         log_file_path = temp_for_job.base_dir_for(job.id) / JobServiceBase.JOB_LOG_FILE_NAME
         return log_file_path
 
@@ -122,7 +122,7 @@ class JobCRUDService(Service):
         """
         # Security check
         with self._query_for_update(current_user_id, job_id) as job_bo:
-            temp_for_job = TempDirForTasks(self.link_src)
+            temp_for_job = TempDirForTasks(self.config.jobs_dir())
             if job_bo.state in (DBJobStateEnum.Finished, DBJobStateEnum.Error, DBJobStateEnum.Pending):
                 # TODO: Set the job to a state e.g. Trashed and erase in background, better for responsiveness
                 temp_for_job.erase_for(job_id)

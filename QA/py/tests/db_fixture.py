@@ -8,7 +8,7 @@ from tools.dbBuildSQL import EcoTaxaDBFrom0, EcoTaxaExistingDB
 
 HERE = Path(dirname(realpath(__file__)))
 PG_DIR = HERE / ".." / "pg_files"
-CONF_FILE = HERE / "appli" / "config.cfg"
+CONF_FILE = HERE / "config.ini"
 
 
 @pytest.fixture(scope="session")

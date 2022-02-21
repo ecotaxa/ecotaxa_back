@@ -41,7 +41,7 @@ class Connection(object):
     """
     APP_NAME = "ecotaxa_back"
 
-    def __init__(self, user, password, db, host, port=5432, read_only=False):
+    def __init__(self, user, password, db, host, port='5432', read_only=False):
         """
             Open a SQLAlchemy connection, i.e. an engine.
         """

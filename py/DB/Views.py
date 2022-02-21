@@ -8,7 +8,7 @@
 from typing import List
 
 from sqlalchemy import Table, text
-from sqlalchemy_views import CreateView, DropView
+from sqlalchemy_views import CreateView, DropView  # type:ignore
 
 OBJECTS_DEF = text("""select sam.projid, sam.sampleid, obh.*, obh.acquisid as processid, ofi.*
                     from obj_head obh

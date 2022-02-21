@@ -5,7 +5,7 @@
 import datetime
 import shutil
 from pathlib import Path
-from typing import Any, List, Tuple
+from typing import List, Tuple
 
 DirEntryT = Tuple[str, str, int, str]
 
@@ -15,14 +15,9 @@ class CommonFolder(object):
          The directory where files can be read by everyone.
          Pointed at by a configuration variable.
     """
-    COMMON_FOLDER_CONFIG_KEY = 'SERVERLOADAREA'
-    # Contains a subdirectory of previous
-    EXPORT_CONFIG_KEY = 'FTPEXPORTAREA'
 
-    def __init__(self, config: Any):
-        base_path = config[self.COMMON_FOLDER_CONFIG_KEY]
-        base_path = base_path.strip("'")
-        self.path: Path = Path(base_path)
+    def __init__(self, path: str):
+        self.path: Path = Path(path)
 
     def path_to(self, sub_path: str) -> str:
         """
@@ -66,13 +61,9 @@ class ExportFolder(object):
     """
          The directory where exports are produced, if asked so.
     """
-    # Contains a subdirectory of previous
-    EXPORT_CONFIG_KEY = 'FTPEXPORTAREA'
 
-    def __init__(self, config: Any):
-        base_path = config[self.EXPORT_CONFIG_KEY]
-        base_path = base_path.strip("'")
-        self.path: Path = Path(base_path)
+    def __init__(self, path: str):
+        self.path: Path = Path(path)
 
     def receive_from(self, src_path: Path, as_name: str):
         """

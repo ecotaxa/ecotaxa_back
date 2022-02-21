@@ -16,7 +16,7 @@ class SavedModels(object):
     PRFX = "io_"
 
     def __init__(self, config: Any):
-        base_path = config[self.MODELS_CONFIG_KEY]
+        base_path = config.get_cnf(self.MODELS_CONFIG_KEY)
         base_path = base_path.strip("'")
         self.path: Path = Path(base_path)
 

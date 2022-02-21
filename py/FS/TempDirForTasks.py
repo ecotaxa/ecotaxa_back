@@ -4,19 +4,16 @@
 #
 import os
 import shutil
-from os.path import join
 from pathlib import Path
 from typing import Optional, Set
 
 
 class TempDirForTasks(object):
     """
-        Base directory for storing data for all API_operations.
+        Base directory for storing data for all BG operations AKA Jobs.
     """
-    SUBDIR = 'temptask'
 
-    def __init__(self, base_path: str):
-        path = join(base_path, self.SUBDIR)
+    def __init__(self, path: str):
         self.path: Path = Path(path)
 
     def base_dir_for(self, task_id: int) -> Path:

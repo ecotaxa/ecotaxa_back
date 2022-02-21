@@ -76,7 +76,7 @@ class SimpleImport(ImportServiceBase):
         # Configure the import to come, directives
         import_how = ImportHow(prj_id=self.prj_id, update_mode="", custom_mapping=ProjectMapping(),
                                skip_object_duplicates=False, loaded_files=[])
-        import_how.do_thumbnail_above(int(self.config['THUMBSIZELIMIT']))
+        import_how.do_thumbnail_above(int(self.config.get_cnf('THUMBSIZELIMIT')))
         # Generate TSV
         req_values = self.req.values
         if req_values.get(SimpleImportFields.userlb, ""):

@@ -8,7 +8,6 @@ import csv
 import os
 import re
 import zipfile
-from os.path import join
 from pathlib import Path
 from typing import Dict, Optional, IO, Tuple
 
@@ -129,7 +128,7 @@ class ProjectExport(JobServiceBase):
         # Final copy
         if req.out_to_ftp:
             self.update_progress(progress_before_copy, "Copying file to FTP")
-            dest = ExportFolder(self.config)
+            dest = ExportFolder(self.config.export_folder())
             # Disambiguate using the job ID
             dest_name = "task_%d_%s" % (self.job_id, self.out_file_name)
             dest.receive_from(self.out_path / self.out_file_name, dest_name)
@@ -442,7 +441,7 @@ class ProjectExport(JobServiceBase):
         zfile = zipfile.ZipFile(produced_path, 'a', allowZip64=True, compression=zipfile.ZIP_DEFLATED)
 
         nb_files_added = 0
-        vault = Vault(join(self.link_src, 'vault'))
+        vault = Vault(self.config.vault_dir())
         temp_img_file = self.out_path / "images.csv"
         with open(temp_img_file, "r") as temp_images_csv_fd:
             for r in csv.DictReader(temp_images_csv_fd, delimiter='\t', quotechar='"', lineterminator='\n'):

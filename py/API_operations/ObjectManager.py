@@ -274,7 +274,7 @@ class ObjectManager(Service):
             RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, a_prj_id)
 
         # Prepare & start a remover thread that will run in // with DB queries
-        remover = VaultRemover(self.link_src, logger).do_start()
+        remover = VaultRemover(self.config, logger).do_start()
         # Do the deletion itself.
         nb_objs, nb_img_rows, img_files = obj_set.delete(self.CHUNK_SIZE, remover.add_files)
 

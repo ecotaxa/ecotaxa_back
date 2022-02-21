@@ -32,7 +32,7 @@ class JobServiceBase(Service, LogEmitter, ABC):
         super().__init__()
         super(LogEmitter, self).__init__()
         self.job_id: JobIDT = 0
-        self.temp_for_jobs = TempDirForTasks(self.link_src)
+        self.temp_for_jobs = TempDirForTasks(self.config.jobs_dir())
         # The state for multi-step jobs
         self.saved_state: Dict[str, Any] = {}
         # The last reply for interactive jobs

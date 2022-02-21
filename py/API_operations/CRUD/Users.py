@@ -32,7 +32,7 @@ class UserService(Service):
         if current_user_id is None:
             # Unauthenticated user tries to create an account
             # Verify not a robot
-            captcha_secret, captcha_id = self.config.get("RECAPTCHASECRET"), self.config.get('RECAPTCHAID')
+            captcha_secret, captcha_id = self.config.get_cnf("RECAPTCHASECRET"), self.config.get_cnf('RECAPTCHAID')
             if captcha_secret and captcha_id:
                 # Basic verification on input
                 assert no_bot is not None, "reCaptcha verif needs data"

@@ -34,6 +34,7 @@ from tests.test_jobs import wait_for_stable, check_job_ok, get_job_errors, check
     FILE_IMPORT_URL, api_check_job_errors, api_check_job_questions
 
 # All files paths are now relative to root shared directory
+TEST_DIR = Path(dirname(realpath(__file__))).resolve()
 SHARED_DIR = (Path(dirname(realpath(__file__))) / ".." / "data").resolve()
 FTP_DIR = SHARED_DIR / "ftp"
 DATA_DIR = Path("")

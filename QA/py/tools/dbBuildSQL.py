@@ -11,7 +11,7 @@ from pathlib import Path
 from lib.processes import SyncSubProcess
 import socket
 
-from tests.test_import import DATA_DIR, SHARED_DIR, FTP_DIR
+from tests.test_import import DATA_DIR, SHARED_DIR, FTP_DIR, TEST_DIR
 
 psql_bin = "psql"
 # If we already have a server don't create one, e.g. in GitHub action
@@ -66,6 +66,9 @@ class EcoTaxaDBFrom0(object):
         self.host = None
         self.shared_dir = SHARED_DIR
         self.ftp_dir = FTP_DIR
+        self.jobs_dir = TEST_DIR / "temptask"
+        self.vault_dir = TEST_DIR / "vault"
+        self.models_dir = TEST_DIR / "models"
 
     def get_env(self):
         # Return the environment for postgres subprocesses
@@ -118,12 +121,6 @@ class EcoTaxaDBFrom0(object):
         """
             Build the DB using manage CLI option.
         """
-        # The CLI uses (now) the config, so some monkey-patching is needed
-        TEST_DIR = Path(dirname(realpath(__file__))) / ".." / "tests"
-        # Import setup point
-        import helpers.link_to_legacy as link
-        link.INI_DIR = TEST_DIR
-        link.INI_FILE = TEST_DIR / "link.ini"
         import cmds.manage
 
         cmds.manage.drop(db_name=DB_NAME, password=password)
@@ -162,27 +159,32 @@ class EcoTaxaDBFrom0(object):
         self.direct_SQL(DB_PASSWORD)
 
     CONF = f"""
-DB_USER="postgres"
-DB_PASSWORD="{DB_PASSWORD}"
-DB_HOST="%s"
-DB_PORT="%d"
-DB_DATABASE="{DB_NAME}"
-RO_DB_USER="readerole"
-RO_DB_PASSWORD="Ec0t1x1Rd4"
-RO_DB_HOST="%s"
-RO_DB_PORT="%d"
-RO_DB_DATABASE="{DB_NAME}"
+[default]
+[conf]    
+DB_USER=postgres
+DB_PASSWORD={DB_PASSWORD}
+DB_HOST=%s
+DB_PORT=%d
+DB_DATABASE={DB_NAME}
+RO_DB_USER=readerole
+RO_DB_PASSWORD=Ec0t1x1Rd4
+RO_DB_HOST=%s
+RO_DB_PORT=%d
+RO_DB_DATABASE={DB_NAME}
 THUMBSIZELIMIT=99
-SECRET_KEY = 'THIS KEY MUST BE CHANGED'
-serverloadarea = "%s"
-ftpexportarea = "%s"
-SECURITY_PASSWORD_HASH="sha512_crypt"
-SECURITY_PASSWORD_SALT="PePPER"
+SECRET_KEY = THIS KEY MUST BE CHANGED
+VAULT_DIR = %s
+JOBS_DIR = %s
+SERVERLOADAREA = %s
+FTPEXPORTAREA = %s
+SECURITY_PASSWORD_HASH=sha512_crypt
+SECURITY_PASSWORD_SALT=PePPER
     """
 
     def write_config(self):
         with open(str(self.conf_file), "w") as f:
             f.write(self.CONF % (self.host, PG_PORT, self.host, PG_PORT,
+                                 self.vault_dir, self.jobs_dir,
                                  self.shared_dir, self.ftp_dir))
 
     def cleanup(self):

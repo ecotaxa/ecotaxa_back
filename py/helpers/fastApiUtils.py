@@ -25,7 +25,7 @@ from starlette.responses import JSONResponse
 # noinspection PyPackageRequirements
 from starlette.status import HTTP_403_FORBIDDEN
 
-from helpers.link_to_legacy import read_config
+from helpers.AppConfig import Config
 from .starlette import status, PlainTextResponse
 
 
@@ -128,7 +128,7 @@ def build_serializer():
     global _serializer
     if not _serializer:
         # Read from legacy app config
-        secret_key = read_config()['SECRET_KEY'][1:-1]
+        secret_key = Config().secret_key()
         # Hardcoded in Flask
         salt = b"cookie-session"
         _serializer = URLSafeTimedSerializer(secret_key=secret_key, salt=salt,

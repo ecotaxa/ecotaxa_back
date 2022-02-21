@@ -3,7 +3,6 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import shutil
-from os.path import join
 from pathlib import Path
 from typing import List, Tuple, Dict
 
@@ -51,7 +50,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         self.req = req
         # Work vars
         self.to_clone: EnumeratedObjectSet = EnumeratedObjectSet(self.session, [])
-        self.vault = Vault(join(self.link_src, 'vault'))
+        self.vault = Vault(self.config.vault_dir())
         self.first_query = True
 
     def init_args(self, args: Dict) -> Dict:

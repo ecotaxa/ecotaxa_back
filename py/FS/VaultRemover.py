@@ -7,11 +7,11 @@
 #
 from logging import Logger
 from os import unlink
-from os.path import join
 from queue import Queue
 from threading import Thread
 from typing import List, Optional
 
+from helpers.AppConfig import Config
 from helpers.Timer import CodeTimer
 from .Vault import Vault
 
@@ -21,9 +21,9 @@ class VaultRemover(Thread):
         Classical usage of a Queue to spool the job to a background task.
     """
 
-    def __init__(self, link_src: str, logger: Logger):
+    def __init__(self, config: Config, logger: Logger):
         super().__init__(name="Vault remover")
-        self.vault = Vault(join(link_src, 'vault'))
+        self.vault = Vault(config.vault_dir())
         # TODO: a collection.deque is faster
         # TODO: or store the file lists, e.g. in chunks of 10, instead of filling the queue with individual items
         self.files_queue: Queue[Optional[str]] = Queue()

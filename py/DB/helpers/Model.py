@@ -5,15 +5,16 @@
 
 # noinspection PyUnreachableCode
 if False:  # pragma: no cover
-    from sqlalchemy import Column, Table
+    from sqlalchemy import Column, Table, MetaData
     from sqlalchemy.dialects import postgresql
     from sqlalchemy.inspection import inspect
     from sqlalchemy.sql.ddl import CreateTable
+    from typing import Set, List, Union, Type
 
     from DB.helpers.ORM import Model
 
 
-    def view_of(_metadata, clazz, to_keep: Set[str]) -> ClassVar:
+    def view_of(_metadata, clazz, to_keep: Set[str]) -> Type[Model]:
         """
             Return a Model, i.e. a SQLAlchemy mapper with only the given fields.
         :param _metadata: unused
@@ -37,7 +38,7 @@ if False:  # pragma: no cover
         return Ret
 
 
-    def partial_clone_of(metadata: MetaData, clazz, to_keep: Set[str], new_pks: List[Union[str, tuple]]) -> ClassVar:
+    def partial_clone_of(metadata: MetaData, clazz, to_keep: Set[str], new_pks: List[Union[str, tuple]]) -> Type[Model]:
         """
             Return a Model, i.e. a SQLAlchemy mapper Class with only the given fields.
         :param new_pks: The new primary keys to add to produced mapper.

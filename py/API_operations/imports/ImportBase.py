@@ -4,7 +4,6 @@
 #
 import zipfile
 from abc import ABC
-from os.path import join
 from typing import Union, Dict
 
 from API_models.imports import ImportReq, SimpleImportReq
@@ -29,7 +28,7 @@ class ImportServiceBase(JobServiceOnProjectBase, ABC):
         """ The project ID to import into """
         self.req = req
         # From legacy code, vault and temptask are in src directory
-        self.vault = Vault(join(self.link_src, 'vault'))
+        self.vault = Vault(self.config.vault_dir())
 
     def init_args(self, args: Dict) -> Dict:
         super().init_args(args)
@@ -47,7 +46,7 @@ class ImportServiceBase(JobServiceOnProjectBase, ABC):
         else:
             # prevent directory escape trick
             assert ".." not in source_dir_or_zip
-            source_dir_or_zip = CommonFolder(self.config).path_to(source_dir_or_zip)
+            source_dir_or_zip = CommonFolder(self.config.common_folder()).path_to(source_dir_or_zip)
         if source_dir_or_zip.lower().endswith(".zip"):
             logger.info("SubTask : Unzip File into temporary folder")
             self.update_progress(1, "Unzip File into temporary folder")

@@ -132,7 +132,7 @@ class NightlyJobService(JobServiceBase):
         old_jobs_2 = [an_id for an_id, in old_jobs_qry_2.all()]
         to_clean = set(old_jobs).union(set(old_jobs_2))
         logger.info("About to clean %s", to_clean)
-        temp_for_job = TempDirForTasks(self.link_src)
+        temp_for_job = TempDirForTasks(self.config.jobs_dir())
         for job_id in to_clean:
             job_bo = JobBO.get_for_update(self.session, job_id)
             temp_for_job.erase_for(job_id)

@@ -82,5 +82,5 @@ class CommonFolderService(Service):
         """
         current_user = self.ro_session.query(User).get(current_user_id)
         assert current_user is not None, "Not authorized"
-        folder = CommonFolder(self.config)
+        folder = CommonFolder(self.config.common_folder())
         return UserFolderService.list_and_format(folder, sub_path)

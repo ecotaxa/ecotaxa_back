@@ -264,7 +264,7 @@ class FileImport(ImportServiceBase):
             # If we must skip existing objects then do an inventory of what's in already
             with CodeTimer("run: Existing images for %d: " % self.prj_id, logger):
                 import_how.objects_and_images_to_skip = Image.fetch_existing_images(self.session, self.prj_id)
-        import_how.do_thumbnail_above(int(self.config['THUMBSIZELIMIT']))
+        import_how.do_thumbnail_above(int(self.config.get_cnf('THUMBSIZELIMIT')))
 
         # Do the bulk job of import
         rowcount_from_validate = nb_rows

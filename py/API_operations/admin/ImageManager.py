@@ -6,7 +6,7 @@
 #
 import filecmp
 import hashlib
-from os.path import join, exists
+from os.path import exists
 from typing import Optional, Set
 
 from sqlalchemy import and_
@@ -30,7 +30,7 @@ class ImageManagerService(Service):
 
     def __init__(self):
         super().__init__()
-        self.vault = Vault(join(self.link_src, 'vault'))
+        self.vault = Vault(self.config.vault_dir())
 
     @staticmethod
     def compute_md5(fname):
@@ -136,7 +136,7 @@ class ImageManagerService(Service):
         ko_not_same = 0
         ko_except = 0
         # Prepare & start a remover thread that will run in // with DB queries
-        remover = VaultRemover(self.link_src, logger).do_start()
+        remover = VaultRemover(self.config, logger).do_start()
         filecmp.clear_cache()
         deleted_imgids: Set[int] = set()
         for orig_file_name, orig_img_id, an_image, an_image_file in to_do:

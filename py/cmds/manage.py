@@ -8,7 +8,7 @@ import typer
 from API_operations.helpers.Service import Service
 from DB.User import Role, User, Country
 from DB.Views import views_creation_queries, views_deletion_queries
-from cmds.db_upg.db_conn import app_config
+from cmds.db_upg.db_conn import app_config  # type:ignore
 from data.Countries import countries_by_name
 
 DEFAULT_ROLES = [Role.APP_ADMINISTRATOR, Role.USERS_ADMINISTRATOR, Role.PROJECT_CREATOR]
@@ -107,7 +107,7 @@ TEMPLATE=template0 LC_CTYPE='C' LC_COLLATE='C' CONNECTION LIMIT=-1;
 @db_app.command(help="Create the DB, i.e. empty shell with no table inside.")
 def create(user: str = "postgres", password: str = "", db_name: str = ""):
     super_conn = Service.build_super_connection(app_config, user, password)
-    db_create_sql = CREATE_DB_SQL % (db_name, app_config.get("DB_USER"))
+    db_create_sql = CREATE_DB_SQL % (db_name, app_config.get_cnf("DB_USER"))
     super_conn.exec_outside_transaction(db_create_sql)
 
 
@@ -124,6 +124,7 @@ def build():
     sess = conn.get_session()
     from DB import Project
 
+    # It's the same metadata object for the whole app, so pick one
     meta = Project.metadata
 
     # Create the tables

@@ -26,7 +26,7 @@ class LoginService(Service):
     def __init__(self):
         super().__init__()
         # Hashing algos
-        pw_hash = self.config.get("SECURITY_PASSWORD_HASH")
+        pw_hash = self.config.get_cnf("SECURITY_PASSWORD_HASH")
         assert pw_hash is not None, "SECURITY_PASSWORD_HASH not set!"
         schemes = [pw_hash, 'plaintext']
         deprecated = ['auto']
@@ -35,7 +35,7 @@ class LoginService(Service):
             default=pw_hash,
             deprecated=deprecated)
         # Hashing config
-        self.password_salt = self.config.get("SECURITY_PASSWORD_SALT")
+        self.password_salt = self.config.get_cnf("SECURITY_PASSWORD_SALT")
         self.password_hash = None
 
     def validate_login(self, username: str, password: str) -> str:
@@ -89,7 +89,7 @@ class LoginService(Service):
             password = self.get_hmac(password).decode('ascii')
 
         return self._pwd_context.hash(password)
-        #     **self.config.get('PASSWORD_HASH_OPTIONS', default={}).get(
+        #     **self.config.get_cnf('PASSWORD_HASH_OPTIONS', default={}).get(
         #         self.password_hash, {})
         # )
 
@@ -122,7 +122,7 @@ class LoginService(Service):
 
     def use_double_hash(self, password_hash=None):
         """Return a bool indicating whether a password should be hashed twice."""
-        single_hash = 'PASSWORD_SINGLE_HASH' in self.config  # Not the case in EcoTaxa config
+        single_hash = 'PASSWORD_SINGLE_HASH' in self.config.list_cnf()  # Not the case in EcoTaxa config
         if single_hash and self.password_salt:
             raise RuntimeError('You may not specify a salt with '
                                'SECURITY_PASSWORD_SINGLE_HASH')  # pragma:nocover

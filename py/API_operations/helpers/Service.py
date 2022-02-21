@@ -3,12 +3,13 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import os
+from typing import Optional
 
 from sqlalchemy import event
 from sqlalchemy.orm import Session
 
 from DB.helpers.Connection import Connection, check_sqlalchemy_version
-from helpers.link_to_legacy import read_config, read_link
+from helpers.AppConfig import Config
 
 
 class BaseService(object):
@@ -61,28 +62,20 @@ class Service(BaseService):
             filesystem conventions
             logs redirection
     """
-    the_config = None
-    the_link = None
-    the_connection = None
-    the_readonly_connection = None
+    the_config: Optional[Config] = None
+    the_connection: Optional[Connection] = None
+    the_readonly_connection: Optional[Connection] = None
 
-    __slots__ = ["session", "ro_session", "config", "link_src"]
+    __slots__ = ["session", "ro_session", "config"]
 
     def __init__(self):
         # Use a single configuration
         if not Service.the_config:
-            config = read_config()
+            config: Config = Config()
             Service.the_config = config
         else:
             config = Service.the_config
-        self.config = config
-        # And a single link
-        if not Service.the_link:
-            link_src = read_link()
-            Service.the_link = link_src
-        else:
-            link_src = Service.the_link
-        self.link_src = link_src
+        self.config: Config = config
         # Use a single r/w connection
         if not Service.the_connection:
             check_sqlalchemy_version()
@@ -92,7 +85,7 @@ class Service(BaseService):
             conn = Service.the_connection
         # Use a single read-only connection, with fallback to the r/w one
         if not Service.the_readonly_connection:
-            if 'RO_DB_HOST' in config:
+            if 'RO_DB_HOST' in config.list_cnf():
                 ro_conn = self.build_connection(config, True)
             else:
                 ro_conn = conn
@@ -111,25 +104,25 @@ class Service(BaseService):
             self.ro_session = self.session
 
     @staticmethod
-    def build_connection(config, read_only=False):
+    def build_connection(config: Config, read_only: bool = False):
         """
             Read a connection from the configuration.
         """
         prfx = "RO_" if read_only else ""
-        port = config.get(prfx + 'DB_PORT', '5432')
-        host = _turn_localhost_for_docker(config[prfx + 'DB_HOST'], port)
-        conn = Connection(host=host, port=port, db=config[prfx + 'DB_DATABASE'],
-                          user=config[prfx + 'DB_USER'], password=config[prfx + 'DB_PASSWORD'],
+        port = config.get_cnf(prfx + 'DB_PORT', '5432')
+        host = _turn_localhost_for_docker(config.get_cnf(prfx + 'DB_HOST'), port)
+        conn = Connection(host=host, port=port, db=config.get_cnf(prfx + 'DB_DATABASE'),
+                          user=config.get_cnf(prfx + 'DB_USER'), password=config.get_cnf(prfx + 'DB_PASSWORD'),
                           read_only=read_only)
         return conn
 
     @staticmethod
-    def build_super_connection(config, user, password):
+    def build_super_connection(config: Config, user: str, password: str):
         """
             Build a super-user connection from the configuration, directly to the DB server.
         """
-        port = config.get('DB_PORT', 5432)
-        host = _turn_localhost_for_docker(config['DB_HOST'], port)
+        port = config.get_cnf('DB_PORT', '5432')
+        host = _turn_localhost_for_docker(config.get_cnf('DB_HOST'), port)
         conn = Connection(host=host, port=port, db="postgres",
                           user=user, password=password,
                           read_only=False)

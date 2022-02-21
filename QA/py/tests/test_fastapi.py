@@ -136,13 +136,13 @@ def test_error(fastapi):
     assert "--- BACK-END ---" in response.content.decode("utf-8")
 
 
-def test_status(fastapi):
+def test_status(config, database, fastapi):
     # We need a test client which does not catch exceptions
     url = "/status"
     response = fastapi.get(url, headers=USER_AUTH)
     assert response.status_code == status.HTTP_200_OK
     # Random check of one entry
-    assert "ftpexportarea" in response.content.decode("utf-8")
+    assert "FTPEXPORTAREA" in response.content.decode("utf-8")
 
 
 PRJ_CREATE_URL = "/projects/create"

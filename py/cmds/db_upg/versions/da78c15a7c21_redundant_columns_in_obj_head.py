@@ -7,7 +7,7 @@ Create Date: 2021-01-27 11:45:25.507105
 """
 
 # revision identifiers, used by Alembic.
-from db_upg.versions.a74a857fe352_no_dup_fk_in_objects import OBJECTS_DDL_a74a857fe352
+from db_upg.versions.a74a857fe352_no_dup_fk_in_objects import OBJECTS_DDL_a74a857fe352  # type:ignore
 
 revision = 'da78c15a7c21'
 down_revision = 'a74a857fe352'
@@ -38,6 +38,7 @@ update images img
  where imi.imgid = img.imgid
    and imi.nextrank != imi.imgrank;
 """
+
 
 def upgrade():
     op.execute('drop view objects')
