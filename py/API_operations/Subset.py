@@ -4,7 +4,7 @@
 #
 import shutil
 from pathlib import Path
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Set
 
 from API_models.subset import SubsetReq, SubsetRsp, LimitMethods, GroupDefinitions
 from BO.Bundle import InBundle
@@ -52,6 +52,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         self.to_clone: EnumeratedObjectSet = EnumeratedObjectSet(self.session, [])
         self.vault = Vault(self.config.vault_dir())
         self.first_query = True
+        self.images_per_orig_id: Dict[str, Set[int]] = {}
 
     def init_args(self, args: Dict) -> Dict:
         super().init_args(args)
@@ -122,7 +123,8 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
                                custom_mapping=ProjectMapping(),
                                skip_object_duplicates=False, loaded_files=[])
         # Get parent (enclosing) Sample, Acquisition. There should be 0 in this context as the project is new.
-        import_how.existing_parents = InBundle.fetch_existing_parents(self.session, prj_id=dest_prj_id)
+        import_how.existing_samples, import_how.existing_acquisitions = \
+            InBundle.fetch_existing_parents(self.session, prj_id=dest_prj_id)
 
         self._clone_all(import_how, writer)
         # Copy mappings to destination. We could narrow them to the minimum?
@@ -150,7 +152,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
 
         return ret.all()
 
-    def _clone_all(self, import_how, writer):
+    def _clone_all(self, import_how: ImportHow, writer):
 
         # Bean counting init
         nb_objects = 0
@@ -185,9 +187,8 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             bean_of(obj_orm), bean_of(fields_orm), bean_of(cnn_features_orm), \
             bean_of(image_orm), bean_of(sample_orm), \
             bean_of(acquisition_orm), bean_of(process_orm)
+        # Minimum is object + fields
         assert obj is not None and fields is not None
-        # A few fields need adjustment
-        obj.img0id = None
         # Write parent entities
         assert sample and acquisition and process
         dict_of_parents = {Sample.__tablename__: sample,
@@ -203,7 +204,9 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         writer.add_db_entities(obj, fields, image, new_records)
         # Keep track of existing objects
         if new_records > 1:
+            self.images_per_orig_id[obj.orig_id] = set()
             # We now have an Id from sequences, so ref. it.
+            # this is needed for proper detection of subsequent images when there are 1+
             import_how.existing_objects[obj.orig_id] = obj.objid
             if cnn_features is not None:
                 writer.add_cnn_features(obj, cnn_features)
@@ -228,6 +231,11 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
                     image.thumb_file_name = thumb_relative_path
                 except FileNotFoundError:
                     logger.error("Could not duplicate thumbnail %s, not found", old_imgpath)
+            # Some imgrank are rotten, and the DB does not enforce unicity per object
+            images_for_obj = self.images_per_orig_id[obj.orig_id]
+            if image.imgrank in images_for_obj:
+                image.imgrank = max(images_for_obj)+1
+            images_for_obj.add(image.imgrank)
 
     def _find_what_to_clone(self):
         """
