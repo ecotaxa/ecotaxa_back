@@ -144,8 +144,7 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
         does_it_work: MergeRsp = sce.run(ADMIN_USER_ID)
     assert does_it_work.errors == []
 
-    # TODO:The merge introduces duplicates, so below fails
-    # check_project(prj_id)
+    check_project(prj_id)
 
     # Dump the subset which should be just gone
     with open(SUBS_AFTER_MERGE_JSON, "w") as fd:

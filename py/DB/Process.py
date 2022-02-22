@@ -2,14 +2,10 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Dict
 
 from .Acquisition import Acquisition
-from .Project import Project
-from .Sample import Sample
-from .helpers import Session
 from .helpers.DDL import Column, ForeignKey
-from .helpers.ORM import Model, Query
+from .helpers.ORM import Model
 from .helpers.ORM import relationship
 from .helpers.Postgres import VARCHAR, INTEGER
 
@@ -30,16 +26,6 @@ class Process(Model):
 
     def pk(self) -> int:
         return self.processid
-
-    @classmethod
-    def get_orig_id_and_model(cls, session: Session, prj_id) -> Dict[str, 'Process']:
-        res: Query = session.query(Process)
-        res = res.join(Acquisition)
-        res = res.join(Sample)
-        res = res.join(Project)
-        res = res.filter(Project.projid == prj_id)
-        ret = {r.orig_id: r for r in res}
-        return ret
 
     def __str__(self):
         return "{0} ({1})".format(self.orig_id, self.processid)

@@ -101,23 +101,23 @@ class MergeService(Service, LogEmitter):
             self.dest_augmented_mappings.by_table[a_tbl].load_from(aug)
 
         # Also check problems on consistency of unique orig_id
-        dest_parents = InBundle.fetch_existing_parents(self.ro_session, prj_id=self.prj_id)
-        src_parents = InBundle.fetch_existing_parents(self.ro_session, prj_id=self.src_prj_id)
+        src_samples, src_acquisitions = InBundle.fetch_existing_parents(self.ro_session, prj_id=self.src_prj_id)
+        dest_samples, dest_acquisitions = InBundle.fetch_existing_parents(self.ro_session, prj_id=self.prj_id)
 
-        for an_orig_id_container in [Sample.__tablename__, Acquisition.__tablename__]:
-            # key=orig_id value, value=full record
-            dest_orig_ids = dest_parents[an_orig_id_container]
-            src_orig_ids = src_parents[an_orig_id_container]
-            common_orig_ids = set(dest_orig_ids.keys()).intersection(src_orig_ids.keys())
+        def verif(container: str, src_entities: Dict, dest_entities: Dict):
+            common_orig_ids = set(dest_entities.keys()).intersection(src_entities.keys())
             if len(common_orig_ids) != 0:
-                logger.info("Common %s orig_ids: %s", an_orig_id_container, common_orig_ids)
+                logger.info("Common %s orig_ids: %s", container, common_orig_ids)
             for common_orig_id in common_orig_ids:
-                orm_diff = orm_equals(dest_orig_ids[common_orig_id], src_orig_ids[common_orig_id])
+                orm_diff = orm_equals(dest_entities[common_orig_id], src_entities[common_orig_id])
                 if orm_diff:
                     msg = ("Data conflict: %s record with orig_id '%s' is different in destination project: %s"
-                           % (an_orig_id_container, common_orig_id, str(orm_diff)))
+                           % (container, common_orig_id, str(orm_diff)))
                     # TODO: Should be an error?
                     logger.warning(msg)
+
+        verif(Sample.__tablename__, src_samples, dest_samples)
+        verif(Acquisition.__tablename__, src_acquisitions, dest_acquisitions)
         return ret
 
     def _do_merge(self, dest_prj: Project):
@@ -133,12 +133,12 @@ class MergeService(Service, LogEmitter):
                 ProjectBO.remap(self.session, self.src_prj_id, a_mapped_tbl, remaps)
 
         # Collect orig_id
-        dest_parents = InBundle.fetch_existing_parents(self.ro_session, prj_id=self.prj_id)
-        src_parents = InBundle.fetch_existing_parents(self.ro_session, prj_id=self.src_prj_id)
+        src_samples, src_acquisitions = InBundle.fetch_existing_parents(self.ro_session, prj_id=self.src_prj_id)
+        dest_samples, dest_acquisitions = InBundle.fetch_existing_parents(self.ro_session, prj_id=self.prj_id)
 
         # Compute needed projections in order to keep orig_id unicity
-        common_samples = self.get_ids_for_common_orig_id(Sample, dest_parents, src_parents)
-        common_acquisitions = self.get_ids_for_common_orig_id(Acquisition, dest_parents, src_parents)
+        common_samples = self.get_ids_for_common_orig_id(dest_samples, src_samples)
+        common_acquisitions = self.get_ids_for_common_orig_id(dest_acquisitions, src_acquisitions)
 
         # Align foreign keys, to Project, Sample and Acquisition
         for a_fk_to_proj_tbl in [Sample, Acquisition, ObjectHeader]:
@@ -147,7 +147,7 @@ class MergeService(Service, LogEmitter):
                 # Move (i.e. change project) samples which are 'new' from merged project,
                 #    so take all of them from src project...
                 upd = upd.filter(a_fk_to_proj_tbl.projid == self.src_prj_id)  # type: ignore
-                # ...but not the ones with same orig_id, which are presumably equal.
+                # ...but not the ones with same orig_id, which will be merged below with Acquisition
                 upd = upd.filter(Sample.sampleid != all_(list(common_samples.keys())))
                 # And update the column
                 upd_values = {'projid': self.prj_id}
@@ -165,7 +165,7 @@ class MergeService(Service, LogEmitter):
                     upd_values = {'acq_sample_id': func.coalesce(smp_subqry.scalar_subquery(),  # type: ignore
                                                                  Acquisition.acq_sample_id)}
                     upd = upd.filter(Acquisition.acq_sample_id == any_(list(common_samples.keys())))
-                    # upd = upd.filter(Acquisition.acquisid != all_(list(common_acquisitions.keys())))
+                    upd = upd.filter(Acquisition.acquisid != all_(list(common_acquisitions.keys())))
                 if len(common_samples) == 0:
                     # Nothing to do. There were only new samples, all of them moved to self.
                     continue
@@ -216,7 +216,7 @@ class MergeService(Service, LogEmitter):
         ProjectBO.delete(self.session, self.src_prj_id)
 
     @staticmethod
-    def get_ids_for_common_orig_id(a_parent_class, dest_parents, src_parents) -> \
+    def get_ids_for_common_orig_id(dst_orig_ids, src_orig_ids) -> \
             Dict[Union[SampleIDT, AcquisitionIDT], Union[SampleIDT, AcquisitionIDT]]:
         """
             Return a link between IDs for resolving colliding orig_id.
@@ -229,8 +229,6 @@ class MergeService(Service, LogEmitter):
         :return:
         """
         ret = {}
-        dst_orig_ids = dest_parents[a_parent_class.__tablename__]
-        src_orig_ids = src_parents[a_parent_class.__tablename__]
         common_orig_ids = set(dst_orig_ids.keys()).intersection(src_orig_ids.keys())
         for a_common_orig_id in common_orig_ids:
             src_orig_id = src_orig_ids[a_common_orig_id].pk()

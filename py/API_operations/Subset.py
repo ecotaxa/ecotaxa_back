@@ -121,7 +121,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         import_how = ImportHow(prj_id=dest_prj_id, update_mode="No",
                                custom_mapping=ProjectMapping(),
                                skip_object_duplicates=False, loaded_files=[])
-        # Get parent (enclosing) Sample, Acquisition, Process. There should be 0 in this context...
+        # Get parent (enclosing) Sample, Acquisition. There should be 0 in this context as the project is new.
         import_how.existing_parents = InBundle.fetch_existing_parents(self.session, prj_id=dest_prj_id)
 
         self._clone_all(import_how, writer)

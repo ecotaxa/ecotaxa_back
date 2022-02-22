@@ -4,11 +4,12 @@
 #
 import time
 from pathlib import Path
-from typing import List, Set, Dict, Optional, Callable
+from typing import List, Set, Dict, Optional, Callable, Tuple
 
-from BO.Mappings import ProjectMapping, ParentTableT
+from BO.Mappings import ProjectMapping
 from BO.ProjectTidying import ProjectTopology
 from BO.Vignette import VignetteMaker
+from DB import Acquisition, Sample
 from DB.helpers.DBWriter import DBWriter
 from FS.Vault import Vault
 
@@ -79,8 +80,8 @@ class ImportHow(object):
         self.found_taxa: Dict[str, Optional[int]] = {}
         # Collected during RealImport
         # e.g. { 'samples': { 'm106_mn01_n2': <Sample object at xxxx> } }
-        # TODO: Process is not really needed anymore
-        self.existing_parents: Dict[str, Dict[str, ParentTableT]] = {}
+        self.existing_samples: Dict[str, Sample] = {}
+        self.existing_acquisitions: Dict[Tuple[str, str], Acquisition] = {}
         # e.g. { 'm106_mn01_n1_sml_409': 1455263 }
         self.existing_objects: Dict[str, int] = {}
         # The generated/from TSV image ranks.

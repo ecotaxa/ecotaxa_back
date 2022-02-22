@@ -13,10 +13,10 @@ from typing import Dict, Set, Any, Mapping, Tuple, ClassVar, Optional, cast
 # noinspection PyPackageRequirements
 from PIL import Image as PIL_Image  # type: ignore
 
-from BO.Mappings import GlobalMapping, ProjectMapping, ParentTableT, ParentTableClassT
+from BO.Mappings import GlobalMapping, ProjectMapping, ParentTableClassT
 from BO.SpaceTime import compute_sun_position, USED_FIELDS_FOR_SUNPOS
 from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
-from DB import Process, Acquisition
+from DB import Sample, Process, Acquisition
 from DB.Object import classif_qual_revert, ObjectHeader, ObjectFields
 from DB.Project import ProjectIDT
 from DB.helpers import Session
@@ -264,72 +264,71 @@ class TSVFile(object):
         """
         assert not how.can_update_only
 
-        upper_level_pk = how.prj_id
-        upper_level_created = True
+        # The data from TSV, to write. Eventually just an empty dict, but still a dict.
+        dict_to_write = dicts_to_write[Sample.__tablename__]
+        sample_orig_id = dict_to_write.get("orig_id")
+        if sample_orig_id is None:  # No orig_id for the sample in provided dict
+            sample_orig_id = '__DUMMY_ID__%d__' % how.prj_id
+            # And inject the value for creation if needed
+            dict_to_write["orig_id"] = sample_orig_id
+        # Look for the sample by its (eventually amended) orig_id
+        sample_before = how.existing_samples.get(sample_orig_id)
+        if sample_before is not None:
+            # Existing sample, store its PK for the Acquisition
+            sample_pk = sample_before.pk()
+        else:
+            # Create a new sample
+            new_sample = TSVFile.create_parent(session, dict_to_write, how.prj_id, Sample)
+            # Store sample object for later reference, but detach it from ORM,
+            # otherwise a simple call to .pk() provokes a select :(
+            how.existing_samples[sample_orig_id] = detach_from_session(session, new_sample)
+            # Store current PK for next iteration
+            sample_pk = new_sample.pk()
+            # Log the appeared sample
+            logger.info("++ ID sample %s %d", sample_orig_id, sample_pk)
 
-        # Loop up->down, i.e. Sample to Process
-        parent_class: ParentTableClassT
-        for alias, parent_class in GlobalMapping.PARENT_CLASSES.items():
-            # The data from TSV, to write. Eventually just an empty dict, but still a dict.
-            dict_to_write = dicts_to_write[alias]
+        # The data from TSV, to write. Eventually just an empty dict, but still a dict.
+        dict_to_write = dicts_to_write[Acquisition.__tablename__]
+        acquis_orig_id = dict_to_write.get("orig_id")
+        if acquis_orig_id is None:  # No orig_id for acquisition in provided dict
+            acquis_orig_id = '__DUMMY_ID__%d__' % sample_pk
+            # And inject the value for creation if needed
+            dict_to_write["orig_id"] = acquis_orig_id
+        # Look for the acquisition by its (eventually amended) orig_id
+        acquis_before = how.existing_acquisitions.get((sample_orig_id, acquis_orig_id))
+        if acquis_before is not None:
+            # Existing acquisition, in the same sample, store its PK for the Process & object
+            acquis_pk = acquis_before.pk()
+            upper_level_created = False
+        else:
+            # Acquisition does not exist with this orig_id inside the sample
+            dict_to_write["acq_sample_id"] = sample_pk
+            new_acquis = TSVFile.create_parent(session, dict_to_write, how.prj_id, Acquisition)
+            # Store acquisition object for later reference, but detach it from ORM,
+            # otherwise the simple call to .pk() below provokes a select :(
+            how.existing_acquisitions[(sample_orig_id, acquis_orig_id)] = detach_from_session(session, new_acquis)
+            # Store current PK for following level
+            acquis_pk = new_acquis.pk()
+            upper_level_created = True
+            # Log the appeared parent
+            logger.info("++ ID acquisition %s %d", acquis_orig_id, acquis_pk)
 
-            if parent_class != Process:
-                # We care about Sample & Acquisition orig_id
-                parent_orig_id = dict_to_write.get("orig_id")
-                if parent_orig_id is None:
-                    # No orig_id for parent object in provided dict
-                    # Default with present parent's parent technical ID
-                    parent_orig_id = '__DUMMY_ID__%d__' % upper_level_pk
-                    # And inject the value for creation if needed
-                    dict_to_write["orig_id"] = parent_orig_id
-                # Look for the parent by its (eventually amended) orig_id
-                parents_for_obj: Dict[str, ParentTableT] = how.existing_parents[alias]
-                parent = parents_for_obj.get(parent_orig_id)
+        # Set parent of object
+        object_head_to_write.acquisid = acquis_pk
 
-                if parent is not None:
-                    # If we create upper level e.g. Sample then we must create lower level Acquisition
-                    # Otherwise it means that unicity per orig_id is broken
-                    if parent_class == Acquisition:
-                        assert not upper_level_created, (
-                                "Cannot add existing acquisition '%s' under just created sample %s."
-                                "It would mean that the acquisition is shared between samples,"
-                                " which is not physically possible"
-                                % (parent_orig_id, upper_level_pk))
-                    # This parent object was known before, don't add it into the session (DB)
-                    # but link the child object_head to it (like newly created ones below)
-                    # Store current PK for next iteration
-                    upper_level_pk = parent.pk()
-                    upper_level_created = False
-                else:
-                    if parent_class == Acquisition:
-                        dict_to_write["acq_sample_id"] = upper_level_pk
-                    parent = TSVFile.create_parent(session, dict_to_write, how.prj_id, parent_class)
-                    # Store parent object for later reference.
-                    # Detach it from ORM otherwise the simple parent.pk() below provokes a select :(
-                    parents_for_obj[parent_orig_id] = detach_from_session(session, parent)
-                    # Store current PK for next iteration
-                    upper_level_pk = parent.pk()
-                    upper_level_created = True
-                    # Log the appeared parent
-                    logger.info("++ ID %s %s %d", alias, parent_orig_id, upper_level_pk)
-
-                if parent_class == Acquisition:
-                    # Set parent of object
-                    object_head_to_write.acquisid = upper_level_pk
-            else:
-                # Process is a twin table of Acquisition, its orig_id can be anything so no check to do.
-                if not upper_level_created:
-                    continue
-                # If enclosing Acquisition was just created then create process
-                assert upper_level_pk
-                dict_to_write["processid"] = upper_level_pk
-                # Ensure an orig_id exists, as it's local we don't really need the composition but it doesn't hurt
-                if dict_to_write.get("orig_id") is None:
-                    dict_to_write["orig_id"] = '__DUMMY_ID__%d__' % upper_level_pk
-                parent = TSVFile.create_parent(session, dict_to_write, how.prj_id, parent_class)
-                assert parent is not None
-                # Log the appeared parent
-                logger.info("++ ID %s %s %d", alias, parent.orig_id, upper_level_pk)
+        # Process is a twin table of Acquisition, its orig_id can be anything so no check to do.
+        if not upper_level_created:
+            # _only if_ enclosing Acquisition was just created then create process
+            return
+        dict_to_write = dicts_to_write[Process.__tablename__]  # The data from TSV, to write.
+        dict_to_write["processid"] = acquis_pk
+        # Ensure an orig_id exists, as it's local we don't really need the composition but it doesn't hurt
+        if dict_to_write.get("orig_id") is None:
+            dict_to_write["orig_id"] = '__DUMMY_ID__%d__' % acquis_pk
+        new_process = TSVFile.create_parent(session, dict_to_write, how.prj_id, Process)
+        assert new_process is not None
+        # Log the appeared process
+        logger.info("++ ID process %s %d", new_process.orig_id, acquis_pk)
 
     @staticmethod
     def create_parent(session: Session, dict_to_write, prj_id: ProjectIDT, parent_class):
@@ -353,6 +352,7 @@ class TSVFile(object):
         """
         assert how.can_update_only
         upper_level_pk = how.prj_id
+        upper_level_orig_id = ""
         # Loop up->down, i.e. Sample to Process
         parent_class: ParentTableClassT
         for alias, parent_class in GlobalMapping.PARENT_CLASSES.items():
@@ -367,14 +367,18 @@ class TSVFile(object):
                     # Default with present parent's parent technical ID
                     parent_orig_id = '__DUMMY_ID__%d__' % upper_level_pk
                 # Look for the parent by its (eventually amended) orig_id
-                parents_for_obj: Dict[str, ParentTableT] = how.existing_parents[alias]
-                parent = parents_for_obj.get(parent_orig_id)
+                if parent_class == Sample:
+                    parent = how.existing_samples.get(parent_orig_id)
+                else:
+                    # Acquisition
+                    parent = how.existing_acquisitions.get((upper_level_orig_id, parent_orig_id))
                 if parent is None:
-                    # No parent found to update, thus we cannot locate children, as there
+                    # No parent found for update, thus we cannot locate children, as there
                     # is an implicit relationship just by the fact that the 3 are on the same line
                     break
                 # Collect the PK for children in case we need to use a __DUMMY
                 upper_level_pk = parent.pk()
+                upper_level_orig_id = parent_orig_id
             else:
                 # Fetch the process from DB
                 parent = session.query(Process).get(upper_level_pk)

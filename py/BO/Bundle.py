@@ -8,13 +8,13 @@ import shutil
 import zipfile
 from pathlib import Path
 # noinspection PyPackageRequirements
-from typing import Callable, List, Dict
+from typing import Callable, List, Dict, Tuple
 
-from BO.Mappings import GlobalMapping, ParentTableClassT, ParentTableT
 from BO.TSVFile import TSVFile
 from BO.Taxonomy import TaxonomyBO
 from BO.Vignette import VignetteMaker
 from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
+from DB import Sample, Acquisition
 from DB.Image import Image
 from DB.Object import ObjectHeader
 from DB.helpers import Session
@@ -65,11 +65,10 @@ class InBundle(object):
         stats = ImportStats(rowcount, report_def)
         # Borrow session from writer
         session = where.db_writer.session
-        # Get parent (enclosing) Sample, Acquisition, Process, if any
-        how.existing_parents = self.fetch_existing_parents(session, prj_id=how.prj_id)
-        for alias, _clazz in GlobalMapping.PARENT_CLASSES.items():
-            log_line = {v.orig_id: v.pk() for k, v in how.existing_parents[alias].items()}
-            logger.info("existing %s = %s", alias, log_line)
+        # Get structural parents, enclosing Sample and Acquisition
+        how.existing_samples, how.existing_acquisitions = self.fetch_existing_parents(session, prj_id=how.prj_id)
+        logger.info("existing samples = %s", list(how.existing_samples.keys()))
+        logger.info("existing acquisitions = %s", list(how.existing_acquisitions.keys()))
         # The created objects (unicity from object_id in TSV, orig_id in model)
         how.existing_objects = self.fetch_existing_objects(session, prj_id=how.prj_id)
         # The stored images (unicity for object ID + rank)
@@ -137,18 +136,14 @@ class InBundle(object):
         return ObjectHeader.fetch_existing_ranks(session, prj_id)
 
     @staticmethod
-    def fetch_existing_parents(session, prj_id) -> Dict[str, Dict[str, ParentTableT]]:
+    def fetch_existing_parents(session, prj_id) -> Tuple[Dict[str, Sample], Dict[Tuple[str, str], Acquisition]]:
         """
             Get from DB the present ORM instances for the tables we are going to update,
             in current project.
         """
-        existing_parents = {}
-        # Get records from acquisition, sample, process
-        clazz: ParentTableClassT
-        for alias, clazz in GlobalMapping.PARENT_CLASSES.items():
-            collect = clazz.get_orig_id_and_model(session, prj_id)
-            existing_parents[alias] = collect
-        return existing_parents  # type: ignore
+        ret = (Sample.get_orig_id_and_model(session, prj_id),
+               Acquisition.get_orig_id_and_model(session, prj_id))
+        return ret
 
     def validate_import(self, how: ImportHow, diag: ImportDiagnostic, session: Session, report_def: Callable) -> int:
         """

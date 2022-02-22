@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Dict
+from typing import Dict, Tuple
 
 # noinspection PyProtectedMember
 from sqlalchemy.orm import relationship, Session
@@ -37,12 +37,12 @@ class Acquisition(Model):
         return self.acquisid
 
     @classmethod
-    def get_orig_id_and_model(cls, session: Session, prj_id) -> Dict[str, 'Acquisition']:
-        res: Query = session.query(Acquisition)
+    def get_orig_id_and_model(cls, session: Session, prj_id) -> Dict[Tuple[str, str], 'Acquisition']:
+        res: Query = session.query(Acquisition, Sample.orig_id)
         res = res.join(Sample)
         res = res.join(Project)
         res = res.filter(Project.projid == prj_id)
-        ret = {r.orig_id: r for r in res}
+        ret = {(sample_orig_id, r.orig_id): r for r, sample_orig_id in res}
         return ret
 
     def __str__(self):
