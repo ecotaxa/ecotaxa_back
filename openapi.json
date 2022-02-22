@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.25"
+    "version":"0.0.26"
   },
   "servers":[
     {
@@ -65,8 +65,23 @@
           "users"
         ],
         "summary":"Get Users",
-        "description":"Returns the list of **all users** with their information. \n\n🔒 *For admins only.*",
+        "description":"Returns the list of **all users** with their full information, or just some of them if their ids\nare provided.\n\n🔒 *For admins only.*",
         "operationId":"get_users",
+        "parameters":[
+          {
+            "description":"String containing the list of one or more id separated by non-num char. \n \n **If several ids are provided**, one full info is returned per user.",
+            "required":false,
+            "schema":{
+              "title":"Ids",
+              "type":"string",
+              "description":"String containing the list of one or more id separated by non-num char. \n \n **If several ids are provided**, one full info is returned per user.",
+              "default":""
+            },
+            "example":"1",
+            "name":"ids",
+            "in":"query"
+          }
+        ],
         "responses":{
           "200":{
             "description":"Successful Response",
@@ -76,8 +91,18 @@
                   "title":"Response Get Users Users Get",
                   "type":"array",
                   "items":{
-                    "$ref":"#/components/schemas/UserModel"
+                    "$ref":"#/components/schemas/UserModelWithRights"
                   }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -105,6 +130,178 @@
               "application/json":{
                 "schema":{
                   "$ref":"#/components/schemas/UserModelWithRights"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/users/{user_id}":{
+      "get":{
+        "tags":[
+          "users"
+        ],
+        "summary":"Get User",
+        "description":"Returns **information about the user** corresponding to the given id.",
+        "operationId":"get_user",
+        "parameters":[
+          {
+            "description":"Internal, the unique numeric id of this user.",
+            "required":true,
+            "schema":{
+              "title":"User Id",
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this user."
+            },
+            "example":1,
+            "name":"user_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/MinUserModel"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      },
+      "put":{
+        "tags":[
+          "users"
+        ],
+        "summary":"Update User",
+        "description":"**Update the user**, return **NULL upon success.**\n\n🔒 Depending on logged user, different authorizations apply:\n- An administrator or user administrator can change any field with respect of consistency.\n- A user can update own password and mail.\n- An ordinary user cannot update anything for another user.",
+        "operationId":"update_user",
+        "parameters":[
+          {
+            "description":"Internal, numeric id of the user.",
+            "required":true,
+            "schema":{
+              "title":"User Id",
+              "type":"integer",
+              "description":"Internal, numeric id of the user."
+            },
+            "example":760,
+            "name":"user_id",
+            "in":"path"
+          }
+        ],
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/UserModelWithRights"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{},
+                "example":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/users/create":{
+      "post":{
+        "tags":[
+          "users"
+        ],
+        "summary":"Create User",
+        "description":"**Create a new user**, return **NULL upon success.**\n\n🔒 Depending on logged user, different authorizations apply:\n- An administrator or user administrator can create a user.\n- An unlogged user can self-create an account. But must eventually provide a no-robot proof.\n- An ordinary logged user cannot create another account.\n\nIf back-end configuration for self-creation check is Google reCAPTCHA,\nthen no_bot is a pair [remote IP, reCAPTCHA response].",
+        "operationId":"create_user",
+        "parameters":[
+          {
+            "description":"not-a-robot proof",
+            "required":false,
+            "schema":{
+              "title":"NoBot token",
+              "type":"array",
+              "items":{
+                "type":"string"
+              },
+              "description":"not-a-robot proof"
+            },
+            "example":"['127.0.0.1', 'ffqsdfsdf'",
+            "name":"no_bot",
+            "in":"query"
+          }
+        ],
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/UserModelWithRights"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{},
+                "example":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -285,7 +482,7 @@
                   "title":"Response Search User Users Search Get",
                   "type":"array",
                   "items":{
-                    "$ref":"#/components/schemas/UserModel"
+                    "$ref":"#/components/schemas/MinUserModel"
                   }
                 }
               }
@@ -315,7 +512,7 @@
           "users"
         ],
         "summary":"Get Users Admins",
-        "description":"**List users administrators**, themselves being users.",
+        "description":"**List users administrators**, themselves being users.\n🔒 Public, no auth.",
         "operationId":"get_users_admins",
         "responses":{
           "200":{
@@ -326,7 +523,33 @@
                   "title":"Response Get Users Admins Users Admins Get",
                   "type":"array",
                   "items":{
-                    "$ref":"#/components/schemas/UserModel"
+                    "$ref":"#/components/schemas/MinUserModel"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/user_admins":{
+      "get":{
+        "tags":[
+          "users"
+        ],
+        "summary":"Get Admin Users",
+        "description":"**List application administrators**, themselves being users.\n🔒 Any authenticated user can access the list.",
+        "operationId":"get_admin_users",
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Get Admin Users Users User Admins Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/MinUserModel"
                   }
                 }
               }
@@ -340,26 +563,26 @@
         ]
       }
     },
-    "/users/{user_id}":{
+    "/organizations/search":{
       "get":{
         "tags":[
           "users"
         ],
-        "summary":"Get User",
-        "description":"Returns **information about the user** corresponding to the given id.",
-        "operationId":"get_user",
+        "summary":"Search Organizations",
+        "description":"**Search for organizations.**\nSo far, organizations are just names in users table.",
+        "operationId":"search_organizations",
         "parameters":[
           {
-            "description":"Internal, the unique numeric id of this user.",
+            "description":"Search by name, use % for searching with 'any char'.",
             "required":true,
             "schema":{
-              "title":"User Id",
-              "type":"integer",
-              "description":"Internal, the unique numeric id of this user."
+              "title":"Title",
+              "type":"string",
+              "description":"Search by name, use % for searching with 'any char'."
             },
-            "example":1,
-            "name":"user_id",
-            "in":"path"
+            "example":"%vill%",
+            "name":"name",
+            "in":"query"
           }
         ],
         "responses":{
@@ -368,8 +591,17 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "$ref":"#/components/schemas/UserModel"
-                }
+                  "title":"Response Search Organizations Organizations Search Get",
+                  "type":"array",
+                  "items":{
+                    "type":"string"
+                  }
+                },
+                "example":[
+                  "Oceanographic Laboratory of Villefranche sur Mer - LOV",
+                  "Developmental Biology Laboratory of Villefranche sur Mer - LBDV",
+                  "Sea Institute of Villefranche sur Mer - IMEV"
+                ]
               }
             }
           },
@@ -383,12 +615,7 @@
               }
             }
           }
-        },
-        "security":[
-          {
-            "BearerOrCookieAuth":[]
-          }
-        ]
+        }
       }
     },
     "/collections/create":{
@@ -501,7 +728,7 @@
           "collections"
         ],
         "summary":"Collection By Title",
-        "description":"Return the **single collection with this title**.\n\n*For published datasets.*\n\n⚠️ DO NOT MODIFY BEHAVIOR ⚠️ ",
+        "description":"Return the **single collection with this title**.\n\n*For published datasets.*\n\n⚠️ DO NOT MODIFY BEHAVIOR ⚠️",
         "operationId":"collection_by_title",
         "parameters":[
           {
@@ -547,7 +774,7 @@
           "collections"
         ],
         "summary":"Collection By Short Title",
-        "description":"Return the **single collection with this short title**.\n\n*For published datasets.*\n\n⚠️ DO NOT MODIFY BEHAVIOR ⚠️ ",
+        "description":"Return the **single collection with this short title**.\n\n*For published datasets.*\n\n⚠️ DO NOT MODIFY BEHAVIOR ⚠️",
         "operationId":"collection_by_short_title",
         "parameters":[
           {
@@ -700,7 +927,7 @@
           "collections"
         ],
         "summary":"Erase Collection",
-        "description":"**Delete the collection**, \n\ni.e. the precious fields, as the projects are just linked-at from the collection.\n\n🔒 *For admins only.*",
+        "description":"**Delete the collection**,\n\ni.e. the precious fields, as the projects are just linked-at from the collection.\n\n🔒 *For admins only.*",
         "operationId":"erase_collection",
         "parameters":[
           {
@@ -933,12 +1160,12 @@
             "in":"query"
           },
           {
-            "description":"One of ['instrument', 'highest_right', 'license', 'projid', 'title', 'visible', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id']",
+            "description":"One of ['instrument', 'highest_right', 'projid', 'title', 'visible', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id']",
             "required":false,
             "schema":{
               "title":"Order field",
               "type":"string",
-              "description":"One of ['instrument', 'highest_right', 'license', 'projid', 'title', 'visible', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id']"
+              "description":"One of ['instrument', 'highest_right', 'projid', 'title', 'visible', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id']"
             },
             "example":"instrument",
             "name":"order_field",
@@ -1238,7 +1465,7 @@
           "projects"
         ],
         "summary":"Erase Project",
-        "description":"**Delete the project.**\n    \nOptionally, if \"only_objects\" is set, the project structure is kept,\nbut emptied from any object, sample, acquisition and process.\n\nOtherwise, no trace of the project will remain in the database.\n\n**Returns** the number of  : **deleted objects**, 0, **deleated image rows** and **deleated image files**.",
+        "description":"**Delete the project.**\n\nOptionally, if \"only_objects\" is set, the project structure is kept,\nbut emptied from any object, sample, acquisition and process.\n\nOtherwise, no trace of the project will remain in the database.\n\n**Returns** the number of  : **deleted objects**, 0, **deleated image rows** and **deleated image files**.",
         "operationId":"erase_project",
         "parameters":[
           {
@@ -1374,7 +1601,7 @@
           "projects"
         ],
         "summary":"Project Set Get User Stats",
-        "description":"**Returns projects user statistics**, i.e. a summary of the work done by users in the\nrequired projects. \n\nThe returned values are a detail per project, so size of input list equals size of output list.",
+        "description":"**Returns projects user statistics**, i.e. a summary of the work done by users in the\nrequired projects.\n\nThe returned values are a detail per project, so size of input list equals size of output list.",
         "operationId":"project_set_get_user_stats",
         "parameters":[
           {
@@ -1687,7 +1914,7 @@
           "projects"
         ],
         "summary":"Project Stats",
-        "description":"**Returns stats** for a project.\n\nThese stats will be returned as a list containing at index :\n- 0 : The **title** of the project, \n- 1 : A string containing all **freecols name and related column number**,\n\n- 2 : **\"(0):\"**\n- 3 :  **\"Total: 0 values, dup 0 values\"**\n\nThen for each acquisition a pair of strings will be added to the list :\n-  A string containing the **acquisition origin id** (the **number of objects for this acquisition**) : and then **small stats for an acquisition of a free column values inside** : [ min of values ; max of values ; distribution of the different values ; mode, i.e. freq of most frequent value]\n-  A string containing the **number of total values** and the **number of duplicates values** \"Total: ... values, dup ... values\"\n\n    ",
+        "description":"**Returns stats** for a project.\n\nThese stats will be returned as a list containing at index :\n- 0 : The **title** of the project,\n- 1 : A string containing all **freecols name and related column number**,\n\n- 2 : **\"(0):\"**\n- 3 :  **\"Total: 0 values, dup 0 values\"**\n\nThen for each acquisition a pair of strings will be added to the list :\n-  A string containing the **acquisition origin id** (the **number of objects for this acquisition**) : and then **small stats for an acquisition of a free column values inside** : [ min of values ; max of values ; distribution of the different values ; mode, i.e. freq of most frequent value]\n-  A string containing the **number of total values** and the **number of duplicates values** \"Total: ... values, dup ... values\"\n\n    ",
         "operationId":"project_stats",
         "parameters":[
           {
@@ -1752,6 +1979,56 @@
         "summary":"Project Recompute Geography",
         "description":"**Recompute geography information** for all samples in project.\n\n**Returns NULL upon success.**\n\n🔒 The user has to be *project manager*.",
         "operationId":"project_recompute_geography",
+        "parameters":[
+          {
+            "description":"Internal, numeric id of the project.",
+            "required":true,
+            "schema":{
+              "title":"Project Id",
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
+            },
+            "example":1,
+            "name":"project_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{},
+                "example":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/projects/{project_id}/recompute_sunpos":{
+      "post":{
+        "tags":[
+          "projects"
+        ],
+        "summary":"Project Recompute Sunpos",
+        "description":"**Recompute sun position field** for all objects in project.\n\n**Returns NULL upon success.**\n\n🔒 The user has to be *project manager* on the referenced project.",
+        "operationId":"project_recompute_sunpos",
         "parameters":[
           {
             "description":"Internal, numeric id of the project.",
@@ -2135,7 +2412,7 @@
           "samples"
         ],
         "summary":"Update Samples",
-        "description":"Do the required **update for each sample in the set.** \n\nAny non-null field in the model is written to every impacted sample.\n\n**Returns the number of updated entities.**",
+        "description":"Do the required **update for each sample in the set.**\n\nAny non-null field in the model is written to every impacted sample.\n\n**Returns the number of updated entities.**",
         "operationId":"update_samples",
         "requestBody":{
           "content":{
@@ -2544,7 +2821,7 @@
           "objects"
         ],
         "summary":"Get Object Set",
-        "description":"Returns **filtred object Ids** for the given project.",
+        "description":"Returns **filtered object Ids** for the given project.",
         "operationId":"get_object_set",
         "parameters":[
           {
@@ -2653,7 +2930,7 @@
           "objects"
         ],
         "summary":"Get Object Set Summary",
-        "description":"For the given project, with given filters, **return the classification summary**.\n        \ni.e.:\n            \n- Total number of objects\n\nAnd optionnaly\n\n- Number of Validated ones\n- Number of Dubious ones\n- Number of Predicted ones\n    ",
+        "description":"For the given project, with given filters, **return the classification summary**.\n\ni.e.:\n\n- Total number of objects\n\nAnd optionally\n\n- Number of Validated ones\n- Number of Dubious ones\n- Number of Predicted ones\n    ",
         "operationId":"get_object_set_summary",
         "parameters":[
           {
@@ -2957,7 +3234,7 @@
           "objects"
         ],
         "summary":"Update Object Set",
-        "description":"Do the required **update for each objects in the set.** \n\n**Returns the number of updated entities.**\n\n🔒 Current user needs *Manage* right on all projects of specified objects.",
+        "description":"Do the required **update for each objects in the set.**\n\n**Returns the number of updated entities.**\n\n🔒 Current user needs *Manage* right on all projects of specified objects.",
         "operationId":"update_object_set",
         "requestBody":{
           "content":{
@@ -3255,7 +3532,7 @@
           "objects"
         ],
         "summary":"Erase Object Set",
-        "description":"**Delete the objects with given object ids.** \n\n**Returns** the number of  : **deleted objects**, 0, **deleated image rows** and **deleated image files**.\n\n🔒 Current user needs *Manage* right on all projects of specified objects.",
+        "description":"**Delete the objects with given object ids.**\n\n**Returns** the number of  : **deleted objects**, 0, **deleated image rows** and **deleated image files**.\n\n🔒 Current user needs *Manage* right on all projects of specified objects.",
         "operationId":"erase_object_set",
         "requestBody":{
           "content":{
@@ -3316,7 +3593,7 @@
           "object"
         ],
         "summary":"Object Query",
-        "description":"Returns **information about the object** corresponding to the given id.\n \n🔒 Anonymous reader can do if the project has the right rights :)",
+        "description":"Returns **information about the object** corresponding to the given id.\n\n🔒 Anonymous reader can do if the project has the right rights :)",
         "operationId":"object_query",
         "parameters":[
           {
@@ -4107,6 +4384,55 @@
         ]
       }
     },
+    "/admin/db/query":{
+      "get":{
+        "tags":[
+          "admin"
+        ],
+        "summary":"Direct Db Query",
+        "description":"For making selects on the DB.\n🔒 Admin only.",
+        "operationId":"db_direct_query",
+        "parameters":[
+          {
+            "description":"The SQL to execute.",
+            "required":true,
+            "schema":{
+              "title":"Query",
+              "type":"string",
+              "description":"The SQL to execute."
+            },
+            "example":"select count(1) from objects",
+            "name":"q",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
     "/jobs/":{
       "get":{
         "tags":[
@@ -4528,7 +4854,7 @@
           "Files"
         ],
         "summary":"Put User File",
-        "description":"**Upload a file for the current user.**\n\nThe returned text will contain a serve-side path which is usable for some file-related operations.\n\n*e.g. import.*",
+        "description":"**Upload a file for the current user.**\n\nThe returned text will contain a server-side path which is usable for some file-related operations.\n\n*e.g. import.*",
         "operationId":"post_user_file",
         "requestBody":{
           "content":{
@@ -4996,7 +5322,7 @@
             "title":"Provider user",
             "allOf":[
               {
-                "$ref":"#/components/schemas/UserModel"
+                "$ref":"#/components/schemas/MinUserModel"
               }
             ],
             "description":"Is the person who \n        is responsible for the content of this metadata record. Writer of the title and abstract."
@@ -5005,7 +5331,7 @@
             "title":"Contact user",
             "allOf":[
               {
-                "$ref":"#/components/schemas/UserModel"
+                "$ref":"#/components/schemas/MinUserModel"
               }
             ],
             "description":"Is the person who \n        should be contacted in cases of questions regarding the content of the dataset or any data restrictions. \n        This is also the person who is most likely to stay involved in the dataset the longest."
@@ -5014,7 +5340,7 @@
             "title":"Creator users",
             "type":"array",
             "items":{
-              "$ref":"#/components/schemas/UserModel"
+              "$ref":"#/components/schemas/MinUserModel"
             },
             "description":"All people who \n        are responsible for the creation of the collection. Data creators should receive credit \n        for their work and should therefore be included in the citation.",
             "default":[]
@@ -5032,7 +5358,7 @@
             "title":"Associate users",
             "type":"array",
             "items":{
-              "$ref":"#/components/schemas/UserModel"
+              "$ref":"#/components/schemas/MinUserModel"
             },
             "description":"Other person(s) \n        associated with the collection.",
             "default":[]
@@ -5145,6 +5471,19 @@
             "example":[
               "App manager Name",
               "app.manager@email.fr"
+            ]
+          },
+          "countries":{
+            "title":"Countries",
+            "minItems":1,
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "description":"List of known countries names.",
+            "default":[],
+            "example":[
+              "France"
             ]
           }
         },
@@ -5868,6 +6207,18 @@
         },
         "description":"All information about the Job."
       },
+      "LicenseEnum":{
+        "title":"LicenseEnum",
+        "enum":[
+          "CC0 1.0",
+          "CC BY 4.0",
+          "CC BY-NC 4.0",
+          "Copyright",
+          ""
+        ],
+        "type":"string",
+        "description":"An enumeration."
+      },
       "LimitMethods":{
         "title":"LimitMethods",
         "enum":[
@@ -5910,6 +6261,35 @@
           }
         },
         "description":"Merge response. "
+      },
+      "MinUserModel":{
+        "title":"MinUserModel",
+        "required":[
+          "id",
+          "email",
+          "name"
+        ],
+        "type":"object",
+        "properties":{
+          "id":{
+            "title":"Id",
+            "type":"integer",
+            "description":"The unique numeric id of this user.",
+            "example":1
+          },
+          "email":{
+            "title":"Email",
+            "type":"string",
+            "description":"User's email address, as text, used during registration.",
+            "example":"ecotaxa.api.user@gmail.com"
+          },
+          "name":{
+            "title":"Name",
+            "type":"string",
+            "description":"User's full name, as text.",
+            "example":"userName"
+          }
+        }
       },
       "MinimalUserBO":{
         "title":"MinimalUserBO",
@@ -6729,7 +7109,6 @@
       "ProjectModel":{
         "title":"ProjectModel",
         "required":[
-          "license",
           "projid",
           "title"
         ],
@@ -6803,7 +7182,7 @@
             "title":"Managers",
             "type":"array",
             "items":{
-              "$ref":"#/components/schemas/UserModel"
+              "$ref":"#/components/schemas/MinUserModel"
             },
             "description":"Managers of this project.",
             "default":[]
@@ -6812,7 +7191,7 @@
             "title":"Annotators",
             "type":"array",
             "items":{
-              "$ref":"#/components/schemas/UserModel"
+              "$ref":"#/components/schemas/MinUserModel"
             },
             "description":"Annotators of this project, if not manager.",
             "default":[]
@@ -6821,7 +7200,7 @@
             "title":"Viewers",
             "type":"array",
             "items":{
-              "$ref":"#/components/schemas/UserModel"
+              "$ref":"#/components/schemas/MinUserModel"
             },
             "description":"Viewers of this project, if not manager nor annotator.",
             "default":[]
@@ -6836,7 +7215,7 @@
             "title":"Contact",
             "allOf":[
               {
-                "$ref":"#/components/schemas/UserModel"
+                "$ref":"#/components/schemas/MinUserModel"
               }
             ],
             "description":"The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers."
@@ -6850,7 +7229,14 @@
           },
           "license":{
             "title":"License",
-            "type":"string"
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/LicenseEnum"
+              }
+            ],
+            "description":"Data licence.",
+            "default":"Copyright",
+            "example":"CC BY 4.0"
           },
           "projid":{
             "title":"Project Id",
@@ -7086,6 +7472,7 @@
         "title":"SampleModel",
         "required":[
           "sampleid",
+          "projid",
           "orig_id"
         ],
         "type":"object",
@@ -7458,12 +7845,16 @@
             "example":"2021-08-20 09:09:39"
           },
           "nbrobj":{
-            "title":"Nbrobj",
-            "type":"integer"
+            "title":"Number of objects",
+            "type":"integer",
+            "description":"Number of objects in this category exactly.",
+            "example":"5800"
           },
           "nbrobjcum":{
-            "title":"Nbrobjcum",
-            "type":"integer"
+            "title":"Number of descendant objects",
+            "type":"integer",
+            "description":"Number of objects in this category and descendant ones.",
+            "example":"54800"
           }
         }
       },
@@ -7628,66 +8019,6 @@
           }
         }
       },
-      "UserModel":{
-        "title":"UserModel",
-        "required":[
-          "id",
-          "email",
-          "name"
-        ],
-        "type":"object",
-        "properties":{
-          "id":{
-            "title":"Id",
-            "type":"integer",
-            "description":"The unique numeric id of this user.",
-            "example":1
-          },
-          "email":{
-            "title":"Email",
-            "type":"string",
-            "description":"User's email address, as text, used during registration.",
-            "example":"ecotaxa.api.user@gmail.com"
-          },
-          "name":{
-            "title":"Name",
-            "type":"string",
-            "description":"User's full name, as text.",
-            "example":"userName"
-          },
-          "organisation":{
-            "title":"Organisation",
-            "type":"string",
-            "description":"User's organisation name, as text.",
-            "example":"Oceanographic Laboratory of Villefranche sur Mer - LOV"
-          },
-          "active":{
-            "title":"Account status",
-            "type":"boolean",
-            "description":"Whether the user is still active.",
-            "example":true
-          },
-          "country":{
-            "title":"Country",
-            "type":"string",
-            "description":"The country name, as text (but chosen in a consistent list).",
-            "example":"France"
-          },
-          "usercreationdate":{
-            "title":"User creation date",
-            "type":"string",
-            "description":"The date of creation of the user, as text formatted according to the ISO 8601 standard.",
-            "format":"date-time",
-            "example":"2020-11-05T12:31:48.299713"
-          },
-          "usercreationreason":{
-            "title":"User creation reason",
-            "type":"string",
-            "description":"Paragraph describing the usage of EcoTaxa made by the user.",
-            "example":"Analysis of size and shapes of plastic particles"
-          }
-        }
-      },
       "UserModelWithRights":{
         "title":"UserModelWithRights",
         "required":[
@@ -7708,6 +8039,12 @@
             "type":"string",
             "description":"User's email address, as text, used during registration.",
             "example":"ecotaxa.api.user@gmail.com"
+          },
+          "password":{
+            "title":"User's password'",
+            "type":"string",
+            "description":"Encrypted (or not) password.",
+            "example":"$foobar45$"
           },
           "name":{
             "title":"Name",
