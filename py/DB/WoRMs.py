@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-from .helpers.DDL  import Column, Integer, String, Boolean, DateTime, SmallInteger
+from .helpers.DDL import Column, Integer, String, Boolean, DateTime, SmallInteger, Index
 from .helpers.ORM import Model
 
 
@@ -78,3 +78,6 @@ class WoRMS(Model):
     """ The most recent date-time in GMT on which the resource was changed """
     # Our management of taxon
     all_fetched = Column(Boolean)
+
+
+Index('worms_pp', WoRMS.parent_name_usage_id, WoRMS.aphia_id)

@@ -11,7 +11,9 @@ To generate diff script for upgrade:
 
 See https://alembic.sqlalchemy.org/en/latest/autogenerate.html
 
-`PATH=../venv38/bin PYTHONPATH=.. alembic revision --autogenerate
+Evalutate the venv first, then:
+
+`PYTHONPATH=.. APP_CONFIG=../config.ini alembic revision --autogenerate
 `
 * As an operator, to upgrade a production DB, from docker shell:
 
@@ -22,17 +24,17 @@ I have no name!@5e55ec7508c5:/app$ cd cmds/
 
 I have no name!@5e55ec7508c5:/app/cmds$ ls
 
-I have no name!@d2637e5ae89c:/app/cmds$ PYTHONPATH=.. alembic upgrade
+I have no name!@d2637e5ae89c:/app/cmds$ PYTHONPATH=.. APP_CONFIG=../config.ini alembic upgrade
 ```
 
 ### Database related scripts
 
 * This will create default admin user and roles.
 
-`PATH=../venv38/bin PYTHONPATH=.. python manage.py db init-security
+`PATH=../venv38/bin PYTHONPATH=.. APP_CONFIG=../config.ini python manage.py db init-security
 `
 
 * This will recompute DB sequences, should they have been damaged somehow.
 
-`PATH=../venv38/bin PYTHONPATH=.. python manage.py db reset-sequences
+`PATH=../venv38/bin PYTHONPATH=.. APP_CONFIG=../config.ini python manage.py db reset-sequences
 `

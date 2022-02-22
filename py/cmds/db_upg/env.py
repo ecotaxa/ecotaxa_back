@@ -28,9 +28,9 @@ target_metadata = Project.metadata
 # ... etc.
 
 
-from db_conn import conn
+from cmds.db_upg.db_conn import conn  # type:ignore
 
-config.set_main_option('sqlalchemy.url', conn.url)
+config.set_main_option('sqlalchemy.url', str(conn.url))
 
 
 def run_migrations_offline():

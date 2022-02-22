@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from DB import Acquisition, Process, Project, Sample, Task, Taxonomy, User, Role, ProjectPrivilege, ParticleProject
+from DB import Acquisition, Process, Project, Sample, Task, Taxonomy, User, Role, ProjectPrivilege
 
 
 def test_to_str():
@@ -16,4 +16,3 @@ def test_to_str():
     assert str(User()) is not None
     assert str(Role()) is not None
     assert str(ProjectPrivilege()) is not None
-    assert str(ParticleProject()) is not None
