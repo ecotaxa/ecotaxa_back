@@ -32,16 +32,29 @@ class InBundle(object):
     """
     TSV_FILTERS = ("**/ecotaxa*.txt", "**/ecotaxa*.tsv")
     UVP6_FILTER = "**/*Images.zip"
+    MAX_FILES = 1000
 
     def __init__(self, path: str, temp_dir: Path):
         self.path = Path(path)
         # Compute the files we have to process.
         self.possible_files: List[Path] = []
+        nb_files = 0
+
+        def one_more():
+            nonlocal nb_files
+            nb_files += 1
+            if nb_files > self.MAX_FILES:
+                raise ImportError("You tried to import too many files, max. is %d" % self.MAX_FILES)
+
         for a_filter in self.TSV_FILTERS:
-            self.possible_files.extend(self.path.glob(a_filter))
+            for a_file in self.path.glob(a_filter):
+                self.possible_files.append(a_file)
+                one_more()
         self.possible_files.sort()
-        self.sub_bundles: List[UVP6Bundle] = [UVP6Bundle(a_bundle, temp_dir)
-                                              for a_bundle in self.path.glob(self.UVP6_FILTER)]
+        self.sub_bundles: List[UVP6Bundle] = []
+        for a_bundle in self.path.glob(self.UVP6_FILTER):
+            self.sub_bundles.append(UVP6Bundle(a_bundle, temp_dir))
+            one_more()
 
     def possible_files_as_posix(self):
         """
