@@ -38,7 +38,14 @@ class TaxonomyMapper(object):
         # Do the manual (i.e. XLSX-driven) matching of what can be.
         # In this part, both Morpho and Phylo taxa are matched to WoRMS.
         to_worms: ToWorms = ToWorms()
+        # Load & QC data
+        pbs = to_worms.pre_validate()
+        # TODO
+        # assert pbs == []
         to_worms.prepare()
+        to_worms.validate_with_trees()
+        to_worms.show_stats()
+        # Apply
         to_worms.apply()
         manual_ids = set(to_worms.done_remaps.keys()).intersection(self.taxa_ids)
         for a_manual_id in list(manual_ids):
@@ -90,5 +97,9 @@ class TaxonomyMapper(object):
         for a_morpho_id, a_phylo_id in phylo_per_morpho.items():
             assert unieuk_per_id[a_morpho_id].type == 'M'
             assert unieuk_per_id[a_phylo_id].type == 'P'
+
+        to_worms.check_ancestors()
+        to_worms.check_closure()
+        to_worms.check_sums()
 
         return ret, phylo_per_morpho

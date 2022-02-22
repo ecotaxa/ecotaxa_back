@@ -440,11 +440,11 @@ class CentralTaxonomyService(Service):
 
     def __init__(self):
         super().__init__()
-        url = self.config.get(self.TAXOSERVER_URL_KEY)
+        url = self.config.get_cnf(self.TAXOSERVER_URL_KEY)
         assert url is not None
-        my_id = self.config.get(self.TAXOSERVER_MY_ID)
+        my_id = self.config.get_cnf(self.TAXOSERVER_MY_ID)
         assert my_id is not None
-        my_key = self.config.get(self.TAXOSERVER_MY_SECRET_KEY)
+        my_key = self.config.get_cnf(self.TAXOSERVER_MY_SECRET_KEY)
         assert my_key is not None
         self.client = EcoTaxoServerClient(url, my_id, my_key)
 

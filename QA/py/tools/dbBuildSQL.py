@@ -177,6 +177,7 @@ VAULT_DIR = %s
 JOBS_DIR = %s
 SERVERLOADAREA = %s
 FTPEXPORTAREA = %s
+MODELSAREA = %s
 SECURITY_PASSWORD_HASH=sha512_crypt
 SECURITY_PASSWORD_SALT=PePPER
     """
@@ -185,7 +186,8 @@ SECURITY_PASSWORD_SALT=PePPER
         with open(str(self.conf_file), "w") as f:
             f.write(self.CONF % (self.host, PG_PORT, self.host, PG_PORT,
                                  self.vault_dir, self.jobs_dir,
-                                 self.shared_dir, self.ftp_dir))
+                                 self.shared_dir, self.ftp_dir,
+                                 self.models_dir))
 
     def cleanup(self):
         # Remove data files

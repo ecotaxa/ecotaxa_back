@@ -33,7 +33,7 @@ logger = get_logger(__name__)
 #
 
 # noinspection SqlDialectInspection,SqlResolve
-class ObjectCache(object):
+class ObjectCache(object): # pragma: no cover
     """
         The cache, in read-only mode.
     """
@@ -217,7 +217,7 @@ class ObjectCache(object):
 
 
 # noinspection SqlDialectInspection
-class ObjectCacheWriter(object):
+class ObjectCacheWriter(object): # pragma: no cover
     """
         The cache, in write mode
     """
@@ -330,7 +330,7 @@ class ObjectCacheWriter(object):
 
 
 # noinspection SqlDialectInspection,SqlResolve
-class ObjectCacheUpdater(object):
+class ObjectCacheUpdater(object): # pragma: no cover
     """
         The cache, in update mode.
     """
