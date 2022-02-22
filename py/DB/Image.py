@@ -77,3 +77,6 @@ class ImageFile(Model):
     digest_type = Column(CHAR, default="?", server_default="?", nullable=False)
     # A digital signature
     digest = Column(BYTEA, nullable=True)
+
+
+Index('is_phy_image_file', ImageFile.__table__.c.digest_type, ImageFile.__table__.c.digest)

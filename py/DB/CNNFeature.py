@@ -3,10 +3,9 @@
 # Copyright (C) 2015-2021  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-from DB import Model
 from .helpers.Bean import Bean
 from .helpers.DDL import ForeignKey
-from .helpers.ORM import Column, relationship
+from .helpers.ORM import Column, relationship, Model
 from .helpers.Postgres import BIGINT, REAL
 
 
