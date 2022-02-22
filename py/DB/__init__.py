@@ -6,5 +6,4 @@
 # noinspection PyUnresolvedReferences
 from sqlalchemy.orm import Session, Query
 
-from .ParticleProject import *
 from .Relations import *

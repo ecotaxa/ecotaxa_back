@@ -17,7 +17,7 @@ from BO.SpaceTime import USED_FIELDS_FOR_SUNPOS, compute_sun_position
 from BO.User import MinimalUserBO, UserActivity, UserIDT, MinimalUserBOListT, UserActivityListT
 from BO.helpers.DataclassAsDict import DataclassAsDict
 from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFields, Acquisition, Process, \
-    ParticleProject, ParticleCategoryHistogramList, ParticleSample, ParticleCategoryHistogram, ObjectsClassifHisto
+    ObjectsClassifHisto
 from DB.Object import VALIDATED_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL
 from DB.Project import ProjectIDT, ProjectIDListT
 from DB.User import Role
@@ -465,26 +465,8 @@ class ProjectBO(object):
         """
             Remove object parents, also project children entities, in the project.
         """
-        # The EcoTaxa samples which are going to disappear. We have to cleanup Particle side.
+        # The EcoTaxa samples which are going to disappear.
         soon_deleted_samples: Query = Query(Sample.sampleid).filter(Sample.projid == prj_id)
-        # The EcoPart samples to clean.
-        soon_invalid_part_samples: Query = Query(ParticleSample.psampleid).filter(
-            ParticleSample.sampleid.in_(soon_deleted_samples))
-
-        # Cleanup EcoPart corresponding tables
-        del_qry = ParticleCategoryHistogramList.__table__. \
-            delete().where(ParticleCategoryHistogramList.psampleid.in_(soon_invalid_part_samples))
-        logger.info("Del part histo lst :%s", str(del_qry))
-        session.execute(del_qry)
-        del_qry = ParticleCategoryHistogram.__table__. \
-            delete().where(ParticleCategoryHistogram.psampleid.in_(soon_invalid_part_samples))
-        logger.info("Del part histo :%s", str(del_qry))
-        session.execute(del_qry)
-        upd_qry = ParticleSample.__table__. \
-            update().where(ParticleSample.psampleid.in_(soon_invalid_part_samples)).values(sampleid=None)
-        logger.info("Upd part samples :%s", str(upd_qry))
-        row_count = session.execute(upd_qry).rowcount
-        logger.info(" %d EcoPart samples unlinked and cleaned", row_count)
 
         ret = []
         del_acquis_qry: Delete = Acquisition.__table__. \
@@ -511,10 +493,6 @@ class ProjectBO(object):
             Completely remove the project. It is assumed that contained objects have been removed.
         """
         # TODO: Remove from user preferences
-        # Unlink Particle project if any
-        upd_qry = ParticleProject.__table__.update().where(ParticleProject.projid == prj_id).values(projid=None)
-        row_count = session.execute(upd_qry).rowcount
-        logger.info("%d EcoPart project unlinked", row_count)
         # Remove project
         session.query(Project). \
             filter(Project.projid == prj_id).delete()

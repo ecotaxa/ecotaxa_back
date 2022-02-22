@@ -12,7 +12,7 @@ from BO.Project import ProjectBO
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.Rights import RightsBO, Action
 from BO.Sample import SampleIDT
-from DB import ObjectHeader, Sample, Acquisition, Project, ParticleProject
+from DB import ObjectHeader, Sample, Acquisition, Project
 from DB.helpers.ORM import orm_equals, any_, all_, func, Query
 from DB.helpers.Postgres import values_cte
 from helpers.DynamicLogs import get_logger, LogsSwitcher, LogEmitter
@@ -141,7 +141,7 @@ class MergeService(Service, LogEmitter):
         common_acquisitions = self.get_ids_for_common_orig_id(Acquisition, dest_parents, src_parents)
 
         # Align foreign keys, to Project, Sample and Acquisition
-        for a_fk_to_proj_tbl in [Sample, Acquisition, ObjectHeader, ParticleProject]:
+        for a_fk_to_proj_tbl in [Sample, Acquisition, ObjectHeader]:
             upd: Query = self.session.query(a_fk_to_proj_tbl)
             if a_fk_to_proj_tbl == Sample:
                 # Move (i.e. change project) samples which are 'new' from merged project,
@@ -187,10 +187,6 @@ class MergeService(Service, LogEmitter):
                 if len(common_acquisitions) == 0:
                     # Nothing to do. There were only new acquisitions, all of them moved to self.
                     continue
-            else:
-                # For Particle project
-                upd = upd.filter(ParticleProject.projid == self.src_prj_id)  # type: ignore
-                upd_values = {'projid': self.prj_id}
             rowcount = upd.update(values=upd_values, synchronize_session=False)
             table_name = a_fk_to_proj_tbl.__tablename__  # type: ignore
             logger.info("Update in %s: %s rows", table_name, rowcount)

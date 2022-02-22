@@ -11,8 +11,6 @@ from .Collection import Collection, CollectionProject, CollectionUserRole, Colle
 from .Image import Image
 from .Job import Job
 from .Object import ObjectHeader, ObjectFields, ObjectsClassifHisto
-# Particle project
-from .ParticleProject import ParticleProject, ParticleSample
 from .Process import Process
 from .Project import Project
 from .ProjectPrivilege import ProjectPrivilege
@@ -92,14 +90,6 @@ ObjectHeader.history = relationship(ObjectsClassifHisto, viewonly=True)
 ObjectsClassifHisto.object = relationship(ObjectHeader)
 # Task
 Task.owner = relationship(User)
-
-# Particle Project
-ParticleProject.ecotaxa_project = relationship(Project)
-Project.ecopart_project = relationship(ParticleProject, viewonly=True)
-
-# Particle Sample
-ParticleSample.ecotaxa_sample = relationship(Sample)
-Sample.ecopart_sample = relationship(ParticleSample, viewonly=True)
 
 # Jobs
 Job.owner = relationship(User)
