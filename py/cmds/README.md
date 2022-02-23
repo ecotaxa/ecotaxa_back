@@ -22,9 +22,7 @@ docker exec -it ecotaxaback /bin/bash
 
 I have no name!@5e55ec7508c5:/app$ cd cmds/
 
-I have no name!@5e55ec7508c5:/app/cmds$ ls
-
-I have no name!@d2637e5ae89c:/app/cmds$ PYTHONPATH=.. APP_CONFIG=../config.ini alembic upgrade
+I have no name!@d2637e5ae89c:/app/cmds$ PYTHONPATH=.. alembic upgrade head
 ```
 
 ### Database related scripts

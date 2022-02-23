@@ -1,13 +1,11 @@
-# In theory, should do SQLAlchemy[mypy], but the typings there depend on SQLA 2.0 interface
-SQLAlchemy==1.4.31
-psycopg2-binary==2.9.3
-# Pin a recent (as of Jan 2022) pydantic
-pydantic==1.9.0
+#
+# Note: to install after requirements.txt
+#
 # Image processing libs.
 # Machine learning with no GPU
 scikit-learn==1.0
 # Machine learning with GPU. NOT automatically regression-tested so to upgrade with caution.
-tensorflow==2.6.0
+tensorflow==2.6.2
 tensorflow-hub==0.12.0
 tensorflow_addons==0.14.0
 # Used same place as TF, CNN generation

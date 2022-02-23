@@ -13,10 +13,14 @@ RUN apt-get install \
     postgresql-client-10 libpq-dev \
     --no-install-recommends --yes
 
-# Get reqs from host
-COPY py/gpu_jobs_reqs.txt ./reqs_orig.txt
+# Get app reqs from host
+COPY py/requirements.txt ./reqs_orig.txt
 # Remove typings
 RUN grep -Ev "(-stubs|^types-)" reqs_orig.txt > reqs.txt
+# Get GPU reqs from host
+COPY py/gpu_jobs_reqs.txt ./reqs_orig.txt
+# Remove typings
+RUN grep -Ev "(-stubs|^types-)" reqs_orig.txt >> reqs.txt
 
 # Create venv, mandatory as we switched away from the python bundled with the OS
 RUN python3.8 -m venv /venv
@@ -65,13 +69,14 @@ COPY --from=builder --chown=root:root /app /app
 RUN find /venv /app -type d -exec chmod a+w {} \; && \
 chmod +x /app/start.sh
 
+# Create an empty config file which can be mounted
+RUN touch /config.ini
+
 # Add venv to path
 ENV PATH="/venv/bin:$PATH"
 
-# _the_ ini file
-COPY link.ini /
-
-#EXPOSE 8000
+# NO WEB
+# EXPOSE 8000
 # The number of gunicorn workers
 #ENV WEB_CONCURRENCY=8
 # Of course the path below is seen from the container. Check your mounts.
@@ -81,6 +86,6 @@ COPY link.ini /
 # ./temptask
 # ./vault
 WORKDIR /app/
-ENV LEGACY_APP='/ecotaxa_master'
+ENV APP_CONFIG='/config.ini'
 CMD ["./start.sh"]
 #CMD["sleep 600"]

@@ -61,21 +61,21 @@ COPY --from=builder --chown=root:root /app /app
 RUN find /venv /app -type d -exec chmod a+w {} \; && \
 chmod +x /app/start.sh
 
+# Create an empty config file which can be mounted
+RUN touch /config.ini
+
 # Add venv to path
 ENV PATH="/venv/bin:$PATH"
-
-# _the_ ini file
-COPY link.ini /
 
 EXPOSE 8000
 # The number of gunicorn workers
 ENV WEB_CONCURRENCY=8
 # Of course the path below is seen from the container. Check your mounts.
-# Needed directory content:
+# Needed directory contents can be found in config.ini.template
 # ./appli
 # ./appli/config.cfg
 # ./temptask
 # ./vault
 WORKDIR /app/
-ENV LEGACY_APP='/ecotaxa_master'
+ENV APP_CONFIG='/config.ini'
 CMD ["./start.sh"]
