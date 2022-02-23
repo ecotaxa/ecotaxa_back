@@ -142,7 +142,13 @@ class EcoTaxaGenerator(utils.Sequence):
         batch_paths = [self.images_paths[i] for i in indexes]
         # batch_orig_images = [lycon.load(p) / 255 for p in batch_paths]
         # TODO: No idea why the 255
-        batch_orig_images = [cv.imread(p) / 255 for p in batch_paths]
+        batch_orig_images = []
+        for p in batch_paths:
+            red = cv.imread(p)
+            if red is None:
+                # Image could not be read... TODO: tell somehow
+                continue
+            batch_orig_images.append(red / 255)
 
         # resize images to the input dimension of the network
         batch_prepared_images = []

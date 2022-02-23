@@ -13,10 +13,6 @@ RUN apt-get install \
     postgresql-client-10 libpq-dev \
     --no-install-recommends --yes
 
-# Get app reqs from host
-COPY py/requirements.txt ./reqs_orig.txt
-# Remove typings
-RUN grep -Ev "(-stubs|^types-)" reqs_orig.txt > reqs.txt
 # Get GPU reqs from host
 COPY py/gpu_jobs_reqs.txt ./reqs_orig.txt
 # Remove typings
@@ -25,7 +21,7 @@ RUN grep -Ev "(-stubs|^types-)" reqs_orig.txt >> reqs.txt
 # Create venv, mandatory as we switched away from the python bundled with the OS
 RUN python3.8 -m venv /venv
 # Install wheel & upgrade pip which is pip-9.0.1 thus knows only manylinux1 repository
-RUN PATH=/venv/bin pip3 install --upgrade pip wheel
+RUN PATH=/venv/bin pip3 install --upgrade pip wheel setuptools
 RUN PATH=/venv/bin:$PATH pip3 install -r reqs.txt
 
 # Strip a bit...

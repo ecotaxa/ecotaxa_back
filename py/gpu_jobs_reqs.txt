@@ -1,11 +1,16 @@
-#
-# Note: to install after requirements.txt
-#
+# LS: After burning sooo many hours trying to reconcile main requirements.py with this one,
+# I concluded that it's better to copy/paste and have minimum libs here.
+SQLAlchemy==1.4.31
+psycopg2-binary==2.9.3
+astral==2.2
+pydantic==1.9.0
 # Image processing libs.
 # Machine learning with no GPU
 scikit-learn==1.0
 # Machine learning with GPU. NOT automatically regression-tested so to upgrade with caution.
-tensorflow==2.6.2
+tensorflow==2.6.0
+# Workaround https://github.com/tensorflow/tensorflow/issues/51592
+keras==2.6.0
 tensorflow-hub==0.12.0
 tensorflow_addons==0.14.0
 # Used same place as TF, CNN generation
@@ -13,3 +18,9 @@ pandas==1.3.3
 ##lycon==0.2.0 # Conflicts with the version required by TF
 opencv-python-headless==4.5.3.56
 imgaug==0.4.0
+# imgaug needs opencv, but not the headless one, so at docker startup:
+#   File "/venv/lib/python3.8/site-packages/cv2/__init__.py", line 8, in <module>
+#     from .cv2 import *
+# ImportError: libGL.so.1: cannot open shared object file: No such file or directory
+# https://github.com/aleju/imgaug/issues/737
+--no-binary=imgaug
