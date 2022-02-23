@@ -36,9 +36,9 @@ class UserService(Service):
             if captcha_secret and captcha_id:
                 # Basic verification on input
                 assert no_bot is not None, "reCaptcha verif needs data"
-                assert len(no_bot) == 2, 'invalid no_bot'
+                assert len(no_bot) == 2, 'invalid no_bot reason 1'
                 for a_str in no_bot:
-                    assert len(a_str) < 512, 'invalid no_bot'
+                    assert len(a_str) < 1024, 'invalid no_bot reason 2'
                 verifier = ReCAPTCHAClient(captcha_id, captcha_secret)
                 error = verifier.validate(no_bot[0], no_bot[1])
                 assert error is None, error
