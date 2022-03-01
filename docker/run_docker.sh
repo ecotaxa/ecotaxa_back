@@ -4,7 +4,7 @@
 #docker run -it --rm \
 echo '*************************** VERSION HEAD ****************************'
 #docker run -d --restart unless-stopped \
-docker run \
+docker run --security-opt seccomp=unconfined \
 -u 1000:1000 -p 8000:8000 --name ecotaxaback  \
 -e "WEB_CONCURRENCY=2" \
 --mount type=bind,source=${PWD}/../py/config.ini,target=/config.ini  \

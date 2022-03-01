@@ -15,9 +15,14 @@ from BO.Classification import HistoricalClassificationListT, HistoricalClassific
 from BO.Mappings import TableMapping
 from BO.Sample import SampleIDT
 from BO.helpers.MappedEntity import MappedEntity
-from DB import ObjectHeader, ObjectFields, Image, ObjectsClassifHisto, User, Taxonomy, Sample, Acquisition
-from DB.Project import ProjectIDT
-from DB.helpers.ORM import Session, Query, joinedload, subqueryload, Model, minimal_model_of
+from DB.Acquisition import Acquisition
+from DB.Image import Image
+from DB.Object import ObjectHeader, ObjectFields, ObjectsClassifHisto
+from DB.Project import ProjectIDT, Project
+from DB.Sample import Sample
+from DB.Taxonomy import Taxonomy
+from DB.User import User
+from DB.helpers.ORM import Session, joinedload, subqueryload, Model, minimal_model_of
 from helpers.DynamicLogs import get_logger
 
 # Typings, to be clear that these are not e.g. project IDs
@@ -27,7 +32,7 @@ ObjectIDWithParentsT = Tuple[ObjectIDT, AcquisitionIDT, SampleIDT, ProjectIDT]
 logger = get_logger(__name__)
 
 
-def _get_proj(obj: ObjectHeader):
+def _get_proj(obj: ObjectHeader) -> Project:
     return obj.acquisition.sample.project
 
 
@@ -47,7 +52,7 @@ class ObjectBO(MappedEntity):
         self.header: ObjectHeader
         if db_object is None:
             # Initialize from the unique ID
-            qry: Query = self._session.query(ObjectHeader)
+            qry = self._session.query(ObjectHeader)
             qry = qry.filter(ObjectHeader.objid == object_id)
             qry = qry.options(joinedload(ObjectHeader.fields))
             qry = qry.options(subqueryload(ObjectHeader.all_images))
@@ -69,16 +74,16 @@ class ObjectBO(MappedEntity):
             Return classification history, user-displayable with names lookup but keeping IDs.
         """
         och = ObjectsClassifHisto
-        qry: Query = self._session.query(och.objid, och.classif_id,
-                                         och.classif_date, och.classif_who,
-                                         och.classif_type, och.classif_qual,
-                                         och.classif_score,
-                                         User.name,
-                                         Taxonomy.display_name).filter(
+        qry = self._session.query(och.objid, och.classif_id,
+                                  och.classif_date, och.classif_who,
+                                  och.classif_type, och.classif_qual,
+                                  och.classif_score,
+                                  User.name.label("user_name"),
+                                  Taxonomy.display_name.label("taxon_name")).filter(
             ObjectsClassifHisto.objid == self.header.objid)
         qry = qry.outerjoin(User)
         qry = qry.outerjoin(Taxonomy, Taxonomy.id == och.classif_id)
-        ret = [HistoricalClassification(rec) for rec in qry.all()]
+        ret = [HistoricalClassification(**rec) for rec in qry]  # type:ignore
         return ret
 
     @staticmethod
@@ -128,7 +133,7 @@ class ObjectBO(MappedEntity):
 
     def __getattr__(self, item):
         """ Fallback for 'not found' field after the C getattr() call.
-            If we did not enrich/modify a Object field somehow then return it """
+            If we did not enrich/modify an Object field somehow then return it """
         try:
             return getattr(self.header, item)
         except AttributeError:
@@ -146,9 +151,9 @@ class ObjectBOSet(object):
         needed_cols = obj_mapping.real_cols_to_tsv.keys()
         # noinspection PyPep8Naming
         ReducedObjectFields = minimal_model_of(MetaData(), ObjectFields, set(needed_cols))
-        qry: Query = session.query(ObjectHeader, ReducedObjectFields)
+        qry = session.query(ObjectHeader, ReducedObjectFields)
         qry = qry.filter(ObjectHeader.objid.in_(object_ids))
         # noinspection PyUnresolvedReferences
         qry = qry.join(ReducedObjectFields, ObjectHeader.objid == ReducedObjectFields.objfid)  # type:ignore
         qry = qry.options(joinedload(ObjectHeader.all_images))
-        self.all = [ObjectBO(session, 0, an_obj, its_fields) for an_obj, its_fields in qry.all()]
+        self.all = [ObjectBO(session, 0, an_obj, its_fields) for an_obj, its_fields in qry]

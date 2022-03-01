@@ -3,8 +3,10 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 # noinspection PyPackageRequirements
+from __future__ import annotations
+
 import datetime
-from typing import Dict, Set
+from typing import Dict, Set, Iterable, TYPE_CHECKING
 
 # noinspection PyPackageRequirements
 from sqlalchemy import Index, Column, ForeignKey, Sequence, Integer
@@ -17,12 +19,15 @@ from sqlalchemy.orm import relationship, Session
 from BO.helpers.TSVHelpers import convert_degree_minute_float_to_decimal_degree
 from .Acquisition import Acquisition
 from .Image import Image
-from .Project import Project
+from .Project import Project, ProjectIDT
 from .Sample import Sample
-# noinspection PyPackageRequirements,PyProtectedMember
 from .helpers import Result
 from .helpers.Direct import text
-from .helpers.ORM import Model, Query
+from .helpers.ORM import Model
+
+if TYPE_CHECKING:
+    pass
+    #from .Image import Image
 
 # Classification qualification
 PREDICTED_CLASSIF_QUAL = 'P'
@@ -88,17 +93,17 @@ class ObjectHeader(Model):
     object_link = Column(VARCHAR(255))
 
     # The relationships are created in Relations.py but the typing here helps the IDE
-    fields: relationship
+    fields: ObjectFields
     cnn_features: relationship
     classif: relationship
     classif_auto: relationship
     classifier: relationship
-    all_images: relationship
+    all_images: Iterable[Image]
     acquisition: relationship
     history: relationship
 
     @classmethod
-    def fetch_existing_objects(cls, session: Session, prj_id) -> Dict[str, int]:
+    def fetch_existing_objects(cls, session: Session, prj_id: ProjectIDT) -> Dict[str, int]:
         # TODO: Why using the view?
         sql = text("SELECT o.orig_id, o.objid "
                    "  FROM objects o "
@@ -110,10 +115,10 @@ class ObjectHeader(Model):
     @classmethod
     def fetch_existing_ranks(cls, session: Session, prj_id) -> Dict[int, Set[int]]:
         ret: Dict[int, Set[int]] = {}
-        qry: Query = session.query(Image.objid, Image.imgrank)
+        qry = session.query(Image.objid, Image.imgrank)
         qry = qry.join(ObjectHeader).join(Acquisition).join(Sample).join(Project)
         qry = qry.filter(Project.projid == prj_id)
-        for objid, imgrank in qry.all():
+        for objid, imgrank in qry:
             ret.setdefault(objid, set()).add(imgrank)
         return ret
 
@@ -172,6 +177,7 @@ class ObjectFields(Model):
     # The relationships are created in Relations.py but the typing here helps the IDE
     object: relationship
 
+
 # TODO
 # event.listen(
 #     ObjectsFields.__table__,
@@ -187,7 +193,6 @@ for i in range(1, 501):
 for i in range(1, 21):
     setattr(ObjectFields, "t%02d" % i, Column(VARCHAR(250)))
 
-
 Index('is_objectsacqclassifqual', ObjectHeader.__table__.c.acquisid, ObjectHeader.__table__.c.classif_id,
       ObjectHeader.__table__.c.classif_qual)
 Index('is_objectsacqrandom', ObjectHeader.__table__.c.acquisid, ObjectHeader.__table__.c.random_value,
@@ -201,6 +206,7 @@ Index('is_objectsdate', ObjectHeader.__table__.c.objdate, ObjectHeader.__table__
 Index('is_objectsacquisition', ObjectHeader.__table__.c.acquisid)
 
 DEFAULT_CLASSIF_HISTORY_DATE = "TO_TIMESTAMP(0)"
+
 
 class ObjectsClassifHisto(Model):
     __tablename__ = 'objectsclassifhisto'

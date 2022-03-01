@@ -3,7 +3,8 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import os
-from typing import Optional
+import typing
+from typing import Optional, ContextManager
 
 from sqlalchemy import event
 from sqlalchemy.orm import Session
@@ -41,7 +42,7 @@ def _get_default_gateway():  # pragma: no cover
     return ""
 
 
-def _turn_localhost_for_docker(host: str, _port: str):  # pragma: no cover
+def _turn_localhost_for_docker(host: str):  # pragma: no cover
     """ Turn localhost to the address as seen from inside the container
         For win & mac0s there is a solution, environment var host.docker.internal
          but https://github.com/docker/for-linux/issues/264
@@ -55,7 +56,10 @@ def _turn_localhost_for_docker(host: str, _port: str):  # pragma: no cover
     return host
 
 
-class Service(BaseService):
+Self = typing.TypeVar("Self")
+
+
+class Service(BaseService, ContextManager):
     """
         A service for EcoTaxa. Supplies common useful features like:
             a DB session
@@ -68,7 +72,7 @@ class Service(BaseService):
 
     __slots__ = ["session", "ro_session", "config"]
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Use a single configuration
         if not Service.the_config:
             config: Config = Config()
@@ -109,11 +113,11 @@ class Service(BaseService):
             Read a connection from the configuration.
         """
         prfx = "RO_" if read_only else ""
-        port = config.get_cnf(prfx + 'DB_PORT', '5432')
-        host = _turn_localhost_for_docker(config.get_cnf(prfx + 'DB_HOST'), port)
-        conn = Connection(host=host, port=port, db=config.get_cnf(prfx + 'DB_DATABASE'),
-                          user=config.get_cnf(prfx + 'DB_USER'), password=config.get_cnf(prfx + 'DB_PASSWORD'),
-                          read_only=read_only)
+        host, port, db = config.get_db_address(read_only)
+        host = _turn_localhost_for_docker(host)
+        user, password = config.get_db_credentials(read_only)
+        conn = Connection(host=host, port=port, db=db,
+                          user=user, password=password, read_only=read_only)
         return conn
 
     @staticmethod
@@ -121,11 +125,10 @@ class Service(BaseService):
         """
             Build a super-user connection from the configuration, directly to the DB server.
         """
-        port = config.get_cnf('DB_PORT', '5432')
-        host = _turn_localhost_for_docker(config.get_cnf('DB_HOST'), port)
+        host, port, _db = config.get_db_address(False)
+        host = _turn_localhost_for_docker(host)
         conn = Connection(host=host, port=port, db="postgres",
-                          user=user, password=password,
-                          read_only=False)
+                          user=user, password=password, read_only=False)
         return conn
 
     @staticmethod
@@ -175,8 +178,9 @@ class Service(BaseService):
                 pass
             assert False, "%s: Please use Service-derived classes in a with() context" % str(self)
 
-    def __enter__(self):
-        self.session = self.session
+    def __enter__(self: Self) -> Self:
+        # TODO: How to express that it's a subclass?
+        self.session = self.session  # type:ignore
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):

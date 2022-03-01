@@ -25,7 +25,7 @@ class OurRandomForestClassifier(object):
     # CPU resources
     WORKERS = 6
 
-    def __init__(self):
+    def __init__(self)  -> None:
         # We can build the classifier right away, it's just allocation
         self.cls = RandomForestClassifier(n_estimators=self.N_ESTIMATORS,
                                           min_samples_leaf=self.MIN_SAMPLES_LEAF,

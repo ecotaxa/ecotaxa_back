@@ -8,15 +8,17 @@ import shutil
 import zipfile
 from pathlib import Path
 # noinspection PyPackageRequirements
-from typing import Callable, List, Dict, Tuple
+from typing import Callable, List, Dict, Tuple, Generator, Set
 
 from BO.TSVFile import TSVFile
 from BO.Taxonomy import TaxonomyBO
 from BO.Vignette import VignetteMaker
 from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
-from DB import Sample, Acquisition
+from DB.Acquisition import Acquisition
 from DB.Image import Image
 from DB.Object import ObjectHeader
+from DB.Project import ProjectIDT
+from DB.Sample import Sample
 from DB.helpers import Session
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
@@ -40,7 +42,7 @@ class InBundle(object):
         self.possible_files: List[Path] = []
         nb_files = 0
 
-        def one_more():
+        def one_more() -> None:
             nonlocal nb_files
             nb_files += 1
             if nb_files > self.MAX_FILES:
@@ -56,7 +58,7 @@ class InBundle(object):
             self.sub_bundles.append(UVP6Bundle(a_bundle, temp_dir))
             one_more()
 
-    def possible_files_as_posix(self):
+    def possible_files_as_posix(self) -> Generator[str, None, None]:
         """
             Return the relative names of the files we have to process. Generator function.
         """
@@ -90,7 +92,7 @@ class InBundle(object):
         ret = self.import_each_file(where, how, stats)
         return ret
 
-    def import_each_file(self, where: ImportWhere, how: ImportHow, stats: ImportStats):
+    def import_each_file(self, where: ImportWhere, how: ImportHow, stats: ImportStats) -> int:
         """
             Import each file in the bundle.
             :param where:
@@ -98,10 +100,10 @@ class InBundle(object):
             :param stats:
         """
 
-        def log_stats():
+        def log_stats(name: str, rows: int) -> None:
             elapsed, rows_per_sec = stats.so_far()
             logger.info("File %s : %d rows loaded, %d so far at %d rows/s",
-                        relative_name, rows_for_csv, stats.current_row_count,
+                        name, rows, stats.current_row_count,
                         rows_per_sec)
 
         for sub_bundle in self.sub_bundles:
@@ -127,14 +129,14 @@ class InBundle(object):
             stats.add_rows(rows_for_csv)
             how.loaded_files.append(relative_name)
             where.db_writer.persist()
-            log_stats()
+            log_stats(relative_name, rows_for_csv)
 
         where.db_writer.eof_cleanup()
 
         return stats.current_row_count
 
     @staticmethod
-    def fetch_existing_objects(session, prj_id):
+    def fetch_existing_objects(session: Session, prj_id: ProjectIDT) -> Dict[str, int]:
         """
             Get existing object IDs (orig_id AKA object_id in TSV) from the project
         """
@@ -142,14 +144,15 @@ class InBundle(object):
             return ObjectHeader.fetch_existing_objects(session, prj_id)
 
     @staticmethod
-    def fetch_existing_ranks(session, prj_id):
+    def fetch_existing_ranks(session: Session, prj_id: ProjectIDT) -> Dict[int, Set[int]]:
         """
             Get existing image ranks from the project
         """
         return ObjectHeader.fetch_existing_ranks(session, prj_id)
 
     @staticmethod
-    def fetch_existing_parents(session, prj_id) -> Tuple[Dict[str, Sample], Dict[Tuple[str, str], Acquisition]]:
+    def fetch_existing_parents(session: Session, prj_id: ProjectIDT) \
+            -> Tuple[Dict[str, Sample], Dict[Tuple[str, str], Acquisition]]:
         """
             Get from DB the present ORM instances for the tables we are going to update,
             in current project.
@@ -202,7 +205,7 @@ class InBundle(object):
                       .format(diag.nb_objects_without_gps))
         return total_row_count
 
-    def validate_each_file(self, how: ImportHow, diag: ImportDiagnostic, report_def: Callable):
+    def validate_each_file(self, how: ImportHow, diag: ImportDiagnostic, report_def: Callable) -> int:
         total_row_count = 0
         for num_file, sub_bundle in enumerate(self.sub_bundles):
             # It's another kind of bundle
@@ -233,7 +236,7 @@ class InBundle(object):
         return total_row_count
 
     @staticmethod
-    def check_classif(session: Session, diag: ImportDiagnostic, classif_id_seen):
+    def check_classif(session: Session, diag: ImportDiagnostic, classif_id_seen) -> None:
         classif_id_found_in_db = TaxonomyBO.find_ids(session, list(classif_id_seen))
         classif_id_not_found_in_db = classif_id_seen.difference(classif_id_found_in_db)
         if len(classif_id_not_found_in_db) > 0:
@@ -242,14 +245,14 @@ class InBundle(object):
             diag.error(msg)
             logger.error(msg)
 
-    def remove_all_tsvs(self):
+    def remove_all_tsvs(self) -> None:
         """
             Remove to-be-treated TSV files inside self,
             used in case a .zip with structured information is sent to Import Simple
         """
         self.possible_files = []
 
-    def add_tsv(self, a_tsv_file: Path):
+    def add_tsv(self, a_tsv_file: Path) -> None:
         """
             Add a TSV file for treatment.
         """
@@ -306,7 +309,7 @@ class UVP6Bundle(InBundle):
                 z.extractall(sample_dir.as_posix())
         super().__init__(sample_dir.as_posix(), temp_dir)
 
-    def before_import(self, how: ImportHow):
+    def before_import(self, how: ImportHow) -> None:
         how.vignette_maker = None
         # Pick vignette-ing config file from the zipped directory
         potential_config = self.path / self.VIGNETTE_CONFIG
@@ -316,5 +319,5 @@ class UVP6Bundle(InBundle):
             how.vignette_maker = VignetteMaker(vignette_maker_cfg, self.path, self.TEMP_VIGNETTE)
 
     @staticmethod
-    def after_import(how: ImportHow):
+    def after_import(how: ImportHow) -> None:
         how.vignette_maker = None

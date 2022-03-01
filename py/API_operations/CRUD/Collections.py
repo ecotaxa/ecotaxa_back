@@ -34,7 +34,7 @@ class CollectionsService(Service):
         # TODO, for now only admins
         _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
         qry = self.ro_session.query(Collection).filter(Collection.title.ilike(title))
-        ret = [CollectionBO(a_rec).enrich() for a_rec in qry.all()]
+        ret = [CollectionBO(a_rec).enrich() for a_rec in qry]
         return ret
 
     def query(self, current_user_id: UserIDT, coll_id: CollectionIDT, for_update: bool) -> Optional[CollectionBO]:
@@ -46,14 +46,14 @@ class CollectionsService(Service):
     def query_by_title(self, title: str) -> CollectionBO:
         # Return a unique collection from its title
         qry = self.ro_session.query(Collection).filter(Collection.title == title)
-        ret = [CollectionBO(a_rec).enrich() for a_rec in qry.all()]
+        ret = [CollectionBO(a_rec).enrich() for a_rec in qry]
         assert len(ret) == 1, NOT_FOUND
         return ret[0]
 
     def query_by_short_title(self, title: str) -> CollectionBO:
         # Return a unique collection from its title, short one
         qry = self.ro_session.query(Collection).filter(Collection.short_title == title)
-        ret = [CollectionBO(a_rec).enrich() for a_rec in qry.all()]
+        ret = [CollectionBO(a_rec).enrich() for a_rec in qry]
         assert len(ret) == 1, NOT_FOUND
         return ret[0]
 

@@ -5,11 +5,10 @@
 from typing import List, Any, Optional, Set, cast, Dict
 
 from BO.DataLicense import DataLicense, LicenseEnum
-from DB import Collection, User, CollectionUserRole, Project, Sample
-from DB import Session, Query
+from DB import Session, User, Sample
 from DB.Collection import COLLECTION_ROLE_DATA_CREATOR, COLLECTION_ROLE_ASSOCIATED_PERSON, CollectionProject, \
-    CollectionOrgaRole
-from DB.Project import ProjectIDListT
+    CollectionOrgaRole, Collection, CollectionUserRole
+from DB.Project import ProjectIDListT, Project
 from DB.helpers.ORM import contains_eager
 from helpers.DynamicLogs import get_logger
 
@@ -40,7 +39,7 @@ class CollectionBO(object):
         self.creator_organisations: List[OrganisationIDT] = []
         self.associate_organisations: List[OrganisationIDT] = []
 
-    def enrich(self):
+    def enrich(self) -> "CollectionBO":
         """
             Add some DB fields and relations as (hopefully more) meaningful attributes.
         """
@@ -58,9 +57,7 @@ class CollectionBO(object):
         by_role_usr = {COLLECTION_ROLE_DATA_CREATOR: self.creator_users,
                        COLLECTION_ROLE_ASSOCIATED_PERSON: self.associate_users}
         a_user_and_role: CollectionUserRole
-        # noinspection PyTypeChecker
         for a_user_and_role in self._collection.users_by_role:
-            # noinspection PyTypeChecker
             by_role_usr[a_user_and_role.role].append(a_user_and_role.user)
         # Dispatch orgs by role
         by_role_org = {COLLECTION_ROLE_DATA_CREATOR: self.creator_organisations,
@@ -78,7 +75,7 @@ class CollectionBO(object):
         """
             Add the given projects into DB, doing sanity checks.
         """
-        qry: Query = session.query(Project).filter(Project.projid.in_(project_ids))
+        qry = session.query(Project).filter(Project.projid.in_(project_ids))
         qry = qry.join(Sample, Project.all_samples).options(contains_eager(Project.all_samples))
         db_projects = qry.all()
         assert len(db_projects) == len(project_ids)

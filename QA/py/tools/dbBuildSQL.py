@@ -1,6 +1,7 @@
 """
 Build the DB from scratch in EcoTaxa V2_2, using an SQL Dump, so the 2_2 source tree is not needed.
 """
+import os
 import shutil
 import sys
 import time
@@ -44,12 +45,19 @@ class EcoTaxaExistingDB(object):
     """
 
     @staticmethod
-    def write_config(conf_file: Path, host: str, port: int, shared: str = "/tmp", ftp: str = "/tmp"):
+    def write_config(conf_file: Path, host: str, port: int,
+                     vault: str = "/tmp", jobs: str = "/tmp",
+                     shared: str = "/tmp", ftp: str = "/tmp",
+                     models: str = "/tmp"):
         with open(str(conf_file), "w") as f:
-            f.write(EcoTaxaDBFrom0.CONF % (host, port, host, port, shared, ftp))
+            f.write(EcoTaxaDBFrom0.CONF % (host, port, host, port,
+                                           vault, jobs,
+                                           shared, ftp,
+                                           models))
+        os.environ["APP_CONFIG"] = conf_file.absolute().as_posix()
 
 
-DB_NAME = 'tecotaxa'
+DB_NAME = 'ecotaxa4'
 DB_PASSWORD = "postgres12"
 
 

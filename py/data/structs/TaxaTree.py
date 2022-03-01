@@ -4,7 +4,7 @@
 #
 # A taxa tree.
 #
-from typing import Dict, Optional, Tuple, List
+from typing import Dict, Optional, Tuple, List, Generator
 
 from BO.Classification import ClassifIDT
 
@@ -33,7 +33,7 @@ class TaxaTree(object):
         # Workload
         self.nb_objects = 0
 
-    def add_path(self, path: List[Tuple[ClassifIDT, str]]):
+    def add_path(self, path: List[Tuple[ClassifIDT, str]]) -> None:
         """
             Add a path into the tree. Paths are root-last.
         """
@@ -46,20 +46,20 @@ class TaxaTree(object):
             self.children[child_id] = child
         child.add_path(path[:-1])
 
-    def size(self):
+    def size(self) -> int:
         ret = 1
         for a_child in self.children.values():
             ret += a_child.size()
         return ret
 
-    def print(self, indent=0, with_children=True):
+    def print(self, indent=0, with_children=True) -> None:
         print(("|  " * indent) + self.name + "(%d): %d objs" % (self.id, self.nb_objects))
         if not with_children:
             return
         for a_child in self.children.values():
             a_child.print(indent + 1)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name + ">"
 
     def find_node(self, taxo_id: ClassifIDT) -> 'TaxaTree':
@@ -79,7 +79,7 @@ class TaxaTree(object):
         ret += ")"
         return ret
 
-    def parents_ite(self):
+    def parents_ite(self) -> Generator["TaxaTree", None, None]:
         """
             An iterator for climbing the tree.
         """
@@ -88,14 +88,14 @@ class TaxaTree(object):
             yield parent
             parent = parent.parent
 
-    def top_to_bottom_ite(self):
+    def top_to_bottom_ite(self) -> Generator["TaxaTree", None, None]:
         if self.parent is not None:
             yield self
         for a_child in self.children.values():
             for a_subtree in a_child.top_to_bottom_ite():
                 yield a_subtree
 
-    def closure(self):
+    def closure(self) -> List[Tuple[int, int]]:
         """
             List of edges with transitive closure.
         """

@@ -12,7 +12,8 @@ from API_models.helpers.DBtoModel import SQLAlchemy2Pydantic
 from API_models.helpers.DataclassToModel import dataclass_to_model
 from BO.Classification import HistoricalLastClassif, HistoricalClassification
 from BO.ObjectSet import ObjectIDListT
-from DB import Image, ObjectHeader
+from DB.Image import Image
+from DB.Object import ObjectHeader
 from .helpers.pydantic import ResponseModel
 
 
@@ -132,18 +133,18 @@ class ObjectSetQueryRsp(ResponseModel):
                                             example=[234, 194, 12])
     project_ids: List[Optional[int]] = Field(title="Project Ids", description="Project Ids.", default=[],
                                              example=[22, 43])
-    details: List[List] = Field(title="Details", description="Requested fields, in request order.",
-                                default=[], example=[[7.315666666666667,
-                                                      43.685
-                                                      ],
-                                                     [
-                                                         7.315666666666667,
-                                                         43.685
-                                                     ],
-                                                     [
-                                                         7.315666666666667,
-                                                         43.685
-                                                     ]])
+    details: List[List[Any]] = Field(title="Details", description="Requested fields, in request order.",
+                                     default=[], example=[[7.315666666666667,
+                                                           43.685
+                                                           ],
+                                                          [
+                                                              7.315666666666667,
+                                                              43.685
+                                                          ],
+                                                          [
+                                                              7.315666666666667,
+                                                              43.685
+                                                          ]])
     total_ids: int = Field(title="Total Ids", description="Total rows returned by the query, even if it was window-ed.",
                            default=0, example=1000)
 
@@ -181,13 +182,14 @@ _DBHistoricalLastClassifDescription = {
                                description="The user who manualy classify this object.", example=3876),
 }
 
-HistoricalLastClassificationModel = dataclass_to_model(HistoricalLastClassif,  # type:ignore
-                                                       field_infos=_DBHistoricalLastClassifDescription)  # type:ignore
+HistoricalLastClassificationModel = dataclass_to_model(HistoricalLastClassif,
+                                                       field_infos=_DBHistoricalLastClassifDescription)
 
 
 class ObjectSetRevertToHistoryRsp(BaseModel):
     # TODO: Setting below to List[HistoricalClassification] fails to export the model
     #       but setting as below fools mypy.
+    # It's now done for the 2 other wrappers, so just copy/paste Lol
     last_entries: List[HistoricalLastClassificationModel] = Field(title="Last entries", # type: ignore
                                                                   description="Object + last classification",
                                                                   default=[], example=[{"objid": 264409236,

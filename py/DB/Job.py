@@ -32,11 +32,11 @@ class Job(Model):
             - When done or in error, no thread.
     """
     __tablename__ = 'job'
-    id = Column(INTEGER, Sequence('seq_temp_tasks'), primary_key=True)
+    id: int = Column(INTEGER, Sequence('seq_temp_tasks'), primary_key=True)
     """ Unique identifier, from a sequence """
-    owner_id = Column(INTEGER, ForeignKey('users.id'), nullable=False)
+    owner_id: int = Column(INTEGER, ForeignKey('users.id'), nullable=False)
     """ The user who created and thus owns the job """
-    type = Column(VARCHAR(80), nullable=False)
+    type: str = Column(VARCHAR(80), nullable=False)
     """ The job type, e.g. import, export... """
     params = Column(VARCHAR())
     """ JSON-encoded startup parameters """

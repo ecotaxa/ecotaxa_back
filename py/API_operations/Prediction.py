@@ -10,11 +10,8 @@
 # Here is just the job registering part, the rest is in GPU_Prediction class.
 #
 from pathlib import Path
-from typing import Dict
 
-import numpy as np  # type: ignore
-
-from API_models.crud import ProjectFilters
+from API_models.filters import ProjectFiltersDict
 from API_models.prediction import PredictionReq, PredictionRsp
 from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
@@ -22,7 +19,7 @@ from FS.MachineLearningModels import SavedModels
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 # TODO: Move somewhere else
-from .helpers.JobService import JobServiceBase
+from .helpers.JobService import JobServiceBase, ArgsDict
 
 logger = get_logger(__name__)
 
@@ -33,7 +30,7 @@ class PredictForProject(JobServiceBase):
     """
     JOB_TYPE = "Prediction"
 
-    def __init__(self, req: PredictionReq, filters: ProjectFilters):
+    def __init__(self, req: PredictionReq, filters: ProjectFiltersDict):
         super().__init__()
         self.req = req
         self.filters = filters
@@ -52,23 +49,23 @@ class PredictForProject(JobServiceBase):
         ret = PredictionRsp(job_id=self.job_id)
         return ret
 
-    def init_args(self, args: Dict) -> Dict:
+    def init_args(self, args: ArgsDict) -> ArgsDict:
         super().init_args(args)
         args["req"] = self.req.dict()
         args["filters"] = self.filters.__dict__
         return args
 
     @staticmethod
-    def deser_args(json_args: Dict):
+    def deser_args(json_args: ArgsDict) -> None:
         json_args["req"] = PredictionReq(**json_args["req"])
-        json_args["filters"] = ProjectFilters(**json_args["filters"])  # type:ignore
+        json_args["filters"] = ProjectFiltersDict(**json_args["filters"])  # type:ignore
 
-    def do_background(self):
+    def do_background(self) -> None:
         """
             Background part of the job.
         """
         with LogsSwitcher(self):
             self.do_prediction()
 
-    def do_prediction(self):
+    def do_prediction(self) -> None:
         ...

@@ -5,6 +5,7 @@
 # For timing portions of code
 #
 import time
+from logging import Logger
 
 
 class CodeTimer(object):
@@ -12,7 +13,7 @@ class CodeTimer(object):
 
     """
 
-    def __init__(self, msg, logger):
+    def __init__(self, msg: str, logger: Logger):
         self.msg = msg
         self.logger = logger
         self.start = None
@@ -23,4 +24,4 @@ class CodeTimer(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         elapsed = time.time() - self.start
         if exc_type is None:
-            self.logger.info(self.msg + "%.02fms" % (elapsed*1000))
+            self.logger.info(self.msg + "%.02fms" % (elapsed * 1000))

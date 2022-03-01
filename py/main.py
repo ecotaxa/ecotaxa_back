@@ -6,7 +6,7 @@
 #
 import os
 from logging import INFO
-from typing import Union, Tuple
+from typing import Union, Tuple, List, Dict, Any, Optional
 
 from fastapi import FastAPI, Request, Response, status, Depends, HTTPException, UploadFile, File, Query, Form, Body, \
     Path
@@ -17,11 +17,14 @@ from fastapi_utils.timing import add_timing_middleware
 from sqlalchemy.sql.expression import null
 
 from API_models.constants import Constants
-from API_models.crud import *
+from API_models.crud import AcquisitionModel, ProcessModel, ProjectModel, UserModelWithRights, MinUserModel, \
+    CollectionModel, CreateCollectionReq, SampleModel, JobModel, BulkUpdateReq, CreateProjectReq, \
+    ProjectTaxoStatsModel, ProjectUserStatsModel, ProjectSetColumnStatsModel, SampleTaxoStatsModel
 from API_models.exports import EMODnetExportRsp, ExportRsp, ExportReq
 from API_models.filesystem import DirectoryModel
+from API_models.filters import ProjectFilters
 from API_models.helpers.Introspect import plain_columns
-from API_models.imports import *
+from API_models.imports import ImportReq, SimpleImportRsp, SimpleImportReq, ImportRsp
 from API_models.login import LoginReq
 from API_models.merge import MergeRsp
 from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp, ClassifyReq, ObjectModel, \
@@ -59,17 +62,19 @@ from API_operations.imports.SimpleImport import SimpleImport
 from BG_operations.JobScheduler import JobScheduler
 from BO.Acquisition import AcquisitionBO
 from BO.Classification import HistoricalClassification, ClassifIDT
+from BO.Collection import CollectionBO
+from BO.ColumnUpdate import ColUpdateList
 from BO.Job import JobBO
 from BO.Object import ObjectBO
 from BO.ObjectSet import ObjectIDListT
 from BO.Process import ProcessBO
 from BO.Project import ProjectBO, ProjectUserStats
 from BO.ProjectSet import ProjectSetColumnStats
-from BO.Sample import SampleBO
+from BO.Sample import SampleBO, SampleTaxoStats
 from BO.Taxonomy import TaxonBO
 from BO.User import UserIDT
-from DB import ProjectPrivilege
-from DB.Project import ProjectTaxoStat
+from DB import ProjectPrivilege, User
+from DB.Project import ProjectTaxoStat, Project
 from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import internal_server_error_handler, dump_openapi, get_current_user, RightsThrower, \
@@ -142,7 +147,8 @@ async def login(params: LoginReq = Body(...)) -> str:
     """
     with LoginService() as sce:
         with RightsThrower():
-            return sce.validate_login(params.username, params.password)
+            ret = sce.validate_login(params.username, params.password)
+    return str(ret)
 
 
 @app.get("/users", operation_id="get_users", tags=['users'], response_model=List[UserModelWithRights])
@@ -150,7 +156,7 @@ def get_users(ids: str = Query("", title="Ids",
                                description="String containing the list of one or more id separated by non-num char. \n"
                                            " \n **If several ids are provided**, one full info is returned per user.",
                                example="1"),
-              current_user: int = Depends(get_current_user)):
+              current_user: int = Depends(get_current_user)) -> List[UserModelWithRights]:
     """
         Returns the list of **all users** with their full information, or just some of them if their ids
         are provided.
@@ -163,7 +169,7 @@ def get_users(ids: str = Query("", title="Ids",
 
 
 @app.get("/users/me", operation_id="show_current_user", tags=['users'], response_model=UserModelWithRights)
-def show_current_user(current_user: int = Depends(get_current_user)):
+def show_current_user(current_user: int = Depends(get_current_user)) -> UserModelWithRights:
     """
         Returns **currently authenticated user's** (i.e. you) information, permissions and last used projects.
     """
@@ -183,7 +189,7 @@ def show_current_user(current_user: int = Depends(get_current_user)):
          })
 def update_user(user: UserModelWithRights,
                 user_id: int = Path(..., description="Internal, numeric id of the user.", example=760),
-                current_user: int = Depends(get_current_user)):
+                current_user: int = Depends(get_current_user)) -> None:
     """
         **Update the user**, return **NULL upon success.**
 
@@ -212,7 +218,7 @@ def update_user(user: UserModelWithRights,
 def create_user(user: UserModelWithRights = Body(...),
                 no_bot: Optional[List[str]] = Query(default=None, title="NoBot token", description="not-a-robot proof",
                                                     example="['127.0.0.1', 'ffqsdfsdf'"),
-                current_user: Optional[int] = Depends(get_optional_current_user)):
+                current_user: Optional[int] = Depends(get_optional_current_user)) -> None:
     """
         **Create a new user**, return **NULL upon success.**
 
@@ -226,7 +232,6 @@ def create_user(user: UserModelWithRights = Body(...),
     """
     with UserService() as sce:
         with ValidityThrower(), RightsThrower():
-
             new_user_id: UserIDT = sce.create_user(current_user, user, no_bot)
 
     with DBSyncService(User, User.id, new_user_id) as ssce:
@@ -251,7 +256,7 @@ def get_current_user_prefs(
         project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
         key: str = Query(..., title="Key", description="The preference key, as text.",
                          example="filters"),
-        current_user: int = Depends(get_current_user)) -> str:
+        current_user: int = Depends(get_current_user)) -> Any:
     """
         **Returns one preference**, for a project and the currently authenticated user.
 
@@ -280,7 +285,7 @@ def set_current_user_prefs(
         value: str = Query(..., title="Value",
                            description="The value to set this preference to, as text.",
                            example="{\"dispfield\": \" dispfield_orig_id dispfield_classif_auto_score dispfield_classif_when dispfield_random_value\", \"ipp\": \"500\", \"magenabled\": \"1\", \"popupenabled\": \"1\", \"sortby\": \"orig_id\", \"sortorder\": \"asc\", \"statusfilter\": \"\", \"zoom\": \"90\"}"),
-        current_user: int = Depends(get_current_user)):
+        current_user: int = Depends(get_current_user)) -> None:
     """
         **Sets one preference**, for a project and for the currently authenticated user.
 
@@ -298,7 +303,7 @@ def set_current_user_prefs(
 def search_user(current_user: int = Depends(get_current_user),
                 by_name: Optional[str] = Query(default=None, title="search by name",
                                                description="Search by name, use % for searching with 'any char'.",
-                                               example="%userNa%")):
+                                               example="%userNa%")) -> List[User]:
     """
         **Search users using various criteria**, search is case insensitive and might contain % chars.
     """
@@ -308,7 +313,7 @@ def search_user(current_user: int = Depends(get_current_user),
 
 
 @app.get("/users/admins", operation_id="get_users_admins", tags=['users'], response_model=List[MinUserModel])
-def get_users_admins():
+def get_users_admins() -> List[User]:
     """
         **List users administrators**, themselves being users.
         🔒 Public, no auth.
@@ -319,7 +324,7 @@ def get_users_admins():
 
 
 @app.get("/users/user_admins", operation_id="get_admin_users", tags=['users'], response_model=List[MinUserModel])
-def get_admin_users(current_user: int = Depends(get_current_user)):
+def get_admin_users(current_user: int = Depends(get_current_user)) -> List[User]:
     """
         **List application administrators**, themselves being users.
         🔒 Any authenticated user can access the list.
@@ -331,7 +336,7 @@ def get_admin_users(current_user: int = Depends(get_current_user)):
 
 @app.get("/users/{user_id}", operation_id="get_user", tags=['users'], response_model=MinUserModel)
 def get_user(user_id: int = Path(..., description="Internal, the unique numeric id of this user.", example=1),
-             current_user: int = Depends(get_current_user)):
+             current_user: int = Depends(get_current_user)) -> Optional[User]:
     """
         Returns **information about the user** corresponding to the given id.
     """
@@ -405,7 +410,7 @@ def create_collection(params: CreateCollectionReq = Body(...),
 def search_collections(title: str = Query(..., title="Title",
                                           description="Search by title, use % for searching with 'any char'.",
                                           example="%coll%"),
-                       current_user: int = Depends(get_current_user)):
+                       current_user: int = Depends(get_current_user)) -> List[CollectionBO]:
     """
         **Search for collections.**
 
@@ -420,7 +425,8 @@ def search_collections(title: str = Query(..., title="Title",
 @app.get("/collections/by_title", operation_id="collection_by_title", tags=['collections'],
          response_model=CollectionModel)
 def collection_by_title(
-        q: str = Query(..., title="Title", description="Search by **exact** title.", example="My collection")):
+        q: str = Query(..., title="Title", description="Search by **exact** title.",
+                       example="My collection")) -> CollectionBO:
     """
         Return the **single collection with this title**.
 
@@ -438,7 +444,7 @@ def collection_by_title(
          response_model=CollectionModel)
 def collection_by_short_title(
         q: str = Query(..., title="Short title", description="Search by **exact** short title.",
-                       example="My coll")):
+                       example="My coll")) -> CollectionBO:
     """
         Return the **single collection with this short title**.
 
@@ -457,7 +463,7 @@ def collection_by_short_title(
 def get_collection(
         collection_id: int = Path(..., description="Internal, the unique numeric id of this collection.",
                                   example=1),
-        current_user: int = Depends(get_current_user)):
+        current_user: int = Depends(get_current_user)) -> CollectionBO:
     """
        Returns **information about the collection** corresponding to the given id.
 
@@ -484,7 +490,7 @@ def get_collection(
 def update_collection(collection: CollectionModel = Body(...),
                       collection_id: int = Path(..., description="Internal, the unique numeric id of this collection.",
                                                 example=1),
-                      current_user: int = Depends(get_current_user)):
+                      current_user: int = Depends(get_current_user)) -> None:
     """
        **Update the collection**. Note that some updates are silently failing when not compatible
         with the composing projects.
@@ -656,7 +662,7 @@ def create_project(params: CreateProjectReq = Body(...),
 @app.post("/projects/{project_id}/subset", operation_id="project_subset", tags=['projects'], response_model=SubsetRsp)
 def project_subset(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
                    params: SubsetReq = Body(...),
-                   current_user: int = Depends(get_current_user)):
+                   current_user: int = Depends(get_current_user)) -> SubsetRsp:
     """
         **Subset a project into another one.**
     """
@@ -682,13 +688,13 @@ def project_query(project_id: int = Path(..., description="Internal, numeric id 
 
 
 @app.get("/project_set/taxo_stats", operation_id="project_set_get_stats", tags=['projects'],
-         response_model=List[ProjectTaxoStatsModel])  # type: ignore
+         response_model=List[ProjectTaxoStatsModel])
 def project_set_get_stats(ids: str = Query(..., title="Ids",
-                                           description="String containing the list of one or more id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
+                                           description="String containing the list of one or more project id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
                                            example="1"),
-                          taxa_ids: Optional[str] = Query(title="Taxa Ids",
-                                                          description="**If several taxa_ids are provided**, one stat record will be returned per requested taxa, if populated.\n \n **If taxa_ids is all**, all valued taxa in the project(s) are returned.",
-                                                          default="", example="all"),
+                          taxa_ids: str = Query(title="Taxa Ids",
+                                                description="**If several taxa_ids are provided**, one stat record will be returned per requested taxa, if populated.\n \n **If taxa_ids is all**, all valued taxa in the project(s) are returned.",
+                                                default="", example="all"),
                           current_user: Optional[int] = Depends(get_optional_current_user)
                           ) -> MyORJSONResponse:  # List[ProjectTaxoStats]
     """
@@ -696,13 +702,14 @@ def project_set_get_stats(ids: str = Query(..., title="Ids",
     """
     with ProjectsService() as sce:
         num_prj_ids = _split_num_list(ids)
+        taxa_ids_call: Union[str, List[int]]
         if taxa_ids == 'all':
-            num_taxa_ids = taxa_ids
+            taxa_ids_call = taxa_ids
         else:
-            num_taxa_ids = _split_num_list(taxa_ids)
+            taxa_ids_call = _split_num_list(taxa_ids)
         with RightsThrower():
-            ret = sce.read_stats(current_user, num_prj_ids, num_taxa_ids)
-        return MyORJSONResponse(ret)
+            ret = sce.read_stats(current_user, num_prj_ids, taxa_ids_call)
+    return MyORJSONResponse(ret)
 
 
 @app.get("/project_set/user_stats", operation_id="project_set_get_user_stats", tags=['projects'],
@@ -756,7 +763,7 @@ def project_set_get_user_stats(ids: str = Query(..., title="Ids",
                      }
                  }
              }
-         }, response_model=ProjectSetColumnStatsModel)  # type: ignore
+         }, response_model=ProjectSetColumnStatsModel)
 def project_set_get_column_stats(ids: str = Query(..., title="Project ids",
                                                   description="String containing the list of one or more id separated by non-num char.",
                                                   example="1400+1453"),
@@ -793,13 +800,13 @@ def project_set_get_column_stats(ids: str = Query(..., title="Project ids",
 @app.post("/projects/{project_id}/dump", operation_id="project_dump", tags=['projects'],
           include_in_schema=False)  # pragma:nocover
 def project_dump(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
-                 filters: ProjectFiltersModel = Body(...),
-                 current_user: int = Depends(get_current_user)):
+                 filters: ProjectFilters = Body(...),
+                 current_user: int = Depends(get_current_user)) -> None:
     """
         Dump the project in JSON form. Internal so far.
     """
     # TODO: Use a StreamingResponse to avoid buffering
-    with JsonDumper(current_user, project_id, filters) as sce:
+    with JsonDumper(current_user, project_id, filters.base()) as sce:
         # TODO: Finish. lol.
         import sys
         return sce.run(sys.stdout)
@@ -868,7 +875,7 @@ def project_check(project_id: int = Path(..., description="Internal, numeric id 
          },
          response_model=List[str])
 def project_stats(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
-                  current_user: int = Depends(get_current_user)):
+                  current_user: int = Depends(get_current_user)) -> List[str]:
     """
 **Returns stats** for a project.
 
@@ -942,7 +949,7 @@ def project_recompute_sunpos(
 @app.post("/file_import/{project_id}", operation_id="import_file", tags=['projects'], response_model=ImportRsp)
 def import_file(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
                 params: ImportReq = Body(...),
-                current_user: int = Depends(get_current_user)):
+                current_user: int = Depends(get_current_user)) -> ImportRsp:
     """
         **Validate or do a real import** of an EcoTaxa archive or directory.
     """
@@ -959,7 +966,7 @@ def simple_import(project_id: int = Path(..., description="Internal, numeric id 
                   dry_run: bool = Query(..., title="Dry run",
                                         description="If set, then only a diagnostic of doability will be done. In this case, plain value check. If no dry_run, this call will create a background job.",
                                         example=True),
-                  current_user: int = Depends(get_current_user)):
+                  current_user: int = Depends(get_current_user)) -> Optional[SimpleImportRsp]:
     """
         **Import images only**, with same metadata for all.
     """
@@ -1011,7 +1018,7 @@ def erase_project(project_id: int = Path(..., description="Internal, numeric id 
          })
 def update_project(project: ProjectModel,
                    project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
-                   current_user: int = Depends(get_current_user)):
+                   current_user: int = Depends(get_current_user)) -> None:
     """
         **Update the project**, return **NULL upon success.**
 
@@ -1051,7 +1058,7 @@ def set_project_predict_settings(settings: str = Query(..., description="The new
                                                        example="seltaxo=84963,59996,56545 baseproject=2562,2571"),
                                  project_id: int = Path(..., description="Internal, numeric id of the project.",
                                                         example=4223),
-                                 current_user: int = Depends(get_current_user)):
+                                 current_user: int = Depends(get_current_user)) -> None:
     """
         **Update the project's prediction settings**, return **NULL upon success.**
 
@@ -1113,9 +1120,9 @@ def sample_set_get_stats(sample_ids: str = Query(..., title="Sample Ids",
         EXPECT A SLOW RESPONSE : No cache of such information anywhere.
     """
     with SamplesService() as sce:
-        sample_ids = _split_num_list(sample_ids)
+        num_sample_ids = _split_num_list(sample_ids)
         with RightsThrower():
-            ret = sce.read_taxo_stats(current_user, sample_ids)
+            ret = sce.read_taxo_stats(current_user, num_sample_ids)
         return ret
 
 
@@ -1141,7 +1148,7 @@ def update_samples(req: BulkUpdateReq = Body(...),
     """
     with SamplesService() as sce:
         with RightsThrower():
-            return sce.update_set(current_user, req.target_ids, req.updates)
+            return sce.update_set(current_user, req.target_ids, ColUpdateList(req.updates))
 
 
 @app.get("/sample/{sample_id}", operation_id="sample_query", tags=['samples'], response_model=SampleModel)
@@ -1199,7 +1206,7 @@ def update_acquisitions(req: BulkUpdateReq = Body(...),
     """
     with AcquisitionsService() as sce:
         with RightsThrower():
-            return sce.update_set(current_user, req.target_ids, req.updates)
+            return sce.update_set(current_user, req.target_ids, ColUpdateList(req.updates))
 
 
 @app.get("/acquisition/{acquisition_id}", operation_id="acquisition_query", tags=['acquisitions'],
@@ -1275,7 +1282,7 @@ def update_processes(req: BulkUpdateReq = Body(...),
     """
     with ProcessesService() as sce:
         with RightsThrower():
-            return sce.update_set(current_user, req.target_ids, req.updates)
+            return sce.update_set(current_user, req.target_ids, ColUpdateList(req.updates))
 
 
 @app.get("/process/{process_id}", operation_id="process_query", tags=['processes'], response_model=ProcessModel)
@@ -1306,7 +1313,7 @@ def process_query(
           response_class=MyORJSONResponse  # Force the ORJSON encoder
           )
 def get_object_set(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
-                   filters: ProjectFiltersModel = Body(...),
+                   filters: ProjectFilters = Body(...),
                    fields: Optional[str] = Query(title="Fields", description='''
 
 Specify the needed object (and ancilliary entities) fields.
@@ -1358,7 +1365,7 @@ name, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatu
     with ObjectManager() as sce:
         with RightsThrower():
             rsp = ObjectSetQueryRsp()
-            obj_with_parents, details, total = sce.query(current_user, project_id, filters,
+            obj_with_parents, details, total = sce.query(current_user, project_id, filters.base(),
                                                          return_fields, order_field,
                                                          window_start, window_size)
         rsp.total_ids = total
@@ -1376,7 +1383,7 @@ name, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatu
 def get_object_set_summary(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
                            only_total: bool = Query(..., title="Only total",
                                                     description="If True, returns only the **Total number of objects**. Else returns also the **Number of validated ones**, the **number of Dubious ones** and the number of **predicted ones**."),
-                           filters: ProjectFiltersModel = Body(...),
+                           filters: ProjectFilters = Body(...),
                            current_user: Optional[int] = Depends(get_optional_current_user)) -> ObjectSetSummaryRsp:
     """ For the given project, with given filters, **return the classification summary**.
 
@@ -1394,7 +1401,7 @@ And optionally
         with RightsThrower():
             rsp = ObjectSetSummaryRsp()
             rsp.total_objects, rsp.validated_objects, rsp.dubious_objects, rsp.predicted_objects \
-                = sce.summary(current_user, project_id, filters, only_total)
+                = sce.summary(current_user, project_id, filters.base(), only_total)
         return rsp
 
 
@@ -1411,7 +1418,7 @@ And optionally
           })
 def reset_object_set_to_predicted(
         project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
-        filters: ProjectFiltersModel = Body(...),
+        filters: ProjectFilters = Body(...),
         current_user: int = Depends(get_current_user)) -> None:
     """
         **Reset to Predicted** all objects for the given project with the filters.
@@ -1420,14 +1427,14 @@ def reset_object_set_to_predicted(
     """
     with ObjectManager() as sce:
         with RightsThrower():
-            return sce.reset_to_predicted(current_user, project_id, filters)
+            return sce.reset_to_predicted(current_user, project_id, filters.base())
 
 
 @app.post("/object_set/{project_id}/revert_to_history", operation_id="revert_object_set_to_history", tags=['objects'],
           response_model=ObjectSetRevertToHistoryRsp)
 def revert_object_set_to_history(
         project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
-        filters: ProjectFiltersModel = Body(...),
+        filters: ProjectFilters = Body(...),
         dry_run: bool = Query(..., title="Dry run",
                               description="If set, then no real write but consequences of the revert will be replied.",
                               example=False),
@@ -1440,9 +1447,10 @@ def revert_object_set_to_history(
     """
     with ObjectManager() as sce:
         with RightsThrower():
-            obj_hist, classif_info = sce.revert_to_history(current_user, project_id, filters, dry_run, target)
-        return ObjectSetRevertToHistoryRsp(last_entries=obj_hist,
-                                           classif_info=classif_info)
+            obj_hist, classif_info = sce.revert_to_history(current_user, project_id, filters.base(), dry_run, target)
+        ret = ObjectSetRevertToHistoryRsp(last_entries=obj_hist,
+                                          classif_info=classif_info)
+    return ret
 
 
 @app.post("/object_set/{project_id}/reclassify", operation_id="reclassify_object_set", tags=['objects'],
@@ -1457,7 +1465,7 @@ def revert_object_set_to_history(
           },
           response_model=int)
 def reclassify_object_set(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
-                          filters: ProjectFiltersModel = Body(...),
+                          filters: ProjectFilters = Body(...),
                           forced_id: ClassifIDT = Query(..., title="Forced Id",
                                                         description="The new classification Id.", example=23025),
                           reason: str = Query(..., title="Reason", description="The reason of this new classification.",
@@ -1472,7 +1480,7 @@ def reclassify_object_set(project_id: int = Path(..., description="Internal, num
     """
     with ObjectManager() as sce:
         with RightsThrower():
-            nb_impacted = sce.reclassify(current_user, project_id, filters, forced_id, reason)
+            nb_impacted = sce.reclassify(current_user, project_id, filters.base(), forced_id, reason)
         return nb_impacted
 
 
@@ -1499,7 +1507,7 @@ def update_object_set(req: BulkUpdateReq = Body(...),
     """
     with ObjectManager() as sce:
         with RightsThrower():
-            return sce.update_set(current_user, req.target_ids, req.updates)
+            return sce.update_set(current_user, req.target_ids, ColUpdateList(req.updates))
 
 
 @app.post("/object_set/classify", operation_id="classify_object_set", tags=['objects'],
@@ -1587,25 +1595,25 @@ def query_object_set_parents(object_ids: ObjectIDListT = Body(..., title="Object
 
 
 @app.post("/object_set/export", operation_id="export_object_set", tags=['objects'], response_model=ExportRsp)
-def export_object_set(filters: ProjectFiltersModel = Body(...),
+def export_object_set(filters: ProjectFilters = Body(...),
                       request: ExportReq = Body(...),
-                      current_user: Optional[int] = Depends(get_optional_current_user)) -> ExportRsp:
+                      current_user: int = Depends(get_current_user)) -> ExportRsp:
     """
         **Start an export job for the given object set and options.**
     """
-    with ProjectExport(request, filters) as sce:
+    with ProjectExport(request, filters.base()) as sce:
         rsp = sce.run(current_user)
     return rsp
 
 
 @app.post("/object_set/predict", operation_id="predict_object_set", tags=['objects'], response_model=PredictionRsp)
-def predict_object_set(filters: ProjectFiltersModel = Body(...),
+def predict_object_set(filters: ProjectFilters = Body(...),
                        request: PredictionReq = Body(...),
-                       current_user: Optional[int] = Depends(get_optional_current_user)) -> PredictionRsp:
+                       current_user: int = Depends(get_current_user)) -> PredictionRsp:
     """
         **Start a prediction** AKA automatic classification for the given object set and options.
     """
-    with PredictForProject(request, filters) as sce:
+    with PredictForProject(request, filters.base()) as sce:
         rsp = sce.run(current_user)
     return rsp
 
@@ -1737,7 +1745,7 @@ async def query_root_taxa() \
 
 
 @app.get("/taxa/status", operation_id="taxa_tree_status", tags=['Taxonomy Tree'], response_model=TaxonomyTreeStatus)
-async def taxa_tree_status(current_user: int = Depends(get_current_user)):
+async def taxa_tree_status(current_user: int = Depends(get_current_user)) -> TaxonomyTreeStatus:
     """
         **Return the status of taxonomy tree** w/r to freshness.
     """
@@ -1782,18 +1790,18 @@ async def reclassif_stats(taxa_ids: str = Query(..., title="Taxa ids",
 
 # TODO JCE
 @app.get("/taxa/reclassification_history/{project_id}", operation_id="reclassif_project_stats", tags=['Taxonomy Tree'],
-         response_model=List[Dict])
+         response_model=List[Dict[str, Any]])
 async def reclassif_project_stats(
         project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
         current_user: Optional[int] = Depends(get_optional_current_user)) \
-        -> List[TaxonBO]:
+        -> List[Dict[str, Any]]:
     """
         Dig into reclassification logs and **return the associations (source → target) for previous reclassifications.**
     """
     with TaxonomyService() as sce:
         with RightsThrower():
             ret = sce.reclassification_history(current_user, project_id)
-        return ret
+    return ret
 
 
 @app.get("/taxon/{taxon_id}", operation_id="query_taxa", tags=['Taxonomy Tree'],
@@ -1817,8 +1825,8 @@ async def query_taxa(
         Returns **information about the taxon** corresponding to the given id, including its lineage.
     """
     with TaxonomyService() as sce:
-        ret = sce.query(taxon_id)
-        return ret
+        ret: Optional[TaxonBO] = sce.query(taxon_id)
+    return ret
 
 
 @app.get("/taxon/{taxon_id}/usage", operation_id="query_taxa_usage", tags=['Taxonomy Tree'],
@@ -1826,7 +1834,7 @@ async def query_taxa(
 async def query_taxa_usage(
         taxon_id: int = Path(..., description="Internal, the unique numeric id of this taxon.", example=12876),
         _current_user: Optional[int] = Depends(get_optional_current_user)) \
-        -> List[TaxonUsageModel]:
+        -> List[Dict[str, Any]]:
     """
         **Where a given taxon is used.**
 
@@ -1834,7 +1842,7 @@ async def query_taxa_usage(
     """
     with TaxonomyService() as sce:
         ret = sce.query_usage(taxon_id)
-        return ret
+    return ret
 
 
 @app.get("/taxon_set/search", operation_id="search_taxa", tags=['Taxonomy Tree'], response_model=List[TaxaSearchRsp])
@@ -1842,7 +1850,7 @@ async def search_taxa(
         query: str = Query(..., description="Use this query for matching returned taxa names.", example="Ban"),
         project_id: Optional[int] = Query(default=None,
                                           description="Internal, numeric id of the project.", example=1),
-        current_user: Optional[int] = Depends(get_optional_current_user)):
+        current_user: Optional[int] = Depends(get_optional_current_user)) -> List[TaxaSearchRsp]:
     """
         **Search for taxa by name.**
 
@@ -1860,7 +1868,7 @@ async def search_taxa(
     """
     with TaxonomyService() as sce:
         ret = sce.search(current_user_id=current_user, prj_id=project_id, query=query)
-        return ret
+    return ret
 
 
 @app.get("/taxon_set/query", operation_id="query_taxa_set", tags=['Taxonomy Tree'],
@@ -1885,7 +1893,7 @@ async def query_taxa_set(ids: str = Query(..., title="Ids",
          response_model=List[TaxonCentral])
 async def get_taxon_in_central(
         taxon_id: int = Path(..., description="Internal, the unique numeric id of this taxon.", example=12876),
-        _current_user: int = Depends(get_current_user)):
+        _current_user: int = Depends(get_current_user)) -> str:
     """
         Return **EcoTaxoServer full record for this taxon**.
     """
@@ -1910,7 +1918,7 @@ async def add_taxon_in_central(
                                            example="null"),
         source_url: Optional[str] = Query(default=None, title="Source url", description="The source url.",
                                           example="http://www.google.fr/"),
-        current_user: int = Depends(get_current_user)):
+        current_user: int = Depends(get_current_user)) -> str:
     """
         **Create a taxon** on EcoTaxoServer.
 
@@ -1923,7 +1931,7 @@ async def add_taxon_in_central(
 
 
 @app.get("/taxa/stats/push_to_central", operation_id="push_taxa_stats_in_central", tags=['Taxonomy Tree'])
-async def push_taxa_stats_in_central(_current_user: int = Depends(get_current_user)):
+async def push_taxa_stats_in_central(_current_user: int = Depends(get_current_user)) -> Any:
     """
         **Push present instance stats**, into EcoTaxoServer.
     """
@@ -1932,14 +1940,15 @@ async def push_taxa_stats_in_central(_current_user: int = Depends(get_current_us
 
 
 @app.get("/taxa/pull_from_central", operation_id="pull_taxa_update_from_central", tags=['Taxonomy Tree'])
-async def pull_taxa_update_from_central(_current_user: int = Depends(get_current_user)):
+async def pull_taxa_update_from_central(_current_user: int = Depends(get_current_user)) -> Dict[str, Any]:
     """
         **Returns what changed in EcoTaxoServer managed tree** and update local tree accordingly.
 
         i.e. : the number of inserts as nbr_inserts, updates as nbr_updates and errors as errors.
     """
     with CentralTaxonomyService() as sce:
-        return sce.pull_updates()
+        ret: Dict[str, Any] = sce.pull_updates()
+    return ret
 
 
 @app.get("/worms/{aphia_id}", operation_id="query_taxa_in_worms", tags=['Taxonomy Tree'], include_in_schema=False,
@@ -1952,8 +1961,8 @@ async def query_taxa_in_worms(aphia_id: int,
         Information about a single taxon in WoRMS reference, including its lineage.
     """
     with TaxonomyService() as sce:
-        ret = sce.query_worms(aphia_id)
-        return ret
+        ret: Optional[TaxonBO] = sce.query_worms(aphia_id)
+    return ret
 
 
 @app.get("/taxa_ref_change/refresh", operation_id="refresh_taxa_db", tags=['WIP'], include_in_schema=False,
@@ -2018,8 +2027,8 @@ def digest_project_images(max_digests: Optional[int],
     max_digests = 1000 if max_digests is None else max_digests
     with ImageManagerService() as sce:
         with RightsThrower():
-            data = sce.do_digests(current_user, project_id, max_digests)
-        return data
+            ret: str = sce.do_digests(current_user, project_id, max_digests)
+    return ret
 
 
 @app.get("/admin/images/digest", operation_id="digest_images", tags=['WIP'], include_in_schema=False,
@@ -2033,8 +2042,8 @@ def digest_images(max_digests: Optional[int],
     max_digests = 1000 if max_digests is None else max_digests
     with ImageManagerService() as sce:
         with RightsThrower():
-            data = sce.do_digests(current_user, prj_id=project_id, max_digests=max_digests)
-        return data
+            ret: str = sce.do_digests(current_user, prj_id=project_id, max_digests=max_digests)
+    return ret
 
 
 @app.get("/admin/images/cleanup1", operation_id="cleanup_images_1", tags=['WIP'], include_in_schema=False,
@@ -2049,8 +2058,8 @@ def cleanup_images_1(
     max_deletes = 10000 if max_deletes is None else max_deletes
     with ImageManagerService() as sce:
         with RightsThrower():
-            data = sce.do_cleanup_dup_same_obj(current_user, prj_id=project_id, max_deletes=max_deletes)
-        return data
+            ret: str = sce.do_cleanup_dup_same_obj(current_user, prj_id=project_id, max_deletes=max_deletes)
+    return ret
 
 
 @app.get("/admin/nightly", operation_id="nightly_maintenance", tags=['WIP'], include_in_schema=False,
@@ -2061,8 +2070,8 @@ def nightly_maintenance(current_user: int = Depends(get_current_user)) -> int:
     """
     with NightlyJobService() as sce:
         with RightsThrower():
-            data = sce.run(current_user)
-        return data
+            ret: int = sce.run(current_user)
+    return ret
 
 
 @app.get("/admin/machine_learning/train", operation_id="machine_learning_train", tags=['WIP'], include_in_schema=False,
@@ -2085,8 +2094,8 @@ def machine_learning_train(project_id: int = Query(..., title="Input project #",
 
     with MachineLearningService() as sce:
         with RightsThrower():
-            result = sce.train(current_user, project_id, model_name)
-        return result
+            ret: str = sce.train(current_user, project_id, model_name)
+    return ret
 
 
 @app.get("/admin/db/query", operation_id="db_direct_query", tags=['admin'], include_in_schema=True,
@@ -2117,7 +2126,7 @@ def list_jobs(for_admin: bool = Query(..., title="For admin",
     """
     with JobCRUDService() as sce:
         with RightsThrower():
-            ret = sce.list(current_user, for_admin)
+            ret: List[JobBO] = sce.list(current_user, for_admin)
     return ret
 
 
@@ -2129,8 +2138,8 @@ def get_job(job_id: int = Path(..., description="Internal, the unique numeric id
     """
     with JobCRUDService() as sce:
         with RightsThrower():
-            ret = sce.query(current_user, job_id)
-        return ret
+            ret: JobBO = sce.query(current_user, job_id)
+    return ret
 
 
 @app.post("/jobs/{job_id}/answer", operation_id="reply_job_question", tags=['jobs'],
@@ -2176,7 +2185,7 @@ def reply_job_question(
          })
 def restart_job(
         job_id: int = Path(..., description="Internal, the unique numeric id of this job.", example=47445),
-        current_user: int = Depends(get_current_user)):
+        current_user: int = Depends(get_current_user)) -> None:
     """
         **Restart the job related to the given id.**
 
@@ -2238,7 +2247,7 @@ def get_job_file(
             })
 def erase_job(
         job_id: int = Path(..., description="Internal, the unique numeric id of this job.", example=47445),
-        current_user: int = Depends(get_current_user)) -> int:
+        current_user: int = Depends(get_current_user)) -> None:
     """
         **Delete the job** from DB, with associated storage.
 
@@ -2250,7 +2259,7 @@ def erase_job(
     """
     with JobCRUDService() as sce:
         with RightsThrower():
-            return sce.delete(current_user, job_id)
+            sce.delete(current_user, job_id)
 
 
 # ######################## END OF JOBS
@@ -2285,7 +2294,7 @@ async def put_user_file(file: UploadFile = File(..., title="File", description="
                         tag: Optional[str] = Form(title="Tag",
                                                   description="If a tag is provided, then all files with the same tag are grouped (in a sub-directory). Otherwise, a temp directory with only this file will be created.",
                                                   default=None),
-                        current_user: int = Depends(get_current_user)):
+                        current_user: int = Depends(get_current_user)) -> str:
     """
         **Upload a file for the current user.**
 
@@ -2382,7 +2391,7 @@ def system_status(_current_user: int = Depends(get_current_user)) -> Response:
 # ######################## END OF WIP
 
 @app.get("/error", operation_id="system_error", tags=['misc'])
-def system_error(_current_user: int = Depends(get_current_user)):
+def system_error(_current_user: int = Depends(get_current_user)) -> None:
     """
         **Return a 500 internal error**, on purpose so the stack trace is visible and client
         can see what it gives.
@@ -2432,18 +2441,18 @@ dump_openapi(app, __file__)
 
 
 @app.on_event("startup")
-def startup_event():
+def startup_event() -> None:
     # Don't run predictions, they are left to a specialized runner
     JobScheduler.FILTER = [PredictForProject.JOB_TYPE]
     JobScheduler.launch_at_interval(2)
 
 
 @app.on_event("shutdown")
-def shutdown_event():
+def shutdown_event() -> None:
     JobScheduler.shutdown()
 
 
-def _split_num_list(ids):
+def _split_num_list(ids: str) -> List[int]:
     # Find first non-num char, decide it's a separator
     for c in ids:
         if c not in "0123456789":

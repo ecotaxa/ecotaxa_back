@@ -8,24 +8,25 @@
 #
 
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Generator, Tuple
+from typing import List, Dict, Optional, Generator, Tuple, Final
 
-import numpy as np  # type: ignore
+import numpy as np
 from numpy import ndarray
 
 from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Mappings import TableMapping
 from BO.Object import ObjectBO
-from BO.helpers.DataclassAsDict import DataclassAsDict
-from DB import Project, ObjectFields
-from DB.Project import ProjectIDListT
+from BO.ObjectSet import ObjectIDListT
+from DB.Object import ObjectFields
+from DB.Project import ProjectIDListT, Project
 from DB.helpers import Session, Result
-from DB.helpers.ORM import Query, any_
+from DB.helpers.Direct import text
+from DB.helpers.ORM import any_
 from helpers.DynamicLogs import get_logger
 
 
-@dataclass(init=False)
-class ProjectSetColumnStats(DataclassAsDict):
+@dataclass()
+class ProjectSetColumnStats:
     """
         Column statistics for a set of projects.
     """
@@ -54,9 +55,9 @@ class FeatureConsistentProjectSet(object):
         """
             Iterator self list of project, returning them + mapped free columns.
         """
-        qry: Query = self.session.query(Project)
+        qry = self.session.query(Project)
         qry = qry.filter(Project.projid == any_(self.prj_ids))
-        for a_proj in qry.all():
+        for a_proj in qry:
             free_columns_mappings = TableMapping(ObjectFields).load_from_equal_list(a_proj.mappingobj)
             mapped = ObjectBO.resolve_fields(self.column_names, free_columns_mappings)
             assert len(mapped) == len(self.column_names), "Project %d does not contain all columns (%s)" \
@@ -71,9 +72,9 @@ class FeatureConsistentProjectSet(object):
                "  JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = {1}"
                " WHERE obh.classif_qual = 'V' ")
 
-    OBJ_COLS = ["objid", "classif_id"]
+    OBJ_COLS: Final = ["objid", "classif_id"]
 
-    def _build_flat_union(self):
+    def _build_flat_union(self) -> Tuple[List[str], str]:
         """
             Build a UNION with all common columns + object_id and classif_id
         """
@@ -100,12 +101,12 @@ class FeatureConsistentProjectSet(object):
                           % (als, als) for als in col_aliases])
         sql += "SELECT COUNT(1), " + exprs + " FROM flat "
         sql = self.amend_sql(sql)
-        res: Result = self.session.execute(sql)
-        vals = res.first()
+        res: Result = self.session.execute(text(sql))
+        vals = res.one()
         total = vals[0]  # first in result line is the count
         counts = vals[1::2]  # then count() every second column
         variances = vals[2::2]  # and variance() the other one
-        ret = ProjectSetColumnStats([self.prj_ids, total, self.column_names, counts, variances])
+        ret = ProjectSetColumnStats(self.prj_ids, total, self.column_names, counts, variances)
         # cls.read_median_values(session, prj_ids, column_names, 5000)
         return ret
 
@@ -122,8 +123,8 @@ class FeatureConsistentProjectSet(object):
         sql = self.amend_sql(sql)
         # Format output
         logger.debug("median SQL: %s", sql)
-        res: Result = self.session.execute(sql)
-        ret = {col_name: a_val for col_name, a_val in zip(self.column_names, res.first())}
+        res: Result = self.session.execute(text(sql))
+        ret = {col_name: a_val for col_name, a_val in zip(self.column_names, res.one())}
         return ret
 
     def read_all(self) -> Result:
@@ -137,7 +138,7 @@ class FeatureConsistentProjectSet(object):
         sql = self.amend_sql(sql)
         # Format output
         logger.debug("read_all SQL: %s", sql)
-        res: Result = self.session.execute(sql)
+        res: Result = self.session.execute(text(sql))
         return res
 
     def np_read_all(self) -> Tuple[ndarray, List[int], ClassifIDListT]:  # TODO: ObjectIDListT
@@ -147,13 +148,14 @@ class FeatureConsistentProjectSet(object):
         res = self.read_all()
         obj_ids: List[int] = []
         classif_ids: ClassifIDListT = []
-        # noinspection PyUnresolvedReferences
-        np_table = self.np_read(res, res.rowcount, self.column_names,
+        rc = res.rowcount  # type:ignore
+        np_table = self.np_read(res, rc, self.column_names,
                                 obj_ids, classif_ids, {})
         return np_table, obj_ids, classif_ids
 
     @staticmethod
-    def np_read(res, nb_lines, columns, obj_ids, classif_ids, replacements):
+    def np_read(res: Result, nb_lines: int, columns: List[str], obj_ids: ObjectIDListT, classif_ids: ClassifIDListT,
+                replacements: Dict[str, float]) -> np.ndarray:
         # Allocate memory in one go
         # TODO: float32 is a shameless attempt to save memory
         np_table = np.ndarray(shape=(nb_lines, len(columns)), dtype=np.float32)
@@ -174,7 +176,7 @@ class FeatureConsistentProjectSet(object):
             np_table[ndx] = vals
         return np_table
 
-    def np_stats(self, nb_table: ndarray) -> Tuple[Dict, Dict]:
+    def np_stats(self, nb_table: ndarray) -> Tuple[Dict[str, float], Dict[str, float]]:
         # Compute medians & variance per _present_ feature
         np_medians_per_col = {}
         np_variances_per_col = {}
@@ -188,7 +190,7 @@ class FeatureConsistentProjectSet(object):
             np_variances_per_col[a_col] = np_variance
         return np_medians_per_col, np_variances_per_col
 
-    def amend_sql(self, sql):
+    def amend_sql(self, sql: str) -> str:
         return sql
 
 
@@ -211,7 +213,7 @@ class LimitedInCategoriesProjectSet(FeatureConsistentProjectSet):
         self.random_limit = random_limit
         self.categories = categories
 
-    def _add_random_limit(self, sql):
+    def _add_random_limit(self, sql: str) -> str:
         prj_in_list = ",".join([str(prj_id) for prj_id in self.prj_ids])
         categ_in_list = ",".join([str(classif_id) for classif_id in self.categories])
         sql += (" WHERE flat.objid IN "
@@ -225,12 +227,12 @@ class LimitedInCategoriesProjectSet(FeatureConsistentProjectSet):
                 "   WHERE rank <= {1} )").format(prj_in_list, self.random_limit, categ_in_list)
         return sql
 
-    def _add_category_filter(self, sql):
+    def _add_category_filter(self, sql: str) -> str:
         categ_in_list = ",".join([str(classif_id) for classif_id in self.categories])
         sql += " WHERE flat.classif_id IN ({0}) ".format(categ_in_list)
         return sql
 
-    def amend_sql(self, sql: str):
+    def amend_sql(self, sql: str) -> str:
         if self.random_limit is not None:
             return self._add_random_limit(sql)
         elif len(self.categories) > 0:

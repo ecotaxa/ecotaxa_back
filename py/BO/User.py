@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from typing import Any, Final, List
 
 from BO.Classification import ClassifIDListT
-from BO.helpers.DataclassAsDict import DataclassAsDict
 from DB import User, UserPreferences, Session
 from helpers.DynamicLogs import get_logger
 
@@ -100,7 +99,7 @@ class UserBO(object):
         cls.set_preferences_per_project(session, user_id, project_id, cls.CLASSIF_MRU_KEY, mru)
 
     @classmethod
-    def validate_usr(cls, session: Session, user_model: Any):
+    def validate_usr(cls, session: Session, user_model: Any) -> None:
         """
             Validate basic rules on a user model before setting it into DB.
             TODO: Not done in pydantic, as there are non-complying values in the DB and that would prevent reading them.
@@ -108,8 +107,7 @@ class UserBO(object):
         # name & email are mandatory by DB constraints and therefore made so by pydantic model
         errors: List[str] = []
         for a_field in (User.name, User.email, User.organisation, User.country):
-            # noinspection PyUnresolvedReferences
-            field_name = a_field.name
+            field_name = a_field.name  # type:ignore
             val = getattr(user_model, field_name)
             if val is None:
                 continue
@@ -119,8 +117,8 @@ class UserBO(object):
         assert not errors, errors
 
 
-@dataclass(init=False)
-class MinimalUserBO(DataclassAsDict):
+@dataclass()
+class MinimalUserBO:
     id: UserIDT
     name: str
 
@@ -128,8 +126,8 @@ class MinimalUserBO(DataclassAsDict):
 MinimalUserBOListT = List[MinimalUserBO]
 
 
-@dataclass(init=False)
-class UserActivity(DataclassAsDict):
+@dataclass()
+class UserActivity:
     id: UserIDT
     nb_actions: int
     last_annot: str

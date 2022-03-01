@@ -9,16 +9,17 @@ import os
 import re
 import zipfile
 from pathlib import Path
-from typing import Dict, Optional, IO, Tuple
+from typing import Optional, Tuple, TextIO
 
-from API_models.crud import ProjectFilters
 from API_models.exports import ExportRsp, ExportReq, ExportTypeEnum
+from API_models.filters import ProjectFiltersDict
 from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
 from DB.Object import VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL
 from DB.Project import Project
+from DB.helpers import Result
 from DB.helpers.Direct import text
 from DB.helpers.SQL import OrderClause
 from FS.CommonDir import ExportFolder
@@ -26,7 +27,7 @@ from FS.Vault import Vault
 from helpers import DateTime  # Need to keep the whole module imported, as the function is mocked
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 # TODO: Move somewhere else
-from ..helpers.JobService import JobServiceBase
+from ..helpers.JobService import JobServiceBase, ArgsDict
 
 logger = get_logger(__name__)
 
@@ -39,7 +40,7 @@ class ProjectExport(JobServiceBase):
     ROWS_REPORT_EVERY = 10000
     IMAGES_REPORT_EVERY = 1000
 
-    def __init__(self, req: ExportReq, filters: ProjectFilters):
+    def __init__(self, req: ExportReq, filters: ProjectFiltersDict):
         super().__init__()
         self.req = req
         self.filters = filters
@@ -56,18 +57,18 @@ class ProjectExport(JobServiceBase):
         ret = ExportRsp(job_id=self.job_id)
         return ret
 
-    def init_args(self, args: Dict) -> Dict:
+    def init_args(self, args: ArgsDict) -> ArgsDict:
         super().init_args(args)
         args["req"] = self.req.dict()
-        args["filters"] = self.filters.__dict__
+        args["filters"] = self.filters
         return args
 
     @staticmethod
-    def deser_args(json_args: Dict):
+    def deser_args(json_args: ArgsDict) -> None:
         json_args["req"] = ExportReq(**json_args["req"])
-        json_args["filters"] = ProjectFilters(**json_args["filters"])  # type:ignore
+        json_args["filters"] = ProjectFiltersDict(**json_args["filters"])  # type:ignore
 
-    def do_background(self):
+    def do_background(self) -> None:
         """
             Background part of the job.
         """
@@ -76,7 +77,7 @@ class ProjectExport(JobServiceBase):
 
     # noinspection PyPep8Naming
     @property
-    def PRODUCED_FILE_NAME(self):
+    def PRODUCED_FILE_NAME(self) -> Optional[str]:
         result = self.get_job_result()
         if result is None:
             return None
@@ -143,7 +144,7 @@ class ProjectExport(JobServiceBase):
                       "out_file": self.out_file_name}
         self.set_job_result(errors=[], infos=done_infos)
 
-    def append_log_to_zip(self):
+    def append_log_to_zip(self) -> None:
         """
             Copy log file of present job into currently produced zip.
         """
@@ -164,7 +165,7 @@ class ProjectExport(JobServiceBase):
         # Get a fast count of the maximum of what to do
         count_sql = "SELECT SUM(nbr) AS cnt FROM projects_taxo_stat WHERE projid = :prj"
         res = self.ro_session.execute(text(count_sql), {"prj": proj_id})
-        obj_count = res.first()[0]
+        obj_count = res.one()[0]
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, self.filters)
@@ -212,9 +213,9 @@ class ProjectExport(JobServiceBase):
                          TO_CHAR(obh.objtime,'{1}') AS object_time,
                          obh.object_link, obh.depth_min AS object_depth_min, obh.depth_max AS object_depth_max,
                          CASE obh.classif_qual 
-                            WHEN '"""+VALIDATED_CLASSIF_QUAL+"""' then 'validated' 
-                            WHEN '"""+PREDICTED_CLASSIF_QUAL+"""' then 'predicted' 
-                            WHEN '"""+DUBIOUS_CLASSIF_QUAL+"""' then 'dubious' 
+                            WHEN '""" + VALIDATED_CLASSIF_QUAL + """' then 'validated' 
+                            WHEN '""" + PREDICTED_CLASSIF_QUAL + """' then 'predicted' 
+                            WHEN '""" + DUBIOUS_CLASSIF_QUAL + """' then 'dubious' 
                             ELSE obh.classif_qual 
                          END AS object_annotation_status,                
                          usr.name AS object_annotation_person_name, usr.email AS object_annotation_person_email,
@@ -319,7 +320,7 @@ class ProjectExport(JobServiceBase):
             prev_value = self.out_file_name.replace('.zip', '')
 
         csv_path: Path = self.out_path / csv_filename  # Constant path to a (sometimes) changing file
-        csv_fd: Optional[IO] = None
+        csv_fd: Optional[TextIO] = None
         csv_wtr = None
 
         # Store the images to save in a separate CSV. Useless if not exporting images but who cares.
@@ -330,7 +331,7 @@ class ProjectExport(JobServiceBase):
         img_wtr.writeheader()
 
         # Prepare TSV structure
-        col_descs = [a_desc for a_desc in res.cursor.description
+        col_descs = [a_desc for a_desc in res.cursor.description  # type:ignore
                      if a_desc.name != "img_src_path"]
         # read latitude column to get float DB type
         for a_desc in col_descs:
@@ -423,7 +424,7 @@ class ProjectExport(JobServiceBase):
             zfile.close()
         return nb_rows, nb_images
 
-    def store_csv_into_zip(self, zfile, prev_value, in_file: Path):
+    def store_csv_into_zip(self, zfile, prev_value, in_file: Path) -> None:
         # Add a new file into the zip
         name_in_zip = "ecotaxa_" + str(prev_value) + ".tsv"
         if self.req.exp_type == ExportTypeEnum.backup:
@@ -432,7 +433,7 @@ class ProjectExport(JobServiceBase):
         logger.info("Storing into zip as %s", name_in_zip)
         zfile.write(in_file, arcname=name_in_zip)
 
-    def add_images(self, nb_files_to_add, start_progress: int, end_progress: int):
+    def add_images(self, nb_files_to_add, start_progress: int, end_progress: int) -> None:
         # Add image files, linked to the TSV content
         self.update_progress(start_progress, "Start Image export")
         progress_range = end_progress - start_progress
@@ -461,7 +462,7 @@ class ProjectExport(JobServiceBase):
                     self.update_progress(progress, msg)
             zfile.close()
 
-    def get_DOI_imgfile_name(self, objid, imgrank, taxofolder, originalfilename):
+    def get_DOI_imgfile_name(self, objid: int, imgrank: int, taxofolder: Optional[str], originalfilename) -> str:
         if not taxofolder:
             taxofolder = "NoCategory"
         file_name = "images/{0}/{1}_{2}{3}".format(self.normalize_filename(taxofolder),
@@ -470,7 +471,7 @@ class ProjectExport(JobServiceBase):
         return file_name
 
     @staticmethod
-    def normalize_filename(filename):
+    def normalize_filename(filename) -> str:
         # noinspection RegExpRedundantEscape
         return re.sub(R"[^a-zA-Z0-9 \.\-\(\)]", "_", str(filename))
 
@@ -520,10 +521,10 @@ class ProjectExport(JobServiceBase):
         return nb_lines
 
     @staticmethod
-    def write_result_to_csv(res, out_file):
+    def write_result_to_csv(res: Result, out_file: Path) -> int:
         nb_lines = 0
         with open(out_file, 'w') as csv_file:
-            col_names = [a_desc.name for a_desc in res.cursor.description]
+            col_names = [a_desc.name for a_desc in res.cursor.description]  # type:ignore
             wtr = csv.DictWriter(csv_file, col_names, delimiter='\t', quotechar='"', lineterminator='\n')
             wtr.writeheader()
             for r in res:

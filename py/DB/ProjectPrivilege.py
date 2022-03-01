@@ -2,12 +2,17 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from .helpers.DDL import Column, Sequence, ForeignKey, Index
 from .helpers.ORM import Model
 from .helpers.ORM import relationship
 from .helpers.Postgres import VARCHAR, INTEGER
 
+if TYPE_CHECKING:
+    from .User import User
 
 class ProjectPrivilege(Model):
     """
@@ -16,13 +21,13 @@ class ProjectPrivilege(Model):
     """
     __tablename__ = 'projectspriv'
     # TODO: Isn't there a natural PK with all columns?
-    id = Column(INTEGER, Sequence('seq_projectspriv'), primary_key=True)
+    id: int = Column(INTEGER, Sequence('seq_projectspriv'), primary_key=True)
 
     # links
-    projid = Column(INTEGER, ForeignKey('projects.projid', ondelete="CASCADE"), nullable=False)
+    projid: int = Column(INTEGER, ForeignKey('projects.projid', ondelete="CASCADE"), nullable=False)
     # TODO: Same as project: if a user is gone, no interest in keeping its privileges.
     # OTOH we don't so far (17 Aug 2020) delete users.
-    member = Column(INTEGER, ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
+    member: int = Column(INTEGER, ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
 
     # association value
     privilege = Column(VARCHAR(255), nullable=False)
@@ -32,7 +37,7 @@ class ProjectPrivilege(Model):
     # relationships
     # The relationships are created in Relations.py but the typing here helps the IDE
     project: relationship
-    user: relationship
+    user: User
 
     def __str__(self):
         return "{0} ({1})".format(self.member, self.privilege)

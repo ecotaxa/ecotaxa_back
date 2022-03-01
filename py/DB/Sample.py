@@ -4,10 +4,11 @@
 #
 from typing import List, Dict
 
-from .Project import Project
+from .Project import Project, ProjectIDT
+from .helpers import Result
 from .helpers.DDL import Index, Sequence, Column, ForeignKey
 from .helpers.Direct import text
-from .helpers.ORM import Query, Result, Model, relationship, Session
+from .helpers.ORM import Model, relationship, Session
 from .helpers.Postgres import VARCHAR, DOUBLE_PRECISION, INTEGER
 
 SAMPLE_FREE_COLUMNS = 31
@@ -16,32 +17,31 @@ SAMPLE_FREE_COLUMNS = 31
 class Sample(Model):
     # Historical (plural) name of the table
     __tablename__ = 'samples'
-    sampleid = Column(INTEGER, Sequence('seq_samples'), primary_key=True)
-    projid = Column(INTEGER, ForeignKey('projects.projid'), nullable=False)
+    sampleid: int = Column(INTEGER, Sequence('seq_samples'), primary_key=True)
+    projid: int = Column(INTEGER, ForeignKey('projects.projid'), nullable=False)
     # i.e. sample_id from TSV
-    orig_id = Column(VARCHAR(255), nullable=False)
+    orig_id: str = Column(VARCHAR(255), nullable=False)
     latitude = Column(DOUBLE_PRECISION)
     longitude = Column(DOUBLE_PRECISION)
     dataportal_descriptor = Column(VARCHAR(8000))
 
     # The relationships are created in Relations.py but the typing here helps IDE
-    project: relationship
+    project: Project
     all_acquisitions: relationship
-    ecopart_sample: relationship
 
     def pk(self) -> int:
         return self.sampleid
 
     @classmethod
-    def get_orig_id_and_model(cls, session: Session, prj_id) -> Dict[str, 'Sample']:
-        res: Query = session.query(Sample)
+    def get_orig_id_and_model(cls, session: Session, prj_id: ProjectIDT) -> Dict[str, 'Sample']:
+        res = session.query(Sample)
         res = res.join(Project)
         res = res.filter(Project.projid == prj_id)
         ret = {r.orig_id: r for r in res}
         return ret
 
     @staticmethod
-    def propagate_geo(session: Session, prj_id):
+    def propagate_geo(session: Session, prj_id: ProjectIDT) -> None:
         """
             Create sample geo from objects one.
         TODO: Should be in a BO

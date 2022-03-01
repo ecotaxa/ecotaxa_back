@@ -10,7 +10,7 @@ from typing import Dict, Tuple
 from API_operations.TaxonomyService import TaxonomyService
 from BO.Classification import ClassifIDListT, ClassifIDT
 from BO.Taxonomy import WoRMSSetFromTaxaSet, TaxonomyBO
-from DB import WoRMS
+from DB.WoRMs import WoRMS
 from DB.helpers.ORM import Session
 from data.ToWorms import ToWorms
 

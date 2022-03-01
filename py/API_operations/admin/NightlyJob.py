@@ -5,16 +5,15 @@
 # Maintenance operations on the DB.
 #
 import datetime
-from typing import Dict
 
-from API_operations.helpers.JobService import JobServiceBase
+from API_operations.helpers.JobService import JobServiceBase, ArgsDict
 from BO.Job import JobBO
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO
 from BO.Taxonomy import TaxonomyBO
-from DB import Role, Project
 from DB.Job import JobIDT, Job
-from DB.Project import ProjectIDListT
+from DB.Project import Project, ProjectIDListT
+from DB.User import Role
 from FS.TempDirForTasks import TempDirForTasks
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 
@@ -27,11 +26,11 @@ class NightlyJobService(JobServiceBase):
     """
     JOB_TYPE = "NightlyMaintenance"
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.curr = 0
 
-    def init_args(self, args: Dict) -> Dict:
+    def init_args(self, args: ArgsDict) -> ArgsDict:
         """ No job param """
         return args
 
@@ -45,7 +44,7 @@ class NightlyJobService(JobServiceBase):
         self.create_job(self.JOB_TYPE, current_user_id)
         return self.job_id
 
-    def do_background(self):
+    def do_background(self) -> None:
         """
             Background part of the job.
         """
@@ -56,10 +55,10 @@ class NightlyJobService(JobServiceBase):
             else:
                 raise Exception("Not know progress:'%s'" % job.progress_msg)
 
-    def do_start(self):
+    def do_start(self) -> None:
         logger.info("Job starting")
         self.update_progress(0, "Starting")
-        all_prj_ids = [proj_id for proj_id, in self.ro_session.query(Project.projid).all()]
+        all_prj_ids = [proj_id for proj_id, in self.ro_session.query(Project.projid)]
         all_prj_ids.sort()
         self.compute_all_projects_taxo_stats(all_prj_ids, 0, 30)
         self.compute_all_projects_stats(all_prj_ids, 30, 60)
@@ -68,14 +67,14 @@ class NightlyJobService(JobServiceBase):
         self.set_job_result(errors=[], infos={"status": "ok"})
         logger.info("Job done")
 
-    def progress_update(self, start: int, chunk: ProjectIDListT, total: int, end: int):
+    def progress_update(self, start: int, chunk: ProjectIDListT, total: int, end: int) -> None:
         logger.info("Done for %s", chunk)
         self.curr += len(chunk)
         progress = round(start + (end - start) / total * self.curr)
         self.update_progress(progress, "Processing project %d" % chunk[-1])
         chunk.clear()
 
-    def compute_all_projects_taxo_stats(self, all_proj_ids: ProjectIDListT, start: int, end: int):
+    def compute_all_projects_taxo_stats(self, all_proj_ids: ProjectIDListT, start: int, end: int) -> None:
         """
             Update the summary projects_taxo_stat table, for all projects.
         """
@@ -90,7 +89,7 @@ class NightlyJobService(JobServiceBase):
                 self.progress_update(start, chunk, total, end)
         logger.info("Done for %s", chunk)
 
-    def compute_all_projects_stats(self, all_proj_ids: ProjectIDListT, start: int, end: int):
+    def compute_all_projects_stats(self, all_proj_ids: ProjectIDListT, start: int, end: int) -> None:
         """
             Recompute relevant fields, directly in projects table.
             Needs @see compute_all_projects_taxo_stats first
@@ -106,7 +105,7 @@ class NightlyJobService(JobServiceBase):
                 self.progress_update(start, chunk, total, end)
         logger.info("Done for %s", chunk)
 
-    def refresh_taxo_tree_stats(self):
+    def refresh_taxo_tree_stats(self) -> None:
         """
             Recompute taxonomy summaries.
         """
@@ -115,7 +114,7 @@ class NightlyJobService(JobServiceBase):
         self.session.commit()
         logger.info("Recompute of taxonomy stats done")
 
-    def clean_old_jobs(self):
+    def clean_old_jobs(self) -> None:
         """
             Reclaim space on disk (and in DB) for old jobs.
             Rules: Jobs older than 30 days are erased whatever
@@ -124,12 +123,12 @@ class NightlyJobService(JobServiceBase):
         logger.info("Starting cleanup of old jobs")
         thirty_days_ago = datetime.datetime.today() - datetime.timedelta(days=30)
         old_jobs_qry_1 = self.ro_session.query(Job.id).filter(Job.creation_date < thirty_days_ago)
-        old_jobs = [an_id for an_id, in old_jobs_qry_1.all()]
+        old_jobs = [an_id for an_id, in old_jobs_qry_1]
         one_week_ago = datetime.datetime.today() - datetime.timedelta(days=7)
-        old_jobs_qry_2 = self.ro_session.query(Job.id)\
-            .filter(Job.creation_date < one_week_ago)\
+        old_jobs_qry_2 = self.ro_session.query(Job.id) \
+            .filter(Job.creation_date < one_week_ago) \
             .filter(Job.state == "F")
-        old_jobs_2 = [an_id for an_id, in old_jobs_qry_2.all()]
+        old_jobs_2 = [an_id for an_id, in old_jobs_qry_2]
         to_clean = set(old_jobs).union(set(old_jobs_2))
         logger.info("About to clean %s", to_clean)
         temp_for_job = TempDirForTasks(self.config.jobs_dir())

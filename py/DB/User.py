@@ -2,7 +2,10 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from __future__ import annotations
+
 from typing import List
+from typing import TYPE_CHECKING
 
 from BO.helpers.TSVHelpers import none_to_empty
 from .helpers import Session, Result
@@ -11,13 +14,16 @@ from .helpers.Direct import text, func
 from .helpers.ORM import Model, relationship
 from .helpers.Postgres import TIMESTAMP, CHAR
 
+if TYPE_CHECKING:
+    from .ProjectPrivilege import ProjectPrivilege
+
 
 class User(Model):
     __tablename__ = 'users'
-    id = Column(Integer, Sequence('seq_users'), primary_key=True)
-    email = Column(String(255), unique=True, nullable=False)
+    id: int = Column(Integer, Sequence('seq_users'), primary_key=True)
+    email: str = Column(String(255), unique=True, nullable=False)
     password = Column(String(255))
-    name = Column(String(255), nullable=False)
+    name: str = Column(String(255), nullable=False)
     organisation = Column(String(255))
     active = Column(Boolean(), default=True)
 
@@ -35,7 +41,7 @@ class User(Model):
     # The relationships are created in Relations.py but the typing here helps the IDE
     roles: relationship
     # The projects that user has rights in, so he/she can participate at various levels.
-    privs_on_projects: relationship
+    privs_on_projects: Sequence[ProjectPrivilege]
     # The objects of which _present_ classification was done by the user
     classified_objects: relationship
     # Preferences, per project, the global ones kept in field above.
@@ -45,6 +51,9 @@ class User(Model):
     def find_users(session: Session, names: List[str], emails: List[str], found_users: dict):
         """
             Find the users in DB, by name or email.
+            :param session:
+            :param emails:
+            :param names:
             :param found_users: A dict in
         """
         sql = text("SELECT id, LOWER(name), LOWER(email) "

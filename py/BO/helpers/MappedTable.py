@@ -12,7 +12,8 @@ from typing import Dict, List
 
 from BO.ColumnUpdate import ColUpdateList, ColUpdate
 from BO.Mappings import MappedTableTypeT, ProjectMapping
-from DB import Project, Session
+from DB import Session, Query
+from DB.Project import Project
 from DB.helpers.ORM import non_key_cols, ModelT
 
 
@@ -25,7 +26,7 @@ class MappedTable(metaclass=ABCMeta):
         self.session = session
 
     @abc.abstractmethod
-    def add_filter(self, upd):
+    def add_filter(self, upd: Query) -> Query:
         ...  # pragma:nocover
 
     def _apply_on_all(self, clazz: MappedTableTypeT, project: Project, updates: List[ColUpdate]) -> int:
@@ -48,7 +49,7 @@ class MappedTable(metaclass=ABCMeta):
         return self._do_updates(clazz, clean_updates)
 
     @staticmethod
-    def _sanitize_updates(clazz: ModelT, tbl_mappings: Dict, updates: List[ColUpdate]):
+    def _sanitize_updates(clazz: ModelT, tbl_mappings: Dict[str, str], updates: List[ColUpdate]) -> List[ColUpdate]:
         """
             Ensure that the update will do the job, avoiding e.g. non-existing columns.
             Also does the free columns mapping, if required.
@@ -67,7 +68,7 @@ class MappedTable(metaclass=ABCMeta):
             clean_updates.append(a_col_upd)
         return clean_updates
 
-    def _do_updates(self, clazz: ModelT, updates: List[ColUpdate]):
+    def _do_updates(self, clazz: ModelT, updates: List[ColUpdate]) -> int:
         # OK we have a set of col+values to apply to a set of entities
         if len(updates) == 0:
             # Eventually there is nothing left after filtering

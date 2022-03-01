@@ -40,7 +40,7 @@ class SamplesService(Service):
         ret.map_free_columns(mappings.sample_mappings)
         return ret
 
-    def update_set(self, current_user_id: UserIDT, sample_ids: SampleIDListT, updates: ColUpdateList):
+    def update_set(self, current_user_id: UserIDT, sample_ids: SampleIDListT, updates: ColUpdateList) -> int:
         # Get project IDs for the samples and verify rights
         sample_set = EnumeratedSampleSet(self.session, sample_ids)
         prj_ids = sample_set.get_projects_ids()
@@ -101,7 +101,7 @@ class AcquisitionsService(Service):
         ret.map_free_columns(mappings.acquisition_mappings)
         return ret
 
-    def update_set(self, current_user_id: int, acquisition_ids: AcquisitionIDListT, updates: ColUpdateList):
+    def update_set(self, current_user_id: int, acquisition_ids: AcquisitionIDListT, updates: ColUpdateList) -> int:
         # Get project IDs for the acquisitions and verify rights
         acquisition_set = EnumeratedAcquisitionSet(self.session, acquisition_ids)
         prj_ids = acquisition_set.get_projects_ids()
@@ -146,7 +146,7 @@ class ProcessesService(Service):
         ret.map_free_columns(mappings.process_mappings)
         return ret
 
-    def update_set(self, current_user_id: int, process_ids: ProcessIDListT, updates: ColUpdateList):
+    def update_set(self, current_user_id: int, process_ids: ProcessIDListT, updates: ColUpdateList) -> int:
         # Get project IDs for the processes and verify rights
         process_set = EnumeratedProcessSet(self.session, process_ids)
         prj_ids = process_set.get_projects_ids()

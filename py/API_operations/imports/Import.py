@@ -4,9 +4,10 @@
 #
 import re
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any, Optional, cast
 
 from API_models.imports import ImportReq, ImportRsp
+from API_operations.helpers.JobService import ArgsDict
 from API_operations.imports.ImportBase import ImportServiceBase
 from BO.Bundle import InBundle
 from BO.Classification import ClassifIDT
@@ -20,6 +21,7 @@ from BO.helpers.ImportHelpers import ImportHow, ImportDiagnostic, ImportWhere
 from BO.helpers.TSVHelpers import none_to_empty
 from DB.Image import Image
 from DB.User import User
+from DB.helpers import Session
 from DB.helpers.DBWriter import DBWriter
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 from helpers.Timer import CodeTimer
@@ -44,12 +46,12 @@ class FileImport(ImportServiceBase):
     def __init__(self, prj_id: int, req: ImportReq):
         super().__init__(prj_id, req)
 
-    def init_args(self, args: Dict) -> Dict:
+    def init_args(self, args: ArgsDict) -> ArgsDict:
         """ Nothing specific so far """
         return super().init_args(args)
 
     @staticmethod
-    def deser_args(json_args: Dict):
+    def deser_args(json_args: ArgsDict) -> None:
         # Ensure that the request is OK, if not below will raise as pydantic is quite pydantic :)
         json_args["req"] = ImportReq(**json_args["req"])
 
@@ -64,7 +66,7 @@ class FileImport(ImportServiceBase):
         ret = ImportRsp(job_id=self.job_id)
         return ret
 
-    def do_background(self):
+    def do_background(self) -> None:
         """
             Background part of the job.
         """
@@ -85,7 +87,8 @@ class FileImport(ImportServiceBase):
         found_users = self.saved_state["found_users"]
         found_taxa = self.saved_state["taxo_found"]
         self.complete_references(found_users, found_taxa,
-                                 self.last_reply["users"], self.last_reply["taxa"])
+                                 self.last_reply["users"],
+                                 self.last_reply["taxa"])
         self._save_vars_to_state(self.STATE_KEYS_REPLY, found_users, found_taxa)
         # Assert validity after input
         missing_users, missing_taxa = self.validate_references(found_users, found_taxa)
@@ -127,7 +130,7 @@ class FileImport(ImportServiceBase):
         else:
             self.do_real()
 
-    def _collect_existing_and_validate(self, source_dir_or_zip, loaded_files) \
+    def _collect_existing_and_validate(self, source_dir_or_zip: str, loaded_files: List[str]) \
             -> Tuple[ImportHow, ImportDiagnostic, int]:
         """
             Prepare the import by checking what's inside the project and scanning files to input.
@@ -153,7 +156,7 @@ class FileImport(ImportServiceBase):
                                                 self.report_validation_progress)
         return import_how, import_diag, nb_rows
 
-    def resolve_references(self, users_found: Dict, taxo_found: Dict):
+    def resolve_references(self, users_found: Dict[str, Dict[str, Any]], taxo_found: Dict[str, Optional[int]]):
         """
             We have references inside the TSVs, to users or categories.
             Resolve them and fill in the dicts in arguments.
@@ -164,7 +167,7 @@ class FileImport(ImportServiceBase):
         self.resolve_taxa(self.session, taxo_found)
 
     @staticmethod
-    def complete_references(users_found: Dict, taxo_found: Dict,
+    def complete_references(users_found: Dict[str, Dict[str, Any]], taxo_found: Dict[str, Optional[int]],
                             more_users: Dict[str, UserIDT],
                             more_taxo: Dict[str, ClassifIDT]) -> None:
         """
@@ -176,7 +179,7 @@ class FileImport(ImportServiceBase):
         taxo_found.update(more_taxo)
 
     @staticmethod
-    def validate_references(users_found: Dict, taxo_found: Dict) -> Tuple[List[str], List[str]]:
+    def validate_references(users_found: Dict, taxo_found: Dict[str, Optional[int]]) -> Tuple[List[str], List[str]]:
         """
             After collection of references, ensure completeness.
         """
@@ -185,50 +188,55 @@ class FileImport(ImportServiceBase):
         return missing_users, missing_taxa
 
     @staticmethod
-    def resolve_users(session, users_found: Dict) -> None:
+    def resolve_users(session: Session, users_found: Dict[str, Dict[str, Any]]) -> None:
         """
             Resolve TSV names from DB names or emails.
-            :param users_found: The resolve output
+            :param session:
+            :param users_found: The resolve input and output
         """
         names = [x for x in users_found.keys()]
-        emails = [x.get('email') for x in users_found.values()]
+        # TODO: Might be time for a TypedDict
+        emails = [cast(str, x.get('email')) for x in users_found.values() if x.get('email')]
         User.find_users(session, names, emails, users_found)
         logger.info("Users Found for all TSVs = %s", users_found)
 
     @staticmethod
-    def resolve_taxa(session, taxo_found: Dict) -> None:
+    def resolve_taxa(session: Session, taxo_found: Dict[str, Optional[int]]) -> None:
         """
             Resolve taxa names.
             :param taxo_found: The resolve output
         """
         lower_taxon_list = []
         regexsearchparenthese = re.compile(r'(.+) \((.+)\)$')
+        taxo_lookup: Dict[str, Dict[str, Any]] = {}
         for taxon_lc in taxo_found.keys():
-            taxo_found[taxon_lc] = {'nbr': 0, 'id': None}
+            taxo_lookup[taxon_lc] = {'nbr': 0, 'id': None}
             lower_taxon_list.append(taxon_lc)
             in_regex = regexsearchparenthese.match(taxon_lc)
             if in_regex:
                 taxon_lc_lt = in_regex.group(1) + '<' + in_regex.group(2)
-                taxo_found[taxon_lc]['alterdisplayname'] = taxon_lc_lt
+                taxo_lookup[taxon_lc]['alterdisplayname'] = taxon_lc_lt
                 lower_taxon_list.append(taxon_lc_lt)
 
-        TaxonomyBO.resolve_taxa(session, taxo_found, lower_taxon_list)
+        TaxonomyBO.resolve_taxa(session, taxo_lookup, lower_taxon_list)
 
-        logger.info("For all TSVs, taxa (with no ID in TSV) found from DB = %s", taxo_found)
-        for found_k, found_v in taxo_found.items():
-            if found_v['nbr'] == 0:
-                logger.info("Taxo '%s' Not Found", found_k)
-            elif found_v['nbr'] > 1:
+        logger.info("For all TSVs, taxa (with no ID in TSV) found from DB = %s", taxo_lookup)
+        for a_ref, found_v in taxo_lookup.items():
+            nbr = found_v['nbr']
+            assert isinstance(nbr, int)
+            if nbr == 0:
+                logger.info("Taxo '%s' Not Found", a_ref)
+                taxo_found[a_ref] = None
+            elif nbr > 1:
                 # more than one is ambiguous, hence like not found
-                logger.info("Taxo '%s' Found more than once", found_k)
-                taxo_found[found_k]['id'] = None
-        for found_k, found_v in taxo_found.items():
-            # in the end we just keep the id, other fields were transitory
-            taxo_found[found_k] = found_v['id']
+                logger.info("Taxo '%s' Found more than once", a_ref)
+                taxo_found[a_ref] = None
+            else:
+                taxo_found[a_ref] = found_v["id"]
         logger.info("For all TSVs, taxa (with no ID in TSV) resolved = %s", taxo_found)
 
-    def report_validation_progress(self, current, total):
-        self.update_progress(20 * current / total,
+    def report_validation_progress(self, current: int, total: int) -> None:
+        self.update_progress(int(20 * current / total),
                              "Validating files %d/%d" % (current, total))
 
     def do_real(self) -> None:
@@ -264,7 +272,7 @@ class FileImport(ImportServiceBase):
             # If we must skip existing objects then do an inventory of what's in already
             with CodeTimer("run: Existing images for %d: " % self.prj_id, logger):
                 import_how.objects_and_images_to_skip = Image.fetch_existing_images(self.session, self.prj_id)
-        import_how.do_thumbnail_above(int(self.config.get_cnf('THUMBSIZELIMIT')))
+        import_how.do_thumbnail_above(self.config.get_thumbnails_limit())
 
         # Do the bulk job of import
         rowcount_from_validate = nb_rows

@@ -9,16 +9,17 @@
 from dataclasses import dataclass
 from typing import List, ClassVar
 
-from DB import Session, Query, Project, Sample, Acquisition
+from DB import Session
+from DB.Acquisition import Acquisition
 from DB.Object import VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL
-from DB.Project import ProjectIDListT
+from DB.Project import ProjectIDListT, Project
+from DB.Sample import Sample
 from DB.helpers.Direct import text
 from DB.helpers.ORM import any_
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 from .Classification import ClassifIDListT
 from .ColumnUpdate import ColUpdateList
-from .helpers.DataclassAsDict import DataclassAsDict
 from .helpers.MappedEntity import MappedEntity
 from .helpers.MappedTable import MappedTable
 
@@ -29,8 +30,8 @@ SampleOrigIDT = str
 logger = get_logger(__name__)
 
 
-@dataclass(init=False)
-class SampleTaxoStats(DataclassAsDict):
+@dataclass()
+class SampleTaxoStats:
     """
         Taxonomy statistics for a sample.
     """
@@ -42,7 +43,7 @@ class SampleTaxoStats(DataclassAsDict):
     nb_predicted: int
 
 
-def _get_proj(sam: Sample):
+def _get_proj(sam: Sample) -> Project:
     return sam.project
 
 
@@ -66,7 +67,7 @@ class SampleBO(MappedEntity):
     @classmethod
     def get_acquisitions(cls, session: Session, sample: Sample) -> List[Acquisition]:
         """ Get acquisitions for the sample """
-        qry: Query = session.query(Acquisition)
+        qry = session.query(Acquisition)
         qry = qry.join(Sample)
         qry = qry.filter(Sample.sampleid == sample.sampleid)
         return qry.all()
@@ -87,12 +88,11 @@ class DescribedSampleSet(object):
             Return all samples from description.
             TODO: No free columns value so far.
         """
-        qry: Query = self._session.query(Sample)
+        qry = self._session.query(Sample)
         qry = qry.join(Sample, Project.all_samples)
         qry = qry.filter(Project.projid.in_(self.prj_ids))
         qry = qry.filter(Sample.orig_id.ilike(self.pattern))
-        ret = [a_sample for a_sample in qry.all()]
-        return ret
+        return qry.all()
 
 
 class EnumeratedSampleSet(MappedTable):
@@ -108,29 +108,29 @@ class EnumeratedSampleSet(MappedTable):
         """
             Return the project IDs for the held sample IDs.
         """
-        qry: Query = self.session.query(Project.projid).distinct(Project.projid)
+        qry = self.session.query(Project.projid).distinct(Project.projid)
         qry = qry.join(Sample, Project.all_samples)
         qry = qry.filter(Sample.sampleid == any_(self.ids))
         with CodeTimer("Prjs for %d samples: " % len(self.ids), logger):
-            return [an_id[0] for an_id in qry.all()]
+            return [an_id for an_id, in qry]
 
     def apply_on_all(self, project: Project, updates: ColUpdateList) -> int:
         """
             Apply all updates on all samples.
         """
-        return self._apply_on_all(Sample, project, updates)
+        return self._apply_on_all(Sample, project, updates.lst)
 
     def add_filter(self, upd):
         return upd.filter(Sample.sampleid == any_(self.ids))
 
     def read_taxo_stats(self) -> List[SampleTaxoStats]:
         sql = text("""
-        SELECT sam.sampleid,
-               ARRAY_AGG(DISTINCT COALESCE(obh.classif_id, -1)) as ids,
-               SUM(CASE WHEN obh.classif_id <> -1 THEN 0 ELSE 1 END) as nb_u,
-               COUNT(CASE WHEN obh.classif_qual = '""" + VALIDATED_CLASSIF_QUAL + """' THEN 1 END) nbr_v,
-               COUNT(CASE WHEN obh.classif_qual = '""" + DUBIOUS_CLASSIF_QUAL + """' THEN 1 END) nbr_d, 
-               COUNT(CASE WHEN obh.classif_qual = '""" + PREDICTED_CLASSIF_QUAL + """' THEN 1 END) nbr_p
+        SELECT sam.sampleid as sample_id,
+               ARRAY_AGG(DISTINCT COALESCE(obh.classif_id, -1)) as used_taxa,
+               SUM(CASE WHEN obh.classif_id <> -1 THEN 0 ELSE 1 END) as nb_unclassified,
+               COUNT(CASE WHEN obh.classif_qual = '""" + VALIDATED_CLASSIF_QUAL + """' THEN 1 END) nb_validated,
+               COUNT(CASE WHEN obh.classif_qual = '""" + DUBIOUS_CLASSIF_QUAL + """' THEN 1 END) nb_dubious, 
+               COUNT(CASE WHEN obh.classif_qual = '""" + PREDICTED_CLASSIF_QUAL + """' THEN 1 END) nb_predicted
           FROM obj_head obh
           JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
           JOIN samples sam ON sam.sampleid = acq.acq_sample_id
@@ -138,5 +138,5 @@ class EnumeratedSampleSet(MappedTable):
          GROUP BY sam.sampleid;""")
         with CodeTimer("Stats for %d samples: " % len(self.ids), logger):
             res = self.session.execute(sql, {'ids': self.ids})
-            ret = [SampleTaxoStats(rec) for rec in res]
+            ret = [SampleTaxoStats(**rec) for rec in res]  # type:ignore
         return ret

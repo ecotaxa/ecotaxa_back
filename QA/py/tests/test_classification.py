@@ -4,7 +4,7 @@
 #
 import logging
 
-from API_models.crud import ProjectFilters
+from API_models.filters import ProjectFilters, ProjectFiltersDict
 from starlette import status
 
 from tests.credentials import CREATOR_AUTH, ORDINARY_USER2_USER_ID, ADMIN_AUTH
@@ -123,7 +123,7 @@ def test_classif(config, database, fastapi, caplog):
 
     def get_object_set_stats():
         stats_url = OBJECT_SET_SUMMARY_URL.format(project_id=prj_id)
-        filters = ProjectFilters()
+        filters = ProjectFiltersDict()
         stats_rsp = fastapi.post(stats_url, headers=ADMIN_AUTH, json=filters)
         assert stats_rsp.status_code == status.HTTP_200_OK
         return stats_rsp.json()

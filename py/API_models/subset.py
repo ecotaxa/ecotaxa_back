@@ -3,8 +3,8 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from enum import Enum
-from typing import Dict
 
+from API_models.filters import ProjectFiltersDict
 from helpers.pydantic import BaseModel, Field
 
 
@@ -21,8 +21,8 @@ class GroupDefinitions(str, Enum):
 
 class SubsetReq(BaseModel):
     """ Subset request. """
-    filters: Dict[str, str] = Field(title="Filters", description="The filters to apply to project.", default={},
-                                    example={"freenum": "n01", "freenumst": "0"})
+    filters: ProjectFiltersDict = Field(title="Filters", description="The filters to apply to project.", default={},
+                                        example={"freenum": "n01", "freenumst": "0"})
     dest_prj_id: int = Field(title="Destination project id", description="The destination project ID.", example=22)
     group_type: GroupDefinitions = Field(title="Group type",
                                          description="Define the groups in which to apply limits. "

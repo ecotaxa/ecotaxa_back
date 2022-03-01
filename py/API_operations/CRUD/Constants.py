@@ -15,9 +15,8 @@ class ConstantsService(Service):
 
     def get(self) -> Constants:
         ret = Constants()
-        conf_keys = set(self.config.list_cnf())
-        if 'APPMANAGER_EMAIL' in conf_keys and 'APPMANAGER_NAME' in conf_keys:
-            ret.app_manager = [self.config.get_cnf('APPMANAGER_NAME'),
-                               self.config.get_cnf('APPMANAGER_EMAIL')]
+        app_manager = self.config.get_app_manager()
+        if all(app_manager):
+            ret.app_manager = list(app_manager)  # type:ignore # mypy doesn't know all()
         ret.countries = [a_country for (a_country,) in self.session.query(text('countryname from countrylist'))]
         return ret

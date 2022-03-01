@@ -3,10 +3,9 @@
 #
 # START OF BACK-END REQUIREMENTS
 # Typings there depend on SQLA 2.0 interface
-SQLAlchemy==1.4.31
+SQLAlchemy[mypy]==1.4.31
+# sqlalchemy2-stubs installed with [mypy] above
 sqlalchemy_views==0.3.1
-# So stick (override?) to older stubs from DropBox
-sqlalchemy-stubs==0.4
 # When SQLAlchemy moves to 2.0 we'll be able to use psycopg3
 #psycopg[binary]==3.0.8
 psycopg2-binary==2.9.3

@@ -16,6 +16,7 @@ from pydantic import create_model, BaseConfig
 from pydantic.fields import ModelField
 
 from API_models.helpers import PydanticModelT
+from BO.User import MinimalUserBO, UserActivity
 
 
 class DataclassConfig(BaseConfig):
@@ -26,7 +27,7 @@ class DataclassConfig(BaseConfig):
 T = TypeVar('T')
 
 
-def dataclass_to_model(clazz: T, add_suffix: bool = False, field_infos:  Optional[Dict[str, Any]] = None) \
+def dataclass_to_model(clazz: T, add_suffix: bool = False, field_infos: Optional[Dict[str, Any]] = None) \
         -> PydanticModelT:
     model_fields = {}
     a_field: dataclasses.Field
@@ -36,6 +37,22 @@ def dataclass_to_model(clazz: T, add_suffix: bool = False, field_infos:  Optiona
         if fld_type in (str, Optional[str], int, float, datetime.datetime):
             # Basic types become directly model fields
             pass
+        elif fld_type == list: # WIP
+            # Compiled (by mypyc) classes have no type info
+            if "_ids" in a_field.name or "counts" in a_field.name:
+                fld_type = List[int]
+            elif "column" in a_field.name:
+                fld_type = List[int]
+            elif "variances" in a_field.name:
+                fld_type = List[Optional[float]]
+            elif "annotators" in a_field.name:
+                fld_type = List[MinimalUserBO]
+            elif "activities" in a_field.name:
+                fld_type = List[UserActivity]
+            elif "used_taxa" in a_field.name:
+                fld_type = List[int]
+            else:
+                raise Exception("Not managed yet :", fld_type, a_field.name)
         elif type(fld_type) == _GenericAlias:
             # A typing e.g. typing.List[BO.UserBO]
             str_type = str(fld_type)
@@ -59,12 +76,19 @@ def dataclass_to_model(clazz: T, add_suffix: bool = False, field_infos:  Optiona
             # Pydantic maps everything to object, no doc or fields or types
             pass
         else:
-            raise Exception("Not managed yet :", fld_type)  # pragma:nocover
+            raise Exception("Not managed yet :", fld_type, a_field.name)  # pragma:nocover
         model_fields[a_field.name] = (fld_type, default)
     model_name = clazz.__name__ + ("Model" if add_suffix else "")  # type: ignore
     ret: PydanticModelT = create_model(
         model_name, __config__=DataclassConfig, **model_fields  # type: ignore
     )
+    # Inject an iterator into the dataclass
+    # As when converting a plain object to a Model, pydantic tries to call dict(obj).
+    #   See in pydantic/main.py
+    #   @classmethod
+    #   def validate(cls: Type['Model'], value: Any) -> 'Model':
+    setattr(clazz, "__iter__", lambda self: iter([(fld, getattr(self, fld))
+                                                  for fld in model_fields.keys()]))
     if field_infos is not None:
         # Amend with Field() calls, for doc. Let crash (KeyError) if desync with base.
         for a_field_name, a_field_info in field_infos.items():

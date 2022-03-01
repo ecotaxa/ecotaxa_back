@@ -13,12 +13,16 @@ import numpy as np  # type: ignore
 from numpy import ndarray
 
 from BO.Object import ObjectIDT
-from DB import ObjectHeader, Acquisition, Sample, ObjectCNNFeature, CNNFeature, Image
-from DB.CNNFeature import ObjectCNNFeaturesBean
+from DB import CNNFeature
+from DB.Acquisition import Acquisition
+from DB.CNNFeature import ObjectCNNFeaturesBean, ObjectCNNFeature
+from DB.Image import Image
+from DB.Object import ObjectHeader
 from DB.Project import ProjectIDT
+from DB.Sample import Sample
 from DB.helpers import Session, Result
 from DB.helpers.DBWriter import DBWriter
-from DB.helpers.ORM import Query, and_
+from DB.helpers.ORM import and_, text
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -40,11 +44,11 @@ class DeepFeatures(object):
         """
             Delete all CNN features from DB, for this project.
         """
-        sub_qry: Query = session.query(ObjectHeader.objid)
+        sub_qry = session.query(ObjectHeader.objid)
         sub_qry = sub_qry.join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
         sub_qry = sub_qry.join(Sample, and_(Sample.sampleid == Acquisition.acq_sample_id,
                                             Sample.projid == proj_id))
-        qry: Query = session.query(ObjectCNNFeature)
+        qry = session.query(ObjectCNNFeature)
         qry = qry.filter(ObjectCNNFeature.objcnnid.in_(sub_qry))
         nb_deleted = qry.delete(synchronize_session=False)
         return nb_deleted
@@ -54,7 +58,7 @@ class DeepFeatures(object):
         """
             Find missing cnn features for this project.
         """
-        qry: Query = session.query(ObjectHeader.objid, Image.file_name)
+        qry = session.query(ObjectHeader.objid, Image.file_name)
         qry = qry.join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
         qry = qry.join(Sample, and_(Sample.sampleid == Acquisition.acq_sample_id,
                                     Sample.projid == proj_id))
@@ -106,7 +110,7 @@ class DeepFeatures(object):
         sql += " ORDER BY ordr.seq "
         params = {"seq": list(range(len(oid_lst))),
                   "oids": oid_lst}
-        res: Result = session.execute(sql, params=params)
+        res: Result = session.execute(text(sql), params=params)
         return res
 
     @classmethod

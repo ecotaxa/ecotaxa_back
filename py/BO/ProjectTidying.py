@@ -10,10 +10,12 @@ from BO.Acquisition import AcquisitionOrigIDT
 from BO.Object import ObjectIDT
 from BO.Process import ProcessOrigIDT
 from BO.Sample import SampleOrigIDT
-from DB import Sample, Acquisition, ObjectHeader, Process
 from DB import Session
+from DB.Acquisition import Acquisition
+from DB.Object import ObjectHeader
+from DB.Process import Process
 from DB.Project import ProjectIDT
-from DB.helpers.ORM import Query
+from DB.Sample import Sample
 
 
 class ProjectTopology(object):
@@ -44,7 +46,7 @@ class ProjectTopology(object):
         """
             Read the project topology from DB.
         """
-        qry: Query = session.query(Sample)
+        qry = session.query(Sample)
         qry = qry.join(Sample.all_acquisitions)
         qry = qry.join(Acquisition.process)
         qry = qry.join(Acquisition.all_objects)
@@ -54,7 +56,7 @@ class ProjectTopology(object):
         acq_orig_id: str
         prc_orig_id: str
         objid: ObjectIDT
-        for sam_orig_id, acq_orig_id, prc_orig_id, objid in qry.all():
+        for sam_orig_id, acq_orig_id, prc_orig_id, objid in qry:
             # Get/create acquisitions for this sample
             objs_for_acquisition = self.add_association(sam_orig_id, acq_orig_id)
             # Store twin process

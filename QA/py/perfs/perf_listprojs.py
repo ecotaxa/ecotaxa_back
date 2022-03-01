@@ -17,9 +17,10 @@ from tools.dbBuildSQL import EcoTaxaExistingDB
 
 
 def main():
-    EcoTaxaExistingDB.write_config(CONF_FILE, "localhost", 5434)
-    with ProjectsService() as sce:
-        sce.search(current_user_id=ADMIN_USER_ID)
+    EcoTaxaExistingDB.write_config(CONF_FILE, "localhost", 5435)
+    for i in range(1,2):
+        with ProjectsService() as sce:
+            ret = sce.search(current_user_id=ADMIN_USER_ID)
 
 
 if __name__ == '__main__':

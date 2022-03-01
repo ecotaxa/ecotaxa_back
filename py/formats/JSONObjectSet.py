@@ -7,7 +7,12 @@
 #
 from typing import Dict, Union
 
-from DB import Project, Sample, Acquisition, Process, ObjectHeader, ObjectFields, Image
+from DB.Acquisition import Acquisition
+from DB.Image import Image
+from DB.Object import ObjectHeader, ObjectFields
+from DB.Process import Process
+from DB.Project import Project
+from DB.Sample import Sample
 from DB.helpers.ORM import ModelT, Column, RelationshipProperty
 
 # Typing for the clarity. Key = DB Column, Value = string in target dict
@@ -15,7 +20,8 @@ JSONDesc = Dict[Union[Column, RelationshipProperty], str]
 
 JSON_FIELDS: Dict[ModelT, JSONDesc] = {
     Project: {Project.title: "ttl",
-              Project.all_samples: "samples"},
+              Project.all_samples: "samples",  # type:ignore
+              },
     Sample: {Sample.sampleid: "id",
              Sample.orig_id: "sid",
              Sample.dataportal_descriptor: "dsc",
@@ -32,12 +38,12 @@ JSON_FIELDS: Dict[ModelT, JSONDesc] = {
     ObjectHeader: {ObjectHeader.orig_id: "oid",
                    ObjectHeader.classif_id: "mcat",
                    ObjectHeader.classif_auto_id: "acat",
-                   ObjectHeader.all_images: "images",
+                   ObjectHeader.all_images: "images",  # type:ignore
                    ObjectHeader.depth_min: "depth_min",
                    ObjectHeader.depth_max: "depth_max",
                    ObjectHeader.latitude: "latitude",
                    ObjectHeader.longitude: "longitude",
-                   ObjectHeader.fields: "fields",  # 1-1 so should be joined right away and disappear
+                   ObjectHeader.fields: "fields",  # type:ignore # 1-1 so should be joined right away and disappear
                    },
     ObjectFields: {},
     Image: {Image.file_name: "fil",

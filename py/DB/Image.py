@@ -70,11 +70,11 @@ class ImageFile(Model):
     # An image on disk. Can be referenced (or not...) from the application
     __tablename__ = 'image_file'
     # Path inside the Vault
-    path = Column(VARCHAR, primary_key=True)
+    path: str = Column(VARCHAR, primary_key=True)
     # State w/r to the application
-    state = Column(CHAR, default="?", server_default="?", nullable=False)
+    state: str = Column(CHAR, default="?", server_default="?", nullable=False)
     # What can be found in digest column
-    digest_type = Column(CHAR, default="?", server_default="?", nullable=False)
+    digest_type: str = Column(CHAR, default="?", server_default="?", nullable=False)
     # A digital signature
     digest = Column(BYTEA, nullable=True)
 

@@ -12,7 +12,7 @@ from API_operations.helpers.Service import Service
 from BO.Job import JobBO
 from DB import Job
 from DB.Job import DBJobStateEnum, JobIDT
-from DB.helpers.ORM import Query, clone_of
+from DB.helpers.ORM import clone_of
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -27,7 +27,7 @@ class JobRunner(Thread):
         super().__init__(name="Job #%d" % a_db_job.id)
         self.db_job = a_db_job
 
-    def run(self):
+    def run(self) -> None:
         """
            Run the background part of the service.
         """
@@ -40,7 +40,7 @@ class JobRunner(Thread):
             sce.run_in_background()
 
     @staticmethod
-    def tech_error(job_id: JobIDT, te: Any):
+    def tech_error(job_id: JobIDT, te: Any) -> None:
         """
             Technical problem, which cannot be managed by the service as it was not possible
             to create it. Report here.
@@ -66,10 +66,10 @@ class JobScheduler(Service):
     the_runner: Optional[JobRunner] = None
     the_timer: Optional[threading.Timer] = None
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
-    def run_one(self):
+    def run_one(self) -> None:
         """
             Pick first pending job and run it, except if already running.
         """
@@ -80,14 +80,14 @@ class JobScheduler(Service):
                 return
             cls.the_runner = None
         # Pick the first pending job which is not already managed by another runner
-        qry: Query = self.session.query(Job).filter(Job.state == DBJobStateEnum.Pending)
+        qry = self.session.query(Job).filter(Job.state == DBJobStateEnum.Pending)
         if self.INCLUDE:
             for a_type in self.INCLUDE:
                 qry = qry.filter(Job.type == a_type)
         for a_type in self.FILTER:
             qry = qry.filter(Job.type != a_type)
         qry = qry.with_for_update(skip_locked=True)
-        the_job: Job = qry.first()
+        the_job: Optional[Job] = qry.first()
         if the_job is None:
             return
         logger.info("Found job to run: %s", str(the_job))
@@ -102,8 +102,9 @@ class JobScheduler(Service):
         cls.the_runner = JobRunner(JobBO(job_clone))
         cls.the_runner.start()
 
-    def wait_for_stable(self):
+    def wait_for_stable(self) -> None:
         # Not to use outside tests
+        assert self.the_runner
         self.the_runner.join()
 
     @staticmethod
@@ -134,12 +135,12 @@ class JobScheduler(Service):
         return True
 
     @classmethod
-    def launch_at_interval(cls, interval: int):
+    def launch_at_interval(cls, interval: int) -> None:
         """
             Launch a job if possible, then wait a bit before accessing next one.
         """
 
-        def launch():
+        def launch() -> None:
             try:
                 with cls() as sce:
                     sce.run_one()
@@ -151,5 +152,6 @@ class JobScheduler(Service):
         cls.the_timer.start()
 
     @classmethod
-    def shutdown(cls):
+    def shutdown(cls) -> None:
+        assert cls.the_timer
         cls.the_timer.cancel()

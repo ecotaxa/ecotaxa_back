@@ -44,17 +44,17 @@ class JobBO(object):
         self.reply = self.deser(db_job.reply, {})
 
     @staticmethod
-    def deser(value, fallback):
+    def deser(value, fallback: Any) -> Any:
         if value:
             return json_loads(value)
         else:
             return fallback
 
-    def update_inside(self, to_save: Dict):
+    def update_inside(self, to_save: Dict) -> None:
         self.inside.update(to_save)
         self._job.inside = json_dumps(self.inside)
 
-    def set_result(self, result: Any):
+    def set_result(self, result: Any) -> None:
         self.result = result
         self._job.result = json_dumps(result)
 
@@ -64,15 +64,15 @@ class JobBO(object):
         except JSONDecodeError:
             return None
 
-    def set_reply(self, reply: Dict):
+    def set_reply(self, reply: Dict) -> None:
         self.reply = reply
         self._job.reply = json_dumps(reply)
 
-    def set_messages(self, messages: List):
+    def set_messages(self, messages: List) -> None:
         self.errors = messages
         self._job.messages = json_dumps(messages)
 
-    def set_question(self, question: Dict):
+    def set_question(self, question: Dict) -> None:
         self.question = question
         self._job.question = json_dumps(question)
 
@@ -109,8 +109,9 @@ class JobBO(object):
         ret._session = session
         return ret
 
-    def delete(self):
-        self._session.delete(self._job)
+    def delete(self) -> None:
+        if self._session:
+            self._session.delete(self._job)
 
     def __enter__(self):
         assert self._session is not None

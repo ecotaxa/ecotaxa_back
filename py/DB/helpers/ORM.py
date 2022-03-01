@@ -8,17 +8,22 @@ from typing import Tuple, List, Set, Dict, TypeVar, Type, Any, Union
 # noinspection PyUnresolvedReferences
 from sqlalchemy import Column, inspect, MetaData, Table, any_ as _pg_any, all_ as _pg_all, not_, and_, or_, func, \
     case, text, select, column, Integer, Float, FLOAT
-from sqlalchemy.engine.result import Result  # type: ignore
+# For exporting
+# noinspection PyUnresolvedReferences
+from sqlalchemy.engine.row import Row
 from sqlalchemy.ext.declarative import declarative_base
 # noinspection PyUnresolvedReferences
 from sqlalchemy.orm import Query, make_transient, contains_eager, joinedload, subqueryload, selectinload
-# For exporting
 # noinspection PyUnresolvedReferences
-from sqlalchemy.orm import relationship, RelationshipProperty, aliased
+from sqlalchemy.orm import relationship, RelationshipProperty, aliased, Mapped
 # noinspection PyUnresolvedReferences
 from sqlalchemy.sql import Delete, Update, Insert, ColumnElement
 # noinspection PyUnresolvedReferences
+from sqlalchemy.sql.elements import Label
+# noinspection PyUnresolvedReferences
 from sqlalchemy.sql.functions import concat
+# noinspection PyUnresolvedReferences
+from sqlalchemy.sql.selectable import Alias
 
 from . import Session
 
@@ -178,9 +183,3 @@ def all_(items_list: Union[List[int], List[str]]):
     # noinspection PyTypeChecker
     return _pg_all(items_list)  # type: ignore
 
-
-def only_res(res: List[Tuple[Any]]):
-    """
-        SQLAlchemy or DBApi returns even single column queries as lists of 1-element tuple :(
-    """
-    return [an_id for an_id, in res]

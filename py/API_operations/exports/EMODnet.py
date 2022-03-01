@@ -9,32 +9,35 @@
 #      ../../DwCA/gbif-data-validator/validator-ws/run-prod coll_6512_export.zip
 # EMODnet QC source code:
 #      https://github.com/EMODnet/EMODnetBiocheck
+import datetime
 import re
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, cast, Set
+from typing import Dict, List, Optional, Tuple, cast, Set, Any
 from urllib.parse import quote_plus
 
+import BO.ProjectVarsDefault as DefaultVars
 from API_models.exports import EMODnetExportRsp
 from BO.Acquisition import AcquisitionBO, AcquisitionIDT
-from BO.Classification import ClassifIDT
+from BO.Classification import ClassifIDT, ClassifIDSetT
 from BO.Collection import CollectionIDT, CollectionBO
 from BO.DataLicense import LicenseEnum, DataLicense
 from BO.Mappings import ProjectMapping
 from BO.Object import ObjectBO, ObjectBOSet
 from BO.Process import ProcessBO
 from BO.Project import ProjectBO, ProjectTaxoStats
-from BO.ProjectVars import DefaultVars
 from BO.Rights import RightsBO
 from BO.Sample import SampleBO
 from BO.TaxonomySwitch import TaxonomyMapper
-from DB import User, Taxonomy, WoRMS, Collection, Role
+from DB.Collection import Collection
 from DB.Project import ProjectTaxoStat, ProjectIDT, ProjectIDListT
 from DB.Sample import Sample
-from DB.helpers.ORM import Query
+from DB.Taxonomy import Taxonomy
+from DB.User import User, Role
+from DB.WoRMs import WoRMS
 from DB.helpers.Postgres import timestamp_to_str
 from data.Countries import countries_by_name
-from formats.EMODnet.Archive import DwC_Archive
+from formats.EMODnet.Archive import DwC_Archive, DwcArchive
 from formats.EMODnet.DatasetMeta import DatasetMetadata
 from formats.EMODnet.MoF import SamplingNetMeshSizeInMicrons, SampleDeviceApertureAreaInSquareMeters, \
     AbundancePerUnitVolumeOfTheWaterBody, BiovolumeOfBiologicalEntity, SamplingInstrumentName, CountOfBiologicalEntity
@@ -45,7 +48,7 @@ from helpers.DateTime import now_time
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 from helpers.Timer import CodeTimer
 # TODO: Move somewhere else
-from ..helpers.JobService import JobServiceBase
+from ..helpers.JobService import JobServiceBase, ArgsDict
 
 logger = get_logger(__name__)
 
@@ -63,7 +66,7 @@ class EMODnetExport(JobServiceBase):
     """
     JOB_TYPE = "DarwinCoreExport"
 
-    def init_args(self, args: Dict) -> Dict:
+    def init_args(self, args: ArgsDict) -> ArgsDict:
         # A bit unusual to find a method before init(), but here we can visually ensure
         # that arg lists are identical.
         super().init_args(args)
@@ -102,7 +105,7 @@ class EMODnetExport(JobServiceBase):
         self.ignored_taxa: Dict[ClassifIDT, Tuple[str, ClassifIDT]] = {}
         self.unknown_nets: Dict[str, List[str]] = {}
         self.empty_samples: List[Tuple[ProjectIDT, str]] = []
-        self.stats_per_rank: Dict[str, Dict] = {}
+        self.stats_per_rank: Dict[str, Dict[str, Any]] = {}
         self.suspicious_vals: Dict[str, List[str]] = {}
 
     DWC_ZIP_NAME = "dwca.zip"
@@ -119,7 +122,7 @@ class EMODnetExport(JobServiceBase):
         ret = EMODnetExportRsp(job_id=self.job_id)
         return ret
 
-    def do_background(self):
+    def do_background(self) -> None:
         """
             Background part of the job.
         """
@@ -163,7 +166,7 @@ class EMODnetExport(JobServiceBase):
             self.log_stats()
         self.set_job_result(self.errors, {"wrns": self.warnings})
 
-    def add_absent_occurrences(self, arch):
+    def add_absent_occurrences(self, arch: DwcArchive) -> None:
         """
             Second pass, occurrence creations for absent taxa.
         """
@@ -186,19 +189,19 @@ class EMODnetExport(JobServiceBase):
                                      basisOfRecord=BasisOfRecordEnum.machineObservation)
                 arch.occurences.add(occ)
 
-    def compute_all_seen_taxa(self):
+    def compute_all_seen_taxa(self) -> ClassifIDSetT:
         # Cumulate all categories
-        all_taxa: Set[ClassifIDT] = set()
+        all_taxa: ClassifIDSetT = set()
         for an_id_set in self.taxa_per_sample.values():
             all_taxa.update(an_id_set)
         return all_taxa
 
     @staticmethod
-    def organisation_to_eml_person(an_org):
+    def organisation_to_eml_person(an_org: str) -> EMLPerson:
         return EMLPerson(organizationName=an_org)
 
     @staticmethod
-    def capitalize_name(name: str):
+    def capitalize_name(name: str) -> str:
         """
             e.g. JEAN -> Jean
             but as well JEAN-MARC -> Jean-Marc
@@ -305,7 +308,7 @@ class EMODnetExport(JobServiceBase):
         if provider is None:
             self.errors.append("No valid metadata provider user found for EML metadata.")
 
-        associates: List[EMLAssociatedPerson] = []
+        associates: List[EMLPerson] = []
         for a_user in the_collection.associate_users:
             person, errs = self.user_to_eml_person(a_user, "associated person %d" % a_user.id)
             if errs:
@@ -414,11 +417,11 @@ class EMODnetExport(JobServiceBase):
         """
         ret: List[EMLTaxonomicClassification] = []
         # Fetch the used taxa in the projects
-        taxo_qry: Query = self.session.query(ProjectTaxoStat.id, Taxonomy.name).distinct()
+        taxo_qry = self.session.query(ProjectTaxoStat.id, Taxonomy.name).distinct()
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.id == Taxonomy.id)
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.nbr > 0)
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid.in_(project_ids))
-        used_taxa = {an_id: a_name for (an_id, a_name) in taxo_qry.all()}
+        used_taxa = {an_id: a_name for (an_id, a_name) in taxo_qry}
         # Map them to WoRMS
         self.mapping, self.morpho2phylo = TaxonomyMapper(self.ro_session, list(used_taxa.keys())).do_match()
         assert set(self.mapping.keys()).isdisjoint(set(self.morpho2phylo.keys()))
@@ -452,7 +455,7 @@ class EMODnetExport(JobServiceBase):
         # Round coordinates to ~ 110mm
         return "%.6f" % lat_or_lon
 
-    def add_events(self, arch: DwC_Archive):
+    def add_events(self, arch: DwC_Archive) -> None:
         """
             Add DwC events into the archive.
                 We produce sample-type events.
@@ -502,7 +505,7 @@ class EMODnetExport(JobServiceBase):
     }
 
     # noinspection PyPep8Naming
-    def add_eMoFs_for_sample(self, sample: Sample, arch: DwC_Archive, event_id: str):
+    def add_eMoFs_for_sample(self, sample: Sample, arch: DwC_Archive, event_id: str) -> None:
         """
             Add eMoF instances, for given sample, i.e. event, into the archive.
         """
@@ -693,7 +696,7 @@ class EMODnetExport(JobServiceBase):
 
         return ret
 
-    def add_morpho_counts(self, count_per_taxon_for_acquis: Dict[ClassifIDT, int]):
+    def add_morpho_counts(self, count_per_taxon_for_acquis: Dict[ClassifIDT, int]) -> None:
         # If there are Morpho taxa with counts, cumulate and wipe them out
         for an_id, count_4_acquis in dict(count_per_taxon_for_acquis).items():
             phylo_id = self.morpho2phylo.get(an_id)
@@ -713,7 +716,7 @@ class EMODnetExport(JobServiceBase):
         aggregs = self.aggregate_for_sample(sample)
 
         # Group by lsid, in order to have a single occurence
-        by_lsid: Dict[str, List] = {}
+        by_lsid: Dict[str, Tuple[str, EMODnetExport.AggregForTaxon, WoRMS]] = {}
         for an_id, an_aggreg in aggregs.items():
             try:
                 worms = self.mapping[an_id]
@@ -727,18 +730,21 @@ class EMODnetExport(JobServiceBase):
                         assert an_id not in self.morpho2phylo
                     self.ignored_morpho += an_aggreg.abundance
                 continue
-            if worms.lsid in by_lsid:
-                for_lsid = by_lsid[worms.lsid]
+            worms_lsid = worms.lsid
+            assert worms_lsid is not None
+            if worms_lsid in by_lsid:
+                occurrence_id, aggreg_for_lsid, worms = by_lsid[worms_lsid]
                 # Add the taxon ID to complete the occurence
-                for_lsid[0] += "_" + str(an_id)
-                for_lsid[1].abundance += an_aggreg.abundance
+                aggreg_for_lsid.abundance += an_aggreg.abundance
+                occurrence_id += "_" + str(an_id)
             else:
                 # Take the original taxo ID to build an occurence
-                assert worms.lsid is not None
-                by_lsid[worms.lsid] = [event_id + "_" + str(an_id), an_aggreg, worms]
+                occurrence_id, aggreg_for_lsid, worms = event_id + "_" + str(an_id), an_aggreg, worms
+            by_lsid[worms_lsid] = (occurrence_id, aggreg_for_lsid, worms)
 
         # Sort per abundance desc
-        by_lsid_desc = OrderedDict(sorted(by_lsid.items(), key=lambda x: x[1][1].abundance, reverse=True))
+        # noinspection PyTypeChecker
+        by_lsid_desc = OrderedDict(sorted(by_lsid.items(), key=lambda itm: itm[1][1].abundance, reverse=True))
         # Record production for this sample
         self.taxa_per_sample[event_id] = set()
         # Loop over WoRMS taxa
@@ -769,7 +775,7 @@ class EMODnetExport(JobServiceBase):
         return nb_added_occurences
 
     @staticmethod
-    def add_eMoFs_for_occurence(arch: DwC_Archive, event_id: str, occurrence_id: str, values: AggregForTaxon):
+    def add_eMoFs_for_occurence(arch: DwC_Archive, event_id: str, occurrence_id: str, values: AggregForTaxon) -> None:
         """
             Add eMoF instances, for given occurence, into the archive.
             Conditions are: - the value exists
@@ -787,7 +793,7 @@ class EMODnetExport(JobServiceBase):
             arch.emofs.add(emof2)
 
     @staticmethod
-    def event_date(min_date, max_date) -> str:
+    def event_date(min_date: datetime.datetime, max_date: datetime.datetime) -> str:
         """
             Return a date range if dates are different, otherwise the date. Separator is "/"
         """
@@ -797,13 +803,13 @@ class EMODnetExport(JobServiceBase):
             return timestamp_to_str(min_date)
 
     @staticmethod
-    def sanitize_title(title) -> str:
+    def sanitize_title(title: str) -> str:
         """
             So far, nothing.
         """
         return title
 
-    def keep_stats(self, taxon_info: WoRMS, count: int):
+    def keep_stats(self, taxon_info: WoRMS, count: int) -> None:
         """
             Keep statistics per various entries.
         """
@@ -812,7 +818,7 @@ class EMODnetExport(JobServiceBase):
         stats["cnt"] += count
         stats["nms"].add(taxon_info.scientificname)
 
-    def log_stats(self):
+    def log_stats(self) -> None:
         not_produced = sum(self.ignored_count.values())
         self.warnings.append("Stats: validated:%d produced to zip:%d not produced (M):%d not produced (P):%d"
                              % (self.validated_count, self.produced_count, self.ignored_morpho, not_produced))
@@ -837,7 +843,7 @@ class EMODnetExport(JobServiceBase):
         for a_rank in ranks_asc:
             logger.info("rank '%s' stats %s", str(a_rank), self.stats_per_rank.get(a_rank))
 
-    def update_db_stats(self):
+    def update_db_stats(self) -> None:
         """
             Refresh the database for aggregates.
         """

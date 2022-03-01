@@ -2,8 +2,10 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+#         Information about mapping process (from TSV to DB)
+#
 from collections import OrderedDict, namedtuple
-from typing import Dict, Tuple, List, Union, Type, Optional, Set, Final
+from typing import Dict, Tuple, List, Union, Type, Optional, Set, Final, Any
 
 from DB.Acquisition import Acquisition
 from DB.Image import Image
@@ -16,76 +18,71 @@ from DB.Sample import Sample
 ParentTableT = Union[Sample, Acquisition, Process]
 ParentTableClassT = Type[ParentTableT]
 
+ANNOTATION_FIELDS: Final = {
+    # !!! 2 TSV fields end up into a single DB column, it's one OR the other
+    'object_annotation_category': {'table': ObjectHeader.__tablename__, 'field': 'classif_id', 'type': 't'},
+    'object_annotation_category_id': {'table': ObjectHeader.__tablename__, 'field': 'classif_id', 'type': 'n'},
+    'object_annotation_date': {'table': ObjectHeader.__tablename__, 'field': 'classif_when', 'type': 't'},
+    'object_annotation_person_name': {'table': ObjectHeader.__tablename__, 'field': 'classif_who', 'type': 't'},
+    'object_annotation_status': {'table': ObjectHeader.__tablename__, 'field': 'classif_qual', 'type': 't'},
+}
+DOUBLED_FIELDS: Final = {
+    # Added to object_annotation_date
+    'object_annotation_time': {'table': ObjectHeader.__tablename__, 'field': 'classif_when', 'type': 't'},
+    # Either this one or object_annotation_person_name
+    'object_annotation_person_email': {'table': ObjectHeader.__tablename__, 'field': 'classif_who', 'type': 't'},
+}
+PREDEFINED_FIELDS: Final = {
+    **ANNOTATION_FIELDS,
+    # A mapping from TSV columns to objects and fields
+    'object_id': {'table': ObjectHeader.__tablename__, 'field': 'orig_id', 'type': 't'},
+    'sample_id': {'table': Sample.__tablename__, 'field': 'orig_id', 'type': 't'},
+    'acq_id': {'table': Acquisition.__tablename__, 'field': 'orig_id', 'type': 't'},
+    'process_id': {'table': Process.__tablename__, 'field': 'orig_id', 'type': 't'},
+    'object_lat': {'table': ObjectHeader.__tablename__, 'field': 'latitude', 'type': 'n'},
+    'object_lon': {'table': ObjectHeader.__tablename__, 'field': 'longitude', 'type': 'n'},
+    'object_date': {'table': ObjectHeader.__tablename__, 'field': 'objdate', 'type': 't'},
+    'object_time': {'table': ObjectHeader.__tablename__, 'field': 'objtime', 'type': 't'},
+    'object_link': {'table': ObjectHeader.__tablename__, 'field': 'object_link', 'type': 't'},
+    'object_depth_min': {'table': ObjectHeader.__tablename__, 'field': 'depth_min', 'type': 'n'},
+    'object_depth_max': {'table': ObjectHeader.__tablename__, 'field': 'depth_max', 'type': 'n'},
+    'img_rank': {'table': Image.__tablename__, 'field': 'imgrank', 'type': 'n'},
+    'img_file_name': {'table': Image.__tablename__, 'field': 'orig_file_name', 'type': 't'},
+    'sample_dataportal_descriptor': {'table': Sample.__tablename__, 'field': 'dataportal_descriptor', 'type': 't'},
+    'acq_instrument': {'table': Acquisition.__tablename__, 'field': 'instrument', 'type': 't'},
+}
 
-class GlobalMapping(object):
+# C'est un set de table 😁
+POSSIBLE_TABLES: Final = set([v['table'] for v in PREDEFINED_FIELDS.values()] +
+                             [ObjectFields.__tablename__])  # No hard-coded mapping for this one anymore
+
+PARENT_CLASSES: Final[Dict[str, ParentTableClassT]] = OrderedDict([(Sample.__tablename__, Sample),
+                                                                   (Acquisition.__tablename__, Acquisition),
+                                                                   (Process.__tablename__, Process)])
+
+TARGET_CLASSES: Final = {**PARENT_CLASSES,
+                         ObjectHeader.__tablename__: ObjectHeader,
+                         ObjectFields.__tablename__: ObjectFields,
+                         Image.__tablename__: Image}
+
+# (f)loat->(n)umerical
+POSSIBLE_TYPES: Final = {'[f]': 'n', '[t]': 't'}
+# TSV prefix to 'real' table name, only for extendable tables
+PREFIX_TO_TABLE: Final = {
+    'object': ObjectFields.__tablename__,
+    'acq': Acquisition.__tablename__,
+    'process': Process.__tablename__,
+    'sample': Sample.__tablename__,
+}
+TABLE_TO_PREFIX: Final = {v: k for k, v in PREFIX_TO_TABLE.items()}
+
+
+# noinspection PyPep8Naming
+def TSV_table_to_table(table: str) -> str:
     """
-        Information about mapping process (from TSV to DB)
+        Return the real table name behind the one used in TSV composed column names.
     """
-    ANNOTATION_FIELDS: Final = {
-        # !!! 2 TSV fields end up into a single DB column, it's one OR the other
-        'object_annotation_category': {'table': ObjectHeader.__tablename__, 'field': 'classif_id', 'type': 't'},
-        'object_annotation_category_id': {'table': ObjectHeader.__tablename__, 'field': 'classif_id', 'type': 'n'},
-        'object_annotation_date': {'table': ObjectHeader.__tablename__, 'field': 'classif_when', 'type': 't'},
-        'object_annotation_person_name': {'table': ObjectHeader.__tablename__, 'field': 'classif_who', 'type': 't'},
-        'object_annotation_status': {'table': ObjectHeader.__tablename__, 'field': 'classif_qual', 'type': 't'},
-    }
-    DOUBLED_FIELDS: Final = {
-        # Added to object_annotation_date
-        'object_annotation_time': {'table': ObjectHeader.__tablename__, 'field': 'classif_when', 'type': 't'},
-        # Either this one or object_annotation_person_name
-        'object_annotation_person_email': {'table': ObjectHeader.__tablename__, 'field': 'classif_who', 'type': 't'},
-    }
-    PREDEFINED_FIELDS: Final = {
-        **ANNOTATION_FIELDS,
-        # A mapping from TSV columns to objects and fields
-        'object_id': {'table': ObjectHeader.__tablename__, 'field': 'orig_id', 'type': 't'},
-        'sample_id': {'table': Sample.__tablename__, 'field': 'orig_id', 'type': 't'},
-        'acq_id': {'table': Acquisition.__tablename__, 'field': 'orig_id', 'type': 't'},
-        'process_id': {'table': Process.__tablename__, 'field': 'orig_id', 'type': 't'},
-        'object_lat': {'table': ObjectHeader.__tablename__, 'field': 'latitude', 'type': 'n'},
-        'object_lon': {'table': ObjectHeader.__tablename__, 'field': 'longitude', 'type': 'n'},
-        'object_date': {'table': ObjectHeader.__tablename__, 'field': 'objdate', 'type': 't'},
-        'object_time': {'table': ObjectHeader.__tablename__, 'field': 'objtime', 'type': 't'},
-        'object_link': {'table': ObjectHeader.__tablename__, 'field': 'object_link', 'type': 't'},
-        'object_depth_min': {'table': ObjectHeader.__tablename__, 'field': 'depth_min', 'type': 'n'},
-        'object_depth_max': {'table': ObjectHeader.__tablename__, 'field': 'depth_max', 'type': 'n'},
-        'img_rank': {'table': Image.__tablename__, 'field': 'imgrank', 'type': 'n'},
-        'img_file_name': {'table': Image.__tablename__, 'field': 'orig_file_name', 'type': 't'},
-        'sample_dataportal_descriptor': {'table': Sample.__tablename__, 'field': 'dataportal_descriptor', 'type': 't'},
-        'acq_instrument': {'table': Acquisition.__tablename__, 'field': 'instrument', 'type': 't'},
-    }
-
-    # C'est un set de table 😁
-    POSSIBLE_TABLES: Final = set([v['table'] for v in PREDEFINED_FIELDS.values()] +
-                                    [ObjectFields.__tablename__])  # No hard-coded mapping for this one anymore
-
-    PARENT_CLASSES: Final[Dict[str, ParentTableClassT]] = OrderedDict([(Sample.__tablename__, Sample),
-                                                                          (Acquisition.__tablename__, Acquisition),
-                                                                          (Process.__tablename__, Process)])
-
-    TARGET_CLASSES: Final = {**PARENT_CLASSES,
-                                ObjectHeader.__tablename__: ObjectHeader,
-                                ObjectFields.__tablename__: ObjectFields,
-                                Image.__tablename__: Image}
-
-    # (f)loat->(n)umerical
-    POSSIBLE_TYPES: Final = {'[f]': 'n', '[t]': 't'}
-    # TSV prefix to 'real' table name, only for extendable tables
-    PREFIX_TO_TABLE: Final = {
-        'object': ObjectFields.__tablename__,
-        'acq': Acquisition.__tablename__,
-        'process': Process.__tablename__,
-        'sample': Sample.__tablename__,
-    }
-    TABLE_TO_PREFIX: Final = {v: k for k, v in PREFIX_TO_TABLE.items()}
-
-    # noinspection PyPep8Naming
-    @classmethod
-    def TSV_table_to_table(cls, table):
-        """
-            Return the real table name behind the one used in TSV composed column names.
-        """
-        return cls.PREFIX_TO_TABLE.get(table, table)
+    return PREFIX_TO_TABLE.get(table, table)
 
 
 # A re-mapping operation, from and to are real DB columns
@@ -115,7 +112,7 @@ class ProjectMapping(object):
     __slots__ = ["object_mappings", "sample_mappings", "acquisition_mappings", "process_mappings",
                  "all", "by_table_name", "by_table", "was_empty"]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.object_mappings: TableMapping = TableMapping(ObjectFields)
         self.sample_mappings: TableMapping = TableMapping(Sample)
         self.acquisition_mappings: TableMapping = TableMapping(Acquisition)
@@ -149,7 +146,7 @@ class ProjectMapping(object):
         self.was_empty = self.is_empty()
         return self
 
-    def as_dict(self):
+    def as_dict(self) -> Dict[str, Dict[str, str]]:
         """
             Return the mapping as a serializable object for messaging.
         """
@@ -157,7 +154,7 @@ class ProjectMapping(object):
                     for mapping in self.all}
         return out_dict
 
-    def load_from_dict(self, in_dict: Dict):
+    def load_from_dict(self, in_dict: Dict) -> 'ProjectMapping':
         """
             Use data produced by @as_dict previous for loading self.
         """
@@ -185,7 +182,7 @@ class ProjectMapping(object):
             prfx, tsv_col = full_tsv_field.split("_", 1)
         except ValueError:
             return None  # Not the expected separator
-        table_name = GlobalMapping.PREFIX_TO_TABLE.get(prfx)
+        table_name = PREFIX_TO_TABLE.get(prfx)
         if table_name is None:
             return None  # Not a known prefix
         mping = self.by_table_name[table_name]
@@ -201,7 +198,7 @@ class ProjectMapping(object):
         ret = set()
         for a_mapping in self.all:
             tbl = a_mapping.table_name
-            prfx = GlobalMapping.TABLE_TO_PREFIX.get(tbl, tbl)
+            prfx = TABLE_TO_PREFIX.get(tbl, tbl)
             ret.update(a_mapping.tsv_cols_prefixed(prfx))
         return ret
 
@@ -226,7 +223,7 @@ class TableMapping(object):
         # key = TSV field name WITHOUT table prefix, val = DB column
         self.tsv_cols_to_real: Dict[str, str] = OrderedDict()
 
-    def load_from_equal_list(self, str_mapping: Optional[str]):
+    def load_from_equal_list(self, str_mapping: Optional[str]) -> 'TableMapping':
         """
             Input has form, e.g.:
                 n01=lat_end
@@ -236,7 +233,7 @@ class TableMapping(object):
         """
         if not str_mapping:
             # None or "" => nothing to do
-            return
+            return self
         real_cols_to_tsv = self.real_cols_to_tsv
         tsv_cols_to_real = self.tsv_cols_to_real
         for a_map in str_mapping.splitlines():
@@ -250,21 +247,21 @@ class TableMapping(object):
             tsv_cols_to_real[tsv_col_no_prfx] = db_col
         return self
 
-    def load_from_dict(self, dict_mapping: dict):
+    def load_from_dict(self, dict_mapping: dict) -> None:
         for db_col, tsv_col_no_prfx in dict_mapping.items():
             self.add_association(db_col, tsv_col_no_prfx)
 
     def load_from(self, other: 'TableMapping'):
         self.load_from_dict(other.real_cols_to_tsv)
 
-    def add_association(self, db_col, tsv_col_no_prfx):
+    def add_association(self, db_col, tsv_col_no_prfx) -> None:
         self.real_cols_to_tsv[db_col] = tsv_col_no_prfx
         self.tsv_cols_to_real[tsv_col_no_prfx] = db_col
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.real_cols_to_tsv)
 
-    def is_empty(self):
+    def is_empty(self) -> bool:
         return len(self.real_cols_to_tsv) == 0
 
     def max_by_type(self, sel_type: str) -> int:
@@ -290,7 +287,7 @@ class TableMapping(object):
         self.add_association(db_col, tsv_col_no_prfx)
         return db_col in self.table.__dict__
 
-    def as_equal_list(self):
+    def as_equal_list(self) -> str:
         return encode_equal_list(self.real_cols_to_tsv, "\n")
 
     def as_select_list(self, alias: str) -> str:
@@ -298,7 +295,7 @@ class TableMapping(object):
             Return a SQL select list for given alias.
         """
         sels = []
-        tsv_table_name = GlobalMapping.TABLE_TO_PREFIX[self.table_name]
+        tsv_table_name = TABLE_TO_PREFIX[self.table_name]
         for db_col, tsv_fld in self.real_cols_to_tsv.items():
             sels.append('%s.%s AS "%s_%s"' % (alias, db_col, tsv_table_name, tsv_fld))
         return ", " + ", ".join(sels) if sels else ""
@@ -375,9 +372,10 @@ class TableMapping(object):
                 for tsv_col in self.real_cols_to_tsv.values()]
 
 
-def encode_equal_list(a_mapping: dict, sep: str):
+def encode_equal_list(a_mapping: Dict[str, Any], sep: str) -> str:
     """
         Turn a dict into a string key=value, with sorted keys.
+    :param sep: line separator
     :param a_mapping:
     :return:
     """

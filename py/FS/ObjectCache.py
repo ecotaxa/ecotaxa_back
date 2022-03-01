@@ -16,11 +16,13 @@ from threading import Thread
 from typing import Optional, Tuple, List, Dict, Set, Any
 
 from BO.Mappings import TableMapping
+from BO.ObjectSet import ObjectIDListT
 from BO.Project import ProjectBO
 from DB import Project
 from DB.Project import ProjectIDT
 from DB.helpers import Result, Session
 from DB.helpers.Connection import Connection
+from DB.helpers.Direct import text
 from DB.helpers.SQL import OrderClause, WhereClause
 from FS.helpers.SQLite import DBMeta, SQLite3, SQLiteConnection
 from helpers.DynamicLogs import get_logger
@@ -28,12 +30,13 @@ from helpers.Timer import CodeTimer
 
 logger = get_logger(__name__)
 
+
 #
 # TODO: Once used, remove the ignore in tox.ini
 #
 
 # noinspection SqlDialectInspection,SqlResolve
-class ObjectCache(object): # pragma: no cover
+class ObjectCache(object):  # pragma: no cover
     """
         The cache, in read-only mode.
     """
@@ -161,7 +164,8 @@ class ObjectCache(object): # pragma: no cover
     def should_refresh(self) -> bool:
         return self.meta is None
 
-    def _from(self):
+    def _from(self) -> str:
+        assert self.pg_order is not None
         refs_sql = self.cache_where.get_sql() + self.pg_order.get_sql()
         if "obh." in refs_sql and "obf." in refs_sql:
             return ("SELECT objid FROM %s obh JOIN %s obf ON obf.objfid = obh.objid" %
@@ -178,7 +182,10 @@ class ObjectCache(object): # pragma: no cover
             return None, None
         return self._fetch(), self._count()
 
-    def _fetch(self):
+    def _fetch(self) -> Optional[ObjectIDListT]:
+        assert self.pg_order is not None
+        assert self.pg_window_size is not None
+        assert self.pg_window_start is not None
         # noinspection SqlResolve
         where_sql = self.cache_where.get_sql()
         read_sql = self._from() + " %s %s LIMIT %d OFFSET %d" % (
@@ -217,7 +224,7 @@ class ObjectCache(object): # pragma: no cover
 
 
 # noinspection SqlDialectInspection
-class ObjectCacheWriter(object): # pragma: no cover
+class ObjectCacheWriter(object):  # pragma: no cover
     """
         The cache, in write mode
     """
@@ -233,13 +240,13 @@ class ObjectCacheWriter(object): # pragma: no cover
         self.object_sql = " SELECT objid, classif_id, classif_qual " \
                           " FROM objects WHERE projid = %d" % self.projid
 
-    def bg_fetch_fill(self, pg_conn: Connection):
+    def bg_fetch_fill(self, pg_conn: Connection) -> None:
         thrd = Thread(name="cache fetcher for %d" % self.projid,
                       target=self._fetch_and_write, args=(pg_conn,))
         thrd.start()
         thrd.join()
 
-    def _fetch_and_write(self, pg_conn: Connection):
+    def _fetch_and_write(self, pg_conn: Connection) -> None:
         logger.info("BG cache thread starting")
         file_name = ObjectCache.file_name(self.projid)
         self.conn = SQLite3.get_conn(file_name, "rwc")  # Create if not there
@@ -272,7 +279,7 @@ class ObjectCacheWriter(object): # pragma: no cover
 
     def query_pg_and_cache(self, table_name: str, pg_sess: Session, cache_sql: str) -> int:
         logger.info("For cache fetch: %s", cache_sql)
-        res: Result = pg_sess.execute(cache_sql)
+        res: Result = pg_sess.execute(text(cache_sql))
         tbl_cols = self.create_sqlite_table(table_name, res)
         nb_ins = self.pg_to_sqlite(table_name, tbl_cols, res)
         return nb_ins
@@ -308,8 +315,7 @@ class ObjectCacheWriter(object): # pragma: no cover
 
     def create_sqlite_table(self, table_name: str, res: Result) -> List[str]:
         # Create the table from resultset structure & content
-        # noinspection PyUnresolvedReferences
-        col_descs = res.cursor.description
+        col_descs = res.cursor.description  # type:ignore
         sqlite_cols: List[str] = []
         ret: List[str] = []
         for a_desc in col_descs:
@@ -330,7 +336,7 @@ class ObjectCacheWriter(object): # pragma: no cover
 
 
 # noinspection SqlDialectInspection,SqlResolve
-class ObjectCacheUpdater(object): # pragma: no cover
+class ObjectCacheUpdater(object):  # pragma: no cover
     """
         The cache, in update mode.
     """
@@ -338,7 +344,7 @@ class ObjectCacheUpdater(object): # pragma: no cover
     def __init__(self, projid: ProjectIDT):
         self.projid = projid
 
-    def update_objects(self, object_ids: List[int], params: Dict):
+    def update_objects(self, object_ids: List[int], params: Dict) -> None:
         upd_sql = "UPDATE object SET classif_id = :classif_id, classif_qual = :classif_qual" \
                   " WHERE objid IN (SELECT value FROM json_each(:obj_ids))"
         params["obj_ids"] = str(object_ids)

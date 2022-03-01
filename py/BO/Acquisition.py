@@ -11,10 +11,14 @@ from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.ColumnUpdate import ColUpdateList
 from BO.helpers.MappedEntity import MappedEntity
 from BO.helpers.MappedTable import MappedTable
-from DB import Session, Query, Project, Acquisition, Sample, ObjectHeader
-from DB.Project import ProjectIDT, ProjectIDListT
+from DB import Session
+from DB.Acquisition import Acquisition
+from DB.Object import ObjectHeader
+from DB.Project import ProjectIDT, ProjectIDListT, Project
+from DB.Sample import Sample
+from DB.helpers import Result
 from DB.helpers.Direct import text
-from DB.helpers.ORM import any_, and_, Result
+from DB.helpers.ORM import any_, and_
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -25,7 +29,7 @@ AcquisitionOrigIDT = str
 logger = get_logger(__name__)
 
 
-def _get_proj(acq: Acquisition):
+def _get_proj(acq: Acquisition) -> Project:
     return acq.sample.project
 
 
@@ -62,12 +66,12 @@ class AcquisitionBO(MappedEntity):
     def get_all_object_ids(cls, session: Session, acquis_id: AcquisitionIDT,
                            classif_ids: Optional[ClassifIDListT] = None) \
             -> List[int]:
-        qry: Query = session.query(ObjectHeader.objid)
+        qry = session.query(ObjectHeader.objid)
         qry = qry.join(Acquisition, and_(ObjectHeader.acquisid == Acquisition.acquisid,
                                          Acquisition.acquisid == acquis_id))
         if classif_ids is not None:
             qry = qry.filter(ObjectHeader.classif_id.in_(classif_ids))
-        return [an_id for an_id in qry.all()]
+        return [an_id for an_id, in qry]
 
 
 class EnumeratedAcquisitionSet(MappedTable):
@@ -83,18 +87,18 @@ class EnumeratedAcquisitionSet(MappedTable):
         """
             Return the project IDs for the held sample IDs.
         """
-        qry: Query = self.session.query(Project.projid).distinct(Project.projid)
+        qry = self.session.query(Project.projid).distinct(Project.projid)
         qry = qry.join(Sample)
         qry = qry.join(Acquisition)
         qry = qry.filter(Acquisition.acquisid == any_(self.ids))
         with CodeTimer("Prjs for %d acquisitions: " % len(self.ids), logger):
-            return [an_id[0] for an_id in qry.all()]
+            return [an_id for an_id, in qry]
 
     def apply_on_all(self, project: Project, updates: ColUpdateList) -> int:
         """
             Apply all updates on all acquisitions.
         """
-        return self._apply_on_all(Acquisition, project, updates)
+        return self._apply_on_all(Acquisition, project, updates.lst)
 
     def add_filter(self, upd):
         return upd.filter(Acquisition.acquisid == any_(self.ids))
@@ -114,9 +118,9 @@ class DescribedAcquisitionSet(object):
             Return all acquisitions from description.
             TODO: No free columns value so far.
         """
-        qry: Query = self._session.query(Acquisition)
+        qry = self._session.query(Acquisition)
         qry = qry.join(Sample)
         qry = qry.join(Project)
         qry = qry.filter(Project.projid == self.prj_id)
-        ret = [an_acquis for an_acquis in qry.all()]
+        ret = [an_acquis for an_acquis in qry]
         return ret

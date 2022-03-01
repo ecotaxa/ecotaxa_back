@@ -5,7 +5,7 @@
 # End-user services around taxonomy tree.
 #
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from API_models.taxonomy import TaxaSearchRsp
 from API_operations.helpers.Service import Service
@@ -16,7 +16,6 @@ from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet, TaxonBOSetFromWoRMS
 from BO.User import UserIDT, UserBO
 from DB.Project import ProjectTaxoStat, Project, ProjectIDT
 from DB.Taxonomy import Taxonomy
-from DB.helpers.ORM import Query
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -27,7 +26,7 @@ class TaxonomyService(Service):
 
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
     def status(self, _current_user_id: UserIDT) -> Optional[datetime]:
@@ -109,9 +108,9 @@ class TaxonomyService(Service):
         """
             Return root (no parents) categories/taxa.
         """
-        qry: Query = self.ro_session.query(Taxonomy.id)
+        qry = self.ro_session.query(Taxonomy.id)
         qry = qry.filter(Taxonomy.parent_id.is_(None))
-        root_ids = [taxon_id for taxon_id, in qry.all()]
+        root_ids = [taxon_id for taxon_id, in qry]
         return self.query_set(root_ids)
 
     def query(self, taxon_id: ClassifIDT) -> Optional[TaxonBO]:
@@ -121,8 +120,8 @@ class TaxonomyService(Service):
         else:
             return ret[0]
 
-    def query_usage(self, taxon_id: ClassifIDT):
-        taxo_and_prjs_qry: Query = self.session.query(ProjectTaxoStat.nbr_v, Project.projid, Project.title)
+    def query_usage(self, taxon_id: ClassifIDT) -> List[Dict[str, Any]]:
+        taxo_and_prjs_qry = self.session.query(ProjectTaxoStat.nbr_v, Project.projid, Project.title)
         taxo_and_prjs_qry = taxo_and_prjs_qry.filter((Project.projid == ProjectTaxoStat.projid)
                                                      & (ProjectTaxoStat.nbr_v > 0)
                                                      & (ProjectTaxoStat.id == taxon_id))
@@ -132,7 +131,7 @@ class TaxonomyService(Service):
             "projid": projid,
             "title": title,
             "nb_validated": nbr_v
-        } for nbr_v, projid, title in taxo_and_prjs_qry.all()]
+        } for nbr_v, projid, title in taxo_and_prjs_qry]
         return ret
 
     def query_set(self, taxon_ids: ClassifIDListT) -> List[TaxonBO]:
@@ -150,7 +149,8 @@ class TaxonomyService(Service):
         ret_dict = {a_taxon.id: a_taxon for a_taxon in TaxonBOSet(self.ro_session, ret_taxa).taxa}
         return [ret_dict[txid] for txid in ret_taxa]
 
-    def reclassification_history(self, _current_user_id: Optional[UserIDT], project_id: ProjectIDT):
+    def reclassification_history(self, _current_user_id: Optional[UserIDT], project_id: ProjectIDT) \
+            -> List[Dict[str, Any]]:
         history = ReClassificationBO.history_for_project(self.ro_session, project_id)
         return history
 

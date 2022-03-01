@@ -77,7 +77,7 @@ class DBWriter(object):
 
         return ObjectView, ObjectFieldsView, ImageView
 
-    def do_bulk_save(self):
+    def do_bulk_save(self) -> None:
         nb_bulks = "%d/%d/%d/%d" % (len(self.obj_bulks), len(self.obj_fields_bulks),
                                     len(self.obj_cnn_bulks), len(self.img_bulks))
         # TODO: Can be reused?
@@ -94,11 +94,11 @@ class DBWriter(object):
         logger.info("Batch save objects of %s", nb_bulks)
 
     def add_db_entities(self, object_head_to_write: Bean, object_fields_to_write: Bean,
-                        image_to_write: Optional[Bean], new_records: int):
+                        image_to_write: Optional[Bean], new_records: int) -> None:
         # Bulk mode or Core do not create links (using ORM relationship), so we have to do manually
         if new_records > 1:
             # There is a new image and more
-            #assert object_head_to_write.projid is not None
+            # assert object_head_to_write.projid is not None
             assert object_head_to_write.orig_id is not None
             # Default value from sequences
             object_head_to_write.objid = self.obj_seq_cache.next()
@@ -115,20 +115,20 @@ class DBWriter(object):
             # There is (potentially just) a new image
             self.img_bulks.append(image_to_write)
 
-    def add_vignette_backup(self, object_head_to_write, backup_img_to_write):
+    def add_vignette_backup(self, object_head_to_write, backup_img_to_write) -> None:
         backup_img_to_write.objid = object_head_to_write.objid
         backup_img_to_write.imgid = self.img_seq_cache.next()
         self.img_bulks.append(backup_img_to_write)
 
-    def add_cnn_features(self, object_head_to_write, cnn_features: Bean):
+    def add_cnn_features(self, object_head_to_write, cnn_features: Bean) -> None:
         cnn_features.objcnnid = object_head_to_write.objid
         self.obj_cnn_bulks.append(cnn_features)
 
-    def add_cnn_features_with_pk(self, cnn_features: Bean):
+    def add_cnn_features_with_pk(self, cnn_features: Bean) -> None:
         self.obj_cnn_bulks.append(cnn_features)
 
-    def persist(self):
+    def persist(self) -> None:
         self.do_bulk_save()
 
-    def eof_cleanup(self):
+    def eof_cleanup(self) -> None:
         self.session.commit()

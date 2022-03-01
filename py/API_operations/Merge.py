@@ -12,8 +12,11 @@ from BO.Project import ProjectBO
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.Rights import RightsBO, Action
 from BO.Sample import SampleIDT
-from DB import ObjectHeader, Sample, Acquisition, Project
-from DB.helpers.ORM import orm_equals, any_, all_, func, Query
+from DB.Acquisition import Acquisition
+from DB.Object import ObjectHeader
+from DB.Project import Project
+from DB.Sample import Sample
+from DB.helpers.ORM import orm_equals, any_, all_, func
 from DB.helpers.Postgres import values_cte
 from helpers.DynamicLogs import get_logger, LogsSwitcher, LogEmitter
 from .helpers.Service import Service
@@ -104,7 +107,7 @@ class MergeService(Service, LogEmitter):
         src_samples, src_acquisitions = InBundle.fetch_existing_parents(self.ro_session, prj_id=self.src_prj_id)
         dest_samples, dest_acquisitions = InBundle.fetch_existing_parents(self.ro_session, prj_id=self.prj_id)
 
-        def verif(container: str, src_entities: Dict, dest_entities: Dict):
+        def verif(container: str, src_entities: Dict, dest_entities: Dict) -> None:
             common_orig_ids = set(dest_entities.keys()).intersection(src_entities.keys())
             if len(common_orig_ids) != 0:
                 logger.info("Common %s orig_ids: %s", container, common_orig_ids)
@@ -120,7 +123,7 @@ class MergeService(Service, LogEmitter):
         verif(Acquisition.__tablename__, src_acquisitions, dest_acquisitions)
         return ret
 
-    def _do_merge(self, dest_prj: Project):
+    def _do_merge(self, dest_prj: Project) -> None:
         """
             Real merge operation.
         """
@@ -142,7 +145,7 @@ class MergeService(Service, LogEmitter):
 
         # Align foreign keys, to Project, Sample and Acquisition
         for a_fk_to_proj_tbl in [Sample, Acquisition, ObjectHeader]:
-            upd: Query = self.session.query(a_fk_to_proj_tbl)
+            upd = self.session.query(a_fk_to_proj_tbl)
             if a_fk_to_proj_tbl == Sample:
                 # Move (i.e. change project) samples which are 'new' from merged project,
                 #    so take all of them from src project...
@@ -195,15 +198,15 @@ class MergeService(Service, LogEmitter):
 
         # Remove the parents which are duplicate from orig_id point of view
         for a_fk_to_proj_tbl in [Acquisition, Sample]:
-            to_del: Query = self.session.query(a_fk_to_proj_tbl)
+            to_del = self.session.query(a_fk_to_proj_tbl)
             if a_fk_to_proj_tbl == Acquisition:
                 # Remove conflicting acquisitions, they should be empty?
                 to_del = to_del.filter(
-                    Acquisition.acquisid == any_(list(common_acquisitions.keys())))  # type: ignore
+                    Acquisition.acquisid == any_(list(common_acquisitions.keys())))
             elif a_fk_to_proj_tbl == Sample:
                 # Remove conflicting samples
                 to_del = to_del.filter(
-                    Sample.sampleid == any_(list(common_samples.keys())))  # type: ignore
+                    Sample.sampleid == any_(list(common_samples.keys())))
             rowcount = to_del.delete(synchronize_session=False)
             table_name = a_fk_to_proj_tbl.__tablename__  # type: ignore
             logger.info("Delete in %s: %s rows", table_name, rowcount)

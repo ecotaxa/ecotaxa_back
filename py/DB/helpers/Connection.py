@@ -2,9 +2,10 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from typing import Final
 
 import sqlalchemy
-from sqlalchemy import MetaData
+from sqlalchemy import MetaData, text
 from sqlalchemy.orm import sessionmaker, Session
 
 from helpers.DynamicLogs import get_logger
@@ -12,7 +13,7 @@ from helpers.DynamicLogs import get_logger
 logger = get_logger(__name__)
 
 
-def check_sqlalchemy_version():
+def check_sqlalchemy_version() -> None:
     # noinspection PyUnresolvedReferences
     version = sqlalchemy.__version__
     expected_version = "1.4.31"
@@ -39,7 +40,7 @@ class Connection(object):
     """
         A connection to the DB via SQLAlchemy.
     """
-    APP_NAME = "ecotaxa_back"
+    APP_NAME: Final = "ecotaxa_back"
 
     def __init__(self, user, password, db, host, port='5432', read_only=False):
         """
@@ -66,7 +67,8 @@ class Connection(object):
                                           # the cost is 1 (simple) query per connection pool recycle.
                                           pool_pre_ping=True,
                                           execution_options=exec_options,
-                                          connect_args={"application_name": self.APP_NAME})
+                                          connect_args={"application_name": self.APP_NAME},
+                                          future=True)
         self.session_factory = sessionmaker(bind=engine)
         self._meta: MetaData = sqlalchemy.MetaData(bind=engine)
         self._meta.reflect()
@@ -83,13 +85,13 @@ class Connection(object):
         ret = self.session_factory()
         return ret
 
-    def exec_outside_transaction(self, statement: str):
+    def exec_outside_transaction(self, statement: str) -> None:
         """
             Execute raw SQL outside of any transaction (which is created by default by SQLA)
         """
         with self.engine.connect() as conn:
-            conn.execute("commit")
-            conn.execute(statement)
+            conn.execute(text("commit"))
+            conn.execute(text(statement))
 
     def get_metadata(self) -> MetaData:
         """

@@ -15,16 +15,17 @@ class Taxonomy(Model):
     """
     __tablename__ = 'taxonomy'
     # TODO: Remove the sequence. In fact, the unicity comes from EcoTaxoServer
-    id = Column(INTEGER, Sequence('seq_taxonomy'), primary_key=True)
+    id: int = Column(INTEGER, Sequence('seq_taxonomy'), primary_key=True)
     parent_id = Column(INTEGER)
-    name = Column(VARCHAR(100), nullable=False)
+    name: str = Column(VARCHAR(100), nullable=False)
     id_source = Column(VARCHAR(20))
-    taxotype = Column(CHAR(1), nullable=False, server_default='P')  # P = Phylo , M = Morpho
+    taxotype: str = Column(CHAR(1), nullable=False, server_default='P')  # P = Phylo , M = Morpho
     # display_name is suffixed in EcoTaxoServer with (Deprecated) when taxostatus is 'D'
     display_name = Column(VARCHAR(200))  # Unique, to disambiguate ties in names
     lastupdate_datetime = Column(TIMESTAMP(precision=0))
     id_instance = Column(INTEGER)
-    taxostatus = Column(CHAR(1), nullable=False, server_default='A')  # N = Not approved, A = Approved, D = Deprecated
+    taxostatus: str = Column(CHAR(1), nullable=False,
+                             server_default='A')  # N = Not approved, A = Approved, D = Deprecated
     # Was used to store temporarily a target id which current taxon should join
     # with all its assigned objects. Then the original category was deleted. So there is (as of 24/08/2021)
     # no DB line with this value set.

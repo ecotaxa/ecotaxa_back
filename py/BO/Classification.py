@@ -3,9 +3,8 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import datetime
+from dataclasses import dataclass
 from typing import Set, List, Iterable
-
-from BO.helpers.DataclassAsDict import dataclass, DataclassAsDict
 
 # Typings, to be clear that these are not e.g. object IDs
 ClassifIDT = int
@@ -14,8 +13,8 @@ ClassifIDSetT = Set[int]
 ClassifIDCollT = Iterable[int]
 
 
-@dataclass(init=False)
-class HistoricalLastClassif(DataclassAsDict):
+@dataclass()
+class HistoricalLastClassif:
     """
         Association b/w an object and a former taxonomy entry.
     """
@@ -31,8 +30,8 @@ class HistoricalLastClassif(DataclassAsDict):
 HistoricalClassificationListT = List['HistoricalClassification']
 
 
-@dataclass(init=False)
-class HistoricalClassification(DataclassAsDict):
+@dataclass()
+class HistoricalClassification():
     """
         Former Taxonomy change operations onto an object, with names for display.
     """

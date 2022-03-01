@@ -38,10 +38,10 @@ class DBSyncService(Service):
         ret = [tuple(a_row) for a_row in res]
         return set(ret)
 
-    def wait(self):
+    def wait(self) -> None:
         start_time = time.time()
         # Wait MAX_WAIT max for the sync
-        waited = 0
+        waited: float = 0
         while waited < self.MAX_WAIT:
             new_val = self._get_result(self.ro_session)
             if new_val == self.ref_val:

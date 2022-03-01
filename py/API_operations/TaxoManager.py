@@ -9,7 +9,7 @@ import json
 import random
 import tempfile
 from collections import deque
-from typing import Dict, Set, List, Tuple, Any, Optional
+from typing import Dict, Set, List, Tuple, Any, Optional, Final, Deque
 
 from httpx import ReadTimeout, HTTPError
 
@@ -17,12 +17,13 @@ from BO.Classification import ClassifIDListT, ClassifIDT
 from BO.Rights import RightsBO
 from BO.Taxonomy import TaxonomyBO
 from BO.User import UserIDT
-from DB import Taxonomy, Role
 from DB.Project import ProjectTaxoStat
+from DB.Taxonomy import Taxonomy
+from DB.User import Role
 from DB.WoRMs import WoRMS
 from DB.helpers.Charset import to_latin1_compat
-from DB.helpers.ORM import Query, any_, Session
-from DB.helpers.ORM import only_res, func, not_, or_, and_, text
+from DB.helpers.ORM import any_, Session, Alias
+from DB.helpers.ORM import func, not_, or_, and_, text
 from helpers.DynamicLogs import get_logger
 from providers.EcoTaxoServer import EcoTaxoServerClient
 from providers.WoRMS import WoRMSFinder
@@ -43,18 +44,18 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         self.temp_log = ""
         # aphia_id -> all_fetched
         self.existing_id: Dict[int, bool] = {}
-        self.to_fetch: deque = deque()
+        self.to_fetch: Deque[int] = deque()
         self.nb_queries = 0
         if max_requests is not None:
             self.max_queries = max_requests
         else:
             self.max_queries = self.MAX_QUERIES
 
-    def log_file_path(self):
+    def log_file_path(self) -> str:
         self.temp_log = tempfile.NamedTemporaryFile(suffix=".log", delete=True).name
         return self.temp_log
 
-    async def db_refresh(self, current_user_id: int):
+    async def db_refresh(self, current_user_id: int) -> None:
         """
             Refresh the local taxonomy DB.
         """
@@ -100,18 +101,18 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         ret.modified = a_child["modified"]
         return ret
 
-    def _random_add_to_fetch(self, to_add: List[int]):
+    def _random_add_to_fetch(self, to_add: List[int]) -> None:
         random.shuffle(to_add)
         self.to_fetch.extend(to_add)
 
-    async def _do_refresh(self):
+    async def _do_refresh(self) -> None:
         """
             Do the real job.
         """
         logger.info("Starting...")
         # Query all for fast existence testing
         qry = self.session.query(WoRMS.aphia_id, WoRMS.all_fetched)
-        self.existing_ids = {rec[0]: rec[1] for rec in qry.all()}
+        self.existing_ids = {aphia_id: all_fetched for aphia_id, all_fetched in qry}
         logger.info("Existing: %d entries", len(self.existing_ids))
         # What was not fetched needs to be
         self._random_add_to_fetch([an_id for an_id in self.existing_ids if not self.existing_ids[an_id]])
@@ -184,7 +185,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         """
         children_qry = self.session.query(WoRMS.aphia_id)
         children_qry = children_qry.filter(WoRMS.parent_name_usage_id == aphia_id)
-        children_ids = set(only_res(children_qry.all()))
+        children_ids = set([an_id for an_id, in children_qry])
         return children_ids
 
     # TODO: /AphiaRecordsByDate Lists all AphiaRecords (taxa) that have their last edit action (modified or added)
@@ -198,9 +199,9 @@ class TaxonomyChangeService(Service):  # pragma:nocover
             Return the list of matching entries b/w Taxonomy and WoRMS.
         """
         ret: List[Tuple[Taxonomy, Optional[WoRMS]]] = []
-        taxo_ids_qry: Query = self.session.query(ProjectTaxoStat.id).distinct()
+        taxo_ids_qry = self.session.query(ProjectTaxoStat.id).distinct()
         taxo_ids_qry = taxo_ids_qry.filter(ProjectTaxoStat.nbr > 0)
-        used_taxo_ids = [an_id for (an_id,) in taxo_ids_qry.all()]
+        used_taxo_ids = [an_id for an_id, in taxo_ids_qry]
 
         # No security check. TODO?
         case1 = "case1" in params
@@ -223,7 +224,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
                 ret.append((taxo, worms))
         elif case2:
             subqry = TaxonomyChangeService.strict_match_subquery(self.session, used_taxo_ids, phylo_or_morpho="M")
-            qry: Query = self.session.query(Taxonomy, WoRMS)
+            qry = self.session.query(Taxonomy, WoRMS)
             qry = qry.join(subqry, subqry.c.id == Taxonomy.id)
             qry = qry.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
             logger.info("matching qry:%s", str(qry))
@@ -238,7 +239,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
             # Match but the match/all matches are not accepted
             subqry = self.full_match_aggregated(used_taxo_ids)
 
-            qry3: Query = self.session.query(Taxonomy, WoRMS)
+            qry3 = self.session.query(Taxonomy, WoRMS)
             qry3 = qry3.join(subqry, subqry.c.id == Taxonomy.id)
             qry3 = qry3.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
             qry3 = qry3.filter(not_(subqry.c.acc.op('@>')(text("ARRAY['accepted'::varchar]"))))
@@ -256,7 +257,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
             # Match but the match/all matches are not accepted
             subqry = self.full_match_aggregated(used_taxo_ids)
 
-            qry31: Query = self.session.query(Taxonomy, WoRMS)
+            qry31 = self.session.query(Taxonomy, WoRMS)
             qry31 = qry31.join(subqry, subqry.c.id == Taxonomy.id)
             qry31 = qry31.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
             qry31 = qry31.filter(not_(subqry.c.acc.op('@>')(text("ARRAY['accepted'::varchar]"))))
@@ -269,7 +270,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         elif case4:
             subqry = self.full_match_aggregated(used_taxo_ids)
 
-            qry4: Query = self.session.query(Taxonomy, WoRMS)
+            qry4 = self.session.query(Taxonomy, WoRMS)
             qry4 = qry4.join(subqry, subqry.c.id == Taxonomy.id)
             qry4 = qry4.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
             qry4 = qry4.filter(subqry.c.cnt > 1)
@@ -285,7 +286,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
             #                            func.count(WoRMS.aphia_id) > 1))
             # subqry = subqry.subquery().alias("ids")
             #
-            # qry4: Query = self.session.query(Taxonomy, WoRMS)
+            # qry4 = self.session.query(Taxonomy, WoRMS)
             # qry4 = qry4.join(subqry, subqry.c.id == Taxonomy.id)
             # qry4 = qry4.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
             logger.info("matching qry:%s", str(qry4))
@@ -298,7 +299,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
             subqry = TaxonomyChangeService.strict_match_subquery(self.session, used_taxo_ids, phylo_or_morpho=None)
             subqry2 = self.full_match_aggregated(used_taxo_ids)
 
-            qry5: Query = self.session.query(Taxonomy)
+            qry5 = self.session.query(Taxonomy)
             qry5 = qry5.filter(Taxonomy.id == any_(used_taxo_ids))
             qry5 = qry5.filter(Taxonomy.taxotype == 'P')
             qry5 = qry5.filter(not_(Taxonomy.id.in_(self.session.query(subqry.c.id))))
@@ -311,7 +312,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         elif case6:
             # No match, morpho
             subqry = TaxonomyChangeService.strict_match_subquery(self.session, used_taxo_ids, phylo_or_morpho=None)
-            qry6: Query = self.session.query(Taxonomy)
+            qry6 = self.session.query(Taxonomy)
             qry6 = qry6.filter(Taxonomy.id == any_(used_taxo_ids))
             qry6 = qry6.filter(Taxonomy.taxotype == 'M')
             qry6 = qry6.filter(not_(Taxonomy.id.in_(self.session.query(subqry.c.id))))
@@ -323,7 +324,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
 
         return ret
 
-    def full_match_aggregated(self, used_taxo_ids):
+    def full_match_aggregated(self, used_taxo_ids) -> Alias:
         subqry = self.session.query(Taxonomy.id,
                                     WoRMS.aphia_id,
                                     func.array_agg(WoRMS.status).over(
@@ -334,8 +335,8 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         subqry = subqry.join(WoRMS, TaxonomyChangeService.match_with_extension())
         subqry = subqry.filter(Taxonomy.id == any_(used_taxo_ids))
         subqry = subqry.filter(Taxonomy.taxotype == 'P')
-        subqry = subqry.subquery().alias("ids")
-        return subqry
+        ret = subqry.subquery().alias("ids")
+        return ret
 
     @staticmethod
     def strict_match(session: Session, used_taxo_ids: ClassifIDListT) -> List[Tuple[Taxonomy, WoRMS]]:
@@ -347,7 +348,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         """
         subqry = TaxonomyChangeService.strict_match_subquery(session, used_taxo_ids, phylo_or_morpho="P")
 
-        qry: Query = session.query(Taxonomy, WoRMS)
+        qry = session.query(Taxonomy, WoRMS)
         qry = qry.join(subqry, subqry.c.id == Taxonomy.id)
         qry = qry.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
         logger.info("matching qry:%s", str(qry))
@@ -385,12 +386,12 @@ class TaxonomyChangeService(Service):  # pragma:nocover
                         func.lower(Taxonomy.name) == func.concat(func.lower(WoRMS.scientificname), text("' x sp.'")))
                    )
 
-    def _do_one_by_one(self, children):
+    def _do_one_by_one(self, children) -> Set[int]:
         """
             There was an error inserting children in bulk set. So do it one by one, and log
             the problem each time.
         """
-        ret = set()
+        ret: Set[int] = set()
         for a_child in children:
             self.session.add(a_child)
             try:
@@ -438,7 +439,7 @@ class CentralTaxonomyService(Service):
     TAXOSERVER_MY_ID = 'TAXOSERVER_INSTANCE_ID'
     TAXOSERVER_MY_SECRET_KEY = 'TAXOSERVER_SHARED_SECRET'
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         url = self.config.get_cnf(self.TAXOSERVER_URL_KEY)
         assert url is not None
@@ -463,7 +464,7 @@ class CentralTaxonomyService(Service):
         ret = self.client.call("/settaxon/", taxon_params)
         return ret
 
-    def push_stats(self):
+    def push_stats(self) -> Any:
         """
             Push taxa usage statistics to EcoTaxoServer.
         """
@@ -477,12 +478,12 @@ class CentralTaxonomyService(Service):
         return ret
 
     # The columns received from EcoTaxoServer which can update the local tree
-    UpdatableCols = ['parent_id', 'name', 'taxotype', 'taxostatus',
-                     'id_source', 'id_instance', 'rename_to',
-                     'display_name', 'source_desc', 'source_url',
-                     'creation_datetime', 'creator_email']
+    UpdatableCols: Final = ['parent_id', 'name', 'taxotype', 'taxostatus',
+                            'id_source', 'id_instance', 'rename_to',
+                            'display_name', 'source_desc', 'source_url',
+                            'creation_datetime', 'creator_email']
 
-    def pull_updates(self) -> Dict:
+    def pull_updates(self) -> Dict[str, Any]:
         """
             Pull taxa changes from EcoTaxoServer
         """

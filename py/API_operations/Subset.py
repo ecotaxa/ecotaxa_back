@@ -4,7 +4,7 @@
 #
 import shutil
 from pathlib import Path
-from typing import List, Tuple, Dict, Set
+from typing import List, Tuple, Dict, Set, Iterable
 
 from API_models.subset import SubsetReq, SubsetRsp, LimitMethods, GroupDefinitions
 from BO.Bundle import InBundle
@@ -14,14 +14,21 @@ from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from BO.TSVFile import TSVFile
 from BO.helpers.ImportHelpers import ImportHow
-from DB import Image, ObjectHeader, ObjectFields, Sample, Acquisition, Process, Project
+from DB.Acquisition import Acquisition
 from DB.CNNFeature import ObjectCNNFeature
+from DB.Image import Image
+from DB.Object import ObjectHeader, ObjectFields
+from DB.Process import Process
+from DB.Project import Project
+from DB.Sample import Sample
+from DB.helpers import Result
 from DB.helpers.Bean import bean_of
 from DB.helpers.DBWriter import DBWriter
-from DB.helpers.ORM import Query, any_, Result
+from DB.helpers.Direct import text
+from DB.helpers.ORM import any_
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger, LogsSwitcher
-from .helpers.JobService import JobServiceOnProjectBase
+from .helpers.JobService import JobServiceOnProjectBase, ArgsDict
 
 logger = get_logger(__name__)
 
@@ -54,13 +61,13 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         self.first_query = True
         self.images_per_orig_id: Dict[str, Set[int]] = {}
 
-    def init_args(self, args: Dict) -> Dict:
+    def init_args(self, args: ArgsDict) -> ArgsDict:
         super().init_args(args)
         args["req"] = self.req.dict()
         return args
 
     @staticmethod
-    def deser_args(json_args: Dict):
+    def deser_args(json_args: ArgsDict) -> None:
         json_args["req"] = SubsetReq(**json_args["req"])
 
     def run(self, current_user_id: int) -> SubsetRsp:
@@ -75,7 +82,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         ret = SubsetRsp(job_id=self.job_id)
         return ret
 
-    def do_background(self):
+    def do_background(self) -> None:
         """
             Background part of the job.
         """
@@ -104,7 +111,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
 
         self.set_job_result(errors=[], infos={"rowcount": len(self.to_clone)})
 
-    def _do_clone(self):
+    def _do_clone(self) -> None:
         """
             Cloning operation itself. Assumes that @see self.to_clone was populated before.
         """
@@ -130,7 +137,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         # Copy mappings to destination. We could narrow them to the minimum?
         custom_mapping.write_to_project(self.dest_prj)
 
-    def _db_fetch(self, object_ids: ObjectIDListT) -> List[DBObjectTupleT]:
+    def _db_fetch(self, object_ids: ObjectIDListT) -> Iterable[DBObjectTupleT]:
         """
             Do a DB read of given objects, with auxiliary objects.
             :param object_ids: The list of IDs
@@ -138,7 +145,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         """
         # TODO: Depending on filter, the joins could be plain (not outer)
         # E.g. if asked for a set of samples
-        ret: Query = self.ro_session.query(ObjectHeader)
+        ret = self.ro_session.query(ObjectHeader)
         ret = ret.join(ObjectHeader.acquisition).join(Acquisition.process).join(Acquisition.sample)
         ret = ret.outerjoin(Image, ObjectHeader.all_images).outerjoin(ObjectCNNFeature).join(ObjectFields)
         ret = ret.filter(ObjectHeader.objid == any_(object_ids))
@@ -150,9 +157,9 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             logger.info("Query: %s", str(ret))
             self.first_query = False
 
-        return ret.all()
+        return ret
 
-    def _clone_all(self, import_how: ImportHow, writer):
+    def _clone_all(self, import_how: ImportHow, writer: DBWriter) -> None:
 
         # Bean counting init
         nb_objects = 0
@@ -173,7 +180,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             progress = int(90 * nb_objects / total_objects)
             self.update_progress(10 + progress, "Subset creation in progress")
 
-    def _send_to_writer(self, import_how: ImportHow, writer: DBWriter, db_tuple: DBObjectTupleT):
+    def _send_to_writer(self, import_how: ImportHow, writer: DBWriter, db_tuple: DBObjectTupleT) -> None:
         """
             Send a single tuple from DB to DB
         :param import_how:
@@ -234,10 +241,10 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             # Some imgrank are rotten, and the DB does not enforce unicity per object
             images_for_obj = self.images_per_orig_id[obj.orig_id]
             if image.imgrank in images_for_obj:
-                image.imgrank = max(images_for_obj)+1
+                image.imgrank = max(images_for_obj) + 1
             images_for_obj.add(image.imgrank)
 
-    def _find_what_to_clone(self):
+    def _find_what_to_clone(self) -> None:
         """
             Determine the objects to clone.
         """
@@ -276,7 +283,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         logger.info("SQL=%s", sql)
         logger.info("SQLParam=%s", params)
 
-        res: Result = self.ro_session.execute(sql, params)
+        res: Result = self.ro_session.execute(text(sql), params)
         ids = [r for r, in res]
         logger.info("There are %d IDs", len(ids))
 

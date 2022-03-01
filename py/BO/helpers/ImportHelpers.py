@@ -4,8 +4,9 @@
 #
 import time
 from pathlib import Path
-from typing import List, Set, Dict, Optional, Callable, Tuple
+from typing import List, Set, Dict, Optional, Callable, Tuple, Any
 
+from BO.Classification import ClassifIDT
 from BO.Mappings import ProjectMapping
 from BO.ProjectTidying import ProjectTopology
 from BO.Vignette import VignetteMaker
@@ -19,19 +20,19 @@ class ImportDiagnostic(object):
         During an import analysis, data and problems collected.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # record fields for which some values are present
-        self.cols_seen = set()
+        self.cols_seen: Set[str] = set()
         # taxonomy ids @see Taxonomy
-        self.classif_id_seen = set()
+        self.classif_id_seen: Set[ClassifIDT] = set()
         self.nb_objects_without_gps = 0
         self.messages: List[str] = []
         self.errors: List[str] = []
         # existing objects for consistency checks
-        self.existing_objects_and_image = set()
+        self.existing_objects_and_image: Set[str] = set()
         self.topology = ProjectTopology()
         # the files which were found but skipped
-        self.skipped_files = []
+        self.skipped_files: List[str] = []
 
     def warn(self, message: str):
         self.messages.append(message)
@@ -74,7 +75,7 @@ class ImportHow(object):
         self.custom_mapping: ProjectMapping = custom_mapping
         # TODO: for validating it's !=
         # The users found in analyzed TSVs, key = name, value = dict with 'email' and/or user 'id'
-        self.found_users: Dict[str, Dict] = {}
+        self.found_users: Dict[str, Dict[str, Any]] = {}
         # The taxa/category _names_ found in TSV _without ID_,
         #     key = taxon NAME (str), value = None during analysis, id during resolve
         self.found_taxa: Dict[str, Optional[int]] = {}
@@ -92,10 +93,10 @@ class ImportHow(object):
         # For UVP6 vignetting
         self.vignette_maker: Optional[VignetteMaker] = None
 
-    def do_thumbnail_above(self, max_dim):
+    def do_thumbnail_above(self, max_dim: int) -> None:
         self.max_dim = max_dim
 
-    def compute_skipped(self, bundle, _logger):
+    def compute_skipped(self, bundle, _logger) -> None:
         """
             Compute files _not_ to load.
         """
@@ -118,7 +119,7 @@ class ImportStats(object):
     def add_rows(self, nb_rows: int):
         self.current_row_count += nb_rows
 
-    def so_far(self):
+    def so_far(self) -> Tuple[float, int]:
         elapsed = time.time() - self.start_time
         rows_per_sec = int(self.current_row_count / elapsed)
         return elapsed, rows_per_sec

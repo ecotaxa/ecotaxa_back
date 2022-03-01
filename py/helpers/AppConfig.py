@@ -9,7 +9,7 @@
 import configparser
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, KeysView, Tuple
 
 # Env. variable
 ENV_KEY = "APP_CONFIG"
@@ -46,8 +46,29 @@ class Config(object):
     def secret_key(self) -> str:
         return self.parser.get("SECRET_KEY")
 
-    def get_cnf(self, key: str, default: Optional[str] = None):
+    def get_db_address(self, read_only: bool = False) -> Tuple[str, int, str]:
+        prfx = "RO_" if read_only else ""
+        host = self.parser.get(prfx + 'DB_HOST')
+        port = self.parser.getint(prfx + 'DB_PORT', 5432)
+        db_name = self.parser.get(prfx + 'DB_DATABASE')
+        return host, port, db_name
+
+    def get_db_credentials(self, read_only: bool = False) -> Tuple[str, str]:
+        prfx = "RO_" if read_only else ""
+        user = self.parser.get(prfx + 'DB_USER')
+        password = self.parser.get(prfx + 'DB_PASSWORD')
+        return user, password
+
+    def get_thumbnails_limit(self) -> int:
+        return self.parser.getint('THUMBSIZELIMIT')
+
+    def get_app_manager(self) -> Tuple[Optional[str], Optional[str]]:
+        return self.parser.get('APPMANAGER_NAME'), self.parser.get('APPMANAGER_EMAIL')
+
+    def get_cnf(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        # TODO: stop using so we can enumerate the keys
         return self.parser.get(key, default)
 
-    def list_cnf(self):
+    def list_cnf(self) -> KeysView[str]:
         return self.parser.keys()
+

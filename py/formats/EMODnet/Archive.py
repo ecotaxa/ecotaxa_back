@@ -29,20 +29,21 @@ class DwcArchive(object):
         self.emofs = ExtendedMeasurementOrFacts()
         self.meta.add(self.emofs)
 
-    def build(self):
+    def build(self) -> None:
         """
             Build the produced archive file.
         """
         zipfile = ZipFile(self.path, mode="w", allowZip64=True, compression=ZIP_DEFLATED)
         parent_dir = self.path.parent
+        # TODO: Better typings
         all_files = [self.dataset_meta, self.meta, self.events, self.occurences, self.emofs]
         for a_file in all_files:
             # Write the objects into real files
-            dest_file = parent_dir/a_file.name
+            dest_file = parent_dir / a_file.name  # type:ignore
             with open(dest_file, "w") as fd:
-                fd.write(a_file.content())
+                fd.write(a_file.content())  # type:ignore
             # Add them to the zip
-            zipfile.write(filename=dest_file, arcname=a_file.name)
+            zipfile.write(filename=dest_file, arcname=a_file.name)  # type:ignore
 
 
 # camelCase is not good for concatenating acronyms

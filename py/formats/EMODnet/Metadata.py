@@ -17,7 +17,7 @@ class DwcMetadata(object):
         self.dataset_meta_name = dataset_meta_name
         self.referred_to: List[TxtFileWithModel] = []
 
-    def add(self, a_content):
+    def add(self, a_content) -> None:
         """
             It's assumed that the first list is the core.
         """

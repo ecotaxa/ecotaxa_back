@@ -16,6 +16,7 @@ from DB.Object import ObjectHeader, classif_qual
 from DB.helpers.DBWriter import DBWriter
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 from .ImportBase import ImportServiceBase
+from ..helpers.JobService import ArgsDict
 
 logger = get_logger(__name__)
 
@@ -31,16 +32,16 @@ class SimpleImport(ImportServiceBase):
         super().__init__(prj_id, req)
         self.dry_run = dry_run
 
-    def init_args(self, args: Dict) -> Dict:
+    def init_args(self, args: ArgsDict) -> ArgsDict:
         super().init_args(args)
         args["dry_run"] = False
         return args
 
     @staticmethod
-    def deser_args(json_args: Dict):
+    def deser_args(json_args: ArgsDict) -> None:
         json_args["req"] = SimpleImportReq(**json_args["req"])
 
-    def run(self, current_user_id: int) -> Optional[SimpleImportRsp]:
+    def run(self, current_user_id: int) -> SimpleImportRsp:
         # Security check
         RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, self.prj_id)
         # Validate values in all cases, dry run or not.
@@ -52,7 +53,7 @@ class SimpleImport(ImportServiceBase):
             ret.job_id = self.job_id
         return ret
 
-    def do_background(self):
+    def do_background(self) -> None:
         """
             Background part of the job.
         """
@@ -76,7 +77,7 @@ class SimpleImport(ImportServiceBase):
         # Configure the import to come, directives
         import_how = ImportHow(prj_id=self.prj_id, update_mode="", custom_mapping=ProjectMapping(),
                                skip_object_duplicates=False, loaded_files=[])
-        import_how.do_thumbnail_above(int(self.config.get_cnf('THUMBSIZELIMIT')))
+        import_how.do_thumbnail_above(self.config.get_thumbnails_limit())
         # Generate TSV
         req_values = self.req.values
         if req_values.get(SimpleImportFields.userlb, ""):

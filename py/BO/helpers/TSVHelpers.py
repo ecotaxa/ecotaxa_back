@@ -2,7 +2,7 @@ import re
 from typing import Optional
 
 
-def clean_value(value: Optional[str], is_numeric: bool = False):
+def clean_value(value: Optional[str], is_numeric: bool = False) -> str:
     """
         Remove spaces and map 2 special values to empty string, which is _accepted_ like an empty column.
     """
@@ -28,7 +28,7 @@ def clean_value_and_none(value: Optional[str], is_numeric: bool = False):
 _minus_inf = float("-inf")
 
 
-def to_float(value: str):
+def to_float(value: str) -> Optional[float]:
     """
     Convert input str to a python float, excluding -inf.
     :param value:
@@ -56,7 +56,7 @@ def none_to_empty(value: Optional[str]):
     return value
 
 
-def convert_degree_minute_float_to_decimal_degree(v):
+def convert_degree_minute_float_to_decimal_degree(v) -> Optional[float]:
     m = re.search(r"(-?\d+)°(\d+) (\d+)", v)
     if m:  # data in format DDD°MM SSS
         parts = [float(x) for x in m.group(1, 2, 3)]

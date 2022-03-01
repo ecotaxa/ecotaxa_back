@@ -6,9 +6,7 @@
 # noinspection PyUnreachableCode
 if False:  # pragma: no cover
     from sqlalchemy import Column, Table, MetaData
-    from sqlalchemy.dialects import postgresql
     from sqlalchemy.inspection import inspect
-    from sqlalchemy.sql.ddl import CreateTable
     from typing import Set, List, Union, Type
 
     from DB.helpers.ORM import Model
@@ -77,6 +75,6 @@ if False:  # pragma: no cover
 
         return Ret
 
-if __name__ == '__main__':
-    def print_table(tbl: Table):
-        print(CreateTable(tbl).compile(dialect=postgresql.dialect()))
+# if __name__ == '__main__':
+#     def print_table(tbl: Table):
+#         print(CreateTable(tbl).compile(dialect=postgresql.dialect()))

@@ -25,7 +25,7 @@ class UserFolderService(Service):
         A service for storing/cleaning user specific folders.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
     async def store(self, current_user_id: UserIDT, file: UploadFile,
@@ -73,7 +73,7 @@ class CommonFolderService(Service):
         A service for navigating in specific shared folder.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
     async def list(self, sub_path: str, current_user_id: UserIDT) -> DirectoryModel:

@@ -9,13 +9,13 @@
 from io import StringIO
 from os.path import join
 
-from API_models.crud import ProjectFilters
+from API_models.filters import ProjectFiltersDict
 from API_operations.ObjectManager import ObjectManager
 from API_operations.helpers.Service import Service
 from BO.Rights import RightsBO
 from BO.User import UserIDT
-from DB import Role
 from DB.Project import ProjectIDT
+from DB.User import Role
 from FS.MachineLearningModels import SavedModels
 from FS.Vault import Vault
 from ML.CNN_feature_trainer import CNNFeatureTrainer
@@ -31,9 +31,9 @@ class MachineLearningService(Service):
         Admin part of ML in EcoTaxa.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self.vault = Vault(join(self.link_src, 'vault'))
+        self.vault = Vault(join(self.config.vault_dir()))
         self.models_dir = SavedModels(self.config)
 
     def train(self, current_user_id: UserIDT,
@@ -41,7 +41,7 @@ class MachineLearningService(Service):
               out_model: str) -> str:
         # Security barrier
         _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
-        obj_filter = ProjectFilters(statusfilter='V')
+        obj_filter = ProjectFiltersDict(statusfilter='V')
         with ObjectManager() as mgr:
             # Query like the API would do
             obj_with_parents, details, total = mgr.query(current_user_id=current_user_id, proj_id=prj_id,

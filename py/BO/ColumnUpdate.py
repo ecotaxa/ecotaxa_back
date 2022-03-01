@@ -4,7 +4,7 @@
 #
 # A formalized way to update entities
 #
-from typing import Iterable
+from typing import Iterable, List, Dict, Any
 
 from sqlalchemy.sql.functions import current_timestamp
 from typing_extensions import TypedDict
@@ -17,19 +17,19 @@ class ColUpdate(TypedDict):
     """ The new value to set, always as a string """
 
 
-class ColUpdateList(list):
+class ColUpdateList:
     """
         Formalized way of updating entities in the system.
             It's, on purpose, not a Dict as we take provision for futures usage when we need an order.
     """
 
     def __init__(self, iterable: Iterable[ColUpdate]):
-        super().__init__(iterable)
+        self.lst: List[ColUpdate] = [an_upd for an_upd in iterable]
 
-    def as_dict_for_db(self):
-        ret = {}
+    def as_dict_for_db(self) -> Dict[str, Any]:
+        ret: Dict[str, Any] = {}
         an_update: ColUpdate
-        for an_update in self:
+        for an_update in self.lst:
             upd_col = an_update["ucol"]
             ret[upd_col] = an_update["uval"]
             if ret[upd_col] == 'current_timestamp':

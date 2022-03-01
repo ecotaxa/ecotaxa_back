@@ -9,8 +9,9 @@ import json
 import logging
 import sys
 import traceback
+from contextlib import AbstractContextManager
 from os.path import dirname
-from typing import Any, Optional, Dict, List
+from typing import Any, Optional, Dict, List, Type, Union
 
 import orjson
 from fastapi import FastAPI, Depends, HTTPException
@@ -19,6 +20,7 @@ from fastapi.security import OAuth2
 from fastapi.security.utils import get_authorization_scheme_param
 from itsdangerous import URLSafeTimedSerializer, TimestampSigner, SignatureExpired, BadSignature  # type: ignore
 # noinspection PyPackageRequirements
+from pydantic.main import BaseModel
 from starlette.requests import Request
 # noinspection PyPackageRequirements
 from starlette.responses import JSONResponse
@@ -124,7 +126,7 @@ MAX_TOKEN_AGE = 2678400  # max token age, 31 days
 _serializer = None
 
 
-def build_serializer():
+def build_serializer() -> URLSafeTimedSerializer:
     global _serializer
     if not _serializer:
         # Read from legacy app config
@@ -191,13 +193,10 @@ _not_found_exception = HTTPException(
 )
 
 
-class RightsThrower(object):
+class RightsThrower(AbstractContextManager):
     """
         Transform any AssertionError, during exit block of "with" syntax, into an HTTP error.
     """
-
-    def __init__(self):
-        pass
 
     def __enter__(self):
         return self
@@ -221,9 +220,6 @@ class ValidityThrower(object):
         into an HTTP 422 error.
     """
 
-    def __init__(self):
-        pass
-
     def __enter__(self):
         return self
 
@@ -246,11 +242,11 @@ class MyORJSONResponse(JSONResponse):
     type_to_fields: Dict[Any, List[str]] = {}
 
     @classmethod
-    def register(cls, a_class, its_model):
+    def register(cls, a_class: Type[Any], its_model: Type[BaseModel]):
         cls.type_to_fields[a_class] = list(its_model.__fields__.keys())
 
     @classmethod
-    def orjson_default(cls, obj):
+    def orjson_default(cls, obj: Any) -> Union[str, Dict[str, Any]]:
         # ORJSon calls this method when it cannot serialize an object.
         # We mimic FastApi behavior of fetching data from the object using the model fields
         fields = cls.type_to_fields.get(obj.__class__)

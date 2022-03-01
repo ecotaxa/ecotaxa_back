@@ -14,10 +14,13 @@ from sqlalchemy import and_
 from API_operations.helpers.Service import Service
 from BO.Rights import RightsBO
 from BO.User import UserIDT
-from DB import ObjectHeader, Sample, Acquisition, Project, Role
+from DB.Acquisition import Acquisition
 from DB.Image import Image, ImageFile, ImageFileStateEnum
-from DB.Project import ProjectIDT
-from DB.helpers.ORM import Query, aliased
+from DB.Object import ObjectHeader
+from DB.Project import ProjectIDT, Project
+from DB.Sample import Sample
+from DB.User import Role
+from DB.helpers.ORM import aliased
 from FS.Vault import Vault
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
@@ -28,7 +31,7 @@ logger = get_logger(__name__)
 
 class ImageManagerService(Service):
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.vault = Vault(self.config.vault_dir())
 
@@ -47,7 +50,7 @@ class ImageManagerService(Service):
             Pick some images without checksum and compute it.
         """
         _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
-        qry: Query = self.ro_session.query(Image.file_name)
+        qry = self.ro_session.query(Image.file_name)
         if prj_id is not None:
             # Find missing images in a project
             qry = qry.join(ObjectHeader).join(Acquisition).join(Sample).join(Project)
@@ -60,7 +63,7 @@ class ImageManagerService(Service):
         qry = qry.limit(max_digests)
         cnt = 0
         with CodeTimer("Files without md5, query '%s':" % str(qry), logger):
-            files_without_md5 = [file_name for file_name, in qry.all()]
+            files_without_md5 = [file_name for file_name, in qry]
         for an_img_file_name in files_without_md5:
             cnt += 1
             img_file = ImageFile(path=an_img_file_name)
@@ -71,7 +74,7 @@ class ImageManagerService(Service):
         left_for_unknown = max_digests - cnt
         if left_for_unknown > 0:
             # Also do unknown image file lines
-            miss_qry: Query = self.session.query(ImageFile)
+            miss_qry = self.session.query(ImageFile)
             miss_qry = miss_qry.filter(and_(ImageFile.state == ImageFileStateEnum.UNKNOWN.value,
                                             ImageFile.digest_type == '?'))
             if prj_id is not None:
@@ -82,7 +85,7 @@ class ImageManagerService(Service):
             # On purpose, no "order by" clause. Results are random, but sorting takes a while on lots of images
             miss_qry = miss_qry.limit(left_for_unknown)
             with CodeTimer("Files with unknown state, query '%s':" % str(miss_qry), logger):
-                missing_ones = [an_img_file for an_img_file in miss_qry.all()]
+                missing_ones = [an_img_file for an_img_file in miss_qry]
             for a_missing in missing_ones:
                 cnt += 1
                 self._md5_on_record(a_missing)
@@ -111,7 +114,7 @@ class ImageManagerService(Service):
         _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
         orig_img = aliased(Image, name="orig")
         orig_file = aliased(ImageFile, name="orig_file")
-        qry: Query = self.session.query(orig_img.file_name, orig_img.imgid, Image, ImageFile)  # Select what to delete
+        qry = self.session.query(orig_img.file_name, orig_img.imgid, Image, ImageFile)  # Select what to delete
         qry = qry.join(ObjectHeader, ObjectHeader.objid == Image.objid).join(Acquisition).join(Sample).join(Project)
         # We consider that original image is the oldest one, so others have a superior ID
         qry = qry.join(orig_img, and_(orig_img.objid == Image.objid,
@@ -132,7 +135,7 @@ class ImageManagerService(Service):
         qry = qry.limit(max_deletes)
         with CodeTimer("Dups same objs inside %d, query '%s':" % (prj_id, str(qry)), logger):
             to_do = [(orig_file_name, orig_img_id, an_image, an_image_file)
-                     for orig_file_name, orig_img_id, an_image, an_image_file in qry.all()]
+                     for orig_file_name, orig_img_id, an_image, an_image_file in qry]
         ko_not_same = 0
         ko_except = 0
         # Prepare & start a remover thread that will run in // with DB queries

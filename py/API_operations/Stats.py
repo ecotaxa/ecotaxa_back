@@ -6,7 +6,7 @@
 # Dig into a project 'big' data part
 #
 from decimal import Decimal
-from typing import List, Dict
+from typing import List, Dict, Tuple, Union
 
 from API_operations.helpers.Service import Service
 from BO.Acquisition import AcquisitionIDT
@@ -32,9 +32,9 @@ class AcquisitionStats(object):
         self.nb_objs = 0
         self.distribs: List[Dict[Decimal, int]] = []
         # The mode i.e. most used value
-        self.modes: List[Decimal] = []
+        self.modes: List[int] = []
 
-    def add_values(self, values: List[Decimal]):
+    def add_values(self, values: List[Decimal]) -> None:
         if self.first:
             self.minima = values.copy()
             self.maxima = values.copy()
@@ -51,20 +51,20 @@ class AcquisitionStats(object):
         self.nb_objs += 1
 
     @staticmethod
-    def remove_exponent(d: Decimal):
+    def remove_exponent(d: Decimal) -> Decimal:
         return d.quantize(Decimal(1)) if d == d.to_integral() else d.normalize()
 
-    def aggregate(self):
+    def aggregate(self) -> None:
         a_distrib: Dict
         modes = self.modes
         for a_distrib in self.distribs:
             mode_for_val = max(a_distrib.values())
             modes.append(mode_for_val)
 
-    def sums(self):
+    def sums(self) -> Tuple[int, Union[Decimal, int]]:
         return self.nb_objs * len(self.minima), sum(self.modes)
 
-    def __str__(self):
+    def __str__(self) -> str:
         ret = "%s (%d): " % (self.acquis_orig_id, self.nb_objs)
         ret += ",".join(["[%s,%s,#%d,u%s]"
                          % (self.remove_exponent(min_val), self.remove_exponent(max_val), len(distrib), a_mode)
@@ -113,7 +113,7 @@ class ProjectStatsFetcher(Service, LogEmitter):
         self.output_acq(acquis_stats, ret)
         return ret
 
-    def output_acq(self, acquis_stats, ret):
+    def output_acq(self, acquis_stats: AcquisitionStats, ret: List[str]) -> None:
         acquis_stats.aggregate()
         ret.append(str(acquis_stats))
         ret.append("Total: %d values, dup %d values" % acquis_stats.sums())

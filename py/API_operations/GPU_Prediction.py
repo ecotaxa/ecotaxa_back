@@ -9,8 +9,9 @@
 #
 from typing import Dict, List, Tuple
 
-import numpy as np  # type: ignore
+import numpy as np
 
+from API_models.prediction import PredictionReq
 from BO.Classification import ClassifIDListT
 from BO.Mappings import TableMapping
 from BO.ObjectSet import DescribedObjectSet, EnumeratedObjectSet, ObjectIDListT
@@ -18,9 +19,10 @@ from BO.Prediction import DeepFeatures
 from BO.Project import ProjectBO
 from BO.ProjectSet import LimitedInCategoriesProjectSet, FeatureConsistentProjectSet
 from BO.Rights import RightsBO, Action
-from DB import Project, ObjectFields
-from DB.Project import ProjectIDT
+from DB.Object import ObjectFields
+from DB.Project import ProjectIDT, Project
 from DB.helpers import Result
+from DB.helpers.Direct import text
 from ML.Deep_features_extractor import DeepFeaturesExtractor
 from ML.Random_forest_classifier import OurRandomForestClassifier
 from helpers.DynamicLogs import get_logger
@@ -72,7 +74,7 @@ class GPUPredictForProject(PredictForProject):
         done_infos = {"rowcount": nb_rows}
         self.set_job_result(errors=[], infos=done_infos)
 
-    def build_learning_set(self, req) -> Tuple[np.ndarray, ClassifIDListT, List[str], Dict]:
+    def build_learning_set(self, req: PredictionReq) -> Tuple[np.ndarray, ClassifIDListT, List[str], Dict[str, float]]:
         """
             Build the learning set from DB data & req instructions.
             :returns - A matrix in which each line contains the features for selected (validated) objects.
@@ -172,17 +174,17 @@ class GPUPredictForProject(PredictForProject):
         from_, where_clause, params = object_set.get_sql(user_id, order_clause=None, select_list=sel_cols)
         sql = "SET LOCAL enable_seqscan=FALSE; SELECT obh.objid, NULL " + sel_cols + " FROM " + from_.get_sql() + where_clause.get_sql()
         logger.info("Execute SQL : %s" % sql)
-        res: Result = self.ro_session.execute(sql, params)
+        res: Result = self.ro_session.execute(text(sql), params)
         return res
 
     CHUNK_SIZE = 10000
 
     def classify(self, tgt_res: Result, classifier: OurRandomForestClassifier, features: List[str],
-                 np_medians_per_feat: Dict) -> int:
+                 np_medians_per_feat: Dict[str, float]) -> int:
         """
             Do the classification job itself, read lines from the DB, classify them and write-back the result.
         """
-        total_rows = tgt_res.rowcount
+        total_rows = tgt_res.rowcount  # type:ignore
         done_count = 0
         nb_changes = 0
         while True:
@@ -212,7 +214,7 @@ class GPUPredictForProject(PredictForProject):
         logger.info("Classify done.")
         return nb_changes
 
-    def ensure_deep_features(self, tgt_project: Project):
+    def ensure_deep_features(self, tgt_project: Project) -> None:
         """
             Ensure that deep features are present for all involved projects.
             As of 01/10/2021: SCN_zoocam_group1
@@ -221,13 +223,14 @@ class GPUPredictForProject(PredictForProject):
                               SCN_uvp5ccelter_group1
         """
         model_name = tgt_project.cnn_network_id
+        assert model_name is not None
         for a_projid in [tgt_project.projid] + self.req.source_project_ids:
             diag = self._ensure_deep_features_for(a_projid, model_name)
             logger.info(diag)
 
     DEEP_EXTRACT_CHUNK = 10000
 
-    def _ensure_deep_features_for(self, proj_id: ProjectIDT, model_name: str):
+    def _ensure_deep_features_for(self, proj_id: ProjectIDT, model_name: str) -> str:
         """
             Ensure that deep features are present for given project.
         """

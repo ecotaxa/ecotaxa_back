@@ -59,7 +59,7 @@ class ReClassificationBO(object):
         qry = qry.order_by(func.count(TaxonomyChangeLog.project_id).desc(),
                            func.max(TaxonomyChangeLog.occurred_on))
         ret = {}
-        for from_id, to_id, nb_prjs in qry.all():
+        for from_id, to_id, nb_prjs in qry:
             if from_id not in ret:
                 # Pick the best match, i.e. first in result
                 ret[from_id] = to_id
@@ -75,4 +75,4 @@ class ReClassificationBO(object):
         qry = qry.filter(TaxonomyChangeLog.project_id == project_id)
         qry = qry.order_by(TaxonomyChangeLog.occurred_on)
         return [{"from": from_id, "to": to_id, "name": to_name}
-                for from_id, to_id, to_name in qry.all()]
+                for from_id, to_id, to_name in qry]

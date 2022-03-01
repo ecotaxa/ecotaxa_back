@@ -10,7 +10,7 @@ from sqlalchemy.orm import relationship, Session
 from .Project import Project
 from .Sample import Sample
 from .helpers.DDL import Column, ForeignKey, Sequence, Index
-from .helpers.ORM import Model, Query
+from .helpers.ORM import Model
 from .helpers.Postgres import VARCHAR, INTEGER
 
 ACQUISITION_FREE_COLUMNS = 31
@@ -20,11 +20,11 @@ class Acquisition(Model):
     # Historical (plural) name of the table
     __tablename__ = 'acquisitions'
     # Self ID
-    acquisid = Column(INTEGER, Sequence('seq_acquisitions'), primary_key=True)
+    acquisid: int = Column(INTEGER, Sequence('seq_acquisitions'), primary_key=True)
     # Parent ID
-    acq_sample_id = Column(INTEGER, ForeignKey('samples.sampleid'), nullable=False)
+    acq_sample_id: int = Column(INTEGER, ForeignKey('samples.sampleid'), nullable=False)
     # i.e. acq_id from TSV
-    orig_id = Column(VARCHAR(255), nullable=False)
+    orig_id: str = Column(VARCHAR(255), nullable=False)
     # TODO: Put into a dedicated table
     instrument = Column(VARCHAR(255))
 
@@ -38,7 +38,7 @@ class Acquisition(Model):
 
     @classmethod
     def get_orig_id_and_model(cls, session: Session, prj_id) -> Dict[Tuple[str, str], 'Acquisition']:
-        res: Query = session.query(Acquisition, Sample.orig_id)
+        res = session.query(Acquisition, Sample.orig_id)
         res = res.join(Sample)
         res = res.join(Project)
         res = res.filter(Project.projid == prj_id)

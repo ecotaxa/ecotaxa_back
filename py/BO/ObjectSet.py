@@ -11,27 +11,30 @@
 import datetime
 from collections import OrderedDict
 from decimal import Decimal
-from typing import Tuple, Optional, List, Iterator, Callable, Dict, Any
+from typing import Tuple, Optional, List, Iterator, Callable, Dict, Any, OrderedDict as OrderedDictT, cast
 
 # A Postgresl insert generator, needed for the key conflict clause
 from sqlalchemy import bindparam
 from sqlalchemy.sql import Alias
 
-from API_models.crud import ProjectFilters
+from API_models.filters import ProjectFiltersDict
 from BO.Classification import HistoricalLastClassif, ClassifIDListT, ClassifIDT
 from BO.ColumnUpdate import ColUpdateList
 from BO.Object import ObjectIDT, ObjectIDWithParentsT
 from BO.Taxonomy import TaxonomyBO
 from BO.User import UserIDT
 from BO.helpers.MappedTable import MappedTable
-from DB import Project, ObjectHeader, Image, Sample, Acquisition
+from DB import Session, Query
+from DB.Acquisition import Acquisition
+from DB.Image import Image
 from DB.Object import ObjectsClassifHisto, ObjectFields, PREDICTED_CLASSIF_QUAL, VALIDATED_CLASSIF_QUAL, \
-    DUBIOUS_CLASSIF_QUAL, DEFAULT_CLASSIF_HISTORY_DATE
-from DB.Project import ProjectIDListT
-from DB.helpers import Result, Session
+    DUBIOUS_CLASSIF_QUAL, DEFAULT_CLASSIF_HISTORY_DATE, ObjectHeader
+from DB.Project import ProjectIDListT, Project
+from DB.Sample import Sample
+from DB.helpers import Result
 from DB.helpers.Core import select
 from DB.helpers.Direct import text, func
-from DB.helpers.ORM import Query, Delete, Update, Insert, any_, and_, or_, case
+from DB.helpers.ORM import Row, Delete, Update, Insert, any_, and_, or_, case
 from DB.helpers.Postgres import pg_insert
 from DB.helpers.SQL import WhereClause, SQLParamDict, FromClause, OrderClause
 from helpers.DynamicLogs import get_logger
@@ -41,6 +44,10 @@ from helpers.Timer import CodeTimer
 ObjectIDListT = List[int]
 # Object_id + parents + project
 ObjectIDWithParentsListT = List[ObjectIDWithParentsT]
+# Previous classif, previous qual, next classif, next qual
+ChangeTupleT = Tuple[Optional[int], str, int, str]
+# Many changes, each of them applied to many objects
+ObjectSetClassifChangesT = OrderedDictT[ChangeTupleT, ObjectIDListT]
 
 logger = get_logger(__name__)
 
@@ -51,7 +58,7 @@ class DescribedObjectSet(object):
         and filtered by exclusion conditions.
     """
 
-    def __init__(self, session: Session, prj_id: int, filters: ProjectFilters):
+    def __init__(self, session: Session, prj_id: int, filters: ProjectFiltersDict):
         self.prj_id = prj_id
         self.filters = ObjectSetFilter(session, filters)
 
@@ -107,10 +114,10 @@ class EnumeratedObjectSet(MappedTable):
         assert len(object_ids) == 0 or isinstance(object_ids[0], ObjectIDT)
         self.object_ids = object_ids
 
-    def add_object(self, object_id: ObjectIDT):
+    def add_object(self, object_id: ObjectIDT) -> None:
         self.object_ids.append(object_id)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.object_ids)
 
     def get_objectid_chunks(self, chunk_size: int) -> Iterator[ObjectIDListT]:
@@ -127,13 +134,13 @@ class EnumeratedObjectSet(MappedTable):
         """
             Return the project IDs for the owned objectsIDs.
         """
-        qry: Query = self.session.query(Project.projid).distinct(Project.projid)
+        qry = self.session.query(Project.projid).distinct(Project.projid)
         qry = qry.join(Sample)
         qry = qry.join(Acquisition)
         qry = qry.join(ObjectHeader)
         qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))
         with CodeTimer("Prjs for %d objs: " % len(self.object_ids), logger):
-            return [an_id for an_id, in qry.all()]
+            return [an_id for an_id, in qry]
 
     @staticmethod
     def _delete_chunk(session: Session, a_chunk: ObjectIDListT) -> Tuple[int, int, List[str]]:
@@ -161,7 +168,7 @@ class EnumeratedObjectSet(MappedTable):
         obj_del_qry: Delete = ObjectHeader.__table__.delete()
         obj_del_qry = obj_del_qry.where(ObjectHeader.objid == any_(a_chunk))
         with CodeTimer("DELETE for %d objs: " % len(a_chunk), logger):
-            nb_objs = session.execute(obj_del_qry).rowcount
+            nb_objs = session.execute(obj_del_qry).rowcount  # type:ignore
 
         session.commit()
         # TODO: Cache delete
@@ -186,7 +193,7 @@ class EnumeratedObjectSet(MappedTable):
 
         return nb_objs, nb_img_rows, img_files
 
-    def reset_to_predicted(self):
+    def reset_to_predicted(self) -> None:
         """
             Reset to Predicted state, keeping log, i.e. history, of previous change. Only Validated
             and Dubious states are affected.
@@ -202,13 +209,13 @@ class EnumeratedObjectSet(MappedTable):
         obj_upd_qry = obj_upd_qry.where(and_(oh.objid == any_(self.object_ids),
                                              (oh.classif_qual.in_([VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL]))))
         obj_upd_qry = obj_upd_qry.values(classif_qual=PREDICTED_CLASSIF_QUAL)
-        nb_objs = self.session.execute(obj_upd_qry).rowcount
+        nb_objs = self.session.execute(obj_upd_qry).rowcount  # type:ignore
         # TODO: Cache upd
         logger.info(" %d out of %d rows reset to predicted", nb_objs, len(self.object_ids))
 
         self.session.commit()
 
-    def update_all(self, params: Dict) -> int:
+    def update_all(self, params: Dict[str, Any]) -> int:
         """
             Update all self's objects using given parameters, dict of column names and values.
         """
@@ -216,13 +223,13 @@ class EnumeratedObjectSet(MappedTable):
         obj_upd_qry: Update = ObjectHeader.__table__.update()
         obj_upd_qry = obj_upd_qry.where(ObjectHeader.objid == any_(self.object_ids))
         obj_upd_qry = obj_upd_qry.values(params)
-        updated_objs = self.session.execute(obj_upd_qry).rowcount
+        updated_objs = self.session.execute(obj_upd_qry).rowcount  # type:ignore
         # TODO: Cache upd
         # prj_id = self.get_projects_ids()[0]
         # ObjectCacheUpdater(prj_id).update_objects(self.object_ids, params)
-        return updated_objs
+        return cast(int, updated_objs)
 
-    def historize_classification(self, only_qual):
+    def historize_classification(self, only_qual: Optional[List[str]]) -> None:
         """
            Copy current classification information into history table, for all rows in self.
            :param only_qual: If set, only historize for current rows with this classification.
@@ -285,12 +292,11 @@ class EnumeratedObjectSet(MappedTable):
         # Insert into the log table
         ins_qry: Insert = pg_insert(och.__table__)
         ins_qry = ins_qry.from_select(ins_columns, sel_subqry)
-        ins_qry = ins_qry.on_conflict_do_nothing(constraint='objectsclassifhisto_pkey')
+        ins_qry = ins_qry.on_conflict_do_nothing(constraint='objectsclassifhisto_pkey')  # type:ignore
         # TODO: mypy crashes due to pg_dialect below
         # logger.info("Histo query: %s", ins_qry.compile(dialect=pg_dialect()))
-        nb_objs = self.session.execute(ins_qry).rowcount
+        nb_objs = self.session.execute(ins_qry).rowcount  # type:ignore
         logger.info(" %d out of %d rows copied to log", nb_objs, len(self.object_ids))
-        return oh
 
     def apply_on_all(self, project: Project, updates: ColUpdateList) -> int:
         """
@@ -298,7 +304,7 @@ class EnumeratedObjectSet(MappedTable):
         """
         mapped_updates = []
         direct_updates = []
-        for an_upd in updates:
+        for an_upd in updates.lst:
             if an_upd["ucol"] in ObjectHeader.__dict__:
                 if an_upd["ucol"] == "classif_id":
                     self.historize_classification(only_qual=None)
@@ -309,7 +315,7 @@ class EnumeratedObjectSet(MappedTable):
         return max(self._apply_on_all_non_mapped(ObjectHeader, direct_updates),
                    self._apply_on_all(ObjectFields, project, mapped_updates))
 
-    def add_filter(self, upd):
+    def add_filter(self, upd: Query) -> Query:
         if "obj_head." in str(upd):
             ret = upd.filter(ObjectHeader.objid == any_(self.object_ids))
         else:
@@ -323,10 +329,10 @@ class EnumeratedObjectSet(MappedTable):
             to have restore-able lines.
         """
         # Get the histo entries
-        subqry: Query = self.session.query(ObjectsClassifHisto,
-                                           func.rank().over(partition_by=ObjectsClassifHisto.objid,
-                                                            order_by=ObjectsClassifHisto.classif_date.desc()).
-                                           label("rnk"))
+        subqry = self.session.query(ObjectsClassifHisto,
+                                    func.rank().over(partition_by=ObjectsClassifHisto.objid,
+                                                     order_by=ObjectsClassifHisto.classif_date.desc()).
+                                    label("rnk"))
         if from_user_id:
             subqry = subqry.filter(ObjectsClassifHisto.classif_who == from_user_id)
             # Pick Manual logs from this user
@@ -337,14 +343,16 @@ class EnumeratedObjectSet(MappedTable):
 
         # Also get some fields from ObjectHeader for referencing, info, and fallback
         qry = self.session.query(ObjectHeader.objid, ObjectHeader.classif_id,
-                                 func.coalesce(subq_alias.c.classif_date, ObjectHeader.classif_auto_when),
-                                 subq_alias.c.classif_type,
-                                 func.coalesce(subq_alias.c.classif_id, ObjectHeader.classif_auto_id).label(
-                                     "h_classif_id"),
+                                 func.coalesce(subq_alias.c.classif_date, ObjectHeader.classif_auto_when)
+                                 .label("histo_classif_date"),
+                                 subq_alias.c.classif_type.label("histo_classif_type"),
+                                 func.coalesce(subq_alias.c.classif_id, ObjectHeader.classif_auto_id)
+                                 .label("histo_classif_id"),
                                  func.coalesce(subq_alias.c.classif_qual,
                                                case([(ObjectHeader.classif_auto_id.isnot(None),
-                                                      PREDICTED_CLASSIF_QUAL)])),
-                                 subq_alias.c.classif_who)
+                                                      PREDICTED_CLASSIF_QUAL)]))
+                                 .label("histo_classif_qual"),
+                                 subq_alias.c.classif_who.label("histo_classif_who"))
         qry = qry.join(subq_alias, ObjectHeader.objid == subq_alias.c.objid, isouter=(from_user_id is None))
         if from_user_id is not None:
             # If taking history from a user, don't apply to the objects he/she classsified
@@ -357,7 +365,7 @@ class EnumeratedObjectSet(MappedTable):
             qry = qry.filter(or_(subq_alias.c.rnk == 1, subq_alias.c.rnk.is_(None)))
         logger.info("_get_last_classif_history qry:%s", str(qry))
         with CodeTimer("HISTORY for %d objs: " % len(self.object_ids), logger):
-            ret = [HistoricalLastClassif(rec) for rec in qry.all()]
+            ret = [HistoricalLastClassif(**rec) for rec in qry]  # type:ignore
         logger.info("_get_last_classif_history qry: %d rows", len(ret))
         return ret
 
@@ -391,7 +399,7 @@ class EnumeratedObjectSet(MappedTable):
 
     def classify_validate(self, user_id: UserIDT, classif_ids: ClassifIDListT, wanted_qualif: str,
                           log_timestamp: datetime.datetime) \
-            -> Tuple[int, Dict[Tuple, ObjectIDListT]]:
+            -> Tuple[int, ObjectSetClassifChangesT]:
         """
             Set current classifications in self and/or validate current classification.
             :param user_id: The User who did these changes.
@@ -405,8 +413,8 @@ class EnumeratedObjectSet(MappedTable):
 
         # Cook a diff b/w present and wanted values, both for the update of obj_head and preparing the ones on _stat
         # Group the updates as lots of them are identical
-        updates: Dict[Tuple, EnumeratedObjectSet] = {}
-        all_changes: OrderedDict[Tuple, List[int]] = OrderedDict()
+        updates: Dict[Tuple[ClassifIDT, str], EnumeratedObjectSet] = {}
+        all_changes: OrderedDict[ChangeTupleT, ObjectIDListT] = OrderedDict()
         target_qualif = wanted_qualif
         # A bit of obsessive optimization
         classif_id_col = ObjectHeader.classif_id.name
@@ -478,7 +486,7 @@ class EnumeratedObjectSet(MappedTable):
         return nb_updated, all_changes
 
     def classify_auto(self, classif_ids: ClassifIDListT, scores: List[float], keep_logs: bool) \
-            -> Tuple[int, Dict[Tuple, ObjectIDListT]]:
+            -> Tuple[int, ObjectSetClassifChangesT]:
         """
             Set automatic classifications in self.
             :param classif_ids: One category id for each of the object ids in self.
@@ -491,7 +499,7 @@ class EnumeratedObjectSet(MappedTable):
 
         # Cook a diff b/w present and wanted values, both for the update of obj_head and preparing the ones on _stat
         # updates: Dict[Tuple, EnumeratedObjectSet] = {}
-        all_changes: OrderedDict[Tuple, List[int]] = OrderedDict()
+        all_changes: ObjectSetClassifChangesT = OrderedDict()
         # A bit of obsessive optimization
         classif_auto_id_col = ObjectHeader.classif_auto_id.name
         classif_auto_score_col = ObjectHeader.classif_auto_score.name
@@ -556,7 +564,7 @@ class EnumeratedObjectSet(MappedTable):
         # Return statuses
         return nb_updated, all_changes
 
-    def _fetch_classifs_and_lock(self) -> Dict[int, Dict]:
+    def _fetch_classifs_and_lock(self) -> Dict[int, Row]:
         """
             Fetch, and DB lock, self's objects
         :return:
@@ -577,7 +585,7 @@ class ObjectSetFilter(object):
         A filter for reducing an object set.
     """
 
-    def __init__(self, session: Session, filters: ProjectFilters):
+    def __init__(self, session: Session, filters: ProjectFiltersDict):
         """
             Init from a dictionary with all fields.
         """
@@ -684,7 +692,7 @@ class ObjectSetFilter(object):
         return None
 
     @staticmethod
-    def _str_to_decimal(a_dict: ProjectFilters, a_key: str) -> Optional[Decimal]:
+    def _str_to_decimal(a_dict: ProjectFiltersDict, a_key: str) -> Optional[Decimal]:
         # noinspection PyTypedDict
         val = a_dict.get(a_key, '')
         if val:

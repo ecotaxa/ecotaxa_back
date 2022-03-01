@@ -7,10 +7,11 @@
 #
 import json
 from json import JSONDecodeError
+from typing import Tuple, Iterable
 
 from DB.Project import Project, ProjectIDT
 from DB.User import User
-from DB.helpers.ORM import Session, Query
+from DB.helpers.ORM import Session
 
 
 class Preferences(object):
@@ -45,12 +46,12 @@ class Preferences(object):
             self.user.preferences = json.dumps(self.prefs)
         return self.changed
 
-    def recent_projects(self, session: Session):
+    def recent_projects(self, session: Session) -> Iterable[Tuple[int, str]]:
         """
             Return display information for last used projects.
         """
         mru = self.prefs.get(self.RECENT_PROJECTS_KEY, [])
-        qry: Query = session.query(Project.projid, Project.title)
+        qry = session.query(Project.projid, Project.title)
         qry = qry.filter(Project.projid.in_(mru))
         qry = qry.order_by(Project.title)
-        return [{"projid": projid, "title": title} for projid, title in qry.all()]
+        return qry

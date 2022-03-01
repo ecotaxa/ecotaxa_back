@@ -4,15 +4,14 @@
 #
 from io import StringIO
 from pathlib import Path
-from typing import IO, Tuple, List, Any, Dict
+from typing import Tuple, List, Any, Dict, TextIO, BinaryIO
 
 from BG_operations.JobScheduler import JobScheduler
 from BO.Job import JobBO
 from BO.Rights import NOT_FOUND, NOT_AUTHORIZED
 from BO.User import UserIDT
-from DB import User, Role, Job
-from DB.Job import JobIDT, DBJobStateEnum
-from DB.helpers.ORM import Query
+from DB.Job import JobIDT, DBJobStateEnum, Job
+from DB.User import User, Role
 from FS.TempDirForTasks import TempDirForTasks
 from ..helpers.JobService import JobServiceBase
 from ..helpers.Service import Service
@@ -32,10 +31,10 @@ class JobCRUDService(Service):
         current_user = self.ro_session.query(User).get(current_user_id)
         assert current_user is not None
         assert not admin_mode or (admin_mode and current_user.has_role(Role.APP_ADMINISTRATOR)), NOT_AUTHORIZED
-        qry: Query = self.ro_session.query(Job)
+        qry = self.ro_session.query(Job)
         if not admin_mode:
             qry = qry.filter(Job.owner_id == current_user_id)
-        ret = [JobBO(a_job) for a_job in qry.all()]
+        ret = [JobBO(a_job) for a_job in qry]
         return ret
 
     def query(self, current_user_id: UserIDT, job_id: JobIDT) -> JobBO:
@@ -64,7 +63,7 @@ class JobCRUDService(Service):
         assert (job.owner_id == current_user_id) or (current_user.has_role(Role.APP_ADMINISTRATOR)), NOT_AUTHORIZED
         return job
 
-    def get_file_stream(self, current_user_id: UserIDT, job_id: JobIDT) -> Tuple[IO, str, str]:
+    def get_file_stream(self, current_user_id: UserIDT, job_id: JobIDT) -> Tuple[BinaryIO, str, str]:
         """
             Return a stream containing the produced file associated with this job.
         """
@@ -75,6 +74,7 @@ class JobCRUDService(Service):
             # Get the job in its state...
             with JobScheduler.instantiate(job_bo) as sce:
                 out_file_name = sce.PRODUCED_FILE_NAME
+                assert out_file_name is not None
             # ...and the file in its temp directory
             out_file_path = temp_dir / out_file_name
             if out_file_name.endswith(".zip"):
@@ -86,9 +86,9 @@ class JobCRUDService(Service):
             try:
                 return open(out_file_path, mode="rb"), out_file_name, media_type
             except IOError:  # pragma:nocover
-                return StringIO("NOT FOUND"), out_file_name, media_type
+                return StringIO("NOT FOUND"), out_file_name, "text/plain"  # type:ignore
 
-    def get_log_stream(self, current_user_id: UserIDT, job_id: JobIDT) -> IO:
+    def get_log_stream(self, current_user_id: UserIDT, job_id: JobIDT) -> TextIO:
         return open(self.get_log_path(current_user_id, job_id), "r")
 
     def get_log_path(self, current_user_id: UserIDT, job_id: JobIDT) -> Path:
@@ -98,7 +98,7 @@ class JobCRUDService(Service):
         log_file_path = temp_for_job.base_dir_for(job.id) / JobServiceBase.JOB_LOG_FILE_NAME
         return log_file_path
 
-    def restart(self, current_user_id: UserIDT, job_id: JobIDT):
+    def restart(self, current_user_id: UserIDT, job_id: JobIDT) -> None:
         with self._query_for_update(current_user_id, job_id) as job_bo:
             if job_bo.state not in (DBJobStateEnum.Error,):
                 return
@@ -116,7 +116,7 @@ class JobCRUDService(Service):
             job_bo.progress_msg = JobBO.REPLIED_MESSAGE
             job_bo.set_reply(reply)
 
-    def delete(self, current_user_id: UserIDT, job_id: JobIDT):
+    def delete(self, current_user_id: UserIDT, job_id: JobIDT) -> None:
         """
             Erase the job.
         """

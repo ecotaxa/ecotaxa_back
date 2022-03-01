@@ -4,10 +4,10 @@
 #
 import zipfile
 from abc import ABC
-from typing import Union, Dict
+from typing import Union
 
 from API_models.imports import ImportReq, SimpleImportReq
-from API_operations.helpers.JobService import JobServiceOnProjectBase
+from API_operations.helpers.JobService import JobServiceOnProjectBase, ArgsDict
 from BO.User import UserIDT
 from FS.CommonDir import CommonFolder
 from FS.UserDir import UserDirectory
@@ -30,7 +30,7 @@ class ImportServiceBase(JobServiceOnProjectBase, ABC):
         # From legacy code, vault and temptask are in src directory
         self.vault = Vault(self.config.vault_dir())
 
-    def init_args(self, args: Dict) -> Dict:
+    def init_args(self, args: ArgsDict) -> ArgsDict:
         super().init_args(args)
         args["req"] = self.req.dict()
         return args

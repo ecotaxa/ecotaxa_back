@@ -7,6 +7,7 @@
 from typing import Type, TypeVar, Dict, Any, Generic, Union, Tuple
 
 from pydantic.fields import ModelField
+from pydantic.generics import GenericModel, GenericModelT
 from sqlalchemy import inspect
 from sqlalchemy.orm import ColumnProperty
 
@@ -21,7 +22,6 @@ class OrmConfig(BaseConfig):
 # Generify the def with input type
 T = TypeVar('T')
 
-from pydantic.generics import GenericModel, GenericModelT
 
 DBT = TypeVar('DBT')  # TODO: Should be an SQLA model
 CT = TypeVar('CT')

@@ -12,8 +12,8 @@ class Occurences(TxtFileWithModel):
         The DwC Occurences to export.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DwC_Occurrence, "occurrence.txt")
 
-    def add(self, an_occurence: DwC_Occurrence):
+    def add(self, an_occurence: DwC_Occurrence) -> None:
         self.add_entity(an_occurence)

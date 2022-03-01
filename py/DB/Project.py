@@ -2,7 +2,9 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List
+from __future__ import annotations
+
+from typing import List, TYPE_CHECKING, Iterable
 
 from BO.DataLicense import LicenseEnum
 from DB.helpers.ORM import Model
@@ -21,6 +23,9 @@ EXPLORE_ONLY = "ExploreOnly"
 # Typings, to be clear that these are not e.g. object IDs
 ProjectIDT = int
 ProjectIDListT = List[int]
+if TYPE_CHECKING:
+    from .Sample import Sample
+    from .ProjectPrivilege import ProjectPrivilege
 
 
 class Project(Model):
@@ -28,8 +33,8 @@ class Project(Model):
         Top-level holder of image data.
     """
     __tablename__ = 'projects'
-    projid = Column(INTEGER, Sequence('seq_projects'), primary_key=True)
-    title = Column(VARCHAR(255), nullable=False)
+    projid: int = Column(INTEGER, Sequence('seq_projects'), primary_key=True)
+    title: str = Column(VARCHAR(255), nullable=False)
     visible = Column(Boolean(), default=True)
     # owner_id = Column(INTEGER, default=0, nullable=False)  # TODO: FK to user
     license = Column(VARCHAR(16), default=LicenseEnum.NO_LICENSE, nullable=False)
@@ -60,9 +65,9 @@ class Project(Model):
     # taxo_stats = relationship("ProjectTaxoStat")
 
     # The relationships are created in Relations.py but the typing here helps IDE
-    all_samples: relationship
+    all_samples: Iterable[Sample]
     # The users involved somehow in this project
-    privs_for_members: relationship
+    privs_for_members: Iterable[ProjectPrivilege]
     # owner: relationship
     members: relationship
     # The twin EcoPart project

@@ -7,13 +7,14 @@
 import base64
 import hashlib
 import hmac
-
 # TODO: if it exists, find the stubs somewhere
+from typing import Union
+
 from passlib.context import CryptContext  # type: ignore
 
 from API_operations.helpers.Service import Service
 from BO.Rights import NOT_AUTHORIZED
-from DB import User
+from DB.User import User
 from helpers.fastApiUtils import build_serializer
 
 
@@ -23,7 +24,7 @@ class LoginService(Service):
         TODO: It's crypto, so without cache, it might not be fast. To measure.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         # Hashing algos
         pw_hash = self.config.get_cnf("SECURITY_PASSWORD_HASH")
@@ -38,7 +39,7 @@ class LoginService(Service):
         self.password_salt = self.config.get_cnf("SECURITY_PASSWORD_SALT")
         self.password_hash = None
 
-    def validate_login(self, username: str, password: str) -> str:
+    def validate_login(self, username: str, password: str) -> Union[str, bytes]:
         # Fetch the one and only user
         user_qry = self.session.query(User).filter(User.email == username).filter(User.active)
         db_users = user_qry.all()
@@ -54,7 +55,7 @@ class LoginService(Service):
     #
     # Copy/paste/adapt from flask-security
     #
-    def verify_and_update_password(self, password, user):
+    def verify_and_update_password(self, password, user) -> bool:
         """Returns ``True`` if the password is valid for the specified user.
 
         Additionally, the hashed password in the database is updated if the
@@ -120,7 +121,7 @@ class LoginService(Service):
             string = string.encode('utf-8')
         return string
 
-    def use_double_hash(self, password_hash=None):
+    def use_double_hash(self, password_hash=None) -> bool:
         """Return a bool indicating whether a password should be hashed twice."""
         single_hash = 'PASSWORD_SINGLE_HASH' in self.config.list_cnf()  # Not the case in EcoTaxa config
         if single_hash and self.password_salt:

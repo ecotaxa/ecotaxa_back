@@ -18,6 +18,8 @@ from .Service import Service
 
 logger = get_logger(__name__)
 
+ArgsDict = Dict[str, Any]
+
 
 class JobServiceBase(Service, LogEmitter, ABC):
     """
@@ -28,7 +30,7 @@ class JobServiceBase(Service, LogEmitter, ABC):
     JOB_TYPE: str
     JOB_LOG_FILE_NAME = 'TaskLogBack.txt'
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         super(LogEmitter, self).__init__()
         self.job_id: JobIDT = 0
@@ -51,7 +53,7 @@ class JobServiceBase(Service, LogEmitter, ABC):
                 if for_subclass:
                     return for_subclass
 
-    def log_file_path(self):
+    def log_file_path(self) -> str:
         """
             Return redirected logging output path. @see DynamicLogs and LogEmitter.
         """
@@ -59,7 +61,7 @@ class JobServiceBase(Service, LogEmitter, ABC):
         return log_file.as_posix()
 
     @abc.abstractmethod
-    def do_background(self):
+    def do_background(self) -> None:
         """ Launch background processing"""
         pass
 
@@ -82,12 +84,12 @@ class JobServiceBase(Service, LogEmitter, ABC):
                 logger.exception(e)
 
     @abc.abstractmethod
-    def init_args(self, args: Dict) -> Dict:
+    def init_args(self, args: ArgsDict) -> ArgsDict:
         """ Serialization of __init__ arguments """
         ...
 
     @staticmethod
-    def deser_args(json_args: Dict) -> None:
+    def deser_args(json_args: ArgsDict) -> None:
         pass
 
     def _save_vars_to_state(self, names: List[str], *values):

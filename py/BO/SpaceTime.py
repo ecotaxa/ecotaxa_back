@@ -11,7 +11,6 @@ from astral.sun import sun  # type: ignore
 from typing_extensions import TypedDict
 
 # TODO: Caching a single value is useful, but less than several of them
-# TODO: a TypedDict is more accurate for typing
 from DB.helpers.Bean import Bean
 
 

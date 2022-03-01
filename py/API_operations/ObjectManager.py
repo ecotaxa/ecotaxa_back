@@ -2,25 +2,24 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Tuple, List, Optional, Set, Dict
+from typing import Tuple, List, Optional, Set, Any
 
-from API_models.crud import ProjectFilters
+from API_models.filters import ProjectFiltersDict
 from BO.Classification import HistoricalLastClassif, ClassifIDSetT, ClassifIDListT, ClassifIDT
 from BO.ColumnUpdate import ColUpdateList
 from BO.Mappings import TableMapping
 from BO.Object import ObjectBO
 from BO.ObjectSet import DescribedObjectSet, ObjectIDListT, EnumeratedObjectSet, ObjectIDWithParentsListT, \
-    ObjectSetFilter
-from BO.Project import ProjectBO
+    ObjectSetFilter, ObjectSetClassifChangesT
+from BO.Project import ProjectBO, ChangeTypeT
 from BO.ReClassifyLog import ReClassificationBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
 from BO.User import UserIDT
-from DB import Project, ObjectFields
-from DB.Object import VALIDATED_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, CLASSIF_QUALS
-from DB.Project import ProjectIDT
+from DB.Object import VALIDATED_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, CLASSIF_QUALS, ObjectFields
+from DB.Project import ProjectIDT, Project
+from DB.helpers import Result
 from DB.helpers.Direct import text
-from DB.helpers.ORM import Result
 from DB.helpers.Postgres import db_server_now
 from DB.helpers.SQL import OrderClause
 # noinspection PyUnresolvedReferences
@@ -40,16 +39,16 @@ class ObjectManager(Service):
     # Delete this chunk of objects at a time
     CHUNK_SIZE = 400
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
     def query(self, current_user_id: Optional[UserIDT], proj_id: ProjectIDT,
-              filters: ProjectFilters,
+              filters: ProjectFiltersDict,
               return_fields: Optional[List[str]] = None,
               order_field: Optional[str] = None,
               window_start: Optional[int] = None,
               window_size: Optional[int] = None) \
-            -> Tuple[ObjectIDWithParentsListT, List[List], int]:
+            -> Tuple[ObjectIDWithParentsListT, List[List[Any]], int]:
         """
             Query the given project with given filters, return all IDs.
             If provided order_field, the result is sorted by this field.
@@ -133,7 +132,7 @@ class ObjectManager(Service):
         objid: int
         acquisid: int
         sampleid: int
-        for objid, acquisid, sampleid, total, *extra in res:  # type:ignore
+        for objid, acquisid, sampleid, total, *extra in res:
             ids.append((objid, acquisid, sampleid, proj_id))
             details.append(extra)
 
@@ -216,9 +215,9 @@ class ObjectManager(Service):
         res: Result = self.ro_session.execute(text(sql), params)
         ids = [(objid, acquisid, sampleid, projid)
                for objid, acquisid, sampleid, projid in res]
-        return ids  # type:ignore
+        return ids
 
-    def summary(self, current_user_id: Optional[UserIDT], proj_id: ProjectIDT, filters: ProjectFilters,
+    def summary(self, current_user_id: Optional[UserIDT], proj_id: ProjectIDT, filters: ProjectFiltersDict,
                 only_total: bool) -> Tuple[int, Optional[int], Optional[int], Optional[int]]:
         """
             Query the given project with given filters, return classification summary, or just grand total if
@@ -289,7 +288,7 @@ class ObjectManager(Service):
         remover.wait_for_done()
         return nb_objs, 0, nb_img_rows, len(img_files)
 
-    def reset_to_predicted(self, current_user_id: UserIDT, proj_id: ProjectIDT, filters: ProjectFilters) -> None:
+    def reset_to_predicted(self, current_user_id: UserIDT, proj_id: ProjectIDT, filters: ProjectFiltersDict) -> None:
         """
             Query the given project with given filters, reset the resulting objects to predicted.
         """
@@ -329,7 +328,7 @@ class ObjectManager(Service):
         return object_set.apply_on_all(project, updates)
 
     def revert_to_history(self, current_user_id: UserIDT, proj_id: ProjectIDT,
-                          filters: ProjectFilters, dry_run: bool,
+                          filters: ProjectFiltersDict, dry_run: bool,
                           target: Optional[int]) -> Tuple[List[HistoricalLastClassif], ClassifSetInfoT]:
         """
             Revert to classification history the given set, if dry_run then only simulate.
@@ -367,7 +366,7 @@ class ObjectManager(Service):
         return impact, classifs
 
     def reclassify(self, current_user_id: UserIDT, proj_id: ProjectIDT,
-                   filters: ProjectFilters, forced_id: ClassifIDT, reason: str) -> int:
+                   filters: ProjectFiltersDict, forced_id: ClassifIDT, reason: str) -> int:
         """
             Regardless of present classification or state, set the new classification for this object set.
         """
@@ -400,18 +399,18 @@ class ObjectManager(Service):
         """
             Collect classification IDs from given list, for lookup & display.
         """
-        ret: Set = set()
+        ret: Set[Optional[ClassifIDT]] = set()
         for an_histo in histo:
             ret.add(an_histo.classif_id)
             ret.add(an_histo.histo_classif_id)
         # Eventually remove the None
         if None in ret:
             ret.remove(None)
-        return ret
+        return ret  # type:ignore # mypy doesn't spot the None removal above
 
     def classify_set(self, current_user_id: UserIDT,
                      target_ids: ObjectIDListT, classif_ids: ClassifIDListT,
-                     wanted_qualif: str) -> Tuple[int, int, Dict]:
+                     wanted_qualif: str) -> Tuple[int, int, ObjectSetClassifChangesT]:
         """
             Classify (from human source) or validate/set to dubious a set of objects.
         """
@@ -427,7 +426,7 @@ class ObjectManager(Service):
 
     def classify_auto_set(self, current_user_id: UserIDT,
                           target_ids: ObjectIDListT, classif_ids: ClassifIDListT, scores: List[float],
-                          keep_logs: bool) -> Tuple[int, int, Dict]:
+                          keep_logs: bool) -> Tuple[int, int, ObjectSetClassifChangesT]:
         """
             Classify (from automatic source) a set of objects.
         """
@@ -440,15 +439,15 @@ class ObjectManager(Service):
         # Return status
         return nb_upd, project.projid, all_changes
 
-    def propagate_classif_changes(self, nb_upd: int, all_changes: Dict[Tuple, ObjectIDListT],
-                                  project: Project):
+    def propagate_classif_changes(self, nb_upd: int, all_changes: ObjectSetClassifChangesT,
+                                  project: Project) -> None:
         """ After a classification, update stats """
         if nb_upd > 0:
             # Log a bit
             for a_chg, impacted in all_changes.items():
                 logger.info("change %s for %s", a_chg, impacted)
             # Collate changes
-            collated_changes: Dict[int, Dict] = {}
+            collated_changes: ChangeTypeT = {}
             for (prev_classif_id, prev_classif_qual, new_classif_id, wanted_qualif), objects in all_changes.items():
                 # Decrement for what was before
                 self.count_in_and_out(collated_changes, prev_classif_id, prev_classif_qual, -len(objects))
@@ -461,7 +460,8 @@ class ObjectManager(Service):
             self.session.rollback()
 
     @staticmethod
-    def count_in_and_out(cumulated_changes, classif_id, qualif, inc_or_dec):
+    def count_in_and_out(cumulated_changes: ChangeTypeT, classif_id: Optional[ClassifIDT],
+                         qualif: str, inc_or_dec: int) -> None:
         """ Cumulate change +/- for a given taxon """
         if classif_id is None:
             classif_id = -1  # Unclassified

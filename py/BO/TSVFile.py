@@ -8,12 +8,13 @@ import random
 import sys
 from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, Set, Any, Mapping, Tuple, ClassVar, Optional, cast
+from typing import Dict, Set, Any, Mapping, Tuple, ClassVar, Optional, cast, Union, TextIO
 
 # noinspection PyPackageRequirements
 from PIL import Image as PIL_Image  # type: ignore
 
-from BO.Mappings import GlobalMapping, ProjectMapping, ParentTableClassT
+import BO.Mappings as GlobalMapping
+from BO.Mappings import ProjectMapping, ParentTableClassT
 from BO.SpaceTime import compute_sun_position, USED_FIELDS_FOR_SUNPOS
 from BO.helpers.ImportHelpers import ImportHow, ImportWhere, ImportDiagnostic, ImportStats
 from DB import Sample, Process, Acquisition
@@ -60,7 +61,7 @@ class TSVFile(object):
         self.type_line: Dict[str, str]
 
     # noinspection PyAttributeOutsideInit
-    def open(self):
+    def open(self) -> TextIO:
         csv_file = open(self.path.as_posix(), encoding='latin_1')
         first_3 = csv_file.read(3)
         if first_3 == 'ï»¿':
@@ -73,9 +74,12 @@ class TSVFile(object):
         # Read as a dict, first line gives the format
         self.rdr = csv.DictReader(csv_file, delimiter='\t', quotechar='"')
         # Cleanup field names, keeping original ones as key.
-        clean_fields: OrderedDict[Optional[str], str] = OrderedDict()
-        for raw_field in self.rdr.fieldnames:
-            clean_fields[raw_field] = raw_field.strip(" \t").lower()
+        clean_fields: OrderedDict[str, str] = OrderedDict()
+        if self.rdr.fieldnames is not None:
+            for raw_field in self.rdr.fieldnames:
+                if raw_field is None:
+                    continue
+                clean_fields[raw_field] = raw_field.strip(" \t").lower()
         self.clean_fields = clean_fields
         # Read types line (2nd line in file)
         line_2 = self.rdr.__next__()
@@ -367,6 +371,7 @@ class TSVFile(object):
                     # Default with present parent's parent technical ID
                     parent_orig_id = '__DUMMY_ID__%d__' % upper_level_pk
                 # Look for the parent by its (eventually amended) orig_id
+                parent: Optional[Union[Sample, Acquisition]]
                 if parent_class == Sample:
                     parent = how.existing_samples.get(parent_orig_id)
                 else:
@@ -431,7 +436,7 @@ class TSVFile(object):
         return ret
 
     @staticmethod
-    def read_fields_to_dicts(how: ImportHow, field_set: Set, lig: Dict[str, Optional[str]], dicts_to_write,
+    def read_fields_to_dicts(how: ImportHow, field_set: Set[str], lig: Dict[str, Optional[str]], dicts_to_write,
                              vals_cache: Dict):
         """
             Read the data line into target dicts. Values go into the right bucket, i.e. target dict, depending
@@ -539,6 +544,7 @@ class TSVFile(object):
                     filter_for_id = text("%s=%d" % (its_pk, objid))
                     # Fetch the record to update
                     obj = session.query(a_cls).filter(filter_for_id).first()
+                    assert obj is not None
                     if a_cls == ObjectHeader:
                         # Eventually refresh sun position
                         if an_upd.nb_fields_from(USED_FIELDS_FOR_SUNPOS) > 0:
@@ -546,7 +552,7 @@ class TSVFile(object):
                             for a_field in USED_FIELDS_FOR_SUNPOS.difference(an_upd.keys()):
                                 an_upd[a_field] = getattr(obj, a_field)
                             TSVFile.do_sun_position_field(an_upd)
-                    updates = TSVFile.update_orm_object(obj, an_upd)  # type: ignore
+                    updates = TSVFile.update_orm_object(obj, an_upd)
                     if len(updates) > 0:
                         logger.info("Updating '%s' using %s", filter_for_id, updates)
                         session.flush()

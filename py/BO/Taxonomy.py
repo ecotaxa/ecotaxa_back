@@ -5,14 +5,14 @@
 # Taxon/Category/Classification 
 #
 from datetime import datetime
-from typing import List, Set, Dict, Tuple, Optional, Final
+from typing import List, Set, Dict, Tuple, Optional, Final, Any
 
 from BO.Classification import ClassifIDCollT, ClassifIDT, ClassifIDListT
-from DB import Taxonomy, WoRMS
 from DB.Project import ProjectTaxoStat
-from DB.Taxonomy import TaxonomyTreeInfo
+from DB.Taxonomy import TaxonomyTreeInfo, Taxonomy
+from DB.WoRMs import WoRMS
 from DB.helpers import Result
-from DB.helpers.ORM import Session, Query, any_, case, func, text, select
+from DB.helpers.ORM import Session, any_, case, func, text, select, Label
 from helpers.DynamicLogs import get_logger
 
 ClassifSetInfoT = Dict[ClassifIDT, Tuple[str, str]]
@@ -37,10 +37,10 @@ class TaxonBO(object):
             children = []
         else:
             assert isinstance(children, list), "Not a list: %s" % children
-        self.id = id_lineage[0]
+        self.id: int = id_lineage[0]
         self.renm_id = rename_id
         self.name = lineage[0]
-        self.nb_objects = nb_objects if nb_objects is not None else 0
+        self.nb_objects: int = nb_objects if nb_objects is not None else 0
         self.nb_children_objects = nb_children_objects if nb_children_objects is not None else 0
         self.display_name = display_name
         self.lineage = lineage
@@ -79,7 +79,7 @@ class TaxonomyBO(object):
         return {an_id for an_id, in res}
 
     @staticmethod
-    def resolve_taxa(session: Session, taxo_found, taxon_lower_list):
+    def resolve_taxa(session: Session, taxo_lookup: Dict[str, Dict[str, Any]], taxon_lower_list):
         """
             Match taxa in taxon_lower_list and return the matched ones in taxo_found.
         """
@@ -91,14 +91,14 @@ class TaxonomyBO(object):
                     OR lower(t.name)||'<'||lower(p.name) = ANY(:chv) """)
         res: Result = session.execute(sql, {"nms": taxon_lower_list, "dms": taxon_lower_list, "chv": taxon_lower_list})
         for rec_taxon in res:
-            for found_k, found_v in taxo_found.items():
+            for found_k, found_v in taxo_lookup.items():
                 if ((found_k == rec_taxon['name'])
                         or (found_k == rec_taxon['display_name'])
                         or (found_k == rec_taxon['computedchevronname'])
                         or (('alterdisplayname' in found_v) and (
                                 found_v['alterdisplayname'] == rec_taxon['display_name']))):
-                    taxo_found[found_k]['nbr'] += 1
-                    taxo_found[found_k]['id'] = rec_taxon['id']
+                    taxo_lookup[found_k]['nbr'] += 1
+                    taxo_lookup[found_k]['id'] = rec_taxon['id']
 
     @staticmethod
     def names_with_parent_for(session: Session, id_coll: ClassifIDCollT) -> ClassifSetInfoT:
@@ -115,7 +115,7 @@ class TaxonomyBO(object):
             ret[rec_taxon['id']] = (rec_taxon['name'], rec_taxon['parent_name'])
         return ret
 
-    RQ_CHILDREN = """WITH RECURSIVE rq(id) 
+    RQ_CHILDREN: Final = """WITH RECURSIVE rq(id) 
                     AS (SELECT id 
                           FROM taxonomy 
                          WHERE id = ANY(:ids)
@@ -188,8 +188,7 @@ class TaxonomyBO(object):
         tf = Taxonomy.__table__.alias('tf')
         # bind = None  # For portable SQL, no 'ilike'
         bind = session.get_bind()
-        # noinspection PyTypeChecker
-        priority = case([(tf.c.id == any_(priority_set), text('0'))], else_=text('1')).label('prio')
+        priority: Label = case([(tf.c.id == any_(priority_set), text('0'))], else_=text('1')).label('prio')
         qry = select([tf.c.taxotype, tf.c.id, tf.c.rename_to, tf.c.display_name, priority], bind=bind)
         if len(name_filters) > 0:
             # Add to the query enough to get the full hierarchy for filtering
@@ -282,9 +281,9 @@ class TaxonomyBO(object):
     @staticmethod
     def get_full_stats(session: Session) -> Dict[ClassifIDT, int]:
         # Get usage statistics for all taxa, as a dict category_id -> number
-        qry: Query = session.query(ProjectTaxoStat.id, func.sum(ProjectTaxoStat.nbr))
+        qry = session.query(ProjectTaxoStat.id, func.sum(ProjectTaxoStat.nbr))
         qry = qry.group_by(ProjectTaxoStat.id)
-        ret = {an_id: a_sum for an_id, a_sum in qry.all()}
+        ret = {an_id: a_sum for an_id, a_sum in qry}
         return ret
 
     @staticmethod
@@ -400,23 +399,23 @@ class TaxonBOSet(object):
         self.get_children(session)
         self.get_cardinalities(session)
 
-    def get_children(self, session: Session):
+    def get_children(self, session: Session) -> None:
         # Enrich TaxonBOs with children
         bos_per_id = {a_bo.id: a_bo for a_bo in self.taxa}
         tch = Taxonomy.__table__.alias('tch')
-        qry: Query = session.query(Taxonomy.id, tch.c.id)
+        qry = session.query(Taxonomy.id, tch.c.id)
         qry = qry.join(tch, tch.c.parent_id == Taxonomy.id)
         qry = qry.filter(Taxonomy.id == any_(list(bos_per_id.keys())))
-        for an_id, a_child_id in qry.all():
+        for an_id, a_child_id in qry:
             bos_per_id[an_id].children.append(a_child_id)
 
     def get_cardinalities(self, session: Session):
         # Enrich TaxonBOs with number of objects. Due to ecotaxa/ecotaxa_dev#648, pick data from projects stats.
         bos_per_id = {a_bo.id: a_bo for a_bo in self.taxa}
-        qry: Query = session.query(ProjectTaxoStat.id, func.sum(ProjectTaxoStat.nbr_v))
+        qry = session.query(ProjectTaxoStat.id, func.sum(ProjectTaxoStat.nbr_v))
         qry = qry.filter(ProjectTaxoStat.id == any_(list(bos_per_id.keys())))
         qry = qry.group_by(ProjectTaxoStat.id)
-        for an_id, a_sum in qry.all():
+        for an_id, a_sum in qry:
             bos_per_id[an_id].nb_objects = a_sum
 
     def as_list(self) -> List[TaxonBO]:
@@ -477,10 +476,10 @@ class TaxonBOSetFromWoRMS(object):
         # Enrich TaxonBOs with children
         bos_per_id = {a_bo.id: a_bo for a_bo in taxa_list}
         tch = WoRMS.__table__.alias('tch')
-        qry: Query = session.query(WoRMS.aphia_id, tch.c.aphia_id)
+        qry = session.query(WoRMS.aphia_id, tch.c.aphia_id)
         qry = qry.join(tch, tch.c.parent_name_usage_id == WoRMS.aphia_id)
         qry = qry.filter(WoRMS.aphia_id == any_(list(bos_per_id.keys())))
-        for an_id, a_child_id in qry.all():
+        for an_id, a_child_id in qry:
             bos_per_id[an_id].children.append(a_child_id)
 
     def as_list(self) -> List[TaxonBO]:

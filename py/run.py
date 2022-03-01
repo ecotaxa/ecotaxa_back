@@ -5,6 +5,7 @@
 import os
 import sys
 from logging import INFO
+from typing import Any
 
 THE_APP = "main:app"
 APP_PORT = "8000"
@@ -13,7 +14,8 @@ APP_PORT = "8000"
 if "APP_PORT" in os.environ:
     APP_PORT = os.environ["APP_PORT"]
 
-def run_uvicorn():
+
+def run_uvicorn() -> None:
     import uvicorn
     from uvicorn.config import LOGGING_CONFIG
     config = LOGGING_CONFIG
@@ -29,17 +31,17 @@ def run_uvicorn():
     uvicorn.run(THE_APP, log_level=INFO, port=int(APP_PORT), reload=True)
 
 
-def run_gunicorn():
+def run_gunicorn() -> None:
     from gunicorn.app.base import BaseApplication
     # The import below makes the module variable for logging being computed.
     # Unlike simple uvicorn above, the processes are forked from Master (present one)
     # so all logging configuration is inherited.
     from main import app
 
-    class EcotaxaApplication(BaseApplication):
+    class EcotaxaApplication(BaseApplication):  # type:ignore
         """Our Gunicorn application."""
 
-        def __init__(self):
+        def __init__(self) -> None:
             self.options = {
                 # Refers to site-packages/uvicorn/workers.py
                 "worker_class": "uvicorn.workers.UvicornWorker",
@@ -58,7 +60,7 @@ def run_gunicorn():
             self.application = app
             super().__init__()
 
-        def load_config(self):
+        def load_config(self) -> None:
             config = {
                 key: value for key, value in self.options.items()
                 if key in self.cfg.settings and value is not None
@@ -66,7 +68,7 @@ def run_gunicorn():
             for key, value in config.items():
                 self.cfg.set(key.lower(), value)
 
-        def load(self):
+        def load(self) -> Any:
             return self.application
 
     EcotaxaApplication().run()

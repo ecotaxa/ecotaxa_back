@@ -16,17 +16,20 @@
 #       becomes deprecated itself.
 #
 from os.path import dirname, realpath, join
-from typing import Tuple, Iterable, Dict, List, Optional
+from typing import Tuple, Iterable, Dict, List, Optional, Any, Union
 
 import openpyxl
 from openpyxl import Workbook
 from openpyxl.cell import Cell
 from openpyxl.worksheet.worksheet import Worksheet
+from typing_extensions import ParamSpec
 
 from API_operations.TaxonomyService import TaxonomyService
 from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Taxonomy import TaxonBO, WoRMSSetFromTaxaSet
 from data.structs.TaxaTree import TaxaTree
+
+P = ParamSpec('P')
 
 XLSX = "Correspondance WoRMS.xlsx"
 TABS = ['Cas 1a', 'Cas 2a', 'Cas 3a', 'Cas 4a',
@@ -62,10 +65,10 @@ class Action(object):  # class action :)
         # Anything...
         self.worms_parent_id: Optional[int] = None
 
-    def add_cell(self, cell_str: str):
+    def add_cell(self, cell_str: str) -> None:
         self.coords += cell_str
 
-    def worms_parent_is(self, parent_aphia_id):
+    def worms_parent_is(self, parent_aphia_id: int) -> None:
         assert self.worms_parent_id is None
         self.worms_parent_id = parent_aphia_id
 
@@ -73,29 +76,29 @@ class Action(object):  # class action :)
     #     assert len(ecotaxa_parent_name) > 0
     #     self.eco_parent = ecotaxa_parent_name
 
-    def turn_to_morpho(self):
+    def turn_to_morpho(self) -> None:
         assert not self.make_morpho
         self.make_morpho = True
 
-    def deprecate(self):
+    def deprecate(self) -> None:
         self.deprecated = True
 
-    def dont_deprecate(self):
+    def dont_deprecate(self) -> None:
         if self.deprecated:
             print("%s deprecated or not?" % self.coords)
 
-    def rename_to(self, new_val: str):
+    def rename_to(self, new_val: str) -> None:
         assert self.new_name is None
         self.new_name = new_val
 
-    def dont_rename(self):
+    def dont_rename(self) -> None:
         assert self.new_name is None
 
-    def set_free_action(self, action: str):
+    def set_free_action(self, action: str) -> None:
         assert not self.text
         self.text = action
 
-    def set_target_worms(self, aphia_id: ClassifIDT):
+    def set_target_worms(self, aphia_id: ClassifIDT) -> None:
         if self.link_with_aphia_id is not None and self.link_with_aphia_id != aphia_id:
             print("In %s: %d -> %d or %d -> %d ?" % (self.coords, self.eco_id,
                                                      self.link_with_aphia_id, self.eco_id, aphia_id))
@@ -120,7 +123,7 @@ class Action(object):  # class action :)
                 and self.new_name is None
                 and self.text is not None)
 
-    def __str__(self):
+    def __str__(self) -> str:
         ret = ""
         if self.make_morpho:
             ret += "->'M'"
@@ -155,7 +158,7 @@ class Action(object):  # class action :)
             ret.append("rename to '%s'" % self.new_name)
         return ", ".join(ret)
 
-    def invalid_reason(self):
+    def invalid_reason(self) -> Optional[str]:
         if self.deprecated and self.link_with_aphia_id is None:
             # Deprecated OK but in favor of something else
             return "deprecated with no replacement"
@@ -170,10 +173,10 @@ class Action(object):  # class action :)
             return "two branchings"
         return None
 
-    def not_mapped_to_worms(self):
+    def not_mapped_to_worms(self) -> bool:
         return self.link_with_aphia_id is None and self.worms_parent_id is None
 
-    def possible_aphia_ids(self):
+    def possible_aphia_ids(self) -> List[int]:
         return [an_id for an_id in (self.link_with_aphia_id, self.worms_parent_id)
                 if an_id is not None]
 
@@ -183,13 +186,13 @@ class ToWorms(object):
         Read the XLSX data source and map IDs.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Taxo data source
         self.ignored_cells: List[str] = []
         # The actions, per eco_id
         self.actions: Dict[int, Action] = {}
         xlsx_path = join(HERE, XLSX)
-        workbook: Workbook = openpyxl.open(xlsx_path, read_only=True)
+        workbook: Workbook = openpyxl.load_workbook(xlsx_path, read_only=True)
         for a_tab in TABS:
             self.analyze(workbook[a_tab])
         # The source (present) taxa
@@ -213,7 +216,7 @@ class ToWorms(object):
                 ret.append("Invalid action in %s: (%s) %s" % (an_action.coords, invalid_reason, str(an_action)))
         return ret
 
-    def prepare(self):
+    def prepare(self) -> None:
         """
             Scan the actions and prepare the application. Build in-memory trees (origin, destination).
         """
@@ -245,7 +248,7 @@ class ToWorms(object):
                 self.worms[an_info.id] = an_info
                 self.worms_tree.add_path(list(zip(an_info.id_lineage, an_info.lineage)))
 
-    def add_to_unieuk(self, eco_ids: ClassifIDListT, taxo_sce):
+    def add_to_unieuk(self, eco_ids: ClassifIDListT, taxo_sce: TaxonomyService) -> None:
         # Add taxo from IDs, if they are not there already
         missing_eco_ids = [an_id for an_id in eco_ids if an_id not in self.unieuk]
         ecotaxa_taxo_infos: List[TaxonBO] = taxo_sce.query_set(missing_eco_ids)
@@ -256,7 +259,7 @@ class ToWorms(object):
             self.unieuk_tree.find_node(an_info.id).add_to_node(an_info.nb_objects)
             # print("E: %d -> %s %s" % (an_info.id, an_info.lineage, len(an_info.children) == 0))
 
-    def validate_with_trees(self):
+    def validate_with_trees(self) -> None:
         # It's dubious if a terminal (leaf) maps to a non-terminal
         for an_id, an_action in self.actions.items():
             if an_id not in self.unieuk:
@@ -285,7 +288,7 @@ class ToWorms(object):
                 if worms_taxo_info.name.lower() == an_action.new_name.lower():
                     print("Redundant rename in %s", an_action.coords)
 
-    def show_stats(self):
+    def show_stats(self) -> None:
         print("Ignored cells: %s", str(self.ignored_cells))
         # morpho_ids = ",".join([str(an_action.eco_id)
         #                        for an_action in self.actions.values()
@@ -301,11 +304,11 @@ class ToWorms(object):
         print("Source tree size: %d" % self.unieuk_tree.size())
         print("WoRMS tree size: %d" % self.worms_tree.size())
 
-    def print_trees(self):
+    def print_trees(self) -> None:
         self.worms_tree.print()
         # self.eco_tree.print()
 
-    def apply(self):
+    def apply(self) -> None:
         """
             Apply the actions onto present tree.
             We go thru the tree top-down, i.e. highest-level taxa first.
@@ -353,7 +356,7 @@ class ToWorms(object):
                 target.add_to_node(an_info.nb_objects)
                 self.done_remaps[an_info.id] = target_info.id
 
-    def check_ancestors(self):
+    def check_ancestors(self) -> None:
         # The first non-morpho parent should have the same corresponding WoRMS
         for an_unieuk_id, a_worms_id in self.done_remaps.items():
             if a_worms_id is None:
@@ -385,7 +388,7 @@ class ToWorms(object):
                                 possible_aphia_ids, possible_aphia_names))
                     break
 
-    def check_closure(self):
+    def check_closure(self) -> None:
         # Check that we do not damage the origin hierarchy,
         # i.e. A -> B in present situation and B' -> A' in target
         closure = set(self.worms_tree.closure())
@@ -421,7 +424,8 @@ class ToWorms(object):
             print("Missing parents: %s" % str(missing_parents))
 
     @staticmethod
-    def find_in_header(cell_iterable: Iterable[Cell], optional=False, *args) -> Tuple:
+    def find_in_header(cell_iterable: Iterable[Cell], optional: bool = False, *args: Any) \
+            -> Tuple[Optional[int], ...]:
         """
             Return 0-based indices of the requested columns in the Cell list.
         """
@@ -438,17 +442,19 @@ class ToWorms(object):
                     ret.append(None)
         return tuple(ret)
 
-    def analyze(self, a_tab: Worksheet):
+    def analyze(self, a_tab: Worksheet) -> None:
         """
             Go thru the spreadsheet and scan identifiers.
         """
         with TaxonomyService() as taxo_sce:
             tab_name = a_tab.title
+            assert isinstance(tab_name, str)
             tab_iter = iter(a_tab)
             header = next(tab_iter)
             # print(tab_name)
             eco_id_col, aphia_id_col = self.find_in_header(header, False, 'eco_id',
                                                            'final_aphia_id')
+            assert eco_id_col is not None and aphia_id_col is not None
             (make_morpho_id_col,
              deprecate_col,
              rename_col,
@@ -475,9 +481,10 @@ class ToWorms(object):
                 eco_str_id = eco_id_cell.value
                 if eco_str_id is None:
                     continue
+                assert isinstance(eco_str_id, str)
                 # We have e.g. =HYPERLINK("http://ecotaxoserver.obs-vlfr.fr/browsetaxo/?id=93066","93066")
-                assert ECOTAXOSERVER_URL in eco_str_id, "Unexpected eco_id value '%s' in tab '%r'" % (
-                eco_str_id, tab_name)
+                assert ECOTAXOSERVER_URL in eco_str_id, "Unexpected eco_id value '%s' in tab '%r'" \
+                                                        % (eco_str_id, tab_name)
                 eco_id = int(eco_str_id.split('"')[3])
                 cell_str = str(eco_id_cell).replace("ReadOnlyCell ", "")
 
@@ -500,7 +507,9 @@ class ToWorms(object):
                                        info.nb_children_objects))
                                 continue
                             else:
-                                action_for_eco_id.set_free_action(action_cell.value)
+                                call_val = action_cell.value
+                                assert call_val is None or isinstance(call_val, str)
+                                action_for_eco_id.set_free_action(call_val)
 
                 if make_morpho_id_col is not None:
                     # Switch to morpho action
@@ -523,6 +532,7 @@ class ToWorms(object):
                     rename_cell = a_line[rename_col]
                     rename_val = rename_cell.value
                     if rename_val is not None:
+                        assert isinstance(rename_val, str)
                         action_for_eco_id.rename_to(rename_val)
                     else:
                         action_for_eco_id.dont_rename()
@@ -531,6 +541,7 @@ class ToWorms(object):
                     # Constraint to parent aphia_id
                     parent_aphia_id_str = a_line[parent_aphia_id_col].value
                     if parent_aphia_id_str is not None:
+                        assert isinstance(parent_aphia_id_str, (str, int))
                         try:
                             parent_aphia_id = int(parent_aphia_id_str)
                             action_for_eco_id.worms_parent_is(parent_aphia_id)
@@ -544,6 +555,7 @@ class ToWorms(object):
                 aphia_str_id = a_line[aphia_id_col].value
                 if aphia_str_id is None:
                     continue
+                assert isinstance(aphia_str_id, (str, int))
                 aphia_id = self.read_aphia_id_value(aphia_str_id, tab_name)
                 if aphia_id is None:
                     continue
@@ -551,7 +563,7 @@ class ToWorms(object):
                 action_for_eco_id.set_target_worms(aphia_id)
 
     @staticmethod
-    def read_aphia_id_value(aphia_str_id, tab_name):
+    def read_aphia_id_value(aphia_str_id: Union[str, int], tab_name: str) -> Optional[int]:
         if isinstance(aphia_str_id, str):
             if WORMS_URL in aphia_str_id:
                 aphia_id = int(aphia_str_id.split('"')[3])
@@ -565,7 +577,7 @@ class ToWorms(object):
             aphia_id = int(aphia_str_id)
         return aphia_id
 
-    def check_sums(self):
+    def check_sums(self) -> None:
         """
             Check if the trees/ignored contain the same number of objects.
         """
@@ -574,17 +586,17 @@ class ToWorms(object):
         not_worms_how_many = [[a_present.id, a_present.nb_objects, a_present.name]
                               for a_present in self.unieuk.values()
                               if a_present.id in nothing_to_do]
-        not_worms_how_many.sort(key=lambda elem: -elem[1])
+        not_worms_how_many.sort(key=lambda elem: -elem[1])  # type:ignore
         not_worms_objs = sum([not_worms[1] for not_worms in not_worms_how_many])
         print("Not to WoRMS: %s" % str(not_worms_how_many))
         eco_sum = self.unieuk_tree.nb_objects
         worms_sum = self.worms_tree.nb_objects
-        print("From %d validated objects in %d categories, to WoRMS: %d, not to WoRMS: %d" %
+        print("From %d validated objects in %d categories, to WoRMS: %d, not to WoRMS: %s" %
               (eco_sum, len(self.unieuk), worms_sum, not_worms_objs))
         # Fails. TODO
         # assert worms_sum + not_worms_objs == eco_sum
 
-    def old_way(self):
+    def old_way(self) -> None:
         """
             Mapping the old way, for stats.
         """

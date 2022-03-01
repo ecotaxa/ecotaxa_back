@@ -3,14 +3,20 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import json
-from typing import IO, Dict, List, Any, Set
+from typing import Dict, List, Any, Set, TextIO
 
-from API_models.crud import ProjectFilters
+from API_models.filters import ProjectFiltersDict
 from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet
-from DB import Project, Sample, Acquisition, Process, Image, ObjectHeader, ObjectFields
+from DB.Acquisition import Acquisition
+from DB.Image import Image
+from DB.Object import ObjectHeader, ObjectFields
+from DB.Process import Process
+from DB.Project import Project
+from DB.Sample import Sample
 from DB.helpers import Result
-from DB.helpers.ORM import Query, Model, contains_eager, any_
+from DB.helpers.Direct import text
+from DB.helpers.ORM import Model, contains_eager, any_
 from formats.JSONObjectSet import JSON_FIELDS, JSONDesc
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
@@ -30,7 +36,7 @@ class JsonDumper(Service):
             The sub-entities are ordered by their 'natural' key, e.g. sample_id for samples.
     """
 
-    def __init__(self, current_user: int, prj_id: int, filters: ProjectFilters):
+    def __init__(self, current_user: int, prj_id: int, filters: ProjectFiltersDict):
         super().__init__()
         self.requester_id = current_user
         self.filters = filters
@@ -42,10 +48,10 @@ class JsonDumper(Service):
         if self.prj:
             self.mapping.load_from_project(self.prj)
         self.ids_to_dump: List[int] = []
-        self.already_dumped: Set = set()
+        self.already_dumped: Set[Model] = set()
         self.first_query = True
 
-    def run(self, out_stream: IO):
+    def run(self, out_stream: TextIO) -> None:
         """
             Produce the json into given stream.
         """
@@ -63,15 +69,15 @@ class JsonDumper(Service):
                 to_stream = self.dump_row(out_stream, self.prj)
         json.dump(obj=to_stream, fp=out_stream, indent="  ")
 
-    def dump_row(self, out_stream: IO, a_row: Model) -> Dict[str, Any]:
+    def dump_row(self, out_stream: TextIO, a_row: Model) -> Dict[str, Any]:
         """
             Dump inside returned value the fields and contained/linked entities from a_row.
         """
-        ret: Dict = {}
+        ret: Dict[str, Any] = {}
         self._dump_into_dict(out_stream, a_row, ret)
         return ret
 
-    def _dump_into_dict(self, out_stream: IO, a_row: Model, tgt_dict: Dict):
+    def _dump_into_dict(self, out_stream: TextIO, a_row: Model, tgt_dict: Dict[str, Any]) -> None:
         """
             Dump inside the tgt_dict all fields and contained/linked entities from a_row.
         """
@@ -84,10 +90,10 @@ class JsonDumper(Service):
         for a_field_or_relation, how in desc.items():
             fld_name = a_field_or_relation.key
             # This is where SQLAlchemy does all its magic when it's a relation
-            attr = getattr(a_row, fld_name)
+            attr = getattr(a_row, fld_name)  # type:ignore
             if isinstance(attr, list):
                 # Serialize the list of child entities, ordinary relationship
-                children: List[Dict] = []
+                children: List[Dict[str, Any]] = []
                 tgt_dict[how] = children
                 for a_child_row in sorted(attr):
                     child_obj = self.dump_row(out_stream, a_child_row)
@@ -128,7 +134,7 @@ class JsonDumper(Service):
         logger.info("SQLParam=%s", params)
 
         with CodeTimer("Get IDs:", logger):
-            res: Result = self.session.execute(sql, params)
+            res: Result = self.session.execute(text(sql), params)
         ids = [r['objid'] for r in res]
 
         logger.info("NB OBJIDS=%d", len(ids))
@@ -142,7 +148,7 @@ class JsonDumper(Service):
             :param objids:
             :return:
         """
-        ret: Query = self.session.query(Project, Sample, Acquisition, Process, ObjectHeader, ObjectFields, Image)
+        ret = self.session.query(Project, Sample, Acquisition, Process, ObjectHeader, ObjectFields, Image)
         ret = ret.join(Sample, Project.all_samples).options(contains_eager(Project.all_samples))
         ret = ret.join(Acquisition, Sample.all_acquisitions)
         ret = ret.join(Process, Acquisition.process)
@@ -159,7 +165,7 @@ class JsonDumper(Service):
             self.first_query = False
 
         with CodeTimer("Get Objects:", logger):
-            objs = [an_obj for an_obj in ret.all()]
+            objs = [an_obj for an_obj in ret]
 
         # We get as many lines as images
         logger.info("NB ROWS JOIN=%d", len(objs))

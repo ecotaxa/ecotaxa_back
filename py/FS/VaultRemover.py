@@ -43,7 +43,7 @@ class VaultRemover(Thread):
         for a_file in files:
             self.files_queue.put(a_file)
 
-    def run(self):
+    def run(self) -> None:
         """
             As long as the queue is not signalled empty, process one file.
         """
@@ -64,7 +64,7 @@ class VaultRemover(Thread):
         if len(problems) > 0:
             self.logger.error("Could not remove file(s) %s", ",".join(problems))
 
-    def wait_for_done(self):
+    def wait_for_done(self) -> None:
         """
             Signal the thread that we have no more files, and wait for the job done.
         """

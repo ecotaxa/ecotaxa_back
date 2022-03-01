@@ -7,7 +7,7 @@
 #
 import re
 from decimal import Decimal
-from typing import Union, List, Dict, Optional, Set
+from typing import Union, List, Dict, Optional, Set, Generator, Tuple
 
 # A dict for sending parametrized SQL to the engine
 SQLParamDict = Dict[str, Union[int, float, Decimal, str, List[int], List[str]]]
@@ -26,14 +26,14 @@ class FromClause(object):
         self.joins.append(other)
         return self
 
-    def get_sql(self):
+    def get_sql(self) -> str:
         ret = "\n  JOIN ".join([a_join for a_join in self.joins if a_join not in self.left_joins])
         if len(self.left_joins) > 0:
             ret += "\n LEFT JOIN " + "\n LEFT JOIN ".join(
                 [a_join for a_join in self.joins if a_join in self.left_joins])
         return ret
 
-    def replace_table(self, before: str, after: str):
+    def replace_table(self, before: str, after: str) -> None:
         repl = []
         before += " "
         after += " "
@@ -44,11 +44,11 @@ class FromClause(object):
         self.joins.clear()
         self.joins.extend(repl)
 
-    def remove_if_refers_to(self, table_name: str):
+    def remove_if_refers_to(self, table_name: str) -> None:
         self.joins = [a_join for a_join in self.joins
                       if table_name not in a_join]
 
-    def set_outer(self, join_start: str):
+    def set_outer(self, join_start: str) -> None:
         """ Signal that the clause starting with join_start should be a LEFT one """
         for a_join in self.joins:
             if a_join.startswith(join_start):
@@ -67,14 +67,14 @@ class WhereClause(object):
         A 'where' clause in SQL. List of 'and' clauses.
     """
 
-    def __init__(self):
-        self.ands = []
+    def __init__(self) -> None:
+        self.ands: List[str] = []
 
     def __mul__(self, other) -> 'WhereClause':
         self.ands.append(other)
         return self
 
-    def get_sql(self):
+    def get_sql(self) -> str:
         if len(self.ands) > 0:
             return "\nWHERE " + "\n  AND ".join(self.ands)
         else:
@@ -83,7 +83,7 @@ class WhereClause(object):
     # Not completely exact but good enough
     COL_RE = re.compile(r"\b(\w+)\.(\w+)\b", re.ASCII)
 
-    def conds_and_refs(self):
+    def conds_and_refs(self) -> Generator[Tuple[str, Set[str]], None, None]:
         """
             Iterator over the conditions, with a pre-analysis on their references.
         """
@@ -97,7 +97,7 @@ class OrderClause(object):
         An 'order by' clause in SQL. List of columns/aliases.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.expressions: List[str] = []
         self.columns: List[str] = []
 

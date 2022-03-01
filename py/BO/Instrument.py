@@ -9,7 +9,7 @@ from typing import List, Dict, Set
 
 from DB import Session, Acquisition, Sample
 from DB.Project import ProjectIDListT, ProjectIDT
-from DB.helpers.ORM import Query, any_
+from DB.helpers.ORM import any_
 from helpers.DynamicLogs import get_logger
 
 InstrumentIDT = str
@@ -23,14 +23,14 @@ class DescribedInstrumentSet(object):
     """
 
     def __init__(self, session: Session, project_ids: ProjectIDListT):
-        qry: Query = session.query(Acquisition.instrument)
+        qry = session.query(Acquisition.instrument)
         qry = qry.join(Sample.all_acquisitions)
         qry = qry.add_columns(Sample.projid)
         qry = qry.filter(Sample.projid == any_(project_ids))
         qry = qry.distinct()
         instruments_by_proj: Dict[ProjectIDT, Set[InstrumentIDT]] = {}
         instrument_names = set()
-        for ins_name, projid in qry.all():
+        for ins_name, projid in qry:
             if ins_name:
                 instruments_by_proj.setdefault(projid, set()).add(ins_name)
                 instrument_names.add(ins_name)

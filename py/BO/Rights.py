@@ -5,7 +5,9 @@
 from enum import IntEnum
 from typing import Optional, Tuple, List, Dict
 
-from DB import User, Role, Project, ProjectPrivilege
+from DB.Project import Project
+from DB.ProjectPrivilege import ProjectPrivilege
+from DB.User import User, Role
 from DB.helpers.ORM import Session
 from .Preferences import Preferences
 from .ProjectPrivilege import ProjectPrivilegeBO
@@ -41,9 +43,9 @@ class RightsBO(object):
             Check rights for the user to do this specific action onto this project.
         """
         # Load ORM entities
-        user = session.query(User).get(user_id)
+        user: Optional[User] = session.query(User).get(user_id)
         assert user is not None
-        project = session.query(Project).get(prj_id)
+        project: Optional[Project] = session.query(Project).get(prj_id)
         assert project is not None, NOT_FOUND
         # Check
         if user.has_role(Role.APP_ADMINISTRATOR):
@@ -190,6 +192,6 @@ class RightsBO(object):
         """
         privilege = ProjectPrivilege()
         privilege.privilege = ACTION_TO_PRIV[action]
-        privilege.project = prj
-        privilege.user = user
+        privilege.projid = prj.projid
+        privilege.member = user.id
         session.add(privilege)

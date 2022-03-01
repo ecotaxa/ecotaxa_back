@@ -14,7 +14,7 @@ from typing import Any, List, Callable, Tuple, Optional, Dict, ClassVar
 
 from BO.Mappings import TableMapping, ProjectMapping
 from BO.ProjectVars import ProjectVar
-from DB import Project
+from DB.Project import Project
 from DB.helpers.ORM import Session
 from helpers.DynamicLogs import get_logger
 
@@ -37,10 +37,10 @@ class MappedEntity(metaclass=ABCMeta):
         # Extension
         self.free_columns: Any = OrderedDict()
 
-    def exists(self):
+    def exists(self) -> bool:
         return getattr(self, self.FREE_COLUMNS_ATTRIBUTE) is not None
 
-    def map_free_columns(self, mappings: TableMapping):
+    def map_free_columns(self, mappings: TableMapping) -> None:
         free_cols = self.free_columns
         free_cols_data = getattr(self, self.FREE_COLUMNS_ATTRIBUTE)
         for a_tsv_col, a_real_col in mappings.tsv_cols_to_real.items():

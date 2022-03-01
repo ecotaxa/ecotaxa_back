@@ -13,13 +13,13 @@ class StatusService(Service):
         Useful inside a docker container.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
     # TODO: Use const from elsewhere
     PATHS_IN_CONF = ['SERVERLOADAREA', 'FTPEXPORTAREA', 'MODELSAREA']
 
-    def run(self):
+    def run(self) -> str:
         """
             Produce the answer.
         """

@@ -6,7 +6,7 @@ import typing
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Dict, Any, Iterable, Optional, Union
+from typing import List, Dict, Any, Iterable, Optional, Union, OrderedDict as OrderedDictT
 
 from BO.Classification import ClassifIDListT
 from BO.Instrument import DescribedInstrumentSet
@@ -15,14 +15,17 @@ from BO.Prediction import DeepFeatures
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.SpaceTime import USED_FIELDS_FOR_SUNPOS, compute_sun_position
 from BO.User import MinimalUserBO, UserActivity, UserIDT, MinimalUserBOListT, UserActivityListT
-from BO.helpers.DataclassAsDict import DataclassAsDict
-from DB import ObjectHeader, Sample, ProjectPrivilege, User, Project, ObjectFields, Acquisition, Process, \
-    ObjectsClassifHisto
-from DB.Object import VALIDATED_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL
-from DB.Project import ProjectIDT, ProjectIDListT
-from DB.User import Role
+from DB.Acquisition import Acquisition
+from DB.Object import VALIDATED_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, ObjectsClassifHisto, \
+    ObjectHeader, ObjectFields
+from DB.Process import Process
+from DB.Project import ProjectIDT, ProjectIDListT, Project
+from DB.ProjectPrivilege import ProjectPrivilege
+from DB.Sample import Sample
+from DB.User import Role, User
 from DB.helpers import Session, Result
 from DB.helpers.Bean import Bean
+from DB.helpers.Core import select
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Delete, Query, any_, and_, subqueryload, minimal_table_of, func
 from helpers.DynamicLogs import get_logger
@@ -30,9 +33,11 @@ from helpers.Timer import CodeTimer
 
 logger = get_logger(__name__)
 
+ChangeTypeT = Dict[int, Dict[str, int]]
 
-@dataclass(init=False)
-class ProjectTaxoStats(DataclassAsDict):
+
+@dataclass()
+class ProjectTaxoStats():
     """
         Taxonomy statistics for a project.
     """
@@ -44,8 +49,8 @@ class ProjectTaxoStats(DataclassAsDict):
     nb_predicted: int
 
 
-@dataclass(init=False)
-class ProjectUserStats(DataclassAsDict):
+@dataclass()
+class ProjectUserStats():
     """
         User statistics for a project.
     """
@@ -93,7 +98,7 @@ class ProjectBO(object):
             return []
         return [int(cl_id) for cl_id in init_list.split(",")]
 
-    def enrich(self):
+    def enrich(self) -> "ProjectBO":
         """
             Add DB fields and relations as (hopefully more) meaningful attributes
         """
@@ -119,7 +124,7 @@ class ProjectBO(object):
                 continue
             if not priv_user.active:
                 continue
-            # noinspection PyTypeChecker
+            assert a_priv.privilege is not None
             by_right_fct[a_priv.privilege](priv_user)
             if 'C' == a_priv.extra:
                 self.contact = priv_user
@@ -193,7 +198,7 @@ class ProjectBO(object):
         num_fields_cols = set([col for col in mappings.object_mappings.tsv_cols_to_real.values()
                                if col[0] == 'n'])
         obj_fields_tbl = minimal_table_of(metadata, ObjectFields, num_fields_cols, exact_floats=True)
-        qry: Query = session.query(Project)
+        qry = session.query(Project)
         qry = qry.join(Project.all_samples).join(Sample.all_acquisitions).join(Acquisition.all_objects)
         qry = qry.join(obj_fields_tbl, ObjectHeader.objid == obj_fields_tbl.c.objfid)
         qry = qry.filter(Project.projid == self._project.projid)
@@ -239,9 +244,9 @@ class ProjectBO(object):
                         prj_ids: ProjectIDListT,
                         taxa_ids: Union[str, ClassifIDListT]) -> List[ProjectTaxoStats]:
         sql = """
-        SELECT pts.projid, ARRAY_AGG(pts.id) as ids, 
-               SUM(CASE WHEN pts.id = -1 THEN pts.nbr ELSE 0 END) as nb_u, 
-               SUM(pts.nbr_v) as nb_v, SUM(pts.nbr_d) as nb_d, SUM(pts.nbr_p) as nb_p
+        SELECT pts.projid, ARRAY_AGG(pts.id) as used_taxa, 
+               SUM(CASE WHEN pts.id = -1 THEN pts.nbr ELSE 0 END) as nb_unclassified, 
+               SUM(pts.nbr_v) as nb_validated, SUM(pts.nbr_d) as nb_dubious, SUM(pts.nbr_p) as nb_predicted
           FROM projects_taxo_stat pts
          WHERE pts.projid = ANY(:ids)"""
         params: Dict[str, Any] = {'ids': prj_ids}
@@ -257,7 +262,7 @@ class ProjectBO(object):
             sql += ", pts.id"
         res: Result = session.execute(text(sql), params)
         with CodeTimer("stats for %d projects:" % len(prj_ids), logger):
-            ret = [ProjectTaxoStats(rec) for rec in res.fetchall()]
+            ret = [ProjectTaxoStats(**rec) for rec in res.fetchall()]  # type:ignore
         for a_stat in ret:
             a_stat.used_taxa.sort()
         return ret
@@ -271,9 +276,9 @@ class ProjectBO(object):
         """
         # Activity count: Count 1 for present classification for a user per object.
         #  Of course, the classification date is the latest for the user.
-        pqry: Query = session.query(Project.projid, User.id, User.name,
-                                    func.count(ObjectHeader.objid),
-                                    func.max(ObjectHeader.classif_when))
+        pqry = session.query(Project.projid, User.id, User.name,
+                             func.count(ObjectHeader.objid),
+                             func.max(ObjectHeader.classif_when))
         pqry = pqry.join(Sample).join(Acquisition).join(ObjectHeader)
         pqry = pqry.join(User, User.id == ObjectHeader.classif_who)
         pqry = pqry.filter(Project.projid == any_(prj_ids))
@@ -286,26 +291,26 @@ class ProjectBO(object):
         stats_per_project = {}
         with CodeTimer("user present stats for %d projects, qry: %s:" % (len(prj_ids), str(pqry)), logger):
             last_prj: Optional[int] = None
-            for projid, user_id, user_name, cnt, last_date in pqry.all():
+            for projid, user_id, user_name, cnt, last_date in pqry:
                 last_date_str = last_date.replace(microsecond=0).isoformat()
                 if projid != last_prj:
                     last_prj = projid
-                    prj_stat = ProjectUserStats((projid, [], []))
+                    prj_stat = ProjectUserStats(projid, [], [])
                     ret.append(prj_stat)
                     user_activities = {}
                     # Store for second pass with history
                     stats_per_project[projid] = prj_stat
                     user_activities_per_project[projid] = user_activities
-                prj_stat.annotators.append(MinimalUserBO((user_id, user_name)))
-                user_activity = UserActivity((user_id, cnt, last_date_str))
+                prj_stat.annotators.append(MinimalUserBO(user_id, user_name))
+                user_activity = UserActivity(user_id, cnt, last_date_str)
                 prj_stat.activities.append(user_activity)
                 # Store for second pass
                 user_activities[user_id] = user_activity
         # Activity count update: Add 1 for each entry in history for each user.
         # The dates in history are ignored, except for users which do not appear in first resultset.
-        hqry: Query = session.query(Project.projid, User.id, User.name,
-                                    func.count(ObjectsClassifHisto.objid),
-                                    func.max(ObjectsClassifHisto.classif_date))
+        hqry = session.query(Project.projid, User.id, User.name,
+                             func.count(ObjectsClassifHisto.objid),
+                             func.max(ObjectsClassifHisto.classif_date))
         hqry = hqry.join(Sample).join(Acquisition).join(ObjectHeader).join(ObjectsClassifHisto)
         hqry = hqry.join(User, User.id == ObjectsClassifHisto.classif_who)
         hqry = hqry.filter(Project.projid == any_(prj_ids))
@@ -313,7 +318,7 @@ class ProjectBO(object):
         hqry = hqry.order_by(Project.projid, User.name)
         with CodeTimer("user history stats for %d projects, qry: %s:" % (len(prj_ids), str(hqry)), logger):
             last_prj = None
-            for projid, user_id, user_name, cnt, last_date in hqry.all():
+            for projid, user_id, user_name, cnt, last_date in hqry:
                 last_date_str = last_date.replace(microsecond=0).isoformat()
                 if projid != last_prj:
                     last_prj = projid
@@ -329,8 +334,8 @@ class ProjectBO(object):
                     already_there.nb_actions += cnt
                 else:
                     # A user _only_ in history
-                    prj_stat.annotators.append(MinimalUserBO((user_id, user_name)))
-                    user_activity = UserActivity((user_id, cnt, last_date_str))
+                    prj_stat.annotators.append(MinimalUserBO(user_id, user_name))
+                    user_activity = UserActivity(user_id, cnt, last_date_str)
                     prj_stat.activities.append(user_activity)
                     user_activities[user_id] = user_activity
         return ret
@@ -409,7 +414,7 @@ class ProjectBO(object):
             res: Result = session.execute(text(sql), sql_params)
             # single-element tuple :( DBAPI
             ret = [an_id for an_id, in res.fetchall()]
-        return ret  # type:ignore
+        return ret
 
     @staticmethod
     def list_public_projects(session: Session,
@@ -420,10 +425,10 @@ class ProjectBO(object):
         :return: The project IDs
         """
         pattern = '%' + title_filter + '%'
-        qry: Query = session.query(Project.projid)
+        qry = session.query(Project.projid)
         qry = qry.filter(Project.visible)
         qry = qry.filter(Project.title.ilike(pattern))
-        ret = [an_id for an_id, in qry.all()]
+        ret = [an_id for an_id, in qry]
         return ret
 
     @classmethod
@@ -449,7 +454,7 @@ class ProjectBO(object):
         return [a_val for a_val in vals]
 
     @staticmethod
-    def do_after_load(session: Session, prj_id: int):
+    def do_after_load(session: Session, prj_id: int) -> None:
         """
             After loading of data, update various cross counts.
         """
@@ -466,20 +471,20 @@ class ProjectBO(object):
             Remove object parents, also project children entities, in the project.
         """
         # The EcoTaxa samples which are going to disappear.
-        soon_deleted_samples: Query = Query(Sample.sampleid).filter(Sample.projid == prj_id)
+        soon_deleted_samples: Query[Any] = Query(Sample.sampleid).filter(Sample.projid == prj_id)
 
         ret = []
         del_acquis_qry: Delete = Acquisition.__table__. \
             delete().where(Acquisition.acq_sample_id.in_(soon_deleted_samples))
         logger.info("Del acquisitions :%s", str(del_acquis_qry))
-        gone_acqs = session.execute(del_acquis_qry).rowcount
+        gone_acqs = session.execute(del_acquis_qry).rowcount  # type:ignore
         ret.append(gone_acqs)
         logger.info("%d rows deleted", gone_acqs)
 
         del_sample_qry: Delete = Sample.__table__. \
             delete().where(Sample.sampleid.in_(soon_deleted_samples))
         logger.info("Del samples :%s", str(del_sample_qry))
-        gone_sams = session.execute(del_sample_qry).rowcount
+        gone_sams = session.execute(del_sample_qry).rowcount  # type:ignore
         ret.append(gone_sams)
         logger.info("%d rows deleted", gone_sams)
 
@@ -488,7 +493,7 @@ class ProjectBO(object):
         return ret
 
     @staticmethod
-    def delete(session: Session, prj_id: int):
+    def delete(session: Session, prj_id: int) -> None:
         """
             Completely remove the project. It is assumed that contained objects have been removed.
         """
@@ -501,46 +506,46 @@ class ProjectBO(object):
             filter(ProjectPrivilege.projid == prj_id).delete()
 
     @staticmethod
-    def remap(session: Session, prj_id: int, table: MappedTableTypeT, remaps: List[RemapOp]):
+    def remap(session: Session, prj_id: int, table: MappedTableTypeT, remaps: List[RemapOp]) -> None:
         """
             Apply remapping operations onto the given table for given project.
         """
         # Do the remapping, including blanking of unused columns
         values = {a_remap.to: text(a_remap.frm) if a_remap.frm is not None else a_remap.frm
                   for a_remap in remaps}
-        qry: Query = session.query(table)
-        samples_4_prj: Query
-        acqs_4_samples: Query
+        qry: Query[Any] = session.query(table)
+        samples_4_prj: Query[Any]
+        acqs_4_samples: Query[Any]
         if table == Sample:
-            qry = qry.filter(Sample.projid == prj_id)  # type: ignore
+            qry = qry.filter(Sample.projid == prj_id)
         elif table == Acquisition:
             samples_4_prj = Query(Sample.sampleid).filter(Sample.projid == prj_id)
-            qry = qry.filter(Acquisition.acq_sample_id.in_(samples_4_prj))  # type: ignore
+            qry = qry.filter(Acquisition.acq_sample_id.in_(samples_4_prj))
         elif table == Process:
             samples_4_prj = Query(Sample.sampleid).filter(Sample.projid == prj_id)
             acqs_4_samples = Query(Acquisition.acquisid).filter(Acquisition.acq_sample_id.in_(samples_4_prj))
-            qry = qry.filter(Process.processid.in_(acqs_4_samples))  # type: ignore
+            qry = qry.filter(Process.processid.in_(acqs_4_samples))
         elif table == ObjectFields:
             samples_4_prj = Query(Sample.sampleid).filter(Sample.projid == prj_id)
             acqs_4_samples = Query(Acquisition.acquisid).filter(Acquisition.acq_sample_id.in_(samples_4_prj))
-            objs_for_acqs: Query = Query(ObjectHeader.objid).filter(ObjectHeader.acquisid.in_(acqs_4_samples))
-            qry = qry.filter(ObjectFields.objfid.in_(objs_for_acqs))  # type: ignore
-        qry = qry.update(values=values, synchronize_session=False)
+            objs_for_acqs: Query[Any] = Query(ObjectHeader.objid).filter(ObjectHeader.acquisid.in_(acqs_4_samples))
+            qry = qry.filter(ObjectFields.objfid.in_(objs_for_acqs))
+        rowcount = qry.update(values=values, synchronize_session=False)
 
-        logger.info("Remap query for %s: %s", table.__tablename__, qry)
+        logger.info("Remap query for %s: %s -> %d", table.__tablename__, qry, rowcount)
 
     @classmethod
     def get_all_object_ids(cls, session: Session,
-                           prj_id: int):  # TODO: Problem with recursive import -> ObjectIDListT:
+                           prj_id: int) -> List[int]:  # TODO: Problem with recursive import -> ObjectIDListT:
         """
             Return the full list of objects IDs inside a project.
             TODO: Maybe better in ObjectBO
         """
-        qry: Query = session.query(ObjectHeader.objid)
+        qry = session.query(ObjectHeader.objid)
         qry = qry.join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
         qry = qry.join(Sample, and_(Sample.sampleid == Acquisition.acq_sample_id,
                                     Sample.projid == prj_id))
-        return [an_id for an_id, in qry.all()]
+        return [an_id for an_id, in qry]
 
     @classmethod
     def get_all_object_ids_with_first_image(cls, session: Session, prj_id: int) -> Dict[Any, str]:  # ObjectIDT
@@ -559,7 +564,7 @@ class ProjectBO(object):
         return {objid: file_name for (objid, file_name) in res.fetchall()}
 
     @classmethod
-    def incremental_update_taxo_stats(cls, session: Session, prj_id: int, collated_changes: Dict):
+    def incremental_update_taxo_stats(cls, session: Session, prj_id: int, collated_changes: ChangeTypeT) -> None:
         """
             Do not recompute the full stats for a project (which can be long).
             Instead, apply deltas because in this context we know them.
@@ -619,14 +624,14 @@ class ProjectBO(object):
             session.execute(text(ts_sql), sqlparam)
 
     @classmethod
-    def get_sort_fields(cls, project: Project) -> typing.OrderedDict[str, str]:
+    def get_sort_fields(cls, project: Project) -> OrderedDictT[str, str]:
         """
             Return the content of 'Fields available for sorting & Display In the manual classification page'
         """
         # e.g. area=area [pixel]
         #      meangreyobjet=mean [0-255]
         #      fractal_box=fractal
-        ret = OrderedDict()
+        ret: OrderedDictT[str, str] = OrderedDict()
         list_as_str = project.classiffieldlist
         if list_as_str is None:
             return ret
@@ -657,13 +662,13 @@ class ProjectBO(object):
         """
         used_fields = sorted(USED_FIELDS_FOR_SUNPOS)
         qry_cols = [ObjectHeader.objid, ObjectHeader.sunpos] + [getattr(ObjectHeader, fld) for fld in used_fields]
-        qry: Query = session.query(*qry_cols)
+        qry = session.query(*qry_cols)
         qry = qry.join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
         qry = qry.join(Sample, and_(Sample.sampleid == Acquisition.acq_sample_id,
                                     Sample.projid == prj_id))
         ret = 0
-        cache: Dict[tuple, str] = {}
-        for a_line in qry.all():
+        cache: Dict[typing.Tuple[Any], str] = {}
+        for a_line in qry:
             objid, sunpos, *vals = a_line
             # A bit of caching
             vals = tuple(vals)
@@ -692,7 +697,8 @@ class ProjectBOSet(object):
 
     def __init__(self, session: Session, prj_ids: ProjectIDListT, public: bool = False):
         # Query the project and ORM-load neighbours as well, as they will be needed in enrich()
-        qry: Query = session.query(Project)
+        qry = select(Project)
+        # qry = session.query(Project)
         qry = qry.options(subqueryload(Project.privs_for_members))
         qry = qry.options(subqueryload(Project.members))
         qry = qry.filter(Project.projid == any_(prj_ids))
@@ -700,7 +706,7 @@ class ProjectBOSet(object):
         # De-duplicate
         projs = []
         with CodeTimer("%s BO projects query:" % len(prj_ids), logger):
-            for a_proj in qry.all():
+            for a_proj, in session.execute(qry):
                 projs.append(a_proj)
         # Build BOs and enrich
         with CodeTimer("%s BO projects init:" % len(projs), logger):

@@ -12,6 +12,6 @@ def _now_time():
     return datetime.datetime.now()
 
 
-def now_time():
+def now_time() -> datetime.datetime:
     # During test, sometimes this def is imported before the test, so it cannot be patched.
     return _now_time()
