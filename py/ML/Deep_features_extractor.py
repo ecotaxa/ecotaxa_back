@@ -17,7 +17,7 @@ from typing import IO, Dict
 
 import pandas as pd  # type: ignore
 
-from BO.Object import ObjectIDT
+from DB.Object import ObjectIDT
 from FS.MachineLearningModels import SavedModels
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger

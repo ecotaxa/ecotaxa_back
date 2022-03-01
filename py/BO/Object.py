@@ -17,7 +17,7 @@ from BO.Sample import SampleIDT
 from BO.helpers.MappedEntity import MappedEntity
 from DB.Acquisition import Acquisition
 from DB.Image import Image
-from DB.Object import ObjectHeader, ObjectFields, ObjectsClassifHisto
+from DB.Object import ObjectHeader, ObjectFields, ObjectsClassifHisto, ObjectIDT
 from DB.Project import ProjectIDT, Project
 from DB.Sample import Sample
 from DB.Taxonomy import Taxonomy
@@ -26,7 +26,6 @@ from DB.helpers.ORM import Session, joinedload, subqueryload, Model, minimal_mod
 from helpers.DynamicLogs import get_logger
 
 # Typings, to be clear that these are not e.g. project IDs
-ObjectIDT = int
 ObjectIDWithParentsT = Tuple[ObjectIDT, AcquisitionIDT, SampleIDT, ProjectIDT]
 
 logger = get_logger(__name__)

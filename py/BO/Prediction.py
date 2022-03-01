@@ -12,12 +12,11 @@ from typing import Any, List, Dict, ClassVar
 import numpy as np  # type: ignore
 from numpy import ndarray
 
-from BO.Object import ObjectIDT
 from DB import CNNFeature
 from DB.Acquisition import Acquisition
 from DB.CNNFeature import ObjectCNNFeaturesBean, ObjectCNNFeature
 from DB.Image import Image
-from DB.Object import ObjectHeader
+from DB.Object import ObjectHeader, ObjectIDT
 from DB.Project import ProjectIDT
 from DB.Sample import Sample
 from DB.helpers import Session, Result

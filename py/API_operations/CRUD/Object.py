@@ -8,8 +8,8 @@ from API_operations.helpers.Service import Service
 from BO.Classification import HistoricalClassification
 from BO.Mappings import ProjectMapping
 from BO.Object import ObjectBO
-from BO.ObjectSet import ObjectIDT
 from BO.Rights import RightsBO, Action
+from DB.Object import ObjectIDT
 
 
 class ObjectService(Service):

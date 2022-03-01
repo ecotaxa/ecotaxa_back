@@ -20,7 +20,7 @@ from sqlalchemy.sql import Alias
 from API_models.filters import ProjectFiltersDict
 from BO.Classification import HistoricalLastClassif, ClassifIDListT, ClassifIDT
 from BO.ColumnUpdate import ColUpdateList
-from BO.Object import ObjectIDT, ObjectIDWithParentsT
+from BO.Object import ObjectIDWithParentsT
 from BO.Taxonomy import TaxonomyBO
 from BO.User import UserIDT
 from BO.helpers.MappedTable import MappedTable
@@ -28,7 +28,7 @@ from DB import Session, Query
 from DB.Acquisition import Acquisition
 from DB.Image import Image
 from DB.Object import ObjectsClassifHisto, ObjectFields, PREDICTED_CLASSIF_QUAL, VALIDATED_CLASSIF_QUAL, \
-    DUBIOUS_CLASSIF_QUAL, DEFAULT_CLASSIF_HISTORY_DATE, ObjectHeader
+    DUBIOUS_CLASSIF_QUAL, DEFAULT_CLASSIF_HISTORY_DATE, ObjectHeader, ObjectIDT
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
 from DB.helpers import Result

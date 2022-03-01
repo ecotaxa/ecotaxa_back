@@ -4,7 +4,7 @@
 #
 from typing import List
 
-from BO.Object import ObjectIDT
+from .Object import ObjectIDT
 from .helpers.Bean import Bean
 from .helpers.DDL import ForeignKey
 from .helpers.ORM import Column, relationship, Model

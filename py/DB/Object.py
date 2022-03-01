@@ -25,9 +25,11 @@ from .helpers import Result
 from .helpers.Direct import text
 from .helpers.ORM import Model
 
+# Typings
+ObjectIDT = int
 if TYPE_CHECKING:
     pass
-    #from .Image import Image
+    # from .Image import Image
 
 # Classification qualification
 PREDICTED_CLASSIF_QUAL = 'P'

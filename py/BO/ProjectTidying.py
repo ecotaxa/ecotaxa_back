@@ -7,12 +7,11 @@
 from typing import Dict, Set, List, Optional
 
 from BO.Acquisition import AcquisitionOrigIDT
-from BO.Object import ObjectIDT
 from BO.Process import ProcessOrigIDT
 from BO.Sample import SampleOrigIDT
 from DB import Session
 from DB.Acquisition import Acquisition
-from DB.Object import ObjectHeader
+from DB.Object import ObjectHeader, ObjectIDT
 from DB.Process import Process
 from DB.Project import ProjectIDT
 from DB.Sample import Sample

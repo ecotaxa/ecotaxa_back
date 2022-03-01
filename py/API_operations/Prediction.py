@@ -52,7 +52,7 @@ class PredictForProject(JobServiceBase):
     def init_args(self, args: ArgsDict) -> ArgsDict:
         super().init_args(args)
         args["req"] = self.req.dict()
-        args["filters"] = self.filters.__dict__
+        args["filters"] = self.filters
         return args
 
     @staticmethod

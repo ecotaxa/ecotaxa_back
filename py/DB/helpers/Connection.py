@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Final
+from typing import ClassVar
 
 import sqlalchemy
 from sqlalchemy import MetaData, text
@@ -40,7 +40,7 @@ class Connection(object):
     """
         A connection to the DB via SQLAlchemy.
     """
-    APP_NAME: Final = "ecotaxa_back"
+    APP_NAME: ClassVar = "ecotaxa_back"
 
     def __init__(self, user, password, db, host, port='5432', read_only=False):
         """
