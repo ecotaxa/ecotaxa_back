@@ -1029,6 +1029,123 @@ UPDATE alembic_version SET version_num='beaa3e8e4033' WHERE alembic_version.vers
 
 COMMIT;
 
+-- Running upgrade beaa3e8e4033 -> a173f0289de1
+
+DROP INDEX "IS_TempTaxoIdFinal";
+
+DROP INDEX "IS_TempTaxoParent";
+
+DROP TABLE temp_taxo;
+
+DROP TABLE part_histopart_det;
+
+DROP TABLE part_projects_res;
+
+DROP INDEX is_part_samples_prj;
+
+DROP INDEX is_part_samples_sampleid;
+
+DROP TABLE part_histopart_reduit;
+
+DROP TABLE part_histocat_lst;
+
+DROP INDEX is_part_projects_projid;
+
+DROP TABLE part_ctd;
+
+DROP TABLE part_histocat;
+
+DROP TABLE part_samples;
+
+DROP TABLE part_projects;
+
+ALTER TABLE samples ALTER COLUMN projid SET NOT NULL;
+
+update acquisitions acq
+set orig_id = orig_id || '_' || (select count(1) from acquisitions acq2
+where acq2.acq_sample_id = acq.acq_sample_id and acq2.orig_id = acq.orig_id and acq2.acquisid <= acq.acquisid)
+where exists (select 1 from acquisitions acq2
+where acq2.acq_sample_id = acq.acq_sample_id and acq2.orig_id = acq.orig_id and acq2.acquisid != acq.acquisid);;
+
+CREATE UNIQUE INDEX "IS_AcquisOrigId" ON acquisitions (acq_sample_id, orig_id);
+
+delete from projectspriv where member is null;;
+
+ALTER TABLE projectspriv ALTER COLUMN member SET NOT NULL;
+
+ALTER TABLE projectspriv DROP CONSTRAINT projectspriv_member_fkey;
+
+ALTER TABLE projectspriv ADD FOREIGN KEY(member) REFERENCES users (id) ON DELETE CASCADE;
+
+UPDATE alembic_version SET version_num='a173f0289de1' WHERE alembic_version.version_num = 'beaa3e8e4033';
+
+-- Running upgrade a173f0289de1 -> 088904e6b78e
+
+CREATE UNIQUE INDEX "CollectionShortTitle" ON collection (short_title);
+
+delete from process where processid in (select processid from process except select acquisid from acquisitions);
+
+ALTER TABLE process ADD FOREIGN KEY(processid) REFERENCES acquisitions (acquisid) ON DELETE CASCADE;
+
+UPDATE alembic_version SET version_num='088904e6b78e' WHERE alembic_version.version_num = 'a173f0289de1';
+
+-- Running upgrade 088904e6b78e -> ffb69f8124f6
+
+CREATE TABLE instrument (
+    instrument_id VARCHAR(32) NOT NULL,
+    name VARCHAR(255),
+    bodc_url VARCHAR(255),
+    PRIMARY KEY (instrument_id)
+);
+
+INSERT INTO instrument (instrument_id, name, bodc_url) VALUES ('CytoBuoy', 'CytoSense flow cytometer', 'http://vocab.nerc.ac.uk/collection/L22/current/TOOL1209/');
+
+INSERT INTO instrument (instrument_id, name, bodc_url) VALUES ('IFCB', NULL, 'http://vocab.nerc.ac.uk/collection/L22/current/TOOL1588/');
+
+INSERT INTO instrument (instrument_id, name, bodc_url) VALUES ('CPICS', NULL, 'http://vocab.nerc.ac.uk/collection/L22/current/TOOL1582/');
+
+INSERT INTO instrument (instrument_id, name, bodc_url) VALUES ('UVP 5', NULL, 'http://vocab.nerc.ac.uk/collection/L22/current/TOOL1577/');
+
+INSERT INTO instrument (instrument_id, name, bodc_url) VALUES ('UVP 6', NULL, 'http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/');
+
+INSERT INTO instrument (instrument_id, name, bodc_url) VALUES ('VPR', NULL, 'http://vocab.nerc.ac.uk/collection/L22/current/TOOL1584/');
+
+INSERT INTO instrument (instrument_id, name, bodc_url) VALUES ('LISST-Holo', NULL, 'http://vocab.nerc.ac.uk/collection/L22/current/TOOL1585/');
+
+INSERT INTO instrument (instrument_id, name, bodc_url) VALUES ('Zoocam', NULL, 'http://vocab.nerc.ac.uk/collection/L22/current/TOOL1587/');
+
+INSERT INTO instrument (instrument_id, name, bodc_url) VALUES ('Loki', NULL, 'http://vocab.nerc.ac.uk/collection/L22/current/TOOL1586/');
+
+INSERT INTO instrument (instrument_id, name, bodc_url) VALUES ('FlowCam', NULL, 'http://vocab.nerc.ac.uk/collection/L22/current/TOOL1583/');
+
+INSERT INTO instrument (instrument_id, name, bodc_url) VALUES ('FastCam', NULL, 'http://vocab.nerc.ac.uk/collection/L22/current/TOOL1580/');
+
+INSERT INTO instrument (instrument_id, name, bodc_url) VALUES ('Zooscan', NULL, 'http://vocab.nerc.ac.uk/collection/L22/current/TOOL1581/');
+
+INSERT INTO instrument (instrument_id, name, bodc_url) VALUES ('PlanktoScope', NULL, 'http://vocab.nerc.ac.uk/collection/L22/current/TOOL1579/');
+
+INSERT INTO instrument (instrument_id, name, bodc_url) VALUES ('ISIIS', NULL, 'http://vocab.nerc.ac.uk/collection/L22/current/TOOL1561/');
+
+INSERT INTO instrument (instrument_id, name, bodc_url) VALUES ('AMNIS', 'AMNIS Imaging Flow Cytometer', NULL);
+
+INSERT INTO instrument (instrument_id, name, bodc_url) VALUES ('camera', 'Generic camera', NULL);
+
+INSERT INTO instrument (instrument_id, name, bodc_url) VALUES ('microscope', 'Generic microscope', NULL);
+
+INSERT INTO instrument (instrument_id, name, bodc_url) VALUES ('scanner', 'Generic scanner', NULL);
+
+INSERT INTO instrument (instrument_id, name, bodc_url) VALUES ('?', 'Unknown instrument', NULL);
+
+ALTER TABLE projects ADD COLUMN instrument_id VARCHAR(32) DEFAULT '?' NOT NULL;
+
+ALTER TABLE projects ALTER COLUMN instrument_id DROP DEFAULT;
+
+ALTER TABLE projects ADD FOREIGN KEY(instrument_id) REFERENCES instrument (instrument_id);
+
+UPDATE alembic_version SET version_num='8ac7e3c29305' WHERE alembic_version.version_num = '088904e6b78e';
+
+COMMIT;
+
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;
