@@ -82,6 +82,8 @@ class DescribedObjectSet(object):
         selected_tables += "acquisitions acq ON acq.acquisid = obh.acquisid"
         selected_tables += "samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :projid"
         column_referencing_sql = obj_where.get_sql() + order_clause.get_sql() + select_list
+        if "prj." in column_referencing_sql:
+            selected_tables += "projects prj ON prj.projid = sam.projid"
         if "prc." in column_referencing_sql:
             selected_tables += "process prc ON prc.processid = acq.acquisid"
         if "obf." in column_referencing_sql:
@@ -764,7 +766,7 @@ class ObjectSetFilter(object):
             params['depthmax'] = self.depth_max
 
         if self.instrument:
-            where_clause *= "acq.instrument ILIKE :instrum "
+            where_clause *= "prj.instrument_id ILIKE :instrum "
             params['instrum'] = '%' + self.instrument + '%'
 
         if self.daytime:

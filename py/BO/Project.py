@@ -720,9 +720,7 @@ class ProjectBOSet(object):
         with CodeTimer("%s set instruments:" % len(prj_ids), logger):
             instruments = DescribedInstrumentSet(session, prj_ids)
             for a_project in self.projects:
-                instrums = instruments.by_project.get(a_project.projid)
-                if instrums is not None:
-                    a_project.instrument = ",".join(instrums)
+                a_project.instrument = instruments.by_project.get(a_project.projid, "?")
 
     def as_list(self) -> List[ProjectBO]:
         return self.projects

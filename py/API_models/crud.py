@@ -15,6 +15,7 @@ from BO.Sample import SampleTaxoStats
 from DB import User
 from DB.Acquisition import ACQUISITION_FREE_COLUMNS, Acquisition
 from DB.Collection import Collection
+from DB.Instrument import UNKNOWN_INSTRUMENT
 from DB.Job import Job
 from DB.Process import PROCESS_FREE_COLUMNS, Process
 from DB.Project import Project
@@ -67,7 +68,9 @@ class _User2Model:
 
 class _UserModelFromDB(SQLAlchemy2Pydantic[User, _User2Model]):
     pass
-#reveal_type(_UserModelFromDB)
+
+
+# reveal_type(_UserModelFromDB)
 
 
 # TODO JCE - description example
@@ -227,7 +230,7 @@ class _AddedToProject(BaseModel):
                                         description="Viewers of this project, if not manager nor annotator.",
                                         default=[])
     instrument: Optional[str] = Field(title="Instrument",
-                                      description="This project's instrument. Transitory: if several of them, then coma-separated.",
+                                      description="This project's instrument code.",
                                       example="zooscan")
     contact: Optional[MinUserModel] = Field(title="Contact",
                                             description="The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.")
@@ -285,6 +288,9 @@ class CreateProjectReq(BaseModel):
                              default=None,
                              example=2)
     title: str = Field(title="Title", description="The project title, as text.", example="My new project title")
+    instrument: str = Field(title="Instrument", description="The project instrument.",
+                            default=UNKNOWN_INSTRUMENT,
+                            example="UVP5")
     visible: bool = Field(title="Visible", description="When TRUE, the project is created visible by all users.",
                           default=True,
                           example=True)

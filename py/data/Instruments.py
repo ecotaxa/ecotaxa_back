@@ -1,0 +1,21 @@
+DEFAULT_INSTRUMENTS = [
+    ("CytoBuoy", "CytoSense flow cytometer", "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1209/"),
+    ("IFCB", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1588/"),
+    ("CPICS", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1582/"),
+    ("UVP 5", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1577/"),
+    ("UVP 6", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/"),
+    ("VPR", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1584/"),
+    ("LISST-Holo", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1585/"),
+    ("Zoocam", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1587/"),
+    ("Loki", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1586/"),
+    ("FlowCam", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1583/"),
+    ("FastCam", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1580/"),
+    ("Zooscan", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1581/"),
+    ("PlanktoScope", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1579/"),
+    ("ISIIS", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1561/"),
+    ("AMNIS", "AMNIS Imaging Flow Cytometer", None),
+    ("camera", "Generic camera", None),
+    ("microscope", "Generic microscope", None),
+    ("scanner", "Generic scanner", None),
+    ("?", "Unknown instrument", None)  # KEEP IT LAST
+]

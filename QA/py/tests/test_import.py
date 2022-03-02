@@ -56,9 +56,12 @@ EMPTY_TSV_IN_UPD_DIR = DATA_DIR / "import_test_upd_empty"
 AMBIG_DIR = DATA_DIR / "import de categories ambigues"
 
 
-def create_project(owner, title):
+def create_project(owner, title, instrument=None):
     with ProjectsService() as sce:
-        prj_id = sce.create(owner, CreateProjectReq(title=title))
+        if instrument:
+            prj_id = sce.create(owner, CreateProjectReq(title=title, instrument=instrument))
+        else:
+            prj_id = sce.create(owner, CreateProjectReq(title=title))
         return prj_id
 
 
@@ -108,10 +111,10 @@ def fill_in_if_missing(job):
 
 
 @pytest.mark.parametrize("title", ["Test Create Update"])
-def test_import(config, database, caplog, title):
+def test_import(config, database, caplog, title, instrument=None):
     caplog.set_level(logging.DEBUG)
     # Create a dest project
-    prj_id = create_project(ADMIN_USER_ID, title)
+    prj_id = create_project(ADMIN_USER_ID, title, instrument)
     # Prepare import request
     params = ImportReq(source_path=str(PLAIN_FILE))
     with FileImport(prj_id, params) as sce:
@@ -358,7 +361,7 @@ def do_import_update(prj_id, caplog, classif, source=None):
 @pytest.mark.parametrize("title", ["Test LS 2"])
 def test_import_uvp6(config, database, caplog, title):
     caplog.set_level(logging.DEBUG)
-    prj_id = create_project(ADMIN_USER_ID, title)
+    prj_id = create_project(ADMIN_USER_ID, title, "UVP 6")
     params = ImportReq(source_path=str(V6_FILE))
     with FileImport(prj_id, params) as sce:
         rsp: ImportRsp = sce.run(ADMIN_USER_ID)

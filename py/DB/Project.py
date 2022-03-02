@@ -8,6 +8,7 @@ from typing import List, TYPE_CHECKING, Iterable
 
 from BO.DataLicense import LicenseEnum
 from DB.helpers.ORM import Model
+from .Instrument import Instrument
 from .helpers.DDL import Column, Sequence, Boolean, ForeignKey
 from .helpers.ORM import relationship
 from .helpers.Postgres import VARCHAR, INTEGER, DOUBLE_PRECISION
@@ -35,8 +36,9 @@ class Project(Model):
     __tablename__ = 'projects'
     projid: int = Column(INTEGER, Sequence('seq_projects'), primary_key=True)
     title: str = Column(VARCHAR(255), nullable=False)
+    instrument_id: str = Column(VARCHAR(32), ForeignKey(Instrument.instrument_id), nullable=False)
+
     visible = Column(Boolean(), default=True)
-    # owner_id = Column(INTEGER, default=0, nullable=False)  # TODO: FK to user
     license = Column(VARCHAR(16), default=LicenseEnum.NO_LICENSE, nullable=False)
     status = Column(VARCHAR(40), default=ANNOTATE_STATUS)  # Annotate, ExploreOnly, Annotate No Prediction
     # The mappings for this Project

@@ -36,7 +36,7 @@ def test_update_prj(config, database, fastapi, caplog):
                 'cnn_network_id': None,
                 'comments': None,
                 'contact': None,
-                'instrument': 'uvp6',
+                'instrument': 'UVP 6',
                 'init_classif_list': [],
                 'license': '',
                 'managers': [{'email': 'admin',

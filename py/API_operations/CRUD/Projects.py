@@ -41,6 +41,7 @@ class ProjectsService(Service):
         else:
             current_user = RightsBO.user_wants_create_project(self.session, current_user_id)
             prj = Project()
+        prj.instrument_id = req.instrument
         prj.title = req.title
         prj.status = ANNOTATE_STATUS
         prj.visible = req.visible
