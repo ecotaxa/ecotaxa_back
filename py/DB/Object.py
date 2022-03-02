@@ -53,7 +53,7 @@ class ObjectHeader(Model):
     # Self
     objid = Column(BIGINT, Sequence('seq_objects'), primary_key=True)
     # Parent
-    acquisid = Column(INTEGER, ForeignKey('acquisitions.acquisid'), nullable=False)
+    acquisid = Column(INTEGER, ForeignKey('acquisitions.acquisid', ondelete="CASCADE"), nullable=False)
     # User-provided identifier
     orig_id = Column(VARCHAR(255), nullable=False)
 

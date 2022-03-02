@@ -13,7 +13,7 @@ See https://alembic.sqlalchemy.org/en/latest/autogenerate.html
 
 Evalutate the venv first, then:
 
-`PYTHONPATH=.. APP_CONFIG=../config.ini alembic revision --autogenerate
+`PYTHONPATH=.. APP_CONFIG=../config.ini alembic revision --autogenerate -m "say something"
 `
 * As an operator, to upgrade a production DB, from docker shell:
 
