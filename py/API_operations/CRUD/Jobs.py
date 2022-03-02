@@ -86,7 +86,7 @@ class JobCRUDService(Service):
             try:
                 return open(out_file_path, mode="rb"), out_file_name, media_type
             except IOError:  # pragma:nocover
-                return StringIO("NOT FOUND"), out_file_name, "text/plain"  # type:ignore
+                return StringIO("NOT FOUND"), out_file_name, "text/plain"  # type:ignore # If found no way to fix
 
     def get_log_stream(self, current_user_id: UserIDT, job_id: JobIDT) -> TextIO:
         return open(self.get_log_path(current_user_id, job_id), "r")

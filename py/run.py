@@ -38,8 +38,11 @@ def run_gunicorn() -> None:
     # so all logging configuration is inherited.
     from main import app
 
-    class EcotaxaApplication(BaseApplication):  # type:ignore
+    class EcotaxaApplication(BaseApplication):
         """Our Gunicorn application."""
+
+        def init(self, parser, opts, args):
+            pass
 
         def __init__(self) -> None:
             self.options = {

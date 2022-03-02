@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Any
 
 from API_models.merge import MergeRsp
 from BO.Acquisition import AcquisitionIDT
@@ -144,6 +144,7 @@ class MergeService(Service, LogEmitter):
         common_acquisitions = self.get_ids_for_common_orig_id(dest_acquisitions, src_acquisitions)
 
         # Align foreign keys, to Project, Sample and Acquisition
+        upd_values: Dict[str, Any] = {}
         for a_fk_to_proj_tbl in [Sample, Acquisition, ObjectHeader]:
             upd = self.session.query(a_fk_to_proj_tbl)
             if a_fk_to_proj_tbl == Sample:
@@ -184,7 +185,7 @@ class MergeService(Service, LogEmitter):
                                          [(k, v) for k, v in common_acquisitions.items()])
                     acq_subqry = self.session.query(acq_cte.c.column2).filter(
                         acq_cte.c.column1 == ObjectHeader.acquisid)
-                    upd_values = {'acquisid': func.coalesce(acq_subqry.scalar_subquery(),  # type:ignore
+                    upd_values = {'acquisid': func.coalesce(acq_subqry.scalar_subquery(),
                                                             ObjectHeader.acquisid)}
                     upd = upd.filter(ObjectHeader.acquisid == any_(list(common_acquisitions.keys())))
                 if len(common_acquisitions) == 0:

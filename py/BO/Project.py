@@ -262,7 +262,7 @@ class ProjectBO(object):
             sql += ", pts.id"
         res: Result = session.execute(text(sql), params)
         with CodeTimer("stats for %d projects:" % len(prj_ids), logger):
-            ret = [ProjectTaxoStats(**rec) for rec in res.fetchall()]  # type:ignore
+            ret = [ProjectTaxoStats(**rec) for rec in res]  # type:ignore # case4
         for a_stat in ret:
             a_stat.used_taxa.sort()
         return ret
@@ -477,14 +477,14 @@ class ProjectBO(object):
         del_acquis_qry: Delete = Acquisition.__table__. \
             delete().where(Acquisition.acq_sample_id.in_(soon_deleted_samples))
         logger.info("Del acquisitions :%s", str(del_acquis_qry))
-        gone_acqs = session.execute(del_acquis_qry).rowcount  # type:ignore
+        gone_acqs = session.execute(del_acquis_qry).rowcount  # type:ignore  # case1
         ret.append(gone_acqs)
         logger.info("%d rows deleted", gone_acqs)
 
         del_sample_qry: Delete = Sample.__table__. \
             delete().where(Sample.sampleid.in_(soon_deleted_samples))
         logger.info("Del samples :%s", str(del_sample_qry))
-        gone_sams = session.execute(del_sample_qry).rowcount  # type:ignore
+        gone_sams = session.execute(del_sample_qry).rowcount  # type:ignore  # case1
         ret.append(gone_sams)
         logger.info("%d rows deleted", gone_sams)
 

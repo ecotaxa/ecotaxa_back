@@ -59,8 +59,7 @@ class ObjectManager(Service):
         if current_user_id is None:
             prj = RightsBO.anonymous_wants(self.ro_session, Action.READ, proj_id)
             # Anonymous can only see validated objects
-            # noinspection PyTypeHints
-            filters.statusfilter = "V"  # type:ignore
+            filters["statusfilter"] = "V"
             user_id = -1
         else:
             user, prj = RightsBO.user_wants(self.session, current_user_id, Action.READ, proj_id)
@@ -229,7 +228,7 @@ class ObjectManager(Service):
             # Anonymous can only see validated objects
             # TODO: Dup code
             # noinspection PyTypeHints
-            filters.statusfilter = "V"  # type:ignore
+            filters["statusfilter"] = "V"
             user_id = -1
         else:
             user, _project = RightsBO.user_wants(self.session, current_user_id, Action.READ, proj_id)

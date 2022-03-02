@@ -315,7 +315,7 @@ class ObjectCacheWriter(object):  # pragma: no cover
 
     def create_sqlite_table(self, table_name: str, res: Result) -> List[str]:
         # Create the table from resultset structure & content
-        col_descs = res.cursor.description  # type:ignore
+        col_descs = res.cursor.description  # type:ignore # case5
         sqlite_cols: List[str] = []
         ret: List[str] = []
         for a_desc in col_descs:

@@ -20,7 +20,7 @@ JSONDesc = Dict[Union[Column, RelationshipProperty], str]
 
 JSON_FIELDS: Dict[ModelT, JSONDesc] = {
     Project: {Project.title: "ttl",
-              Project.all_samples: "samples",  # type:ignore
+              Project.all_samples: "samples",  # type:ignore # case2
               },
     Sample: {Sample.sampleid: "id",
              Sample.orig_id: "sid",
@@ -38,7 +38,7 @@ JSON_FIELDS: Dict[ModelT, JSONDesc] = {
     ObjectHeader: {ObjectHeader.orig_id: "oid",
                    ObjectHeader.classif_id: "mcat",
                    ObjectHeader.classif_auto_id: "acat",
-                   ObjectHeader.all_images: "images",  # type:ignore
+                   ObjectHeader.all_images: "images",  # type:ignore # case2
                    ObjectHeader.depth_min: "depth_min",
                    ObjectHeader.depth_max: "depth_max",
                    ObjectHeader.latitude: "latitude",

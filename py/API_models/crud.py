@@ -67,6 +67,7 @@ class _User2Model:
 
 class _UserModelFromDB(SQLAlchemy2Pydantic[User, _User2Model]):
     pass
+#reveal_type(_UserModelFromDB)
 
 
 # TODO JCE - description example
@@ -110,6 +111,24 @@ class _ProjectModelFromDB(SQLAlchemy2Pydantic[Project, _Project2Model]):
 class ProjectSummaryModel(BaseModel):
     projid: int = Field(title="Project Id", description="Project unique identifier.", default=None, example=1)
     title: str = Field(title="Project title", description="Project's title.", default=None, example="Zooscan Tara Med")
+
+
+class UserModelWithRights(_UserModelFromDB):
+    can_do: List[int] = Field(title="User's permissions",
+                              description="List of User's allowed actions : 1 create a project, 2 administrate the app, 3 administrate users, 4 create taxon.",
+                              default=[], example=[1, 4])
+    last_used_projects: List[ProjectSummaryModel] = Field(title="Last used projects",
+                                                          description="List of User's last used projects.", default=[],
+                                                          example=[
+                                                              {
+                                                                  "projid": 3,
+                                                                  "title": "Zooscan point B"
+                                                              },
+                                                              {
+                                                                  "projid": 1,
+                                                                  "title": "Zooscan Tara Med"
+                                                              }
+                                                          ])
 
 
 # TODO JCE - description example
@@ -185,24 +204,6 @@ class _Collection2Model:
 
 class _CollectionModelFromDB(SQLAlchemy2Pydantic[Collection, _Collection2Model]):
     pass
-
-
-class UserModelWithRights(_UserModelFromDB):
-    can_do: List[int] = Field(title="User's permissions",
-                              description="List of User's allowed actions : 1 create a project, 2 administrate the app, 3 administrate users, 4 create taxon.",
-                              default=[], example=[1, 4])
-    last_used_projects: List[ProjectSummaryModel] = Field(title="Last used projects",
-                                                          description="List of User's last used projects.", default=[],
-                                                          example=[
-                                                              {
-                                                                  "projid": 3,
-                                                                  "title": "Zooscan point B"
-                                                              },
-                                                              {
-                                                                  "projid": 1,
-                                                                  "title": "Zooscan Tara Med"
-                                                              }
-                                                          ])
 
 
 class _AddedToProject(BaseModel):
@@ -418,16 +419,17 @@ class _AddedToJob(BaseModel):
     """
         What's added to a Job compared to the plain DB record.
     """
-    params: Dict[str, Any] = Field(title="params", description="Creation parameters.", default={}, example={"prj_id": 1,
-                                                                                                            "req": {
-                                                                                                                "filters": {
-                                                                                                                    "taxo": "85067",
-                                                                                                                    "taxochild": "N"},
-                                                                                                                "dest_prj_id": 1,
-                                                                                                                "group_type": "S",
-                                                                                                                "limit_type": "P",
-                                                                                                                "limit_value": 100.0,
-                                                                                                                "do_images": True}})
+    params: Dict[str, Any] = Field(title="params", description="Creation parameters.", default={},
+                                   example={"prj_id": 1,
+                                            "req": {
+                                                "filters": {
+                                                    "taxo": "85067",
+                                                    "taxochild": "N"},
+                                                "dest_prj_id": 1,
+                                                "group_type": "S",
+                                                "limit_type": "P",
+                                                "limit_value": 100.0,
+                                                "do_images": True}})
     result: Dict[str, Any] = Field(title="result", description="Final result of the run.", default={},
                                    example={"rowcount": 3})
     errors: List[str] = Field(title="errors", description="The errors seen during last step.", default=[], example=[])

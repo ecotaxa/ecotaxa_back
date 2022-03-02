@@ -9,7 +9,7 @@ import os
 import re
 import zipfile
 from pathlib import Path
-from typing import Optional, Tuple, TextIO
+from typing import Optional, Tuple, TextIO, cast
 
 from API_models.exports import ExportRsp, ExportReq, ExportTypeEnum
 from API_models.filters import ProjectFiltersDict
@@ -66,7 +66,7 @@ class ProjectExport(JobServiceBase):
     @staticmethod
     def deser_args(json_args: ArgsDict) -> None:
         json_args["req"] = ExportReq(**json_args["req"])
-        json_args["filters"] = ProjectFiltersDict(**json_args["filters"])  # type:ignore
+        json_args["filters"] = cast(ProjectFiltersDict, json_args["filters"])
 
     def do_background(self) -> None:
         """
@@ -331,7 +331,7 @@ class ProjectExport(JobServiceBase):
         img_wtr.writeheader()
 
         # Prepare TSV structure
-        col_descs = [a_desc for a_desc in res.cursor.description  # type:ignore
+        col_descs = [a_desc for a_desc in res.cursor.description  # type:ignore # case2
                      if a_desc.name != "img_src_path"]
         # read latitude column to get float DB type
         for a_desc in col_descs:
@@ -524,7 +524,7 @@ class ProjectExport(JobServiceBase):
     def write_result_to_csv(res: Result, out_file: Path) -> int:
         nb_lines = 0
         with open(out_file, 'w') as csv_file:
-            col_names = [a_desc.name for a_desc in res.cursor.description]  # type:ignore
+            col_names = [a_desc.name for a_desc in res.cursor.description]  # type:ignore # case2
             wtr = csv.DictWriter(csv_file, col_names, delimiter='\t', quotechar='"', lineterminator='\n')
             wtr.writeheader()
             for r in res:

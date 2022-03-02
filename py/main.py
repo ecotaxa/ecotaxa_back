@@ -1108,7 +1108,7 @@ def samples_search(project_ids: str = Query(..., title="Project Ids",
                      }
                  }
              }
-         }, response_model=List[SampleTaxoStatsModel])  # type:ignore
+         }, response_model=List[SampleTaxoStatsModel])  # type:ignore # case7
 def sample_set_get_stats(sample_ids: str = Query(..., title="Sample Ids",
                                                  description="String containing the list of one or more sample ids separated by non-num char.",
                                                  example="15,5"),
@@ -1715,7 +1715,7 @@ def object_query(
                      }
                  }
              }
-         }, response_model=List[HistoricalClassificationModel])  # type:ignore
+         }, response_model=List[HistoricalClassificationModel])  # type:ignore # case7
 def object_query_history(
         object_id: int = Path(..., description="Internal, the unique numeric id of this object.", example=1),
         current_user: Optional[int] = Depends(get_optional_current_user)) \

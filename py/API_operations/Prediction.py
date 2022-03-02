@@ -10,6 +10,7 @@
 # Here is just the job registering part, the rest is in GPU_Prediction class.
 #
 from pathlib import Path
+from typing import cast
 
 from API_models.filters import ProjectFiltersDict
 from API_models.prediction import PredictionReq, PredictionRsp
@@ -58,7 +59,7 @@ class PredictForProject(JobServiceBase):
     @staticmethod
     def deser_args(json_args: ArgsDict) -> None:
         json_args["req"] = PredictionReq(**json_args["req"])
-        json_args["filters"] = ProjectFiltersDict(**json_args["filters"])  # type:ignore
+        json_args["filters"] = cast(ProjectFiltersDict, json_args["filters"])
 
     def do_background(self) -> None:
         """

@@ -34,17 +34,19 @@ if True:
 
     # Collection
     Collection.projects = relationship(Project, secondary=CollectionProject.__tablename__)
-    Collection.contact_user = relationship(User, foreign_keys=[Collection.contact_user_id], uselist=False) # type:ignore
-    Collection.provider_user = relationship(User, foreign_keys=[Collection.provider_user_id], uselist=False) # type:ignore
+    Collection.contact_user = relationship(User, foreign_keys=[Collection.contact_user_id],  # type:ignore # case2
+                                           uselist=False)
+    Collection.provider_user = relationship(User, foreign_keys=[Collection.provider_user_id],  # type:ignore # case2
+                                            uselist=False)
     Collection.users_by_role = relationship(CollectionUserRole, viewonly=True)
     Collection.organisations_by_role = relationship(CollectionOrgaRole)
 
     CollectionUserRole.collection = relationship(Collection, uselist=False)
-    CollectionUserRole.user = relationship(User, uselist=False) # type:ignore
+    CollectionUserRole.user = relationship(User, uselist=False)  # type:ignore # case2
 
     # Project
     Project.all_samples = relationship(Sample, viewonly=True)
-    Sample.project = relationship(Project) # type:ignore
+    Sample.project = relationship(Project)  # type:ignore # case2
 
     # Sample
     Sample.all_acquisitions = relationship(Acquisition, viewonly=True)
@@ -61,13 +63,13 @@ if True:
     ProjectPrivilege.project = relationship(Project, cascade="all, delete-orphan", single_parent=True)
     Project.privs_for_members = relationship(ProjectPrivilege, viewonly=True)
 
-    ProjectPrivilege.user = relationship(User, cascade="all, delete-orphan", single_parent=True) # type:ignore
+    ProjectPrivilege.user = relationship(User, cascade="all, delete-orphan", single_parent=True)  # type:ignore # case2
     User.privs_on_projects = relationship(ProjectPrivilege, viewonly=True)
 
     Project.members = relationship(User, secondary=ProjectPrivilege.__tablename__, viewonly=True)
 
     # Object
-    ObjectHeader.fields = relationship(ObjectFields, uselist=False, viewonly=True)  # type:ignore
+    ObjectHeader.fields = relationship(ObjectFields, uselist=False, viewonly=True)  # type:ignore # case2
     ObjectFields.object = relationship(ObjectHeader, uselist=False)
 
     ObjectHeader.classif = relationship(Taxonomy, primaryjoin="Taxonomy.id==ObjectHeader.classif_id",

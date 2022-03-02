@@ -25,7 +25,7 @@ class JobServiceBase(Service, LogEmitter, ABC):
     """
         Common methods and data for asynchronous and long operations.
         This base class is for the short-lived instances which 'just' do some operations.
-        For long-lived objects, i.e. processes @see JobScheduler class.
+        For long-lived objects, i.e. processes/threads @see JobScheduler class.
     """
     JOB_TYPE: str
     JOB_LOG_FILE_NAME = 'TaskLogBack.txt'

@@ -168,7 +168,7 @@ class EnumeratedObjectSet(MappedTable):
         obj_del_qry: Delete = ObjectHeader.__table__.delete()
         obj_del_qry = obj_del_qry.where(ObjectHeader.objid == any_(a_chunk))
         with CodeTimer("DELETE for %d objs: " % len(a_chunk), logger):
-            nb_objs = session.execute(obj_del_qry).rowcount  # type:ignore
+            nb_objs = session.execute(obj_del_qry).rowcount  # type:ignore # case1
 
         session.commit()
         # TODO: Cache delete
@@ -209,7 +209,7 @@ class EnumeratedObjectSet(MappedTable):
         obj_upd_qry = obj_upd_qry.where(and_(oh.objid == any_(self.object_ids),
                                              (oh.classif_qual.in_([VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL]))))
         obj_upd_qry = obj_upd_qry.values(classif_qual=PREDICTED_CLASSIF_QUAL)
-        nb_objs = self.session.execute(obj_upd_qry).rowcount  # type:ignore
+        nb_objs = self.session.execute(obj_upd_qry).rowcount  # type:ignore  # case1
         # TODO: Cache upd
         logger.info(" %d out of %d rows reset to predicted", nb_objs, len(self.object_ids))
 
@@ -223,7 +223,7 @@ class EnumeratedObjectSet(MappedTable):
         obj_upd_qry: Update = ObjectHeader.__table__.update()
         obj_upd_qry = obj_upd_qry.where(ObjectHeader.objid == any_(self.object_ids))
         obj_upd_qry = obj_upd_qry.values(params)
-        updated_objs = self.session.execute(obj_upd_qry).rowcount  # type:ignore
+        updated_objs = self.session.execute(obj_upd_qry).rowcount  # type:ignore  # case1
         # TODO: Cache upd
         # prj_id = self.get_projects_ids()[0]
         # ObjectCacheUpdater(prj_id).update_objects(self.object_ids, params)
@@ -295,7 +295,7 @@ class EnumeratedObjectSet(MappedTable):
         ins_qry = ins_qry.on_conflict_do_nothing(constraint='objectsclassifhisto_pkey')  # type:ignore
         # TODO: mypy crashes due to pg_dialect below
         # logger.info("Histo query: %s", ins_qry.compile(dialect=pg_dialect()))
-        nb_objs = self.session.execute(ins_qry).rowcount  # type:ignore
+        nb_objs = self.session.execute(ins_qry).rowcount  # type:ignore  # case1
         logger.info(" %d out of %d rows copied to log", nb_objs, len(self.object_ids))
 
     def apply_on_all(self, project: Project, updates: ColUpdateList) -> int:
@@ -365,7 +365,7 @@ class EnumeratedObjectSet(MappedTable):
             qry = qry.filter(or_(subq_alias.c.rnk == 1, subq_alias.c.rnk.is_(None)))
         logger.info("_get_last_classif_history qry:%s", str(qry))
         with CodeTimer("HISTORY for %d objs: " % len(self.object_ids), logger):
-            ret = [HistoricalLastClassif(**rec) for rec in qry]  # type:ignore
+            ret = [HistoricalLastClassif(**rec) for rec in qry]
         logger.info("_get_last_classif_history qry: %d rows", len(ret))
         return ret
 

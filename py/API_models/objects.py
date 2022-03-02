@@ -14,7 +14,6 @@ from BO.Classification import HistoricalLastClassif, HistoricalClassification
 from BO.ObjectSet import ObjectIDListT
 from DB.Image import Image
 from DB.Object import ObjectHeader
-from .helpers.pydantic import ResponseModel
 
 
 # TODO JCE - examples - ?default?
@@ -124,7 +123,7 @@ class ObjectModel(ObjectHeaderModel, ObjectFieldsModel):
                                          example={"area": 49.0, "mean": 232.27, "stddev": 2.129}, default={})
 
 
-class ObjectSetQueryRsp(ResponseModel):
+class ObjectSetQueryRsp(BaseModel):
     object_ids: ObjectIDListT = Field(title="Object Ids", description="Matching object IDs.", default=[],
                                       example=[634509, 6234516, 976544])
     acquisition_ids: List[Optional[int]] = Field(title="Acquisition Ids", description="Parent (acquisition) IDs.",
@@ -149,7 +148,7 @@ class ObjectSetQueryRsp(ResponseModel):
                            default=0, example=1000)
 
 
-class ObjectSetSummaryRsp(ResponseModel):
+class ObjectSetSummaryRsp(BaseModel):
     """
      Classification summary from object set.
     """
@@ -260,6 +259,6 @@ HistoricalClassificationModel = dataclass_to_model(HistoricalClassification,
                                                    field_infos=_DBHistoricalClassificationDescription)
 
 
-class ObjectHistoryRsp(ResponseModel):
+class ObjectHistoryRsp(BaseModel):
     classif: List[HistoricalClassificationModel] = Field(title="The classification history",  # type: ignore
                                                          default=[])

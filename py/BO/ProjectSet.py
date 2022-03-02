@@ -148,7 +148,7 @@ class FeatureConsistentProjectSet(object):
         res = self.read_all()
         obj_ids: List[int] = []
         classif_ids: ClassifIDListT = []
-        rc = res.rowcount  # type:ignore
+        rc = res.rowcount  # type:ignore  # case1
         np_table = self.np_read(res, rc, self.column_names,
                                 obj_ids, classif_ids, {})
         return np_table, obj_ids, classif_ids

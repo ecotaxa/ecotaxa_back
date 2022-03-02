@@ -35,7 +35,7 @@ class DwcArchive(object):
         """
         zipfile = ZipFile(self.path, mode="w", allowZip64=True, compression=ZIP_DEFLATED)
         parent_dir = self.path.parent
-        # TODO: Better typings
+        # TODO: Better typings, classes below should have a trait
         all_files = [self.dataset_meta, self.meta, self.events, self.occurences, self.emofs]
         for a_file in all_files:
             # Write the objects into real files

@@ -25,7 +25,7 @@ class DBSyncService(Service):
         super().__init__()
         table: Table = a_table.__table__
         self.table_name = table.name
-        qry = select([text("%s.*" % table.name)])  # type:ignore
+        qry = select([text("%s.*" % table.name)])
         for a_col, a_val in zip(args[::2], args[1::2]):
             qry = qry.where(a_col == a_val)
         self.qry = qry

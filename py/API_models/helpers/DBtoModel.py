@@ -12,6 +12,7 @@ from sqlalchemy import inspect
 from sqlalchemy.orm import ColumnProperty
 
 from API_models.helpers import PydanticModelT
+from DB.helpers.ORM import Model
 from helpers.pydantic import BaseConfig, create_model
 
 
@@ -22,15 +23,14 @@ class OrmConfig(BaseConfig):
 # Generify the def with input type
 T = TypeVar('T')
 
-
-DBT = TypeVar('DBT')  # TODO: Should be an SQLA model
+DBT = TypeVar('DBT', bound=Model)
 CT = TypeVar('CT')
 
 
 # Ref: https://pydantic-docs.helpmanual.io/usage/models/#generic-models
 class SQLAlchemy2Pydantic(GenericModel, Generic[DBT, CT]):
     def __class_getitem__(cls: Type[GenericModelT], params: Union[Type[Any], Tuple[Type[Any], ...]]) -> Type[Any]:
-        db_model, how = params  # type:ignore
+        db_model, how = params  # type:ignore # too much generic for mypy
         # TODO: Remove the 'exclude' completely. If no doc, not included.
         try:
             exclude = how.exclude

@@ -184,7 +184,7 @@ class GPUPredictForProject(PredictForProject):
         """
             Do the classification job itself, read lines from the DB, classify them and write-back the result.
         """
-        total_rows = tgt_res.rowcount  # type:ignore
+        total_rows = tgt_res.rowcount  # type:ignore # case1
         done_count = 0
         nb_changes = 0
         while True:

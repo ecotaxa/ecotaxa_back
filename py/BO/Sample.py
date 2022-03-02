@@ -9,11 +9,11 @@
 from dataclasses import dataclass
 from typing import List, ClassVar
 
-from DB import Session
 from DB.Acquisition import Acquisition
 from DB.Object import VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
+from DB.helpers import Session, Result
 from DB.helpers.Direct import text
 from DB.helpers.ORM import any_
 from helpers.DynamicLogs import get_logger
@@ -137,6 +137,6 @@ class EnumeratedSampleSet(MappedTable):
          WHERE sam.sampleid = ANY(:ids)
          GROUP BY sam.sampleid;""")
         with CodeTimer("Stats for %d samples: " % len(self.ids), logger):
-            res = self.session.execute(sql, {'ids': self.ids})
-            ret = [SampleTaxoStats(**rec) for rec in res]  # type:ignore
+            res: Result = self.session.execute(sql, {'ids': self.ids})
+            ret = [SampleTaxoStats(**rec) for rec in res]  # type:ignore # case4
         return ret

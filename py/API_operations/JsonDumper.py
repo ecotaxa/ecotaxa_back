@@ -90,7 +90,7 @@ class JsonDumper(Service):
         for a_field_or_relation, how in desc.items():
             fld_name = a_field_or_relation.key
             # This is where SQLAlchemy does all its magic when it's a relation
-            attr = getattr(a_row, fld_name)  # type:ignore
+            attr = getattr(a_row, fld_name)  # type:ignore # case2
             if isinstance(attr, list):
                 # Serialize the list of child entities, ordinary relationship
                 children: List[Dict[str, Any]] = []
