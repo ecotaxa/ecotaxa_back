@@ -262,11 +262,16 @@ class MyORJSONResponse(JSONResponse):
 
         def render(self, content: Any) -> bytes:
             try:
-                return orjson.dumps(content, option=orjson.OPT_NON_STR_KEYS,
-                                    default=MyORJSONResponse.orjson_default)
-            except TypeError:
-                logging.warning("Problem encoding %s", content)
-                return json.dumps(content).encode("utf-8")
+                ret = orjson.dumps(content, option=orjson.OPT_NON_STR_KEYS,
+                                   default=MyORJSONResponse.orjson_default)
+            except TypeError as te:
+                # I saw e.g. Missing Image \'gr_200\\u00b5m_20180322_tot_1_161.jpg\
+                err_msg = str(te)
+                logging.warning("Orjson problem '%s' encoding %s", err_msg, content)
+                # Switch to more permissive encoding
+                ret = json.dumps(content).encode("utf-8", errors='replace')
+            return ret
+
 
     except ImportError:
         # noinspection PyUnusedLocal
