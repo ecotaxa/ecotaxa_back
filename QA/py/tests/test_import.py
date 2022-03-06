@@ -361,7 +361,7 @@ def do_import_update(prj_id, caplog, classif, source=None):
 @pytest.mark.parametrize("title", ["Test LS 2"])
 def test_import_uvp6(config, database, caplog, title):
     caplog.set_level(logging.DEBUG)
-    prj_id = create_project(ADMIN_USER_ID, title, "UVP 6")
+    prj_id = create_project(ADMIN_USER_ID, title, "UVP6")
     params = ImportReq(source_path=str(V6_FILE))
     with FileImport(prj_id, params) as sce:
         rsp: ImportRsp = sce.run(ADMIN_USER_ID)

@@ -1246,16 +1246,21 @@ def acquisition_query(
          }
          )
 def instrument_query(project_ids: str = Query(..., title="Projects ids",
-                                              description="String containing the list of one or more project id separated by non-num char.",
+                                              description="String containing the list of one or more project ids,"
+                                                          " separated by non-num char, or 'all' for all instruments.",
                                               example="1,2,3")) \
         -> List[str]:
     """
-        Returns the list of instruments, inside specific project(s).
+        Returns the list of instruments, inside specific project(s) or globally.
     """
     with InstrumentsService() as sce:
-        proj_ids = _split_num_list(project_ids)
+        prj_ids_call: Optional[List[int]]
+        if project_ids == 'all':
+            prj_ids_call = None
+        else:
+            prj_ids_call = _split_num_list(project_ids)
         with RightsThrower():
-            ret = sce.query(proj_ids)
+            ret = sce.query(prj_ids_call)
         return ret
 
 

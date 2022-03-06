@@ -401,9 +401,7 @@ class ProjectBO(object):
 
         if instrument_filter != '':
             sql += """
-                     AND prj.projid IN (SELECT DISTINCT sam.projid FROM samples sam, acquisitions acq
-                                         WHERE acq.acq_sample_id = sam.sampleid
-                                           AND acq.instrument ILIKE '%%'|| :instrum ||'%%' ) """
+                     AND prj.instrument_id ILIKE '%%'|| :instrum ||'%%' """
             sql_params["instrum"] = instrument_filter
 
         if filter_subset:
