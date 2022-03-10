@@ -130,7 +130,7 @@ class ProjectBO(object):
                 self.contact = priv_user
         return self
 
-    def update(self, session: Session, title: str, visible: bool, status: str, description: str,
+    def update(self, session: Session, instrument: str, title: str, visible: bool, status: str, description: str,
                init_classif_list: List[int],
                classiffieldlist: str, popoverfieldlist: str,
                cnn_network_id: str, comments: str,
@@ -144,6 +144,7 @@ class ProjectBO(object):
             # Delete CNN features which depend on the CNN network
             DeepFeatures.delete_all(session, proj_id)
         # Fields update
+        self._project.instrument_id = instrument
         self._project.title = title
         self._project.visible = visible
         self._project.status = status

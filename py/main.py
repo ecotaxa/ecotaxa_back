@@ -90,7 +90,7 @@ logger = get_logger(__name__)
 fastapi_logger.setLevel(INFO)
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.26",
+              version="0.0.27",
               # openapi URL as seen from navigator, this is included when /docs is required
               # which serves swagger-ui JS app. Stay in /api sub-path.
               openapi_url="/api/openapi.json",
@@ -1030,6 +1030,7 @@ def update_project(project: ProjectModel,
 
         with ValidityThrower():
             present_project.update(session=sce.session,
+                                   instrument=project.instrument,
                                    title=project.title, visible=project.visible, status=project.status,  # type: ignore
                                    description=project.description,  # type: ignore
                                    init_classif_list=project.init_classif_list,
