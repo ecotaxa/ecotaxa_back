@@ -37,20 +37,21 @@ class ProjectsService(Service):
             current_user, prj = RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, req.clone_of_id)
             if prj is None:
                 return "Project to clone not found"
-            prj = clone_of(prj)
+            new_prj = clone_of(prj)
+            new_prj.instrument_id = prj.instrument_id  # instrument is a FK, thus no copied by clone_of()
         else:
             current_user = RightsBO.user_wants_create_project(self.session, current_user_id)
-            prj = Project()
-        prj.instrument_id = req.instrument
-        prj.title = req.title
-        prj.status = ANNOTATE_STATUS
-        prj.visible = req.visible
-        self.session.add(prj)
+            new_prj = Project()
+            new_prj.instrument_id = req.instrument
+        new_prj.title = req.title
+        new_prj.status = ANNOTATE_STATUS
+        new_prj.visible = req.visible
+        self.session.add(new_prj)
         self.session.flush()  # to get the project ID
         # Add the manage privilege
-        RightsBO.grant(self.session, current_user, Action.ADMINISTRATE, prj)
+        RightsBO.grant(self.session, current_user, Action.ADMINISTRATE, new_prj)
         self.session.commit()
-        return prj.projid
+        return new_prj.projid
 
     def search(self, current_user_id: Optional[int],
                for_managing: bool = False,

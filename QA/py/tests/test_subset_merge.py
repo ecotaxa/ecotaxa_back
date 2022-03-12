@@ -76,7 +76,7 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
     print("\n".join(caplog.messages))
 
     # Subset in full, i.e. clone
-    subset_prj_id = create_project(ADMIN_USER_ID, "Subset of UVP6")
+    subset_prj_id = create_project(ADMIN_USER_ID, "Subset of UVP6", "UVP6")
     filters = {"freenum": "n01", "freenumst": "0"}
     params = SubsetReq(dest_prj_id=subset_prj_id,
                        filters=filters,
