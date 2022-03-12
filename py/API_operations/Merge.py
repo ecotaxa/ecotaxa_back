@@ -89,6 +89,8 @@ class MergeService(Service, LogEmitter):
             :return: a list of problems, empty means we can proceed.
         """
         ret = []
+        if dest_prj.instrument_id != src_prj.instrument_id:
+            ret.append("Source and target projects have different instruments")
         dest_mappings = ProjectMapping().load_from_project(dest_prj)
         src_mappings = ProjectMapping().load_from_project(src_prj)
         a_tbl: MappedTableTypeT

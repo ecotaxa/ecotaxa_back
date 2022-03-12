@@ -130,7 +130,7 @@ class ProjectBO(object):
                 self.contact = priv_user
         return self
 
-    def update(self, session: Session, instrument: str, title: str, visible: bool, status: str, description: str,
+    def update(self, session: Session, instrument: Optional[str], title: str, visible: bool, status: str, description: str,
                init_classif_list: List[int],
                classiffieldlist: str, popoverfieldlist: str,
                cnn_network_id: str, comments: str,
@@ -139,6 +139,7 @@ class ProjectBO(object):
                license_: str):
         assert contact is not None, "A valid Contact is needed."
         proj_id = self._project.projid
+        assert instrument is not None, "A valid Instrument is needed."
         # Field reflexes
         if cnn_network_id != self._project.cnn_network_id:
             # Delete CNN features which depend on the CNN network
