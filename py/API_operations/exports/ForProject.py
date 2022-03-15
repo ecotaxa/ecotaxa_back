@@ -223,9 +223,10 @@ class ProjectExport(JobServiceBase):
                          TO_CHAR(obh.classif_when,'{1}') AS object_annotation_time,                
                          txo.display_name AS object_annotation_category 
                     """).format(date_fmt, time_fmt)
-        if req.exp_type == ExportTypeEnum.backup:
+        if req.exp_type in (ExportTypeEnum.backup, ExportTypeEnum.dig_obj_ident):
             select_clause += ", txo.id AS object_annotation_category_id"
         else:
+            # TODO: I didn't find where the below is used.
             select_clause += "," + TaxonomyBO.parents_sql("obh.classif_id") + " AS object_annotation_hierarchy"
 
         if 'C' in req.tsv_entities:
@@ -260,24 +261,6 @@ class ProjectExport(JobServiceBase):
                     obh.random_value object_random_value, obh.sunpos object_sunpos """
             if 'S' in req.tsv_entities:
                 select_clause += "\n, sam.latitude sample_lat, sam.longitude sample_long "
-
-        # TODO: The condition on o.projid=1 in historical code below prevents any data production
-        # if 'H' in req.tsv_entities:
-        #     sql1 += " , oh.classif_date AS histoclassif_date, classif_type AS histoclassif_type, " \
-        #             "to3.name histoclassif_name, oh.classif_qual histoclassif_qual,uo3.name histoclassif_who, " \
-        #             "classif_score histoclassif_score"
-        #     sql2 += """ LEFT JOIN (select o.objid, classif_date, classif_type, och.classif_id,
-        #                                   och.classif_qual, och.classif_who, classif_score
-        #                              from objectsclassifhisto och
-        #                              join objects o on o.objid=och.objid and o.projid=1 {0}
-        #                            union all
-        #                            select o.objid, o.classif_when classif_date, 'C' classif_type, classif_id,
-        #                                   classif_qual, classif_who, NULL
-        #                              from objects o {0} where o.projid=1
-        #                           ) oh on o.objid=oh.objid
-        #                 LEFT JOIN taxonomy to3 on oh.classif_id=to3.id
-        #                 LEFT JOIN users uo3 on oh.classif_who=uo3.id
-        #             """.format(samplefilter)
 
         order_clause = OrderClause()
         if req.split_by == "sample":
@@ -381,9 +364,10 @@ class ProjectExport(JobServiceBase):
                 if req.exp_type == ExportTypeEnum.dig_obj_ident:
                     # Images will be stored in a per-category directory, but there is a single TSV at the Zip root
                     categ = a_row['object_annotation_category']
+                    categ_id: Optional[int] = a_row['object_annotation_category_id']  # type:ignore
                     # All names cannot directly become directories
                     a_row['img_file_name'] = self.get_DOI_imgfile_name(a_row['objid'], a_row['img_rank'],
-                                                                       categ, a_row['img_file_name'])
+                                                                       categ, categ_id, a_row['img_file_name'])
                     copy_op["dst_path"] = a_row['img_file_name']
                 else:  # It's a backup
                     # Images are stored in the Zip subdirectory per sample/taxo, i.e. at the same place as
@@ -462,9 +446,13 @@ class ProjectExport(JobServiceBase):
                     self.update_progress(progress, msg)
             zfile.close()
 
-    def get_DOI_imgfile_name(self, objid: int, imgrank: int, taxofolder: Optional[str], originalfilename) -> str:
+    def get_DOI_imgfile_name(self, objid: int, imgrank: int, taxofolder: Optional[str], classif_id: Optional[int],
+                             originalfilename) -> str:
         if not taxofolder:
             taxofolder = "NoCategory"
+        else:
+            assert classif_id
+            taxofolder += "__%d" % classif_id
         file_name = "images/{0}/{1}_{2}{3}".format(self.normalize_filename(taxofolder),
                                                    objid, imgrank,
                                                    Path(originalfilename).suffix.lower())
