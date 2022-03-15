@@ -23,13 +23,13 @@ def test_create_collection(config, database, fastapi, caplog):
 
     # Admin imports the project
     from tests.test_import import test_import
-    prj_id = test_import(config, database, caplog, "Collection project 1", "scanner")
+    prj_id = test_import(config, database, caplog, "Collection project 1", "Other scanner")
 
     # Small instrument 'list' test
     url = INSTRUMENT_QUERY_URL.format(project_id=prj_id)
     rsp = fastapi.get(url)
     assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json() == ['scanner']
+    assert rsp.json() == ['Other scanner']
 
     # And creates a collection with it
     url = COLLECTION_CREATE_URL
