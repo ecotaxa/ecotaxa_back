@@ -20,7 +20,7 @@ from API_models.constants import Constants
 from API_models.crud import AcquisitionModel, ProcessModel, ProjectModel, UserModelWithRights, MinUserModel, \
     CollectionModel, CreateCollectionReq, SampleModel, JobModel, BulkUpdateReq, CreateProjectReq, \
     ProjectTaxoStatsModel, ProjectUserStatsModel, ProjectSetColumnStatsModel, SampleTaxoStatsModel
-from API_models.exports import EMODnetExportRsp, ExportRsp, ExportReq
+from API_models.exports import DarwinCoreExportRsp, ExportRsp, ExportReq
 from API_models.filesystem import DirectoryModel
 from API_models.filters import ProjectFilters
 from API_models.helpers.Introspect import plain_columns
@@ -55,7 +55,7 @@ from API_operations.UserFolder import UserFolderService, CommonFolderService
 from API_operations.admin.Database import DatabaseService
 from API_operations.admin.ImageManager import ImageManagerService
 from API_operations.admin.NightlyJob import NightlyJobService
-from API_operations.exports.EMODnet import EMODnetExport
+from API_operations.exports.DarwinCore import DarwinCoreExport
 from API_operations.exports.ForProject import ProjectExport
 from API_operations.imports.Import import FileImport
 from API_operations.imports.SimpleImport import SimpleImport
@@ -515,8 +515,9 @@ def update_collection(collection: CollectionModel = Body(...),
                                   associate_orgs=collection.associate_organisations)
 
 
-@app.get("/collections/{collection_id}/export/emodnet", operation_id="emodnet_format_export", tags=['collections'],
-         response_model=EMODnetExportRsp)
+@app.get("/collections/{collection_id}/export/darwin_core", operation_id="darwin_core_format_export",
+         tags=['collections'],
+         response_model=DarwinCoreExportRsp)
 def emodnet_format_export(
         collection_id: int = Path(..., description="Internal, the unique numeric id of this collection.",
                                   example=1),
@@ -532,17 +533,17 @@ def emodnet_format_export(
         with_computations: bool = Query(..., title="With computations",
                                         description="If set, then an attempt will be made to compute organisms concentrations and biovolumes.",
                                         example=False),
-        current_user: int = Depends(get_current_user)) -> EMODnetExportRsp:
+        current_user: int = Depends(get_current_user)) -> DarwinCoreExportRsp:
     """
-        **Export the collection in EMODnet format**, @see https://www.emodnet-ingestion.eu
+        **Export the collection in Darwin Core format, e.g. for EMODnet portal**, @see https://www.emodnet-ingestion.eu
 
-        Produces a DwC-A archive into a temporary directory, ready for download.
+        Produces a DwC-A (https://dwc.tdwg.org/) archive into a temporary directory, ready for download.
 
         Maybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html
 
         🔒 *For admins only.*
     """
-    with EMODnetExport(collection_id, dry_run, with_zeroes, with_computations, auto_morpho) as sce:
+    with DarwinCoreExport(collection_id, dry_run, with_zeroes, with_computations, auto_morpho) as sce:
         with RightsThrower():
             return sce.run(current_user)
 

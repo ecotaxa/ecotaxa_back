@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Tuple, cast, Set, Any
 from urllib.parse import quote_plus
 
 import BO.ProjectVarsDefault as DefaultVars
-from API_models.exports import EMODnetExportRsp
+from API_models.exports import DarwinCoreExportRsp
 from BO.Acquisition import AcquisitionBO, AcquisitionIDT
 from BO.Classification import ClassifIDT, ClassifIDSetT
 from BO.Collection import CollectionIDT, CollectionBO
@@ -37,11 +37,11 @@ from DB.User import User, Role
 from DB.WoRMs import WoRMS
 from DB.helpers.Postgres import timestamp_to_str
 from data.Countries import countries_by_name
-from formats.EMODnet.Archive import DwC_Archive, DwcArchive
-from formats.EMODnet.DatasetMeta import DatasetMetadata
-from formats.EMODnet.MoF import SamplingNetMeshSizeInMicrons, SampleDeviceApertureAreaInSquareMeters, \
+from formats.DarwinCore.Archive import DwC_Archive, DwcArchive
+from formats.DarwinCore.DatasetMeta import DatasetMetadata
+from formats.DarwinCore.MoF import SamplingNetMeshSizeInMicrons, SampleDeviceApertureAreaInSquareMeters, \
     AbundancePerUnitVolumeOfTheWaterBody, BiovolumeOfBiologicalEntity, SamplingInstrumentName, CountOfBiologicalEntity
-from formats.EMODnet.models import DwC_Event, RecordTypeEnum, DwC_Occurrence, OccurrenceStatusEnum, \
+from formats.DarwinCore.models import DwC_Event, RecordTypeEnum, DwC_Occurrence, OccurrenceStatusEnum, \
     BasisOfRecordEnum, EMLGeoCoverage, EMLTemporalCoverage, EMLMeta, EMLTitle, EMLPerson, EMLKeywordSet, \
     EMLTaxonomicClassification, EMLAdditionalMeta, EMLIdentifier, EMLAssociatedPerson
 from helpers.DateTime import now_time
@@ -53,7 +53,7 @@ from ..helpers.JobService import JobServiceBase, ArgsDict
 logger = get_logger(__name__)
 
 
-class EMODnetExport(JobServiceBase):
+class DarwinCoreExport(JobServiceBase):
     """
         EMODNet export.
         Help during development:
@@ -111,7 +111,7 @@ class EMODnetExport(JobServiceBase):
     DWC_ZIP_NAME = "dwca.zip"
     PRODUCED_FILE_NAME = DWC_ZIP_NAME
 
-    def run(self, current_user_id: int) -> EMODnetExportRsp:
+    def run(self, current_user_id: int) -> DarwinCoreExportRsp:
         """
             Initial run, basically just create the job.
         """
@@ -119,7 +119,7 @@ class EMODnetExport(JobServiceBase):
         _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
         # OK, go background straight away
         self.create_job(self.JOB_TYPE, current_user_id)
-        ret = EMODnetExportRsp(job_id=self.job_id)
+        ret = DarwinCoreExportRsp(job_id=self.job_id)
         return ret
 
     def do_background(self) -> None:
@@ -242,7 +242,7 @@ class EMODnetExport(JobServiceBase):
             problems.append(
                 "Cannot determine name+surname from %s name: %s." % (for_messages, user.name))
         else:
-            name, sur_name = EMODnetExport.capitalize_name(name), EMODnetExport.capitalize_name(sur_name)
+            name, sur_name = DarwinCoreExport.capitalize_name(name), DarwinCoreExport.capitalize_name(sur_name)
 
         try:
             country = countries_by_name[user.country]
@@ -586,7 +586,7 @@ class EMODnetExport(JobServiceBase):
             for the project and the configuration variable.
         """
         # We return all per taxon.
-        ret: Dict[ClassifIDT, EMODnetExport.AggregForTaxon] = {}
+        ret: Dict[ClassifIDT, DarwinCoreExport.AggregForTaxon] = {}
 
         count_per_taxon_per_acquis: Dict[AcquisitionIDT, Dict[ClassifIDT, int]] = {}
 
@@ -716,7 +716,7 @@ class EMODnetExport(JobServiceBase):
         aggregs = self.aggregate_for_sample(sample)
 
         # Group by lsid, in order to have a single occurence
-        by_lsid: Dict[str, Tuple[str, EMODnetExport.AggregForTaxon, WoRMS]] = {}
+        by_lsid: Dict[str, Tuple[str, DarwinCoreExport.AggregForTaxon, WoRMS]] = {}
         for an_id, an_aggreg in aggregs.items():
             try:
                 worms = self.mapping[an_id]

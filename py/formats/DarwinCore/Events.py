@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-from formats.EMODnet.models import DwC_Event
+from formats.DarwinCore.models import DwC_Event
 from formats.TxtFromModels import TxtFileWithModel
 
 

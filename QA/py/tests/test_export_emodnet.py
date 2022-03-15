@@ -16,7 +16,7 @@ from tests.test_jobs import wait_for_stable, api_check_job_ok, api_check_job_fai
 from tests.test_update import ACQUISITION_SET_UPDATE_URL, SAMPLE_SET_UPDATE_URL
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
-COLLECTION_EXPORT_EMODNET_URL = "/collections/{collection_id}/export/emodnet?dry_run={dry}" \
+COLLECTION_EXPORT_EMODNET_URL = "/collections/{collection_id}/export/darwin_core?dry_run={dry}" \
                                 "&with_zeroes={zeroes}&with_computations={comp}&auto_morpho={morph}"
 
 COLLECTION_QUERY_BY_TITLE_URL = "/collections/by_title/?q={title}"
@@ -220,8 +220,8 @@ def add_concentration_data(fastapi, prj_id):
 
 
 def test_names():
-    from API_operations.exports.EMODnet import EMODnetExport
-    assert EMODnetExport.capitalize_name("JEAN") == "Jean"
-    assert EMODnetExport.capitalize_name("JEAN-MARC") == "Jean-Marc"
-    assert EMODnetExport.capitalize_name("FOo--BAR") == "Foo--Bar"
-    assert EMODnetExport.capitalize_name("FOo-- 1 BAR") == "Foo-- 1 Bar"
+    from API_operations.exports.DarwinCore import DarwinCoreExport
+    assert DarwinCoreExport.capitalize_name("JEAN") == "Jean"
+    assert DarwinCoreExport.capitalize_name("JEAN-MARC") == "Jean-Marc"
+    assert DarwinCoreExport.capitalize_name("FOo--BAR") == "Foo--Bar"
+    assert DarwinCoreExport.capitalize_name("FOo-- 1 BAR") == "Foo-- 1 Bar"

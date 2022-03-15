@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-from formats.EMODnet.models import DwC_ExtendedMeasurementOrFact
+from formats.DarwinCore.models import DwC_ExtendedMeasurementOrFact
 from formats.TxtFromModels import TxtFileWithModel
 
 

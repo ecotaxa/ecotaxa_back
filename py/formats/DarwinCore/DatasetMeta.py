@@ -9,7 +9,7 @@
 
 from lxml import etree  # type: ignore
 
-from formats.EMODnet.models import EMLPerson, EMLMeta, EMLAssociatedPerson, EMLAdditionalMeta
+from formats.DarwinCore.models import EMLPerson, EMLMeta, EMLAssociatedPerson, EMLAdditionalMeta
 
 etree_sub_element = etree.SubElement
 

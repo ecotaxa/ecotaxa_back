@@ -8,17 +8,17 @@ from typing import List
 from helpers.pydantic import BaseModel, Field
 
 
-class EMODnetExportReq(BaseModel):
+class DarwinCoreExportReq(BaseModel):
     """
-        EMODNet format export request.
+        Darwin Core format export request. @see https://dwc.tdwg.org/
     """
     # meta: EMLMeta = Field(title="EML meta for the produced archive")
     project_ids: List[int] = Field(title="Project Ids", description="The projects to export.", min_items=1)
 
 
-class EMODnetExportRsp(BaseModel):
+class DarwinCoreExportRsp(BaseModel):
     """
-        EMODNet format export response.
+        Darwin Core format export response.
     """
     errors: List[str] = Field(title="Errors", description="Showstopper problems found while building the archive.", 
                                 example=["No content produced."," See previous warnings or check the presence of samples in the projects"], default=[])
@@ -61,7 +61,7 @@ class ExportReq(BaseModel):
 
 
  #TODO: Should inherit the other way round.
-class ExportRsp(EMODnetExportRsp):
+class ExportRsp(DarwinCoreExportRsp):
     """
         Export response.
     """

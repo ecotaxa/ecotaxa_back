@@ -5,11 +5,11 @@
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 
-from formats.EMODnet.DatasetMeta import DatasetMetadata
-from formats.EMODnet.Events import Events
-from formats.EMODnet.Metadata import DwC_Metadata
-from formats.EMODnet.Occurences import Occurences
-from formats.EMODnet.eMoFs import ExtendedMeasurementOrFacts
+from formats.DarwinCore.DatasetMeta import DatasetMetadata
+from formats.DarwinCore.Events import Events
+from formats.DarwinCore.Metadata import DwC_Metadata
+from formats.DarwinCore.Occurences import Occurences
+from formats.DarwinCore.eMoFs import ExtendedMeasurementOrFacts
 
 
 class DwcArchive(object):

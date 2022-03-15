@@ -13,7 +13,7 @@
 #   http://vocab.nerc.ac.uk/collection/P01/current/TEMPPR01/
 
 
-from formats.EMODnet.models import DwC_ExtendedMeasurementOrFact
+from formats.DarwinCore.models import DwC_ExtendedMeasurementOrFact
 
 
 class CountOfBiologicalEntity(DwC_ExtendedMeasurementOrFact):

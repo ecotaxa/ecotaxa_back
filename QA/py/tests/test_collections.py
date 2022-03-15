@@ -6,7 +6,7 @@ from starlette import status
 
 from tests.credentials import ADMIN_AUTH
 
-PROJECT_EXPORT_EMODNET_URL = "/export/emodnet?dry_run=False"
+PROJECT_EXPORT_EMODNET_URL = "/export/darwin_core?dry_run=False"
 
 COLLECTION_CREATE_URL = "/collections/create"
 COLLECTION_QUERY_URL = "/collections/{collection_id}"
