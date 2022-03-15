@@ -586,6 +586,7 @@ class ObjectSetFilter(object):
     """
         A filter for reducing an object set.
     """
+    TO_COL = {"score": ObjectHeader.classif_auto_score.name}
 
     def __init__(self, session: Session, filters: ProjectFiltersDict):
         """
@@ -810,15 +811,21 @@ class ObjectSetFilter(object):
             where_clause *= "obh.classif_when <= TO_TIMESTAMP(:validtodate,'YYYY-MM-DD HH24:MI')"
             params['validtodate'] = self.validated_to
 
-        if self.free_num and self.free_num_start:
-            criteria_col = "n%02d" % int(self.free_num[2:])
-            where_clause *= "obf." + criteria_col + " >= :freenumst"
-            params['freenumst'] = self.free_num_start
-
-        if self.free_num and self.free_num_end:
-            criteria_col = "n%02d" % int(self.free_num[2:])
-            where_clause *= "obf." + criteria_col + " <= :freenumend"
-            params['freenumend'] = self.free_num_end
+        if self.free_num and (self.free_num_start or self.free_num_end):  # e.g. "on02" and 5
+            if self.free_num_start:
+                comp_op = " >= "
+                bound = self.free_num_start
+            else:
+                assert self.free_num_end
+                comp_op = " <= "
+                bound = self.free_num_end
+            try:
+                criteria_col = "n%02d" % int(self.free_num[2:])
+                where_clause *= "obf." + criteria_col + comp_op + ":freenumbnd"
+            except ValueError:
+                criteria_col = self.TO_COL.get(self.free_num[1:], "?")
+                where_clause *= "obh." + criteria_col + comp_op + ":freenumbnd"
+            params['freenumbnd'] = bound
 
         if self.free_text and self.free_text_val:
             criteria_tbl = self.free_text[0]

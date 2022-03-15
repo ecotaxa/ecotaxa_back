@@ -53,7 +53,7 @@ class ProjectFiltersDict(TypedDict, total=False):
     validtodate: Optional[str]
     """ Format is 'YYYY-MM-DD HH24:MI', include objects validated/set to dubious before this date+time """
     freenum: Optional[str]
-    """ Numerical DB column number in Object as basis for the 2 following criteria """
+    """ Numerical DB column in Object, as basis for the 2 following criteria. e.g. on04. Use oscore for classification score. """
     freenumst: Optional[str]
     """ Start of included range for the column defined by freenum, in which objects are included """
     freenumend: Optional[str]
