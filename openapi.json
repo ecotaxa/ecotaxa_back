@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.26"
+    "version":"0.0.27"
   },
   "servers":[
     {
@@ -974,14 +974,14 @@
         ]
       }
     },
-    "/collections/{collection_id}/export/emodnet":{
+    "/collections/{collection_id}/export/darwin_core":{
       "get":{
         "tags":[
           "collections"
         ],
         "summary":"Emodnet Format Export",
-        "description":"**Export the collection in EMODnet format**, @see https://www.emodnet-ingestion.eu\n\nProduces a DwC-A archive into a temporary directory, ready for download.\n\nMaybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html\n\n🔒 *For admins only.*",
-        "operationId":"emodnet_format_export",
+        "description":"**Export the collection in Darwin Core format, e.g. for EMODnet portal**, @see https://www.emodnet-ingestion.eu\n\nProduces a DwC-A (https://dwc.tdwg.org/) archive into a temporary directory, ready for download.\n\nMaybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html\n\n🔒 *For admins only.*",
+        "operationId":"darwin_core_format_export",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this collection.",
@@ -1050,7 +1050,7 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "$ref":"#/components/schemas/EMODnetExportRsp"
+                  "$ref":"#/components/schemas/DarwinCoreExportRsp"
                 }
               }
             }
@@ -1537,12 +1537,12 @@
         "operationId":"project_set_get_stats",
         "parameters":[
           {
-            "description":"String containing the list of one or more id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
+            "description":"String containing the list of one or more project id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
             "required":true,
             "schema":{
               "title":"Ids",
               "type":"string",
-              "description":"String containing the list of one or more id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project."
+              "description":"String containing the list of one or more project id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project."
             },
             "example":"1",
             "name":"ids",
@@ -2667,16 +2667,16 @@
           "instruments"
         ],
         "summary":"Instrument Query",
-        "description":"Returns the list of instruments, inside specific project(s).",
+        "description":"Returns the list of instruments, inside specific project(s) or globally.",
         "operationId":"instrument_query",
         "parameters":[
           {
-            "description":"String containing the list of one or more project id separated by non-num char.",
+            "description":"String containing the list of one or more project ids, separated by non-num char, or 'all' for all instruments.",
             "required":true,
             "schema":{
               "title":"Projects ids",
               "type":"string",
-              "description":"String containing the list of one or more project id separated by non-num char."
+              "description":"String containing the list of one or more project ids, separated by non-num char, or 'all' for all instruments."
             },
             "example":"1,2,3",
             "name":"project_ids",
@@ -5182,7 +5182,9 @@
           "updates":{
             "title":"Updates",
             "type":"array",
-            "items":{},
+            "items":{
+              "$ref":"#/components/schemas/ColUpdate"
+            },
             "description":"The list of updates, to do on all impacted entities. \n\n     { \n\n         ucol : A column name, pseudo-columns AKA free ones, are OK. \n\n         uval : The new value to set, always as a string \n\n     }",
             "example":[
               {
@@ -5292,6 +5294,24 @@
             "type":"string",
             "description":"The wanted qualifications for all objects. 'V' or 'P'.",
             "example":"V"
+          }
+        }
+      },
+      "ColUpdate":{
+        "title":"Update request Model",
+        "required":[
+          "ucol",
+          "uval"
+        ],
+        "type":"object",
+        "properties":{
+          "ucol":{
+            "title":"Ucol",
+            "type":"string"
+          },
+          "uval":{
+            "title":"Uval",
+            "type":"string"
           }
         }
       },
@@ -5536,6 +5556,13 @@
             "description":"The project title, as text.",
             "example":"My new project title"
           },
+          "instrument":{
+            "title":"Instrument",
+            "type":"string",
+            "description":"The project instrument.",
+            "default":"?",
+            "example":"UVP5"
+          },
           "visible":{
             "title":"Visible",
             "type":"boolean",
@@ -5544,6 +5571,45 @@
             "example":true
           }
         }
+      },
+      "DarwinCoreExportRsp":{
+        "title":"DarwinCoreExportRsp",
+        "type":"object",
+        "properties":{
+          "errors":{
+            "title":"Errors",
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "description":"Showstopper problems found while building the archive.",
+            "default":[],
+            "example":[
+              "No content produced.",
+              " See previous warnings or check the presence of samples in the projects"
+            ]
+          },
+          "warnings":{
+            "title":"Warnings",
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "description":"Problems found while building the archive, which do not prevent producing it.",
+            "default":[],
+            "example":[
+              "No occurrence added for sample '3456' in 1"
+            ]
+          },
+          "job_id":{
+            "title":"Job Id",
+            "type":"integer",
+            "description":"The created job, 0 if there were problems.",
+            "default":0,
+            "example":12376
+          }
+        },
+        "description":"Darwin Core format export response."
       },
       "DirectoryEntryModel":{
         "title":"DirectoryEntryModel",
@@ -5606,45 +5672,6 @@
           }
         },
         "description":"A path + list of entries inside. The path is relative to an implied root."
-      },
-      "EMODnetExportRsp":{
-        "title":"EMODnetExportRsp",
-        "type":"object",
-        "properties":{
-          "errors":{
-            "title":"Errors",
-            "type":"array",
-            "items":{
-              "type":"string"
-            },
-            "description":"Showstopper problems found while building the archive.",
-            "default":[],
-            "example":[
-              "No content produced.",
-              " See previous warnings or check the presence of samples in the projects"
-            ]
-          },
-          "warnings":{
-            "title":"Warnings",
-            "type":"array",
-            "items":{
-              "type":"string"
-            },
-            "description":"Problems found while building the archive, which do not prevent producing it.",
-            "default":[],
-            "example":[
-              "No occurrence added for sample '3456' in 1"
-            ]
-          },
-          "job_id":{
-            "title":"Job Id",
-            "type":"integer",
-            "description":"The created job, 0 if there were problems.",
-            "default":0,
-            "example":12376
-          }
-        },
-        "description":"EMODNet format export response."
       },
       "ExportReq":{
         "title":"Export request Model",
@@ -6721,8 +6748,7 @@
             "default":0,
             "example":1000
           }
-        },
-        "description":"Tuned model for faster serialization out.\nTODO: A bit useless in the context as FastAPI does _not_ use ser/deser from the model.\n      Instead, it produces what needs to be sent over the wire and calls a JSON encoder onto it.\n      So 1) It calls def jsonable_encoder (in FastAPI encoders.py)\n         2) It calls an encoder (presently ORJSONEncoder in main.py)"
+        }
       },
       "ObjectSetRevertToHistoryRsp":{
         "title":"ObjectSetRevertToHistoryRsp",
@@ -7094,17 +7120,131 @@
           "filt_annot":{
             "title":"Filter annotator",
             "type":"string",
-            "description":"Coma-separated list of annotator, i.e. person who validated the classification at any point in time.",
+            "description":"Coma-separated list of annotators, i.e. persons who validated the classification at any point in time.",
             "example":"34,67,67"
           },
           "filt_last_annot":{
             "title":"Filter last annotator",
             "type":"string",
-            "description":"Coma-separated list of annotator, i.e. person who validated the classification in last.",
+            "description":"Coma-separated list of annotators, i.e. persons who validated the classification in last.",
             "example":"34,67"
           }
         },
         "description":"How to reduce project data."
+      },
+      "ProjectFiltersDict":{
+        "title":"Subset request Model",
+        "type":"object",
+        "properties":{
+          "taxo":{
+            "title":"Taxo",
+            "type":"string"
+          },
+          "taxochild":{
+            "title":"Taxochild",
+            "type":"string"
+          },
+          "statusfilter":{
+            "title":"Statusfilter",
+            "type":"string"
+          },
+          "MapN":{
+            "title":"Mapn",
+            "type":"string"
+          },
+          "MapW":{
+            "title":"Mapw",
+            "type":"string"
+          },
+          "MapE":{
+            "title":"Mape",
+            "type":"string"
+          },
+          "MapS":{
+            "title":"Maps",
+            "type":"string"
+          },
+          "depthmin":{
+            "title":"Depthmin",
+            "type":"string"
+          },
+          "depthmax":{
+            "title":"Depthmax",
+            "type":"string"
+          },
+          "samples":{
+            "title":"Samples",
+            "type":"string"
+          },
+          "instrum":{
+            "title":"Instrum",
+            "type":"string"
+          },
+          "daytime":{
+            "title":"Daytime",
+            "type":"string"
+          },
+          "month":{
+            "title":"Month",
+            "type":"string"
+          },
+          "fromdate":{
+            "title":"Fromdate",
+            "type":"string"
+          },
+          "todate":{
+            "title":"Todate",
+            "type":"string"
+          },
+          "fromtime":{
+            "title":"Fromtime",
+            "type":"string"
+          },
+          "totime":{
+            "title":"Totime",
+            "type":"string"
+          },
+          "inverttime":{
+            "title":"Inverttime",
+            "type":"string"
+          },
+          "validfromdate":{
+            "title":"Validfromdate",
+            "type":"string"
+          },
+          "validtodate":{
+            "title":"Validtodate",
+            "type":"string"
+          },
+          "freenum":{
+            "title":"Freenum",
+            "type":"string"
+          },
+          "freenumst":{
+            "title":"Freenumst",
+            "type":"string"
+          },
+          "freenumend":{
+            "title":"Freenumend",
+            "type":"string"
+          },
+          "freetxt":{
+            "title":"Freetxt",
+            "type":"string"
+          },
+          "freetxtval":{
+            "title":"Freetxtval",
+            "type":"string"
+          },
+          "filt_annot":{
+            "title":"Filt Annot",
+            "type":"string"
+          },
+          "filt_last_annot":{
+            "title":"Filt Last Annot",
+            "type":"string"
+          }
+        }
       },
       "ProjectModel":{
         "title":"ProjectModel",
@@ -7208,7 +7348,7 @@
           "instrument":{
             "title":"Instrument",
             "type":"string",
-            "description":"This project's instrument. Transitory: if several of them, then coma-separated.",
+            "description":"This project's instrument code.",
             "example":"zooscan"
           },
           "contact":{
@@ -7651,10 +7791,11 @@
         "properties":{
           "filters":{
             "title":"Filters",
-            "type":"object",
-            "additionalProperties":{
-              "type":"string"
-            },
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/ProjectFiltersDict"
+              }
+            ],
             "description":"The filters to apply to project.",
             "default":{},
             "example":{
