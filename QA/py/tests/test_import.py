@@ -51,6 +51,7 @@ ISSUES_DIR2 = DATA_DIR / "import_issues" / "no_classif_id"
 ISSUES_DIR3 = DATA_DIR / "import_issues" / "tsv_too_many_cols"
 EMPTY_DIR = DATA_DIR / "import_issues" / "no_relevant_file"
 EMPTY_TSV_DIR = DATA_DIR / "import_issues" / "empty_tsv"
+EMPTY_TSV_DIR2 = DATA_DIR / "import_issues" / "empty_tsv2"
 BREAKING_HIERARCHY_DIR = DATA_DIR / "import_issues" / "breaking_hierarchy"
 EMPTY_TSV_IN_UPD_DIR = DATA_DIR / "import_test_upd_empty"
 AMBIG_DIR = DATA_DIR / "import de categories ambigues"
@@ -397,7 +398,7 @@ def test_import_empty(config, database, caplog):
 
 # @pytest.mark.skip()
 def test_import_empty_tsv(config, database, caplog):
-    """ a TSV but no data """
+    """ a TSV with header but no data """
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 3")
 
@@ -408,6 +409,17 @@ def test_import_empty_tsv(config, database, caplog):
     check_job_errors(job)
     assert len(get_job_errors(job)) == 1
 
+def test_import_empty_tsv2(config, database, caplog):
+    """ a TSV with nothing at all """
+    caplog.set_level(logging.DEBUG)
+    prj_id = create_project(ADMIN_USER_ID, "Test LS 2.6.3")
+
+    params = ImportReq(source_path=str(EMPTY_TSV_DIR2))
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    check_job_errors(job)
+    assert len(get_job_errors(job)) == 1
 
 # @pytest.mark.skip()
 def test_import_issues(config, database, caplog):
@@ -533,6 +545,26 @@ def test_import_sparse(config, database, caplog):
     with AsciiDumper() as sce:
         sce.run(projid=prj_id, out="chk.dmp")
 
+def test_import_broken_TSV(config, database, caplog):
+    """
+        Import a TSV with 0 byte.
+    """
+    caplog.set_level(logging.DEBUG)
+    prj_id = create_project(ADMIN_USER_ID, "Test Sparse")
+
+    params = ImportReq(source_path=str(SPARSE_DIR))
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    errors = check_job_errors(job)
+    assert errors == \
+           [
+               "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field acq_id is mandatory as there are some acq columns: ['acq_hardware', 'acq_imgtype', 'acq_instrument'].",
+               "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field sample_id is mandatory as there are some sample columns: ['sample_program', 'sample_ship', 'sample_stationid']."
+           ]
+    print("\n".join(caplog.messages))
+    with AsciiDumper() as sce:
+        sce.run(projid=prj_id, out="chk.dmp")
 
 # @pytest.mark.skip()
 def test_import_breaking_unicity(config, database, caplog):

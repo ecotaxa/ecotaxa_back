@@ -82,8 +82,11 @@ class TSVFile(object):
                 clean_fields[raw_field] = raw_field.strip(" \t").lower()
         self.clean_fields = clean_fields
         # Read types line (2nd line in file)
-        line_2 = self.rdr.__next__()
-        self.type_line = {clean_fields[raw_field]: v for raw_field, v in line_2.items()}
+        try:
+            line_2 = self.rdr.__next__()
+            self.type_line = {clean_fields[raw_field]: v for raw_field, v in line_2.items()}
+        except StopIteration:
+            self.type_line = {}
         # When called using "with", the file will be closed on code block leave
         return csv_file
 
