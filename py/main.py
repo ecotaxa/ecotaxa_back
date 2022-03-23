@@ -2239,6 +2239,13 @@ def get_job_file(
         with RightsThrower():
             file_like, file_name, media_type = sce.get_file_stream(current_user, job_id)
         headers = {"content-disposition": "attachment; filename=\"" + file_name + "\""}
+
+        # Calculate Content-Length (if possible; fails for StringIO)
+        try:
+            headers["content-length"] = str(os.fstat(file_like.fileno()).st_size)
+        except:
+            pass
+
         return StreamingResponse(file_like, headers=headers, media_type=media_type)
 
 
