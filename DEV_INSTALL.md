@@ -2,11 +2,11 @@
 
 The environment consists mainly of a Postgres database and some directories.
 
-### Postgres
+### I. Postgres
 
-As of the writing, version 13.- is used in main production site (https://ecotaxa.obs-vlfr.fr).
+As of the writing, version 13.6 is used in main production site (https://ecotaxa.obs-vlfr.fr).
 
-#### Using docker
+#### I.1 Using docker
 
 See https://hub.docker.com/_/postgres/ for in-depth details.
 
@@ -34,11 +34,11 @@ So our small DB is now running on port 5432 (standard one) and persists in the c
 
 In a dedicated shell.
 
-#### Local installation
+#### I.2 Local PG installation
 
 For the braves only.
 
-### Python
+### II Python
 
 Source code is in `py` directory. The back-end needs python3.8, the installation is quite classical as there is
 a `requirements.txt`.
@@ -72,14 +72,13 @@ Of course the packages and version numbers below are for illustration.
     types-orjson-3.6.2 types-pytz-2021.1.2 types-requests-2.25.6 typing-extensions-4.2.0 urllib3-1.26.9 uvicorn-0.17.4
     uvloop-0.16.0 zipp-3.8.0
 
-### Configuration
+### III Configuration
 
 The configuration file is named `config.ini` and is a customized version of `config.ini.template`.
 
 Important entries, at this stage, might look like:
 
     [default]
-    my_dir = ..
     
     [conf]
     # DB connectivity, the user must be able to read/write every PG object there
@@ -97,6 +96,7 @@ Important entries, at this stage, might look like:
     
     ...
 
+    my_dir = ..
     # Where all images are stored. r/w by the back-end.
     VAULT_DIR = %(my_dir)s/vault
     # One subdirectory here per job. r/w by the back-end.
@@ -108,15 +108,17 @@ Important entries, at this stage, might look like:
     # CNN models. ro by the back-end.
     MODELSAREA = %(my_dir)s/models
 
-### Initial DB build
+Naturally, the pointed-at directories must exist.
+
+### IV Initial DB build
 
 This command will create an empty database:
 
     (myvenv) ecotaxa_back/py$ PYTHONPATH=. python cmds/manage.py db create --password mysecretpassword --db-name ecotaxa
     ...
 
-**Note**: The command does not read the config.ini for rights. Creating a DB might be different from rights to use the
-DB. Still the `--db-name` option needs to be equal to the config.ini `DB_DATABASE` entry.
+**Note**: The command does not read the config.ini for rights. Creating a DB might be different, from rights point of
+view, than using it R/W. Still the `--db-name` option needs to be equal to the config.ini `DB_DATABASE` entry.
 
 Next command will build DB tables, this time using the rights from .ini:
 
@@ -129,7 +131,7 @@ Next command will build DB tables, this time using the rights from .ini:
     Adding country 'Zambia'
     Adding country 'Zimbabwe'
 
-### Launch
+### V Launch & check
 
 The development server is on uvicorn and launches with command:
 
@@ -148,4 +150,4 @@ It can be checked that the server is OK by issuing an unauthenticated API call:
 
 For more complex operations, some python is needed, e.g. EcoTaxa front-end (https://github.com/ecotaxa/ecotaxa).
 
-PS: _The_ created login is in manage.py source code.
+PS: _The_ created Administrator login is in `manage.py` source code.
