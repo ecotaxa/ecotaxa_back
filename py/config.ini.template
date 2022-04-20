@@ -45,5 +45,6 @@ RECAPTCHASECRET = 6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
 
 # Password encryption parameters
 SECRET_KEY = THIS KEY MUST BE CHANGED
+# The below is kind of hardcoded, left here for reference as it's in Flask config, @see helpers/login.py.
 SECURITY_PASSWORD_HASH = sha512_crypt
 SECURITY_PASSWORD_SALT = YYfDY3FID

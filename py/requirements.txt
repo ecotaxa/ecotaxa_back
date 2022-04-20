@@ -1,3 +1,7 @@
+# To ensure all is installed and only them:
+# (venv)$ pip freeze | xargs pip uninstall -y
+# (venv)$ pip install -r requirements.txt
+
 # Typings there depend on SQLA 2.0 interface
 SQLAlchemy[mypy]==1.4.31
 # sqlalchemy2-stubs are now installed with [mypy] above
@@ -60,5 +64,7 @@ scikit-learn==1.0
 alembic==1.7.5
 # CLI tools, for "cmds" subdirectory
 typer[all]==0.4.0
+# https://github.com/tiangolo/typer/issues/377
+click==8.0.4
 # More recent mypy
 mypy==0.940

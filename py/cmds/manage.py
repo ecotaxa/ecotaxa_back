@@ -111,7 +111,7 @@ def create(user: str = "postgres", password: str = "", db_name: str = ""):
     super_conn.exec_outside_transaction(db_create_sql)
 
 
-@db_app.command(help="Create the DB, i.e. empty shell with no table inside.")
+@db_app.command(help="Completely drop the DB.")
 def drop(user: str = "postgres", password: str = "", db_name: str = ""):
     super_conn = Service.build_super_connection(app_config, user, password)
     db_drop_sql = "DROP DATABASE IF EXISTS %s ( FORCE )" % db_name
