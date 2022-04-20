@@ -6,10 +6,13 @@
 import typer
 
 from API_operations.helpers.Service import Service
+from BO.Rights import RightsBO, Action
+from DB.Instrument import Instrument
 from DB.User import Role, User, Country
 from DB.Views import views_creation_queries, views_deletion_queries
 from cmds.db_upg.db_conn import app_config  # type:ignore
 from data.Countries import countries_by_name
+from data.Instruments import DEFAULT_INSTRUMENTS
 
 DEFAULT_ROLES = [Role.APP_ADMINISTRATOR, Role.USERS_ADMINISTRATOR, Role.PROJECT_CREATOR]
 THE_ADMIN = "administrator"
@@ -46,6 +49,8 @@ def _init_security(sess):
         typer.echo("Creating user '%s'" % THE_ADMIN)
         # noinspection PyArgumentList
         adm_user = User(email=THE_ADMIN, password=THE_ADMIN_PASSWORD, name="Application Administrator")
+        all_roles = {a_role.name: a_role for a_role in sess.query(Role)}
+        RightsBO.set_allowed_actions(adm_user, [Action.ADMINISTRATE_APP], all_roles)
         sess.add(adm_user)
         # TODO: The below needs the RO (read-only) connection, which is not created yet during build-from-scratch
         # with LoginService() as sce:
@@ -87,12 +92,22 @@ def do_static():
 
 
 def _do_static(sess):
+    # Countries
     for a_country in countries_by_name.keys():
         db_country = sess.query(Country).get(a_country)
         if db_country is None:
             # noinspection PyArgumentList
             sess.add(Country(countryname=a_country))
             typer.echo("Adding country '%s'" % a_country)
+    # Instruments
+    for ins, nam, url in DEFAULT_INSTRUMENTS:
+        db_ins = sess.query(Instrument).get(ins)
+        if db_ins is None:
+            db_ins = Instrument()
+            db_ins.instrument_id = ins
+            db_ins.name = nam
+            db_ins.bodc_url = url
+            sess.add(db_ins)
     sess.commit()
 
 
