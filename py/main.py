@@ -1609,7 +1609,8 @@ def export_object_set(filters: ProjectFilters = Body(...),
         **Start an export job for the given object set and options.**
     """
     with ProjectExport(request, filters.base()) as sce:
-        rsp = sce.run(current_user)
+        with RightsThrower():
+            rsp = sce.run(current_user)
     return rsp
 
 
