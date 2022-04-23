@@ -14,6 +14,7 @@ from .helpers.Postgres import VARCHAR, INTEGER
 if TYPE_CHECKING:
     from .User import User
 
+
 class ProjectPrivilege(Model):
     """
         What users can do on a project.

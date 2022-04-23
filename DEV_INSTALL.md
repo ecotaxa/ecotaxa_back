@@ -120,16 +120,10 @@ This command will create an empty database:
 **Note**: The command does not read the config.ini for rights. Creating a DB might be different, from rights point of
 view, than using it R/W. Still the `--db-name` option needs to be equal to the config.ini `DB_DATABASE` entry.
 
-Next command will build DB tables, this time using the rights from .ini:
+Next command will build DB tables and fill them with default data, this time using the rights from .ini:
 
     (myvenv) ecotaxa_back/py$ PYTHONPATH=. python cmds/manage.py db build
-    Creating role 'Application Administrator'
-    Creating role 'Users Administrator'
-    Creating role 'Project creator'
-    ...
-    Adding country 'South Africa'
-    Adding country 'Zambia'
-    Adding country 'Zimbabwe'
+    Adding user 'administrator'
 
 ### V Launch & check
 

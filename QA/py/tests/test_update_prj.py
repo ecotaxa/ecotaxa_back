@@ -39,7 +39,7 @@ def test_update_prj(config, database, fastapi, caplog):
                 'instrument': 'UVP6',
                 'init_classif_list': [],
                 'license': '',
-                'managers': [{'email': 'admin',
+                'managers': [{'email': 'administrator',
                               'id': 1,
                               'name': 'Application Administrator'}],
                 'obj_free_cols': {'%area': 'n23',

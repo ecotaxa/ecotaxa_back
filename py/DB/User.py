@@ -4,14 +4,17 @@
 #
 from __future__ import annotations
 
-from typing import List
+from typing import List, Iterable
 from typing import TYPE_CHECKING
 
+from sqlalchemy import event
+
 from BO.helpers.TSVHelpers import none_to_empty
+from data.Countries import countries_by_name
 from .helpers import Session, Result
 from .helpers.DDL import Column, ForeignKey, Sequence, Integer, String, Boolean
 from .helpers.Direct import text, func
-from .helpers.ORM import Model, relationship
+from .helpers.ORM import Model, relationship, Insert
 from .helpers.Postgres import TIMESTAMP, CHAR
 
 if TYPE_CHECKING:
@@ -41,7 +44,7 @@ class User(Model):
     # The relationships are created in Relations.py but the typing here helps the IDE
     roles: relationship
     # The projects that user has rights in, so he/she can participate at various levels.
-    privs_on_projects: Sequence[ProjectPrivilege]
+    privs_on_projects: Iterable[ProjectPrivilege]
     # The objects of which _present_ classification was done by the user
     classified_objects: relationship
     # Preferences, per project, the global ones kept in field above.
@@ -87,9 +90,22 @@ class Role(Model):
     USERS_ADMINISTRATOR = "Users Administrator"
     PROJECT_CREATOR = "Project creator"
 
+    # Existing data references them by id, so changing the order here will scramble rights completely!
+    ALL_ROLES = [APP_ADMINISTRATOR, USERS_ADMINISTRATOR, PROJECT_CREATOR]
+
     #    description = Column(String(255))
     def __str__(self):
         return "{0} ({1})".format(self.name, self.id)
+
+
+@event.listens_for(Role.__table__, 'after_create')
+def insert_initial_role_values(_table, sess, **kwargs):
+    """
+        Create default roles without granting them to anyone.
+    """
+    for role_id, a_role in enumerate(Role.ALL_ROLES, 1):
+        ins = Insert(Role).values((role_id, a_role))
+        sess.execute(ins)
 
 
 class UserRole(Model):
@@ -107,3 +123,13 @@ class Country(Model):
     """
     __tablename__ = 'countrylist'
     countryname = Column(String(50), primary_key=True, nullable=False)
+
+
+@event.listens_for(Country.__table__, 'after_create')
+def insert_initial_country_values(_table, sess, **kwargs):
+    """
+        Create default countries after table creation.
+    """
+    for a_country in countries_by_name.keys():
+        ins = Insert(Country).values((a_country,))
+        sess.execute(ins)

@@ -31,8 +31,8 @@ def test_plain_API_login(config, database, caplog):
     assert rsp.status_code == status.HTTP_403_FORBIDDEN
 
     # Plaintext password in DB
-    rsp = client.post(url, json={"username": "admin",
-                                 "password": "nimda"})
+    rsp = client.post(url, json={"username": "administrator",
+                                 "password": "ecotaxa"})
     assert rsp.status_code == status.HTTP_200_OK
 
     # Good password but inactive account

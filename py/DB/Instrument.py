@@ -29,7 +29,10 @@ class Instrument(Model):
 
 
 @event.listens_for(Instrument.__table__, 'after_create')
-def insert_initial_values(_table, sess, **kwargs):
-    for ins_id, ins_name, ins_url in DEFAULT_INSTRUMENTS + []:
+def insert_initial_instrument_values(_table, sess, **kwargs):
+    """
+        Create default instruments after table creation.
+    """
+    for ins_id, ins_name, ins_url in DEFAULT_INSTRUMENTS:
         ins = Insert(Instrument).values((ins_id, ins_name, ins_url))
         sess.execute(ins)

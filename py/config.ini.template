@@ -7,7 +7,7 @@ DB_PASSWORD = xxxxxxxx
 DB_HOST = localhost
 DB_PORT = 5435
 DB_DATABASE = ecotaxa4
-# Read-only user, to same or other DB, the user must be able to read tables there
+# Optional: Read-only user, to same or other DB, the user must be able to read tables there
 RO_DB_USER = readerole
 RO_DB_PASSWORD = xxxxxxxx
 RO_DB_HOST = localhost

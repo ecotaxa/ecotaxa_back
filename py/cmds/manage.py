@@ -14,7 +14,6 @@ from cmds.db_upg.db_conn import app_config  # type:ignore
 from data.Countries import countries_by_name
 from data.Instruments import DEFAULT_INSTRUMENTS
 
-DEFAULT_ROLES = [Role.APP_ADMINISTRATOR, Role.USERS_ADMINISTRATOR, Role.PROJECT_CREATOR]
 THE_ADMIN = "administrator"
 THE_ADMIN_PASSWORD = "ecotaxa"
 
@@ -34,19 +33,17 @@ def init_security():
 
 
 def _init_security(sess):
-    for role_id, role in enumerate(DEFAULT_ROLES, 1):
+    for role_id, role in enumerate(Role.ALL_ROLES, 1):
         db_role = sess.query(Role).get(role_id)
         if db_role is None:
-            typer.echo("Creating role '%s'" % role)
+            typer.echo("Adding role '%s'" % role)
             # noinspection PyArgumentList
             sess.add(Role(id=role_id, name=role))
             sess.commit()
-        else:
-            typer.echo("Role '%s' is present" % role)
     # This is _not_ a full method of upgrading or restoring a damaged admin
     the_admin = sess.query(User).filter(User.email == THE_ADMIN).all()
     if len(the_admin) == 0:
-        typer.echo("Creating user '%s'" % THE_ADMIN)
+        typer.echo("Adding user '%s'" % THE_ADMIN)
         # noinspection PyArgumentList
         adm_user = User(email=THE_ADMIN, password=THE_ADMIN_PASSWORD, name="Application Administrator")
         all_roles = {a_role.name: a_role for a_role in sess.query(Role)}
@@ -57,8 +54,6 @@ def _init_security(sess):
         #     # Encrypt the password right away
         #     sce.verify_and_update_password(THE_ADMIN_PASSWORD, adm_user)
         sess.commit()
-    else:
-        typer.echo("User '%s' is present" % THE_ADMIN)
     sess.commit()
 
 
@@ -96,13 +91,16 @@ def _do_static(sess):
     for a_country in countries_by_name.keys():
         db_country = sess.query(Country).get(a_country)
         if db_country is None:
+            typer.echo("Adding country '%s'" % a_country)
             # noinspection PyArgumentList
             sess.add(Country(countryname=a_country))
-            typer.echo("Adding country '%s'" % a_country)
     # Instruments
+    # Note: Should do nothing just after table creation, as instruments
+    # are loaded then (@see hook in DB/Instrument.py).
     for ins, nam, url in DEFAULT_INSTRUMENTS:
         db_ins = sess.query(Instrument).get(ins)
         if db_ins is None:
+            typer.echo("Adding instrument '%s'" % ins)
             db_ins = Instrument()
             db_ins.instrument_id = ins
             db_ins.name = nam
