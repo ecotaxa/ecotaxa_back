@@ -2238,8 +2238,9 @@ def get_job_file(
     """
     with JobCRUDService() as sce:
         with RightsThrower():
-            file_like, file_name, media_type = sce.get_file_stream(current_user, job_id)
-        headers = {"content-disposition": "attachment; filename=\"" + file_name + "\""}
+            file_like, length, file_name, media_type = sce.get_file_stream(current_user, job_id)
+        headers = {"content-disposition": "attachment; filename=\"" + file_name + "\"",
+                   "content-length": str(length)}
         return StreamingResponse(file_like, headers=headers, media_type=media_type)
 
 

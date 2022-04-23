@@ -2,7 +2,8 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from io import StringIO
+from io import BytesIO
+from os import fstat
 from pathlib import Path
 from typing import Tuple, List, Any, Dict, TextIO, BinaryIO
 
@@ -63,7 +64,7 @@ class JobCRUDService(Service):
         assert (job.owner_id == current_user_id) or (current_user.has_role(Role.APP_ADMINISTRATOR)), NOT_AUTHORIZED
         return job
 
-    def get_file_stream(self, current_user_id: UserIDT, job_id: JobIDT) -> Tuple[BinaryIO, str, str]:
+    def get_file_stream(self, current_user_id: UserIDT, job_id: JobIDT) -> Tuple[BinaryIO, int, str, str]:
         """
             Return a stream containing the produced file associated with this job.
         """
@@ -83,10 +84,15 @@ class JobCRUDService(Service):
                 media_type = "text/tab-separated-values"
             else:
                 media_type = "unknown"
+            fp: BinaryIO
             try:
-                return open(out_file_path, mode="rb"), out_file_name, media_type
+                fp = open(out_file_path, mode="rb")
+                length = fstat(fp.fileno()).st_size
             except IOError:  # pragma:nocover
-                return StringIO("NOT FOUND"), out_file_name, "text/plain"  # type:ignore # If found no way to fix
+                fp = BytesIO(b"NOT FOUND")
+                length = 9
+                media_type = "text/plain"
+            return fp, length, out_file_name, media_type
 
     def get_log_stream(self, current_user_id: UserIDT, job_id: JobIDT) -> TextIO:
         return open(self.get_log_path(current_user_id, job_id), "r")
