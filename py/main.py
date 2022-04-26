@@ -34,6 +34,7 @@ from API_models.subset import SubsetReq, SubsetRsp
 from API_models.taxonomy import TaxaSearchRsp, TaxonModel, TaxonomyTreeStatus, TaxonUsageModel, TaxonCentral
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
+from API_operations.CRUD.Image import ImageService
 from API_operations.CRUD.Instruments import InstrumentsService
 from API_operations.CRUD.Jobs import JobCRUDService
 from API_operations.CRUD.Object import ObjectService
@@ -2428,6 +2429,20 @@ def used_constants() -> Constants:
     """
     with ConstantsService() as sce:
         return sce.get()
+
+
+@app.get("/vault/{dir_id}/{img_in_dir}", operation_id="get_image", tags=['image'], include_in_schema=False)
+def get_image(
+        dir_id: str = Path(..., description="Internal, image directory ID, 0-padded if < 1000.", example="0123"),
+        img_in_dir: str = Path(..., description="Internal, image path in directory.", example="0075.jpg"),
+) -> StreamingResponse:
+    """
+        Stream a vault image by its ref.
+    """
+    with ImageService() as sce:
+        file_like, length, media_type = sce.get_stream(dir_id, img_in_dir)
+        headers = {"content-length": str(length)}
+        return StreamingResponse(file_like, headers=headers, media_type=media_type)
 
 
 # ######################## END OF MISC

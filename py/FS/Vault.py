@@ -41,6 +41,12 @@ class Vault(object):
         """
         return self.path.joinpath(sub_directory)
 
+    def full_path(self, sub_directory: str, file_in_subdirectory: str) -> PurePath:
+        """
+            Return full path to a known image in a known subdirectory.
+        """
+        return self.path / sub_directory / file_in_subdirectory
+
     @staticmethod
     def address_for_id(img_id: int) -> Tuple[str, str]:
         """
