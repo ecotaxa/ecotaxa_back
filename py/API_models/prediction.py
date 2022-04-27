@@ -58,3 +58,12 @@ class PredictionRsp(BaseModel):
                                 example=[], default=[])
     job_id: int = Field(title="Job Id", description="The created job, 0 if there were problems.",
                         example=482, default=0)
+
+
+class MLModel(BaseModel):
+    """
+        A ML model for the features, so far just a name.
+    """
+    name: str = Field(title="Name",
+                      description="A usable model for features extraction.",
+                      example="zoocam_2022_04_06")

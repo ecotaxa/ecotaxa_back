@@ -29,7 +29,7 @@ from API_models.login import LoginReq
 from API_models.merge import MergeRsp
 from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp, ClassifyReq, ObjectModel, \
     ObjectHeaderModel, HistoricalClassificationModel, ObjectSetSummaryRsp, ClassifyAutoReq
-from API_models.prediction import PredictionRsp, PredictionReq
+from API_models.prediction import PredictionRsp, PredictionReq, MLModel
 from API_models.subset import SubsetReq, SubsetRsp
 from API_models.taxonomy import TaxaSearchRsp, TaxonModel, TaxonomyTreeStatus, TaxonUsageModel, TaxonCentral
 from API_operations.CRUD.Collections import CollectionsService
@@ -46,7 +46,7 @@ from API_operations.DBSyncService import DBSyncService
 from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
 from API_operations.ObjectManager import ObjectManager
-from API_operations.Prediction import PredictForProject
+from API_operations.Prediction import PredictForProject, PredictionDataService
 from API_operations.Stats import ProjectStatsFetcher
 from API_operations.Status import StatusService
 from API_operations.Subset import SubsetServiceOnProject
@@ -91,7 +91,7 @@ logger = get_logger(__name__)
 fastapi_logger.setLevel(INFO)
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.27",
+              version="0.0.28",
               # openapi URL as seen from navigator, this is included when /docs is required
               # which serves swagger-ui JS app. Stay in /api sub-path.
               openapi_url="/api/openapi.json",
@@ -2430,6 +2430,20 @@ def used_constants() -> Constants:
     with ConstantsService() as sce:
         return sce.get()
 
+
+@app.get("/ml_models", operation_id="query_ml_models", tags=['misc'],
+         response_model=List[MLModel])
+async def query_ml_models() \
+        -> List[MLModel]:
+    """
+        **Return the list of machine learning models, which can be used for extracting image features.**
+    """
+    with PredictionDataService() as sce:
+        models = sce.get_models()
+    return [MLModel(name=a_model) for a_model in models]
+
+
+# ######################## END OF MISC
 
 @app.get("/vault/{dir_id}/{img_in_dir}", operation_id="get_image", tags=['image'], include_in_schema=False)
 def get_image(

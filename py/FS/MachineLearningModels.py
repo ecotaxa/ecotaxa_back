@@ -4,7 +4,7 @@
 #
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, List
 
 
 class SavedModels(object):
@@ -19,6 +19,25 @@ class SavedModels(object):
         base_path = config.get_cnf(self.MODELS_CONFIG_KEY)
         base_path = base_path.strip("'")
         self.path: Path = Path(base_path)
+
+    def list(self) -> List[str]:
+        """
+            Enumerate all the possible models in self.
+        """
+        ret = []
+        valid_if = "dim_reducer.pickle"
+        if self.path.exists():
+            for a_dir in self.path.glob("*"):
+                if not a_dir.is_dir():
+                    continue
+                if not (a_dir / valid_if).is_file():
+                    continue
+                dir_name = a_dir.name
+                if not dir_name.startswith(self.PRFX):
+                    continue
+                dir_name = dir_name[len(self.PRFX):]
+                ret.append(dir_name)
+        return ret
 
     def _prefix(self, name: str) -> str:
         return self.PRFX + name

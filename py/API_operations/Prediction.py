@@ -10,7 +10,7 @@
 # Here is just the job registering part, the rest is in GPU_Prediction class.
 #
 from pathlib import Path
-from typing import cast
+from typing import cast, List
 
 from API_models.filters import ProjectFiltersDict
 from API_models.prediction import PredictionReq, PredictionRsp
@@ -21,6 +21,7 @@ from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 # TODO: Move somewhere else
 from .helpers.JobService import JobServiceBase, ArgsDict
+from .helpers.Service import Service
 
 logger = get_logger(__name__)
 
@@ -70,3 +71,12 @@ class PredictForProject(JobServiceBase):
 
     def do_prediction(self) -> None:
         ...
+
+
+class PredictionDataService(Service):
+    """
+        Available models service.
+    """
+
+    def get_models(self) -> List[str]:
+        return SavedModels(self.config).list()
