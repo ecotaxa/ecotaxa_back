@@ -76,7 +76,7 @@ class EcoTaxaDBFrom0(object):
         self.ftp_dir = FTP_DIR
         self.jobs_dir = TEST_DIR / "temptask"
         self.vault_dir = TEST_DIR / "vault"
-        self.models_dir = TEST_DIR / "models"
+        self.models_dir = SHARED_DIR / "models"
 
     def get_env(self):
         # Return the environment for postgres subprocesses

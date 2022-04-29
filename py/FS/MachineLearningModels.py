@@ -14,6 +14,9 @@ class SavedModels(object):
     """
     MODELS_CONFIG_KEY = 'MODELSAREA'
     PRFX = "io_"
+    DIM_REDUCER_FILE = "dim_reducer.pickle"
+    CROP_FILE = "crop.txt"
+    FEATURE_EXTRACTOR_DIR = "feature_extractor"
 
     def __init__(self, config: Any):
         base_path = config.get_cnf(self.MODELS_CONFIG_KEY)
@@ -22,15 +25,18 @@ class SavedModels(object):
 
     def list(self) -> List[str]:
         """
-            Enumerate all the possible models in self.
+            Enumerate all the possibly usable models in self.
         """
         ret = []
-        valid_if = "dim_reducer.pickle"
         if self.path.exists():
             for a_dir in self.path.glob("*"):
                 if not a_dir.is_dir():
                     continue
-                if not (a_dir / valid_if).is_file():
+                if not (a_dir / self.DIM_REDUCER_FILE).is_file():
+                    continue
+                if not (a_dir / self.CROP_FILE).is_file():
+                    continue
+                if not (a_dir / self.FEATURE_EXTRACTOR_DIR).is_dir():
                     continue
                 dir_name = a_dir.name
                 if not dir_name.startswith(self.PRFX):
@@ -43,25 +49,29 @@ class SavedModels(object):
         return self.PRFX + name
 
     def get_checkpoints_dir(self, model_name: str) -> Path:
-        # directory to save training checkpoints
+        # Directory to save training checkpoints
+        # Used during training only
         model_name = self._prefix(model_name)
         ckpt_dir = self.path / model_name / 'checkpoints'
         os.makedirs(ckpt_dir, exist_ok=True)
         return ckpt_dir
 
-    def extractor_path(self, model_name: str) -> Path:
-        # Used during CNN usage for generating
-        model_name = self._prefix(model_name)
-        return self.path / model_name / "feature_extractor"
-
     def best_model_path(self, model_name: str) -> Path:
+        # Used during training only
         model_name = self._prefix(model_name)
         return self.path / model_name / "best_model"
 
-    def reducer_pickle_path(self, model_name: str) -> Path:
+    def extractor_path(self, model_name: str) -> Path:
+        # Used during both training and extraction
         model_name = self._prefix(model_name)
-        return self.path / model_name / "dim_reducer.pickle"
+        return self.path / model_name / self.FEATURE_EXTRACTOR_DIR
+
+    def reducer_pickle_path(self, model_name: str) -> Path:
+        # Used during both training and extraction
+        model_name = self._prefix(model_name)
+        return self.path / model_name / self.DIM_REDUCER_FILE
 
     def crop_values_path(self, model_name: str) -> Path:
+        # Used during both training and extraction
         model_name = self._prefix(model_name)
-        return self.path / model_name / "crop.txt"
+        return self.path / model_name / self.CROP_FILE
