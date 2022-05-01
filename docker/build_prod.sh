@@ -4,10 +4,10 @@
 #
 rsync -avr --delete --exclude-from=not_to_copy.lst ../py/ py/
 
-docker build            -t grololo06/ecotaxaback -f prod_image/Dockerfile .
-#docker build --no-cache -t grololo06/ecotaxaback -f prod_image/Dockerfile .
+#docker build            -t ecotaxa/ecotaxa_back -f prod_image/Dockerfile .
+docker build --no-cache -t ecotaxa/ecotaxa_back -f prod_image/Dockerfile .
 
-docker build -t grololo06/ecotaxagpuback -f gpu_prod_image/Dockerfile .
+#docker build -t ecotaxa/ecotaxa_gpu_back -f gpu_prod_image/Dockerfile .
 
 # once built, replace 2.3 with the version...:
 #   docker tag grololo06/ecotaxaback:latest grololo06/ecotaxaback:2.5
