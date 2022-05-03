@@ -43,7 +43,7 @@ FROM ubuntu:18.04 as target
 
 # Minimum install
 RUN apt-get update && \
-apt-get install python3.8 libpq5 --no-install-recommends --yes && \
+apt-get install vim python3.8 libpq5 --no-install-recommends --yes && \
 apt-get clean && \
 rm -rf /var/lib/apt/lists/* && \
 rm -rf /var/log/*

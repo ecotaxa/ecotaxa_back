@@ -1,4 +1,4 @@
-venv*
+*venv*
 __pycache__
 *.pyc
 .idea
@@ -6,7 +6,7 @@ __pycache__
 .mypy_cache
 run.build
 run.bin
-config.ini
+config.ini*
 config.ini.template
 
 

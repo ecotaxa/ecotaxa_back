@@ -1,19 +1,18 @@
 #!/bin/bash
-#
-# Due to Docker fs, we need to copy all sources
-#
+VERSION=2.6.3
+# In case of doubt on the image sanity or if you have time, uncomment below
+#NO_CACHE=--no-cache
+# Preliminary, log using ecotaxa docker account
+#docker login -u ecotaxa
+# Copy all sources
 rsync -avr --delete --exclude-from=not_to_copy.lst ../py/ py/
-
-#docker build            -t ecotaxa/ecotaxa_back -f prod_image/Dockerfile .
-docker build --no-cache -t ecotaxa/ecotaxa_back -f prod_image/Dockerfile .
-
-#docker build -t ecotaxa/ecotaxa_gpu_back -f gpu_prod_image/Dockerfile .
-
-# once built, replace 2.3 with the version...:
-#   docker tag grololo06/ecotaxaback:latest grololo06/ecotaxaback:2.5
-#   docker push grololo06/ecotaxaback:2.5
-
-#   docker tag grololo06/ecotaxagpuback:latest grololo06/ecotaxagpuback:2.5
-#   docker push grololo06/ecotaxagpuback:2.5
-# needing before:
-#   docker login
+# Build
+docker build $NO_CACHE -t ecotaxa/ecotaxa_back -f prod_image/Dockerfile .
+docker build $NO_CACHE -t ecotaxa/ecotaxa_gpu_back -f gpu_prod_image/Dockerfile .
+# Publish
+docker tag ecotaxa/ecotaxa_back:latest ecotaxa/ecotaxa_back:$VERSION
+docker push ecotaxa/ecotaxa_back:$VERSION
+# GPU
+docker tag ecotaxa/ecotaxa_gpu_back:latest ecotaxa/ecotaxa_gpu_back:$VERSION
+# The push takes ages because the image comes from official Nvidia one which is 1.4G in size
+docker push ecotaxa/ecotaxa_gpu_back:$VERSION
