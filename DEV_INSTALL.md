@@ -13,7 +13,7 @@ See https://hub.docker.com/_/postgres/ for in-depth details.
 We need a PG docker accessible from the host, persisting its data in a given directory.   
 It would result e.g. in:
 
-    ecotaxa_back$ docker run -d -p 5432:5432 --name ecotaxa_db -e POSTGRES_PASSWORD=mysecretpassword -e PGDATA=/var/lib/postgresql/data/pgdata -v `pwd`/pg_data:/var/lib/postgresql/data postgres:13.6
+    ecotaxa_back$ docker run -d -p 5432:5432 --name ecotaxa_db -e POSTGRES_PASSWORD=mysecretpassword -v `pwd`/pg_data:/var/lib/postgresql/data postgres:13.6
 
 Then, to check:
 
@@ -56,6 +56,11 @@ The pip and wheel upgrade might be needed depending on your python, but it doesn
     (myvenv) ecotaxa_back/py$ pip3 install --upgrade pip wheel
     ...
     Successfully installed pip-22.0.4 wheel-0.37.1
+
+On MacOS, due to https://github.com/python-pillow/Pillow/issues/5276, you will need to install some global package
+first, namely
+
+    $ brew install libjpeg
 
 Of course the packages and version numbers below are for illustration.
 
