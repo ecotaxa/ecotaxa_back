@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.27"
+    "version":"0.0.28"
   },
   "servers":[
     {
@@ -5053,6 +5053,32 @@
           }
         }
       }
+    },
+    "/ml_models":{
+      "get":{
+        "tags":[
+          "misc"
+        ],
+        "summary":"Query Ml Models",
+        "description":"**Return the list of machine learning models, which can be used for extracting image features.**",
+        "operationId":"query_ml_models",
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Query Ml Models Ml Models Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/MLModel"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components":{
@@ -6272,6 +6298,22 @@
             "example":"ecotaxa.api.user@gmail.com"
           }
         }
+      },
+      "MLModel":{
+        "title":"MLModel",
+        "required":[
+          "name"
+        ],
+        "type":"object",
+        "properties":{
+          "name":{
+            "title":"Name",
+            "type":"string",
+            "description":"A usable model for features extraction.",
+            "example":"zoocam_2022_04_06"
+          }
+        },
+        "description":"A ML model for the features, so far just a name."
       },
       "MergeRsp":{
         "title":"MergeRsp",
