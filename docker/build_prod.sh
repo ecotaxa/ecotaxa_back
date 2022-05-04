@@ -12,7 +12,10 @@ docker build $NO_CACHE -t ecotaxa/ecotaxa_gpu_back -f gpu_prod_image/Dockerfile 
 # Publish
 docker tag ecotaxa/ecotaxa_back:latest ecotaxa/ecotaxa_back:$VERSION
 docker push ecotaxa/ecotaxa_back:$VERSION
+docker push ecotaxa/ecotaxa_back:latest
 # GPU
 docker tag ecotaxa/ecotaxa_gpu_back:latest ecotaxa/ecotaxa_gpu_back:$VERSION
 # The push takes ages because the image comes from official Nvidia one which is 1.4G in size
 docker push ecotaxa/ecotaxa_gpu_back:$VERSION
+docker push ecotaxa/ecotaxa_gpu_back:latest
+
