@@ -9,14 +9,17 @@ import os
 import re
 import zipfile
 from pathlib import Path
-from typing import Optional, Tuple, TextIO, cast
+from typing import Optional, Tuple, TextIO, cast, Dict, List
 
 from API_models.exports import ExportRsp, ExportReq, ExportTypeEnum
 from API_models.filters import ProjectFiltersDict
+from BO.Classification import ClassifIDT
 from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet
 from BO.Rights import RightsBO, Action
+from BO.Sample import SampleBO
 from BO.Taxonomy import TaxonomyBO
+from DB import Sample
 from DB.Object import VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL
 from DB.Project import Project
 from DB.helpers import Result
@@ -120,10 +123,13 @@ class ProjectExport(JobServiceBase):
                 self.add_images(nb_images, 10, progress_before_copy)
         elif req.exp_type == ExportTypeEnum.summary:
             nb_rows = self.create_summary(src_project)
+        elif req.exp_type in (ExportTypeEnum.abundances, ExportTypeEnum.concentrations, ExportTypeEnum.biovols):
+            nb_rows = self.create_sci_summary(src_project)
         else:
             raise Exception("Unsupported export type : %s" % req.exp_type)
         # Zip present log file as well
-        if req.exp_type != ExportTypeEnum.summary:
+        if req.exp_type not in (ExportTypeEnum.summary, ExportTypeEnum.abundances,
+                                ExportTypeEnum.concentrations, ExportTypeEnum.biovols):
             logger.info("Log in zip should end here.")
             self.append_log_to_zip()
         # Final copy
@@ -503,6 +509,43 @@ class ProjectExport(JobServiceBase):
         logger.info(msg)
         self.update_progress(50, msg)
         nb_lines = self.write_result_to_csv(res, out_file)
+        msg = "Extracted %d rows" % nb_lines
+        logger.info(msg)
+        self.update_progress(90, msg)
+        return nb_lines
+
+    def create_sci_summary(self, src_project: Project):
+        """
+            Assuming that the historical summary is a data one, compute 'scientific' summaries.
+        """
+        req = self.req
+        proj_id = src_project.projid
+        self.update_progress(1, "Start Scientific Summary export")
+
+        # TODO: dup code
+        now_txt = DateTime.now_time().strftime("%Y%m%d_%H%M")
+        self.out_file_name = "export_summary_{0:d}_{1:s}.tsv".format(src_project.projid, now_txt)
+        out_file = self.temp_for_jobs.base_dir_for(self.job_id) / self.out_file_name
+
+        samples = Sample.get_orig_id_and_model(self.ro_session, prj_id=src_project.projid)
+        a_sample: Sample
+        # TODO: Category mapping from Req
+        categ_mapping: Optional[Dict[ClassifIDT, ClassifIDT]] = None
+        with_computations = req.exp_type in (ExportTypeEnum.concentrations, ExportTypeEnum.biovols)
+        for orig_id, a_sample in samples.items():
+            warnings: List[str] = []
+            res_for_sample = SampleBO.aggregate_for_sample(session=self.ro_session, sample=a_sample,
+                                                           morpho2phylo=categ_mapping,
+                                                           with_computations=with_computations,
+                                                           warnings=warnings)
+            for a_warn in warnings:
+                # TODO: Add the orig_id for the user to know
+                logger.info(a_warn)
+
+        nb_lines = 0  # TODO: 0-propagation amongst categories/samples
+        msg = "Creating file %s" % out_file
+        logger.info(msg)
+        self.update_progress(50, msg)
         msg = "Extracted %d rows" % nb_lines
         logger.info(msg)
         self.update_progress(90, msg)
