@@ -53,6 +53,9 @@ class AcquisitionBO(MappedEntity):
     @classmethod
     def get_sums_by_taxon(cls, session: Session, acquis_id: AcquisitionIDT) \
             -> Dict[ClassifIDT, int]:
+        """
+            Compute number of objects validated for each taxon in the acquisition.
+        """
         sql = text("SELECT o.classif_id, count(1)"
                    "  FROM obj_head o "
                    " WHERE o.acquisid = :acq "

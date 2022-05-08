@@ -112,12 +112,12 @@ def fill_in_if_missing(job):
 
 
 @pytest.mark.parametrize("title", ["Test Create Update"])
-def test_import(config, database, caplog, title, instrument=None):
+def test_import(config, database, caplog, title, path=str(PLAIN_FILE), instrument=None):
     caplog.set_level(logging.DEBUG)
     # Create a dest project
     prj_id = create_project(ADMIN_USER_ID, title, instrument)
     # Prepare import request
-    params = ImportReq(source_path=str(PLAIN_FILE))
+    params = ImportReq(source_path=path)
     with FileImport(prj_id, params) as sce:
         rsp: ImportRsp = sce.run(ADMIN_USER_ID)
     job = wait_for_stable(rsp.job_id)

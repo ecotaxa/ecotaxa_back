@@ -8,15 +8,63 @@ from zipfile import ZipFile
 # noinspection PyPackageRequirements
 from starlette import status
 
-from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID
-from tests.test_export_emodnet import JOB_DOWNLOAD_URL
+from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID, CREATOR_AUTH
+from tests.test_classification import OBJECT_SET_CLASSIFY_URL
+from tests.test_export_emodnet import JOB_DOWNLOAD_URL, JOB_LOG_DOWNLOAD_URL
 from tests.test_fastapi import PROJECT_QUERY_URL
 from tests.test_import import SHARED_DIR, create_project, do_import, DATA_DIR, dump_project
 from tests.test_jobs import get_job_and_wait_until_ok, wait_for_stable, api_check_job_ok, JOB_QUERY_URL
+from tests.test_objectset_query import _prj_query
 
 OBJECT_SET_EXPORT_URL = "/object_set/export"
 
 EXPORT_ROOT_REF_DIR = "ref_exports"
+
+_req_tmpl = {
+    "exp_type": "TSV",
+    "tsv_entities": "OPASHC",
+    "coma_as_separator": False,
+    "format_dates_times": False,
+    "with_images": False,
+    "only_first_image": False,
+    "split_by": "sample",
+    "with_internal_ids": False,
+    "out_to_ftp": False,
+    "sum_subtotal": ""}
+
+
+def test_export_sci(config, database, fastapi, caplog):
+    caplog.set_level(logging.FATAL)
+
+    # Admin imports the project, which is an export expected result
+    from tests.test_import import test_import
+    path = str(DATA_DIR/"ref_exports"/"bak_all_images")
+    prj_id = test_import(config, database, caplog, "TSV sci export", path=path)
+
+    # Validate all, otherwise empty report
+    obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
+    url = OBJECT_SET_CLASSIFY_URL
+    classifications = [-1 for _obj in obj_ids]  # Keep current
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
+                                                      "classifications": classifications,
+                                                      "wanted_qualification": "V"})
+    assert rsp.status_code == status.HTTP_200_OK
+
+    # Abundance export
+    filters = {}
+    req = _req_tmpl.copy()
+    req.update({"project_id": prj_id,
+                "exp_type": "ABO"})
+    req_and_filters = {"filters": filters,
+                       "request": req}
+    rsp = fastapi.post(OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters)
+    assert rsp.status_code == status.HTTP_200_OK
+
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_check(fastapi, job_id, "abundances", only_hdr=True)
+    log = get_log_file(fastapi, job_id)
+    # TODO: The log file contains dates, so we cannot know what's inside beforehand...
+    print(log)
 
 
 def test_export_tsv(config, database, fastapi, caplog):
@@ -37,18 +85,9 @@ def test_export_tsv(config, database, fastapi, caplog):
 
     # Admin exports it
     url = OBJECT_SET_EXPORT_URL
-    req = {"project_id": prj_id,
-           "exp_type": "TSV",
-           "tsv_entities": "OPASHC",
-           "coma_as_separator": False,
-           "format_dates_times": False,
-           "with_images": False,
-           "only_first_image": False,
-           "split_by": "sample",
-           "with_internal_ids": False,
-           "out_to_ftp": False,
-           "sum_subtotal": ""}
     filters = {}
+    req = _req_tmpl.copy()
+    req.update({"project_id": prj_id})
     req_and_filters = {"filters": filters,
                        "request": req}
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
@@ -127,6 +166,10 @@ def download_and_unzip_and_check(fastapi, job_id, ref_dir, only_hdr: bool = Fals
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
     unzip_and_check(rsp.content, ref_dir, only_hdr)
 
+def get_log_file(fastapi, job_id):
+    log_url = JOB_LOG_DOWNLOAD_URL.format(job_id=job_id)
+    rsp = fastapi.get(log_url, headers=ADMIN_AUTH)
+    return rsp.content
 
 def tsv_check(tsv_content, ref_dir: str, only_hdr: bool):
     ref_dir_path = SHARED_DIR / EXPORT_ROOT_REF_DIR / ref_dir
@@ -227,4 +270,3 @@ def test_export_roundtrip(config, database, fastapi, caplog):
         dump_project(ADMIN_USER_ID, prj_id, fd)
     with open('exp_clone.json', "w") as fd:
         dump_project(ADMIN_USER_ID, clone_prj_id, fd)
-

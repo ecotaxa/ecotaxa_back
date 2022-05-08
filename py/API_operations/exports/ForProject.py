@@ -8,8 +8,9 @@ import csv
 import os
 import re
 import zipfile
+from collections import OrderedDict
 from pathlib import Path
-from typing import Optional, Tuple, TextIO, cast, Dict, List
+from typing import Optional, Tuple, TextIO, cast, Dict, List, Set
 
 from API_models.exports import ExportRsp, ExportReq, ExportTypeEnum
 from API_models.filters import ProjectFiltersDict
@@ -17,8 +18,8 @@ from BO.Classification import ClassifIDT
 from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet
 from BO.Rights import RightsBO, Action
-from BO.Sample import SampleBO
-from BO.Taxonomy import TaxonomyBO
+from BO.Sample import SampleBO, SampleAggregForTaxon
+from BO.Taxonomy import TaxonomyBO, TaxonBOSet
 from DB import Sample
 from DB.Object import VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL
 from DB.Project import Project
@@ -529,24 +530,50 @@ class ProjectExport(JobServiceBase):
 
         samples = Sample.get_orig_id_and_model(self.ro_session, prj_id=src_project.projid)
         a_sample: Sample
+
         # TODO: Category mapping from Req
         categ_mapping: Optional[Dict[ClassifIDT, ClassifIDT]] = None
         with_computations = req.exp_type in (ExportTypeEnum.concentrations, ExportTypeEnum.biovols)
+        res_by_sample = OrderedDict()
+        seen_taxa: Set[ClassifIDT] = set()
         for orig_id, a_sample in samples.items():
             warnings: List[str] = []
             res_for_sample = SampleBO.aggregate_for_sample(session=self.ro_session, sample=a_sample,
                                                            morpho2phylo=categ_mapping,
                                                            with_computations=with_computations,
                                                            warnings=warnings)
+            res_by_sample[orig_id] = res_for_sample
+            seen_taxa.update(res_for_sample.keys())
             for a_warn in warnings:
                 # TODO: Add the orig_id for the user to know
                 logger.info(a_warn)
 
-        nb_lines = 0  # TODO: 0-propagation amongst categories/samples
+        # Propagate the 0s as we want every taxon to have a line in every sample
+        sorted_seen_taxa = sorted(list(seen_taxa))
+        for sample_id, taxo_details in res_by_sample.items():
+            for a_taxon in sorted_seen_taxa:
+                if a_taxon not in taxo_details:
+                    taxo_details[a_taxon] = SampleAggregForTaxon(0, None, None)
+        # Lookup the taxa to get a name
+        taxo_set = TaxonBOSet(session=self.ro_session, taxon_ids=sorted_seen_taxa)
+        taxa_names = {taxon.id: taxon.display_name for taxon in taxo_set.as_list()}
+        # Output data
         msg = "Creating file %s" % out_file
         logger.info(msg)
         self.update_progress(50, msg)
-        msg = "Extracted %d rows" % nb_lines
+        # Write the TSV
+        nb_lines = 0
+        with open(out_file, 'w') as csv_file:
+            col_names = ["sampleid", "taxonid", "count"]
+            wtr = csv.DictWriter(csv_file, col_names, delimiter='\t', quotechar='"', lineterminator='\n')
+            wtr.writeheader()
+            for sample_id, taxo_details in res_by_sample.items():
+                for a_taxon, a_detail in taxo_details.items():
+                    wtr.writerow({"sampleid": sample_id,
+                                  "taxonid": taxa_names[a_taxon],
+                                  "count": a_detail.abundance})
+                    nb_lines += 1
+        msg = "Produced %d rows" % nb_lines
         logger.info(msg)
         self.update_progress(90, msg)
         return nb_lines

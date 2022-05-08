@@ -22,6 +22,7 @@ COLLECTION_EXPORT_EMODNET_URL = "/collections/{collection_id}/export/darwin_core
 COLLECTION_QUERY_BY_TITLE_URL = "/collections/by_title/?q={title}"
 
 JOB_DOWNLOAD_URL = "/jobs/{job_id}/file"
+JOB_LOG_DOWNLOAD_URL = "/jobs/{job_id}/log"
 
 PROJECT_SEARCH_SAMPLES_URL = "/api/samples/search?project_ids={project_id}&id_pattern="
 PROJECT_SEARCH_ACQUIS_URL = "/acquisitions/search?project_id={project_id}"

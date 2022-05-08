@@ -23,7 +23,7 @@ def test_create_collection(config, database, fastapi, caplog):
 
     # Admin imports the project
     from tests.test_import import test_import
-    prj_id = test_import(config, database, caplog, "Collection project 1", "Other scanner")
+    prj_id = test_import(config, database, caplog, "Collection project 1", instrument="Other scanner")
 
     # Small instrument 'list' test
     url = INSTRUMENT_QUERY_URL.format(project_id=prj_id)
