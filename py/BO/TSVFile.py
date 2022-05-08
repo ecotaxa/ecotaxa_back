@@ -121,7 +121,7 @@ class TSVFile(object):
                 row_count_for_csv += 1
                 counter += 1
 
-                # Value is wrongly deduced as str from the rdr, it's optional in fact
+                # Value is wrongly deduced (by typings) as a mandatory str from the rdr, it's optional in fact
                 rawlig2 = cast(Dict[str, Optional[str]], rawlig)
 
                 lig = {self.clean_fields[field]: v for field, v in rawlig2.items()}
