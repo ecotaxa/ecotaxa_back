@@ -30,6 +30,8 @@ OBJECT_SET_DELETE_URL = "/object_set/"
 OBJECT_SET_SUMMARY_URL = "/object_set/{project_id}/summary?only_total=False"
 OBJECT_SET_PARENTS_URL = "/object_set/parents"
 
+PROJECT_SET_USER_STATS = "/project_set/user_stats?ids={prj_ids}"
+
 copepod_id = 25828
 entomobryomorpha_id = 25835
 crustacea = 12846
@@ -273,3 +275,18 @@ def test_classif(config, database, fastapi, caplog):
     for prj in resp['project_ids']:
         assert prj == prj_id
     assert resp['total_ids'] == 4
+
+    # Try user stats on the project
+    url = PROJECT_SET_USER_STATS.format(prj_ids=str(prj_id))
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    stats = rsp.json()
+    # The ref stats were obtained with a run in may 2022
+    ref_stats = [{"projid": prj_id,
+                  "annotators": [{"id": 1,
+                                  "name": "Application Administrator"}],
+                  "activities": [{"id": 1, "nb_actions": 8,
+                                  "last_annot": "2022-05-12T14:21:15"}]}]
+    # Fix the date on both sides
+    ref_stats[0]["activities"][0]["last_annot"] = "FIXED DATE"
+    stats[0]["activities"][0]["last_annot"] = "FIXED DATE"
+    assert stats == ref_stats

@@ -31,6 +31,34 @@ def test_create_collection(config, database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json() == ['Other scanner']
 
+    # All instruments 'list' test
+    url = INSTRUMENT_QUERY_URL.format(project_id='all')
+    rsp = fastapi.get(url)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == ['?',
+                          'AMNIS',
+                          'CPICS',
+                          'CytoSense',
+                          'FastCam',
+                          'FlowCam',
+                          'IFCB',
+                          'ISIIS',
+                          'LISST-Holo',
+                          'Loki',
+                          'Other camera',
+                          'Other flowcytometer',
+                          'Other microscope',
+                          'Other scanner',
+                          'PlanktoScope',
+                          'UVP5HD',
+                          'UVP5SD',
+                          'UVP5Z',
+                          'UVP6',
+                          'VPR',
+                          'ZooCam',
+                          'Zooscan',
+                          'eHFCM']
+
     # And creates a collection with it
     url = COLLECTION_CREATE_URL
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"title": "Test collection",
