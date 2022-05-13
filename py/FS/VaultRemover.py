@@ -53,7 +53,7 @@ class VaultRemover(Thread):
             a_file = queue.get()
             if a_file is None:
                 break
-            file_in_vault = self.vault.path_to(a_file)
+            file_in_vault = self.vault.image_path(a_file)
             try:
                 unlink(file_in_vault)
             except FileNotFoundError:

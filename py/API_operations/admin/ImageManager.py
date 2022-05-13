@@ -93,7 +93,7 @@ class ImageManagerService(Service):
         return "Digest for %d images done." % cnt
 
     def _md5_on_record(self, img_file: ImageFile):
-        img_file_path = self.vault.sub_path(img_file.path)
+        img_file_path = self.vault.image_path(img_file.path)
         try:
             md5 = self.compute_md5(img_file_path)
             img_file.digest = md5
@@ -147,8 +147,8 @@ class ImageManagerService(Service):
             if orig_img_id in deleted_imgids:
                 continue
             # Even if MD5s match, be paranoid and compare files
-            orig_path = self.vault.sub_path(orig_file_name)
-            dup_path = self.vault.sub_path(an_image.file_name)
+            orig_path = self.vault.image_path(orig_file_name)
+            dup_path = self.vault.image_path(an_image.file_name)
             assert orig_path != dup_path
             orig_exists = exists(orig_path)
             dup_exists = exists(dup_path)

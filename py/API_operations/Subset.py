@@ -220,7 +220,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         # Do images
         if new_records > 0 and image and image.file_name is not None:
             # We have an image, with a new imgid but old paths have been copied
-            old_imgpath = Path(self.vault.path_to(image.file_name))
+            old_imgpath = Path(self.vault.image_path(image.file_name))
             image.file_name = None  # In case, don't reference a non-existing file
             try:
                 sub_path = self.vault.store_image(old_imgpath, image.imgid)
@@ -229,7 +229,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
                 logger.error("Could not duplicate %s, not found", old_imgpath)
             # Proceed to thumbnail if any
             if image.thumb_file_name is not None:
-                old_thumbnail_path = self.vault.path_to(image.thumb_file_name)
+                old_thumbnail_path = self.vault.image_path(image.thumb_file_name)
                 thumb_relative_path, thumb_full_path = self.vault.thumbnail_paths(image.imgid)
                 image.thumb_file_name = None  # In case, don't reference a non-existing file
                 try:

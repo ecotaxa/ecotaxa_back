@@ -31,7 +31,7 @@ class MachineLearningBase(object):
         #     nb_loaded += 0 if self.vault.ensure_there(an_img) else 1
         # if nb_loaded != len(paths):
         #     logger.info("Downloaded %d images", nb_loaded)
-        vault_def = self.vault.path_to
+        vault_def = self.vault.image_path
         return [vault_def(an_img) for an_img in paths]
 
     def read_crop(self, model_name) -> Tuple[int, int, int, int]:

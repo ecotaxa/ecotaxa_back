@@ -10,12 +10,14 @@ sqlalchemy_views==0.3.1
 #psycopg[binary]==3.0.8
 psycopg2-binary==2.9.3
 # Pillow needs manual testing
+# mac: brew install libjpeg
 Pillow==8.1.0
 # astral needs pytz
 astral==2.2
 pytz==2021.1
 types-pytz==2021.1.2
-# Needed by TF EXACTLY
+# Needed by TF EXACTLY, but only in GPU back -end
+# the main back-end uses numpy for image processing, any recent version will do.
 numpy~=1.19.2
 # Backbone of the app
 fastapi==0.73.0

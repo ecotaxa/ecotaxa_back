@@ -19,7 +19,7 @@ class ImageService(Service):
         self.vault = Vault(self.config.vault_dir())
 
     def get_stream(self, dir_id: str, img_in_dir: str) -> Tuple[BinaryIO, int, str]:
-        file_path = self.vault.full_path(dir_id, img_in_dir)
+        file_path = self.vault.image_path("%s/%s" % (dir_id, img_in_dir))
         fp = open(file_path, mode="rb")
         length = fstat(fp.fileno()).st_size
         media_type = "text/plain"
@@ -29,4 +29,3 @@ class ImageService(Service):
         elif img_in_dir_lower.endswith(".png"):
             media_type = "image/png"
         return fp, length, media_type
-

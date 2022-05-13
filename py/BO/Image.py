@@ -47,7 +47,7 @@ class ImageBO(object):
             Get dimensions from given image, return a string with the error in case of issue.
             It is assumed that the image is valid, i.e. did not throw an exception in above validate()
         """
-        im = PIL_Image.open(vault.path_to(sub_path))
+        im = PIL_Image.open(vault.image_path(sub_path))
         image_to_write.width = im.size[0]
         image_to_write.height = im.size[1]
         # Generate a thumbnail if image is too large

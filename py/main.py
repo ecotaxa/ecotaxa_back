@@ -676,7 +676,7 @@ def project_subset(project_id: int = Path(..., description="Internal, numeric id
 
 @app.get("/projects/{project_id}", operation_id="project_query", tags=['projects'], response_model=ProjectModel)
 def project_query(project_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
-                  for_managing: Optional[bool] = Query(title="For managinig", description="For managing this project.",
+                  for_managing: Optional[bool] = Query(title="For managing", description="For managing this project.",
                                                        default=False, example=False),
                   current_user: Optional[int] = Depends(get_optional_current_user)) -> ProjectBO:
     """

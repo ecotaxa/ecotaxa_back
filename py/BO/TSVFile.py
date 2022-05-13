@@ -191,7 +191,7 @@ class TSVFile(object):
                         sub_path = where.vault.store_image(orig_file_name, backup_img_to_write.imgid)
                         backup_img_to_write.file_name = sub_path
                         # Get original image dimensions
-                        im = PIL_Image.open(where.vault.path_to(sub_path))
+                        im = PIL_Image.open(where.vault.image_path(sub_path))
                         backup_img_to_write.width, backup_img_to_write.height = im.size
                         del im
 

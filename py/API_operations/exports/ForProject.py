@@ -437,7 +437,7 @@ class ProjectExport(JobServiceBase):
         temp_img_file = self.out_path / "images.csv"
         with open(temp_img_file, "r") as temp_images_csv_fd:
             for r in csv.DictReader(temp_images_csv_fd, delimiter='\t', quotechar='"', lineterminator='\n'):
-                img_file_path = vault.path_to(r["src_path"])
+                img_file_path = vault.image_path(r["src_path"])
                 path_in_zip = r["dst_path"]
                 try:
                     zfile.write(img_file_path, arcname=path_in_zip)

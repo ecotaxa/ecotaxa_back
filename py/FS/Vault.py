@@ -16,15 +16,15 @@ class Vault(object):
         self.path: Path = Path(path)
         self.ok_subs: Set[str] = set()
 
-    def ensure_exists(self, sub_directory: str):
+    def ensure_exists(self, sub_directory: str) -> Path:
         """
-            Ensure the sub-directory exists, i.e. create it, if not there.
+            Ensure the sub-directory exists, i.e. create it, if not there, and return it.
             If another process asked for the same simultaneously then use it.
         :param sub_directory:
         """
-        if sub_directory in self.ok_subs:
-            return
         subdir: Path = self.path.joinpath(sub_directory)
+        if sub_directory in self.ok_subs:
+            return subdir
         try:
             if not subdir.exists():
                 subdir.mkdir()
@@ -33,19 +33,7 @@ class Vault(object):
             if not subdir.exists():
                 raise e
         self.ok_subs.add(sub_directory)
-
-    def sub_path(self, sub_directory: str) -> PurePath:
-        """
-            Return a path to subdirectory of self.
-        :return:
-        """
-        return self.path.joinpath(sub_directory)
-
-    def full_path(self, sub_directory: str, file_in_subdirectory: str) -> PurePath:
-        """
-            Return full path to a known image in a known subdirectory.
-        """
-        return self.path / sub_directory / file_in_subdirectory
+        return subdir
 
     @staticmethod
     def address_for_id(img_id: int) -> Tuple[str, str]:
@@ -59,13 +47,12 @@ class Vault(object):
 
     def store_image(self, img_file_path: Path, img_id: int) -> str:
         """
-            Store, i.e. copy, an image with given path, into self with given ID.
+            Store, i.e. copy, an image having given path, into self, with given ID.
         :return: The image path, relative to root directory.
         """
         assert img_id is not None
         folder, ndx_in_folder = self.address_for_id(img_id)
-        self.ensure_exists(folder)
-        folder_path: PurePath = self.sub_path(folder)
+        folder_path: PurePath = self.ensure_exists(folder)
         # Return the path relative to vault, keeping file suffix, e.g. .jpg or .png
         filename = "%s%s" % (ndx_in_folder, img_file_path.suffix)
 
@@ -80,11 +67,10 @@ class Vault(object):
 
     BASE_URL = "https://ecotaxa.obs-vlfr.fr/vault/%s"
 
-    def ensure_there(self, sub_path: str) -> bool:
+    def ensure_there(self, img_maybe: Path, sub_path: str) -> bool:
         """
             For devs, to ensure an image exists. If it doesn't, get it from main site.
         """
-        img_maybe = self.path.joinpath(sub_path)
         is_there = img_maybe.exists()
         if not is_there:
             import requests
@@ -93,30 +79,37 @@ class Vault(object):
             fout = tempfile.mktemp(suffix=sub_path[-4:])
             r = requests.get(self.BASE_URL % sub_path, stream=True)
             if r.status_code != 200:
-                raise
+                return False
             with open(fout, 'wb') as f:
                 for chunk in r.iter_content(1024):
                     f.write(chunk)
             f.close()
-            img_id = int(sub_path[:-4].replace("/", ""))
+            if "mini" in sub_path:
+                img_id = int(sub_path[:-9].replace("/", ""))
+            else:
+                img_id = int(sub_path[:-4].replace("/", ""))
             self.store_image(Path(fout), img_id)
             unlink(fout)
         return is_there
 
-    def path_to(self, sub_path: str) -> str:
+    def image_path(self, img_sub_path: str) -> str:
         """
-            Return absolute path to given relative subpath.
+            Return absolute path to given referenced, i.e. assumed as _existing_, image,
+             either plain or thumbnail, with given sub path e.g. '4567/345.png' or '5014/6481_mini.jpg'.
         :return:
         """
-        return self.path.joinpath(sub_path).as_posix()
+        full_path = self.path.joinpath(img_sub_path)
+        # For devs.
+        #self.ensure_there(full_path, img_sub_path)
+        return full_path.as_posix()
 
-    def thumbnail_paths(self, img_id) -> Tuple[str, str]:
+    def thumbnail_paths(self, img_id: int) -> Tuple[str, str]:
         """
             Return relative and absolute paths to a thumbnail image.
-            It is assumed that the main image was stored before.
+            It is assumed that the main image was stored before, the common subdirectory must exist.
         :return:
         """
         folder, ndx_in_folder = self.address_for_id(img_id)
         # We force thumbnail format to JPEG
         sub_path = "%s/%s_mini%s" % (folder, ndx_in_folder, '.jpg')
-        return sub_path, self.path_to(sub_path)
+        return sub_path, self.path.joinpath(sub_path).as_posix()
