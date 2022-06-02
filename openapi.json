@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.28"
+    "version":"0.0.29"
   },
   "servers":[
     {
@@ -1364,7 +1364,7 @@
             "description":"For managing this project.",
             "required":false,
             "schema":{
-              "title":"For managinig",
+              "title":"For managing",
               "type":"boolean",
               "description":"For managing this project.",
               "default":false
@@ -5608,7 +5608,7 @@
             "items":{
               "type":"string"
             },
-            "description":"Showstopper problems found while building the archive.",
+            "description":"Showstopper problems found preventing building the archive.",
             "default":[],
             "example":[
               "No content produced.",
@@ -5749,7 +5749,7 @@
             "title":"Split by",
             "type":"string",
             "description":"For 'TSV' type, inside archives, split in one directory per... 'sample', 'taxo' or '' (no split).",
-            "example":"S"
+            "example":"sample"
           },
           "coma_as_separator":{
             "title":"Coma as separator",
@@ -5806,7 +5806,7 @@
             "items":{
               "type":"string"
             },
-            "description":"Showstopper problems found while building the archive.",
+            "description":"Showstopper problems found preventing building the archive.",
             "default":[],
             "example":[
               "No content produced.",
@@ -5841,7 +5841,10 @@
           "TSV",
           "BAK",
           "DOI",
-          "SUM"
+          "SUM",
+          "ABO",
+          "CNC",
+          "BIV"
         ],
         "type":"string",
         "description":"An enumeration."
