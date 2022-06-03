@@ -42,6 +42,8 @@ COPY gpu_prod_image/start.sh /app
 # Image is for drivers v470
 FROM nvidia/cuda:11.4.3-cudnn8-runtime-ubuntu18.04 as target
 
+RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/3bf863cc.pub
+
 # Minimum install
 RUN apt-get update && \
 apt-get install python3.8 libpq5 --no-install-recommends --yes && \
