@@ -7,7 +7,7 @@
 # A Sample BO + enumerated set of Sample(s)
 #
 from dataclasses import dataclass
-from typing import List, ClassVar, Dict, Optional
+from typing import List, ClassVar, Dict, Optional, Tuple
 
 from DB.Acquisition import Acquisition
 from DB.Object import VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL
@@ -91,10 +91,13 @@ class SampleBO(MappedEntity):
                              morpho2phylo: Optional[Dict[ClassifIDT, ClassifIDT]], with_computations: bool,
                              warnings: List[str]) -> Dict[ClassifIDT, SampleAggregForTaxon]:
         """
+            :param session: SQLA DB session for queries.
+            :param sample: The Sample for which computations needs to be done.
             :param with_computations: If not set, just do abundance calculations (e.g. to save time
                 or when it's known to be impossible).
             :param morpho2phylo: The Morpho taxa to their nearest Phylo parent. If not provided
-                then no up-the-taxa-tree consolidation will be done, i.e. there will be Morpho taxa in 'ret' keys.
+                then _no_ up-the-taxa-tree consolidation will be done, i.e. there will be Morpho taxa in 'ret' keys.
+            :param warnings: Eventual non-blocking problems found.
 
             Do the aggregations for the given sample for each taxon and return them.
             They will become emofs if used from DWC:
@@ -108,25 +111,12 @@ class SampleBO(MappedEntity):
                 for the project and the configuration variable.
         """
         # We return all _per taxon_.
-        ret: Dict[ClassifIDT, SampleAggregForTaxon] = {}
+        ret: Dict[ClassifIDT, SampleAggregForTaxon]
 
-        count_per_taxon_per_acquis: Dict[AcquisitionIDT, Dict[ClassifIDT, int]] = {}
+        acquis_for_sample = SampleBO.get_acquisitions(session, sample)
 
         # Start with abundances, simple count and giving its keys to the returned dict.
-        acquis_for_sample = SampleBO.get_acquisitions(session, sample)
-        for an_acquis in acquis_for_sample:
-            # Get counts for acquisition (subsample)
-            count_per_taxon_for_acquis: Dict[ClassifIDT, int] = AcquisitionBO.get_sums_by_taxon(session,
-                                                                                                an_acquis.acquisid)
-            if morpho2phylo is not None:
-                cls.add_morpho_counts(count_per_taxon_for_acquis, morpho2phylo)
-            count_per_taxon_per_acquis[an_acquis.acquisid] = count_per_taxon_for_acquis
-            for an_id, count_4_acquis in count_per_taxon_for_acquis.items():
-                aggreg_for_taxon = ret.get(an_id)
-                if aggreg_for_taxon is None:
-                    ret[an_id] = SampleAggregForTaxon(count_4_acquis, None, None)
-                else:
-                    aggreg_for_taxon.abundance += count_4_acquis
+        ret, count_per_taxon_per_acquis = cls.aggregate_abundances(session, acquis_for_sample, morpho2phylo)
 
         if not with_computations:
             return ret
@@ -219,6 +209,29 @@ class SampleBO(MappedEntity):
                             len(acq_object_ids))
 
         return ret
+
+    @classmethod
+    def aggregate_abundances(cls, session: Session, acquis_for_sample: List[Acquisition],
+                             morpho2phylo: Optional[Dict[ClassifIDT, ClassifIDT]]) \
+            -> Tuple[Dict[ClassifIDT, SampleAggregForTaxon], Dict[AcquisitionIDT, Dict[ClassifIDT, int]]]:
+        aggreg_per_taxon: Dict[ClassifIDT, SampleAggregForTaxon] = {}
+        count_per_taxon_per_acquis: Dict[AcquisitionIDT, Dict[ClassifIDT, int]] = {}
+        for an_acquis in acquis_for_sample:
+            # Get counts for acquisition (subsample)
+            count_per_taxon_for_acquis: Dict[ClassifIDT, int] = AcquisitionBO.get_sums_by_taxon(session,
+                                                                                                an_acquis.acquisid)
+            if morpho2phylo is not None:
+                cls.add_morpho_counts(count_per_taxon_for_acquis, morpho2phylo)
+            count_per_taxon_per_acquis[an_acquis.acquisid] = count_per_taxon_for_acquis
+            for an_id, count_4_acquis in count_per_taxon_for_acquis.items():
+                aggreg_for_taxon = aggreg_per_taxon.get(an_id)
+                if aggreg_for_taxon is None:
+                    # Create new aggregation data for this taxon
+                    aggreg_per_taxon[an_id] = SampleAggregForTaxon(count_4_acquis, None, None)
+                else:
+                    # Sum if taxon already there
+                    aggreg_for_taxon.abundance += count_4_acquis
+        return aggreg_per_taxon, count_per_taxon_per_acquis
 
     @classmethod
     def add_morpho_counts(cls, count_per_taxon_for_acquis: Dict[ClassifIDT, int],

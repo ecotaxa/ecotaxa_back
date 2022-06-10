@@ -22,7 +22,7 @@ volume_sampled = ProjectVar("tot_vol",
                             Units.cubic_metres,
                             not_lots_of_nines)
 
-# TODO: Unused
+# TODO: Unused, the result is overriden with -1 in @see BO.Sample.aggregate_for_sample
 equivalent_ellipsoidal_volume = ProjectVar("4.0/3.0*math.pi*(major/2*pixel_size)*(minor/2*pixel_size)**2",
                                            Vocabulary.biovolume,
                                            Units.cubic_millimetres_per_cubic_metre)

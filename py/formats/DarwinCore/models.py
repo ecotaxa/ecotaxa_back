@@ -46,6 +46,7 @@ class RecordTypeEnum(str, Enum):
     Text = 'Text'
     MovingImage = 'MovingImage'
     PhysicalObject = 'PhysicalObject'
+    # These 2 are not 'official'
     cruise = 'cruise'
     sample = 'sample'
 
