@@ -96,7 +96,7 @@ class SampleBO(MappedEntity):
             :param with_computations: If not set, just do abundance calculations (e.g. to save time
                 or when it's known to be impossible).
             :param morpho2phylo: The Morpho taxa to their nearest Phylo parent. If not provided
-                then _no_ up-the-taxa-tree consolidation will be done, i.e. there will be Morpho taxa in 'ret' keys.
+                then _no_ up-the-taxa-tree consolidation will be done, i.e. there _will be_ Morpho taxa in 'ret' keys.
             :param warnings: Eventual non-blocking problems found.
 
             Do the aggregations for the given sample for each taxon and return them.

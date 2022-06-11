@@ -41,6 +41,12 @@ class ExportTypeEnum(str, Enum):
     biovols = 'BIV'  # Biovolume summary https://github.com/ecotaxa/ecotaxa/issues/617
 
 
+class ExportGroupingEnum(str, Enum):
+    by_project = ''
+    by_sample = 'S'
+    by_subsample = 'A'  # TODO: Temporary see below
+
+
 class ExportReq(BaseModel):
     """
         Export request.
@@ -71,8 +77,11 @@ class ExportReq(BaseModel):
                                     description="For 'BAK' and 'DOI' types, export internal DB IDs.", example=False)
     only_first_image: bool = Field(title="Only first image",
                                    description="For 'DOI' type, export only first (displayed) image.", example=False)
-    sum_subtotal: str = Field(title="Sum subtotal", description="For 'SUM' type, how subtotals should be calculated. "
-                                                                "Per A(cquisition) or S(ample) or ''.", example="A")
+    # TODO: Move A(acquisition) to U(subsample) but it needs propagation to client side.
+    sum_subtotal: ExportGroupingEnum = Field(title="Sum subtotal",
+                                             description="For 'SUM' type, how/if subtotals should be calculated."
+                                                         "Per A(cquisition) or S(ample) or <Empty>(Project).",
+                                             example="A")
     out_to_ftp: bool = Field(title="Out to ftp",
                              description="Copy result file to FTP area. Original file is still available.",
                              example=False)

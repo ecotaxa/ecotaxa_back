@@ -10,9 +10,9 @@ import re
 import zipfile
 from collections import OrderedDict
 from pathlib import Path
-from typing import Optional, Tuple, TextIO, cast, Dict, List, Set
+from typing import Optional, Tuple, TextIO, cast, Dict, List, Set, OrderedDict as OrderedDictType
 
-from API_models.exports import ExportRsp, ExportReq, ExportTypeEnum
+from API_models.exports import ExportRsp, ExportReq, ExportTypeEnum, ExportGroupingEnum
 from API_models.filters import ProjectFiltersDict
 from BO.Classification import ClassifIDT
 from BO.Mappings import ProjectMapping
@@ -484,10 +484,13 @@ class ProjectExport(JobServiceBase):
 
         # By default, select (and group by) unambiguous category name
         sels = ["txo.display_name"]
-        if self.req.sum_subtotal == "A":
+        if self.req.sum_subtotal == ExportGroupingEnum.by_subsample:
             sels[:0] = ["acq.orig_id"]
-        elif self.req.sum_subtotal == "S":
+        elif self.req.sum_subtotal == ExportGroupingEnum.by_sample:
             sels[:0] = ["sam.orig_id", "sam.latitude", "sam.longitude", "MAX(obh.objdate) AS date"]
+        else:
+            # It's not grouped, so we get count for the full project
+            pass
         sels.append("COUNT(*) AS nbr")
 
         select_clause = "SELECT " + ", ".join(sels)
@@ -515,64 +518,103 @@ class ProjectExport(JobServiceBase):
         self.update_progress(90, msg)
         return nb_lines
 
+    # Used for all scientific exports, leading columns for output
+    COLS_PER_SCI_EXPORT: Dict[str, List[str]] = {
+        ExportGroupingEnum.by_project: [],
+        ExportGroupingEnum.by_sample: ["sampleid"],
+        ExportGroupingEnum.by_subsample: ["sampleid", "acquisid"],
+    }
+
     def create_sci_summary(self, src_project: Project):
         """
             Assuming that the historical summary is a data one, compute 'scientific' summaries.
         """
         req = self.req
-        proj_id = src_project.projid
+        exp_type = req.exp_type
+        group_by = req.sum_subtotal  # Little rename which is clearer IMHO
+        src_proj_id = src_project.projid
         self.update_progress(1, "Start Scientific Summary export")
 
-        # TODO: dup code
+        # TODO: dup code, for including some param hints e.g. _ABO_by_sample_ ?
         now_txt = DateTime.now_time().strftime("%Y%m%d_%H%M")
-        self.out_file_name = "export_summary_{0:d}_{1:s}.tsv".format(src_project.projid, now_txt)
+        self.out_file_name = "export_summary_{0:d}_{1:s}.tsv".format(src_proj_id, now_txt)
         out_file = self.temp_for_jobs.base_dir_for(self.job_id) / self.out_file_name
 
-        samples = Sample.get_orig_id_and_model(self.ro_session, prj_id=src_project.projid)
+        samples = Sample.get_orig_id_and_model(self.ro_session, prj_id=src_proj_id)
         a_sample: Sample
 
-        # TODO: Category mapping from Req
+        # TODO: Get and apply category mapping from Req
         categ_mapping: Optional[Dict[ClassifIDT, ClassifIDT]] = None
-        with_computations = req.exp_type in (ExportTypeEnum.concentrations, ExportTypeEnum.biovols)
-        res_by_sample = OrderedDict()
-        seen_taxa: Set[ClassifIDT] = set()
-        for orig_id, a_sample in samples.items():
-            warnings: List[str] = []
-            res_for_sample = SampleBO.aggregate_for_sample(session=self.ro_session, sample=a_sample,
-                                                           morpho2phylo=categ_mapping,
-                                                           with_computations=with_computations,
-                                                           warnings=warnings)
-            res_by_sample[orig_id] = res_for_sample
-            seen_taxa.update(res_for_sample.keys())
-            for a_warn in warnings:
-                # TODO: Add the orig_id for the user to know
-                logger.info(a_warn)
 
-        # Propagate the 0s as we want every taxon to have a line in every sample
-        sorted_seen_taxa = sorted(list(seen_taxa))
-        for sample_id, taxo_details in res_by_sample.items():
-            for a_taxon in sorted_seen_taxa:
-                if a_taxon not in taxo_details:
-                    taxo_details[a_taxon] = SampleAggregForTaxon(0, None, None)
-        # Lookup the taxa to get a name
-        taxo_set = TaxonBOSet(session=self.ro_session, taxon_ids=sorted_seen_taxa)
-        taxa_names = {taxon.id: taxon.display_name for taxon in taxo_set.as_list()}
-        # Output data
-        msg = "Creating file %s" % out_file
-        logger.info(msg)
-        self.update_progress(50, msg)
-        # Write the TSV
-        nb_lines = 0
-        with open(out_file, 'w') as csv_file:
-            col_names = ["sampleid", "taxonid", "count"]
-            wtr = csv.DictWriter(csv_file, col_names, delimiter='\t', quotechar='"', lineterminator='\n')
-            wtr.writeheader()
-            for sample_id, taxo_details in res_by_sample.items():
-                for a_taxon, a_detail in taxo_details.items():
-                    wtr.writerow({"sampleid": sample_id,
-                                  "taxonid": taxa_names[a_taxon],
-                                  "count": a_detail.abundance})
-                    nb_lines += 1
+        if exp_type == ExportTypeEnum.abundances:
+
+            if group_by == ExportGroupingEnum.by_subsample:
+                raise Exception('Not implemented, abundances per subsample')
+
+            res_by_sample: OrderedDictType[str, Dict[int, SampleAggregForTaxon]] = OrderedDict()
+            res_by_taxon: OrderedDictType[ClassifIDT, SampleAggregForTaxon] = OrderedDict()
+
+            seen_taxa: Set[ClassifIDT] = set()
+            for orig_id, a_sample in samples.items():
+                warnings: List[str] = []
+                res_for_sample = SampleBO.aggregate_for_sample(session=self.ro_session, sample=a_sample,
+                                                               morpho2phylo=categ_mapping,
+                                                               with_computations=False,  # Just abundances
+                                                               warnings=warnings)
+                res_by_sample[orig_id] = res_for_sample
+                seen_taxa.update(res_for_sample.keys())
+                for a_warn in warnings:
+                    # TODO: Add the orig_id for the user to know
+                    logger.info(a_warn)
+
+            sorted_seen_taxa = sorted(list(seen_taxa))
+
+            if group_by == ExportGroupingEnum.by_sample:
+                # Propagate the 0s as we want every taxon to have a line in every sample
+                for sample_id, taxo_details in res_by_sample.items():
+                    for a_taxon in sorted_seen_taxa:
+                        if a_taxon not in taxo_details:
+                            taxo_details[a_taxon] = SampleAggregForTaxon(0, None, None)
+            elif group_by == ExportGroupingEnum.by_project:
+                # Gather all in a single entry
+                for sample_id, taxo_details in res_by_sample.items():
+                    for taxon_id, a_taxo_detail in taxo_details.items():
+                        if taxon_id not in res_by_taxon:
+                            res_by_taxon[taxon_id] = SampleAggregForTaxon(0, None, None)
+                        res_by_taxon[taxon_id].abundance += a_taxo_detail.abundance
+
+            # Lookup the taxa to get a name
+            taxo_set = TaxonBOSet(session=self.ro_session, taxon_ids=sorted_seen_taxa)
+            taxa_names = {taxon.id: taxon.display_name for taxon in taxo_set.as_list()}
+
+            # Output data
+            msg = "Creating file %s" % out_file
+            logger.info(msg)
+            self.update_progress(50, msg)
+            # Write the TSV
+            nb_lines = 0
+            with open(out_file, 'w') as csv_file:
+                col_names = self.COLS_PER_SCI_EXPORT[group_by] + ["taxonid", "count"]
+                wtr = csv.DictWriter(csv_file, col_names, delimiter='\t', quotechar='"', lineterminator='\n')
+                wtr.writeheader()
+                if group_by == ExportGroupingEnum.by_sample:
+                    for sample_id, taxo_details in res_by_sample.items():
+                        for a_taxon, a_detail in taxo_details.items():
+                            wtr.writerow({"sampleid": sample_id,
+                                          "taxonid": taxa_names[a_taxon],
+                                          "count": a_detail.abundance})
+                            nb_lines += 1
+                elif group_by == ExportGroupingEnum.by_project:
+                    for a_taxon, a_detail in res_by_taxon.items():
+                        wtr.writerow({"taxonid": taxa_names[a_taxon],
+                                      "count": a_detail.abundance})
+                        nb_lines += 1
+
+        elif exp_type == ExportTypeEnum.concentrations:
+            raise Exception("Not implemented concentrations summary report")
+        elif exp_type == ExportTypeEnum.biovols:
+            raise Exception("Not implemented biovolume summary report")
+
         msg = "Produced %d rows" % nb_lines
         logger.info(msg)
         self.update_progress(90, msg)

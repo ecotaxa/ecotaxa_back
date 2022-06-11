@@ -50,21 +50,35 @@ def test_export_sci(config, database, fastapi, caplog):
                                                       "wanted_qualification": "V"})
     assert rsp.status_code == status.HTTP_200_OK
 
-    # Abundance export
+    # Abundance export whole project
     filters = {}
     req = _req_tmpl.copy()
     req.update({"project_id": prj_id,
-                "exp_type": "ABO"})
+                "exp_type": "ABO",
+                "sum_subtotal": ""})
     req_and_filters = {"filters": filters,
                        "request": req}
     rsp = fastapi.post(OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters)
     assert rsp.status_code == status.HTTP_200_OK
 
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
-    download_and_check(fastapi, job_id, "abundances", only_hdr=True)
+    download_and_check(fastapi, job_id, "abundances_whole_project", only_hdr=True)
+    #log = get_log_file(fastapi, job_id)
+
+    # Abundance export by sample
+    filters = {}
+    req = _req_tmpl.copy()
+    req.update({"project_id": prj_id,
+                "exp_type": "ABO",
+                "sum_subtotal": "S"})
+    req_and_filters = {"filters": filters,
+                       "request": req}
+    rsp = fastapi.post(OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters)
+    assert rsp.status_code == status.HTTP_200_OK
+
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_check(fastapi, job_id, "abundances_by_sample", only_hdr=True)
     log = get_log_file(fastapi, job_id)
-    # TODO: The log file contains dates, so we cannot know what's inside beforehand...
-    print(log)
 
 
 def test_export_tsv(config, database, fastapi, caplog):
