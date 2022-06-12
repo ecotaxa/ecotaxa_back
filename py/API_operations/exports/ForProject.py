@@ -12,11 +12,12 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Optional, Tuple, TextIO, cast, Dict, List, Set, OrderedDict as OrderedDictType
 
-from API_models.exports import ExportRsp, ExportReq, ExportTypeEnum, ExportGroupingEnum
+from API_models.exports import ExportRsp, ExportReq, ExportTypeEnum, SummaryExportGroupingEnum
 from API_models.filters import ProjectFiltersDict
 from BO.Classification import ClassifIDT
 from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet
+from BO.ObjectSetQueryPlus import ResultGrouping, PerTaxonResultsQuery
 from BO.Rights import RightsBO, Action
 from BO.Sample import SampleBO, SampleAggregForTaxon
 from BO.Taxonomy import TaxonomyBO, TaxonBOSet
@@ -470,40 +471,43 @@ class ProjectExport(JobServiceBase):
         # noinspection RegExpRedundantEscape
         return re.sub(R"[^a-zA-Z0-9 \.\-\(\)]", "_", str(filename))
 
+    def _get_summary_file(self, src_project):
+        now_txt = DateTime.now_time().strftime("%Y%m%d_%H%M")
+        self.out_file_name = "export_summary_{0:d}_{1:s}.tsv".format(src_project.projid, now_txt)
+        out_file = self.temp_for_jobs.base_dir_for(self.job_id) / self.out_file_name
+        return out_file
+
     def create_summary(self, src_project: Project):
         req = self.req
         proj_id = src_project.projid
         self.update_progress(1, "Start Summary export")
 
-        now_txt = DateTime.now_time().strftime("%Y%m%d_%H%M")
-        self.out_file_name = "export_summary_{0:d}_{1:s}.tsv".format(src_project.projid, now_txt)
-        out_file = self.temp_for_jobs.base_dir_for(self.job_id) / self.out_file_name
+        out_file = self._get_summary_file(src_project)
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, self.filters)
 
-        # By default, select (and group by) unambiguous category name
-        sels = ["txo.display_name"]
-        if self.req.sum_subtotal == ExportGroupingEnum.by_subsample:
-            sels[:0] = ["acq.orig_id"]
-        elif self.req.sum_subtotal == ExportGroupingEnum.by_sample:
-            sels[:0] = ["sam.orig_id", "sam.latitude", "sam.longitude", "MAX(obh.objdate) AS date"]
-        else:
-            # It's not grouped, so we get count for the full project
-            pass
-        sels.append("COUNT(*) AS nbr")
+        # The specialized SQL builder
+        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(object_set, self._get_owner_id(), "display_name")
+        # We want the count, that's the goal of all this
+        aug_qry.select_count("nbr")
+        # We can set aliases even for expressions we don't select, so include all possibly needed ones
+        aug_qry.add_aliases({"sam.orig_id": "sample_id",
+                             "acq.orig_id": "acquis_id",
+                             "MAX(obh.objdate)": "date"})
 
-        select_clause = "SELECT " + ", ".join(sels)
-        not_aggregated = [a_sel for a_sel in sels if " " not in a_sel]
-        group_clause = " GROUP BY " + ", ".join(not_aggregated)
-        order_clause = OrderClause()
-        for a_sel in not_aggregated:
-            alias, col = a_sel.split(".")
-            order_clause.add_expression(alias, col)
+        if self.req.sum_subtotal == SummaryExportGroupingEnum.just_by_taxon:
+            pass  # Default value
+        elif self.req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
+            aug_qry.add_select(["sam.orig_id", "sam.latitude", "sam.longitude", "MAX(obh.objdate)"]). \
+                set_grouping(ResultGrouping.BY_SAMPLE_AND_TAXO)
+        elif self.req.sum_subtotal == SummaryExportGroupingEnum.by_subsample:
+            aug_qry.add_select(["sam.orig_id", "acq.orig_id"]). \
+                set_grouping(ResultGrouping.BY_SUBSAMPLE_AND_TAXO)
+        elif self.req.sum_subtotal == SummaryExportGroupingEnum.by_project:
+            assert False, "No collections yet to get multiple projects"
 
-        # Base SQL comes from filters
-        from_, where, params = object_set.get_sql(self._get_owner_id(), order_clause, select_clause)
-        sql = select_clause + " FROM " + from_.get_sql() + where.get_sql() + group_clause + order_clause.get_sql()
+        sql, params = aug_qry.get_sql()
 
         logger.info("Execute SQL : %s", sql)
         logger.info("Params : %s", params)
@@ -520,9 +524,9 @@ class ProjectExport(JobServiceBase):
 
     # Used for all scientific exports, leading columns for output
     COLS_PER_SCI_EXPORT: Dict[str, List[str]] = {
-        ExportGroupingEnum.by_project: [],
-        ExportGroupingEnum.by_sample: ["sampleid"],
-        ExportGroupingEnum.by_subsample: ["sampleid", "acquisid"],
+        SummaryExportGroupingEnum.just_by_taxon: [],
+        SummaryExportGroupingEnum.by_sample: ["sampleid"],
+        SummaryExportGroupingEnum.by_subsample: ["sampleid", "acquisid"],
     }
 
     def create_sci_summary(self, src_project: Project):
@@ -535,10 +539,8 @@ class ProjectExport(JobServiceBase):
         src_proj_id = src_project.projid
         self.update_progress(1, "Start Scientific Summary export")
 
-        # TODO: dup code, for including some param hints e.g. _ABO_by_sample_ ?
-        now_txt = DateTime.now_time().strftime("%Y%m%d_%H%M")
-        self.out_file_name = "export_summary_{0:d}_{1:s}.tsv".format(src_proj_id, now_txt)
-        out_file = self.temp_for_jobs.base_dir_for(self.job_id) / self.out_file_name
+        # TODO: include some param hints e.g. _ABO_by_sample_ ?
+        out_file = self._get_summary_file(src_project)
 
         samples = Sample.get_orig_id_and_model(self.ro_session, prj_id=src_proj_id)
         a_sample: Sample
@@ -548,7 +550,7 @@ class ProjectExport(JobServiceBase):
 
         if exp_type == ExportTypeEnum.abundances:
 
-            if group_by == ExportGroupingEnum.by_subsample:
+            if group_by == SummaryExportGroupingEnum.by_subsample:
                 raise Exception('Not implemented, abundances per subsample')
 
             res_by_sample: OrderedDictType[str, Dict[int, SampleAggregForTaxon]] = OrderedDict()
@@ -569,13 +571,13 @@ class ProjectExport(JobServiceBase):
 
             sorted_seen_taxa = sorted(list(seen_taxa))
 
-            if group_by == ExportGroupingEnum.by_sample:
+            if group_by == SummaryExportGroupingEnum.by_sample:
                 # Propagate the 0s as we want every taxon to have a line in every sample
                 for sample_id, taxo_details in res_by_sample.items():
                     for a_taxon in sorted_seen_taxa:
                         if a_taxon not in taxo_details:
                             taxo_details[a_taxon] = SampleAggregForTaxon(0, None, None)
-            elif group_by == ExportGroupingEnum.by_project:
+            elif group_by == SummaryExportGroupingEnum.just_by_taxon:
                 # Gather all in a single entry
                 for sample_id, taxo_details in res_by_sample.items():
                     for taxon_id, a_taxo_detail in taxo_details.items():
@@ -597,14 +599,14 @@ class ProjectExport(JobServiceBase):
                 col_names = self.COLS_PER_SCI_EXPORT[group_by] + ["taxonid", "count"]
                 wtr = csv.DictWriter(csv_file, col_names, delimiter='\t', quotechar='"', lineterminator='\n')
                 wtr.writeheader()
-                if group_by == ExportGroupingEnum.by_sample:
+                if group_by == SummaryExportGroupingEnum.by_sample:
                     for sample_id, taxo_details in res_by_sample.items():
                         for a_taxon, a_detail in taxo_details.items():
                             wtr.writerow({"sampleid": sample_id,
                                           "taxonid": taxa_names[a_taxon],
                                           "count": a_detail.abundance})
                             nb_lines += 1
-                elif group_by == ExportGroupingEnum.by_project:
+                elif group_by == SummaryExportGroupingEnum.just_by_taxon:
                     for a_taxon, a_detail in res_by_taxon.items():
                         wtr.writerow({"taxonid": taxa_names[a_taxon],
                                       "count": a_detail.abundance})

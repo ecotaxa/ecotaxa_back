@@ -41,8 +41,10 @@ class ExportTypeEnum(str, Enum):
     biovols = 'BIV'  # Biovolume summary https://github.com/ecotaxa/ecotaxa/issues/617
 
 
-class ExportGroupingEnum(str, Enum):
-    by_project = ''
+class SummaryExportGroupingEnum(str, Enum):
+    """ It's implied that we also group by category AKA classification AKA taxon """
+    just_by_taxon = ''  # Just group by the implied taxa
+    by_project = 'P'  # Reserve for collections
     by_sample = 'S'
     by_subsample = 'A'  # TODO: Temporary see below
 
@@ -78,10 +80,10 @@ class ExportReq(BaseModel):
     only_first_image: bool = Field(title="Only first image",
                                    description="For 'DOI' type, export only first (displayed) image.", example=False)
     # TODO: Move A(acquisition) to U(subsample) but it needs propagation to client side.
-    sum_subtotal: ExportGroupingEnum = Field(title="Sum subtotal",
-                                             description="For 'SUM' type, how/if subtotals should be calculated."
-                                                         "Per A(cquisition) or S(ample) or <Empty>(Project).",
-                                             example="A")
+    sum_subtotal: SummaryExportGroupingEnum = Field(title="Sum subtotal",
+                                                    description="For 'SUM' type, if computations should be combined."
+                                                                "Per A(cquisition) or S(ample) or <Empty>(just taxa).",
+                                                    example="A")
     out_to_ftp: bool = Field(title="Out to ftp",
                              description="Copy result file to FTP area. Original file is still available.",
                              example=False)
