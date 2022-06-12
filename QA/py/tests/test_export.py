@@ -38,7 +38,7 @@ def test_export_sci(config, database, fastapi, caplog):
 
     # Admin imports the project, which is an export expected result
     from tests.test_import import test_import
-    path = str(DATA_DIR/"ref_exports"/"bak_all_images")
+    path = str(DATA_DIR / "ref_exports" / "bak_all_images")
     prj_id = test_import(config, database, caplog, "TSV sci export", path=path)
 
     # Validate all, otherwise empty report
@@ -63,7 +63,7 @@ def test_export_sci(config, database, fastapi, caplog):
 
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
     download_and_check(fastapi, job_id, "abundances_whole_project", only_hdr=True)
-    #log = get_log_file(fastapi, job_id)
+    # log = get_log_file(fastapi, job_id)
 
     # Abundance export by sample
     filters = {}
@@ -78,7 +78,7 @@ def test_export_sci(config, database, fastapi, caplog):
 
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
     download_and_check(fastapi, job_id, "abundances_by_sample", only_hdr=True)
-    log = get_log_file(fastapi, job_id)
+    # log = get_log_file(fastapi, job_id)
 
 
 def test_export_tsv(config, database, fastapi, caplog):
@@ -155,7 +155,7 @@ def test_export_tsv(config, database, fastapi, caplog):
     # TODO: Better comparison ignoring columns
     download_and_unzip_and_check(fastapi, job_id, "tsv_with_ids", only_hdr=True)
 
-    # Summary export
+    # Summary export, 3 types
     req.update({"exp_type": "SUM",
                 "out_to_ftp": True,
                 "sum_subtotal": "S"
@@ -164,9 +164,27 @@ def test_export_tsv(config, database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
 
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
-    # Too much randomness inside: IDs, random value
-    # TODO: Better comparison ignoring columns
-    download_and_check(fastapi, job_id, "summary", only_hdr=True)
+    download_and_check(fastapi, job_id, "summary_per_sample", only_hdr=True)
+
+    req.update({"exp_type": "SUM",
+                "out_to_ftp": True,
+                "sum_subtotal": "A"
+                })
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+    assert rsp.status_code == status.HTTP_200_OK
+
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_check(fastapi, job_id, "summary_per_subsample", only_hdr=True)
+
+    req.update({"exp_type": "SUM",
+                "out_to_ftp": True,
+                "sum_subtotal": ""
+                })
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+    assert rsp.status_code == status.HTTP_200_OK
+
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_check(fastapi, job_id, "summary_whole", only_hdr=True)
 
 
 def download_and_check(fastapi, job_id, ref_dir, only_hdr: bool = False):
@@ -180,10 +198,12 @@ def download_and_unzip_and_check(fastapi, job_id, ref_dir, only_hdr: bool = Fals
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
     unzip_and_check(rsp.content, ref_dir, only_hdr)
 
+
 def get_log_file(fastapi, job_id):
     log_url = JOB_LOG_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(log_url, headers=ADMIN_AUTH)
     return rsp.content
+
 
 def tsv_check(tsv_content, ref_dir: str, only_hdr: bool):
     ref_dir_path = SHARED_DIR / EXPORT_ROOT_REF_DIR / ref_dir
