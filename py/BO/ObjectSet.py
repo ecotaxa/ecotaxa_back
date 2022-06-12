@@ -69,6 +69,7 @@ class DescribedObjectSet(object):
             -> Tuple[FromClause, WhereClause, SQLParamDict]:
         """
             Construct SQL parts for getting the IDs of objects.
+            :param user_id: The 'current' user, in case the filter refers to him/her.
             :param all_images: If not set (default), only return the lowest rank, i.e. visible, image
             :return:
         """
