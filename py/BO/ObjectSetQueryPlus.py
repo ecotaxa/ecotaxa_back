@@ -8,13 +8,21 @@
 #   - Remapping of read taxonomy.
 #   - Addition of python formulae as virtual columns.
 #
+import csv
 import enum
+from pathlib import Path
 from typing import List, Optional, Tuple, Dict
 
 from BO.ObjectSet import DescribedObjectSet
 from BO.User import UserIDT
 from DB import Taxonomy
+from DB.helpers import Result
+from DB.helpers.Direct import text
+from DB.helpers.ORM import Session
 from DB.helpers.SQL import OrderClause, SQLParamDict
+from helpers.DynamicLogs import get_logger
+
+logger = get_logger(__name__)
 
 
 class ResultGrouping(enum.IntEnum):
@@ -139,6 +147,46 @@ class ObjectSetQueryPlus(object):
         from_, where, params = self.obj_set.get_sql(self.user_id, order_clause, select_clause)
         sql = select_clause + " FROM " + from_.get_sql() + where.get_sql() + group_clause + order_clause.get_sql()
         return sql, params
+
+    def write_to_csv(self, ro_session: Session, file_path: Path) -> int:
+        """
+            Execute the query and write output.
+        """
+        sql, params = self.get_sql()
+        logger.info("Execute SQL : %s", sql)
+        logger.info("Params : %s", params)
+        res = ro_session.execute(text(sql), params)
+        nb_lines = self.write_result_to_csv(res, file_path)
+        return nb_lines
+
+    def _get_header(self) -> List[str]:
+        """
+            Return the CSV header from SQL column.
+        """
+        ret = []
+        for a_col in self.sql_select_list:
+            if a_col in self.aliases:
+                ret.append(self.aliases[a_col])
+            elif "." in a_col:
+                ret.append(a_col.split(".")[1])
+            else:
+                raise
+        return ret
+
+    def write_result_to_csv(self, res: Result, out_file: Path) -> int:
+        """
+            Write a cursor to the output file.
+        """
+        nb_lines = 0
+        with open(out_file, 'w') as csv_file:
+            col_names = self._get_header()
+            wtr = csv.DictWriter(csv_file, col_names, delimiter='\t', quotechar='"', lineterminator='\n')
+            wtr.writeheader()
+            for r in res:
+                a_row = dict(r)
+                wtr.writerow(a_row)
+                nb_lines += 1
+        return nb_lines
 
 
 class PerTaxonResultsQuery(ObjectSetQueryPlus):

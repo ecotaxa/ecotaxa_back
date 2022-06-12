@@ -24,7 +24,6 @@ from BO.Taxonomy import TaxonomyBO, TaxonBOSet
 from DB import Sample
 from DB.Object import VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL
 from DB.Project import Project
-from DB.helpers import Result
 from DB.helpers.Direct import text
 from DB.helpers.SQL import OrderClause
 from FS.CommonDir import ExportFolder
@@ -507,19 +506,14 @@ class ProjectExport(JobServiceBase):
         elif self.req.sum_subtotal == SummaryExportGroupingEnum.by_project:
             assert False, "No collections yet to get multiple projects"
 
-        sql, params = aug_qry.get_sql()
-
-        logger.info("Execute SQL : %s", sql)
-        logger.info("Params : %s", params)
-        res = self.ro_session.execute(text(sql), params)
-
-        msg = "Creating file %s" % out_file
-        logger.info(msg)
+        msg = "Writing to file %s" % out_file
         self.update_progress(50, msg)
-        nb_lines = self.write_result_to_csv(res, out_file)
+        nb_lines = aug_qry.write_to_csv(self.ro_session, out_file)
+
         msg = "Extracted %d rows" % nb_lines
         logger.info(msg)
         self.update_progress(90, msg)
+
         return nb_lines
 
     # Used for all scientific exports, leading columns for output
@@ -622,15 +616,4 @@ class ProjectExport(JobServiceBase):
         self.update_progress(90, msg)
         return nb_lines
 
-    @staticmethod
-    def write_result_to_csv(res: Result, out_file: Path) -> int:
-        nb_lines = 0
-        with open(out_file, 'w') as csv_file:
-            col_names = [a_desc.name for a_desc in res.cursor.description]  # type:ignore # case2
-            wtr = csv.DictWriter(csv_file, col_names, delimiter='\t', quotechar='"', lineterminator='\n')
-            wtr.writeheader()
-            for r in res:
-                a_row = dict(r)
-                wtr.writerow(a_row)
-                nb_lines += 1
-        return nb_lines
+
