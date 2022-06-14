@@ -70,6 +70,8 @@ class DescribedObjectSet(object):
         """
             Construct SQL parts for getting the IDs of objects.
             :param user_id: The 'current' user, in case the filter refers to him/her.
+            :param select_list: Used for hinting the builder that some specific table will be needed in join.
+                    major tables obj_head, samples and acquisitions are always joined.
             :param all_images: If not set (default), only return the lowest rank, i.e. visible, image
             :return:
         """
@@ -91,6 +93,7 @@ class DescribedObjectSet(object):
             selected_tables += "obj_field obf ON obf.objfid = obh.objid"
         if "txo." in column_referencing_sql or "txp." in column_referencing_sql:
             selected_tables += "taxonomy txo ON txo.id = obh.classif_id"
+            # TODO: For e.g. Validated classif_qual, we can do a normal join
             selected_tables.set_outer("taxonomy txo ")
         if "img." in column_referencing_sql:
             selected_tables += "images img ON obh.objid = img.objid " + \

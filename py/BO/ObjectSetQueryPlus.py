@@ -11,18 +11,23 @@
 import csv
 import enum
 from pathlib import Path
-from typing import List, Optional, Tuple, Dict
+from typing import List, Optional, Tuple, Dict, Generator, Any, Iterable
 
 from BO.ObjectSet import DescribedObjectSet
 from BO.User import UserIDT
 from DB import Taxonomy
-from DB.helpers import Result
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Session
 from DB.helpers.SQL import OrderClause, SQLParamDict
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
+
+# To avoid saturating memory for large datasets, use a generator
+# each .next() will yield a dict with similar structure, i.e. dict keys.
+RowSourceT = Generator[Dict[str, Any], None, None]
+# A typing for both in-mem list of dicts and row sources
+IterableRowsT = Iterable[Dict[str, Any]]
 
 
 class ResultGrouping(enum.IntEnum):
@@ -40,16 +45,24 @@ class ResultGrouping(enum.IntEnum):
 
 
 class ObjectSetQueryPlus(object):
+    """
+
+    """
+    COUNT_STAR = "COUNT(*)"
+    TAXONOMY_PK = "txo.id"
+    SAMPLE_PK = "sam.sampleid"
+    SUBSAMPLE_PK = "acq.acquisid"
 
     def __init__(self, obj_set: DescribedObjectSet, user_id: UserIDT):
         self.obj_set = obj_set
         self.user_id = user_id
         self.prj_id = obj_set.prj_id
         #
-        self.grouping: ResultGrouping = ResultGrouping.NO_GROUPING
-        self.sql_select_list: List[str] = []
-        self.aliases: Dict[str, str] = {}
-        self.count: Optional[str] = None
+        self.sql_select_list: List[str] = []  # What is needed
+        self.aliases: Dict[str, str] = {}  # How it will appear
+        self.grouping: ResultGrouping = ResultGrouping.NO_GROUPING  # The grouping
+        self.count: bool = False  # A simple aggregate
+        self.sum_exp: Optional[str] = None  # A complex aggregate
 
     def set_grouping(self, grouping: ResultGrouping) -> 'ObjectSetQueryPlus':
         """
@@ -58,34 +71,25 @@ class ObjectSetQueryPlus(object):
         assert grouping != ResultGrouping.BY_PROJECT_AND_TAXO, "Single project for now"
         # Sanity check, we cannot group if no data from grouping level
         if grouping & ResultGrouping.BY_TAXO:
-            self.check_select("txo.")
+            self._check_select_contains("txo.")
         if grouping & ResultGrouping.BY_SUBSAMPLE:
-            self.check_select("acq.", "prc.")
+            self._check_select_contains("acq.", "prc.")
         if grouping & ResultGrouping.BY_SAMPLE:
-            self.check_select("sam.")
+            self._check_select_contains("sam.")
         self.grouping = grouping
         return self
 
-    def check_select(self, prfx1: str, prfx2: Optional[str] = None) -> None:
-        prfxs = [prfx1]
-        if prfx2:
-            prfxs.append(prfx2)
+    def _check_select_contains(self, prfx1: str, prfx2: Optional[str] = None) -> None:
+        prfxs = [prfx1] + ([prfx2] if prfx2 else [])
         for a_prefix in prfxs:
             for a_col in self.sql_select_list:
                 if a_prefix in a_col:
                     return
         assert False, "one of %s in needed for grouping" % str(prfxs)
 
-    def set_select(self, cols_list: List[str]) -> 'ObjectSetQueryPlus':
+    def set_aliases(self, aliases: Dict[str, str]):
         """
-            What is needed as output.
-        """
-        self.sql_select_list = cols_list
-        return self
-
-    def add_aliases(self, aliases: Dict[str, str]):
-        """
-            The result will have these are header columns.
+            The result will have these as header columns.
         """
         self.aliases.update(aliases)
 
@@ -99,33 +103,42 @@ class ObjectSetQueryPlus(object):
             self.sql_select_list.extend(cols_list)
         return self
 
-    def select_count(self, count_alias: str) -> 'ObjectSetQueryPlus':
+    def aggregate_with_count(self) -> 'ObjectSetQueryPlus':
         """
             Add a count to the query, with given name, for each grouping.
         """
         assert self.grouping != ResultGrouping.NO_GROUPING
-        self.count = count_alias
-        self.aliases["COUNT(*)"] = count_alias
+        assert self.sum_exp is None
+        self.count = True
         return self
 
-    def _compute_group_by(self) -> List[str]:
+    def aggregate_with_computed_sum(self, sum_expression: str) -> 'ObjectSetQueryPlus':
+        """
+            Add a computed sum to the query, with given name, for each grouping.
+        """
+        assert self.grouping != ResultGrouping.NO_GROUPING
+        assert not self.count
+        self.sum_exp = sum_expression
+        return self
+
+    def _compute_group_by(self) -> str:
+        if self.sum_exp:
+            # We can't have PG doing these sums as they are computed here in python
+            return ""
         ret = []
         if self.grouping & ResultGrouping.BY_TAXO:
-            ret.append("txo.id")
+            ret.append(self.TAXONOMY_PK)
         if self.grouping & ResultGrouping.BY_SUBSAMPLE:
-            ret.append("acq.acquisid")
+            ret.append(self.SUBSAMPLE_PK)
         if self.grouping & ResultGrouping.BY_SAMPLE:
-            ret.append("sam.sampleid")
-        return ret
+            ret.append(self.SAMPLE_PK)
+        return " GROUP BY " + ", ".join(ret)
 
     def get_sql(self) -> Tuple[str, SQLParamDict]:
         """
             Compose the query and return it.
         """
-        sels = self.sql_select_list
-        # Include count
-        if self.count is not None:
-            sels.append("COUNT(*)")
+        sels = self._get_selects()
         # Build SL, aliased parts if relevant
         aliased_sels = []
         for a_sel in sels:
@@ -136,8 +149,8 @@ class ObjectSetQueryPlus(object):
                 aliased_sels.append(a_sel + " AS " + als)
         select_clause = "SELECT " + ", ".join(aliased_sels)
         # Group by
-        group_clause = " GROUP BY " + ", ".join(self._compute_group_by())
-        # Order by
+        group_clause = self._compute_group_by()
+        # Order by all selected columns, in their given order
         order_clause = OrderClause()
         for a_sel in sels:
             alias_or_plain = self.aliases.get(a_sel, a_sel)
@@ -148,42 +161,73 @@ class ObjectSetQueryPlus(object):
         sql = select_clause + " FROM " + from_.get_sql() + where.get_sql() + group_clause + order_clause.get_sql()
         return sql, params
 
-    def write_to_csv(self, ro_session: Session, file_path: Path) -> int:
+    def get_row_source(self, ro_session: Session) -> RowSourceT:
         """
-            Execute the query and write output.
+            Build a generator to loop over query results, eventually enriched.
         """
         sql, params = self.get_sql()
         logger.info("Execute SQL : %s", sql)
         logger.info("Params : %s", params)
         res = ro_session.execute(text(sql), params)
-        nb_lines = self.write_result_to_csv(res, file_path)
+        for a_row in res:
+            db_row = dict(a_row)
+            if self.sum_exp is not None:
+                # if self.grouping & ResultGrouping.BY_TAXO:
+                # if self.grouping & ResultGrouping.BY_SUBSAMPLE:
+                # if self.grouping & ResultGrouping.BY_SAMPLE:
+                alias = self.aliases[self.sum_exp]
+                db_row[alias] = "e"
+            yield db_row
+
+    def get_result(self, ro_session: Session) -> List[Dict[str, Any]]:
+        """
+            Read the row source, in full, and return it.
+        """
+        src = self.get_row_source(ro_session)
+        return [a_row for a_row in src]
+
+    def write_result_to_csv(self, ro_session: Session, file_path: Path) -> int:
+        """
+            Write row source into CSV.
+        """
+        nb_lines = self.write_row_source_to_csv(self.get_row_source(ro_session), file_path)
         return nb_lines
+
+    def _get_selects(self) -> List[str]:
+        """
+            Get user selects.
+        """
+        ret = self.sql_select_list[:]
+        # Include count
+        if self.count:
+            ret += [self.COUNT_STAR]
+        return ret
 
     def _get_header(self) -> List[str]:
         """
             Return the CSV header from SQL column.
         """
         ret = []
-        for a_col in self.sql_select_list:
+        for a_col in self._get_selects():
             if a_col in self.aliases:
                 ret.append(self.aliases[a_col])
-            elif "." in a_col:
-                ret.append(a_col.split(".")[1])
             else:
-                raise
+                raise Exception("expression '%s' is not aliased" % a_col)
+        if self.sum_exp is not None:
+            ret.append(self.aliases[self.sum_exp])
         return ret
 
-    def write_result_to_csv(self, res: Result, out_file: Path) -> int:
+    def write_row_source_to_csv(self, res: IterableRowsT, out_file: Path) -> int:
         """
-            Write a cursor to the output file.
+            Write many rows, from mem or cursor, into the output file.
         """
         nb_lines = 0
         with open(out_file, 'w') as csv_file:
             col_names = self._get_header()
             wtr = csv.DictWriter(csv_file, col_names, delimiter='\t', quotechar='"', lineterminator='\n')
             wtr.writeheader()
-            for r in res:
-                a_row = dict(r)
+            for a_row in res:
+                # There is a nice sanity check here, that all rows have the structure defined in the header
                 wtr.writerow(a_row)
                 nb_lines += 1
         return nb_lines
@@ -196,5 +240,7 @@ class PerTaxonResultsQuery(ObjectSetQueryPlus):
 
     def __init__(self, obj_set: DescribedObjectSet, user_id: UserIDT, txo_col: str):
         super().__init__(obj_set, user_id)
-        assert txo_col in Taxonomy.__dict__
-        self.set_select(["txo." + txo_col]).set_grouping(ResultGrouping.BY_TAXO)
+        assert txo_col.startswith("txo.")
+        assert txo_col[4:] in Taxonomy.__dict__
+        self.sql_select_list = [txo_col]
+        self.set_grouping(ResultGrouping.BY_TAXO)
