@@ -535,6 +535,8 @@ class ProjectExport(JobServiceBase):
 
         # The specialized SQL builder
         aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(object_set, user_id, "txo.display_name")
+        aug_qry.remap_categories(req.pre_mapping)
+        aug_qry.set_formulae(req.formulae)
         # We want the count, that's the goal of all this
         aug_qry.aggregate_with_count()
         # We can set aliases even for expressions we don't select, so include all possibly needed ones
@@ -576,7 +578,7 @@ class ProjectExport(JobServiceBase):
     def add_not_presents_in_summary(self, without_zeroes: List[Dict[str, Any]], object_set: DescribedObjectSet,
                                     user_id: UserIDT, zero_col: str):
         """
-            Add lines with 0 abundance for relevant (sample, category) pairs.
+            Add lines with 0 abundance/concentration/biovolume for relevant (sample, category) pairs.
         """
         presents: Set[Tuple[str, str]] = set()
         samples: Set[str] = set()
@@ -620,6 +622,8 @@ class ProjectExport(JobServiceBase):
 
         # The specialized SQL builder
         aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(object_set, user_id, "txo.display_name")
+        aug_qry.remap_categories(req.pre_mapping)
+        aug_qry.set_formulae(req.formulae)
         # We want the sum of formula calculation
         formula = "1/SubSamplingCoefficient/VolWBodySamp"
         aug_qry.aggregate_with_computed_sum(formula)

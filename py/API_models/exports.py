@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from enum import Enum
-from typing import List
+from typing import List, Dict
 
 from helpers.pydantic import BaseModel, Field
 
@@ -81,9 +81,22 @@ class ExportReq(BaseModel):
                                    description="For 'DOI' type, export only first (displayed) image.", example=False)
     # TODO: Move A(acquisition) to U(subsample) but it needs propagation to client side.
     sum_subtotal: SummaryExportGroupingEnum = Field(title="Sum subtotal",
-                                                    description="For 'SUM' type, if computations should be combined."
+                                                    description="For 'SUM', 'ABO', 'CNC' and 'BIV' types, if "
+                                                                "computations should be combined."
                                                                 "Per A(cquisition) or S(ample) or <Empty>(just taxa).",
                                                     example="A")
+    pre_mapping: Dict[int, int] = Field(title="Categories mapping",
+                                        description="For 'ABO', 'CNC' and 'BIV' types types, mapping "
+                                                    "from present taxon (key) to output replacement one (value).",
+                                        example={456: 956, 2456: 213}, default={})
+    formulae: Dict[str, str] = Field(title="Computation formulas",
+                                     description="Transitory: For 'CNC' and 'BIV' type, how to get values from DB "
+                                                 "free columns. Python syntax, prefixes are 'sam', 'ssm' and 'obj'.",
+                                     example={"SubSamplingCoefficient": "1/ssm.sub_part",
+                                              "VolWBodySamp": "sam.tot_vol/1000",
+                                              "IndividualBioVol": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3"},
+                                     default={}
+                                     )
     out_to_ftp: bool = Field(title="Out to ftp",
                              description="Copy result file to FTP area. Original file is still available.",
                              example=False)

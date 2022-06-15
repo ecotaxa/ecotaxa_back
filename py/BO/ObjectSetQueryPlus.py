@@ -10,11 +10,15 @@
 #
 import csv
 import enum
+import math
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Generator, Any, Iterable
 
+from BO.Classification import ClassifIDT
 from BO.ObjectSet import DescribedObjectSet
+from BO.ProjectVars import ProjectVar
 from BO.User import UserIDT
+from BO.Vocabulary import Units, Vocabulary
 from DB import Taxonomy
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Session
@@ -28,6 +32,8 @@ logger = get_logger(__name__)
 RowSourceT = Generator[Dict[str, Any], None, None]
 # A typing for both in-mem list of dicts and row sources
 IterableRowsT = Iterable[Dict[str, Any]]
+# From, To
+TaxoRemappingT = Dict[ClassifIDT, ClassifIDT]
 
 
 class ResultGrouping(enum.IntEnum):
@@ -52,11 +58,16 @@ class ObjectSetQueryPlus(object):
     TAXONOMY_PK = "txo.id"
     SAMPLE_PK = "sam.sampleid"
     SUBSAMPLE_PK = "acq.acquisid"
+    KNOWN_PREFICES = ['sam', 'ssm', 'obj']
 
     def __init__(self, obj_set: DescribedObjectSet, user_id: UserIDT):
         self.obj_set = obj_set
         self.user_id = user_id
         self.prj_id = obj_set.prj_id
+        # Input data tweaking
+        self.taxo_mapping: TaxoRemappingT = {}
+        # Computations settings
+        self.formulae: Dict[str, str] = {}
         #
         self.sql_select_list: List[str] = []  # What is needed
         self.aliases: Dict[str, str] = {}  # How it will appear
@@ -93,6 +104,18 @@ class ObjectSetQueryPlus(object):
         """
         self.aliases.update(aliases)
 
+    def remap_categories(self, taxo_mappings: TaxoRemappingT):
+        """
+            The result will not contain any category in keys, only the ones in values.
+        """
+        self.taxo_mapping = taxo_mappings
+
+    def set_formulae(self, formulae: Dict[str, str]):
+        """
+            Set the formulae, i.e. the way to extract significant values from free columns.
+        """
+        self.formulae = formulae
+
     def add_select(self, cols_list: List[str], before: bool = True) -> 'ObjectSetQueryPlus':
         """
             Augment what is needed as output.
@@ -105,7 +128,7 @@ class ObjectSetQueryPlus(object):
 
     def aggregate_with_count(self) -> 'ObjectSetQueryPlus':
         """
-            Add a count to the query, with given name, for each grouping.
+            Add a count to the query, for each grouping.
         """
         assert self.grouping != ResultGrouping.NO_GROUPING
         assert self.sum_exp is None
@@ -161,22 +184,61 @@ class ObjectSetQueryPlus(object):
         sql = select_clause + " FROM " + from_.get_sql() + where.get_sql() + group_clause + order_clause.get_sql()
         return sql, params
 
+    def _eval_from_exp_and_formulae(self) -> ProjectVar:
+        """
+            Return an eval-able python code chunk.
+            TODO: Absent values e.g. 9999999
+        """
+        sum_exp = self.sum_exp
+        assert sum_exp
+        # Substitute known variables inside
+        vars_in_exp = ProjectVar.find_vars(sum_exp)
+        for a_var in vars_in_exp:
+            if a_var in self.formulae:
+                a_subexp = self.formulae[a_var]
+                sum_exp = sum_exp.replace(a_var, "(" + a_subexp + ")")
+        # Transform dot notations into single var e.g. sam.tot_vol -> sam_tot_vol
+        vars_in_exp2 = ProjectVar.find_vars(sum_exp)
+        for a_var in vars_in_exp2:
+            if a_var.startswith("math."):  # TODO: more libs?
+                continue
+            elif "." not in a_var:
+                raise Exception("Could not expand variable '%s' found in expression '%s'" % (a_var, self.sum_exp))
+            else:
+                prfx, free_col = a_var.split(".")
+                if prfx not in self.KNOWN_PREFICES:
+                    raise Exception("Variable '%s' does not start with valid suffix '%s', found in expression '%s'" %
+                                    (a_var, prfx, self.sum_exp))
+                # TODO: resolve free col
+                sum_exp = sum_exp.replace(a_var, prfx + "_" + free_col)
+
+        # TODO: This is wrong!
+        prj_var = ProjectVar(sum_exp, Vocabulary.volume_sampled, Units.cubic_metres)
+        return prj_var
+
     def get_row_source(self, ro_session: Session) -> RowSourceT:
         """
             Build a generator to loop over query results, eventually enriched.
         """
+        # Data side
         sql, params = self.get_sql()
         logger.info("Execute SQL : %s", sql)
         logger.info("Params : %s", params)
         res = ro_session.execute(text(sql), params)
+        # Scientific side
+        sum_eval = None
+        dest_col = None
+        if self.sum_exp is not None:
+            sum_eval = self._eval_from_exp_and_formulae()
+            dest_col = self.aliases[self.sum_exp]
         for a_row in res:
             db_row = dict(a_row)
-            if self.sum_exp is not None:
-                # if self.grouping & ResultGrouping.BY_TAXO:
-                # if self.grouping & ResultGrouping.BY_SUBSAMPLE:
-                # if self.grouping & ResultGrouping.BY_SAMPLE:
-                alias = self.aliases[self.sum_exp]
-                db_row[alias] = "e"
+            if dest_col is not None:
+                assert sum_eval
+                dyn_val = eval(sum_eval.code, {"math": math}, db_row)
+                if not sum_eval.is_valid(dyn_val):
+                    raise TypeError("Not valid %s: %s" % (sum_eval.formula, str(dyn_val)))
+                db_row[dest_col] = dyn_val
             yield db_row
 
     def get_result(self, ro_session: Session) -> List[Dict[str, Any]]:

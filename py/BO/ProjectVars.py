@@ -5,6 +5,7 @@
 # Computations from free columns, at the level where they are present for a project.
 #
 import ast
+import re
 from typing import Optional, List
 
 from .Vocabulary import Term
@@ -79,3 +80,13 @@ class ProjectVar(object):
         if self.validator is not None:
             return self.validator.passes(a_val)
         return True
+
+    IDENT_RE = r"[a-zA-Z][a-zA-Z0-9_]*"
+    VAR_RE = re.compile(r"{idt}(\.{idt})?".format(idt=IDENT_RE))
+
+    @classmethod
+    def find_vars(cls, sum_exp) -> List[str]:
+        """ Find the variables inside the expression """
+        # TODO: Some free vars are really weird
+        refs = [a_match.group(0) for a_match in cls.VAR_RE.finditer(sum_exp)]
+        return sorted(set(refs))
