@@ -42,6 +42,7 @@ class AbundancePerUnitAreaOfTheBed(DwC_ExtendedMeasurementOrFact):
 
 
 class AbundancePerUnitVolumeOfTheWaterBody(DwC_ExtendedMeasurementOrFact):
+    # TODO: Duplicated in Vocabulary.py
     def __init__(self, event_id: str, occurrence_id: str, value: str):
         assert occurrence_id is not None
         super().__init__(
@@ -56,6 +57,7 @@ class AbundancePerUnitVolumeOfTheWaterBody(DwC_ExtendedMeasurementOrFact):
 
 
 class BiovolumeOfBiologicalEntity(DwC_ExtendedMeasurementOrFact):
+    # TODO: Duplicated in Vocabulary.py
     def __init__(self, event_id: str, occurrence_id: str, value: str):
         assert occurrence_id is not None
         super().__init__(
