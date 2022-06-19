@@ -13,6 +13,27 @@ from typing import Union, List, Dict, Optional, Set, Generator, Tuple
 SQLParamDict = Dict[str, Union[int, float, Decimal, str, List[int], List[str]]]
 
 
+class SelectClause(object):
+    """
+        List of selected expressions, eventually aliased.
+    """
+
+    def __init__(self):
+        self.expressions = []
+        self.aliases = []
+
+    def add(self, expr: str, alias: Optional[str] = None) -> 'SelectClause':
+        self.expressions.append(expr)
+        self.aliases.append(alias)
+        return self
+
+    def get_sql(self) -> str:
+        aliased = [expr + (" AS %s" % alias if alias else "")
+                   for expr, alias in zip(self.expressions, self.aliases)]
+        ret = "SELECT " + ", ".join(aliased)
+        return ret
+
+
 class FromClause(object):
     """
         A 'from' clause in SQL. List of joined table expressions.

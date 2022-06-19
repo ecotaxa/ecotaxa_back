@@ -20,6 +20,7 @@ from BO.ObjectSetQueryPlus import ResultGrouping, PerTaxonResultsQuery, Iterable
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
 from BO.User import UserIDT
+from BO.Vocabulary import Vocabulary, Units
 from DB.Object import VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL
 from DB.Project import Project
 from DB.helpers import Result
@@ -486,7 +487,7 @@ class ProjectExport(JobServiceBase):
         object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, self.filters)
 
         # The specialized SQL builder
-        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(object_set, self._get_owner_id(), "txo.display_name")
+        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(object_set, src_project, self._get_owner_id(), "txo.display_name")
         # We want the count, that's the goal of all this
         aug_qry.aggregate_with_count()
         # We can set aliases even for expressions we don't select, so include all possibly needed ones
@@ -534,9 +535,9 @@ class ProjectExport(JobServiceBase):
         object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, self.filters)
 
         # The specialized SQL builder
-        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(object_set, user_id, "txo.display_name")
+        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(object_set, src_project, user_id, "txo.display_name")
         aug_qry.remap_categories(req.pre_mapping)
-        aug_qry.set_formulae(req.formulae)
+        # aug_qry.set_formulae(req.formulae) # Not needed for abundances
         # We want the count, that's the goal of all this
         aug_qry.aggregate_with_count()
         # We can set aliases even for expressions we don't select, so include all possibly needed ones
@@ -621,12 +622,12 @@ class ProjectExport(JobServiceBase):
         object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, self.filters)
 
         # The specialized SQL builder
-        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(object_set, user_id, "txo.display_name")
+        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(object_set, src_project, user_id, "txo.display_name")
         aug_qry.remap_categories(req.pre_mapping)
         aug_qry.set_formulae(req.formulae)
         # We want the sum of formula calculation
         formula = "1/SubSamplingCoefficient/VolWBodySamp"
-        aug_qry.aggregate_with_computed_sum(formula)
+        aug_qry.aggregate_with_computed_sum(formula, Vocabulary.concentrations, Units.number_per_cubic_metre)
         # We can set aliases even for expressions we don't select, so include all possibly needed ones
         aug_qry.set_aliases({"txo.display_name": "taxonid",
                              "sam.orig_id": "sampleid",
@@ -644,6 +645,7 @@ class ProjectExport(JobServiceBase):
 
         if req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
             # We need to add missing taxa
+            # TODO: check with https://github.com/ecotaxa/ecotaxa/issues/615#issuecomment-1158781701
             without_zeroes = aug_qry.get_result(self.ro_session)
             not_presents = self.add_not_presents_in_summary(without_zeroes, object_set, user_id, "concentration")
             without_zeroes.extend(not_presents)

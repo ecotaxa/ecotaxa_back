@@ -10,19 +10,19 @@
 #
 import csv
 import enum
-import math
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Generator, Any, Iterable
 
 from BO.Classification import ClassifIDT
+from BO.ComputedVar import ComputedVar
+from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet
-from BO.ProjectVars import ProjectVar
 from BO.User import UserIDT
-from BO.Vocabulary import Units, Vocabulary
-from DB import Taxonomy
+from BO.Vocabulary import Term
+from DB import Taxonomy, Project
 from DB.helpers.Direct import text
-from DB.helpers.ORM import Session
-from DB.helpers.SQL import OrderClause, SQLParamDict
+from DB.helpers.ORM import Session, Row
+from DB.helpers.SQL import OrderClause, SQLParamDict, SelectClause
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -58,12 +58,16 @@ class ObjectSetQueryPlus(object):
     TAXONOMY_PK = "txo.id"
     SAMPLE_PK = "sam.sampleid"
     SUBSAMPLE_PK = "acq.acquisid"
-    KNOWN_PREFICES = ['sam', 'ssm', 'obj']
+    # The namings, from _formulae_ point of view
+    SAMPLE_PREFIX = 'sam'
+    SUBSAMPLE_PREFIX = 'ssm'
+    OBJECT_PREFIX = 'obj'
+    KNOWN_PREFIXES = [SAMPLE_PREFIX, SUBSAMPLE_PREFIX, OBJECT_PREFIX]
 
-    def __init__(self, obj_set: DescribedObjectSet, user_id: UserIDT):
+    def __init__(self, obj_set: DescribedObjectSet, src_project: Project, user_id: UserIDT):
         self.obj_set = obj_set
         self.user_id = user_id
-        self.prj_id = obj_set.prj_id
+        self.project = src_project
         # Input data tweaking
         self.taxo_mapping: TaxoRemappingT = {}
         # Computations settings
@@ -73,7 +77,7 @@ class ObjectSetQueryPlus(object):
         self.aliases: Dict[str, str] = {}  # How it will appear
         self.grouping: ResultGrouping = ResultGrouping.NO_GROUPING  # The grouping
         self.count: bool = False  # A simple aggregate
-        self.sum_exp: Optional[str] = None  # A complex aggregate
+        self.sum_exp: Optional[ComputedVar] = None  # A complex aggregate
 
     def set_grouping(self, grouping: ResultGrouping) -> 'ObjectSetQueryPlus':
         """
@@ -135,86 +139,115 @@ class ObjectSetQueryPlus(object):
         self.count = True
         return self
 
-    def aggregate_with_computed_sum(self, sum_expression: str) -> 'ObjectSetQueryPlus':
+    def _resolve_refs(self) -> Dict[Tuple[str, str], Tuple[str, str]]:
+        """
+            Resolve references, e.g. sam.tot_vol -> sam.t05. The prefixes are valid.
+            TODO: As we're here, it would be nice to include plain non-free columns as well.
+        """
+        ret: Dict[Tuple[str, str], Tuple[str, str]] = {}
+        mapping = ProjectMapping().load_from_project(self.project)
+        assert self.sum_exp
+        for a_var in self.sum_exp.references.keys():
+            prfx, free_col = a_var.split(".")
+            real_col, real_tbl = None, None
+            if prfx == self.SAMPLE_PREFIX:
+                # Sample, straightforward
+                real_col = mapping.sample_mappings.tsv_cols_to_real.get(free_col)
+                real_tbl = "sam"  # TODO: Use a constant from ObjectSet
+            elif prfx == self.SUBSAMPLE_PREFIX:
+                # Subsample, i.e. either Process or Acquisition but not both
+                real_col1 = mapping.process_mappings.tsv_cols_to_real.get(free_col)
+                real_col2 = mapping.acquisition_mappings.tsv_cols_to_real.get(free_col)
+                if real_col1 is not None and real_col2 is not None:
+                    raise Exception("%s.%s is ambiguous, as %s is present in both Process and Acquisition free columns"
+                                    % (prfx, free_col, free_col))
+                elif real_col1 is not None:
+                    real_col = real_col1
+                    real_tbl = "prc"  # TODO: Use a constant from ObjectSet
+                elif real_col2 is not None:
+                    real_col = real_col2
+                    real_tbl = "acq"  # TODO: Use a constant from ObjectSet
+            elif prfx == self.OBJECT_PREFIX:
+                real_col = mapping.object_mappings.tsv_cols_to_real.get(free_col)
+                real_tbl = "obf"  # TODO: Use a constant from ObjectSet
+            if real_col is None:
+                raise Exception("Could not resolve %s.%s in project free columns" % (prfx, free_col))
+            assert real_tbl
+            ret[(prfx, free_col)] = (real_tbl, real_col)
+        return ret
+
+    def aggregate_with_computed_sum(self, sum_expression: str, term: Term, unit: Term) -> 'ObjectSetQueryPlus':
         """
             Add a computed sum to the query, with given name, for each grouping.
         """
         assert self.grouping != ResultGrouping.NO_GROUPING
         assert not self.count
-        self.sum_exp = sum_expression
+        # Validate & compile straight away
+        self.sum_exp = ComputedVar(sum_expression, term, unit)
+        self.sum_exp.expand_extract_refs(self.formulae, self.KNOWN_PREFIXES)
+        # Resolve references
+        resolved = self._resolve_refs()
+        self.sum_exp.replace_python_refs_with_SQL(resolved)
         return self
+
+    def _group_by_columns(self) -> List[str]:
+        """
+            The list of columns implied by the required grouping, in hierarchical order.
+        :return:
+        """
+        ret = []
+        if self.grouping & ResultGrouping.BY_SAMPLE:
+            ret.append(self.SAMPLE_PK)
+        if self.grouping & ResultGrouping.BY_SUBSAMPLE:
+            ret.append(self.SUBSAMPLE_PK)
+        if self.grouping & ResultGrouping.BY_TAXO:
+            ret.append(self.TAXONOMY_PK)
+        return ret
 
     def _compute_group_by(self) -> str:
         if self.sum_exp:
-            # We can't have PG doing these sums as they are computed here in python
+            # We can't have PG doing these aggregates as they are computed here in python
             return ""
-        ret = []
-        if self.grouping & ResultGrouping.BY_TAXO:
-            ret.append(self.TAXONOMY_PK)
-        if self.grouping & ResultGrouping.BY_SUBSAMPLE:
-            ret.append(self.SUBSAMPLE_PK)
-        if self.grouping & ResultGrouping.BY_SAMPLE:
-            ret.append(self.SAMPLE_PK)
-        return " GROUP BY " + ", ".join(ret)
+        return " GROUP BY " + ", ".join(self._group_by_columns())
+
+    def _add_tech_selects(self, select: SelectClause) -> None:
+        """
+            Add the selected columns implied/needed by expression expansion.
+            e.g. sam.t07 AS sam_tot_vol, acq.t03 AS ssm_sub_part
+        """
+        if self.sum_exp:
+            for a_py_ref, a_sql_ref in self.sum_exp.references.items():
+                select.add(a_sql_ref, a_py_ref)
+            for key_num, a_col in enumerate(self._group_by_columns()):
+                select.add(a_col, "key%d" % key_num)
 
     def get_sql(self) -> Tuple[str, SQLParamDict]:
         """
             Compose the query and return it.
         """
-        sels = self._get_selects()
         # Build SL, aliased parts if relevant
-        aliased_sels = []
-        for a_sel in sels:
-            als = self.aliases.get(a_sel)
-            if als is None:
-                aliased_sels.append(a_sel)
-            else:
-                aliased_sels.append(a_sel + " AS " + als)
-        select_clause = "SELECT " + ", ".join(aliased_sels)
+        select = self._selects_4_output()
+        # Add implied selects
+        self._add_tech_selects(select)
+        select_clause = select.get_sql()
         # Group by
         group_clause = self._compute_group_by()
-        # Order by all selected columns, in their given order
+        #
         order_clause = OrderClause()
-        for a_sel in sels:
-            alias_or_plain = self.aliases.get(a_sel, a_sel)
-            order_clause.add_expression(alias=None, expr=alias_or_plain)
+        if not self.sum_exp:
+            # Order by all selected columns, in their given order
+            for alias in select.aliases:
+                order_clause.add_expression(alias=None, expr=alias)
+        else:
+            # Order by the grouping keys, in their order.
+            # It's important as we detect the breaks in composite key to emit rows with aggregates.
+            for key_col in self._group_by_columns():
+                order_clause.add_expression(alias=None, expr=key_col)
 
         # Base SQL comes from filters
         from_, where, params = self.obj_set.get_sql(self.user_id, order_clause, select_clause)
         sql = select_clause + " FROM " + from_.get_sql() + where.get_sql() + group_clause + order_clause.get_sql()
         return sql, params
-
-    def _eval_from_exp_and_formulae(self) -> ProjectVar:
-        """
-            Return an eval-able python code chunk.
-            TODO: Absent values e.g. 9999999
-        """
-        sum_exp = self.sum_exp
-        assert sum_exp
-        # Substitute known variables inside
-        vars_in_exp = ProjectVar.find_vars(sum_exp)
-        for a_var in vars_in_exp:
-            if a_var in self.formulae:
-                a_subexp = self.formulae[a_var]
-                sum_exp = sum_exp.replace(a_var, "(" + a_subexp + ")")
-        # Transform dot notations into single var e.g. sam.tot_vol -> sam_tot_vol
-        vars_in_exp2 = ProjectVar.find_vars(sum_exp)
-        for a_var in vars_in_exp2:
-            if a_var.startswith("math."):  # TODO: more libs?
-                continue
-            elif "." not in a_var:
-                raise Exception("Could not expand variable '%s' found in expression '%s'" % (a_var, self.sum_exp))
-            else:
-                prfx, free_col = a_var.split(".")
-                if prfx not in self.KNOWN_PREFICES:
-                    raise Exception("Variable '%s' does not start with valid suffix '%s', found in expression '%s'" %
-                                    (a_var, prfx, self.sum_exp))
-                # TODO: resolve free col
-                sum_exp = sum_exp.replace(a_var, prfx + "_" + free_col)
-
-        # TODO: This is wrong!
-        prj_var = ProjectVar(sum_exp, Vocabulary.volume_sampled, Units.cubic_metres)
-        return prj_var
 
     def get_row_source(self, ro_session: Session) -> RowSourceT:
         """
@@ -225,21 +258,56 @@ class ObjectSetQueryPlus(object):
         logger.info("Execute SQL : %s", sql)
         logger.info("Params : %s", params)
         res = ro_session.execute(text(sql), params)
-        # Scientific side
-        sum_eval = None
-        dest_col = None
-        if self.sum_exp is not None:
-            sum_eval = self._eval_from_exp_and_formulae()
-            dest_col = self.aliases[self.sum_exp]
-        for a_row in res:
-            db_row = dict(a_row)
-            if dest_col is not None:
-                assert sum_eval
-                dyn_val = eval(sum_eval.code, {"math": math}, db_row)
-                if not sum_eval.is_valid(dyn_val):
-                    raise TypeError("Not valid %s: %s" % (sum_eval.formula, str(dyn_val)))
-                db_row[dest_col] = dyn_val
-            yield db_row
+        if self.sum_exp is None:
+            # Pure SQL, emit each row
+            for a_simple_row in res:
+                yield dict(a_simple_row)
+        else:
+            # Expression evaluation
+            # Prepare a maximum of things outside of the loop, which can be over thousands of rows.
+            eval_bnd = self.sum_exp.eval  # This is a bounded call
+            dest_col = self.aliases[self.sum_exp.formula]
+            # We have 3 parts in each row:
+            #  - The output values for the TSV, one of them is "0" and will receive the formula result
+            #  - The variables, input for formula evaluation
+            #  - The numerical keys for grouping
+            # e.g.: SELECT sam.orig_id AS sampleid, txo.display_name AS taxonid, 0 AS concentration,
+            #              sam.t07 AS sam_tot_vol, acq.t03 AS ssm_sub_part,
+            #              sam.sampleid AS key0, txo.id AS key1 FROM obj_head obh
+            out_vars = self._selects_4_output().aliases
+            nb_out_vars = len(out_vars)
+            formula_vars = list(self.sum_exp.references.keys())
+            keys_idx = nb_out_vars + len(formula_vars)
+            # Init loop vars 'previous' states
+            vals_sum: float = 0.0
+            last_row: Optional[Row] = None
+            last_keys: Tuple = tuple()
+            a_row: Row
+            for a_row in res:
+                vars_row = dict(zip(formula_vars, a_row[nb_out_vars:]))
+                val, nan_because_bad = eval_bnd(vars_row)
+                if val != val:  # NaN test
+                    if nan_because_bad:
+                        # TODO: Propagate
+                        logger.warning("All values could not be converted to float in %s", str(dict(a_row)))
+                keys = tuple(a_row[keys_idx:])
+                if last_row is None:
+                    # Ye olde first row problem...
+                    last_keys = keys
+                elif keys != last_keys:
+                    # Emit a row
+                    out_row = dict(zip(out_vars, last_row))
+                    out_row[dest_col] = vals_sum
+                    last_keys = keys
+                    vals_sum = 0.0
+                    yield out_row
+                last_row = a_row
+                vals_sum += val
+            if last_row is not None:
+                # The antique last row corner
+                out_row = dict(zip(out_vars, last_row))
+                out_row[dest_col] = vals_sum
+                yield out_row
 
     def get_result(self, ro_session: Session) -> List[Dict[str, Any]]:
         """
@@ -250,34 +318,33 @@ class ObjectSetQueryPlus(object):
 
     def write_result_to_csv(self, ro_session: Session, file_path: Path) -> int:
         """
-            Write row source into CSV.
+            Write all from row source into CSV.
         """
         nb_lines = self.write_row_source_to_csv(self.get_row_source(ro_session), file_path)
         return nb_lines
 
-    def _get_selects(self) -> List[str]:
+    def _selects_4_output(self) -> SelectClause:
         """
-            Get user selects.
+            Compute the selected expressions which will become TSV columns.
         """
-        ret = self.sql_select_list[:]
+        ret = SelectClause()
+        sels = self.sql_select_list[:]
         # Include count
         if self.count:
-            ret += [self.COUNT_STAR]
+            sels += [self.COUNT_STAR]
+        for a_sel in sels:
+            alias = self.aliases[a_sel]
+            ret.add(a_sel, alias)
+        # Add a placeholder for sum_expression
+        if self.sum_exp is not None:
+            ret.add("0", self.aliases[self.sum_exp.formula])
         return ret
 
     def _get_header(self) -> List[str]:
         """
             Return the CSV header from SQL column.
         """
-        ret = []
-        for a_col in self._get_selects():
-            if a_col in self.aliases:
-                ret.append(self.aliases[a_col])
-            else:
-                raise Exception("expression '%s' is not aliased" % a_col)
-        if self.sum_exp is not None:
-            ret.append(self.aliases[self.sum_exp])
-        return ret
+        return self._selects_4_output().aliases
 
     def write_row_source_to_csv(self, res: IterableRowsT, out_file: Path) -> int:
         """
@@ -300,8 +367,8 @@ class PerTaxonResultsQuery(ObjectSetQueryPlus):
         A specialized ObjectSetQueryPlus which always groups result, at least, by a Taxonomy table column.
     """
 
-    def __init__(self, obj_set: DescribedObjectSet, user_id: UserIDT, txo_col: str):
-        super().__init__(obj_set, user_id)
+    def __init__(self, obj_set: DescribedObjectSet, src_project: Project, user_id: UserIDT, txo_col: str):
+        super().__init__(obj_set, src_project, user_id)
         assert txo_col.startswith("txo.")
         assert txo_col[4:] in Taxonomy.__dict__
         self.sql_select_list = [txo_col]
