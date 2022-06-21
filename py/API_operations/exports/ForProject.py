@@ -13,7 +13,6 @@ from typing import Optional, Tuple, TextIO, cast, Dict, List, Set, Any
 
 from API_models.exports import ExportRsp, ExportReq, ExportTypeEnum, SummaryExportGroupingEnum
 from API_models.filters import ProjectFiltersDict
-from BO.Classification import ClassifIDT
 from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet
 from BO.ObjectSetQueryPlus import ResultGrouping, PerTaxonResultsQuery, IterableRowsT
@@ -487,7 +486,8 @@ class ProjectExport(JobServiceBase):
         object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, self.filters)
 
         # The specialized SQL builder
-        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(object_set, src_project, self._get_owner_id(), "txo.display_name")
+        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(object_set, src_project, self._get_owner_id(),
+                                                             "txo.display_name")
         # We want the count, that's the goal of all this
         aug_qry.aggregate_with_count()
         # We can set aliases even for expressions we don't select, so include all possibly needed ones
@@ -672,11 +672,8 @@ class ProjectExport(JobServiceBase):
         req = self.req
         exp_type = req.exp_type
 
-        # Ensure we work on validated obejcts only
+        # Ensure we work on validated objects only
         self.filters["statusfilter"] = "V"
-
-        # TODO: Get and apply category mapping from Req
-        categ_mapping: Optional[Dict[ClassifIDT, ClassifIDT]] = None
 
         if req.sum_subtotal == SummaryExportGroupingEnum.by_project:
             assert False, "No collections yet to get multiple projects"

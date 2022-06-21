@@ -20,7 +20,7 @@ class ProjectFiltersDict(TypedDict, total=False):
           'VM': Validated by me 
           'U': Not classified
           'UP': Updatable by prediction 
-           other: direct equality comparison with DB value """
+           other: direct equality comparison with DB value, i.e. P V or D """
     MapN: Optional[str]
     MapW: Optional[str]
     MapE: Optional[str]

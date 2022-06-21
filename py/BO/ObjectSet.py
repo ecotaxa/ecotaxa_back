@@ -51,6 +51,8 @@ ObjectSetClassifChangesT = OrderedDictT[ChangeTupleT, ObjectIDListT]
 
 logger = get_logger(__name__)
 
+# If one of these statuses are required, then the classif_id must be valid
+MEANS_CLASSIF_ID_EXIST = ('V', 'PV', 'PVD', 'NVM', 'VM')
 
 class DescribedObjectSet(object):
     """
@@ -93,8 +95,8 @@ class DescribedObjectSet(object):
             selected_tables += "obj_field obf ON obf.objfid = obh.objid"
         if "txo." in column_referencing_sql or "txp." in column_referencing_sql:
             selected_tables += "taxonomy txo ON txo.id = obh.classif_id"
-            # TODO: For e.g. Validated classif_qual, we can do a normal join
-            selected_tables.set_outer("taxonomy txo ")
+            if self.filters.status_filter not in MEANS_CLASSIF_ID_EXIST:
+                selected_tables.set_outer("taxonomy txo ")
         if "img." in column_referencing_sql:
             selected_tables += "images img ON obh.objid = img.objid " + \
                                ("AND img.imgrank = (SELECT MIN(img3.imgrank) "

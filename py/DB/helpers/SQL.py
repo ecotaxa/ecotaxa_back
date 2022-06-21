@@ -48,11 +48,13 @@ class FromClause(object):
         return self
 
     def get_sql(self) -> str:
-        ret = "\n  JOIN ".join([a_join for a_join in self.joins if a_join not in self.left_joins])
-        if len(self.left_joins) > 0:
-            ret += "\n LEFT JOIN " + "\n LEFT JOIN ".join(
-                [a_join for a_join in self.joins if a_join in self.left_joins])
-        return ret
+        sqls = [self.joins[0]]
+        for a_join in self.joins[1:]:
+            if a_join in self.left_joins:
+                sqls.append("LEFT JOIN "+a_join)
+            else:
+                sqls.append("JOIN "+a_join)
+        return "\n ".join(sqls)
 
     def replace_table(self, before: str, after: str) -> None:
         repl = []
@@ -75,12 +77,19 @@ class FromClause(object):
             if a_join.startswith(join_start):
                 self.left_joins.add(a_join)
 
-    def find_join(self, join_start: str) -> bool:
+    def find_join(self, join_start: str) -> Tuple[str, int]:
         """ Find a clause starting with join_start """
-        for a_join in self.joins:
+        for idx, a_join in enumerate(self.joins):
             if a_join.startswith(join_start):
-                return True
-        return False
+                return a_join, idx
+        return "", -1
+
+    def replace_in_join(self, idx: int, exp_from: str, exp_to: str):
+        """ Textual substitution in given join text """
+        self.joins[idx] = self.joins[idx].replace(exp_from, exp_to)
+
+    def insert(self, a_join: str, idx: int):
+        self.joins.insert(idx, a_join)
 
 
 class WhereClause(object):

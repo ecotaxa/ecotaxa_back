@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from enum import Enum
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from helpers.pydantic import BaseModel, Field
 
@@ -85,10 +85,11 @@ class ExportReq(BaseModel):
                                                                 "computations should be combined."
                                                                 "Per A(cquisition) or S(ample) or <Empty>(just taxa).",
                                                     example="A")
-    pre_mapping: Dict[int, int] = Field(title="Categories mapping",
-                                        description="For 'ABO', 'CNC' and 'BIV' types types, mapping "
-                                                    "from present taxon (key) to output replacement one (value).",
-                                        example={456: 956, 2456: 213}, default={})
+    pre_mapping: Dict[int, Optional[int]] = Field(title="Categories mapping",
+                                                  description="For 'ABO', 'CNC' and 'BIV' types types, mapping "
+                                                              "from present taxon (key) to output replacement one (value)."
+                                                              " Use a null replacement to dicard the present taxon.",
+                                                  example={456: 956, 2456: 213}, default={})
     formulae: Dict[str, str] = Field(title="Computation formulas",
                                      description="Transitory: For 'CNC' and 'BIV' type, how to get values from DB "
                                                  "free columns. Python syntax, prefixes are 'sam', 'ssm' and 'obj'.",

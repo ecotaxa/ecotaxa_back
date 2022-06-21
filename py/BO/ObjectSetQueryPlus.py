@@ -32,8 +32,8 @@ logger = get_logger(__name__)
 RowSourceT = Generator[Dict[str, Any], None, None]
 # A typing for both in-mem list of dicts and row sources
 IterableRowsT = Iterable[Dict[str, Any]]
-# From, To
-TaxoRemappingT = Dict[ClassifIDT, ClassifIDT]
+# From:To and remove if no "To"
+TaxoRemappingT = Dict[ClassifIDT, Optional[ClassifIDT]]
 
 
 class ResultGrouping(enum.IntEnum):
@@ -246,8 +246,27 @@ class ObjectSetQueryPlus(object):
 
         # Base SQL comes from filters
         from_, where, params = self.obj_set.get_sql(self.user_id, order_clause, select_clause)
+        if len(self.taxo_mapping) > 0:
+            select_clause = self._amend_query_for_mapping(from_, select_clause)
         sql = select_clause + " FROM " + from_.get_sql() + where.get_sql() + group_clause + order_clause.get_sql()
         return sql, params
+
+    def _amend_query_for_mapping(self, from_, select_clause):
+        """
+            From parts of the ObjectSet SQL, inject the needed mapping, with a CTE.
+        """
+        pairs = []
+        for from_txo, to_txo in self.taxo_mapping.items():
+            pairs.append("(%d,%s)" % (from_txo, "NULL" if to_txo is None else str(to_txo)))
+        cte_txt = "WITH mpg (src_id, dst_id)" + " AS (VALUES " + ",".join(pairs) + ") "
+        txo_join, idx = from_.find_join("taxonomy txo")
+        # Read: when there was no mapping then lookup using classif_id else pick lookup even if null
+        exp = "CASE WHEN mpg.src_id IS NULL THEN obh.classif_id ELSE mpg.dst_id END "
+        from_.replace_in_join(idx, "obh.classif_id", exp)
+        from_.insert("mpg ON mpg.src_id = obh.classif_id", idx)
+        from_.set_outer("mpg ")
+        select_clause = cte_txt + select_clause
+        return select_clause
 
     def get_row_source(self, ro_session: Session) -> RowSourceT:
         """
