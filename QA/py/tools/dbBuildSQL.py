@@ -1,5 +1,5 @@
 """
-Build the DB from scratch in EcoTaxa V2_2, using an SQL Dump, so the 2_2 source tree is not needed.
+Build the DB from scratch in EcoTaxa.
 """
 import os
 import shutil
@@ -21,7 +21,7 @@ PG_PORT = environ.get("POSTGRES_PORT")
 if PG_HOST and PG_PORT:
     PG_PORT = int(PG_PORT)
 else:
-    pg_lib = "/usr/lib/postgresql/13/bin/"
+    pg_lib = "/usr/lib/postgresql/135/bin/"
     pgctl_bin = join(pg_lib, "pg_ctl")
     initdb_bin = join(pg_lib, "initdb")
     mustExist = [pgctl_bin, initdb_bin]
