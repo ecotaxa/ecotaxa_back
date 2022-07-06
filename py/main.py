@@ -196,7 +196,7 @@ def update_user(user: UserModelWithRights,
 
         🔒 Depending on logged user, different authorizations apply:
         - An administrator or user administrator can change any field with respect of consistency.
-        - A user can update own password and mail.
+        - A user can update own password and name.
         - An ordinary user cannot update anything for another user.
     """
     with UserService() as sce:
