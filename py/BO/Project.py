@@ -6,7 +6,7 @@ import typing
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Dict, Any, Iterable, Optional, Union, OrderedDict as OrderedDictT
+from typing import List, Dict, Any, Iterable, Optional, Union, OrderedDict as OrderedDictT, Set
 
 from BO.Classification import ClassifIDListT
 from BO.Instrument import DescribedInstrumentSet
@@ -130,7 +130,8 @@ class ProjectBO(object):
                 self.contact = priv_user
         return self
 
-    def update(self, session: Session, instrument: Optional[str], title: str, visible: bool, status: str, description: str,
+    def update(self, session: Session, instrument: Optional[str], title: str, visible: bool, status: str,
+               description: str,
                init_classif_list: List[int],
                classiffieldlist: str, popoverfieldlist: str,
                cnn_network_id: str, comments: str,
@@ -268,6 +269,28 @@ class ProjectBO(object):
         for a_stat in ret:
             a_stat.used_taxa.sort()
         return ret
+
+    @staticmethod
+    def validated_categories_ids(session: Session,
+                                 prj_ids: ProjectIDListT) -> ClassifIDListT:
+        """ Return display_name for all categories with at least one validated object,
+        in provided project list. """
+        qry = session.query(ObjectHeader.classif_id).distinct(ObjectHeader.classif_id)
+        qry = qry.join(Acquisition).join(Sample).join(Project)
+        qry = qry.filter(Project.projid == any_(prj_ids))
+        qry = qry.filter(ObjectHeader.classif_qual == VALIDATED_CLASSIF_QUAL)
+        with CodeTimer("Validated category IDs for %s, qry: %s " % (len(prj_ids), str(qry)), logger):
+            return [an_id for an_id, in qry]
+
+    @staticmethod
+    def all_samples_orig_id(session: Session,
+                            prj_ids: ProjectIDListT) -> Set[str]:
+        """ Return orig_id (i.e. users' sample_id for all projects). If several projects, it is assumed
+         that project ids come from a Collection, so no naming conflict. """
+        qry = session.query(Sample.orig_id).distinct(Sample.orig_id)
+        qry = qry.join(Project)
+        qry = qry.filter(Project.projid == any_(prj_ids))
+        return set([an_id for an_id, in qry])
 
     @staticmethod
     def read_user_stats(session: Session, prj_ids: ProjectIDListT) -> List[ProjectUserStats]:

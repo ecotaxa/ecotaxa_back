@@ -79,6 +79,15 @@ class TaxonomyBO(object):
         return {an_id for an_id, in res}
 
     @staticmethod
+    def get_display_names(session: Session, classif_ids: ClassifIDListT) -> List[str]:
+        """
+            Return display names for given IDs
+        """
+        qry = session.query(Taxonomy.display_name).distinct()
+        qry = qry.filter(Taxonomy.id == any_(classif_ids))
+        return [a_name for a_name, in qry]
+
+    @staticmethod
     def resolve_taxa(session: Session, taxo_lookup: Dict[str, Dict[str, Any]], taxon_lower_list):
         """
             Match taxa in taxon_lower_list and return the matched ones in taxo_found.

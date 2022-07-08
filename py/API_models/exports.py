@@ -88,7 +88,7 @@ class ExportReq(BaseModel):
     pre_mapping: Dict[int, Optional[int]] = Field(title="Categories mapping",
                                                   description="For 'ABO', 'CNC' and 'BIV' types types, mapping "
                                                               "from present taxon (key) to output replacement one (value)."
-                                                              " Use a null replacement to dicard the present taxon.",
+                                                              " Use a null replacement to discard the present taxon.",
                                                   example={456: 956, 2456: 213}, default={})
     formulae: Dict[str, str] = Field(title="Computation formulas",
                                      description="Transitory: For 'CNC' and 'BIV' type, how to get values from DB "

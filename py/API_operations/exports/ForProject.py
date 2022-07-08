@@ -16,13 +16,13 @@ from API_models.filters import ProjectFiltersDict
 from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet
 from BO.ObjectSetQueryPlus import ResultGrouping, PerTaxonResultsQuery, IterableRowsT
+from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
 from BO.User import UserIDT
 from BO.Vocabulary import Vocabulary, Units
 from DB.Object import VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL
 from DB.Project import Project
-from DB.helpers import Result
 from DB.helpers.Direct import text
 from DB.helpers.SQL import OrderClause
 from FS.CommonDir import ExportFolder
@@ -558,7 +558,7 @@ class ProjectExport(JobServiceBase):
         if req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
             # We need to add missing taxa
             without_zeroes = aug_qry.get_result(self.ro_session)
-            not_presents = self.add_not_presents_in_summary(without_zeroes, object_set, user_id, "count")
+            not_presents = self.add_not_presents_in_summary(without_zeroes, "count", object_set, user_id)
             without_zeroes.extend(not_presents)
             without_zeroes.sort(key=lambda row: (row["sampleid"], row["taxonid"]))
             row_src: IterableRowsT = without_zeroes
@@ -576,14 +576,37 @@ class ProjectExport(JobServiceBase):
 
         return nb_lines
 
-    def add_not_presents_in_summary(self, without_zeroes: List[Dict[str, Any]], object_set: DescribedObjectSet,
-                                    user_id: UserIDT, zero_col: str):
+    def add_not_presents_in_summary(self, without_zeroes: List[Dict[str, Any]], zero_col: str,
+                                    object_set: DescribedObjectSet,
+                                    user_id: UserIDT):
         """
             Add lines with 0 abundance/concentration/biovolume for relevant (sample, category) pairs.
+            Specs: https://github.com/ecotaxa/ecotaxa/issues/615#issuecomment-1158781701
         """
+        prj_ids = [object_set.prj_id]
+        # ALL categories (categories with at least one object classified in the project)
+        all_cat_ids = ProjectBO.validated_categories_ids(self.ro_session, prj_ids)
+        remaps = self.req.pre_mapping
+        # Apply the remapping. SQL version is in ObjectSetQueryPlus.py (def _amend_query_for_mapping)
+        remapped_cats = []
+        for a_cat in all_cat_ids:
+            if a_cat in remaps:
+                remapped_cat = remaps[a_cat]
+                if remapped_cat is None:
+                    # To discard
+                    continue
+                else:
+                    # Out = mapped
+                    remapped_cats.append(remapped_cat)
+            else:
+                # Out = original
+                remapped_cats.append(a_cat)
+        # ALL sampling_units (from the samples or subsamples/acquisition table)
+        all_sampling_units = ProjectBO.all_samples_orig_id(self.ro_session, prj_ids)
+        # Prepare the cross fill
         presents: Set[Tuple[str, str]] = set()
-        samples: Set[str] = set()
-        taxa: Set[str] = set()
+        samples: Set[str] = set(all_sampling_units)
+        taxa: Set[str] = set(TaxonomyBO.get_display_names(self.ro_session, remapped_cats))
         # Build (sample, taxon) pairs
         for a_row in without_zeroes:
             sampleid, taxonid = a_row["sampleid"], a_row["taxonid"]
@@ -591,12 +614,12 @@ class ProjectExport(JobServiceBase):
             samples.add(sampleid)
             taxa.add(taxonid)
         # We want as well all the samples implied by the filters
-        # TODO: Put the query somewhere else
-        from_, where_clause, params = object_set.get_sql(user_id)
-        sql = "SELECT DISTINCT sam.orig_id FROM " + from_.get_sql() + " " + where_clause.get_sql()
-        res: Result = self.ro_session.execute(text(sql), params)
-        for sampleid, in res:
-            samples.add(sampleid)
+        # # TODO: Put the query somewhere else
+        # from_, where_clause, params = object_set.get_sql(user_id)
+        # sql = "SELECT DISTINCT sam.orig_id FROM " + from_.get_sql() + " " + where_clause.get_sql()
+        # res: Result = self.ro_session.execute(text(sql), params)
+        # for sampleid, in res:
+        #     samples.add(sampleid)
         # Cross-fill
         not_presents: List[Dict[str, Any]] = []
         for sampleid in samples:
@@ -647,7 +670,7 @@ class ProjectExport(JobServiceBase):
             # We need to add missing taxa
             # TODO: check with https://github.com/ecotaxa/ecotaxa/issues/615#issuecomment-1158781701
             without_zeroes = aug_qry.get_result(self.ro_session)
-            not_presents = self.add_not_presents_in_summary(without_zeroes, object_set, user_id, "concentration")
+            not_presents = self.add_not_presents_in_summary(without_zeroes, "concentration", object_set, user_id, )
             without_zeroes.extend(not_presents)
             without_zeroes.sort(key=lambda row: (row["sampleid"], row["taxonid"]))
             row_src: IterableRowsT = without_zeroes

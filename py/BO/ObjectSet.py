@@ -54,6 +54,7 @@ logger = get_logger(__name__)
 # If one of these statuses are required, then the classif_id must be valid
 MEANS_CLASSIF_ID_EXIST = ('V', 'PV', 'PVD', 'NVM', 'VM')
 
+
 class DescribedObjectSet(object):
     """
         A (potentially large) set of objects, described by a base rule (all objects in project XXX)
