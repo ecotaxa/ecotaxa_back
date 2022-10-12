@@ -757,7 +757,7 @@ class ObjectSetFilter(object):
             elif self.status_filter == "PVD":
                 where_clause *= "obh.classif_qual IS NOT NULL"
             else:
-                where_clause *= "obh.classif_qual = '" + self.status_filter + "'"
+                where_clause *= "obh.classif_qual = '" + self.status_filter[:3] + "'"
 
         if self.MapN and self.MapW and self.MapE and self.MapS:
             where_clause *= "obh.latitude BETWEEN :MapS AND :MapN"

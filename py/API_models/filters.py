@@ -91,7 +91,7 @@ class _ProjectFilters2Model(object):
             'VM': Validated by me 
             'U': Not classified
             other: direct equality comparison with DB value 
-        """, example="NV"),
+        """, example="NV", max_length=3),
         "MapN": Field(title="Map North",
                       description="If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
                       example=44.34),
