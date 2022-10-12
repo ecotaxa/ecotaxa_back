@@ -37,9 +37,10 @@ class UserFolderService(Service):
             TODO: Quotas
         """
         file_name = file.filename
+        assert ".." not in file_name, "Forbidden"
         current_user = self.ro_session.query(User).get(current_user_id)
         assert current_user is not None
-        logger.info("Adding '%s' ('%s'/'%s') for '%s'", tag, file_name, path, current_user.name)
+        logger.info("Adding '%s' ('%s'/'%s') for '%s'", tag, path, file_name, current_user.name)
         ret = await UserDirectory(current_user_id, tag).add_file(file_name, path, file)
         return ret
 

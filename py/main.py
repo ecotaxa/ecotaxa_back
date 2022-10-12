@@ -2313,7 +2313,8 @@ async def put_user_file(file: UploadFile = File(..., title="File", description="
         *e.g. import.*
     """
     with UserFolderService() as sce:
-        with RightsThrower():
+        with ValidityThrower(), RightsThrower():
+            assert ".." not in str(path) + str(tag), "Forbidden"
             file_name = await sce.store(current_user, file, path, tag)
         return file_name
 
