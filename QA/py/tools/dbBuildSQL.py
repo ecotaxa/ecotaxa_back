@@ -188,6 +188,7 @@ FTPEXPORTAREA = %s
 MODELSAREA = %s
 SECURITY_PASSWORD_HASH=sha512_crypt
 SECURITY_PASSWORD_SALT=PePPER
+APPMANAGER_MAIL=someone@somewhere.org
     """
 
     def write_config(self):

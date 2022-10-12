@@ -29,6 +29,8 @@ class StatusService(Service):
         if current_user_id is None:
             return "UP!"
         current_user = self.ro_session.query(User).get(current_user_id)
+        if current_user is None:
+            return "Who?"
         is_admin = current_user.has_role(Role.APP_ADMINISTRATOR)
         ret = ["Config dump:"]
         for k in self.config.list_cnf():
@@ -53,7 +55,7 @@ class StatusService(Service):
             else:
                 status = "*** KO ***"
             if not is_admin:
-                path = "/somepath"
+                path = Path("/somepath")
             ret.append("  %s (from %s): %s" % (path, pk, status))
         ret.append("")
         return "\n".join(ret)
