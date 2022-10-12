@@ -3,7 +3,10 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from pathlib import Path
+from typing import Optional
 
+from BO.User import UserIDT
+from DB import User, Role
 from .helpers.Service import Service
 
 
@@ -19,12 +22,18 @@ class StatusService(Service):
     # TODO: Use const from elsewhere
     PATHS_IN_CONF = ['SERVERLOADAREA', 'FTPEXPORTAREA', 'MODELSAREA']
 
-    def run(self) -> str:
+    def run(self, current_user_id: Optional[UserIDT]) -> str:
         """
             Produce the answer.
         """
+        if current_user_id is None:
+            return "UP!"
+        current_user = self.ro_session.query(User).get(current_user_id)
+        is_admin = current_user.has_role(Role.APP_ADMINISTRATOR)
         ret = ["Config dump:"]
         for k in self.config.list_cnf():
+            if not is_admin and not "appmanager" in k:
+                continue
             v = self.config.get_cnf(k)
             if 'secret' in k.lower() or 'salt' in k.lower() or 'password' in k.lower():
                 v = "*************"
@@ -43,6 +52,8 @@ class StatusService(Service):
                 status = "OK"
             else:
                 status = "*** KO ***"
+            if not is_admin:
+                path = "/somepath"
             ret.append("  %s (from %s): %s" % (path, pk, status))
         ret.append("")
         return "\n".join(ret)

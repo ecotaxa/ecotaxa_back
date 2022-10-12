@@ -2391,12 +2391,13 @@ Paths:
         }
     }
 })
-def system_status(_current_user: int = Depends(get_current_user)) -> Response:
+def system_status(current_user: Optional[int] = Depends(get_optional_current_user)) -> Response:
     """
         **Report the status**, mainly used for verifying that the server is up.
+        Depending on provided credentials, you get more or less information.
     """
     with StatusService() as sce:
-        return Response(sce.run(), media_type="text/plain")
+        return Response(sce.run(current_user), media_type="text/plain")
 
 
 # ######################## END OF WIP

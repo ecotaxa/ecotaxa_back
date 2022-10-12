@@ -139,9 +139,16 @@ def test_error(fastapi):
 def test_status(config, database, fastapi):
     # We need a test client which does not catch exceptions
     url = "/status"
+    response = fastapi.get(url)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.text == "UP!"
     response = fastapi.get(url, headers=USER_AUTH)
     assert response.status_code == status.HTTP_200_OK
     # Random check of one entry
+    assert "somepath" in response.content.decode("utf-8")
+    response = fastapi.get(url, headers=ADMIN_AUTH)
+    assert response.status_code == status.HTTP_200_OK
+    # Random check of an admin entry
     assert "FTPEXPORTAREA" in response.content.decode("utf-8")
 
 
