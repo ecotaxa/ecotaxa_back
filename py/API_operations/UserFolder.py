@@ -5,7 +5,7 @@
 # Per-user or shared set of files.
 #
 import time
-from typing import Optional, Any
+from typing import Optional, Union
 
 from fastapi import UploadFile
 
@@ -48,15 +48,17 @@ class UserFolderService(Service):
         """
             List the files in given subpath of the private folder.
         """
+        # Leading / implies root directory
+        sub_path = sub_path.lstrip("/")
         current_user = self.ro_session.query(User).get(current_user_id)
         assert current_user is not None, "Not authorized"
         folder = UserDirectory(current_user_id, None)
         return self.list_and_format(folder, sub_path)
 
     @staticmethod
-    def list_and_format(a_dir: Any, sub_path: str) -> DirectoryModel:
+    def list_and_format(a_dir: Union[UserDirectory, CommonFolder], sub_path: str) -> DirectoryModel:
+        assert ".." not in sub_path, "Not found"
         try:
-            assert "../" not in sub_path, "Not found"
             listing = a_dir.list(sub_path)
         except FileNotFoundError:
             # Prevent hammering on the endpoint
@@ -83,5 +85,7 @@ class CommonFolderService(Service):
         """
         current_user = self.ro_session.query(User).get(current_user_id)
         assert current_user is not None, "Not authorized"
+        # Leading / implies root of user directory
+        sub_path = sub_path.lstrip("/")
         folder = CommonFolder(self.config.common_folder())
         return UserFolderService.list_and_format(folder, sub_path)

@@ -2279,6 +2279,7 @@ async def list_user_files(sub_path: str = Query(..., title="Sub path", descripti
                           current_user: int = Depends(get_current_user)) -> DirectoryModel:
     """
         **List the private files** which are usable for some file-related operations.
+        A sub_path starting with "/" is considered relative to user folder.
 
         *e.g. import.*
     """

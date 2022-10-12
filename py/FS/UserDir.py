@@ -59,6 +59,8 @@ class UserDirectory(object):
         """
             Only list the known (with tags) directory.
         """
+        # Leading / implies root directory
+        sub_path = sub_path.lstrip("/")
         ret: List[DirEntryT] = []
         path: Path = Path(tempfile.gettempdir(), self.USER_DIR_PATTERN % self.user_id, sub_path)
         CommonFolder.list_dir_into(path, ret)
