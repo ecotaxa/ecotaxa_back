@@ -11,7 +11,7 @@ from .ORM import Session, Table, MetaData, minimal_table_of
 from .Postgres import SequenceCache
 from ..CNNFeature import ObjectCNNFeature
 from ..Image import Image
-from ..Object import ObjectHeader, ObjectFields
+from ..Object import ObjectHeader, ObjectFields, ObjectsClassifHisto
 
 logger = get_logger(__name__)
 
@@ -39,6 +39,8 @@ class DBWriter(object):
         self.obj_cnn_tbl = ObjectCNNFeature.__table__
         self.img_bulks: List[Bean] = []
         self.img_tbl: Table
+        self.obj_history_bulks: List[Bean] = []
+        self.obj_history_tbl = ObjectsClassifHisto.__table__
 
         # Save a bit of time for commit
         self.session.execute(text("SET synchronous_commit TO OFF;"))
@@ -78,14 +80,17 @@ class DBWriter(object):
         return ObjectView, ObjectFieldsView, ImageView
 
     def do_bulk_save(self) -> None:
-        nb_bulks = "%d/%d/%d/%d" % (len(self.obj_bulks), len(self.obj_fields_bulks),
-                                    len(self.obj_cnn_bulks), len(self.img_bulks))
+        nb_bulks = "%d/%d/%d/%d/%d" % (len(self.obj_bulks), len(self.obj_fields_bulks),
+                                    len(self.obj_cnn_bulks), len(self.img_bulks),
+                                    len(self.obj_history_bulks))
         # TODO: Can be reused?
         inserts = [self.obj_tbl.insert(), self.obj_fields_tbl.insert(),
-                   self.obj_cnn_tbl.insert(), self.img_tbl.insert()]
+                   self.obj_cnn_tbl.insert(), self.img_tbl.insert(),
+                   self.obj_history_tbl.insert()]
         # TODO: SQLAlchemy compiled_cache?
         bulk_sets = [self.obj_bulks, self.obj_fields_bulks,
-                     self.obj_cnn_bulks, self.img_bulks]
+                     self.obj_cnn_bulks, self.img_bulks,
+                     self.obj_history_bulks]
         for a_bulk_set, an_insert in zip(bulk_sets, inserts):
             if not a_bulk_set:
                 continue
@@ -123,6 +128,11 @@ class DBWriter(object):
     def add_cnn_features(self, object_head_to_write, cnn_features: Bean) -> None:
         cnn_features.objcnnid = object_head_to_write.objid
         self.obj_cnn_bulks.append(cnn_features)
+
+    def add_classif_log(self, object_head_to_write, classif_histo: List[Bean]) -> None:
+        for a_bean in classif_histo:
+            a_bean.objid = object_head_to_write.objid
+        self.obj_history_bulks.extend(classif_histo)
 
     def add_cnn_features_with_pk(self, cnn_features: Bean) -> None:
         self.obj_cnn_bulks.append(cnn_features)

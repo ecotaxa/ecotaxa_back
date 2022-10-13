@@ -17,12 +17,12 @@ from BO.helpers.ImportHelpers import ImportHow
 from DB.Acquisition import Acquisition
 from DB.CNNFeature import ObjectCNNFeature
 from DB.Image import Image
-from DB.Object import ObjectHeader, ObjectFields
+from DB.Object import ObjectHeader, ObjectFields, ObjectsClassifHisto
 from DB.Process import Process
 from DB.Project import Project
 from DB.Sample import Sample
 from DB.helpers import Result
-from DB.helpers.Bean import bean_of
+from DB.helpers.Bean import bean_of, Bean
 from DB.helpers.DBWriter import DBWriter
 from DB.helpers.Direct import text
 from DB.helpers.ORM import any_
@@ -115,7 +115,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         """
             Cloning operation itself. Assumes that @see self.to_clone was populated before.
         """
-        # Get the mappings in source project, in order to determines the useful columns
+        # Get the mappings in source project, in order to determine the useful columns
         custom_mapping = ProjectMapping().load_from_project(self.prj)
         obj_mapping = custom_mapping.object_mappings
         used_columns = set(obj_mapping.real_cols_to_tsv.keys())
@@ -159,6 +159,14 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
 
         return ret
 
+    def _db_fetch_histo(self, object_ids: ObjectIDListT) -> Iterable[ObjectsClassifHisto]:
+        """
+            Do a DB read of classification history.
+        """
+        ret = self.ro_session.query(ObjectsClassifHisto)
+        ret = ret.filter(ObjectsClassifHisto.objid == any_(object_ids))
+        return ret
+
     def _clone_all(self, import_how: ImportHow, writer: DBWriter) -> None:
 
         # Bean counting init
@@ -168,9 +176,15 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         for a_chunk in self.to_clone.get_objectid_chunks(self.CHUNK_SIZE):
             # Fetch them using SQLAlchemy
             db_tuples = self._db_fetch(a_chunk)
+            db_histo = self._db_fetch_histo(a_chunk)
+            # Rationalize histo as there is lots of rows
+            db_histo_dict: Dict[int, List[ObjectsClassifHisto]] = {}
+            for an_histo in db_histo:
+                assert an_histo.objid is not None
+                db_histo_dict.setdefault(an_histo.objid, list()).append(an_histo)
             # Send each 'line'
             for a_db_tuple in db_tuples:
-                self._send_to_writer(import_how, writer, a_db_tuple)
+                self._send_to_writer(import_how, writer, a_db_tuple, db_histo_dict)
             # Bean counting and reporting
             nb_objects += len(a_chunk)
             # Save
@@ -180,15 +194,25 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             progress = int(90 * nb_objects / total_objects)
             self.update_progress(10 + progress, "Subset creation in progress")
 
-    def _send_to_writer(self, import_how: ImportHow, writer: DBWriter, db_tuple: DBObjectTupleT) -> None:
+    def _send_to_writer(self, import_how: ImportHow, writer: DBWriter,
+                        db_tuple: DBObjectTupleT, db_histo: Dict[int, List[ObjectsClassifHisto]]) -> None:
         """
-            Send a single tuple from DB to DB
+            Send a set of tuples from DB to DB
         :param import_how:
         :param writer:
         :param db_tuple:
         :return:
         """
         obj_orm, fields_orm, cnn_features_orm, image_orm, sample_orm, acquisition_orm, process_orm = db_tuple
+        assert obj_orm.objid  # mypy
+        histo_for_obj = db_histo.get(obj_orm.objid, [])
+        histo: List[Bean] = []
+        for a_histo in histo_for_obj:
+            bean = bean_of(a_histo)
+            assert bean  # mypy
+            bean.classif_date = a_histo.classif_date  # Reconstitute PK
+            bean.classif_who = a_histo.classif_who  # Another erased key
+            histo.append(bean)
         # Transform all to key-less beans so they can be absorbed by DBWriter
         obj, fields, cnn_features, image, sample, acquisition, process = \
             bean_of(obj_orm), bean_of(fields_orm), bean_of(cnn_features_orm), \
@@ -202,6 +226,8 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
                            Acquisition.__tablename__: acquisition,
                            Process.__tablename__: process}
         TSVFile.add_parent_objects(import_how, self.session, obj, dict_of_parents)
+        # Propagate last human operator on the object
+        obj.classif_who = obj_orm.classif_who
         # Write object and children
         new_records = TSVFile.create_or_link_slaves(how=import_how,
                                                     session=self.session,
@@ -210,13 +236,15 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
                                                     image_to_write=image)
         writer.add_db_entities(obj, fields, image, new_records)
         # Keep track of existing objects
-        if new_records > 1:
+        if new_records > 1:  # TODO: This is a cumbersome way of stating "new object",
+            # as an object is obj_head + obj_fields i.e. 2 records
             self.images_per_orig_id[obj.orig_id] = set()
             # We now have an Id from sequences, so ref. it.
             # this is needed for proper detection of subsequent images when there are 1+
             import_how.existing_objects[obj.orig_id] = obj.objid
             if cnn_features is not None:
                 writer.add_cnn_features(obj, cnn_features)
+            writer.add_classif_log(obj, histo)
         # Do images
         if new_records > 0 and image and image.file_name is not None:
             # We have an image, with a new imgid but old paths have been copied

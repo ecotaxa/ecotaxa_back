@@ -69,6 +69,8 @@ class ImageManagerService(Service):
             img_file = ImageFile(path=an_img_file_name)
             self.session.add(img_file)
             self._md5_on_record(img_file)
+            if cnt % 100 == 0:
+                self.session.commit()
         self.session.commit()
         # Eventually we can still satisfy the constraint while doing a few missing md5s
         left_for_unknown = max_digests - cnt

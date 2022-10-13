@@ -296,7 +296,7 @@ def test_import_update(config, database, caplog):
     # 9 fields + 7 derived sun positions
     assert nb_upds == 16
     saves = [msg for msg in caplog.messages if "Batch save objects" in msg]
-    assert saves == ["Batch save objects of 0/0/0/0"] * 3
+    assert saves == ["Batch save objects of 0/0/0/0/0"] * 3
 
     # Update classif, 2 cells, one classif ID and one classif quality
     do_import_update(prj_id, caplog, 'Cla')
@@ -313,7 +313,7 @@ def test_import_update(config, database, caplog):
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
     # ecotaxa/ecotaxa_dev#583: Check that no image was added during the update
     saves = [msg for msg in caplog.messages if "Batch save objects" in msg]
-    assert saves == ["Batch save objects of 0/0/0/0"] * 3
+    assert saves == ["Batch save objects of 0/0/0/0/0"] * 3
 
     do_import_update(prj_id, caplog, 'Yes')
     print("Import update 3:" + "\n".join(caplog.messages))
