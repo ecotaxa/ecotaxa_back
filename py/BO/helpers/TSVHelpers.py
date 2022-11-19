@@ -1,3 +1,4 @@
+import math
 import re
 from typing import Optional
 
@@ -58,11 +59,10 @@ def none_to_empty(value: Optional[str]):
 
 def convert_degree_minute_float_to_decimal_degree(v) -> Optional[float]:
     m = re.search(r"(-?\d+)°(\d+) (\d+)", v)
-    if m:  # data in format DDD°MM SSS
+    if m:  # data in format DDD°MM SS
         parts = [float(x) for x in m.group(1, 2, 3)]
-        parts[1] += parts[2] / 60  # on ajoute les secondes en fraction des minutes
-        parts[0] += parts[1] / 60  # on ajoute les minutes en fraction des degrés
-        return parts[0]
+        parts[1] += parts[2] / 60  # accumulate seconds into minutes
+        return parts[0] + math.copysign(parts[1] / 60, parts[0])
     else:  # decimal part was in minutes
         # Bug in 2.2 @see https://github.com/oceanomics/ecotaxa_dev/issues/340
         v = to_float(v)
