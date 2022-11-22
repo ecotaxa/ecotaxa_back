@@ -11,7 +11,7 @@ sqlalchemy_views==0.3.1
 psycopg2-binary==2.9.3
 # Pillow needs manual testing
 # mac: brew install libjpeg
-Pillow==8.1.0
+Pillow==9.3.0
 # astral needs pytz
 astral==2.2
 pytz==2021.1
