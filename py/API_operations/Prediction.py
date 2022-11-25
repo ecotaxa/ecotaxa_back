@@ -19,6 +19,7 @@ from BO.User import UserIDT
 from FS.MachineLearningModels import SavedModels
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger, LogsSwitcher
+
 # TODO: Move somewhere else
 from .helpers.JobService import JobServiceBase, ArgsDict
 from .helpers.Service import Service
@@ -27,9 +28,8 @@ logger = get_logger(__name__)
 
 
 class PredictForProject(JobServiceBase):
-    """
+    """ """
 
-    """
     JOB_TYPE = "Prediction"
 
     def __init__(self, req: PredictionReq, filters: ProjectFiltersDict):
@@ -42,9 +42,11 @@ class PredictForProject(JobServiceBase):
 
     def run(self, current_user_id: UserIDT) -> PredictionRsp:
         """
-            Initial creation, do security and consistency checks, then create the job.
+        Initial creation, do security and consistency checks, then create the job.
         """
-        _user, _project = RightsBO.user_wants(self.session, current_user_id, Action.READ, self.req.project_id)
+        _user, _project = RightsBO.user_wants(
+            self.session, current_user_id, Action.ANNOTATE, self.req.project_id
+        )
         # TODO: more checks, e.g. deep features models consistency
         # OK, go background
         self.create_job(self.JOB_TYPE, current_user_id)
@@ -64,7 +66,7 @@ class PredictForProject(JobServiceBase):
 
     def do_background(self) -> None:
         """
-            Background part of the job.
+        Background part of the job.
         """
         with LogsSwitcher(self):
             self.do_prediction()
@@ -75,7 +77,7 @@ class PredictForProject(JobServiceBase):
 
 class PredictionDataService(Service):
     """
-        Available models service.
+    Available models service.
     """
 
     def get_models(self) -> List[str]:
