@@ -8,7 +8,7 @@ from logging import INFO
 from typing import Any
 
 THE_APP = "main:app"
-APP_PORT = "5000"
+APP_PORT = "8000"
 
 # Overload port if provided from env.
 if "APP_PORT" in os.environ:
