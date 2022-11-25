@@ -24,6 +24,7 @@ if True:
     # noinspection PyUnresolvedReferences
     from .WoRMs import WoRMS
     from .helpers.ORM import relationship
+    from .Prediction import Prediction
 
     # User
     User.roles = relationship(Role, secondary="users_roles")

@@ -31,6 +31,7 @@ from DB.Object import ObjectsClassifHisto, ObjectFields, PREDICTED_CLASSIF_QUAL,
     DUBIOUS_CLASSIF_QUAL, DEFAULT_CLASSIF_HISTORY_DATE, ObjectHeader, ObjectIDT
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
+from DB.Prediction import Prediction
 from DB.helpers import Result
 from DB.helpers.Core import select
 from DB.helpers.Direct import text, func
@@ -514,15 +515,22 @@ class EnumeratedObjectSet(MappedTable):
         classif_auto_score_col = ObjectHeader.classif_auto_score.name
         classif_id_col = ObjectHeader.classif_id.name
         classif_qual_col = ObjectHeader.classif_qual.name
+        pred_objid_col = Prediction.objid.name
+        pred_classif_id_col = Prediction.classif_id.name
+        pred_score_col = Prediction.score.name
+        pred_discarded_col = Prediction.discarded.name
         overriden_by_prediction = {None, PREDICTED_CLASSIF_QUAL}
         full_updates = []
         partial_updates = []
+        pred_inserts = []
+        pred_updates = []
         objid_param = "_objid"
         impacted_object_ids = set(self.object_ids)
         for obj_id, classif, score in zip(self.object_ids, classif_ids, scores):
             prev_obj = prev[obj_id]
             prev_classif_id: Optional[int] = prev_obj['classif_id']
             prev_classif_qual = prev_obj['classif_qual']
+            prev_classif_auto_id = prev_obj['classif_auto_id']
             # Skip non-updates
             if (classif == prev_classif_id) and prev_classif_qual == PREDICTED_CLASSIF_QUAL:
                 impacted_object_ids.discard(obj_id)
@@ -543,6 +551,18 @@ class EnumeratedObjectSet(MappedTable):
             else:
                 # Just store prediction, no change on user-visible data
                 partial_updates.append(an_update)
+            if prev_classif_auto_id:
+                a_pred_update: Dict[str, Any] = {objid_param: obj_id,
+                                             pred_classif_id_col: classif,
+                                             pred_score_col: score,
+                                             pred_discarded_col: False}
+                pred_updates.append(a_pred_update)
+            else:
+                a_pred_insert: Dict[str, Any] = {pred_objid_col: obj_id,
+                                                 pred_classif_id_col: classif,
+                                                 pred_score_col: score,
+                                                 pred_discarded_col: False}
+                pred_inserts.append(a_pred_insert)
 
         # Historize (auto)
         if keep_logs:
@@ -566,6 +586,24 @@ class EnumeratedObjectSet(MappedTable):
                                               classif_auto_score=bindparam(classif_auto_score_col),
                                               classif_auto_when=sql_now)
             self.session.execute(part_upd_qry, partial_updates)
+        
+        # Predictions table update
+        if len(pred_inserts) > 0:
+            pred_ins_query : Insert = Prediction.__table__.insert()
+            pred_ins_query = pred_ins_query.values(objid=bindparam(pred_objid_col),
+                                                   classif_id=bindparam(pred_classif_id_col),
+                                                   score=bindparam(pred_score_col),
+                                                   discarded=bindparam(pred_discarded_col))
+            self.session.execute(pred_ins_query, pred_inserts)
+        if len(pred_updates) > 0:
+            pred_upd_query : Update = Prediction.__table__.update()
+            pred_upd_query = pred_upd_query.where(Prediction.objid == bindparam(objid_param))
+            pred_upd_query = pred_upd_query.values(objid=bindparam(pred_objid_col),
+                                                   classif_id=bindparam(pred_classif_id_col),
+                                                   score=bindparam(pred_score_col),
+                                                   discarded=bindparam(pred_discarded_col))
+            self.session.execute(pred_upd_query, pred_updates)
+        
         # TODO: Cache upd
         logger.info("_auto: %d full updates and %d partial updates ", len(full_updates), len(partial_updates))
         nb_updated = len(full_updates) + len(partial_updates)
@@ -586,6 +624,21 @@ class EnumeratedObjectSet(MappedTable):
         logger.info("Fetch with lock: %s", qry)
         res: Result = self.session.execute(qry)
         prev = {rec['objid']: rec for rec in res.fetchall()}
+        return prev
+    
+    def _fetch_predictions(self) -> Dict[int, List[Row]]:
+        qry = select([Prediction.pred_id, Prediction.objid, 
+                      Prediction.classif_id, Prediction.score, 
+                      Prediction.discarded]).with_for_update(key_share=True)
+        qry = qry.where(Prediction.objid == any_(self.object_ids))
+        logger.info("Fetch preds with lock: %s", qry)
+        res: Result = self.session.execute(qry)
+        prev = dict()
+        for rec in res.fetchall():
+            if rec['objid'] not in prev:
+                prev[rec['objid']] = [rec]
+            else:
+                prev[rec['objid']].append(rec)
         return prev
 
 
