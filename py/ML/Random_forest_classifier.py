@@ -50,3 +50,23 @@ class OurRandomForestClassifier(object):
         classif_ids = [int(self.cls.classes_[mc]) for mc in max_proba]
         scores = [r[mc] for mc, r in zip(max_proba, predict_result)]
         return classif_ids, scores
+    
+    def predict_top_n(self, to_predict: np.ndarray, n: int) -> Tuple[List[ClassifIDListT], List[List[float]]]:
+        """
+            Predict, i.e. return the n most likely target values (classif_id) for the given objects.
+            Input np array must have the same columns as in training samples during build.
+            For each input line, the returned array contain the n best guessed classification ID, and their scores.
+        """
+        predict_result = self.cls.predict_proba(to_predict)
+        classif_ids = list()
+        scores = list()
+        for rank in range(n):
+            max_proba = np.argmax(predict_result, axis=1)
+            classif_ids.append([int(self.cls.classes_[mc]) for mc in max_proba])
+            scores.append([r[mc] for mc, r in zip(max_proba, predict_result)])
+            # Set highest probabilities to -1 to ignore them for the next rank
+            predict_result[predict_result == predict_result.max(axis=1, keepdims=1)] = -1
+        classif_ids = np.array(classif_ids).T.tolist()
+        scores = np.array(scores).T.tolist()
+        return classif_ids, scores
+
