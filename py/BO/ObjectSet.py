@@ -611,6 +611,119 @@ class EnumeratedObjectSet(MappedTable):
         # Return statuses
         return nb_updated, all_changes
 
+    def classify_auto_top_n(self, list_classif_ids: List[ClassifIDListT], scores: List[List[float]], keep_logs: bool) \
+            -> Tuple[int, ObjectSetClassifChangesT]:
+        """
+            Set automatic classifications in self.
+            :param list_classif_ids: the top n category ids for each of the object ids in self.
+            :param scores: n confidence scores for each object from automatic classification algorithm.
+            :param keep_logs: Self-explained
+            :returns updated rows and a summary of changes, for stats.
+        """
+        # Gather state of classification, for impacted objects, before the change. Keep a lock on rows.
+        prev = self._fetch_classifs_and_lock()
+        prev_preds = self._fetch_predictions()
+
+        # Cook a diff b/w present and wanted values, both for the update of obj_head and preparing the ones on _stat
+        # updates: Dict[Tuple, EnumeratedObjectSet] = {}
+        all_changes: ObjectSetClassifChangesT = OrderedDict()
+        # A bit of obsessive optimization
+        classif_auto_id_col = ObjectHeader.classif_auto_id.name
+        classif_auto_score_col = ObjectHeader.classif_auto_score.name
+        classif_id_col = ObjectHeader.classif_id.name
+        classif_qual_col = ObjectHeader.classif_qual.name
+        pred_objid_col = Prediction.objid.name
+        pred_classif_id_col = Prediction.classif_id.name
+        pred_score_col = Prediction.score.name
+        pred_discarded_col = Prediction.discarded.name
+        overriden_by_prediction = {None, PREDICTED_CLASSIF_QUAL}
+        full_updates = []
+        partial_updates = []
+        pred_inserts = []
+        pred_deletes = []
+        objid_param = "_objid"
+        impacted_object_ids = set(self.object_ids)
+        for obj_id, list_classifs, list_scores in zip(self.object_ids, list_classif_ids, scores):
+            # list_classifs should be sorted by score (desc.)
+            classif = list_classifs[0]
+            score = list_scores[0]
+            prev_obj = prev[obj_id]
+            prev_classif_id: Optional[int] = prev_obj['classif_id']
+            prev_classif_qual = prev_obj['classif_qual']
+            prev_classif_auto_id = prev_obj['classif_auto_id']
+            # Skip non-updates
+            if (classif == prev_classif_id) and prev_classif_qual == PREDICTED_CLASSIF_QUAL:
+                impacted_object_ids.discard(obj_id)
+                continue
+            # Whatever, set the auto_* fields, on the object
+            an_update: Dict[str, Any] = {objid_param: obj_id,
+                                         classif_auto_id_col: classif,
+                                         classif_auto_score_col: score}
+            if prev_classif_qual in overriden_by_prediction:
+                # If not manually modified, go to Predicted state and set prediction as classification
+                an_update[classif_id_col] = classif
+                an_update[classif_qual_col] = PREDICTED_CLASSIF_QUAL
+                full_updates.append(an_update)
+                # Prepare changes, for stats update, grouped by operation
+                change_key = (prev_classif_id, prev_classif_qual, classif, PREDICTED_CLASSIF_QUAL)
+                for_this_change = all_changes.setdefault(change_key, [])
+                for_this_change.append(obj_id)
+            else:
+                # Just store prediction, no change on user-visible data
+                partial_updates.append(an_update)
+            if obj_id in prev_preds:
+                for pred in prev_preds[obj_id]:
+                    pred_deletes.append(pred['pred_id'])
+            for pred_classif, pred_score in zip(list_classifs, list_scores):
+                a_pred_insert: Dict[str, Any] = {pred_objid_col: obj_id,
+                                                 pred_classif_id_col: pred_classif,
+                                                 pred_score_col: pred_score,
+                                                 pred_discarded_col: False}
+                pred_inserts.append(a_pred_insert)
+
+        # Historize (auto)
+        if keep_logs:
+            impacted_objects = EnumeratedObjectSet(self.session, list(impacted_object_ids))
+            impacted_objects.historize_classification(only_qual=None)
+
+        # Bulk (or sort of) update of obj_head
+        sql_now = text("now()")
+        obj_upd_qry: Update = ObjectHeader.__table__.update()
+        obj_upd_qry = obj_upd_qry.where(ObjectHeader.objid == bindparam(objid_param))
+        if len(full_updates) > 0:
+            full_upd_qry = obj_upd_qry.values(classif_id=bindparam(classif_id_col),
+                                              classif_qual=bindparam(classif_qual_col),
+                                              classif_auto_id=bindparam(classif_auto_id_col),
+                                              classif_auto_score=bindparam(classif_auto_score_col),
+                                              classif_auto_when=sql_now)
+            self.session.execute(full_upd_qry, full_updates)
+        # Partial updates
+        if len(partial_updates) > 0:
+            part_upd_qry = obj_upd_qry.values(classif_auto_id=bindparam(classif_auto_id_col),
+                                              classif_auto_score=bindparam(classif_auto_score_col),
+                                              classif_auto_when=sql_now)
+            self.session.execute(part_upd_qry, partial_updates)
+        
+        # Predictions table update
+        if len(pred_inserts) > 0:
+            pred_ins_query : Insert = Prediction.__table__.insert()
+            pred_ins_query = pred_ins_query.values(objid=bindparam(pred_objid_col),
+                                                   classif_id=bindparam(pred_classif_id_col),
+                                                   score=bindparam(pred_score_col),
+                                                   discarded=bindparam(pred_discarded_col))
+            self.session.execute(pred_ins_query, pred_inserts)
+        if len(pred_deletes) > 0:
+            pred_del_query : Delete = Prediction.__table__.delete()
+            pred_del_query = pred_del_query.where(Prediction.pred_id.in_(pred_deletes))
+            self.session.execute(pred_del_query)
+        
+        # TODO: Cache upd
+        logger.info("_auto: %d full updates and %d partial updates ", len(full_updates), len(partial_updates))
+        nb_updated = len(full_updates) + len(partial_updates)
+
+        # Return statuses
+        return nb_updated, all_changes
+    
     def _fetch_classifs_and_lock(self) -> Dict[int, Row]:
         """
             Fetch, and DB lock, self's objects

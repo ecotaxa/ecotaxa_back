@@ -60,13 +60,11 @@ class OurRandomForestClassifier(object):
         predict_result = self.cls.predict_proba(to_predict)
         classif_ids = list()
         scores = list()
-        for rank in range(n):
-            max_proba = np.argmax(predict_result, axis=1)
-            classif_ids.append([int(self.cls.classes_[mc]) for mc in max_proba])
-            scores.append([r[mc] for mc, r in zip(max_proba, predict_result)])
-            # Set highest probabilities to -1 to ignore them for the next rank
-            predict_result[predict_result == predict_result.max(axis=1, keepdims=1)] = -1
-        classif_ids = np.array(classif_ids).T.tolist()
-        scores = np.array(scores).T.tolist()
+        for obj_probas in predict_result:
+            # Get the order of predicted probabilities in descending order
+            sorted_indexes = np.flip(np.argsort(obj_probas))
+            # Add the first n predictions to result
+            classif_ids.append(self.cls.classes_[sorted_indexes][:n].tolist())
+            scores.append(obj_probas[sorted_indexes][:n].tolist())
         return classif_ids, scores
 
