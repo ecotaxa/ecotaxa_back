@@ -541,8 +541,7 @@ class EnumeratedObjectSet(MappedTable):
 
         # Historize (auto)
         if keep_logs:
-            impacted_objects = EnumeratedObjectSet(self.session, self.object_ids)
-            impacted_objects.historize_classification(only_qual=None)
+            self.historize_classification(only_qual=None)
 
         # Bulk (or sort of) update of obj_head
         sql_now = text("now()")
