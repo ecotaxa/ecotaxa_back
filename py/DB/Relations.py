@@ -13,6 +13,7 @@ if True:
     from .Image import Image
     from .Job import Job
     from .Object import ObjectHeader, ObjectFields, ObjectsClassifHisto
+    from .Prediction import Prediction
     from .Process import Process
     from .Project import Project
     from .ProjectPrivilege import ProjectPrivilege
@@ -24,7 +25,6 @@ if True:
     # noinspection PyUnresolvedReferences
     from .WoRMs import WoRMS
     from .helpers.ORM import relationship
-    from .Prediction import Prediction
 
     # User
     User.roles = relationship(Role, secondary="users_roles")
@@ -44,7 +44,7 @@ if True:
 
     CollectionUserRole.collection = relationship(Collection, uselist=False)
     CollectionUserRole.user = relationship(User, uselist=False)  # type:ignore # case2
-
+    
     # Project
     Project.all_samples = relationship(Sample, viewonly=True)
     Sample.project = relationship(Project)  # type:ignore # case2
@@ -94,6 +94,9 @@ if True:
 
     ObjectHeader.history = relationship(ObjectsClassifHisto, viewonly=True)
     ObjectsClassifHisto.object = relationship(ObjectHeader)
+    
+    ObjectHeader.prediction = relationship(Prediction)
+    
     # Task
     Task.owner = relationship(User)
 

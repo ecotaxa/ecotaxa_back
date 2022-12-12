@@ -515,7 +515,7 @@ class EnumeratedObjectSet(MappedTable):
         classif_auto_score_col = ObjectHeader.classif_auto_score.name
         classif_id_col = ObjectHeader.classif_id.name
         classif_qual_col = ObjectHeader.classif_qual.name
-        pred_objid_col = Prediction.objid.name
+        pred_objid_col = Prediction.object_id.name
         pred_classif_id_col = Prediction.classif_id.name
         pred_score_col = Prediction.score.name
         pred_discarded_col = Prediction.discarded.name
@@ -567,7 +567,6 @@ class EnumeratedObjectSet(MappedTable):
         # Historize (auto)
         if keep_logs:
             impacted_objects = EnumeratedObjectSet(self.session, list(impacted_object_ids))
-            impacted_objects.historize_classification(only_qual=None)
 
         # Bulk (or sort of) update of obj_head
         sql_now = text("now()")
@@ -590,15 +589,15 @@ class EnumeratedObjectSet(MappedTable):
         # Predictions table update
         if len(pred_inserts) > 0:
             pred_ins_query : Insert = Prediction.__table__.insert()
-            pred_ins_query = pred_ins_query.values(objid=bindparam(pred_objid_col),
+            pred_ins_query = pred_ins_query.values(object_id=bindparam(pred_objid_col),
                                                    classif_id=bindparam(pred_classif_id_col),
                                                    score=bindparam(pred_score_col),
                                                    discarded=bindparam(pred_discarded_col))
             self.session.execute(pred_ins_query, pred_inserts)
         if len(pred_updates) > 0:
             pred_upd_query : Update = Prediction.__table__.update()
-            pred_upd_query = pred_upd_query.where(Prediction.objid == bindparam(objid_param))
-            pred_upd_query = pred_upd_query.values(objid=bindparam(pred_objid_col),
+            pred_upd_query = pred_upd_query.where(Prediction.object_id == bindparam(objid_param))
+            pred_upd_query = pred_upd_query.values(object_id=bindparam(pred_objid_col),
                                                    classif_id=bindparam(pred_classif_id_col),
                                                    score=bindparam(pred_score_col),
                                                    discarded=bindparam(pred_discarded_col))
@@ -632,7 +631,7 @@ class EnumeratedObjectSet(MappedTable):
         classif_auto_score_col = ObjectHeader.classif_auto_score.name
         classif_id_col = ObjectHeader.classif_id.name
         classif_qual_col = ObjectHeader.classif_qual.name
-        pred_objid_col = Prediction.objid.name
+        pred_objid_col = Prediction.object_id.name
         pred_classif_id_col = Prediction.classif_id.name
         pred_score_col = Prediction.score.name
         pred_discarded_col = Prediction.discarded.name
@@ -684,7 +683,6 @@ class EnumeratedObjectSet(MappedTable):
         # Historize (auto)
         if keep_logs:
             impacted_objects = EnumeratedObjectSet(self.session, list(impacted_object_ids))
-            impacted_objects.historize_classification(only_qual=None)
 
         # Bulk (or sort of) update of obj_head
         sql_now = text("now()")
@@ -740,10 +738,10 @@ class EnumeratedObjectSet(MappedTable):
         return prev
     
     def _fetch_predictions(self) -> Dict[int, List[Row]]:
-        qry = select([Prediction.pred_id, Prediction.objid, 
+        qry = select([Prediction.pred_id, Prediction.object_id, 
                       Prediction.classif_id, Prediction.score, 
                       Prediction.discarded]).with_for_update(key_share=True)
-        qry = qry.where(Prediction.objid == any_(self.object_ids))
+        qry = qry.where(Prediction.object_id == any_(self.object_ids))
         logger.info("Fetch preds with lock: %s", qry)
         res: Result = self.session.execute(qry)
         prev = dict()
