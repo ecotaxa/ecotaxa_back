@@ -217,9 +217,9 @@ class ClassifyReq(BaseModel):
 
 class ClassifyAutoReq(BaseModel):
     target_ids: List[int] = Field(title="Target Ids", description="The IDs of the target objects.")
-    classifications: List[int] = Field(title="Classifications",
+    classifications: List[List[int]] = Field(title="Classifications",
                                        description="The wanted new classifications, i.e. taxon ID, one for each object.")
-    scores: List[float] = Field(title="Scores",
+    scores: List[List[float]] = Field(title="Scores",
                                 description="The classification score is generally between 0 and 1. It indicates the probability that the taxon prediction of this object is correct.")
     keep_log: bool = Field(title="Keep log", description="Set if former automatic classification history is needed.")
 

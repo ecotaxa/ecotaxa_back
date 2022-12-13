@@ -51,11 +51,11 @@ class OurRandomForestClassifier(object):
         scores = [r[mc] for mc, r in zip(max_proba, predict_result)]
         return classif_ids, scores
     
-    def predict_top_n(self, to_predict: np.ndarray, n: int) -> Tuple[List[ClassifIDListT], List[List[float]]]:
+    def predict_all(self, to_predict: np.ndarray) -> Tuple[List[ClassifIDListT], List[List[float]]]:
         """
-            Predict, i.e. return the n most likely target values (classif_id) for the given objects.
+            Predict, i.e. return all target values (classif_id) for the given objects in descending score order.
             Input np array must have the same columns as in training samples during build.
-            For each input line, the returned array contain the n best guessed classification ID, and their scores.
+            For each input line, the returned array contains all guessed classification ID, and their scores.
         """
         predict_result = self.cls.predict_proba(to_predict)
         classif_ids = list()
@@ -63,8 +63,8 @@ class OurRandomForestClassifier(object):
         for obj_probas in predict_result:
             # Get the order of predicted probabilities in descending order
             sorted_indexes = np.flip(np.argsort(obj_probas))
-            # Add the first n predictions to result
-            classif_ids.append(self.cls.classes_[sorted_indexes][:n].tolist())
-            scores.append(obj_probas[sorted_indexes][:n].tolist())
+            # Add all predictions to result
+            classif_ids.append(self.cls.classes_[sorted_indexes].tolist())
+            scores.append(obj_probas[sorted_indexes].tolist())
         return classif_ids, scores
 

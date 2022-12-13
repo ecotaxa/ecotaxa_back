@@ -60,10 +60,10 @@ def classify_all(fastapi, obj_ids, classif_id):
     assert rsp.status_code == status.HTTP_200_OK
 
 
-def classify_auto_all(fastapi, obj_ids, classif_id):
+def classify_auto_all(fastapi, obj_ids, classif_ids):
     url = OBJECT_SET_CLASSIFY_AUTO_URL
-    classifications = [classif_id for _obj in obj_ids]
-    scores = [0.52 for _obj in obj_ids]
+    classifications = [classif_ids for _obj in obj_ids]
+    scores = [[0.52, 0.4, 0.8] for _obj in obj_ids]
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
                                                       "classifications": classifications,
                                                       "scores": scores,
@@ -179,7 +179,7 @@ def test_classif(config, database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
 
     # Super ML result, 4 first objects are crustacea
-    classify_auto_all(fastapi, obj_ids[:4], crustacea)
+    classify_auto_all(fastapi, obj_ids[:4], [crustacea, copepod_id, entomobryomorpha_id])
 
     assert get_stats(fastapi, prj_id) == {'nb_dubious': 0,
                                           'nb_predicted': 4,

@@ -196,10 +196,10 @@ class GPUPredictForProject(PredictForProject):
                 np_deep_features_chunk = DeepFeatures.np_read_for_objects(self.ro_session, obj_ids)
                 np_chunk = np.concatenate([np_chunk, np_deep_features_chunk], axis=1)
             logger.info("One chunk of %d", len(obj_ids))
-            list_classif_ids, list_scores = classifier.predict_top_n(np_chunk, n=3)
+            list_classif_ids, list_scores = classifier.predict_all(np_chunk)
             target_obj_set = EnumeratedObjectSet(self.session, obj_ids)
             # TODO: Remove the keep_logs flag, once sure the new algo is better
-            nb_upd, all_changes = target_obj_set.classify_auto_top_n(list_classif_ids, list_scores, keep_logs=True)
+            nb_upd, all_changes = target_obj_set.classify_auto(list_classif_ids, list_scores, keep_logs=True)
             nb_changes += nb_upd
             logger.info("Changes :%s", str(all_changes)[:1000])
             self.session.commit()

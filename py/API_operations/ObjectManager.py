@@ -424,7 +424,7 @@ class ObjectManager(Service):
         return nb_upd, project.projid, all_changes
 
     def classify_auto_set(self, current_user_id: UserIDT,
-                          target_ids: ObjectIDListT, classif_ids: ClassifIDListT, scores: List[float],
+                          target_ids: ObjectIDListT, classif_ids: List[ClassifIDListT], scores: List[List[float]],
                           keep_logs: bool) -> Tuple[int, int, ObjectSetClassifChangesT]:
         """
             Classify (from automatic source) a set of objects.
