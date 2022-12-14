@@ -2,6 +2,11 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2021  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+#
+# A prediction associates a class/label predicted by an ML algorithm to an object.
+# Each prediction has a confidence score and a boolean "discarded" attribute, automatically set to True if a user
+# indicated that the object does not belong to the predicted class.
+#
 from __future__ import annotations
 
 from DB.helpers.ORM import Model
