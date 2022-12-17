@@ -18,7 +18,7 @@ from sqlalchemy import bindparam
 from sqlalchemy.sql import Alias
 
 from API_models.filters import ProjectFiltersDict
-from BO.Classification import HistoricalLastClassif, ClassifIDListT, ClassifIDT
+from BO.Classification import HistoricalLastClassif, ClassifIDListT, ClassifIDT, ClassifScoresListT
 from BO.ColumnUpdate import ColUpdateList
 from BO.Object import ObjectIDWithParentsT
 from BO.Taxonomy import TaxonomyBO
@@ -29,9 +29,9 @@ from DB.Acquisition import Acquisition
 from DB.Image import Image
 from DB.Object import ObjectsClassifHisto, ObjectFields, PREDICTED_CLASSIF_QUAL, VALIDATED_CLASSIF_QUAL, \
     DUBIOUS_CLASSIF_QUAL, DEFAULT_CLASSIF_HISTORY_DATE, ObjectHeader, ObjectIDT
+from DB.Prediction import Prediction
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
-from DB.Prediction import Prediction
 from DB.helpers import Result
 from DB.helpers.Core import select
 from DB.helpers.Direct import text, func
@@ -495,12 +495,12 @@ class EnumeratedObjectSet(MappedTable):
         # Return statuses
         return nb_updated, all_changes
 
-    def classify_auto(self, list_classif_ids: List[ClassifIDListT], scores: List[List[float]], keep_logs: bool) \
+    def classify_auto(self, list_classif_ids: List[ClassifIDListT], scores: List[ClassifScoresListT], keep_logs: bool) \
             -> Tuple[int, ObjectSetClassifChangesT]:
         """
             Set automatic classifications in self.
             :param list_classif_ids: all predicted category ids for each of the object ids in self.
-            :param scores: all predicted confidence scores for each object from automatic classification algorithm.
+            :param scores: all predicted confidence scores for each object, from automatic classification algorithm.
             :param keep_logs: Self-explained
             :returns updated rows and a summary of changes, for stats.
         """
@@ -531,6 +531,7 @@ class EnumeratedObjectSet(MappedTable):
             if obj_id in prev_preds:
                 for pred in prev_preds[obj_id]:
                     if pred["discarded"] and pred["classif_id"] in list_classifs:
+                        # The prediction was discarded by a user e.g. "This image does _not_ correspond to a Copepod"
                         to_remove_index = list_classifs.index(pred["classif_id"])
                         list_classifs.pop(to_remove_index)
                         list_scores.pop(to_remove_index)
@@ -542,7 +543,6 @@ class EnumeratedObjectSet(MappedTable):
             prev_obj = prev[obj_id]
             prev_classif_id: Optional[int] = prev_obj['classif_id']
             prev_classif_qual = prev_obj['classif_qual']
-            prev_classif_auto_id = prev_obj['classif_auto_id']
 
             an_update: Dict[str, Any] = {objid_param: obj_id,
                                          classif_auto_id_col: classif,
@@ -610,10 +610,9 @@ class EnumeratedObjectSet(MappedTable):
         # Return statuses
         return nb_updated, all_changes
     
-    def _fetch_classifs_and_lock(self) -> Dict[int, Row]:
+    def _fetch_classifs_and_lock(self) -> Dict[ObjectIDT, Row]:
         """
             Fetch, and DB lock, self's objects
-        :return:
         """
         qry = select([ObjectHeader.objid,
                       ObjectHeader.classif_auto_id, ObjectHeader.classif_auto_when, ObjectHeader.classif_auto_score,
@@ -625,8 +624,11 @@ class EnumeratedObjectSet(MappedTable):
         prev = {rec['objid']: rec for rec in res.fetchall()}
         return prev
     
-    def _fetch_predictions(self) -> Dict[int, List[Row]]:
-        qry = select([Prediction.pred_id, Prediction.object_id, 
+    def _fetch_predictions(self) -> Dict[ObjectIDT, List[Row]]:
+        """
+            Fetch, and DB lock, all predictions for each of self's objects.
+        """
+        qry = select([Prediction.pred_id, Prediction.object_id,
                       Prediction.classif_id, Prediction.score, 
                       Prediction.discarded]).with_for_update(key_share=True)
         qry = qry.where(Prediction.object_id == any_(self.object_ids))
@@ -634,10 +636,11 @@ class EnumeratedObjectSet(MappedTable):
         res: Result = self.session.execute(qry)
         prev = dict()
         for rec in res.fetchall():
-            if rec['object_id'] not in prev:
-                prev[rec['object_id']] = [rec]
+            object_id = rec['object_id']
+            if object_id not in prev:
+                prev[object_id] = [rec]
             else:
-                prev[rec['object_id']].append(rec)
+                prev[object_id].append(rec)
         return prev
 
 

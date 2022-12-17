@@ -220,15 +220,17 @@ class ClassifyAutoReq(BaseModel):
     classifications: List[List[int]] = Field(title="Classifications",
                                        description="The wanted new classifications, i.e. taxon ID, one for each object.")
     scores: List[List[float]] = Field(title="Scores",
-                                description="The classification score is generally between 0 and 1. It indicates the probability that the taxon prediction of this object is correct.")
+                                description="The classification score is generally between 0 and 1. "
+                                            "It indicates the probability that the taxon prediction of this object is correct.")
     keep_log: bool = Field(title="Keep log", description="Set if former automatic classification history is needed.")
 
     class Config:
+        # TODO: The example is not OK anymore, and it might be a good idea to keep compatibility for endpoint present user(s)
         schema_extra = {
             "title": "Classify auto request Model",
             "example": {
                 "target_ids": [634509, 6234516, 976544],
-                "classifications": [7546, 3421, 788],
+                "classifications": [[7546, 777, 4378], 3421, 788],
                 "scores": [0.4, 0.56, 0.38],
                 "keep_log": False,
             }

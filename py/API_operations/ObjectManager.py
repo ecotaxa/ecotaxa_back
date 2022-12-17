@@ -5,7 +5,7 @@
 from typing import Tuple, List, Optional, Set, Any
 
 from API_models.filters import ProjectFiltersDict
-from BO.Classification import HistoricalLastClassif, ClassifIDSetT, ClassifIDListT, ClassifIDT
+from BO.Classification import HistoricalLastClassif, ClassifIDSetT, ClassifIDListT, ClassifIDT, ClassifScoresListT
 from BO.ColumnUpdate import ColUpdateList
 from BO.Mappings import TableMapping
 from BO.Object import ObjectBO
@@ -424,7 +424,7 @@ class ObjectManager(Service):
         return nb_upd, project.projid, all_changes
 
     def classify_auto_set(self, current_user_id: UserIDT,
-                          target_ids: ObjectIDListT, classif_ids: List[ClassifIDListT], scores: List[List[float]],
+                          target_ids: ObjectIDListT, classif_ids: List[ClassifIDListT], scores: List[ClassifScoresListT],
                           keep_logs: bool) -> Tuple[int, int, ObjectSetClassifChangesT]:
         """
             Classify (from automatic source) a set of objects.

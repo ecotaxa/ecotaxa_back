@@ -9,6 +9,7 @@ from typing import Set, List, Iterable
 # Typings, to be clear that these are not e.g. object IDs
 ClassifIDT = int
 ClassifIDListT = List[int]
+ClassifScoresListT = List[float]
 ClassifIDSetT = Set[int]
 ClassifIDCollT = Iterable[int]
 
