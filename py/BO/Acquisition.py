@@ -5,9 +5,9 @@
 #
 # An Acquisition business object
 #
-from typing import List, Dict, Optional, ClassVar
+from typing import List, Optional, ClassVar
 
-from BO.Classification import ClassifIDT, ClassifIDListT
+from BO.Classification import ClassifIDListT
 from BO.ColumnUpdate import ColUpdateList
 from BO.helpers.MappedEntity import MappedEntity
 from BO.helpers.MappedTable import MappedTable
@@ -16,8 +16,6 @@ from DB.Acquisition import Acquisition
 from DB.Object import ObjectHeader
 from DB.Project import ProjectIDT, ProjectIDListT, Project
 from DB.Sample import Sample
-from DB.helpers import Result
-from DB.helpers.Direct import text
 from DB.helpers.ORM import any_, and_
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
@@ -49,21 +47,6 @@ class AcquisitionBO(MappedEntity):
         """ Fallback for 'not found' field after the C getattr() call.
             If we did not enrich a Sample field somehow then return it """
         return getattr(self.acquis, item)
-
-    @classmethod
-    def get_sums_by_taxon(cls, session: Session, acquis_id: AcquisitionIDT) \
-            -> Dict[ClassifIDT, int]:
-        """
-            Compute number of objects validated for each taxon in the acquisition.
-        """
-        sql = text("SELECT o.classif_id, count(1)"
-                   "  FROM obj_head o "
-                   " WHERE o.acquisid = :acq "
-                   "   AND o.classif_id IS NOT NULL "
-                   "   AND o.classif_qual = 'V'"
-                   " GROUP BY o.classif_id")
-        res: Result = session.execute(sql, {"acq": acquis_id})
-        return {int(classif_id): int(cnt) for (classif_id, cnt) in res.fetchall()}
 
     @classmethod
     def get_all_object_ids(cls, session: Session, acquis_id: AcquisitionIDT,

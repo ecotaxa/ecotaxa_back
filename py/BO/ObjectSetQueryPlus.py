@@ -283,7 +283,7 @@ class ObjectSetQueryPlus(object):
                 yield dict(a_simple_row)
         else:
             # Expression evaluation
-            # Prepare a maximum of things outside of the loop, which can be over thousands of rows.
+            # Prepare a maximum of things outside the loop, which can be over thousands of rows.
             eval_bnd = self.sum_exp.eval  # This is a bounded call
             dest_col = self.aliases[self.sum_exp.formula]
             # We have 3 parts in each row:

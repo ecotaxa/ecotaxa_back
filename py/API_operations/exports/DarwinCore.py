@@ -17,19 +17,25 @@ from urllib.parse import quote_plus
 
 import BO.ProjectVarsDefault as DefaultVars
 from API_models.exports import DarwinCoreExportRsp
+from BO.Acquisition import AcquisitionBO, AcquisitionIDT
 from BO.Classification import ClassifIDT, ClassifIDSetT
 from BO.Collection import CollectionIDT, CollectionBO
 from BO.DataLicense import LicenseEnum, DataLicense
+from BO.Mappings import ProjectMapping
+from BO.Process import ProcessBO
 from BO.Project import ProjectBO, ProjectTaxoStats
 from BO.Rights import RightsBO
 from BO.Sample import SampleBO, SampleAggregForTaxon
 from BO.TaxonomySwitch import TaxonomyMapper
+from DB import Acquisition
 from DB.Collection import Collection
 from DB.Project import ProjectTaxoStat, ProjectIDT, ProjectIDListT
 from DB.Sample import Sample
 from DB.Taxonomy import Taxonomy
 from DB.User import User, Role
 from DB.WoRMs import WoRMS
+from DB.helpers import Session, Result
+from DB.helpers.Direct import text
 from DB.helpers.Postgres import timestamp_to_str
 from data.Countries import countries_by_name
 from formats.DarwinCore.Archive import DwC_Archive, DwcArchive
@@ -41,6 +47,7 @@ from formats.DarwinCore.models import DwC_Event, RecordTypeEnum, DwC_Occurrence,
     EMLTaxonomicClassification, EMLAdditionalMeta, EMLIdentifier, EMLAssociatedPerson
 from helpers.DateTime import now_time
 from helpers.DynamicLogs import get_logger, LogsSwitcher
+from helpers.Timer import CodeTimer
 # TODO: Move somewhere else
 from ..helpers.JobService import JobServiceBase, ArgsDict
 
@@ -560,14 +567,196 @@ class DarwinCoreExport(JobServiceBase):
             arch.emofs.add(SamplingNetMeshSizeInMicrons(event_id, str(net_mesh)))
             arch.emofs.add(SampleDeviceApertureAreaInSquareMeters(event_id, str(net_surf)))
 
+    @classmethod
+    def _add_morpho_counts(cls, count_per_taxon_for_acquis: Dict[ClassifIDT, int],
+                           morpho2phylo: Dict[ClassifIDT, ClassifIDT]) -> None:
+        """
+            If there are Morpho taxa with counts, cumulate and wipe them out.
+        """
+        for an_id, count_4_acquis in dict(count_per_taxon_for_acquis).items():
+            phylo_id = morpho2phylo.get(an_id)
+            if phylo_id is not None:
+                del count_per_taxon_for_acquis[an_id]
+                if phylo_id in count_per_taxon_for_acquis:
+                    # Accumulate in parent count
+                    count_per_taxon_for_acquis[phylo_id] += count_4_acquis
+                else:
+                    # Create the parent
+                    count_per_taxon_for_acquis[phylo_id] = count_4_acquis
+
+    @classmethod
+    def _get_sums_by_taxon(cls, session: Session, acquis_id: AcquisitionIDT) \
+            -> Dict[ClassifIDT, int]:
+        """
+            Compute number of objects validated for each taxon in the acquisition.
+        """
+        sql = text("SELECT o.classif_id, count(1)"
+                   "  FROM obj_head o "
+                   " WHERE o.acquisid = :acq "
+                   "   AND o.classif_id IS NOT NULL "
+                   "   AND o.classif_qual = 'V'"
+                   " GROUP BY o.classif_id")
+        res: Result = session.execute(sql, {"acq": acquis_id})
+        return {int(classif_id): int(cnt) for (classif_id, cnt) in res.fetchall()}
+
+    @classmethod
+    def _aggregate_abundances(cls, session: Session, acquis_for_sample: List[Acquisition],
+                              morpho2phylo: Optional[Dict[ClassifIDT, ClassifIDT]]) \
+            -> Tuple[Dict[ClassifIDT, SampleAggregForTaxon], Dict[AcquisitionIDT, Dict[ClassifIDT, int]]]:
+        aggreg_per_taxon: Dict[ClassifIDT, SampleAggregForTaxon] = {}
+        count_per_taxon_per_acquis: Dict[AcquisitionIDT, Dict[ClassifIDT, int]] = {}
+        for an_acquis in acquis_for_sample:
+            # Get counts for acquisition (subsample)
+            count_per_taxon_for_acquis: Dict[ClassifIDT, int] = cls._get_sums_by_taxon(session,
+                                                                                       an_acquis.acquisid)
+            if morpho2phylo is not None:
+                cls._add_morpho_counts(count_per_taxon_for_acquis, morpho2phylo)
+            count_per_taxon_per_acquis[an_acquis.acquisid] = count_per_taxon_for_acquis
+            for an_id, count_4_acquis in count_per_taxon_for_acquis.items():
+                aggreg_for_taxon = aggreg_per_taxon.get(an_id)
+                if aggreg_for_taxon is None:
+                    # Create new aggregation data for this taxon
+                    aggreg_per_taxon[an_id] = SampleAggregForTaxon(count_4_acquis, None, None)
+                else:
+                    # Sum if taxon already there
+                    aggreg_for_taxon.abundance += count_4_acquis
+        return aggreg_per_taxon, count_per_taxon_per_acquis
+
+    @classmethod
+    def _aggregate_for_sample(cls, session: Session, sample: Sample,
+                              morpho2phylo: Optional[Dict[ClassifIDT, ClassifIDT]], with_computations: bool,
+                              warnings: List[str]) -> Dict[ClassifIDT, SampleAggregForTaxon]:
+        """
+
+        TODO: All this is now generalized in exports/ForProject.py
+
+            :param session: SQLA DB session for queries.
+            :param sample: The Sample for which computations needs to be done.
+            :param with_computations: If not set, just do abundance calculations (e.g. to save time
+                or when it's known to be impossible).
+            :param morpho2phylo: The Morpho taxa to their nearest Phylo parent. If not provided
+                then _no_ up-the-taxa-tree consolidation will be done, i.e. there _will be_ Morpho taxa in 'ret' keys.
+            :param warnings: Eventual non-blocking problems found.
+
+            Do the aggregations for the given sample for each taxon and return them.
+            They will become emofs if used from DWC:
+                - 'Abundance' -> CountOfBiologicalEntity -> count of objects group by taxon
+                - 'Concentration' -> AbundancePerUnitVolumeOfTheWaterBody
+                    -> sum(individual_concentration) group by taxon
+                        with individual_concentration = 1 / subsample_coef / total_water_volume
+                - 'Biovolume' -> BiovolumeOfBiologicalEntity -> sum(individual_biovolume) group by taxon
+                    with individual_biovolume = individual_volume / subsample_coef / total_water_volume
+            The abundance can always be computed. The 2 other ones depend on availability of values
+                for the project and the configuration variable.
+        """
+        # We return all _per taxon_.
+        ret: Dict[ClassifIDT, SampleAggregForTaxon]
+
+        acquis_for_sample = SampleBO.get_acquisitions(session, sample)
+
+        # Start with abundances, simple count and giving its keys to the returned dict.
+        ret, count_per_taxon_per_acquis = cls._aggregate_abundances(session, acquis_for_sample, morpho2phylo)
+
+        if not with_computations:
+            return ret
+
+        # Enrich with concentrations
+        subsampling_coeff_per_acquis: Dict[AcquisitionIDT, float] = {}
+        try:
+            # Fetch calculation data at sample level
+            sample_volume = SampleBO.get_computed_var(sample, DefaultVars.volume_sampled)
+        except TypeError as e:
+            warnings.append("Could not compute volume sampled from sample %s (%s),"
+                            " no concentration or biovolume will be computed." % (sample.orig_id, str(e)))
+            sample_volume = -1
+        if sample_volume > 0:
+            # Cumulate for subsamples AKA acquisitions
+            for an_acquis in acquis_for_sample:
+                try:
+                    subsampling_coefficient = AcquisitionBO.get_computed_var(an_acquis, DefaultVars.subsample_coeff)
+                    subsampling_coeff_per_acquis[an_acquis.acquisid] = subsampling_coefficient
+                except TypeError as e:
+                    warnings.append("Could not compute subsampling coefficient from acquisition %s (%s),"
+                                    " no concentration or biovolume will be computed" %
+                                    (an_acquis.orig_id, str(e)))
+                    logger.info("concentrations: no subsample coeff for '%s' (%s)", an_acquis.orig_id, str(e))
+                    continue
+                # Get counts for acquisition (sub-sample)
+                logger.info("computing concentrations for '%s'", an_acquis.orig_id)
+                count_per_taxon_for_acquis = count_per_taxon_per_acquis[an_acquis.acquisid]
+                for an_id, count_4_acquis in count_per_taxon_for_acquis.items():
+                    aggreg_for_taxon = ret[an_id]
+                    concentration_for_taxon = count_4_acquis / subsampling_coefficient / sample_volume
+                    if aggreg_for_taxon.concentration is None:
+                        aggreg_for_taxon.concentration = 0
+                    aggreg_for_taxon.concentration += concentration_for_taxon
+
+        # Enrich with biovolumes. This needs a computation for each object, so it's likely to be slow.
+        if sample_volume > 0:
+            # TODO: There are circular references
+            from BO.Object import ObjectBO, ObjectBOSet
+            # Mappings are constant for the sample
+            # noinspection PyTypeChecker
+            mapping = ProjectMapping().load_from_project(sample.project)
+            # Cumulate for subsamples AKA acquisitions
+            for an_acquis in acquis_for_sample:
+                subsampling_coefficient = subsampling_coeff_per_acquis.get(an_acquis.acquisid)
+                if subsampling_coefficient is None:
+                    logger.info("biovolumes: no subsample coeff for '%s'", an_acquis.orig_id)
+                    continue
+                # Get pixel size from associated process, it a constant to individual biovol computations
+                try:
+                    pixel_size, = ProcessBO.get_free_fields(an_acquis.process, ["particle_pixel_size_mm"],
+                                                            [float],
+                                                            [None])
+                except TypeError as _e:
+                    logger.info("biovolumes: no pixel size for '%s'", an_acquis.orig_id)
+                    continue
+                constants = {"pixel_size": pixel_size}
+                # Get all objects for the acquisition. The filter on classif_id is useless for now.
+                with CodeTimer("Objects IDs for '%s': " % an_acquis.orig_id, logger):
+                    acq_object_ids = AcquisitionBO.get_all_object_ids(session=session,
+                                                                      acquis_id=an_acquis.acquisid,
+                                                                      classif_ids=list(ret.keys()))
+                with CodeTimer("Objects for '%s': " % an_acquis.orig_id, logger):
+                    objects = ObjectBOSet(session, acq_object_ids, mapping.object_mappings)
+                nb_biovols = 0
+                for an_obj in objects.all:
+                    # Compute a biovol if possible
+                    try:
+                        biovol = ObjectBO.get_computed_var(an_obj, DefaultVars.equivalent_ellipsoidal_volume,
+                                                           mapping, constants)
+                        biovol = -1
+                    except TypeError as _e:
+                        biovol = -1
+                    if biovol == -1:
+                        try:
+                            biovol = ObjectBO.get_computed_var(an_obj, DefaultVars.equivalent_spherical_volume,
+                                                               mapping, constants)
+                        except TypeError as _e:
+                            continue
+                    # Aggregate by category/taxon
+                    aggreg_for_taxon = ret[an_obj.classif_id]
+                    individual_biovolume = biovol / subsampling_coefficient / sample_volume
+                    if aggreg_for_taxon.biovolume is None:
+                        aggreg_for_taxon.biovolume = 0
+                    aggreg_for_taxon.biovolume += individual_biovolume
+                    # Update stats
+                    nb_biovols += 1
+                # A bit of display
+                logger.info("%d biovolumes computed for '%s' out of %d objects", nb_biovols, an_acquis.orig_id,
+                            len(acq_object_ids))
+
+        return ret
+
     def add_occurences(self, sample: Sample, arch: DwC_Archive, event_id: str) -> int:
         """
             Add DwC occurences, for given sample, into the archive. A single line per WoRMS taxon.
         """
-        aggregs = SampleBO.aggregate_for_sample(session=self.session, sample=sample,
-                                                morpho2phylo=self.morpho2phylo if self.auto_morpho else None,
-                                                with_computations=self.with_computations,
-                                                warnings=self.warnings)
+        aggregs = self._aggregate_for_sample(session=self.session, sample=sample,
+                                             morpho2phylo=self.morpho2phylo if self.auto_morpho else None,
+                                             with_computations=self.with_computations,
+                                             warnings=self.warnings)
 
         # Group by lsid, in order to have a single occurence
         by_lsid: Dict[str, Tuple[str, SampleAggregForTaxon, WoRMS]] = {}

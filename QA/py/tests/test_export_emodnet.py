@@ -9,6 +9,7 @@ from unittest import mock
 
 from tests.credentials import ADMIN_AUTH, REAL_USER_ID, CREATOR_AUTH
 from tests.emodnet_ref import ref_zip, with_zeroes_zip, no_computations_zip
+from tests.export_shared import JOB_DOWNLOAD_URL
 from tests.test_classification import _prj_query, OBJECT_SET_CLASSIFY_URL
 from tests.test_collections import COLLECTION_CREATE_URL, COLLECTION_UPDATE_URL, COLLECTION_QUERY_URL
 from tests.test_fastapi import PROJECT_QUERY_URL
@@ -20,9 +21,6 @@ COLLECTION_EXPORT_EMODNET_URL = "/collections/{collection_id}/export/darwin_core
                                 "&with_zeroes={zeroes}&with_computations={comp}&auto_morpho={morph}"
 
 COLLECTION_QUERY_BY_TITLE_URL = "/collections/by_title/?q={title}"
-
-JOB_DOWNLOAD_URL = "/jobs/{job_id}/file"
-JOB_LOG_DOWNLOAD_URL = "/jobs/{job_id}/log"
 
 PROJECT_SEARCH_SAMPLES_URL = "/api/samples/search?project_ids={project_id}&id_pattern="
 PROJECT_SEARCH_ACQUIS_URL = "/acquisitions/search?project_id={project_id}"
