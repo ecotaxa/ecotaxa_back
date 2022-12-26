@@ -216,8 +216,8 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         # Transform all to key-less beans so they can be absorbed by DBWriter
         obj, fields, cnn_features, image, sample, acquisition, process = \
             bean_of(obj_orm), bean_of(fields_orm), bean_of(cnn_features_orm), \
-            bean_of(image_orm), bean_of(sample_orm), \
-            bean_of(acquisition_orm), bean_of(process_orm)
+                bean_of(image_orm), bean_of(sample_orm), \
+                bean_of(acquisition_orm), bean_of(process_orm)
         # Minimum is object + fields
         assert obj is not None and fields is not None
         # Write parent entities
@@ -295,8 +295,9 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             part_key = "???"
 
         # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(self.session, self.prj_id, self.req.filters)
-        from_, where, params = object_set.get_sql(self._get_owner_id())
+        object_set: DescribedObjectSet = DescribedObjectSet(self.session, self.prj_id, self._get_owner_id(),
+                                                            self.req.filters)
+        from_, where, params = object_set.get_sql()
 
         # noinspection SqlResolve
         sql = """

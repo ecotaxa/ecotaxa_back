@@ -17,9 +17,8 @@ from BO.Classification import ClassifIDT
 from BO.ComputedVar import ComputedVar
 from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet
-from BO.User import UserIDT
 from BO.Vocabulary import Term
-from DB import Taxonomy, Project
+from DB import Taxonomy
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Session, Row
 from DB.helpers.SQL import OrderClause, SQLParamDict, SelectClause
@@ -64,10 +63,8 @@ class ObjectSetQueryPlus(object):
     OBJECT_PREFIX = 'obj'
     KNOWN_PREFIXES = [SAMPLE_PREFIX, SUBSAMPLE_PREFIX, OBJECT_PREFIX]
 
-    def __init__(self, obj_set: DescribedObjectSet, src_project: Project, user_id: UserIDT):
+    def __init__(self, obj_set: DescribedObjectSet):
         self.obj_set = obj_set
-        self.user_id = user_id
-        self.project = src_project
         # Input data tweaking
         self.taxo_mapping: TaxoRemappingT = {}
         # Computations settings
@@ -145,7 +142,8 @@ class ObjectSetQueryPlus(object):
             TODO: As we're here, it would be nice to include plain non-free columns as well.
         """
         ret: Dict[Tuple[str, str], Tuple[str, str]] = {}
-        mapping = ProjectMapping().load_from_project(self.project)
+        objSetProject = self.obj_set.getProject()
+        mapping = ProjectMapping().load_from_project(objSetProject)
         assert self.sum_exp
         for a_var in self.sum_exp.references.keys():
             prfx, free_col = a_var.split(".")
@@ -245,7 +243,7 @@ class ObjectSetQueryPlus(object):
                 order_clause.add_expression(alias=None, expr=key_col)
 
         # Base SQL comes from filters
-        from_, where, params = self.obj_set.get_sql(self.user_id, order_clause, select_clause)
+        from_, where, params = self.obj_set.get_sql(order_clause, select_clause)
         if len(self.taxo_mapping) > 0:
             select_clause = self._amend_query_for_mapping(from_, select_clause)
         sql = select_clause + " FROM " + from_.get_sql() + where.get_sql() + group_clause + order_clause.get_sql()
@@ -283,7 +281,7 @@ class ObjectSetQueryPlus(object):
                 yield dict(a_simple_row)
         else:
             # Expression evaluation
-            # Prepare a maximum of things outside the loop, which can be over thousands of rows.
+            # Prepare a maximum of things outside the loop, which can be over hundreds of thousands of rows.
             eval_bnd = self.sum_exp.eval  # This is a bounded call
             dest_col = self.aliases[self.sum_exp.formula]
             # We have 3 parts in each row:
@@ -386,8 +384,8 @@ class PerTaxonResultsQuery(ObjectSetQueryPlus):
         A specialized ObjectSetQueryPlus which always groups result, at least, by a Taxonomy table column.
     """
 
-    def __init__(self, obj_set: DescribedObjectSet, src_project: Project, user_id: UserIDT, txo_col: str):
-        super().__init__(obj_set, src_project, user_id)
+    def __init__(self, obj_set: DescribedObjectSet, txo_col: str):
+        super().__init__(obj_set)
         assert txo_col.startswith("txo.")
         assert txo_col[4:] in Taxonomy.__dict__
         self.sql_select_list = [txo_col]

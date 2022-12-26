@@ -20,8 +20,10 @@ from API_models.exports import DarwinCoreExportRsp
 from BO.Acquisition import AcquisitionBO, AcquisitionIDT
 from BO.Classification import ClassifIDT, ClassifIDSetT
 from BO.Collection import CollectionIDT, CollectionBO
+from BO.CommonObjectSets import CommonObjectSets
 from BO.DataLicense import LicenseEnum, DataLicense
 from BO.Mappings import ProjectMapping
+from BO.ObjectSetQueryPlus import PerTaxonResultsQuery, ResultGrouping, TaxoRemappingT
 from BO.Process import ProcessBO
 from BO.Project import ProjectBO, ProjectTaxoStats
 from BO.Rights import RightsBO
@@ -52,6 +54,8 @@ from helpers.Timer import CodeTimer
 from ..helpers.JobService import JobServiceBase, ArgsDict
 
 logger = get_logger(__name__)
+
+AbundancePerAcquisitionT = Dict[AcquisitionIDT, Dict[ClassifIDT, int]]
 
 
 class DarwinCoreExport(JobServiceBase):
@@ -93,7 +97,7 @@ class DarwinCoreExport(JobServiceBase):
         # The Phylo taxa to their WoRMS counterpart
         self.mapping: Dict[ClassifIDT, WoRMS] = {}
         # The Morpho taxa to their nearest Phylo parent
-        self.morpho2phylo: Dict[ClassifIDT, ClassifIDT] = {}
+        self.morpho2phylo: TaxoRemappingT = {}
         self.taxa_per_sample: Dict[str, Set[ClassifIDT]] = {}
         # Output
         self.errors: List[str] = []
@@ -569,7 +573,7 @@ class DarwinCoreExport(JobServiceBase):
 
     @classmethod
     def _add_morpho_counts(cls, count_per_taxon_for_acquis: Dict[ClassifIDT, int],
-                           morpho2phylo: Dict[ClassifIDT, ClassifIDT]) -> None:
+                           morpho2phylo: TaxoRemappingT) -> None:
         """
             If there are Morpho taxa with counts, cumulate and wipe them out.
         """
@@ -599,18 +603,17 @@ class DarwinCoreExport(JobServiceBase):
         res: Result = session.execute(sql, {"acq": acquis_id})
         return {int(classif_id): int(cnt) for (classif_id, cnt) in res.fetchall()}
 
-    @classmethod
-    def _aggregate_abundances(cls, session: Session, acquis_for_sample: List[Acquisition],
-                              morpho2phylo: Optional[Dict[ClassifIDT, ClassifIDT]]) \
-            -> Tuple[Dict[ClassifIDT, SampleAggregForTaxon], Dict[AcquisitionIDT, Dict[ClassifIDT, int]]]:
+    def _aggregate_abundances(self, session: Session, acquis_for_sample: List[Acquisition],
+                              morpho2phylo: Optional[TaxoRemappingT]) \
+            -> Tuple[Dict[ClassifIDT, SampleAggregForTaxon], AbundancePerAcquisitionT]:
         aggreg_per_taxon: Dict[ClassifIDT, SampleAggregForTaxon] = {}
-        count_per_taxon_per_acquis: Dict[AcquisitionIDT, Dict[ClassifIDT, int]] = {}
+        count_per_taxon_per_acquis: AbundancePerAcquisitionT = {}
         for an_acquis in acquis_for_sample:
             # Get counts for acquisition (subsample)
-            count_per_taxon_for_acquis: Dict[ClassifIDT, int] = cls._get_sums_by_taxon(session,
-                                                                                       an_acquis.acquisid)
+            count_per_taxon_for_acquis: Dict[ClassifIDT, int] = self._get_sums_by_taxon(session,
+                                                                                        an_acquis.acquisid)
             if morpho2phylo is not None:
-                cls._add_morpho_counts(count_per_taxon_for_acquis, morpho2phylo)
+                self._add_morpho_counts(count_per_taxon_for_acquis, morpho2phylo)
             count_per_taxon_per_acquis[an_acquis.acquisid] = count_per_taxon_for_acquis
             for an_id, count_4_acquis in count_per_taxon_for_acquis.items():
                 aggreg_for_taxon = aggreg_per_taxon.get(an_id)
@@ -622,9 +625,8 @@ class DarwinCoreExport(JobServiceBase):
                     aggreg_for_taxon.abundance += count_4_acquis
         return aggreg_per_taxon, count_per_taxon_per_acquis
 
-    @classmethod
-    def _aggregate_for_sample(cls, session: Session, sample: Sample,
-                              morpho2phylo: Optional[Dict[ClassifIDT, ClassifIDT]], with_computations: bool,
+    def _aggregate_for_sample(self, session: Session, sample: Sample,
+                              morpho2phylo: Optional[TaxoRemappingT], with_computations: bool,
                               warnings: List[str]) -> Dict[ClassifIDT, SampleAggregForTaxon]:
         """
 
@@ -655,7 +657,23 @@ class DarwinCoreExport(JobServiceBase):
         acquis_for_sample = SampleBO.get_acquisitions(session, sample)
 
         # Start with abundances, simple count and giving its keys to the returned dict.
-        ret, count_per_taxon_per_acquis = cls._aggregate_abundances(session, acquis_for_sample, morpho2phylo)
+        ret, count_per_taxon_per_acquis = self._aggregate_abundances(session, acquis_for_sample, morpho2phylo)
+
+        # Parallel computation
+        obj_set = CommonObjectSets.validatedInSample(session, sample)
+        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(obj_set, "txo.id")
+        if morpho2phylo is not None:
+            aug_qry.remap_categories(morpho2phylo)
+        aug_qry.aggregate_with_count()
+        aug_qry.set_aliases({"txo.id": "txo_id",
+                             "acq.acquisid": "acq_id",
+                             "sam.sampleid": "sam_id",
+                             aug_qry.COUNT_STAR: "count"})
+        aug_qry.add_select(["sam.sampleid", "acq.acquisid"]).set_grouping(ResultGrouping.BY_SUBSAMPLE_AND_TAXO)
+        count_per_taxon_per_acquis2: AbundancePerAcquisitionT = {}
+        for a_row in aug_qry.get_row_source(self.ro_session):
+            for_acq = count_per_taxon_per_acquis2.setdefault(a_row["acq_id"], {})
+            for_acq[a_row["txo_id"]] = a_row["count"]
 
         if not with_computations:
             return ret

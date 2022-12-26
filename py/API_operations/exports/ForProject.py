@@ -19,7 +19,6 @@ from BO.ObjectSetQueryPlus import ResultGrouping, PerTaxonResultsQuery, Iterable
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
-from BO.User import UserIDT
 from BO.Vocabulary import Vocabulary, Units
 from DB.Object import VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL
 from DB.Project import Project
@@ -165,6 +164,7 @@ class ProjectExport(JobServiceBase):
         """
         req = self.req
         proj_id = src_project.projid
+        user_id = self._get_owner_id()
         self.update_progress(1, "Start TSV export")
         progress_range = end_progress - 1
 
@@ -174,7 +174,7 @@ class ProjectExport(JobServiceBase):
         obj_count = res.one()[0]
 
         # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, self.filters)
+        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, user_id, self.filters)
 
         # Backup or not, the column namings are taken from common mapping
         # @See Mapping.py
@@ -285,8 +285,7 @@ class ProjectExport(JobServiceBase):
             order_clause.add_expression(None, "img_rank")
 
         # Base SQL comes from filters
-        from_, where, params = object_set.get_sql(self._get_owner_id(), order_clause, select_clause,
-                                                  all_images=not req.only_first_image)
+        from_, where, params = object_set.get_sql(order_clause, select_clause, all_images=not req.only_first_image)
         sql = select_clause + " FROM " + from_.get_sql() + where.get_sql() + order_clause.get_sql()
         logger.info("Execute SQL : %s" % sql)
         logger.info("Params : %s" % params)
@@ -483,11 +482,11 @@ class ProjectExport(JobServiceBase):
         out_file = self._get_summary_file(src_project)
 
         # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, self.filters)
+        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, self._get_owner_id(),
+                                                            self.filters)
 
         # The specialized SQL builder
-        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(object_set, src_project, self._get_owner_id(),
-                                                             "txo.display_name")
+        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(object_set, "txo.display_name")
         # We want the count, that's the goal of all this
         aug_qry.aggregate_with_count()
         # We can set aliases even for expressions we don't select, so include all possibly needed ones
@@ -532,10 +531,10 @@ class ProjectExport(JobServiceBase):
         out_file = self._get_summary_file(src_project)
 
         # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, self.filters)
+        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, user_id, self.filters)
 
         # The specialized SQL builder
-        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(object_set, src_project, user_id, "txo.display_name")
+        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(object_set, "txo.display_name")
         aug_qry.remap_categories(req.pre_mapping)
         # aug_qry.set_formulae(req.formulae) # Not needed for abundances
         # We want the count, that's the goal of all this
@@ -558,7 +557,7 @@ class ProjectExport(JobServiceBase):
         if req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
             # We need to add missing taxa
             without_zeroes = aug_qry.get_result(self.ro_session)
-            not_presents = self.add_not_presents_in_summary(without_zeroes, "count", object_set, user_id)
+            not_presents = self.add_not_presents_in_summary(without_zeroes, "count", object_set)
             without_zeroes.extend(not_presents)
             without_zeroes.sort(key=lambda row: (row["sampleid"], row["taxonid"]))
             row_src: IterableRowsT = without_zeroes
@@ -577,8 +576,7 @@ class ProjectExport(JobServiceBase):
         return nb_lines
 
     def add_not_presents_in_summary(self, without_zeroes: List[Dict[str, Any]], zero_col: str,
-                                    object_set: DescribedObjectSet,
-                                    user_id: UserIDT):
+                                    object_set: DescribedObjectSet):
         """
             Add lines with 0 abundance/concentration/biovolume for relevant (sample, category) pairs.
             Specs: https://github.com/ecotaxa/ecotaxa/issues/615#issuecomment-1158781701
@@ -642,10 +640,10 @@ class ProjectExport(JobServiceBase):
         out_file = self._get_summary_file(src_project)
 
         # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, self.filters)
+        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, user_id, self.filters)
 
         # The specialized SQL builder
-        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(object_set, src_project, user_id, "txo.display_name")
+        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(object_set, "txo.display_name")
         aug_qry.remap_categories(req.pre_mapping)
         aug_qry.set_formulae(req.formulae)
         # We want the sum of formula calculation
@@ -670,7 +668,7 @@ class ProjectExport(JobServiceBase):
             # We need to add missing taxa
             # TODO: check with https://github.com/ecotaxa/ecotaxa/issues/615#issuecomment-1158781701
             without_zeroes = aug_qry.get_result(self.ro_session)
-            not_presents = self.add_not_presents_in_summary(without_zeroes, "concentration", object_set, user_id, )
+            not_presents = self.add_not_presents_in_summary(without_zeroes, "concentration", object_set)
             without_zeroes.extend(not_presents)
             without_zeroes.sort(key=lambda row: (row["sampleid"], row["taxonid"]))
             row_src: IterableRowsT = without_zeroes

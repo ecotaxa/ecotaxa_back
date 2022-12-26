@@ -61,18 +61,20 @@ class DescribedObjectSet(object):
         and filtered by exclusion conditions.
     """
 
-    def __init__(self, session: Session, prj_id: int, filters: ProjectFiltersDict):
+    def __init__(self, session: Session, prj_id: int, user_id: Optional[UserIDT], filters: ProjectFiltersDict):
+        """
+            :param user_id: The 'current' user, in case the filter refers to him/her.
+        """
         self.prj_id = prj_id
+        self.user_id = user_id
         self.filters = ObjectSetFilter(session, filters)
 
-    def get_sql(self, user_id: int,
-                order_clause: Optional[OrderClause] = None,
+    def get_sql(self, order_clause: Optional[OrderClause] = None,
                 select_list: str = "",
                 all_images: bool = False) \
             -> Tuple[FromClause, WhereClause, SQLParamDict]:
         """
             Construct SQL parts for getting the IDs of objects.
-            :param user_id: The 'current' user, in case the filter refers to him/her.
             :param select_list: Used for hinting the builder that some specific table will be needed in join.
                     major tables obj_head, samples and acquisitions are always joined.
             :param all_images: If not set (default), only return the lowest rank, i.e. visible, image
@@ -83,7 +85,7 @@ class DescribedObjectSet(object):
         # The filters on objects
         obj_where = WhereClause()
         params: SQLParamDict = {"projid": self.prj_id}
-        self.filters.get_sql_filter(obj_where, params, user_id)
+        self.filters.get_sql_filter(obj_where, params, self.user_id)
         selected_tables = FromClause("obj_head obh")
         selected_tables += "acquisitions acq ON acq.acquisid = obh.acquisid"
         selected_tables += "samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :projid"
@@ -110,6 +112,11 @@ class DescribedObjectSet(object):
             selected_tables += "taxonomy txp ON txp.id = txo.parent_id"
             selected_tables.set_outer("taxonomy txp ")
         return selected_tables, obj_where, params
+
+    def getProject(self) -> Project:
+        ret = self.filters.session.query(Project).get(self.prj_id)
+        assert ret is not None
+        return ret
 
 
 class EnumeratedObjectSet(MappedTable):
@@ -705,7 +712,7 @@ class ObjectSetFilter(object):
         else:
             return None
 
-    def get_sql_filter(self, where_clause: WhereClause, params: SQLParamDict, user_id: int) -> None:
+    def get_sql_filter(self, where_clause: WhereClause, params: SQLParamDict, user_id: Optional[UserIDT]) -> None:
         """
             The generated SQL assumes that, in the query:
                 'obh' is the alias for object_head aka ObjectHeader
