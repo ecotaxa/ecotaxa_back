@@ -31,7 +31,7 @@ logger = get_logger(__name__)
 RowSourceT = Generator[Dict[str, Any], None, None]
 # A typing for both in-mem list of dicts and row sources
 IterableRowsT = Iterable[Dict[str, Any]]
-# From:To and remove if no "To"
+# From:To and remove if no "To", i.e. if "To" is None
 TaxoRemappingT = Dict[ClassifIDT, Optional[ClassifIDT]]
 
 
@@ -142,8 +142,8 @@ class ObjectSetQueryPlus(object):
             TODO: As we're here, it would be nice to include plain non-free columns as well.
         """
         ret: Dict[Tuple[str, str], Tuple[str, str]] = {}
-        objSetProject = self.obj_set.getProject()
-        mapping = ProjectMapping().load_from_project(objSetProject)
+        obj_set_project = self.obj_set.getProject()
+        mapping = ProjectMapping().load_from_project(obj_set_project)
         assert self.sum_exp
         for a_var in self.sum_exp.references.keys():
             prfx, free_col = a_var.split(".")

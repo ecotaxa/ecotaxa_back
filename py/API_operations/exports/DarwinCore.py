@@ -571,68 +571,66 @@ class DarwinCoreExport(JobServiceBase):
             arch.emofs.add(SamplingNetMeshSizeInMicrons(event_id, str(net_mesh)))
             arch.emofs.add(SampleDeviceApertureAreaInSquareMeters(event_id, str(net_surf)))
 
-    @classmethod
-    def _add_morpho_counts(cls, count_per_taxon_for_acquis: Dict[ClassifIDT, int],
-                           morpho2phylo: TaxoRemappingT) -> None:
-        """
-            If there are Morpho taxa with counts, cumulate and wipe them out.
-        """
-        for an_id, count_4_acquis in dict(count_per_taxon_for_acquis).items():
-            phylo_id = morpho2phylo.get(an_id)
-            if phylo_id is not None:
-                del count_per_taxon_for_acquis[an_id]
-                if phylo_id in count_per_taxon_for_acquis:
-                    # Accumulate in parent count
-                    count_per_taxon_for_acquis[phylo_id] += count_4_acquis
-                else:
-                    # Create the parent
-                    count_per_taxon_for_acquis[phylo_id] = count_4_acquis
+    # @classmethod
+    # def _add_morpho_counts(cls, count_per_taxon_for_acquis: Dict[ClassifIDT, int],
+    #                        morpho2phylo: TaxoRemappingT) -> None:
+    #     """
+    #         If there are Morpho taxa with counts, cumulate and wipe them out.
+    #     """
+    #     for an_id, count_4_acquis in dict(count_per_taxon_for_acquis).items():
+    #         phylo_id = morpho2phylo.get(an_id)
+    #         if phylo_id is not None:
+    #             del count_per_taxon_for_acquis[an_id]
+    #             if phylo_id in count_per_taxon_for_acquis:
+    #                 # Accumulate in parent count
+    #                 count_per_taxon_for_acquis[phylo_id] += count_4_acquis
+    #             else:
+    #                 # Create the parent
+    #                 count_per_taxon_for_acquis[phylo_id] = count_4_acquis
 
-    @classmethod
-    def _get_sums_by_taxon(cls, session: Session, acquis_id: AcquisitionIDT) \
-            -> Dict[ClassifIDT, int]:
-        """
-            Compute number of objects validated for each taxon in the acquisition.
-        """
-        sql = text("SELECT o.classif_id, count(1)"
-                   "  FROM obj_head o "
-                   " WHERE o.acquisid = :acq "
-                   "   AND o.classif_id IS NOT NULL "
-                   "   AND o.classif_qual = 'V'"
-                   " GROUP BY o.classif_id")
-        res: Result = session.execute(sql, {"acq": acquis_id})
-        return {int(classif_id): int(cnt) for (classif_id, cnt) in res.fetchall()}
+    # @classmethod
+    # def _get_sums_by_taxon(cls, session: Session, acquis_id: AcquisitionIDT) \
+    #         -> Dict[ClassifIDT, int]:
+    #     """
+    #         Compute number of objects validated for each taxon in the acquisition.
+    #     """
+    #     sql = text("SELECT o.classif_id, count(1)"
+    #                "  FROM obj_head o "
+    #                " WHERE o.acquisid = :acq "
+    #                "   AND o.classif_id IS NOT NULL "
+    #                "   AND o.classif_qual = 'V'"
+    #                " GROUP BY o.classif_id")
+    #     res: Result = session.execute(sql, {"acq": acquis_id})
+    #     return {int(classif_id): int(cnt) for (classif_id, cnt) in res.fetchall()}
 
-    def _aggregate_abundances(self, session: Session, acquis_for_sample: List[Acquisition],
-                              morpho2phylo: Optional[TaxoRemappingT]) \
-            -> Tuple[Dict[ClassifIDT, SampleAggregForTaxon], AbundancePerAcquisitionT]:
-        aggreg_per_taxon: Dict[ClassifIDT, SampleAggregForTaxon] = {}
-        count_per_taxon_per_acquis: AbundancePerAcquisitionT = {}
-        for an_acquis in acquis_for_sample:
-            # Get counts for acquisition (subsample)
-            count_per_taxon_for_acquis: Dict[ClassifIDT, int] = self._get_sums_by_taxon(session,
-                                                                                        an_acquis.acquisid)
-            if morpho2phylo is not None:
-                self._add_morpho_counts(count_per_taxon_for_acquis, morpho2phylo)
-            count_per_taxon_per_acquis[an_acquis.acquisid] = count_per_taxon_for_acquis
-            for an_id, count_4_acquis in count_per_taxon_for_acquis.items():
-                aggreg_for_taxon = aggreg_per_taxon.get(an_id)
-                if aggreg_for_taxon is None:
-                    # Create new aggregation data for this taxon
-                    aggreg_per_taxon[an_id] = SampleAggregForTaxon(count_4_acquis, None, None)
-                else:
-                    # Sum if taxon already there
-                    aggreg_for_taxon.abundance += count_4_acquis
-        return aggreg_per_taxon, count_per_taxon_per_acquis
+    # def _aggregate_abundances(self, session: Session, acquis_for_sample: List[Acquisition],
+    #                           morpho2phylo: Optional[TaxoRemappingT]) \
+    #         -> Tuple[Dict[ClassifIDT, SampleAggregForTaxon], AbundancePerAcquisitionT]:
+    #     aggreg_per_taxon: Dict[ClassifIDT, SampleAggregForTaxon] = {}
+    #     count_per_taxon_per_acquis: AbundancePerAcquisitionT = {}
+    #     for an_acquis in acquis_for_sample:
+    #         # Get counts for acquisition (subsample)
+    #         count_per_taxon_for_acquis: Dict[ClassifIDT, int] = self._get_sums_by_taxon(session,
+    #                                                                                     an_acquis.acquisid)
+    #         if morpho2phylo is not None:
+    #             self._add_morpho_counts(count_per_taxon_for_acquis, morpho2phylo)
+    #         count_per_taxon_per_acquis[an_acquis.acquisid] = count_per_taxon_for_acquis
+    #         for an_id, count_4_acquis in count_per_taxon_for_acquis.items():
+    #             aggreg_for_taxon = aggreg_per_taxon.get(an_id)
+    #             if aggreg_for_taxon is None:
+    #                 # Create new aggregation data for this taxon
+    #                 aggreg_per_taxon[an_id] = SampleAggregForTaxon(count_4_acquis, None, None)
+    #             else:
+    #                 # Sum if taxon already there
+    #                 aggreg_for_taxon.abundance += count_4_acquis
+    #     return aggreg_per_taxon, count_per_taxon_per_acquis
 
-    def _aggregate_for_sample(self, session: Session, sample: Sample,
-                              morpho2phylo: Optional[TaxoRemappingT], with_computations: bool,
+    def _aggregate_for_sample(self, sample: Sample, morpho2phylo: Optional[TaxoRemappingT], with_computations: bool,
                               warnings: List[str]) -> Dict[ClassifIDT, SampleAggregForTaxon]:
         """
 
         TODO: All this is now generalized in exports/ForProject.py
 
-            :param session: SQLA DB session for queries.
             :param sample: The Sample for which computations needs to be done.
             :param with_computations: If not set, just do abundance calculations (e.g. to save time
                 or when it's known to be impossible).
@@ -654,26 +652,12 @@ class DarwinCoreExport(JobServiceBase):
         # We return all _per taxon_.
         ret: Dict[ClassifIDT, SampleAggregForTaxon]
 
-        acquis_for_sample = SampleBO.get_acquisitions(session, sample)
+        acquis_for_sample = SampleBO.get_acquisitions(self.ro_session, sample)
 
-        # Start with abundances, simple count and giving its keys to the returned dict.
-        ret, count_per_taxon_per_acquis = self._aggregate_abundances(session, acquis_for_sample, morpho2phylo)
-
-        # Parallel computation
-        obj_set = CommonObjectSets.validatedInSample(session, sample)
-        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(obj_set, "txo.id")
-        if morpho2phylo is not None:
-            aug_qry.remap_categories(morpho2phylo)
-        aug_qry.aggregate_with_count()
-        aug_qry.set_aliases({"txo.id": "txo_id",
-                             "acq.acquisid": "acq_id",
-                             "sam.sampleid": "sam_id",
-                             aug_qry.COUNT_STAR: "count"})
-        aug_qry.add_select(["sam.sampleid", "acq.acquisid"]).set_grouping(ResultGrouping.BY_SUBSAMPLE_AND_TAXO)
-        count_per_taxon_per_acquis2: AbundancePerAcquisitionT = {}
-        for a_row in aug_qry.get_row_source(self.ro_session):
-            for_acq = count_per_taxon_per_acquis2.setdefault(a_row["acq_id"], {})
-            for_acq[a_row["txo_id"]] = a_row["count"]
+        # Start with abundances, 'simple' count but eventually with remapping
+        count_per_taxon_per_acquis = self.abundances_per_acquisition_for_sample(sample, morpho2phylo)
+        # Returned data is per taxon for the whole sample
+        ret = self.cumulate_abundances(count_per_taxon_per_acquis)
 
         if not with_computations:
             return ret
@@ -733,11 +717,11 @@ class DarwinCoreExport(JobServiceBase):
                 constants = {"pixel_size": pixel_size}
                 # Get all objects for the acquisition. The filter on classif_id is useless for now.
                 with CodeTimer("Objects IDs for '%s': " % an_acquis.orig_id, logger):
-                    acq_object_ids = AcquisitionBO.get_all_object_ids(session=session,
+                    acq_object_ids = AcquisitionBO.get_all_object_ids(session=self.ro_session,
                                                                       acquis_id=an_acquis.acquisid,
                                                                       classif_ids=list(ret.keys()))
                 with CodeTimer("Objects for '%s': " % an_acquis.orig_id, logger):
-                    objects = ObjectBOSet(session, acq_object_ids, mapping.object_mappings)
+                    objects = ObjectBOSet(self.ro_session, acq_object_ids, mapping.object_mappings)
                 nb_biovols = 0
                 for an_obj in objects.all:
                     # Compute a biovol if possible
@@ -767,11 +751,48 @@ class DarwinCoreExport(JobServiceBase):
 
         return ret
 
+    def abundances_per_acquisition_for_sample(self, sample: Sample, morpho2phylo: Optional[TaxoRemappingT]) \
+            -> AbundancePerAcquisitionT:
+        """
+            Compute abundances (count) for given sample, grouped per acquisition.
+        """
+        obj_set = CommonObjectSets.validatedInSample(self.ro_session, sample)
+        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(obj_set, "txo.id")
+        if morpho2phylo is not None:
+            aug_qry.remap_categories(morpho2phylo)
+        aug_qry.set_aliases({"txo.id": "txo_id",
+                             "acq.acquisid": "acq_id",
+                             "sam.sampleid": "sam_id",
+                             aug_qry.COUNT_STAR: "count"})
+        aug_qry.add_select(["sam.sampleid", "acq.acquisid"]) \
+            .aggregate_with_count().set_grouping(ResultGrouping.BY_SUBSAMPLE_AND_TAXO)
+        count_per_taxon_per_acquis: AbundancePerAcquisitionT = {}
+        for a_row in aug_qry.get_row_source(self.ro_session):
+            for_acq = count_per_taxon_per_acquis.setdefault(a_row["acq_id"], {})
+            txo_id = a_row["txo_id"]
+            for_acq[txo_id] = a_row["count"]
+        return count_per_taxon_per_acquis
+
+    @staticmethod
+    def cumulate_abundances(count_per_taxon_per_acquis: AbundancePerAcquisitionT) \
+            -> Dict[ClassifIDT, SampleAggregForTaxon]:
+        aggreg_per_taxon: Dict[ClassifIDT, SampleAggregForTaxon] = {}
+        for acq_id, count_for_acq in count_per_taxon_per_acquis.items():
+            for txo_id, count in count_for_acq.items():
+                aggreg_for_taxon = aggreg_per_taxon.get(txo_id)
+                if aggreg_for_taxon is None:
+                    # Create new aggregation data for this taxon
+                    aggreg_per_taxon[txo_id] = SampleAggregForTaxon(count, None, None)
+                else:
+                    # Sum if taxon already there
+                    aggreg_for_taxon.abundance += count
+        return aggreg_per_taxon
+
     def add_occurences(self, sample: Sample, arch: DwC_Archive, event_id: str) -> int:
         """
             Add DwC occurences, for given sample, into the archive. A single line per WoRMS taxon.
         """
-        aggregs = self._aggregate_for_sample(session=self.session, sample=sample,
+        aggregs = self._aggregate_for_sample(sample=sample,
                                              morpho2phylo=self.morpho2phylo if self.auto_morpho else None,
                                              with_computations=self.with_computations,
                                              warnings=self.warnings)

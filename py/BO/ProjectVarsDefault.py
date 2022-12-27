@@ -1,5 +1,5 @@
 """
-    The most common, i.e. from Zooprocess, formulae.
+    The most common, i.e. from ZooProcess, formulae.
 """
 
 from .ProjectVars import VariableValidity, ProjectVar

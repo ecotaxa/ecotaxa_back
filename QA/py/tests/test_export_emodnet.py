@@ -36,6 +36,8 @@ def test_emodnet_export(config, database, fastapi, caplog):
 def do_test_emodnet_export(config, database, fastapi, caplog):
     caplog.set_level(logging.FATAL)
 
+    # TODO TODO TODO: The data does _not_ allow to generate biovolume
+
     # Admin imports the project
     from tests.test_import import test_import, test_import_a_bit_more_skipping
     prj_id = test_import(config, database, caplog, "EMODNET project")
@@ -146,7 +148,7 @@ This series is part of the long term planktonic monitoring of
     unzip_and_check(rsp.content, ref_zip)
 
     url_with_0s = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=True, comp=True,
-                                                       morph=True)
+                                                       morph=False)
     rsp = fastapi.get(url_with_0s, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
@@ -157,7 +159,7 @@ This series is part of the long term planktonic monitoring of
     unzip_and_check(rsp.content, with_zeroes_zip)
 
     url_raw_data = COLLECTION_EXPORT_EMODNET_URL.format(collection_id=coll_id, dry=False, zeroes=False, comp=False,
-                                                        morph=True)
+                                                        morph=False)
     rsp = fastapi.get(url_raw_data, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
