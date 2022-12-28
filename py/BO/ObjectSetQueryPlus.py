@@ -97,7 +97,7 @@ class ObjectSetQueryPlus(object):
             for a_col in self.sql_select_list:
                 if a_prefix in a_col:
                     return
-        assert False, "one of %s in needed for grouping" % str(prfxs)
+        assert False, "one of %s in needed in select list, for grouping" % str(prfxs)
 
     def set_aliases(self, aliases: Dict[str, str]):
         """
@@ -176,7 +176,7 @@ class ObjectSetQueryPlus(object):
 
     def aggregate_with_computed_sum(self, sum_expression: str, term: Term, unit: Term) -> 'ObjectSetQueryPlus':
         """
-            Add a computed sum to the query, with given name, for each grouping.
+            Add a computed (i.e. from formula) sum to the query, with given name, for each grouping.
         """
         assert self.grouping != ResultGrouping.NO_GROUPING
         assert not self.count
