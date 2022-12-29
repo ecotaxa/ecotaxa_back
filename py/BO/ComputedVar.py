@@ -6,7 +6,7 @@
 #
 import math
 from collections import OrderedDict
-from typing import Dict, List, Any, Optional, Tuple, OrderedDict as OrderedDictT
+from typing import Dict, List, Any, Optional, Tuple, OrderedDict as OrderedDictT, Set
 
 from BO.ProjectVars import ProjectVar
 from BO.Vocabulary import Term
@@ -24,7 +24,7 @@ class ComputedVar(ProjectVar):
         self.expanded_formula: Optional[str] = None
         self.references: OrderedDictT[str, str] = OrderedDict()
 
-    def expand_extract_refs(self, defs: Dict[str, str], valid_prefixes: List[str]):
+    def expand_extract_refs(self, defs: Dict[str, str], valid_prefixes: List[str], names_and_defs: Dict[str, str]):
         """
             Expand the formula using given inside-variables definitions and get references, checking they are allowed.
         """
@@ -38,7 +38,9 @@ class ComputedVar(ProjectVar):
         # Do an inventory of references inside the expanded expression
         vars_in_exp2 = self.find_vars(formula)
         for a_var in vars_in_exp2:
-            if a_var.startswith("math."):  # TODO: more libs?
+            if a_var in names_and_defs:
+                self.references[a_var] = names_and_defs[a_var]
+            elif a_var.startswith("math."):
                 continue
             elif "." not in a_var:
                 raise Exception("Expression '%s' is invalid (no dot), found in expression '%s'" %
@@ -74,11 +76,13 @@ class ComputedVar(ProjectVar):
         except (TypeError, ValueError):
             nan_due_to_bad_input = self._is_bad_input(row)
             return math.nan, nan_due_to_bad_input
+        except (NameError):
+            raise
 
     def replace_python_refs_with_SQL(self, replacements: Dict[Tuple[str, str], Tuple[str, str]]):
         """
             Replace the references in expanded_formula formula & recompile.
-            E.g. we can have sam.tot_vol in formula, but this is obj.member python syntax which will
+            E.g. we can have sam.tot_vol in formula, but this is 'obj.member' python syntax which will
             fail during eval() as there is no 'obj'. So let it become sam_tot_vol.
             E.g. replacements contains {('sam','tot_vol'):('sam','t05')}
         """

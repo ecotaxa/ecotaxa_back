@@ -11,7 +11,7 @@
 import csv
 import enum
 from pathlib import Path
-from typing import List, Optional, Tuple, Dict, Generator, Any, Iterable
+from typing import List, Optional, Tuple, Dict, Generator, Any, Iterable, Set
 
 from BO.Classification import ClassifIDT
 from BO.ComputedVar import ComputedVar
@@ -45,7 +45,8 @@ class ResultGrouping(enum.IntEnum):
     BY_SUBSAMPLE = 4  # Aggregates are per subsample
     BY_PROJECT = 8  # Aggregates are per project
     BY_SAMPLE_AND_TAXO = BY_TAXO + BY_SAMPLE
-    BY_SUBSAMPLE_AND_TAXO = BY_TAXO + BY_SUBSAMPLE + BY_SAMPLE
+    BY_SUBSAMPLE_AND_TAXO = BY_TAXO + BY_SUBSAMPLE
+    BY_SAMPLE_SUBSAMPLE_AND_TAXO = BY_TAXO + BY_SUBSAMPLE + BY_SAMPLE
     BY_PROJECT_AND_TAXO = BY_TAXO + BY_SUBSAMPLE + BY_SAMPLE + BY_PROJECT  # One day, for Collections
 
 
@@ -71,16 +72,15 @@ class ObjectSetQueryPlus(object):
         self.formulae: Dict[str, str] = {}
         #
         self.sql_select_list: List[str] = []  # What is needed
-        self.aliases: Dict[str, str] = {}  # How it will appear
+        self.defs_to_alias: Dict[str, str] = {}  # How it will appear
         self.grouping: ResultGrouping = ResultGrouping.NO_GROUPING  # The grouping
-        self.count: bool = False  # A simple aggregate
         self.sum_exp: Optional[ComputedVar] = None  # A complex aggregate
 
     def set_grouping(self, grouping: ResultGrouping) -> 'ObjectSetQueryPlus':
         """
             Group results at this level.
         """
-        assert grouping != ResultGrouping.BY_PROJECT_AND_TAXO, "Single project for now"
+        assert grouping & ResultGrouping.BY_PROJECT != ResultGrouping.BY_PROJECT, "Single project for now"
         # Sanity check, we cannot group if no data from grouping level
         if grouping & ResultGrouping.BY_TAXO:
             self._check_select_contains("txo.")
@@ -97,13 +97,14 @@ class ObjectSetQueryPlus(object):
             for a_col in self.sql_select_list:
                 if a_prefix in a_col:
                     return
-        assert False, "one of %s in needed in select list, for grouping" % str(prfxs)
+        assert False, "one of %s is needed in select list, for grouping" % str(prfxs)
 
-    def set_aliases(self, aliases: Dict[str, str]):
+    def set_aliases(self, aliases: Dict[str, str]) -> 'ObjectSetQueryPlus':
         """
             The result will have these as header columns.
         """
-        self.aliases.update(aliases)
+        self.defs_to_alias.update(aliases)
+        return self
 
     def remap_categories(self, taxo_mappings: TaxoRemappingT):
         """
@@ -117,35 +118,26 @@ class ObjectSetQueryPlus(object):
         """
         self.formulae = formulae
 
-    def add_select(self, cols_list: List[str], before: bool = True) -> 'ObjectSetQueryPlus':
+    def add_select(self, cols_list: List[str]) -> 'ObjectSetQueryPlus':
         """
             Augment what is needed as output.
         """
-        if before:
-            self.sql_select_list[:0] = cols_list
-        else:
-            self.sql_select_list.extend(cols_list)
+        self.sql_select_list.extend(cols_list)
         return self
 
-    def aggregate_with_count(self) -> 'ObjectSetQueryPlus':
-        """
-            Add a count to the query, for each grouping.
-        """
-        assert self.grouping != ResultGrouping.NO_GROUPING
-        assert self.sum_exp is None
-        self.count = True
-        return self
-
-    def _resolve_refs(self) -> Dict[Tuple[str, str], Tuple[str, str]]:
+    def _resolve_refs(self, aliases: Dict[str, str]) -> Dict[Tuple[str, str], Tuple[str, str]]:
         """
             Resolve references, e.g. sam.tot_vol -> sam.t05. The prefixes are valid.
+            As this is meant to complement ObjectSet queries, we use SQL table aliases from there.
             TODO: As we're here, it would be nice to include plain non-free columns as well.
         """
+        assert self.sum_exp
         ret: Dict[Tuple[str, str], Tuple[str, str]] = {}
         obj_set_project = self.obj_set.getProject()
         mapping = ProjectMapping().load_from_project(obj_set_project)
-        assert self.sum_exp
         for a_var in self.sum_exp.references.keys():
+            if a_var in aliases:
+                continue
             prfx, free_col = a_var.split(".")
             real_col, real_tbl = None, None
             if prfx == self.SAMPLE_PREFIX:
@@ -178,13 +170,14 @@ class ObjectSetQueryPlus(object):
         """
             Add a computed (i.e. from formula) sum to the query, with given name, for each grouping.
         """
-        assert self.grouping != ResultGrouping.NO_GROUPING
-        assert not self.count
         # Validate & compile straight away
         self.sum_exp = ComputedVar(sum_expression, term, unit)
-        self.sum_exp.expand_extract_refs(self.formulae, self.KNOWN_PREFIXES)
+        # Allow to reference a SQL output in the formula, not itself of course
+        aliases_to_def = {an_alias: a_def for (a_def, an_alias) in self.defs_to_alias.items()
+                          if a_def != sum_expression}
+        self.sum_exp.expand_extract_refs(self.formulae, self.KNOWN_PREFIXES, aliases_to_def)
         # Resolve references
-        resolved = self._resolve_refs()
+        resolved = self._resolve_refs(aliases_to_def)
         self.sum_exp.replace_python_refs_with_SQL(resolved)
         return self
 
@@ -203,10 +196,14 @@ class ObjectSetQueryPlus(object):
         return ret
 
     def _compute_group_by(self) -> str:
+        grouping = " GROUP BY " + ", ".join(self._group_by_columns())
         if self.sum_exp:
+            if self.COUNT_STAR in self.sum_exp.references.values():
+                # The expression relies on SQL grouping
+                return grouping
             # We can't have PG doing these aggregates as they are computed here in python
             return ""
-        return " GROUP BY " + ", ".join(self._group_by_columns())
+        return grouping
 
     def _add_tech_selects(self, select: SelectClause) -> None:
         """
@@ -214,8 +211,12 @@ class ObjectSetQueryPlus(object):
             e.g. sam.t07 AS sam_tot_vol, acq.t03 AS ssm_sub_part
         """
         if self.sum_exp:
+            aggreg_in_exp = self.COUNT_STAR in self.sum_exp.references.values()
             for a_py_ref, a_sql_ref in self.sum_exp.references.items():
-                select.add(a_sql_ref, a_py_ref)
+                if aggreg_in_exp and a_sql_ref != self.COUNT_STAR:
+                    select.add("MAX(" + a_sql_ref + ")", a_py_ref)
+                else:
+                    select.add(a_sql_ref, a_py_ref)
             for key_num, a_col in enumerate(self._group_by_columns()):
                 select.add(a_col, "key%d" % key_num)
 
@@ -280,10 +281,11 @@ class ObjectSetQueryPlus(object):
             for a_simple_row in res:
                 yield dict(a_simple_row)
         else:
+            assert self.grouping != ResultGrouping.NO_GROUPING
             # Expression evaluation
             # Prepare a maximum of things outside the loop, which can be over hundreds of thousands of rows.
             eval_bnd = self.sum_exp.eval  # This is a bounded call
-            dest_col = self.aliases[self.sum_exp.formula]
+            dest_col = self.defs_to_alias[self.sum_exp.formula]
             # We have 3 parts in each row:
             #  - The output values for the TSV, one of them is "0" and will receive the formula result
             #  - The variables, input for formula evaluation
@@ -346,15 +348,12 @@ class ObjectSetQueryPlus(object):
         """
         ret = SelectClause()
         sels = self.sql_select_list[:]
-        # Include count
-        if self.count:
-            sels += [self.COUNT_STAR]
         for a_sel in sels:
-            alias = self.aliases[a_sel]
+            alias = self.defs_to_alias[a_sel]
             ret.add(a_sel, alias)
         # Add a placeholder for sum_expression
         if self.sum_exp is not None:
-            ret.add("0", self.aliases[self.sum_exp.formula])
+            ret.add("0", self.defs_to_alias[self.sum_exp.formula])
         return ret
 
     def _get_header(self) -> List[str]:
@@ -377,16 +376,3 @@ class ObjectSetQueryPlus(object):
                 wtr.writerow(a_row)
                 nb_lines += 1
         return nb_lines
-
-
-class PerTaxonResultsQuery(ObjectSetQueryPlus):
-    """
-        A specialized ObjectSetQueryPlus which always groups result, at least, by a Taxonomy table column.
-    """
-
-    def __init__(self, obj_set: DescribedObjectSet, txo_col: str):
-        super().__init__(obj_set)
-        assert txo_col.startswith("txo.")
-        assert txo_col[4:] in Taxonomy.__dict__
-        self.sql_select_list = [txo_col]
-        self.set_grouping(ResultGrouping.BY_TAXO)

@@ -15,7 +15,7 @@ from API_models.exports import ExportRsp, ExportReq, ExportTypeEnum, SummaryExpo
 from API_models.filters import ProjectFiltersDict
 from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet
-from BO.ObjectSetQueryPlus import ResultGrouping, PerTaxonResultsQuery, IterableRowsT
+from BO.ObjectSetQueryPlus import ResultGrouping, IterableRowsT, ObjectSetQueryPlus
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
@@ -486,9 +486,7 @@ class ProjectExport(JobServiceBase):
                                                             self.filters)
 
         # The specialized SQL builder
-        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(object_set, "txo.display_name")
-        # We want the count, that's the goal of all this
-        aug_qry.aggregate_with_count()
+        aug_qry = ObjectSetQueryPlus(object_set)
         # We can set aliases even for expressions we don't select, so include all possibly needed ones
         aug_qry.set_aliases({"sam.orig_id": "sample_id",
                              "sam.latitude": "latitude",
@@ -499,15 +497,18 @@ class ProjectExport(JobServiceBase):
                              aug_qry.COUNT_STAR: "nbr"})
 
         if req.sum_subtotal == SummaryExportGroupingEnum.just_by_taxon:
-            pass  # Default value
+            grouping = ResultGrouping.BY_TAXO
         elif req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
-            aug_qry.add_select(["sam.orig_id", "sam.latitude", "sam.longitude", "MAX(obh.objdate)"]). \
-                set_grouping(ResultGrouping.BY_SAMPLE_AND_TAXO)
+            aug_qry.add_select(["sam.orig_id", "sam.latitude", "sam.longitude", "MAX(obh.objdate)"])
+            grouping = ResultGrouping.BY_SAMPLE_AND_TAXO
         elif req.sum_subtotal == SummaryExportGroupingEnum.by_subsample:
-            aug_qry.add_select(["sam.orig_id", "acq.orig_id"]). \
-                set_grouping(ResultGrouping.BY_SUBSAMPLE_AND_TAXO)
+            aug_qry.add_select(["sam.orig_id", "acq.orig_id"])
+            grouping = ResultGrouping.BY_SAMPLE_SUBSAMPLE_AND_TAXO
         elif req.sum_subtotal == SummaryExportGroupingEnum.by_project:
             assert False, "No collections yet to get multiple projects"
+        # We want the count, that's the goal of all this
+        aug_qry.add_select(["txo.display_name", aug_qry.COUNT_STAR])
+        aug_qry.set_grouping(grouping)
 
         msg = "Writing to file %s" % out_file
         self.update_progress(50, msg)
@@ -534,11 +535,9 @@ class ProjectExport(JobServiceBase):
         object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, user_id, self.filters)
 
         # The specialized SQL builder
-        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(object_set, "txo.display_name")
+        aug_qry = ObjectSetQueryPlus(object_set)
         aug_qry.remap_categories(req.pre_mapping)
         # aug_qry.set_formulae(req.formulae) # Not needed for abundances
-        # We want the count, that's the goal of all this
-        aug_qry.aggregate_with_count()
         # We can set aliases even for expressions we don't select, so include all possibly needed ones
         aug_qry.set_aliases({"txo.display_name": "taxonid",
                              "sam.orig_id": "sampleid",
@@ -546,13 +545,16 @@ class ProjectExport(JobServiceBase):
                              aug_qry.COUNT_STAR: "count"})
 
         if req.sum_subtotal == SummaryExportGroupingEnum.just_by_taxon:
-            aug_qry.set_grouping(ResultGrouping.BY_TAXO)
+            grouping = ResultGrouping.BY_TAXO
         elif req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
-            aug_qry.add_select(["sam.orig_id"]). \
-                set_grouping(ResultGrouping.BY_SAMPLE_AND_TAXO)
+            aug_qry.add_select(["sam.orig_id"])
+            grouping = ResultGrouping.BY_SAMPLE_AND_TAXO
         elif req.sum_subtotal == SummaryExportGroupingEnum.by_subsample:
-            aug_qry.add_select(["sam.orig_id", "acq.orig_id"]). \
-                set_grouping(ResultGrouping.BY_SUBSAMPLE_AND_TAXO)
+            aug_qry.add_select(["sam.orig_id", "acq.orig_id"])
+            grouping = ResultGrouping.BY_SAMPLE_SUBSAMPLE_AND_TAXO
+        # We also want taxon and counts, in the end of the record
+        aug_qry.add_select(["txo.display_name", aug_qry.COUNT_STAR])
+        aug_qry.set_grouping(grouping)
 
         if req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
             # We need to add missing taxa
@@ -643,7 +645,7 @@ class ProjectExport(JobServiceBase):
         object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, user_id, self.filters)
 
         # The specialized SQL builder
-        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(object_set, "txo.display_name")
+        aug_qry = ObjectSetQueryPlus(object_set)
         aug_qry.remap_categories(req.pre_mapping)
         aug_qry.set_formulae(req.formulae)
         # We want the sum of formula calculation
@@ -656,13 +658,15 @@ class ProjectExport(JobServiceBase):
                              formula: "concentration"})
 
         if req.sum_subtotal == SummaryExportGroupingEnum.just_by_taxon:
-            aug_qry.set_grouping(ResultGrouping.BY_TAXO)
+            grouping = ResultGrouping.BY_TAXO
         elif req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
-            aug_qry.add_select(["sam.orig_id"]). \
-                set_grouping(ResultGrouping.BY_SAMPLE_AND_TAXO)
+            aug_qry.add_select(["sam.orig_id"])
+            grouping = ResultGrouping.BY_SAMPLE_AND_TAXO
         elif req.sum_subtotal == SummaryExportGroupingEnum.by_subsample:
-            aug_qry.add_select(["sam.orig_id", "acq.orig_id"]). \
-                set_grouping(ResultGrouping.BY_SUBSAMPLE_AND_TAXO)
+            aug_qry.add_select(["sam.orig_id", "acq.orig_id"])
+            grouping =  ResultGrouping.BY_SAMPLE_SUBSAMPLE_AND_TAXO
+        aug_qry.add_select(["txo.display_name"])
+        aug_qry.set_grouping(grouping)
 
         if req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
             # We need to add missing taxa

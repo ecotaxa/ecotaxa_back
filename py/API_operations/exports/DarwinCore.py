@@ -23,7 +23,7 @@ from BO.Collection import CollectionIDT, CollectionBO
 from BO.CommonObjectSets import CommonObjectSets
 from BO.DataLicense import LicenseEnum, DataLicense
 from BO.Mappings import ProjectMapping
-from BO.ObjectSetQueryPlus import PerTaxonResultsQuery, ResultGrouping, TaxoRemappingT
+from BO.ObjectSetQueryPlus import ResultGrouping, TaxoRemappingT, ObjectSetQueryPlus
 from BO.Process import ProcessBO
 from BO.Project import ProjectBO, ProjectTaxoStats
 from BO.Rights import RightsBO
@@ -626,9 +626,6 @@ class DarwinCoreExport(JobServiceBase):
     def _aggregate_for_sample(self, sample: Sample, morpho2phylo: Optional[TaxoRemappingT], with_computations: bool,
                               warnings: List[str]) -> Dict[ClassifIDT, SampleAggregForTaxon]:
         """
-
-        TODO: All this is now generalized in exports/ForProject.py
-
             :param sample: The Sample for which computations needs to be done.
             :param with_computations: If not set, just do abundance calculations (e.g. to save time
                 or when it's known to be impossible).
@@ -648,14 +645,12 @@ class DarwinCoreExport(JobServiceBase):
                 for the project and the configuration variable.
         """
         # We return all _per taxon_.
-        ret: Dict[ClassifIDT, SampleAggregForTaxon]
-
-        acquis_for_sample = SampleBO.get_acquisitions(self.ro_session, sample)
+        ret: Dict[ClassifIDT, SampleAggregForTaxon] = {}
 
         # Start with abundances, 'simple' count but eventually with remapping
-        count_per_taxon_per_acquis = self.abundances_per_acquisition_for_sample(sample, morpho2phylo)
-        # Returned data must be per taxon for the whole sample
-        ret = self.cumulate_abundances(count_per_taxon_per_acquis)
+        counts = self.abundances_for_sample(sample, morpho2phylo)
+        for a_count in counts:
+            ret[a_count["txo_id"]] = SampleAggregForTaxon(a_count["count"], None, None)
 
         if not with_computations:
             return ret
@@ -682,6 +677,7 @@ class DarwinCoreExport(JobServiceBase):
                             " no concentration or biovolume will be computed." % (sample.orig_id, str(e)))
             return ret
 
+        acquis_for_sample = SampleBO.get_acquisitions(self.ro_session, sample)
         subsampling_coeff_per_acquis: Dict[AcquisitionIDT, float] = {}
         for an_acquis in acquis_for_sample:
             try:
@@ -765,27 +761,19 @@ class DarwinCoreExport(JobServiceBase):
 
         return ret
 
-    def abundances_per_acquisition_for_sample(self, sample: Sample, morpho2phylo: Optional[TaxoRemappingT]) \
-            -> AbundancePerAcquisitionT:
+    def abundances_for_sample(self, sample: Sample, morpho2phylo: Optional[TaxoRemappingT]) \
+            -> List[Dict[str, Any]]:
         """
-            Compute abundances (count) for given sample, grouped per acquisition.
+            Compute abundances (count) for given sample.
         """
         obj_set = CommonObjectSets.validatedInSample(self.ro_session, sample)
-        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(obj_set, "txo.id")
+        aug_qry = ObjectSetQueryPlus(obj_set)
         if morpho2phylo is not None:
             aug_qry.remap_categories(morpho2phylo)
+        aug_qry.add_select(["txo.id", aug_qry.COUNT_STAR])
         aug_qry.set_aliases({"txo.id": "txo_id",
-                             "acq.acquisid": "acq_id",
-                             "sam.sampleid": "sam_id",
-                             aug_qry.COUNT_STAR: "count"})
-        aug_qry.add_select(["sam.sampleid", "acq.acquisid"]) \
-            .aggregate_with_count().set_grouping(ResultGrouping.BY_SUBSAMPLE_AND_TAXO)
-        count_per_taxon_per_acquis: AbundancePerAcquisitionT = {}
-        for a_row in aug_qry.get_row_source(self.ro_session):
-            for_acq = count_per_taxon_per_acquis.setdefault(a_row["acq_id"], {})
-            txo_id = a_row["txo_id"]
-            for_acq[txo_id] = a_row["count"]
-        return count_per_taxon_per_acquis
+                             aug_qry.COUNT_STAR: "count"}).set_grouping(ResultGrouping.BY_TAXO)
+        return aug_qry.get_result(self.ro_session)
 
     def concentrations_for_sample(self, formulae: Dict[str, str], sample: Sample,
                                   morpho2phylo: Optional[TaxoRemappingT]) \
@@ -794,15 +782,16 @@ class DarwinCoreExport(JobServiceBase):
             Compute concentration of each taxon for given sample.
         """
         obj_set = CommonObjectSets.validatedInSample(self.ro_session, sample)
-        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(obj_set, "txo.id")
+        aug_qry = ObjectSetQueryPlus(obj_set)
         if morpho2phylo is not None:
             aug_qry.remap_categories(morpho2phylo)
         aug_qry.set_formulae(formulae)
-        sum_formula = "1/subsample_coef/total_water_volume"
+        sum_formula = "sql_count/subsample_coef/total_water_volume"
         aug_qry.set_aliases({"txo.id": "txo_id",
+                             "acq.acquisid": "acq_id",
+                             aug_qry.COUNT_STAR: "sql_count",
                              sum_formula: "conc"})
-        # TODO: For speedup, it should be possible to aggregates a bit in SQL and have:
-        # sum_formula = "count(*)/subsample_coef/total_water_volume" + aggregation by subsample
+        aug_qry.add_select(["txo.id", "acq.acquisid"]).set_grouping(ResultGrouping.BY_SUBSAMPLE_AND_TAXO)
         aug_qry.aggregate_with_computed_sum(sum_formula, Vocabulary.concentrations, Units.number_per_cubic_metre)
         return aug_qry.get_result(self.ro_session)
 
@@ -813,30 +802,17 @@ class DarwinCoreExport(JobServiceBase):
             Compute biovolume of each taxon for given sample.
         """
         obj_set = CommonObjectSets.validatedInSample(self.ro_session, sample)
-        aug_qry: PerTaxonResultsQuery = PerTaxonResultsQuery(obj_set, "txo.id")
+        aug_qry = ObjectSetQueryPlus(obj_set, )
         if morpho2phylo is not None:
             aug_qry.remap_categories(morpho2phylo)
         aug_qry.set_formulae(formulae)
         sum_formula = "individual_volume/subsample_coef/total_water_volume"
         aug_qry.set_aliases({"txo.id": "txo_id",
                              sum_formula: "biovol"})
-        aug_qry.aggregate_with_computed_sum(sum_formula, Vocabulary.biovolume, Units.cubic_millimetres_per_cubic_metre)
+        aug_qry.add_select(["txo.id"]).aggregate_with_computed_sum(sum_formula, Vocabulary.biovolume,
+                                                                   Units.cubic_millimetres_per_cubic_metre)
+        aug_qry.set_grouping(ResultGrouping.BY_TAXO)
         return aug_qry.get_result(self.ro_session)
-
-    @staticmethod
-    def cumulate_abundances(count_per_taxon_per_acquis: AbundancePerAcquisitionT) \
-            -> Dict[ClassifIDT, SampleAggregForTaxon]:
-        aggreg_per_taxon: Dict[ClassifIDT, SampleAggregForTaxon] = {}
-        for acq_id, count_for_acq in count_per_taxon_per_acquis.items():
-            for txo_id, count in count_for_acq.items():
-                aggreg_for_taxon = aggreg_per_taxon.get(txo_id)
-                if aggreg_for_taxon is None:
-                    # Create new aggregation data for this taxon
-                    aggreg_per_taxon[txo_id] = SampleAggregForTaxon(count, None, None)
-                else:
-                    # Sum if taxon already there
-                    aggreg_for_taxon.abundance += count
-        return aggreg_per_taxon
 
     def add_occurences(self, sample: Sample, arch: DwC_Archive, event_id: str) -> int:
         """
@@ -847,7 +823,7 @@ class DarwinCoreExport(JobServiceBase):
                                              with_computations=self.with_computations,
                                              warnings=self.warnings)
 
-        # Group by lsid, in order to have a single occurence
+        # Group by lsid, in order to have a single occurrence
         by_lsid: Dict[str, Tuple[str, SampleAggregForTaxon, WoRMS]] = {}
         for an_id, an_aggreg in aggregs.items():
             try:
