@@ -6,7 +6,7 @@
 #
 import math
 from collections import OrderedDict
-from typing import Dict, List, Any, Optional, Tuple, OrderedDict as OrderedDictT, Set
+from typing import Dict, List, Any, Optional, Tuple, OrderedDict as OrderedDictT
 
 from BO.ProjectVars import ProjectVar
 from BO.Vocabulary import Term
@@ -76,7 +76,7 @@ class ComputedVar(ProjectVar):
         except (TypeError, ValueError):
             nan_due_to_bad_input = self._is_bad_input(row)
             return math.nan, nan_due_to_bad_input
-        except (NameError):
+        except NameError:  # this 'should not' happen, but during dev, the raise below allows to set a breakpoint
             raise
 
     def replace_python_refs_with_SQL(self, replacements: Dict[Tuple[str, str], Tuple[str, str]]):

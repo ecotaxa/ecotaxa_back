@@ -11,14 +11,13 @@
 import csv
 import enum
 from pathlib import Path
-from typing import List, Optional, Tuple, Dict, Generator, Any, Iterable, Set
+from typing import List, Optional, Tuple, Dict, Generator, Any, Iterable
 
 from BO.Classification import ClassifIDT
 from BO.ComputedVar import ComputedVar
 from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet
 from BO.Vocabulary import Term
-from DB import Taxonomy
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Session, Row
 from DB.helpers.SQL import OrderClause, SQLParamDict, SelectClause
@@ -307,8 +306,9 @@ class ObjectSetQueryPlus(object):
                 val, nan_because_bad = eval_bnd(vars_row)
                 if val != val:  # NaN test
                     if nan_because_bad:
-                        # TODO: Propagate
-                        logger.warning("All values could not be converted to float in %s", str(dict(a_row)))
+                        # TODO: It might be tricky to find problems using the values below
+                        err_msg = "All values could not be converted to float in %s" % str(dict(a_row))
+                        logger.warning(err_msg)
                 keys = tuple(a_row[keys_idx:])
                 if last_row is None:
                     # Ye olde first row problem...

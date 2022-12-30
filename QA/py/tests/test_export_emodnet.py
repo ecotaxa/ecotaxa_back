@@ -7,7 +7,7 @@ from zipfile import ZipFile
 from starlette import status
 from unittest import mock
 
-from tests.credentials import ADMIN_AUTH, REAL_USER_ID, CREATOR_AUTH
+from tests.credentials import ADMIN_AUTH, REAL_USER_ID, CREATOR_AUTH, ADMIN_USER_ID
 from tests.emodnet_ref import ref_zip, with_zeroes_zip, no_computations_zip
 from tests.export_shared import JOB_DOWNLOAD_URL
 from tests.test_classification import _prj_query, OBJECT_SET_CLASSIFY_URL
@@ -39,11 +39,12 @@ def do_test_emodnet_export(config, database, fastapi, caplog):
     # In these TSVs, we have: object_major, object_minor, object_area, process_pixel
 
     # Admin imports the project
-    from tests.test_import import test_import, test_import_a_bit_more_skipping
+    from tests.test_import import BAD_FREE_DIR, test_import, do_import, test_import_a_bit_more_skipping
     prj_id = test_import(config, database, caplog, "EMODNET project")
     # Add a sample spanning 2 days
     test_import_a_bit_more_skipping(config, database, caplog, "EMODNET project")
-
+    # Add a sample with corrupted or absent needed free columns
+    do_import(prj_id, BAD_FREE_DIR, ADMIN_USER_ID)
 
     # Get the project for update
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
@@ -80,7 +81,7 @@ def do_test_emodnet_export(config, database, fastapi, caplog):
 
     # Validate everything, otherwise no export.
     obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
-    assert len(obj_ids) == 11
+    assert len(obj_ids) == 19
     url = OBJECT_SET_CLASSIFY_URL
     classifications = [-1 for _obj in obj_ids]  # Keep current
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
@@ -194,11 +195,12 @@ def unzip_and_check(zip_content, ref_content):
 
 
 def add_concentration_data(fastapi, prj_id):
-    # Update Acquisitions & Samples so that there can be a concentration
+    # Update Acquisitions & Samples so that there can be a concentration,
+    # only some of them so that on-purpose erroneous data survives
     url = PROJECT_SEARCH_SAMPLES_URL.format(project_id=prj_id)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
-    sample_ids = [r["sampleid"] for r in rsp.json()]
+    sample_ids = [r["sampleid"] for r in rsp.json() if "mn04" not in r["orig_id"]]
     url = SAMPLE_SET_UPDATE_URL.format(project_id=prj_id)
     req = {"target_ids": sample_ids,
            "updates":
@@ -210,7 +212,7 @@ def add_concentration_data(fastapi, prj_id):
     url = PROJECT_SEARCH_ACQUIS_URL.format(project_id=prj_id)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
-    acquis_ids = [r["acquisid"] for r in rsp.json()]
+    acquis_ids = [r["acquisid"] for r in rsp.json() if "mn04" not in r["orig_id"]]
     url = ACQUISITION_SET_UPDATE_URL.format(project_id=prj_id)
     req = {"target_ids": acquis_ids,
            "updates":

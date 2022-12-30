@@ -17,14 +17,12 @@ from urllib.parse import quote_plus
 
 import BO.ProjectVarsDefault as DefaultVars
 from API_models.exports import DarwinCoreExportRsp
-from BO.Acquisition import AcquisitionBO, AcquisitionIDT
+from BO.Acquisition import AcquisitionIDT
 from BO.Classification import ClassifIDT, ClassifIDSetT
 from BO.Collection import CollectionIDT, CollectionBO
 from BO.CommonObjectSets import CommonObjectSets
 from BO.DataLicense import LicenseEnum, DataLicense
-from BO.Mappings import ProjectMapping
 from BO.ObjectSetQueryPlus import ResultGrouping, TaxoRemappingT, ObjectSetQueryPlus
-from BO.Process import ProcessBO
 from BO.Project import ProjectBO, ProjectTaxoStats
 from BO.Rights import RightsBO
 from BO.Sample import SampleBO, SampleAggregForTaxon
@@ -47,7 +45,6 @@ from formats.DarwinCore.models import DwC_Event, RecordTypeEnum, DwC_Occurrence,
     EMLTaxonomicClassification, EMLAdditionalMeta, EMLIdentifier, EMLAssociatedPerson
 from helpers.DateTime import now_time
 from helpers.DynamicLogs import get_logger, LogsSwitcher
-from helpers.Timer import CodeTimer
 # TODO: Move somewhere else
 from ..helpers.JobService import JobServiceBase, ArgsDict
 
@@ -516,7 +513,7 @@ class DarwinCoreExport(JobServiceBase):
         # arch.emofs.add(emof)
         try:
             total_water_volume = SampleBO.get_computed_var(sample, DefaultVars.volume_sampled)
-        except TypeError as _e:
+        except (TypeError, ValueError) as _e:
             pass
         else:
             if self.nine_nine_re.match(str(total_water_volume)):
@@ -623,15 +620,14 @@ class DarwinCoreExport(JobServiceBase):
     #                 aggreg_for_taxon.abundance += count_4_acquis
     #     return aggreg_per_taxon, count_per_taxon_per_acquis
 
-    def _aggregate_for_sample(self, sample: Sample, morpho2phylo: Optional[TaxoRemappingT], with_computations: bool,
-                              warnings: List[str]) -> Dict[ClassifIDT, SampleAggregForTaxon]:
+    def _aggregate_for_sample(self, sample: Sample, morpho2phylo: Optional[TaxoRemappingT], with_computations: bool) \
+            -> Dict[ClassifIDT, SampleAggregForTaxon]:
         """
             :param sample: The Sample for which computations needs to be done.
             :param with_computations: If not set, just do abundance calculations (e.g. to save time
                 or when it's known to be impossible).
             :param morpho2phylo: The Morpho taxa to their nearest Phylo parent. If not provided
                 then _no_ up-the-taxa-tree consolidation will be done, i.e. there _will be_ Morpho taxa in 'ret' keys.
-            :param warnings: Eventual non-blocking problems found (out).
 
             Do the aggregations for the given sample for each taxon and return them.
             They will become emofs if used from DWC:
@@ -660,104 +656,22 @@ class DarwinCoreExport(JobServiceBase):
                     "subsample_coef": "1/ssm.sub_part"}
         concentrations = self.concentrations_for_sample(formulae, sample, morpho2phylo)
         for a_conc in concentrations:
-            ret[a_conc["txo_id"]].concentration = a_conc["conc"]
+            conc = a_conc["conc"]
+            if conc == conc:  # NaN test
+                ret[a_conc["txo_id"]].concentration = conc
+            else:
+                self.warnings.append("NaN found in concentration computation, input data is missing or incorrect")
 
         # Enrich with biovolumes, note that we need previous formulae for scaling
         # ESD @see ProjectVarsDefault.equivalent_spherical_volume
         formulae.update({"individual_volume": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel)**3"})
         biovolumes = self.biovolumes_for_sample(formulae, sample, morpho2phylo)
         for a_biovol in biovolumes:
-            ret[a_biovol["txo_id"]].biovolume = a_biovol["biovol"]
-
-        try:
-            # Fetch calculation data at sample level
-            total_water_volume = SampleBO.get_computed_var(sample, DefaultVars.volume_sampled)
-        except TypeError as e:
-            warnings.append("Could not compute volume sampled from sample %s (%s),"
-                            " no concentration or biovolume will be computed." % (sample.orig_id, str(e)))
-            return ret
-
-        acquis_for_sample = SampleBO.get_acquisitions(self.ro_session, sample)
-        subsampling_coeff_per_acquis: Dict[AcquisitionIDT, float] = {}
-        for an_acquis in acquis_for_sample:
-            try:
-                subsampling_coefficient = AcquisitionBO.get_computed_var(an_acquis, DefaultVars.subsample_coeff)
-                subsampling_coeff_per_acquis[an_acquis.acquisid] = subsampling_coefficient
-            except TypeError as e:
-                warnings.append("Could not compute subsampling coefficient from acquisition %s (%s),"
-                                " no concentration or biovolume will be computed" %
-                                (an_acquis.orig_id, str(e)))
-                logger.info("concentrations: no subsample coeff for '%s' (%s)", an_acquis.orig_id, str(e))
-                continue
-
-        # if total_water_volume > 0:
-        #     # Cumulate for subsamples AKA acquisitions
-        #     for an_acquis in acquis_for_sample:
-        #         # Get counts for acquisition (sub-sample)
-        #         logger.info("computing concentrations for '%s'", an_acquis.orig_id)
-        #         count_per_taxon_for_acquis = count_per_taxon_per_acquis[an_acquis.acquisid]
-        #         subsampling_coefficient = subsampling_coeff_per_acquis[an_acquis.acquisid]
-        #         for txo_id, count_4_acquis in count_per_taxon_for_acquis.items():
-        #             aggreg_for_taxon = ret[txo_id]
-        #             concentration_for_taxon = count_4_acquis / subsampling_coefficient / total_water_volume
-        #             if aggreg_for_taxon.concentration is None:
-        #                 aggreg_for_taxon.concentration = 0
-        #             aggreg_for_taxon.concentration += concentration_for_taxon
-
-        # Enrich with biovolumes. This needs a computation for each object, so it's likely to be slow.
-        # # TODO: There are circular references
-        # from BO.Object import ObjectBO, ObjectBOSet
-        # # Mappings are constant for the sample
-        # # noinspection PyTypeChecker
-        # mapping = ProjectMapping().load_from_project(sample.project)
-        # # Cumulate for subsamples AKA acquisitions
-        # for an_acquis in acquis_for_sample:
-        #     subsampling_coefficient = subsampling_coeff_per_acquis.get(an_acquis.acquisid)
-        #     if subsampling_coefficient is None:
-        #         logger.info("biovolumes: no subsample coeff for '%s'", an_acquis.orig_id)
-        #         continue
-        #     # Get pixel size from associated process, it a constant to individual biovol computations
-        #     try:
-        #         pixel_size, = ProcessBO.get_free_fields(an_acquis.process, ["pixel"],
-        #                                                 [float],
-        #                                                 [None])
-        #     except TypeError as _e:
-        #         logger.info("biovolumes: no pixel size for '%s'", an_acquis.orig_id)
-        #         continue
-        #     constants = {"pixel_size": pixel_size}
-        #     # Get all objects for the acquisition. The filter on classif_id is useless for now.
-        #     with CodeTimer("Objects IDs for '%s': " % an_acquis.orig_id, logger):
-        #         acq_object_ids = AcquisitionBO.get_all_object_ids(session=self.ro_session,
-        #                                                           acquis_id=an_acquis.acquisid,
-        #                                                           classif_ids=list(ret.keys()))
-        #     with CodeTimer("Objects for '%s': " % an_acquis.orig_id, logger):
-        #         objects = ObjectBOSet(self.ro_session, acq_object_ids, mapping.object_mappings)
-        #     nb_biovols = 0
-        #     for an_obj in objects.all:
-        #         # Compute a biovol if possible
-        #         try:
-        #             biovol = ObjectBO.get_computed_var(an_obj, DefaultVars.equivalent_ellipsoidal_volume,
-        #                                                mapping, constants)
-        #             biovol = -1  # Forced to "do not compute"
-        #         except TypeError as _e:
-        #             biovol = -1
-        #         if biovol == -1:
-        #             try:
-        #                 biovol = ObjectBO.get_computed_var(an_obj, DefaultVars.equivalent_spherical_volume,
-        #                                                    mapping, constants)
-        #             except TypeError as _e:
-        #                 continue
-        #         # Aggregate by category/taxon
-        #         aggreg_for_taxon = ret[an_obj.classif_id]
-        #         individual_biovolume = biovol / subsampling_coefficient / total_water_volume
-        #         if aggreg_for_taxon.biovolume is None:
-        #             aggreg_for_taxon.biovolume = 0
-        #         aggreg_for_taxon.biovolume += individual_biovolume
-        #         # Update stats
-        #         nb_biovols += 1
-        #     # A bit of display
-        #     logger.info("%d biovolumes computed for '%s' out of %d objects", nb_biovols, an_acquis.orig_id,
-        #                 len(acq_object_ids))
+            biovol = a_biovol["biovol"]
+            if biovol == biovol:  # NaN test
+                ret[a_biovol["txo_id"]].biovolume = biovol
+            else:
+                self.warnings.append("NaN found in biovolume computation, input data is missing or incorrect")
 
         return ret
 
@@ -820,8 +734,7 @@ class DarwinCoreExport(JobServiceBase):
         """
         aggregs = self._aggregate_for_sample(sample=sample,
                                              morpho2phylo=self.morpho2phylo if self.auto_morpho else None,
-                                             with_computations=self.with_computations,
-                                             warnings=self.warnings)
+                                             with_computations=self.with_computations)
 
         # Group by lsid, in order to have a single occurrence
         by_lsid: Dict[str, Tuple[str, SampleAggregForTaxon, WoRMS]] = {}

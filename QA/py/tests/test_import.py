@@ -44,6 +44,7 @@ V6_FILE = DATA_DIR / "UVP6_example.zip"
 V6_DIR = DATA_DIR / "import_uvp6_zip_in_dir"
 PLAIN_DIR = DATA_DIR / "import_test"
 UPDATE_DIR = DATA_DIR / "import_update"
+BAD_FREE_DIR = DATA_DIR / "import_bad_free_data"
 SPARSE_DIR = DATA_DIR / "import_sparse"
 PLUS_DIR = DATA_DIR / "import_test_plus"
 WEIRD_DIR = DATA_DIR / "import_test_weird"
@@ -105,7 +106,8 @@ def fill_in_if_missing(job):
         # Simulate a missing user and map him to admin
         with JobCRUDService() as sce:
             sce.reply(ADMIN_USER_ID, job_id, {"users": {"admin4test": 1,
-                                                        "elizandro rodriguez": 1},
+                                                        "elizandro rodriguez": 1,
+                                                        "taxo finder": 1},
                                               "taxa": {}})
         return wait_for_stable(job_id)
     else:
@@ -410,6 +412,7 @@ def test_import_empty_tsv(config, database, caplog):
     check_job_errors(job)
     assert len(get_job_errors(job)) == 1
 
+
 def test_import_empty_tsv2(config, database, caplog):
     """ a TSV with nothing at all """
     caplog.set_level(logging.DEBUG)
@@ -421,6 +424,7 @@ def test_import_empty_tsv2(config, database, caplog):
     job = wait_for_stable(rsp.job_id)
     check_job_errors(job)
     assert len(get_job_errors(job)) == 1
+
 
 # @pytest.mark.skip()
 def test_import_issues(config, database, caplog):
@@ -546,6 +550,7 @@ def test_import_sparse(config, database, caplog):
     with AsciiDumper() as sce:
         sce.run(projid=prj_id, out="chk.dmp")
 
+
 def test_import_broken_TSV(config, database, caplog):
     """
         Import a TSV with 0 byte.
@@ -566,6 +571,7 @@ def test_import_broken_TSV(config, database, caplog):
     print("\n".join(caplog.messages))
     with AsciiDumper() as sce:
         sce.run(projid=prj_id, out="chk.dmp")
+
 
 # @pytest.mark.skip()
 def test_import_breaking_unicity(config, database, caplog):

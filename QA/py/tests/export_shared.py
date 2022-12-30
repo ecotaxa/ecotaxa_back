@@ -51,7 +51,7 @@ def one_tsv_check(content_bin, name, only_hdr, ref_dir_path):
     assert len(file_content) == len(ref_content), "For %s, not same number of lines" % name
     num_line = 1
     for act, ref in zip(file_content, ref_content):
-        assert act == ref, "diff in %s/%s line %d" % (ref_dir_path, name, num_line)
+        assert act == ref, "diff A'%s'E'%s' in %s/%s line %d" % (act, ref, ref_dir_path, name, num_line)
         if only_hdr:
             break
         num_line += 1

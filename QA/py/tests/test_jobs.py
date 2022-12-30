@@ -27,9 +27,9 @@ def wait_for_stable(job_id: int):
 def check_job_ok(job):
     if job.state != DBJobStateEnum.Finished:
         if job.state == DBJobStateEnum.Asking:
-            print("? " + job.question)
+            print("? " + str(job.question))
         else:
-            print("NOT OK" + job.messages)
+            print("NOT OK" + str(job.messages))
     assert (job.state, job.progress_pct, job.progress_msg) == (DBJobStateEnum.Finished, 100, "Done")
 
 
