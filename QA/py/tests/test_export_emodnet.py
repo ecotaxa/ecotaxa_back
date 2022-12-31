@@ -128,11 +128,37 @@ This series is part of the long term planktonic monitoring of
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
-    job = wait_for_stable(job_id)
-    api_check_job_ok(fastapi, job_id)
-    # warns = rsp.json()["warnings"]
-    # # assert warns == []
-    # assert rsp.json()["errors"] == []
+    wait_for_stable(job_id)
+    job_status = api_check_job_ok(fastapi, job_id)
+    warns = job_status["result"]["wrns"]
+    ref_warns = [
+        "Could not extract sampling net name and features from sample m106_mn01_n1_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
+        "Could not extract sampling net name and features from sample m106_mn01_n2_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
+        "No occurrence added for sample 'm106_mn01_n2_sml' in project #%d" % prj_id,
+        "Could not extract sampling net name and features from sample m106_mn01_n3_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
+        "No occurrence added for sample 'm106_mn01_n3_sml' in project #%d" % prj_id,
+        "Could not extract sampling net name and features from sample m106_mn04_n4_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
+        "Sample 'm106_mn04_n4_sml' taxo(s) #[1, 78418]: Computed concentration is NaN, input data is missing or incorrect",
+        "Sample 'm106_mn04_n4_sml' taxo(s) #[1, 78418]: Computed biovolume is NaN, input data is missing or incorrect",
+        "Could not extract sampling net name and features from sample m106_mn04_n5_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
+        "Some values could not be converted to float in {'sql_count': 1, 'sam_tot_vol': 'foo', 'ssm_sub_part': '8'}",
+        "Some values could not be converted to float in {'sql_count': 1, 'sam_tot_vol': 'foo', 'ssm_sub_part': '8'}",
+        "Sample 'm106_mn04_n5_sml' taxo(s) #[1, 78418]: Computed concentration is NaN, input data is missing or incorrect",
+        "Some values could not be converted to float in {'obj_area': 1511.0, 'sam_tot_vol': 'foo', 'ssm_pixel': '10.6', 'ssm_sub_part': '8'}",
+        "Some values could not be converted to float in {'obj_area': 1583.0, 'sam_tot_vol': 'foo', 'ssm_pixel': '10.6', 'ssm_sub_part': '8'}",
+        "Sample 'm106_mn04_n5_sml' taxo(s) #[1, 78418]: Computed biovolume is NaN, input data is missing or incorrect",
+        "Could not extract sampling net name and features from sample m106_mn04_n6_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
+        "Some values could not be converted to float in {'sql_count': 1, 'sam_tot_vol': '2000', 'ssm_sub_part': 'hi'}",
+        "Some values could not be converted to float in {'sql_count': 1, 'sam_tot_vol': '2000', 'ssm_sub_part': 'hi'}",
+        "Some values could not be converted to float in {'sql_count': 1, 'sam_tot_vol': '2000', 'ssm_sub_part': 'hi'}",
+        "Sample 'm106_mn04_n6_sml' taxo(s) #[1, 45072, 78418]: Computed concentration is NaN, input data is missing or incorrect",
+        "Some values could not be converted to float in {'obj_area': 1583.0, 'sam_tot_vol': '2000', 'ssm_pixel': '10.6', 'ssm_sub_part': 'hi'}",
+        "Some values could not be converted to float in {'obj_area': 1583.0, 'sam_tot_vol': '2000', 'ssm_pixel': '10.6', 'ssm_sub_part': 'hi'}",
+        "Some values could not be converted to float in {'obj_area': 1583.0, 'sam_tot_vol': '2000', 'ssm_pixel': '10.6', 'ssm_sub_part': 'hi'}",
+        "Sample 'm106_mn04_n6_sml' taxo(s) #[1, 45072, 78418]: Computed biovolume is NaN, input data is missing or incorrect",
+        'Stats: validated:19 produced to zip:7 not produced (M):12 not produced (P):0']
+    assert warns == ref_warns
+    assert rsp.json()["errors"] == []
     # job_id = rsp.json()["job_id"]
 
     # Download the result zip

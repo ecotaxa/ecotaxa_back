@@ -512,7 +512,7 @@ class ProjectExport(JobServiceBase):
 
         msg = "Writing to file %s" % out_file
         self.update_progress(50, msg)
-        nb_lines = aug_qry.write_result_to_csv(self.ro_session, out_file)
+        nb_lines = aug_qry.write_result_to_csv(self.ro_session, out_file, logger.warning)
 
         msg = "Extracted %d rows" % nb_lines
         logger.info(msg)
@@ -558,14 +558,14 @@ class ProjectExport(JobServiceBase):
 
         if req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
             # We need to add missing taxa
-            without_zeroes = aug_qry.get_result(self.ro_session)
+            without_zeroes = aug_qry.get_result(self.ro_session, logger.warning)
             not_presents = self.add_not_presents_in_summary(without_zeroes, "count", object_set)
             without_zeroes.extend(not_presents)
             without_zeroes.sort(key=lambda row: (row["sampleid"], row["taxonid"]))
             row_src: IterableRowsT = without_zeroes
         else:
             # We can write the query output
-            row_src = aug_qry.get_row_source(self.ro_session)
+            row_src = aug_qry.get_row_source(self.ro_session, logger.warning)
 
         msg = "Writing to file %s" % out_file
         self.update_progress(50, msg)
@@ -664,21 +664,21 @@ class ProjectExport(JobServiceBase):
             grouping = ResultGrouping.BY_SAMPLE_AND_TAXO
         elif req.sum_subtotal == SummaryExportGroupingEnum.by_subsample:
             aug_qry.add_select(["sam.orig_id", "acq.orig_id"])
-            grouping =  ResultGrouping.BY_SAMPLE_SUBSAMPLE_AND_TAXO
+            grouping = ResultGrouping.BY_SAMPLE_SUBSAMPLE_AND_TAXO
         aug_qry.add_select(["txo.display_name"])
         aug_qry.set_grouping(grouping)
 
         if req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
             # We need to add missing taxa
             # TODO: check with https://github.com/ecotaxa/ecotaxa/issues/615#issuecomment-1158781701
-            without_zeroes = aug_qry.get_result(self.ro_session)
+            without_zeroes = aug_qry.get_result(self.ro_session, logger.warning)
             not_presents = self.add_not_presents_in_summary(without_zeroes, "concentration", object_set)
             without_zeroes.extend(not_presents)
             without_zeroes.sort(key=lambda row: (row["sampleid"], row["taxonid"]))
             row_src: IterableRowsT = without_zeroes
         else:
             # We can write the query output
-            row_src = aug_qry.get_row_source(self.ro_session)
+            row_src = aug_qry.get_row_source(self.ro_session, logger.warning)
 
         msg = "Writing to file %s" % out_file
         self.update_progress(50, msg)

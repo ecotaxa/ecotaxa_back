@@ -493,7 +493,7 @@ class DarwinCoreExport(JobServiceBase):
                 self.add_eMoFs_for_sample(sample=a_sample, arch=arch, event_id=event_id)
                 nb_added = self.add_occurences(sample=a_sample, arch=arch, event_id=event_id)
                 if nb_added == 0:
-                    self.warnings.append("No occurrence added for sample '%s' in %d" % (a_sample.orig_id, a_prj_id))
+                    self.warnings.append("No occurrence added for sample '%s' in project #%d" % (a_sample.orig_id, a_prj_id))
 
     nine_nine_re = re.compile("999+.0$")
 
@@ -655,23 +655,33 @@ class DarwinCoreExport(JobServiceBase):
         formulae = {"total_water_volume": "sam.tot_vol",
                     "subsample_coef": "1/ssm.sub_part"}
         concentrations = self.concentrations_for_sample(formulae, sample, morpho2phylo)
+        conc_wrn_txos = []
         for a_conc in concentrations:
-            conc = a_conc["conc"]
+            txo_id, conc = a_conc["txo_id"], a_conc["conc"]
             if conc == conc:  # NaN test
-                ret[a_conc["txo_id"]].concentration = conc
+                ret[txo_id].concentration = conc
             else:
-                self.warnings.append("NaN found in concentration computation, input data is missing or incorrect")
+                conc_wrn_txos.append(txo_id)
+        if len(conc_wrn_txos) > 0:
+            wrn = "Sample '{}' taxo(s) #{}: Computed concentration is NaN, input data is missing or incorrect"
+            wrn = wrn.format(sample.orig_id, conc_wrn_txos)
+            self.warnings.append(wrn)
 
         # Enrich with biovolumes, note that we need previous formulae for scaling
         # ESD @see ProjectVarsDefault.equivalent_spherical_volume
         formulae.update({"individual_volume": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel)**3"})
         biovolumes = self.biovolumes_for_sample(formulae, sample, morpho2phylo)
+        biovol_wrn_txos = []
         for a_biovol in biovolumes:
-            biovol = a_biovol["biovol"]
+            txo_id, biovol = a_biovol["txo_id"], a_biovol["biovol"]
             if biovol == biovol:  # NaN test
-                ret[a_biovol["txo_id"]].biovolume = biovol
+                ret[txo_id].biovolume = biovol
             else:
-                self.warnings.append("NaN found in biovolume computation, input data is missing or incorrect")
+                biovol_wrn_txos.append(txo_id)
+        if len(biovol_wrn_txos) > 0:
+            wrn = "Sample '{}' taxo(s) #{}: Computed biovolume is NaN, input data is missing or incorrect"
+            wrn = wrn.format(sample.orig_id, biovol_wrn_txos)
+            self.warnings.append(wrn)
 
         return ret
 
@@ -687,7 +697,7 @@ class DarwinCoreExport(JobServiceBase):
         aug_qry.add_select(["txo.id", aug_qry.COUNT_STAR])
         aug_qry.set_aliases({"txo.id": "txo_id",
                              aug_qry.COUNT_STAR: "count"}).set_grouping(ResultGrouping.BY_TAXO)
-        return aug_qry.get_result(self.ro_session)
+        return aug_qry.get_result(self.ro_session, lambda e: self.warnings.append(e))
 
     def concentrations_for_sample(self, formulae: Dict[str, str], sample: Sample,
                                   morpho2phylo: Optional[TaxoRemappingT]) \
@@ -707,7 +717,7 @@ class DarwinCoreExport(JobServiceBase):
                              sum_formula: "conc"})
         aug_qry.add_select(["txo.id", "acq.acquisid"]).set_grouping(ResultGrouping.BY_SUBSAMPLE_AND_TAXO)
         aug_qry.aggregate_with_computed_sum(sum_formula, Vocabulary.concentrations, Units.number_per_cubic_metre)
-        return aug_qry.get_result(self.ro_session)
+        return aug_qry.get_result(self.ro_session, lambda e: self.warnings.append(e))
 
     def biovolumes_for_sample(self, formulae: Dict[str, str], sample: Sample,
                               morpho2phylo: Optional[TaxoRemappingT]) \
@@ -726,7 +736,7 @@ class DarwinCoreExport(JobServiceBase):
         aug_qry.add_select(["txo.id"]).aggregate_with_computed_sum(sum_formula, Vocabulary.biovolume,
                                                                    Units.cubic_millimetres_per_cubic_metre)
         aug_qry.set_grouping(ResultGrouping.BY_TAXO)
-        return aug_qry.get_result(self.ro_session)
+        return aug_qry.get_result(self.ro_session, lambda e: self.warnings.append(e))
 
     def add_occurences(self, sample: Sample, arch: DwC_Archive, event_id: str) -> int:
         """

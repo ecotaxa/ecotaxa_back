@@ -16,7 +16,7 @@ def wait_for_stable(job_id: int):
     """ Wait for the job to be in a stable state, i.e. not running """
     with JobCRUDService() as sce:
         assert sce.query(ADMIN_USER_ID, job_id).state == DBJobStateEnum.Pending
-        # TODO ofr testing prediction: JobScheduler.FILTER.clear()
+        # TODO for testing prediction: JobScheduler.FILTER.clear()
         # Manually create a scheduler, so there is no dependency on the way it's used in main.py (launched at interval)
         with JobScheduler() as jsce:
             jsce.run_one()
@@ -63,6 +63,7 @@ def api_check_job_ok(fastapi, job_id):
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     job_dict = rsp.json()
     assert (job_dict["state"], job_dict["progress_pct"], job_dict["progress_msg"]) == ('F', 100, 'Done')
+    return job_dict
 
 
 def api_check_job_errors(fastapi, job_id) -> List[str]:

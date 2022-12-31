@@ -66,7 +66,7 @@ def dump_openapi(app: FastAPI, main_path: str):  # pragma: no cover
     # Copy here for Git commit but also into another dev tree
     parent_dir = dirname(main_path)
     dests = [Path(parent_dir, "..", "openapi.json"),
-             Path(parent_dir, "..", "..", "ecotaxa_master", "to_back", "openapi.json")]
+             Path(parent_dir, "..", "..", "ecotaxa_front", "to_back", "openapi.json")]
     for dest in dests:
         with dest.open("w") as fd:
             fd.write(json_def)

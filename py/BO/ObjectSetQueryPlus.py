@@ -11,7 +11,7 @@
 import csv
 import enum
 from pathlib import Path
-from typing import List, Optional, Tuple, Dict, Generator, Any, Iterable
+from typing import List, Optional, Tuple, Dict, Generator, Any, Iterable, Callable
 
 from BO.Classification import ClassifIDT
 from BO.ComputedVar import ComputedVar
@@ -266,7 +266,7 @@ class ObjectSetQueryPlus(object):
         select_clause = cte_txt + select_clause
         return select_clause
 
-    def get_row_source(self, ro_session: Session) -> RowSourceT:
+    def get_row_source(self, ro_session: Session, wrn_fct: Callable[[str], None]) -> RowSourceT:
         """
             Build a generator to loop over query results, eventually enriched.
         """
@@ -306,9 +306,8 @@ class ObjectSetQueryPlus(object):
                 val, nan_because_bad = eval_bnd(vars_row)
                 if val != val:  # NaN test
                     if nan_because_bad:
-                        # TODO: It might be tricky to find problems using the values below
-                        err_msg = "All values could not be converted to float in %s" % str(dict(a_row))
-                        logger.warning(err_msg)
+                        wrn_msg = "Some values could not be converted to float in %s" % str(dict(vars_row))
+                        wrn_fct(wrn_msg)
                 keys = tuple(a_row[keys_idx:])
                 if last_row is None:
                     # Ye olde first row problem...
@@ -328,18 +327,18 @@ class ObjectSetQueryPlus(object):
                 out_row[dest_col] = vals_sum
                 yield out_row
 
-    def get_result(self, ro_session: Session) -> List[Dict[str, Any]]:
+    def get_result(self, ro_session: Session, wrn_fct: Callable[[str], None]) -> List[Dict[str, Any]]:
         """
             Read the row source, in full, and return it.
         """
-        src = self.get_row_source(ro_session)
+        src = self.get_row_source(ro_session, wrn_fct)
         return [a_row for a_row in src]
 
-    def write_result_to_csv(self, ro_session: Session, file_path: Path) -> int:
+    def write_result_to_csv(self, ro_session: Session, file_path: Path, wrn_fct: Callable[[str], None]) -> int:
         """
             Write all from row source into CSV.
         """
-        nb_lines = self.write_row_source_to_csv(self.get_row_source(ro_session), file_path)
+        nb_lines = self.write_row_source_to_csv(self.get_row_source(ro_session, wrn_fct), file_path)
         return nb_lines
 
     def _selects_4_output(self) -> SelectClause:
