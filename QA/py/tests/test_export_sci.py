@@ -14,7 +14,7 @@ from tests.test_objectset_query import _prj_query
 
 formulae = {"SubSamplingCoefficient": "1/ssm.sub_part",
             "VolWBodySamp": "sam.tot_vol",  # Volumes are in m3 already for this data
-            "IndividualBioVol": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3"}
+            "IndividualBioVol": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel)**3"}
 
 
 def test_export_sci(config, database, fastapi, caplog):
@@ -137,4 +137,27 @@ def test_export_conc_biovol(config, database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
     download_and_check(fastapi, job_id, "concentrations_by_sample", only_hdr=True)
+    # log = get_log_file(fastapi, job_id)
+
+    # Biovolume export by sample
+    filters = {}
+    req = _req_tmpl.copy()
+    req.update({"project_id": prj_id,
+                "exp_type": "BIV",
+                "sum_subtotal": "S",
+                "formulae": formulae})
+    req_and_filters = {"filters": filters,
+                       "request": req}
+    rsp = fastapi.post(OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters)
+    assert rsp.status_code == status.HTTP_200_OK
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_check(fastapi, job_id, "biovolumes_by_sample", only_hdr=True)
+    # log = get_log_file(fastapi, job_id)
+
+    # Biovolume export by subsample AKA Acquisition
+    req.update({"sum_subtotal": "A"})
+    rsp = fastapi.post(OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters)
+    assert rsp.status_code == status.HTTP_200_OK
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_check(fastapi, job_id, "biovolumes_by_subsample", only_hdr=True)
     # log = get_log_file(fastapi, job_id)

@@ -474,6 +474,19 @@ class ProjectExport(JobServiceBase):
         out_file = self.temp_for_jobs.base_dir_for(self.job_id) / self.out_file_name
         return out_file
 
+    def _grouping_from_req(self) -> ResultGrouping:
+        req_sum = self.req.sum_subtotal
+        if req_sum == SummaryExportGroupingEnum.just_by_taxon:
+            return ResultGrouping.BY_TAXO
+        elif req_sum == SummaryExportGroupingEnum.by_sample:
+            return ResultGrouping.BY_SAMPLE_AND_TAXO
+        elif req_sum == SummaryExportGroupingEnum.by_subsample:
+            return ResultGrouping.BY_SAMPLE_SUBSAMPLE_AND_TAXO
+        elif req_sum == SummaryExportGroupingEnum.by_project:
+            assert False, "No collections yet to get multiple projects"
+        else:
+            assert False, "Incorrect required grouping : %s" % req_sum
+
     def create_summary(self, src_project: Project) -> int:
         req = self.req
         proj_id = src_project.projid
@@ -497,18 +510,14 @@ class ProjectExport(JobServiceBase):
                              aug_qry.COUNT_STAR: "nbr"})
 
         if req.sum_subtotal == SummaryExportGroupingEnum.just_by_taxon:
-            grouping = ResultGrouping.BY_TAXO
+            pass
         elif req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
             aug_qry.add_select(["sam.orig_id", "sam.latitude", "sam.longitude", "MAX(obh.objdate)"])
-            grouping = ResultGrouping.BY_SAMPLE_AND_TAXO
         elif req.sum_subtotal == SummaryExportGroupingEnum.by_subsample:
             aug_qry.add_select(["sam.orig_id", "acq.orig_id"])
-            grouping = ResultGrouping.BY_SAMPLE_SUBSAMPLE_AND_TAXO
-        elif req.sum_subtotal == SummaryExportGroupingEnum.by_project:
-            assert False, "No collections yet to get multiple projects"
         # We want the count, that's the goal of all this
         aug_qry.add_select(["txo.display_name", aug_qry.COUNT_STAR])
-        aug_qry.set_grouping(grouping)
+        aug_qry.set_grouping(self._grouping_from_req())
 
         msg = "Writing to file %s" % out_file
         self.update_progress(50, msg)
@@ -545,16 +554,14 @@ class ProjectExport(JobServiceBase):
                              aug_qry.COUNT_STAR: "count"})
 
         if req.sum_subtotal == SummaryExportGroupingEnum.just_by_taxon:
-            grouping = ResultGrouping.BY_TAXO
+            pass
         elif req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
             aug_qry.add_select(["sam.orig_id"])
-            grouping = ResultGrouping.BY_SAMPLE_AND_TAXO
         elif req.sum_subtotal == SummaryExportGroupingEnum.by_subsample:
             aug_qry.add_select(["sam.orig_id", "acq.orig_id"])
-            grouping = ResultGrouping.BY_SAMPLE_SUBSAMPLE_AND_TAXO
-        # We also want taxon and counts, in the end of the record
+        # We also want taxon name and counts, in the end of the line
         aug_qry.add_select(["txo.display_name", aug_qry.COUNT_STAR])
-        aug_qry.set_grouping(grouping)
+        aug_qry.set_grouping(self._grouping_from_req())
 
         if req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
             # We need to add missing taxa
@@ -658,21 +665,77 @@ class ProjectExport(JobServiceBase):
                              formula: "concentration"})
 
         if req.sum_subtotal == SummaryExportGroupingEnum.just_by_taxon:
-            grouping = ResultGrouping.BY_TAXO
+            pass
         elif req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
             aug_qry.add_select(["sam.orig_id"])
-            grouping = ResultGrouping.BY_SAMPLE_AND_TAXO
         elif req.sum_subtotal == SummaryExportGroupingEnum.by_subsample:
             aug_qry.add_select(["sam.orig_id", "acq.orig_id"])
-            grouping = ResultGrouping.BY_SAMPLE_SUBSAMPLE_AND_TAXO
         aug_qry.add_select(["txo.display_name"])
-        aug_qry.set_grouping(grouping)
+        aug_qry.set_grouping(self._grouping_from_req())
 
         if req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
             # We need to add missing taxa
             # TODO: check with https://github.com/ecotaxa/ecotaxa/issues/615#issuecomment-1158781701
             without_zeroes = aug_qry.get_result(self.ro_session, logger.warning)
             not_presents = self.add_not_presents_in_summary(without_zeroes, "concentration", object_set)
+            without_zeroes.extend(not_presents)
+            without_zeroes.sort(key=lambda row: (row["sampleid"], row["taxonid"]))
+            row_src: IterableRowsT = without_zeroes
+        else:
+            # We can write the query output
+            row_src = aug_qry.get_row_source(self.ro_session, logger.warning)
+
+        msg = "Writing to file %s" % out_file
+        self.update_progress(50, msg)
+        nb_lines = aug_qry.write_row_source_to_csv(row_src, out_file)
+
+        msg = "Extracted %d rows" % nb_lines
+        logger.info(msg)
+        self.update_progress(90, msg)
+
+        return nb_lines
+
+    def create_sci_biovolumes_summary(self, src_project: Project) -> int:
+        """
+            @see https://github.com/ecotaxa/ecotaxa/issues/617
+        """
+        req = self.req
+        proj_id = src_project.projid
+        user_id = self._get_owner_id()
+        self.update_progress(1, "Start Biovolumes Summary export")
+
+        out_file = self._get_summary_file(src_project)
+
+        # Prepare a where clause and parameters from filter
+        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, user_id, self.filters)
+
+        # The specialized SQL builder
+        aug_qry = ObjectSetQueryPlus(object_set)
+        aug_qry.remap_categories(req.pre_mapping)
+        aug_qry.set_formulae(req.formulae)
+        # We want the sum of formula calculation, for each object
+        formula = "IndividualBioVol/SubSamplingCoefficient/VolWBodySamp"
+        aug_qry.aggregate_with_computed_sum(formula, Vocabulary.biovolume, Units.cubic_millimetres_per_cubic_metre)
+        # We can set aliases even for expressions we don't select, so include all possibly needed ones
+        aug_qry.set_aliases({"txo.display_name": "taxonid",
+                             "sam.orig_id": "sampleid",
+                             "acq.orig_id": "acquisid",
+                             formula: "biovolume"})
+
+        if req.sum_subtotal == SummaryExportGroupingEnum.just_by_taxon:
+            pass
+        elif req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
+            aug_qry.add_select(["sam.orig_id"])
+        elif req.sum_subtotal == SummaryExportGroupingEnum.by_subsample:
+            aug_qry.add_select(["sam.orig_id", "acq.orig_id"])
+        aug_qry.add_select(["txo.display_name"])
+        aug_qry.set_grouping(self._grouping_from_req())
+
+        if req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
+            # We need to add missing taxa
+            # TODO: check with https://github.com/ecotaxa/ecotaxa/issues/615#issuecomment-1158781701
+            without_zeroes = aug_qry.get_result(self.ro_session, logger.warning)
+            not_presents = self.add_not_presents_in_summary(without_zeroes, "biovolume", object_set)
             without_zeroes.extend(not_presents)
             without_zeroes.sort(key=lambda row: (row["sampleid"], row["taxonid"]))
             row_src: IterableRowsT = without_zeroes
@@ -708,7 +771,7 @@ class ProjectExport(JobServiceBase):
         elif exp_type == ExportTypeEnum.concentrations:
             return self.create_sci_concentrations_summary(src_project)
         elif exp_type == ExportTypeEnum.biovols:
-            raise Exception("Not implemented biovolume summary report")
+            return self.create_sci_biovolumes_summary(src_project)
 
         # msg = "Produced %d rows" % nb_lines
         # logger.info(msg)
