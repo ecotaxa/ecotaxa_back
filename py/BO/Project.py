@@ -6,7 +6,7 @@ import typing
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Dict, Any, Iterable, Optional, Union, OrderedDict as OrderedDictT, Set
+from typing import List, Dict, Any, Iterable, Optional, Union, OrderedDict as OrderedDictT, Set, Tuple
 
 from BO.Classification import ClassifIDListT
 from BO.Instrument import DescribedInstrumentSet
@@ -284,13 +284,27 @@ class ProjectBO(object):
 
     @staticmethod
     def all_samples_orig_id(session: Session,
-                            prj_ids: ProjectIDListT) -> Set[str]:
-        """ Return orig_id (i.e. users' sample_id for all projects). If several projects, it is assumed
-         that project ids come from a Collection, so no naming conflict. """
+                            prj_ids: ProjectIDListT) -> Set[Tuple]:
+        """ Return orig_id (i.e. users' sample_id) for all projects.
+         If several projects, it is assumed that project ids come from a Collection, so no naming conflict. """
+        # TODO: Test that there is indeed no collision, count(project_id) should be 1
         qry = session.query(Sample.orig_id).distinct(Sample.orig_id)
         qry = qry.join(Project)
         qry = qry.filter(Project.projid == any_(prj_ids))
-        return set([an_id for an_id, in qry])
+        return set([(an_id,) for an_id, in qry])
+
+    @staticmethod
+    def all_subsamples_orig_id(session: Session,
+                               prj_ids: ProjectIDListT) -> Set[Tuple]:
+        """ Return Sample orig_id (i.e. users' sample_id) and Acquisition orig_id (i.e. users' acq_id) pairs
+         for all projects. If several projects, it is assumed that project ids come from a Collection,
+         so no naming conflict. """
+        # TODO: Test that there is indeed no collision, count(project_id) should be 1
+        qry = session.query(Sample.orig_id, Acquisition.orig_id).distinct()
+        qry = qry.join(Project)
+        qry = qry.filter(Sample.sampleid == Acquisition.acq_sample_id)
+        qry = qry.filter(Project.projid == any_(prj_ids))
+        return set([(sam_id, acq_id) for sam_id, acq_id in qry])
 
     @staticmethod
     def read_user_stats(session: Session, prj_ids: ProjectIDListT) -> List[ProjectUserStats]:

@@ -43,8 +43,9 @@ class ComputedVar(ProjectVar):
             elif a_var.startswith("math."):
                 continue
             elif "." not in a_var:
-                raise Exception("Expression '%s' is invalid (no dot), found in expression '%s'" %
-                                (a_var, formula))
+                raise Exception(
+                    "Expression '%s' is invalid (no dot) or unresolved from variables, found in expression '%s'" %
+                    (a_var, formula))
             else:
                 prfx, free_col = a_var.split(".")
                 if prfx not in valid_prefixes:

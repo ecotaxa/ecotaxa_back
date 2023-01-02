@@ -13,6 +13,7 @@ from typing import Optional, Tuple, TextIO, cast, Dict, List, Set, Any
 
 from API_models.exports import ExportRsp, ExportReq, ExportTypeEnum, SummaryExportGroupingEnum
 from API_models.filters import ProjectFiltersDict
+from BO.Classification import ClassifIDListT
 from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet
 from BO.ObjectSetQueryPlus import ResultGrouping, IterableRowsT, ObjectSetQueryPlus
@@ -21,7 +22,7 @@ from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
 from BO.Vocabulary import Vocabulary, Units
 from DB.Object import VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL
-from DB.Project import Project
+from DB.Project import Project, ProjectIDListT
 from DB.helpers.Direct import text
 from DB.helpers.SQL import OrderClause
 from FS.CommonDir import ExportFolder
@@ -553,26 +554,13 @@ class ProjectExport(JobServiceBase):
                              "acq.orig_id": "acquisid",
                              aug_qry.COUNT_STAR: "count"})
 
-        if req.sum_subtotal == SummaryExportGroupingEnum.just_by_taxon:
-            pass
-        elif req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
-            aug_qry.add_select(["sam.orig_id"])
-        elif req.sum_subtotal == SummaryExportGroupingEnum.by_subsample:
-            aug_qry.add_select(["sam.orig_id", "acq.orig_id"])
+        id_cols = self._id_columns_from_grouping(req)
+        aug_qry.add_select(id_cols)
         # We also want taxon name and counts, in the end of the line
         aug_qry.add_select(["txo.display_name", aug_qry.COUNT_STAR])
         aug_qry.set_grouping(self._grouping_from_req())
 
-        if req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
-            # We need to add missing taxa
-            without_zeroes = aug_qry.get_result(self.ro_session, logger.warning)
-            not_presents = self.add_not_presents_in_summary(without_zeroes, "count", object_set)
-            without_zeroes.extend(not_presents)
-            without_zeroes.sort(key=lambda row: (row["sampleid"], row["taxonid"]))
-            row_src: IterableRowsT = without_zeroes
-        else:
-            # We can write the query output
-            row_src = aug_qry.get_row_source(self.ro_session, logger.warning)
+        row_src = self.add_zeroes_in_sci_report(aug_qry, id_cols, "count")
 
         msg = "Writing to file %s" % out_file
         self.update_progress(50, msg)
@@ -584,18 +572,71 @@ class ProjectExport(JobServiceBase):
 
         return nb_lines
 
-    def add_not_presents_in_summary(self, without_zeroes: List[Dict[str, Any]], zero_col: str,
+    def add_zeroes_in_sci_report(self, aug_qry: ObjectSetQueryPlus, id_cols: List[str], zero_col: str):
+        """
+            Return relevant zero lines, for given non-zero input ones.
+            param: id_cols: The identifying columns in the query.
+            param: zero_col: The column to fill with 0 in the output.
+        """
+        if self.req.sum_subtotal in (SummaryExportGroupingEnum.by_sample, SummaryExportGroupingEnum.by_subsample):
+            # Produce the zero-less report
+            without_zeroes = aug_qry.get_result(self.ro_session, logger.warning)
+            out_id_cols = [aug_qry.defs_to_alias[a_col] for a_col in id_cols]
+            not_presents = self.add_not_presents_in_summary(without_zeroes, out_id_cols, zero_col, aug_qry.obj_set)
+            without_zeroes.extend(not_presents)
+            without_zeroes.sort(key=lambda a_row: tuple([a_row[id_col] for id_col in out_id_cols + ["taxonid"]]))
+            row_src: IterableRowsT = without_zeroes
+        else:
+            # We can write the query output
+            row_src = aug_qry.get_row_source(self.ro_session, logger.warning)
+        return row_src
+
+    def add_not_presents_in_summary(self, without_zeroes: List[Dict[str, Any]],
+                                    id_cols: List[str], zero_col: str,
                                     object_set: DescribedObjectSet):
         """
-            Add lines with 0 abundance/concentration/biovolume for relevant (sample, category) pairs.
+            Produce lines with 0 abundance/concentration/biovolume for relevant (sample, category) pairs
+            or (sample, acquisition, category) triplets.
             Specs: https://github.com/ecotaxa/ecotaxa/issues/615#issuecomment-1158781701
         """
         prj_ids = [object_set.prj_id]
-        # ALL categories (categories with at least one object classified in the project)
+        remapped_cats = self.get_remapped_categories(prj_ids)
+        # Get all sampling_units (from the samples or subsamples AKA acquisition table)
+        if self.req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
+            all_sampling_units = ProjectBO.all_samples_orig_id(self.ro_session, prj_ids)
+        elif self.req.sum_subtotal == SummaryExportGroupingEnum.by_subsample:
+            all_sampling_units = ProjectBO.all_subsamples_orig_id(self.ro_session, prj_ids)
+        else:
+            raise Exception("Unexpected req.sum_subtotal")
+        # Get possible taxa names
+        taxa: Set[str] = set(TaxonomyBO.get_display_names(self.ro_session, remapped_cats))
+        # Prepare the cross fill
+        presents: Set[Tuple[Tuple, str]] = set()
+        # Build (sample, taxon) pairs from zero-less report
+        for a_row in without_zeroes:
+            sampling_unit_id, taxonid = tuple([a_row[id_col] for id_col in id_cols]), a_row["taxonid"]
+            presents.add((sampling_unit_id, taxonid))
+        # Cross-fill
+        not_presents: List[Dict[str, Any]] = []
+        for sampling_unit_id in all_sampling_units:
+            for taxonid in taxa:
+                if (sampling_unit_id, taxonid) not in presents:
+                    a_not_present = {id_col: id_col_val for id_col, id_col_val in zip(id_cols, sampling_unit_id)}
+                    a_not_present.update({"taxonid": taxonid,
+                                          zero_col: 0})
+                    not_presents.append(a_not_present)
+        return not_presents
+
+    def get_remapped_categories(self, prj_ids: ProjectIDListT) -> ClassifIDListT:
+        """
+            Return all categories present, at least once, in given list of projects.
+            Present categories are remapped according to the request.
+        """
+        # Determine ALL categories (categories with at least one object classified in the project)
         all_cat_ids = ProjectBO.validated_categories_ids(self.ro_session, prj_ids)
         remaps = self.req.pre_mapping
         # Apply the remapping. SQL version is in ObjectSetQueryPlus.py (def _amend_query_for_mapping)
-        remapped_cats = []
+        ret = []
         for a_cat in all_cat_ids:
             if a_cat in remaps:
                 remapped_cat = remaps[a_cat]
@@ -604,38 +645,11 @@ class ProjectExport(JobServiceBase):
                     continue
                 else:
                     # Out = mapped
-                    remapped_cats.append(remapped_cat)
+                    ret.append(remapped_cat)
             else:
                 # Out = original
-                remapped_cats.append(a_cat)
-        # ALL sampling_units (from the samples or subsamples/acquisition table)
-        all_sampling_units = ProjectBO.all_samples_orig_id(self.ro_session, prj_ids)
-        # Prepare the cross fill
-        presents: Set[Tuple[str, str]] = set()
-        samples: Set[str] = set(all_sampling_units)
-        taxa: Set[str] = set(TaxonomyBO.get_display_names(self.ro_session, remapped_cats))
-        # Build (sample, taxon) pairs
-        for a_row in without_zeroes:
-            sampleid, taxonid = a_row["sampleid"], a_row["taxonid"]
-            presents.add((sampleid, taxonid))
-            samples.add(sampleid)
-            taxa.add(taxonid)
-        # We want as well all the samples implied by the filters
-        # # TODO: Put the query somewhere else
-        # from_, where_clause, params = object_set.get_sql(user_id)
-        # sql = "SELECT DISTINCT sam.orig_id FROM " + from_.get_sql() + " " + where_clause.get_sql()
-        # res: Result = self.ro_session.execute(text(sql), params)
-        # for sampleid, in res:
-        #     samples.add(sampleid)
-        # Cross-fill
-        not_presents: List[Dict[str, Any]] = []
-        for sampleid in samples:
-            for taxonid in taxa:
-                if (sampleid, taxonid) not in presents:
-                    not_presents.append({"sampleid": sampleid,
-                                         "taxonid": taxonid,
-                                         zero_col: 0})
-        return not_presents
+                ret.append(a_cat)
+        return ret
 
     def create_sci_concentrations_summary(self, src_project: Project) -> int:
         """
@@ -656,7 +670,7 @@ class ProjectExport(JobServiceBase):
         aug_qry.remap_categories(req.pre_mapping)
         aug_qry.set_formulae(req.formulae)
         # We want the sum of formula calculation
-        formula = "1/SubSamplingCoefficient/VolWBodySamp"
+        formula = "1/subsample_coef/total_water_volume"
         aug_qry.aggregate_with_computed_sum(formula, Vocabulary.concentrations, Units.number_per_cubic_metre)
         # We can set aliases even for expressions we don't select, so include all possibly needed ones
         aug_qry.set_aliases({"txo.display_name": "taxonid",
@@ -664,26 +678,12 @@ class ProjectExport(JobServiceBase):
                              "acq.orig_id": "acquisid",
                              formula: "concentration"})
 
-        if req.sum_subtotal == SummaryExportGroupingEnum.just_by_taxon:
-            pass
-        elif req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
-            aug_qry.add_select(["sam.orig_id"])
-        elif req.sum_subtotal == SummaryExportGroupingEnum.by_subsample:
-            aug_qry.add_select(["sam.orig_id", "acq.orig_id"])
+        id_cols = self._id_columns_from_grouping(req)
+        aug_qry.add_select(id_cols)
         aug_qry.add_select(["txo.display_name"])
         aug_qry.set_grouping(self._grouping_from_req())
 
-        if req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
-            # We need to add missing taxa
-            # TODO: check with https://github.com/ecotaxa/ecotaxa/issues/615#issuecomment-1158781701
-            without_zeroes = aug_qry.get_result(self.ro_session, logger.warning)
-            not_presents = self.add_not_presents_in_summary(without_zeroes, "concentration", object_set)
-            without_zeroes.extend(not_presents)
-            without_zeroes.sort(key=lambda row: (row["sampleid"], row["taxonid"]))
-            row_src: IterableRowsT = without_zeroes
-        else:
-            # We can write the query output
-            row_src = aug_qry.get_row_source(self.ro_session, logger.warning)
+        row_src = self.add_zeroes_in_sci_report(aug_qry, id_cols, "concentration")
 
         msg = "Writing to file %s" % out_file
         self.update_progress(50, msg)
@@ -694,6 +694,17 @@ class ProjectExport(JobServiceBase):
         self.update_progress(90, msg)
 
         return nb_lines
+
+    @staticmethod
+    def _id_columns_from_grouping(req: ExportReq):
+        id_cols = []
+        if req.sum_subtotal == SummaryExportGroupingEnum.just_by_taxon:
+            pass
+        elif req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
+            id_cols = ["sam.orig_id"]
+        elif req.sum_subtotal == SummaryExportGroupingEnum.by_subsample:
+            id_cols = ["sam.orig_id", "acq.orig_id"]
+        return id_cols
 
     def create_sci_biovolumes_summary(self, src_project: Project) -> int:
         """
@@ -714,7 +725,7 @@ class ProjectExport(JobServiceBase):
         aug_qry.remap_categories(req.pre_mapping)
         aug_qry.set_formulae(req.formulae)
         # We want the sum of formula calculation, for each object
-        formula = "IndividualBioVol/SubSamplingCoefficient/VolWBodySamp"
+        formula = "individual_volume/subsample_coef/total_water_volume"
         aug_qry.aggregate_with_computed_sum(formula, Vocabulary.biovolume, Units.cubic_millimetres_per_cubic_metre)
         # We can set aliases even for expressions we don't select, so include all possibly needed ones
         aug_qry.set_aliases({"txo.display_name": "taxonid",
@@ -722,26 +733,12 @@ class ProjectExport(JobServiceBase):
                              "acq.orig_id": "acquisid",
                              formula: "biovolume"})
 
-        if req.sum_subtotal == SummaryExportGroupingEnum.just_by_taxon:
-            pass
-        elif req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
-            aug_qry.add_select(["sam.orig_id"])
-        elif req.sum_subtotal == SummaryExportGroupingEnum.by_subsample:
-            aug_qry.add_select(["sam.orig_id", "acq.orig_id"])
+        id_cols = self._id_columns_from_grouping(req)
+        aug_qry.add_select(id_cols)
         aug_qry.add_select(["txo.display_name"])
         aug_qry.set_grouping(self._grouping_from_req())
 
-        if req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
-            # We need to add missing taxa
-            # TODO: check with https://github.com/ecotaxa/ecotaxa/issues/615#issuecomment-1158781701
-            without_zeroes = aug_qry.get_result(self.ro_session, logger.warning)
-            not_presents = self.add_not_presents_in_summary(without_zeroes, "biovolume", object_set)
-            without_zeroes.extend(not_presents)
-            without_zeroes.sort(key=lambda row: (row["sampleid"], row["taxonid"]))
-            row_src: IterableRowsT = without_zeroes
-        else:
-            # We can write the query output
-            row_src = aug_qry.get_row_source(self.ro_session, logger.warning)
+        row_src = self.add_zeroes_in_sci_report(aug_qry, id_cols, "biovolume")
 
         msg = "Writing to file %s" % out_file
         self.update_progress(50, msg)

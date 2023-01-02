@@ -48,7 +48,7 @@ def one_tsv_check(content_bin, name, only_hdr, ref_dir_path):
     file_content = TextIOWrapper(BytesIO(content_bin), "utf-8-sig").readlines()
     print("".join(file_content))
     ref_content = open(ref_dir_path / name).readlines()
-    assert len(file_content) == len(ref_content), "For %s, not same number of lines" % name
+    assert len(file_content) == len(ref_content), "For %s, not same number of lines" % ref_dir_path
     num_line = 1
     for act, ref in zip(file_content, ref_content):
         assert act == ref, "diff A'%s'E'%s' in %s/%s line %d" % (act, ref, ref_dir_path, name, num_line)

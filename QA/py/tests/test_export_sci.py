@@ -12,9 +12,9 @@ from tests.test_import import DATA_DIR, do_import
 from tests.test_jobs import get_job_and_wait_until_ok
 from tests.test_objectset_query import _prj_query
 
-formulae = {"SubSamplingCoefficient": "1/ssm.sub_part",
-            "VolWBodySamp": "sam.tot_vol",  # Volumes are in m3 already for this data
-            "IndividualBioVol": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel)**3"}
+formulae = {"subsample_coef": "1/ssm.sub_part",
+            "total_water_volume": "sam.tot_vol",  # Volumes are in m3 already for this data
+            "individual_volume": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel)**3"}
 
 
 def test_export_sci(config, database, fastapi, caplog):

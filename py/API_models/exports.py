@@ -42,11 +42,11 @@ class ExportTypeEnum(str, Enum):
 
 
 class SummaryExportGroupingEnum(str, Enum):
-    """ It's implied that we also group by category AKA classification AKA taxon """
-    just_by_taxon = ''  # Just group by the implied taxa
-    by_project = 'P'  # Reserve for collections
+    """ It's implied that we minimally group/aggregate by category AKA classification AKA taxon """
+    just_by_taxon = ''  # No other aggregation level
     by_sample = 'S'
     by_subsample = 'A'  # TODO: Temporary see below
+    by_project = 'P'  # Reserve for collections
 
 
 class ExportReq(BaseModel):
@@ -88,14 +88,16 @@ class ExportReq(BaseModel):
     pre_mapping: Dict[int, Optional[int]] = Field(title="Categories mapping",
                                                   description="For 'ABO', 'CNC' and 'BIV' types types, mapping "
                                                               "from present taxon (key) to output replacement one (value)."
-                                                              " Use a null replacement to discard the present taxon.",
+                                                              " Use a null replacement to _discard_ the present taxon.",
                                                   example={456: 956, 2456: 213}, default={})
     formulae: Dict[str, str] = Field(title="Computation formulas",
                                      description="Transitory: For 'CNC' and 'BIV' type, how to get values from DB "
-                                                 "free columns. Python syntax, prefixes are 'sam', 'ssm' and 'obj'.",
-                                     example={"SubSamplingCoefficient": "1/ssm.sub_part",
-                                              "VolWBodySamp": "sam.tot_vol/1000",
-                                              "IndividualBioVol": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3"},
+                                                 "free columns. Python syntax, prefixes are 'sam', 'ssm' and 'obj'."
+                                                 "Variables used in computations are 'total_water_volume', 'subsample_coef' "
+                                                 "and 'individual_volume'",
+                                     example={"subsample_coef": "1/ssm.sub_part",
+                                              "total_water_volume": "sam.tot_vol/1000",
+                                              "individual_volume": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3"},
                                      default={}
                                      )
     out_to_ftp: bool = Field(title="Out to ftp",
