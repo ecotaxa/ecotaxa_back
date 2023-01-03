@@ -9,7 +9,7 @@ import os
 import re
 import zipfile
 from pathlib import Path
-from typing import Optional, Tuple, TextIO, cast, Dict, List, Set, Any, Iterable
+from typing import Optional, Tuple, TextIO, cast, Dict, List, Set, Any
 
 from API_models.exports import ExportRsp, ExportReq, ExportTypeEnum, SummaryExportGroupingEnum
 from API_models.filters import ProjectFiltersDict
@@ -300,7 +300,7 @@ class ProjectExport(JobServiceBase):
         zfile = zipfile.ZipFile(produced_path, 'w', allowZip64=True, compression=zipfile.ZIP_DEFLATED)
 
         splitcsv = (req.split_by != "")
-        csv_filename = 'data.tsv'  # Just a temp name as there is a rename while filling up the Zip
+        csv_filename = 'data.tsv'  # Just a temp name as there is a renaming while filling up the Zip
         if splitcsv:
             # Produce into the same temp file all the time, at zipping time the name in archive will vary
             prev_value = "NotAssigned"  # To trigger a sequence change immediately
@@ -518,6 +518,7 @@ class ProjectExport(JobServiceBase):
             aug_qry.add_selects(["sam.orig_id", "acq.orig_id"])
         # We want the count, that's the goal of all this
         aug_qry.add_selects(["txo.display_name", aug_qry.COUNT_STAR])
+        aug_qry.set_grouping(self._grouping_from_req())
 
         msg = "Writing to file %s" % out_file
         self.update_progress(50, msg)
@@ -529,8 +530,7 @@ class ProjectExport(JobServiceBase):
 
         return nb_lines
 
-    def create_sci_abundances_summary(self, aug_qry: ObjectSetQueryPlus) -> \
-            str:
+    def create_sci_abundances_summary(self, aug_qry: ObjectSetQueryPlus) -> str:
         """
             @see https://github.com/ecotaxa/ecotaxa/issues/615
         """
@@ -542,8 +542,7 @@ class ProjectExport(JobServiceBase):
 
         return "count"
 
-    def create_sci_concentrations_summary(self, aug_qry: ObjectSetQueryPlus) -> \
-            str:
+    def create_sci_concentrations_summary(self, aug_qry: ObjectSetQueryPlus) -> str:
         """
             @see https://github.com/ecotaxa/ecotaxa/issues/616
         """
@@ -557,8 +556,7 @@ class ProjectExport(JobServiceBase):
 
         return "concentration"
 
-    def create_sci_biovolumes_summary(self, aug_qry: ObjectSetQueryPlus) -> \
-            str:
+    def create_sci_biovolumes_summary(self, aug_qry: ObjectSetQueryPlus) -> str:
         """
             @see https://github.com/ecotaxa/ecotaxa/issues/617
         """
