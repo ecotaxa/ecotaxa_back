@@ -117,7 +117,7 @@ class ObjectSetQueryPlus(object):
         """
         self.formulae = formulae
 
-    def add_select(self, cols_list: List[str]) -> 'ObjectSetQueryPlus':
+    def add_selects(self, cols_list: List[str]) -> 'ObjectSetQueryPlus':
         """
             Augment what is needed as output.
         """

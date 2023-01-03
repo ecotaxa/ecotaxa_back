@@ -493,7 +493,8 @@ class DarwinCoreExport(JobServiceBase):
                 self.add_eMoFs_for_sample(sample=a_sample, arch=arch, event_id=event_id)
                 nb_added = self.add_occurences(sample=a_sample, arch=arch, event_id=event_id)
                 if nb_added == 0:
-                    self.warnings.append("No occurrence added for sample '%s' in project #%d" % (a_sample.orig_id, a_prj_id))
+                    self.warnings.append(
+                        "No occurrence added for sample '%s' in project #%d" % (a_sample.orig_id, a_prj_id))
 
     nine_nine_re = re.compile("999+.0$")
 
@@ -694,7 +695,7 @@ class DarwinCoreExport(JobServiceBase):
         aug_qry = ObjectSetQueryPlus(obj_set)
         if morpho2phylo is not None:
             aug_qry.remap_categories(morpho2phylo)
-        aug_qry.add_select(["txo.id", aug_qry.COUNT_STAR])
+        aug_qry.add_selects(["txo.id", aug_qry.COUNT_STAR])
         aug_qry.set_aliases({"txo.id": "txo_id",
                              aug_qry.COUNT_STAR: "count"}).set_grouping(ResultGrouping.BY_TAXO)
         return aug_qry.get_result(self.ro_session, lambda e: self.warnings.append(e))
@@ -715,7 +716,7 @@ class DarwinCoreExport(JobServiceBase):
                              "acq.acquisid": "acq_id",
                              aug_qry.COUNT_STAR: "sql_count",
                              sum_formula: "conc"})
-        aug_qry.add_select(["txo.id", "acq.acquisid"]).set_grouping(ResultGrouping.BY_SUBSAMPLE_AND_TAXO)
+        aug_qry.add_selects(["txo.id", "acq.acquisid"]).set_grouping(ResultGrouping.BY_SUBSAMPLE_AND_TAXO)
         aug_qry.aggregate_with_computed_sum(sum_formula, Vocabulary.concentrations, Units.number_per_cubic_metre)
         return aug_qry.get_result(self.ro_session, lambda e: self.warnings.append(e))
 
@@ -733,8 +734,8 @@ class DarwinCoreExport(JobServiceBase):
         sum_formula = "individual_volume/subsample_coef/total_water_volume"
         aug_qry.set_aliases({"txo.id": "txo_id",
                              sum_formula: "biovol"})
-        aug_qry.add_select(["txo.id"]).aggregate_with_computed_sum(sum_formula, Vocabulary.biovolume,
-                                                                   Units.cubic_millimetres_per_cubic_metre)
+        aug_qry.add_selects(["txo.id"]).aggregate_with_computed_sum(sum_formula, Vocabulary.biovolume,
+                                                                    Units.cubic_millimetres_per_cubic_metre)
         aug_qry.set_grouping(ResultGrouping.BY_TAXO)
         return aug_qry.get_result(self.ro_session, lambda e: self.warnings.append(e))
 

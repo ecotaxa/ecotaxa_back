@@ -9,7 +9,7 @@ import os
 import re
 import zipfile
 from pathlib import Path
-from typing import Optional, Tuple, TextIO, cast, Dict, List, Set, Any
+from typing import Optional, Tuple, TextIO, cast, Dict, List, Set, Any, Iterable
 
 from API_models.exports import ExportRsp, ExportReq, ExportTypeEnum, SummaryExportGroupingEnum
 from API_models.filters import ProjectFiltersDict
@@ -513,12 +513,11 @@ class ProjectExport(JobServiceBase):
         if req.sum_subtotal == SummaryExportGroupingEnum.just_by_taxon:
             pass
         elif req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
-            aug_qry.add_select(["sam.orig_id", "sam.latitude", "sam.longitude", "MAX(obh.objdate)"])
+            aug_qry.add_selects(["sam.orig_id", "sam.latitude", "sam.longitude", "MAX(obh.objdate)"])
         elif req.sum_subtotal == SummaryExportGroupingEnum.by_subsample:
-            aug_qry.add_select(["sam.orig_id", "acq.orig_id"])
+            aug_qry.add_selects(["sam.orig_id", "acq.orig_id"])
         # We want the count, that's the goal of all this
-        aug_qry.add_select(["txo.display_name", aug_qry.COUNT_STAR])
-        aug_qry.set_grouping(self._grouping_from_req())
+        aug_qry.add_selects(["txo.display_name", aug_qry.COUNT_STAR])
 
         msg = "Writing to file %s" % out_file
         self.update_progress(50, msg)
@@ -530,49 +529,50 @@ class ProjectExport(JobServiceBase):
 
         return nb_lines
 
-    def create_sci_abundances_summary(self, src_project: Project) -> int:
+    def create_sci_abundances_summary(self, aug_qry: ObjectSetQueryPlus) -> \
+            str:
         """
             @see https://github.com/ecotaxa/ecotaxa/issues/615
         """
-        req = self.req
-        proj_id = src_project.projid
-        user_id = self._get_owner_id()
         self.update_progress(1, "Start Abundance Summary export")
 
-        out_file = self._get_summary_file(src_project)
+        # We want count, in the end of the line
+        aug_qry.set_aliases({aug_qry.COUNT_STAR: "count"})
+        aug_qry.add_selects([aug_qry.COUNT_STAR])
 
-        # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, user_id, self.filters)
+        return "count"
 
-        # The specialized SQL builder
-        aug_qry = ObjectSetQueryPlus(object_set)
-        aug_qry.remap_categories(req.pre_mapping)
-        # aug_qry.set_formulae(req.formulae) # Not needed for abundances
-        # We can set aliases even for expressions we don't select, so include all possibly needed ones
-        aug_qry.set_aliases({"txo.display_name": "taxonid",
-                             "sam.orig_id": "sampleid",
-                             "acq.orig_id": "acquisid",
-                             aug_qry.COUNT_STAR: "count"})
+    def create_sci_concentrations_summary(self, aug_qry: ObjectSetQueryPlus) -> \
+            str:
+        """
+            @see https://github.com/ecotaxa/ecotaxa/issues/616
+        """
+        self.update_progress(1, "Start Concentrations Summary export")
 
-        id_cols = self._id_columns_from_grouping(req)
-        aug_qry.add_select(id_cols)
-        # We also want taxon name and counts, in the end of the line
-        aug_qry.add_select(["txo.display_name", aug_qry.COUNT_STAR])
-        aug_qry.set_grouping(self._grouping_from_req())
+        # We want the sum of this formula calculation
+        formula = "1/subsample_coef/total_water_volume"
+        aug_qry.aggregate_with_computed_sum(formula, Vocabulary.concentrations, Units.number_per_cubic_metre)
+        # Specific alias
+        aug_qry.set_aliases({formula: "concentration"})
 
-        row_src = self.add_zeroes_in_sci_report(aug_qry, id_cols, "count")
+        return "concentration"
 
-        msg = "Writing to file %s" % out_file
-        self.update_progress(50, msg)
-        nb_lines = aug_qry.write_row_source_to_csv(row_src, out_file)
+    def create_sci_biovolumes_summary(self, aug_qry: ObjectSetQueryPlus) -> \
+            str:
+        """
+            @see https://github.com/ecotaxa/ecotaxa/issues/617
+        """
+        self.update_progress(1, "Start Biovolumes Summary export")
 
-        msg = "Extracted %d rows" % nb_lines
-        logger.info(msg)
-        self.update_progress(90, msg)
+        # We want the sum of formula calculation, for each object
+        formula = "individual_volume/subsample_coef/total_water_volume"
+        aug_qry.aggregate_with_computed_sum(formula, Vocabulary.biovolume, Units.cubic_millimetres_per_cubic_metre)
+        # Specific alias
+        aug_qry.set_aliases({formula: "biovolume"})
 
-        return nb_lines
+        return "biovolume"
 
-    def add_zeroes_in_sci_report(self, aug_qry: ObjectSetQueryPlus, id_cols: List[str], zero_col: str):
+    def add_zeroes_in_sci_summary(self, aug_qry: ObjectSetQueryPlus, id_cols: List[str], zero_col: str):
         """
             Return relevant zero lines, for given non-zero input ones.
             param: id_cols: The identifying columns in the query.
@@ -582,7 +582,8 @@ class ProjectExport(JobServiceBase):
             # Produce the zero-less report
             without_zeroes = aug_qry.get_result(self.ro_session, logger.warning)
             out_id_cols = [aug_qry.defs_to_alias[a_col] for a_col in id_cols]
-            not_presents = self.add_not_presents_in_summary(without_zeroes, out_id_cols, zero_col, aug_qry.obj_set)
+            not_presents = self.add_not_presents_in_sci_summary(without_zeroes, out_id_cols, zero_col,
+                                                                aug_qry.obj_set)
             without_zeroes.extend(not_presents)
             without_zeroes.sort(key=lambda a_row: tuple([a_row[id_col] for id_col in out_id_cols + ["taxonid"]]))
             row_src: IterableRowsT = without_zeroes
@@ -591,9 +592,9 @@ class ProjectExport(JobServiceBase):
             row_src = aug_qry.get_row_source(self.ro_session, logger.warning)
         return row_src
 
-    def add_not_presents_in_summary(self, without_zeroes: List[Dict[str, Any]],
-                                    id_cols: List[str], zero_col: str,
-                                    object_set: DescribedObjectSet):
+    def add_not_presents_in_sci_summary(self, without_zeroes: List[Dict[str, Any]],
+                                        id_cols: List[str], zero_col: str,
+                                        object_set: DescribedObjectSet):
         """
             Produce lines with 0 abundance/concentration/biovolume for relevant (sample, category) pairs
             or (sample, acquisition, category) triplets.
@@ -651,126 +652,70 @@ class ProjectExport(JobServiceBase):
                 ret.append(a_cat)
         return ret
 
-    def create_sci_concentrations_summary(self, src_project: Project) -> int:
-        """
-            @see https://github.com/ecotaxa/ecotaxa/issues/616
-        """
+    def _id_columns_from_req(self):
+        ret = []
         req = self.req
-        proj_id = src_project.projid
-        user_id = self._get_owner_id()
-        self.update_progress(1, "Start Concentrations Summary export")
-
-        out_file = self._get_summary_file(src_project)
-
-        # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, user_id, self.filters)
-
-        # The specialized SQL builder
-        aug_qry = ObjectSetQueryPlus(object_set)
-        aug_qry.remap_categories(req.pre_mapping)
-        aug_qry.set_formulae(req.formulae)
-        # We want the sum of formula calculation
-        formula = "1/subsample_coef/total_water_volume"
-        aug_qry.aggregate_with_computed_sum(formula, Vocabulary.concentrations, Units.number_per_cubic_metre)
-        # We can set aliases even for expressions we don't select, so include all possibly needed ones
-        aug_qry.set_aliases({"txo.display_name": "taxonid",
-                             "sam.orig_id": "sampleid",
-                             "acq.orig_id": "acquisid",
-                             formula: "concentration"})
-
-        id_cols = self._id_columns_from_grouping(req)
-        aug_qry.add_select(id_cols)
-        aug_qry.add_select(["txo.display_name"])
-        aug_qry.set_grouping(self._grouping_from_req())
-
-        row_src = self.add_zeroes_in_sci_report(aug_qry, id_cols, "concentration")
-
-        msg = "Writing to file %s" % out_file
-        self.update_progress(50, msg)
-        nb_lines = aug_qry.write_row_source_to_csv(row_src, out_file)
-
-        msg = "Extracted %d rows" % nb_lines
-        logger.info(msg)
-        self.update_progress(90, msg)
-
-        return nb_lines
-
-    @staticmethod
-    def _id_columns_from_grouping(req: ExportReq):
-        id_cols = []
         if req.sum_subtotal == SummaryExportGroupingEnum.just_by_taxon:
             pass
         elif req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
-            id_cols = ["sam.orig_id"]
+            ret = ["sam.orig_id"]
         elif req.sum_subtotal == SummaryExportGroupingEnum.by_subsample:
-            id_cols = ["sam.orig_id", "acq.orig_id"]
-        return id_cols
-
-    def create_sci_biovolumes_summary(self, src_project: Project) -> int:
-        """
-            @see https://github.com/ecotaxa/ecotaxa/issues/617
-        """
-        req = self.req
-        proj_id = src_project.projid
-        user_id = self._get_owner_id()
-        self.update_progress(1, "Start Biovolumes Summary export")
-
-        out_file = self._get_summary_file(src_project)
-
-        # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, user_id, self.filters)
-
-        # The specialized SQL builder
-        aug_qry = ObjectSetQueryPlus(object_set)
-        aug_qry.remap_categories(req.pre_mapping)
-        aug_qry.set_formulae(req.formulae)
-        # We want the sum of formula calculation, for each object
-        formula = "individual_volume/subsample_coef/total_water_volume"
-        aug_qry.aggregate_with_computed_sum(formula, Vocabulary.biovolume, Units.cubic_millimetres_per_cubic_metre)
-        # We can set aliases even for expressions we don't select, so include all possibly needed ones
-        aug_qry.set_aliases({"txo.display_name": "taxonid",
-                             "sam.orig_id": "sampleid",
-                             "acq.orig_id": "acquisid",
-                             formula: "biovolume"})
-
-        id_cols = self._id_columns_from_grouping(req)
-        aug_qry.add_select(id_cols)
-        aug_qry.add_select(["txo.display_name"])
-        aug_qry.set_grouping(self._grouping_from_req())
-
-        row_src = self.add_zeroes_in_sci_report(aug_qry, id_cols, "biovolume")
-
-        msg = "Writing to file %s" % out_file
-        self.update_progress(50, msg)
-        nb_lines = aug_qry.write_row_source_to_csv(row_src, out_file)
-
-        msg = "Extracted %d rows" % nb_lines
-        logger.info(msg)
-        self.update_progress(90, msg)
-
-        return nb_lines
+            ret = ["sam.orig_id", "acq.orig_id"]
+        return ret
 
     def create_sci_summary(self, src_project: Project) -> int:
         """
             Assuming that the historical summary is a data one, compute 'scientific' summaries.
         """
         req = self.req
+        proj_id = src_project.projid
+        user_id = self._get_owner_id()
         exp_type = req.exp_type
+        out_file = self._get_summary_file(src_project)
 
         # Ensure we work on validated objects only
         self.filters["statusfilter"] = "V"
+        # Prepare a where clause and parameters from filter
+        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, user_id, self.filters)
+        # The specialized SQL builder operates from the object set
+        aug_qry = ObjectSetQueryPlus(object_set)
+        aug_qry.remap_categories(req.pre_mapping)
+        aug_qry.set_formulae(req.formulae)
+        # Set common aliases, not all of them is always used
+        aug_qry.set_aliases({"sam.orig_id": "sampleid",
+                             "acq.orig_id": "acquisid",
+                             "txo.display_name": "taxonid"})
+        id_cols = self._id_columns_from_req()
+        aug_qry.add_selects(id_cols)
+        aug_qry.add_selects(["txo.display_name"])
 
         if req.sum_subtotal == SummaryExportGroupingEnum.by_project:
-            assert False, "No collections yet to get multiple projects"
+            assert False, "No collections yet to get multiple projects from"
 
+        # Per-type adjustment
+        zero_col = ""
         if exp_type == ExportTypeEnum.abundances:
-            return self.create_sci_abundances_summary(src_project)
+            zero_col = self.create_sci_abundances_summary(aug_qry)
         elif exp_type == ExportTypeEnum.concentrations:
-            return self.create_sci_concentrations_summary(src_project)
+            zero_col = self.create_sci_concentrations_summary(aug_qry)
         elif exp_type == ExportTypeEnum.biovols:
-            return self.create_sci_biovolumes_summary(src_project)
+            zero_col = self.create_sci_biovolumes_summary(aug_qry)
 
-        # msg = "Produced %d rows" % nb_lines
-        # logger.info(msg)
-        # self.update_progress(90, msg)
+        # Group according to request
+        aug_qry.set_grouping(self._grouping_from_req())
+
+        msg = "Computing zero lines to add"
+        logger.info(msg)
+        self.update_progress(30, msg)
+        row_src = self.add_zeroes_in_sci_summary(aug_qry, id_cols, zero_col)
+
+        msg = "Writing to file %s" % out_file
+        logger.info(msg)
+        self.update_progress(50, msg)
+        nb_lines = aug_qry.write_row_source_to_csv(row_src, out_file)
+
+        msg = "Extracted %d rows" % nb_lines
+        logger.info(msg)
+        self.update_progress(90, msg)
+
         return 0
