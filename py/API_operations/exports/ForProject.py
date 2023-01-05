@@ -579,9 +579,10 @@ class ProjectExport(JobServiceBase):
         if self.req.sum_subtotal in (SummaryExportGroupingEnum.by_sample, SummaryExportGroupingEnum.by_subsample):
             # Produce the zero-less report
             without_zeroes = aug_qry.get_result(self.ro_session, logger.warning)
+            # Columns are aliased so the output columns are named differently
             out_id_cols = [aug_qry.defs_to_alias[a_col] for a_col in id_cols]
-            not_presents = self.add_not_presents_in_sci_summary(without_zeroes, out_id_cols, zero_col,
-                                                                aug_qry.obj_set)
+            not_presents = self.not_presents_in_sci_summary(without_zeroes, out_id_cols, zero_col,
+                                                            aug_qry.obj_set)
             without_zeroes.extend(not_presents)
             without_zeroes.sort(key=lambda a_row: tuple([a_row[id_col] for id_col in out_id_cols + ["taxonid"]]))
             row_src: IterableRowsT = without_zeroes
@@ -590,28 +591,32 @@ class ProjectExport(JobServiceBase):
             row_src = aug_qry.get_row_source(self.ro_session, logger.warning)
         return row_src
 
-    def add_not_presents_in_sci_summary(self, without_zeroes: List[Dict[str, Any]],
-                                        id_cols: List[str], zero_col: str,
-                                        object_set: DescribedObjectSet):
+    def not_presents_in_sci_summary(self, without_zeroes: List[Dict[str, Any]],
+                                    id_cols: List[str], zero_col: str,
+                                    object_set: DescribedObjectSet):
         """
             Produce lines with 0 abundance/concentration/biovolume for relevant (sample, category) pairs
             or (sample, acquisition, category) triplets.
             Specs: https://github.com/ecotaxa/ecotaxa/issues/615#issuecomment-1158781701
         """
-        prj_ids = [object_set.prj_id]
-        remapped_cats = self.get_remapped_categories(prj_ids)
         # Get all sampling_units (from the samples or subsamples AKA acquisition table)
-        if self.req.sum_subtotal == SummaryExportGroupingEnum.by_sample:
-            all_sampling_units = ProjectBO.all_samples_orig_id(self.ro_session, prj_ids)
-        elif self.req.sum_subtotal == SummaryExportGroupingEnum.by_subsample:
-            all_sampling_units = ProjectBO.all_subsamples_orig_id(self.ro_session, prj_ids)
-        else:
-            raise Exception("Unexpected req.sum_subtotal")
+        sampling_units_qry = ObjectSetQueryPlus(object_set.without_filtering_taxo()) \
+            .add_selects(self._id_columns_from_req()).set_aliases({"sam.orig_id": "sampleid",
+                                                                   "acq.orig_id": "acquisid"}) \
+            .set_grouping(ResultGrouping.without_taxo(self._grouping_from_req()))
+        all_sampling_units: Set[Tuple] = set()
+        # Tuples here have either one or two values
+        for a_row in sampling_units_qry.get_result(self.ro_session):
+            all_sampling_units.add(tuple([a_row[id_col] for id_col in id_cols]))
         # Get possible taxa names
-        taxa: Set[str] = set(TaxonomyBO.get_display_names(self.ro_session, remapped_cats))
-        # Prepare the cross fill
+        txo_qry = ObjectSetQueryPlus(object_set) \
+            .remap_categories(self.req.pre_mapping) \
+            .add_selects(["txo.display_name"]).set_aliases({"txo.display_name": "txo"}) \
+            .set_grouping(ResultGrouping.BY_TAXO)
+        taxa: Set[str] = set([a_row["txo"] for a_row in txo_qry.get_row_source(self.ro_session)])
+        # Prepare the cross fill, all with tuples which are hash-able
         presents: Set[Tuple[Tuple, str]] = set()
-        # Build (sample, taxon) pairs from zero-less report
+        # Build (sampling unit, taxon) pairs from zero-less report
         for a_row in without_zeroes:
             sampling_unit_id, taxonid = tuple([a_row[id_col] for id_col in id_cols]), a_row["taxonid"]
             presents.add((sampling_unit_id, taxonid))
@@ -625,30 +630,6 @@ class ProjectExport(JobServiceBase):
                                           zero_col: 0})
                     not_presents.append(a_not_present)
         return not_presents
-
-    def get_remapped_categories(self, prj_ids: ProjectIDListT) -> ClassifIDListT:
-        """
-            Return all categories present, at least once, in given list of projects.
-            Present categories are remapped according to the request.
-        """
-        # Determine ALL categories (categories with at least one object classified in the project)
-        all_cat_ids = ProjectBO.validated_categories_ids(self.ro_session, prj_ids)
-        remaps = self.req.pre_mapping
-        # Apply the remapping. SQL version is in ObjectSetQueryPlus.py (def _amend_query_for_mapping)
-        ret = []
-        for a_cat in all_cat_ids:
-            if a_cat in remaps:
-                remapped_cat = remaps[a_cat]
-                if remapped_cat is None:
-                    # To discard
-                    continue
-                else:
-                    # Out = mapped
-                    ret.append(remapped_cat)
-            else:
-                # Out = original
-                ret.append(a_cat)
-        return ret
 
     def _id_columns_from_req(self):
         ret = []

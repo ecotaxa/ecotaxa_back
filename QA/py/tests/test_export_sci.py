@@ -6,7 +6,7 @@ from tests.credentials import CREATOR_AUTH, ADMIN_AUTH, ADMIN_USER_ID
 from tests.export_shared import download_and_check
 from tests.test_classification import OBJECT_SET_CLASSIFY_URL
 from tests.test_export import _req_tmpl, OBJECT_SET_EXPORT_URL
-from tests.test_export_emodnet import add_concentration_data
+from tests.test_export_emodnet import add_concentration_data, PROJECT_SEARCH_SAMPLES_URL
 from tests.test_fastapi import PROJECT_QUERY_URL
 from tests.test_import import DATA_DIR, do_import
 from tests.test_jobs import get_job_and_wait_until_ok
@@ -161,3 +161,77 @@ def test_export_conc_biovol(config, database, fastapi, caplog):
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
     download_and_check(fastapi, job_id, "biovolumes_by_subsample", only_hdr=True)
     # log = get_log_file(fastapi, job_id)
+
+
+def test_export_sci_filtered_by_taxo(config, database, fastapi, caplog):
+    """ Simulate calls to export with an active filter """
+    caplog.set_level(logging.FATAL)
+
+    # TODO: Dup code for the data load
+    # Admin imports the project, which is an export expected result
+    from tests.test_import import test_import
+    path = str(DATA_DIR / "ref_exports" / "bak_all_images")
+    prj_id = test_import(config, database, caplog, "TSV sci export filtered", path=path)
+
+    # Validate all, otherwise empty report
+    obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
+    url = OBJECT_SET_CLASSIFY_URL
+    classifications = [-1 for _obj in obj_ids]  # Keep current
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
+                                                      "classifications": classifications,
+                                                      "wanted_qualification": "V"})
+    assert rsp.status_code == status.HTTP_200_OK
+
+    # Abundance export, per sample with a filter on a category
+    filters = {"taxo": "45072",
+               "taxochild": "Y"}  # TODO: Not very useful as the test has a very reduced tree
+    req = _req_tmpl.copy()
+    req.update({"project_id": prj_id,
+                "exp_type": "ABO",
+                "sum_subtotal": "S"})
+    req_and_filters = {"filters": filters,
+                       "request": req}
+    rsp = fastapi.post(OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters)
+    assert rsp.status_code == status.HTTP_200_OK
+
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_check(fastapi, job_id, "abundances_by_sample_filtered_on_cat", only_hdr=True)
+
+
+def test_export_sci_filtered_by_sample(config, database, fastapi, caplog):
+    """ Simulate calls to export with an active filter """
+    caplog.set_level(logging.FATAL)
+
+    # TODO: Dup code for the data load
+    # Admin imports the project, which is an export expected result
+    from tests.test_import import test_import
+    path = str(DATA_DIR / "ref_exports" / "bak_all_images")
+    prj_id = test_import(config, database, caplog, "TSV sci export filtered", path=path)
+
+    # Validate all, otherwise empty report
+    obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
+    url = OBJECT_SET_CLASSIFY_URL
+    classifications = [-1 for _obj in obj_ids]  # Keep current
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
+                                                      "classifications": classifications,
+                                                      "wanted_qualification": "V"})
+    assert rsp.status_code == status.HTTP_200_OK
+
+    # Abundance export, per sample with a filter on samples
+    url = PROJECT_SEARCH_SAMPLES_URL.format(project_id=prj_id)
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    # TODO: This need for IDs in the API is a bit of pain
+    sample_ids = [str(r["sampleid"]) for r in rsp.json() if "n2" not in r["orig_id"]]
+    filters = {"samples": ",".join(sample_ids)}
+    req = _req_tmpl.copy()
+    req.update({"project_id": prj_id,
+                "exp_type": "ABO",
+                "sum_subtotal": "S"})
+    req_and_filters = {"filters": filters,
+                       "request": req}
+    rsp = fastapi.post(OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters)
+    assert rsp.status_code == status.HTTP_200_OK
+
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_check(fastapi, job_id, "abundances_by_sample_filtered_on_sample", only_hdr=True)

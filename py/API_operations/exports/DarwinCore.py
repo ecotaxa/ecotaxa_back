@@ -727,7 +727,7 @@ class DarwinCoreExport(JobServiceBase):
             Compute biovolume of each taxon for given sample.
         """
         obj_set = CommonObjectSets.validatedInSample(self.ro_session, sample)
-        aug_qry = ObjectSetQueryPlus(obj_set, )
+        aug_qry = ObjectSetQueryPlus(obj_set)
         if morpho2phylo is not None:
             aug_qry.remap_categories(morpho2phylo)
         aug_qry.set_formulae(formulae)

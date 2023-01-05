@@ -46,7 +46,12 @@ class ResultGrouping(enum.IntEnum):
     BY_SAMPLE_AND_TAXO = BY_TAXO + BY_SAMPLE
     BY_SUBSAMPLE_AND_TAXO = BY_TAXO + BY_SUBSAMPLE
     BY_SAMPLE_SUBSAMPLE_AND_TAXO = BY_TAXO + BY_SUBSAMPLE + BY_SAMPLE
+    BY_SAMPLE_AND_SUBSAMPLE = BY_SUBSAMPLE + BY_SAMPLE
     BY_PROJECT_AND_TAXO = BY_TAXO + BY_SUBSAMPLE + BY_SAMPLE + BY_PROJECT  # One day, for Collections
+
+    @classmethod
+    def without_taxo(cls, val: 'ResultGrouping') -> 'ResultGrouping':
+        return val & ~cls.BY_TAXO  # type:ignore
 
 
 class ObjectSetQueryPlus(object):
@@ -105,17 +110,19 @@ class ObjectSetQueryPlus(object):
         self.defs_to_alias.update(aliases)
         return self
 
-    def remap_categories(self, taxo_mappings: TaxoRemappingT):
+    def remap_categories(self, taxo_mappings: TaxoRemappingT) -> 'ObjectSetQueryPlus':
         """
             The result will not contain any category in keys, only the ones in values.
         """
         self.taxo_mapping = taxo_mappings
+        return self
 
-    def set_formulae(self, formulae: Dict[str, str]):
+    def set_formulae(self, formulae: Dict[str, str]) -> 'ObjectSetQueryPlus':
         """
             Set the formulae, i.e. the way to extract significant values from free columns.
         """
         self.formulae = formulae
+        return self
 
     def add_selects(self, cols_list: List[str]) -> 'ObjectSetQueryPlus':
         """
@@ -266,7 +273,7 @@ class ObjectSetQueryPlus(object):
         select_clause = cte_txt + select_clause
         return select_clause
 
-    def get_row_source(self, ro_session: Session, wrn_fct: Callable[[str], None]) -> RowSourceT:
+    def get_row_source(self, ro_session: Session, wrn_fct: Optional[Callable[[str], None]] = None) -> RowSourceT:
         """
             Build a generator to loop over query results, eventually enriched.
         """
@@ -307,7 +314,8 @@ class ObjectSetQueryPlus(object):
                 if val != val:  # NaN test
                     if nan_because_bad:
                         wrn_msg = "Some values could not be converted to float in %s" % str(dict(vars_row))
-                        wrn_fct(wrn_msg)
+                        if wrn_fct is not None:
+                            wrn_fct(wrn_msg)
                 keys = tuple(a_row[keys_idx:])
                 if last_row is None:
                     # Ye olde first row problem...
@@ -327,14 +335,15 @@ class ObjectSetQueryPlus(object):
                 out_row[dest_col] = vals_sum
                 yield out_row
 
-    def get_result(self, ro_session: Session, wrn_fct: Callable[[str], None]) -> List[Dict[str, Any]]:
+    def get_result(self, ro_session: Session, wrn_fct: Optional[Callable[[str], None]] = None) -> List[Dict[str, Any]]:
         """
             Read the row source, in full, and return it.
         """
         src = self.get_row_source(ro_session, wrn_fct)
         return [a_row for a_row in src]
 
-    def write_result_to_csv(self, ro_session: Session, file_path: Path, wrn_fct: Callable[[str], None]) -> int:
+    def write_result_to_csv(self, ro_session: Session, file_path: Path,
+                            wrn_fct: Optional[Callable[[str], None]]) -> int:
         """
             Write all from row source into CSV.
         """

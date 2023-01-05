@@ -118,6 +118,13 @@ class DescribedObjectSet(object):
         assert ret is not None
         return ret
 
+    def without_filtering_taxo(self):
+        """
+            Return a clone of self, but without any Taxonomy related filter.
+        """
+        filters_but_taxo = self.filters.filters_without_taxo()
+        return DescribedObjectSet(self.filters.session, self.prj_id, self.user_id, filters_but_taxo)
+
 
 class EnumeratedObjectSet(MappedTable):
     """
@@ -592,15 +599,17 @@ class EnumeratedObjectSet(MappedTable):
 
 class ObjectSetFilter(object):
     """
-        A filter for reducing an object set.
+        A filter, inside an object set.
     """
     TO_COL = {"score": ObjectHeader.classif_auto_score.name}
+    TAXO_KEYS = ["taxo", "taxochild"]
 
     def __init__(self, session: Session, filters: ProjectFiltersDict):
         """
             Init from a dictionary with all fields.
         """
         self.session = session
+        self.filters = filters
         # Now to the filters
         self.taxo: Optional[str] = filters.get("taxo", "")
         self.taxo_child: bool = filters.get("taxochild", "") == "Y"
@@ -864,3 +873,13 @@ class ObjectSetFilter(object):
         elif self.last_annotators:
             where_clause *= "obh.classif_who = ANY (:filt_annot)"
             params['filt_annot'] = [int(x) for x in self.last_annotators.split(',')]
+
+    def filters_without_taxo(self) -> ProjectFiltersDict:
+        """
+            Return a clone of self's filters, but removing any Taxonomy related condition.
+            TODO: Some filtering of taxo is possible on free cols as well.
+        """
+        less_filtered = self.filters.copy()
+        for a_key in self.TAXO_KEYS:
+            less_filtered.pop(a_key, "")  # type:ignore
+        return less_filtered
