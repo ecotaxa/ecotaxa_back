@@ -401,14 +401,18 @@ class TSVFile(object):
 
     @staticmethod
     def update_orm_object(model: Model, update_dict: Dict[str, Any]):
-        updates = []
+        """
+            In-memory update of the ORM record, based on the difference with a needed state.
+            :return: An explanation text for the updates to come.
+        """
+        updateMsgs = []
         for attr, value in model.__dict__.items():
             if attr in update_dict and update_dict[attr] != value:
                 upd_val = update_dict[attr]
                 setattr(model, attr, upd_val)
-                updates.append((attr, repr(value) + "->" + repr(upd_val)))
+                updateMsgs.append((attr, repr(value) + "->" + repr(upd_val)))
         # TODO: Extra values in update_dict ?
-        return updates
+        return updateMsgs
 
     @staticmethod
     def diff_orm_object(model: Model, update_dict: Dict[str, str]):

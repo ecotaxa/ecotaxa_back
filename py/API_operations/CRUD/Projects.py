@@ -38,7 +38,7 @@ class ProjectsService(Service):
             if prj is None:
                 return "Project to clone not found"
             new_prj = clone_of(prj)
-            new_prj.instrument_id = prj.instrument_id  # instrument is a FK, thus no copied by clone_of()
+            new_prj.instrument_id = prj.instrument_id  # instrument is a FK, thus not copied by clone_of()
         else:
             current_user = RightsBO.user_wants_create_project(self.session, current_user_id)
             new_prj = Project()

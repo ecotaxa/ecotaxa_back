@@ -21,6 +21,7 @@ if True:
     from .Taxonomy import Taxonomy
     from .User import User, Role
     from .UserPreferences import UserPreferences
+    from .Instrument import Instrument
     # noinspection PyUnresolvedReferences
     from .WoRMs import WoRMS
     from .helpers.ORM import relationship
@@ -68,6 +69,7 @@ if True:
 
     Project.members = relationship(User, secondary=ProjectPrivilege.__tablename__, viewonly=True)
 
+    Project.instrument = relationship(Instrument, viewonly=True)
     # Object
     ObjectHeader.fields = relationship(ObjectFields, uselist=False, viewonly=True)  # type:ignore # case2
     ObjectFields.object = relationship(ObjectHeader, uselist=False)

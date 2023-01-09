@@ -74,6 +74,8 @@ class Project(Model):
     members: relationship
     # The twin EcoPart project
     ecopart_project: relationship
+    # The related instrument full definition
+    instrument: relationship
 
     def __str__(self):
         return "{0} ({1})".format(self.title, self.projid)

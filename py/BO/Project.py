@@ -9,7 +9,6 @@ from datetime import datetime
 from typing import List, Dict, Any, Iterable, Optional, Union, OrderedDict as OrderedDictT, Set, Tuple
 
 from BO.Classification import ClassifIDListT
-from BO.Instrument import DescribedInstrumentSet
 from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping, TableMapping
 from BO.Prediction import DeepFeatures
 from BO.ProjectPrivilege import ProjectPrivilegeBO
@@ -65,7 +64,7 @@ class ProjectBO(object):
         A Project business object. So far (but less and less...) mainly a container
         for static API_operations involving it.
     """
-    __slots__ = ["_project", "instrument", "highest_right",
+    __slots__ = ["_project", "instrument", "instrument_url", "highest_right",
                  "obj_free_cols", "sample_free_cols",
                  "acquisition_free_cols", "process_free_cols",
                  "init_classif_list",
@@ -73,8 +72,9 @@ class ProjectBO(object):
 
     def __init__(self, project: Project):
         self._project = project
-        # Added values
-        self.instrument = ""
+        # Added/copied values
+        self.instrument = project.instrument_id
+        self.instrument_url = None
         self.highest_right = ""  # This field depends on the user asking for the information
         self.obj_free_cols: Dict[str, str] = {}
         self.sample_free_cols: Dict[str, str] = {}
@@ -128,6 +128,14 @@ class ProjectBO(object):
             by_right_fct[a_priv.privilege](priv_user)
             if 'C' == a_priv.extra:
                 self.contact = priv_user
+        self.instrument_url = self._project.instrument.bodc_url
+        return self
+
+    def public_enrich(self) -> "ProjectBO":
+        """
+            Enrichment with fields we can expose to public unauthenticated calls.
+        """
+        self.instrument_url = self._project.instrument.bodc_url
         return self
 
     def update(self, session: Session, instrument: Optional[str], title: str, visible: bool, status: str,
@@ -750,14 +758,9 @@ class ProjectBOSet(object):
             self_projects_append = self.projects.append
             for a_proj in projs:
                 if public:
-                    self_projects_append(ProjectBO(a_proj))
+                    self_projects_append(ProjectBO(a_proj).public_enrich())
                 else:
                     self_projects_append(ProjectBO(a_proj).enrich())
-        # Add instruments
-        with CodeTimer("%s set instruments:" % len(prj_ids), logger):
-            instruments = DescribedInstrumentSet(session, prj_ids)
-            for a_project in self.projects:
-                a_project.instrument = instruments.by_project.get(a_project.projid, "?")
 
     def as_list(self) -> List[ProjectBO]:
         return self.projects

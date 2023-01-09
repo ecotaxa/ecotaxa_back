@@ -231,7 +231,10 @@ class _AddedToProject(BaseModel):
                                         default=[])
     instrument: Optional[str] = Field(title="Instrument",
                                       description="This project's instrument code.",
-                                      example="zooscan")
+                                      example="Zooscan")
+    instrument_url: Optional[str] = Field(title="Instrument URL",
+                                      description="This project's instrument BODC definition.",
+                                      example="http://vocab.nerc.ac.uk/collection/L22/current/TOOL1581/")
     contact: Optional[MinUserModel] = Field(title="Contact",
                                             description="The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.")
 

@@ -37,6 +37,7 @@ def test_update_prj(config, database, fastapi, caplog):
                 'comments': None,
                 'contact': None,
                 'instrument': 'UVP6',
+                'instrument_url': 'http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/',
                 'init_classif_list': [],
                 'license': '',
                 'managers': [{'email': 'administrator',
