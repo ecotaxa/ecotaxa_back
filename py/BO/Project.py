@@ -67,7 +67,7 @@ class ProjectBO(object):
     __slots__ = ["_project", "instrument", "instrument_url", "highest_right",
                  "obj_free_cols", "sample_free_cols",
                  "acquisition_free_cols", "process_free_cols",
-                 "init_classif_list",
+                 "init_classif_list", "bodc_variables",
                  "contact", "viewers", "annotators", "managers"]
 
     def __init__(self, project: Project):
@@ -86,6 +86,8 @@ class ProjectBO(object):
         self.viewers: List[User] = []
         self.annotators: List[User] = []
         self.managers: List[User] = []
+        # Formulas AKA variables
+        self.bodc_variables: Dict[str, str] = {}
 
     def get_preset(self) -> ClassifIDListT:
         """
@@ -129,6 +131,9 @@ class ProjectBO(object):
             if 'C' == a_priv.extra:
                 self.contact = priv_user
         self.instrument_url = self._project.instrument.bodc_url
+        # Variables
+        if self._project.variables is not None:
+            self.bodc_variables.update(self._project.variables)
         return self
 
     def public_enrich(self) -> "ProjectBO":

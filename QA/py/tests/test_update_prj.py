@@ -30,6 +30,7 @@ def test_update_prj(config, database, fastapi, caplog):
                                           'threshold': 't07',
                                           'volimage': 't02'},
                 'annotators': [],
+                'bodc_variables': {},
                 'highest_right': 'Manage',
                 'classiffieldlist': None,
                 'classifsettings': None,

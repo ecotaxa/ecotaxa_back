@@ -218,6 +218,9 @@ class _AddedToProject(BaseModel):
                                             default={}, example={"flash_delay": "t01"})
     process_free_cols: FreeColT = Field(title="Process free cols", description="Process free columns.", default={},
                                         example={"nb_images": "t01"})
+    bodc_variables: Dict[str, str] = Field(title="Expressions for computing standard BODC quantities.",
+                                           description="BOBC quantities from columns", default={},
+                                           example={"subsample_coef": "1/sub_part"})
     init_classif_list: List[int] = Field(title="Init classification list",
                                          description="Favorite taxa used in classification.", default=[],
                                          example=[5, 11493, 11498, 11509])
@@ -233,8 +236,8 @@ class _AddedToProject(BaseModel):
                                       description="This project's instrument code.",
                                       example="Zooscan")
     instrument_url: Optional[str] = Field(title="Instrument URL",
-                                      description="This project's instrument BODC definition.",
-                                      example="http://vocab.nerc.ac.uk/collection/L22/current/TOOL1581/")
+                                          description="This project's instrument BODC definition.",
+                                          example="http://vocab.nerc.ac.uk/collection/L22/current/TOOL1581/")
     contact: Optional[MinUserModel] = Field(title="Contact",
                                             description="The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.")
 
