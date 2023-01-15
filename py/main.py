@@ -1041,7 +1041,8 @@ def update_project(project: ProjectModel,
                                    cnn_network_id=project.cnn_network_id, comments=project.comments,  # type: ignore
                                    contact=project.contact,
                                    managers=project.managers, annotators=project.annotators, viewers=project.viewers,
-                                   license_=project.license)
+                                   license_=project.license,
+                                   bodc_vars=project.bodc_variables)
 
     with DBSyncService(Project, Project.projid, project_id) as ssce: ssce.wait()
     with DBSyncService(ProjectPrivilege, ProjectPrivilege.projid, project_id) as ssce: ssce.wait()

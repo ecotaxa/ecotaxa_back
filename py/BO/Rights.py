@@ -186,7 +186,7 @@ class RightsBO(object):
         return user
 
     @staticmethod
-    def grant(session: Session, user: User, action: Action, prj: Project):
+    def grant(session: Session, user: User, action: Action, prj: Project, extra: str = None):
         """
             Grant the possibility to do this action on this project to this user.
         """
@@ -194,4 +194,5 @@ class RightsBO(object):
         privilege.privilege = ACTION_TO_PRIV[action]
         privilege.projid = prj.projid
         privilege.member = user.id
+        privilege.extra = extra
         session.add(privilege)

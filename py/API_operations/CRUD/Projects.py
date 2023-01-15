@@ -48,8 +48,8 @@ class ProjectsService(Service):
         new_prj.visible = req.visible
         self.session.add(new_prj)
         self.session.flush()  # to get the project ID
-        # Add the manage privilege
-        RightsBO.grant(self.session, current_user, Action.ADMINISTRATE, new_prj)
+        # Add the manage privilege & set user as contact
+        RightsBO.grant(self.session, current_user, Action.ADMINISTRATE, new_prj, 'C')
         self.session.commit()
         return new_prj.projid
 

@@ -9,6 +9,8 @@ from .helpers.DDL import Column, ForeignKey
 from .helpers.ORM import relationship
 from .helpers.Postgres import VARCHAR, INTEGER
 
+KNOWN_PROJECT_VARS = {"subsample_coef", "total_water_volume", "individual_biovolume"}
+
 
 class ProjectVariables(Model):
     """

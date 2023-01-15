@@ -14,12 +14,14 @@ from BO.Prediction import DeepFeatures
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.SpaceTime import USED_FIELDS_FOR_SUNPOS, compute_sun_position
 from BO.User import MinimalUserBO, UserActivity, UserIDT, MinimalUserBOListT, UserActivityListT
+from DB import ProjectVariables
 from DB.Acquisition import Acquisition
 from DB.Object import VALIDATED_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, ObjectsClassifHisto, \
     ObjectHeader, ObjectFields
 from DB.Process import Process
 from DB.Project import ProjectIDT, ProjectIDListT, Project
 from DB.ProjectPrivilege import ProjectPrivilege
+from DB.ProjectVariables import KNOWN_PROJECT_VARS
 from DB.Sample import Sample
 from DB.User import Role, User
 from DB.helpers import Session, Result
@@ -150,10 +152,12 @@ class ProjectBO(object):
                cnn_network_id: str, comments: str,
                contact: Any,
                managers: List[Any], annotators: List[Any], viewers: List[Any],
-               license_: str):
+               license_: str, bodc_vars: Dict):
         assert contact is not None, "A valid Contact is needed."
         proj_id = self._project.projid
         assert instrument is not None, "A valid Instrument is needed."
+        for a_var, its_def in bodc_vars.items():
+            assert a_var in KNOWN_PROJECT_VARS, "Invalid project variable key"
         # Field reflexes
         if cnn_network_id != self._project.cnn_network_id:
             # Delete CNN features which depend on the CNN network
