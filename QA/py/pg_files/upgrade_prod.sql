@@ -198,7 +198,7 @@ ALTER TABLE public.collection_orga_role
 INSERT INTO public.alembic_version(version_num) VALUES ('15cad3c0948e');
 
 -- Generating line:
--- ecotaxa_master$ python manage.py db upgrade --sql 36bb704b9fc5:4bb7276e86de >> ../ecotaxa_back/QA/py/pg_files/upgrade_prod.sql
+-- ecotaxa_front$ python manage.py db upgrade --sql 36bb704b9fc5:4bb7276e86de >> ../ecotaxa_back/QA/py/pg_files/upgrade_prod.sql
 BEGIN;
 
 -- Running upgrade 36bb704b9fc5 -> 4bb7276e86de
@@ -1143,6 +1143,31 @@ ALTER TABLE projects ALTER COLUMN instrument_id DROP DEFAULT;
 ALTER TABLE projects ADD FOREIGN KEY(instrument_id) REFERENCES instrument (instrument_id);
 
 UPDATE alembic_version SET version_num='8ac7e3c29305' WHERE alembic_version.version_num = '088904e6b78e';
+
+COMMIT;
+
+-- Running upgrade 8ac7e3c29305 -> 521c25353fa0
+
+CREATE TABLE projects_variables (
+    project_id INTEGER NOT NULL,
+    subsample_coef VARCHAR,
+    total_water_volume VARCHAR,
+    individual_biovolume VARCHAR,
+    PRIMARY KEY (project_id),
+    FOREIGN KEY(project_id) REFERENCES projects (projid)
+);
+
+CREATE TABLE taxo_recast (
+    collection_id INTEGER NOT NULL,
+    project_id INTEGER NOT NULL,
+    operation VARCHAR(32) NOT NULL,
+    transform VARCHAR NOT NULL,
+    PRIMARY KEY (collection_id, project_id, operation),
+    FOREIGN KEY(collection_id) REFERENCES collection (id),
+    FOREIGN KEY(project_id) REFERENCES projects (projid)
+);
+
+UPDATE alembic_version SET version_num='521c25353fa0' WHERE alembic_version.version_num = '8ac7e3c29305';
 
 COMMIT;
 
