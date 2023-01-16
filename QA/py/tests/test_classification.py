@@ -29,6 +29,7 @@ OBJECT_SET_CLASSIFY_AUTO_URL = "/object_set/classify_auto"
 OBJECT_SET_DELETE_URL = "/object_set/"
 OBJECT_SET_SUMMARY_URL = "/object_set/{project_id}/summary?only_total=False"
 OBJECT_SET_PARENTS_URL = "/object_set/parents"
+OBJECT_QUERY_URL = "/object/{object_id}"
 
 PROJECT_SET_USER_STATS = "/project_set/user_stats?ids={prj_ids}"
 
@@ -60,10 +61,11 @@ def classify_all(fastapi, obj_ids, classif_id):
     assert rsp.status_code == status.HTTP_200_OK
 
 
-def classify_auto_all(fastapi, obj_ids, classif_id):
+def classify_auto_all(fastapi, obj_ids, classif_id, scores=None):
     url = OBJECT_SET_CLASSIFY_AUTO_URL
     classifications = [classif_id for _obj in obj_ids]
-    scores = [0.52 for _obj in obj_ids]
+    if not scores:
+        scores = [0.52 for _obj in obj_ids]
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
                                                       "classifications": classifications,
                                                       "scores": scores,
@@ -187,6 +189,13 @@ def test_classif(config, database, fastapi, caplog):
                                           'nb_validated': 0,
                                           'projid': prj_id,
                                           'used_taxa': [-1, crustacea]}
+    
+    # New ML results with a different score for the second object
+    classify_auto_all(fastapi, [obj_ids[1]], crustacea, [0.8])
+    url = OBJECT_QUERY_URL.format(object_id=obj_ids[1])
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json()['classif_auto_score'] == 0.8
 
     # Admin (me!) thinks that all is a copepod :)
     classify_all(fastapi, obj_ids, copepod_id)
