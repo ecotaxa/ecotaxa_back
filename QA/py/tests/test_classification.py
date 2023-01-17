@@ -272,6 +272,19 @@ def test_classif(config, database, fastapi, caplog):
                            'used_taxa': [
                                25835]}]  # <- copepod is gone, unclassified as well, replaced with entomobryomorpha
 
+    # Reset to predicted on validated objects
+    url = OBJECT_SET_RESET_PREDICTED_URL.format(project_id=prj_id)
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
+    assert rsp.status_code == status.HTTP_200_OK
+    stats = rsp.json()
+    
+    assert get_stats(fastapi, prj_id) == {'nb_dubious': 0,
+                                          'nb_predicted': 8,
+                                          'nb_unclassified': 0,
+                                          'nb_validated': 0,
+                                          'projid': prj_id,
+                                          'used_taxa': [25835]}
+  
     # Delete some object via API, why not?
     rsp = fastapi.delete(OBJECT_SET_DELETE_URL, headers=ADMIN_AUTH, json=obj_ids[:4])
     assert rsp.status_code == status.HTTP_200_OK
@@ -293,7 +306,7 @@ def test_classif(config, database, fastapi, caplog):
     ref_stats = [{"projid": prj_id,
                   "annotators": [{"id": 1,
                                   "name": "Application Administrator"}],
-                  "activities": [{"id": 1, "nb_actions": 8,
+                  "activities": [{"id": 1, "nb_actions": 12,
                                   "last_annot": "2022-05-12T14:21:15"}]}]
     # Fix the date on both sides
     ref_stats[0]["activities"][0]["last_annot"] = "FIXED DATE"
