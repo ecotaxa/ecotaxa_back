@@ -54,7 +54,7 @@ class ExportReq(BaseModel):
         Export request.
     """
     project_id: int = Field(title="Project Id", description="The project to export.", example=1)
-    exp_type: ExportTypeEnum = Field(title="Export type", description="The export type: 'TSV', 'BAK', 'DOI' or 'SUM'.",
+    exp_type: ExportTypeEnum = Field(title="Export type", description="The export type.",
                                      example=ExportTypeEnum.general_tsv)
     use_latin1: bool = Field(default=False,
                              title="Use latin1",
@@ -82,7 +82,7 @@ class ExportReq(BaseModel):
     # TODO: Move A(acquisition) to U(subsample) but it needs propagation to client side.
     sum_subtotal: SummaryExportGroupingEnum = Field(title="Sum subtotal",
                                                     description="For 'SUM', 'ABO', 'CNC' and 'BIV' types, if "
-                                                                "computations should be combined."
+                                                                "computations should be combined. "
                                                                 "Per A(cquisition) or S(ample) or <Empty>(just taxa).",
                                                     example="A")
     pre_mapping: Dict[int, Optional[int]] = Field(title="Categories mapping",

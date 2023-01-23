@@ -218,9 +218,11 @@ class _AddedToProject(BaseModel):
                                             default={}, example={"flash_delay": "t01"})
     process_free_cols: FreeColT = Field(title="Process free cols", description="Process free columns.", default={},
                                         example={"nb_images": "t01"})
-    bodc_variables: Dict[str, str] = Field(title="Expressions for computing standard BODC quantities.",
-                                           description="BOBC quantities from columns", default={},
-                                           example={"subsample_coef": "1/sub_part"})
+    bodc_variables: Dict[str, Optional[str]] = Field(title="Expressions for computing standard BODC quantities.",
+                                                     description="BOBC quantities from columns. Only the 3 keys listed in example are valid.", default={},
+                                                     example={"subsample_coef": "1/ssm.sub_part",
+                                                              "total_water_volume": "sam.tot_vol/1000",
+                                                              "individual_volume": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3"})
     init_classif_list: List[int] = Field(title="Init classification list",
                                          description="Favorite taxa used in classification.", default=[],
                                          example=[5, 11493, 11498, 11509])

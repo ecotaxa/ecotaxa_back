@@ -22,6 +22,15 @@ def test_error_var():
                             Units.cubic_millimetres_per_cubic_metre)
 
 
+def test_empty_var():
+    # Various "nothing"s
+    for a_val in (None, ""):
+        with pytest.raises(TypeError) as e_info:
+            _myvar = ProjectVar(a_val,
+                                Vocabulary.biovolume,
+                                Units.cubic_millimetres_per_cubic_metre)
+
+
 def test_parse_expr():
     expr = "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3+Unexpanded+w3ird"
     vars = ProjectVar.find_vars(expr)
@@ -40,6 +49,7 @@ def test_project_vars(config, database, fastapi, caplog):
     read_json = rsp.json()
     assert BODC_VARS_KEY in read_json
     upd_json = deepcopy(read_json)
+
     # Bad update with non-dict
     upd_json[BODC_VARS_KEY] = "toto"
     url = PROJECT_UPDATE_URL.format(project_id=prj_id)
@@ -49,15 +59,21 @@ def test_project_vars(config, database, fastapi, caplog):
     vars = {}
     upd_json[BODC_VARS_KEY] = vars
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
-    assert rsp.status_code == status.HTTP_200_OK, rsp.reason + str(rsp.content)
+    assert rsp.status_code == status.HTTP_200_OK, rsp.reason + str(rsp.text)
     # Good format update with bad keys
     vars["e"] = 1
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
-    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rsp.reason + str(rsp.content)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rsp.reason + str(rsp.text)
     # Good format update with good key
     del vars["e"]
     vars["subsample_coef"] = "1/sub_part"
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
-    assert rsp.status_code == status.HTTP_200_OK, rsp.reason + str(rsp.content)
-    # TODO: Syntax error in formula
+    assert rsp.status_code == status.HTTP_200_OK, rsp.reason + str(rsp.text)
+    # Syntax error in formula
+    vars["subsample_coef"] = "1/toto tutu"
+    rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rsp.reason + str(rsp.text)
     # TODO: Unknown col in formula
+    # vars["subsample_coef"] = "1/sup_part"
+    # rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
+    # assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rsp.reason + str(rsp.text)

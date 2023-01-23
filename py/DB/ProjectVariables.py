@@ -4,6 +4,8 @@
 #
 from __future__ import annotations
 
+from typing import Dict
+
 from DB.helpers.ORM import Model
 from .helpers.DDL import Column, ForeignKey
 from .helpers.ORM import relationship
@@ -32,3 +34,14 @@ class ProjectVariables(Model):
     def __str__(self):
         return "{0}:{1}{2}{3}".format(self.project_id, self.subsample_coef, self.total_water_volume,
                                       self.individual_biovolume)
+
+    def load_from_dict(self, vars_dict: Dict[str, str]) -> 'ProjectVariables':
+        """ Load self from a dict with proper keys """
+        for a_var in KNOWN_PROJECT_VARS:
+            if a_var in vars_dict:
+                setattr(self, a_var, vars_dict[a_var])
+        return self
+
+    def to_dict(self) -> Dict[str, str]:
+        """ Dict representation of self """
+        return {a_col: getattr(self, a_col) for a_col in KNOWN_PROJECT_VARS}

@@ -12,6 +12,7 @@ from BO.Classification import ClassifIDListT
 from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping, TableMapping
 from BO.Prediction import DeepFeatures
 from BO.ProjectPrivilege import ProjectPrivilegeBO
+from BO.ProjectVars import ProjectVar
 from BO.SpaceTime import USED_FIELDS_FOR_SUNPOS, compute_sun_position
 from BO.User import MinimalUserBO, UserActivity, UserIDT, MinimalUserBOListT, UserActivityListT
 from DB import ProjectVariables
@@ -135,7 +136,7 @@ class ProjectBO(object):
         self.instrument_url = self._project.instrument.bodc_url
         # Variables
         if self._project.variables is not None:
-            self.bodc_variables.update(self._project.variables)
+            self.bodc_variables.update(self._project.variables.to_dict())
         return self
 
     def public_enrich(self) -> "ProjectBO":
@@ -156,11 +157,18 @@ class ProjectBO(object):
         assert contact is not None, "A valid Contact is needed."
         proj_id = self._project.projid
         assert instrument is not None, "A valid Instrument is needed."
+        # Validate variables
+        errors: List[str] = []
         for a_var, its_def in bodc_vars.items():
-            assert a_var in KNOWN_PROJECT_VARS, "Invalid project variable key"
+            assert a_var in KNOWN_PROJECT_VARS, "Invalid project variable key: {}".format(a_var)
+            try:
+                var_def = ProjectVar.from_project(a_var, its_def)
+            except TypeError as e:
+                errors.append("Error {} in formula '{}': ".format(str(e), its_def))
+        assert len(errors) == 0, "There are formula errors: " + str(errors)
         # Field reflexes
         if cnn_network_id != self._project.cnn_network_id:
-            # Delete CNN features which depend on the CNN network
+            # Delete CNN features, which depend on the CNN network
             DeepFeatures.delete_all(session, proj_id)
         # Fields update
         self._project.instrument_id = instrument
@@ -200,6 +208,13 @@ class ProjectBO(object):
                                              extra=extra))
         # Sanity check
         assert contact_used, "Could not set Contact, the designated user is not in Managers list."
+        # Variables update, in full
+        bodc_vars_model = self._project.variables
+        if bodc_vars_model is None:
+            # Create record if needed
+            bodc_vars_model = ProjectVariables()
+            self._project.variables = bodc_vars_model
+        bodc_vars_model.load_from_dict(bodc_vars)
         session.commit()
 
     def __getattr__(self, item):
