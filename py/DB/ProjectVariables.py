@@ -4,7 +4,7 @@
 #
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, Optional
 
 from DB.helpers.ORM import Model
 from .helpers.DDL import Column, ForeignKey
@@ -35,11 +35,14 @@ class ProjectVariables(Model):
         return "{0}:{1}{2}{3}".format(self.project_id, self.subsample_coef, self.total_water_volume,
                                       self.individual_biovolume)
 
-    def load_from_dict(self, vars_dict: Dict[str, str]) -> 'ProjectVariables':
+    def load_from_dict(self, vars_dict: Dict[str, Optional[str]]) -> 'ProjectVariables':
         """ Load self from a dict with proper keys """
         for a_var in KNOWN_PROJECT_VARS:
             if a_var in vars_dict:
-                setattr(self, a_var, vars_dict[a_var])
+                a_val = vars_dict[a_var]
+                # Map empty string to None i.e. NULL
+                a_val = None if a_val is not None and a_val.strip() == "" else a_val
+                setattr(self, a_var, a_val)
         return self
 
     def to_dict(self) -> Dict[str, str]:

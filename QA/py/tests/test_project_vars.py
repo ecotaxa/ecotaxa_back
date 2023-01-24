@@ -69,6 +69,12 @@ def test_project_vars(config, database, fastapi, caplog):
     vars["subsample_coef"] = "1/sub_part"
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
     assert rsp.status_code == status.HTTP_200_OK, rsp.reason + str(rsp.text)
+    # Good format update with good key but no val
+    vars["subsample_coef"] = "  "
+    vars["individual_biovolume"] = " "
+    vars["total_water_volume"] = None
+    rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
+    assert rsp.status_code == status.HTTP_200_OK, rsp.reason + str(rsp.text)
     # Syntax error in formula
     vars["subsample_coef"] = "1/toto tutu"
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)

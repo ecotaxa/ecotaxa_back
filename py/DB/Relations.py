@@ -49,7 +49,7 @@ if True:
     CollectionUserRole.user = relationship(User, uselist=False)  # type:ignore # case2
 
     # Ancilliary to project
-    ProjectVariables.project = relationship(Project)  # type:ignore # case2
+    ProjectVariables.project = relationship(Project, viewonly=True)  # type:ignore # case2
     Project.variables = relationship(ProjectVariables, uselist=False)
 
     # Project

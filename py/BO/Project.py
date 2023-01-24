@@ -160,6 +160,8 @@ class ProjectBO(object):
         # Validate variables
         errors: List[str] = []
         for a_var, its_def in bodc_vars.items():
+            if its_def is None or its_def.strip() == "":
+                continue
             assert a_var in KNOWN_PROJECT_VARS, "Invalid project variable key: {}".format(a_var)
             try:
                 var_def = ProjectVar.from_project(a_var, its_def)
