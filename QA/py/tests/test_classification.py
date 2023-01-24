@@ -216,6 +216,34 @@ def test_classif(config, database, fastapi, caplog):
     assert classif == [
         {'objid': obj_ids[0], 'classif_id': 12846, 'classif_date': 'now', 'classif_who': None,
          'classif_type': 'A', 'classif_qual': 'P', 'classif_score': 0.52, 'user_name': None, 'taxon_name': 'Crustacea'}]
+    
+    # Revert on validated objects
+    url = OBJECT_SET_REVERT_URL.format(project_id=prj_id, dry_run=False, tgt_usr="")
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
+    assert rsp.status_code == status.HTTP_200_OK
+    stats = rsp.json()
+    
+    assert get_stats(fastapi, prj_id) == {'nb_dubious': 0,
+                                          'nb_predicted': 4,
+                                          'nb_unclassified': 4,
+                                          'nb_validated': 0,
+                                          'projid': prj_id,
+                                          'used_taxa': [-1, crustacea]}
+    
+    # Second revert, should not change since the last record in history is the same
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
+    assert rsp.status_code == status.HTTP_200_OK
+    stats = rsp.json()
+    
+    assert get_stats(fastapi, prj_id) == {'nb_dubious': 0,
+                                          'nb_predicted': 4,
+                                          'nb_unclassified': 4,
+                                          'nb_validated': 0,
+                                          'projid': prj_id,
+                                          'used_taxa': [-1, crustacea]}
+    
+    # Apply validation again after revert
+    classify_all(fastapi, obj_ids, copepod_id)
 
     # Not a copepod :(
     classify_all(fastapi, obj_ids, entomobryomorpha_id)
@@ -271,7 +299,7 @@ def test_classif(config, database, fastapi, caplog):
                            'projid': prj_id,
                            'used_taxa': [
                                25835]}]  # <- copepod is gone, unclassified as well, replaced with entomobryomorpha
-
+    
     # Reset to predicted on validated objects
     url = OBJECT_SET_RESET_PREDICTED_URL.format(project_id=prj_id)
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
@@ -282,6 +310,19 @@ def test_classif(config, database, fastapi, caplog):
                                           'nb_predicted': 8,
                                           'nb_unclassified': 0,
                                           'nb_validated': 0,
+                                          'projid': prj_id,
+                                          'used_taxa': [25835]}
+    
+    # Revert after reset to predicted
+    url = OBJECT_SET_REVERT_URL.format(project_id=prj_id, dry_run=False, tgt_usr="")
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
+    assert rsp.status_code == status.HTTP_200_OK
+    stats = rsp.json()
+    
+    assert get_stats(fastapi, prj_id) == {'nb_dubious': 0,
+                                          'nb_predicted': 0,
+                                          'nb_unclassified': 0,
+                                          'nb_validated': 8,
                                           'projid': prj_id,
                                           'used_taxa': [25835]}
   
