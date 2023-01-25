@@ -237,7 +237,7 @@ def test_classif(config, database, fastapi, caplog):
                                           'nb_unclassified': 0,
                                           'nb_validated': 8,
                                           'projid': prj_id,
-                                          'used_taxa': [25828]}  # No more Unclassified and Copepod is in +
+                                          'used_taxa': [copepod_id]}  # No more Unclassified and Copepod is in +
 
     # No history yet as the object was just created
     classif = classif_history(fastapi, obj_ids[0])
@@ -245,7 +245,7 @@ def test_classif(config, database, fastapi, caplog):
     assert classif[0]['classif_date'] is not None  # e.g. 2021-09-12T09:28:03.278626
     classif[0]['classif_date'] = "now"
     assert classif == [
-        {'objid': obj_ids[0], 'classif_id': 12846, 'classif_date': 'now', 'classif_who': None,
+        {'objid': obj_ids[0], 'classif_id': crustacea, 'classif_date': 'now', 'classif_who': None,
          'classif_type': 'A', 'classif_qual': 'P', 'classif_score': 0.52, 'user_name': None, 'taxon_name': 'Crustacea'}]
     
     # Revert on validated objects
@@ -295,7 +295,7 @@ def test_classif(config, database, fastapi, caplog):
     classif2[0]['classif_date'] = 'hopefully just now'
     classif2[1]['classif_date'] = 'a bit before'
     assert classif2 == [{'classif_date': 'hopefully just now',
-                         'classif_id': 25828,
+                         'classif_id': copepod_id,
                          'classif_qual': 'V',
                          'classif_score': None,
                          'classif_type': 'M',
@@ -304,7 +304,7 @@ def test_classif(config, database, fastapi, caplog):
                          'taxon_name': 'Copepoda',
                          'user_name': 'Application Administrator'},
                         {'classif_date': 'a bit before',
-                         'classif_id': 12846,
+                         'classif_id': crustacea,
                          'classif_qual': 'P',
                          'classif_score': 0.52,
                          'classif_type': 'A',
@@ -328,8 +328,8 @@ def test_classif(config, database, fastapi, caplog):
                            'nb_unclassified': 0,
                            'nb_validated': 8,
                            'projid': prj_id,
-                           'used_taxa': [
-                               25835]}]  # <- copepod is gone, unclassified as well, replaced with entomobryomorpha
+                           'used_taxa': 
+                           [entomobryomorpha_id]}]  # <- copepod is gone, unclassified as well, replaced with entomobryomorpha
     
     # Reset to predicted on validated objects
     url = OBJECT_SET_RESET_PREDICTED_URL.format(project_id=prj_id)
@@ -342,7 +342,7 @@ def test_classif(config, database, fastapi, caplog):
                                           'nb_unclassified': 0,
                                           'nb_validated': 0,
                                           'projid': prj_id,
-                                          'used_taxa': [25835]}
+                                          'used_taxa': [entomobryomorpha_id]}
     
     # Revert after reset to predicted
     url = OBJECT_SET_REVERT_URL.format(project_id=prj_id, dry_run=False, tgt_usr="")
@@ -355,7 +355,7 @@ def test_classif(config, database, fastapi, caplog):
                                           'nb_unclassified': 0,
                                           'nb_validated': 8,
                                           'projid': prj_id,
-                                          'used_taxa': [25835]}
+                                          'used_taxa': [entomobryomorpha_id]}
   
     # Delete some object via API, why not?
     rsp = fastapi.delete(OBJECT_SET_DELETE_URL, headers=ADMIN_AUTH, json=obj_ids[:4])
