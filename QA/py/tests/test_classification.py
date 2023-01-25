@@ -3,6 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import logging
+import pytest
 
 from API_models.filters import ProjectFilters, ProjectFiltersDict
 from starlette import status
@@ -71,6 +72,33 @@ def classify_auto_all(fastapi, obj_ids, classif_id, scores=None):
                                                       "scores": scores,
                                                       "keep_log": True})
     assert rsp.status_code == status.HTTP_200_OK
+    
+    
+def classify_auto_incorrect(fastapi, obj_ids):
+    url = OBJECT_SET_CLASSIFY_AUTO_URL
+    classifications = [-1 for _obj in obj_ids]
+    
+    # List of scores of a different length, should raise an error
+    scores = [0.1 for _obj in obj_ids[:-1]]
+    with pytest.raises(AssertionError):
+        rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
+                                                          "classifications": classifications,
+                                                          "scores": scores,
+                                                          "keep_log": True})
+    # List of scores outside [0, 1], should raise an error
+    scores = [2. for _obj in obj_ids]
+    with pytest.raises(AssertionError):
+        rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
+                                                          "classifications": classifications,
+                                                          "scores": scores,
+                                                          "keep_log": True})
+    # List of scores with wrong type, should fail
+    scores = [None for _obj in obj_ids]
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
+                                                      "classifications": classifications,
+                                                      "scores": scores,
+                                                      "keep_log": True})
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
@@ -180,6 +208,9 @@ def test_classif(config, database, fastapi, caplog):
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
     assert rsp.status_code == status.HTTP_200_OK
 
+    # Incorrect ML results
+    classify_auto_incorrect(fastapi, obj_ids[:4])
+    
     # Super ML result, 4 first objects are crustacea
     classify_auto_all(fastapi, obj_ids[:4], crustacea)
 
