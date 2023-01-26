@@ -89,7 +89,7 @@ class ProjectBO(object):
         self.viewers: List[User] = []
         self.annotators: List[User] = []
         self.managers: List[User] = []
-        # Formulas AKA variables
+        # Formulas AKA variables, used to compute BODC quantities
         self.bodc_variables: Dict[str, str] = {}
 
     def get_preset(self) -> ClassifIDListT:

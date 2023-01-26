@@ -11,7 +11,7 @@ from .helpers.DDL import Column, ForeignKey
 from .helpers.ORM import relationship
 from .helpers.Postgres import VARCHAR, INTEGER
 
-KNOWN_PROJECT_VARS = {"subsample_coef", "total_water_volume", "individual_biovolume"}
+KNOWN_PROJECT_VARS = {"subsample_coef", "total_water_volume", "individual_volume"}
 
 
 class ProjectVariables(Model):
@@ -25,15 +25,15 @@ class ProjectVariables(Model):
     subsample_coef = Column(VARCHAR)
     # Python expression, the calculation result complies to http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/
     total_water_volume = Column(VARCHAR)
-    # Python expression, the calculation result complies to http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/
-    individual_biovolume = Column(VARCHAR)
+    # Python expression, the implied unit is mm3
+    individual_volume = Column(VARCHAR)
 
     # The relationship(s) are created in Relations.py but the typing here helps IDE
     project: relationship
 
     def __str__(self):
         return "{0}:{1}{2}{3}".format(self.project_id, self.subsample_coef, self.total_water_volume,
-                                      self.individual_biovolume)
+                                      self.individual_volume)
 
     def load_from_dict(self, vars_dict: Dict[str, Optional[str]]) -> 'ProjectVariables':
         """ Load self from a dict with proper keys """

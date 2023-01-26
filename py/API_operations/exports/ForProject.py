@@ -659,7 +659,12 @@ class ProjectExport(JobServiceBase):
         # The specialized SQL builder operates from the object set
         aug_qry = ObjectSetQueryPlus(object_set)
         aug_qry.remap_categories(req.pre_mapping)
-        aug_qry.set_formulae(req.formulae)
+        # Formulae default from the project but are overriden by the query
+        formulae: Dict[str, str] = {}
+        if src_project.variables is not None:
+            formulae.update(src_project.variables.to_dict())
+        formulae.update(req.formulae)
+        aug_qry.set_formulae(formulae)
         # Set common aliases, not all of them is always used
         aug_qry.set_aliases({"sam.orig_id": "sampleid",
                              "acq.orig_id": "acquisid",

@@ -15,7 +15,7 @@ from .Vocabulary import Vocabulary, Units
 TYPES_PER_VAR = {
     "subsample_coef": (Vocabulary.subsampling_coefficient, Units.dimensionless),
     "total_water_volume": (Vocabulary.volume_sampled, Units.cubic_metres),
-    "individual_biovolume": (Vocabulary.biovolume, Units.cubic_millimetres_per_cubic_metre)
+    "individual_volume": (Vocabulary.volume_mm3, Units.cubic_millimetres)
 }
 # ...but below should prevent any de-sync
 assert KNOWN_PROJECT_VARS == set(TYPES_PER_VAR.keys())

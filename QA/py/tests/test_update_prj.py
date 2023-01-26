@@ -258,7 +258,7 @@ def test_update_prj_bodc_vars(config, database, fastapi, caplog):
 
     vars = {"subsample_coef": "1",
             "total_water_volume": "2",
-            "individual_biovolume": "3"}
+            "individual_volume": "3"}
     settings_json[BODC_VARS_KEY] = vars
     # Now it should be OK
     rsp = fastapi.put(upd_url, headers=ADMIN_AUTH, json=settings_json)

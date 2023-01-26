@@ -1152,7 +1152,7 @@ CREATE TABLE projects_variables (
     project_id INTEGER NOT NULL,
     subsample_coef VARCHAR,
     total_water_volume VARCHAR,
-    individual_biovolume VARCHAR,
+    individual_volume VARCHAR,
     PRIMARY KEY (project_id),
     FOREIGN KEY(project_id) REFERENCES projects (projid)
 );

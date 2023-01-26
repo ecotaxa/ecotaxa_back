@@ -19,7 +19,7 @@ def upgrade():
     sa.Column('project_id', sa.INTEGER(), nullable=False),
     sa.Column('subsample_coef', sa.VARCHAR(), nullable=True),
     sa.Column('total_water_volume', sa.VARCHAR(), nullable=True),
-    sa.Column('individual_biovolume', sa.VARCHAR(), nullable=True),
+    sa.Column('individual_volume', sa.VARCHAR(), nullable=True),
     sa.ForeignKeyConstraint(['project_id'], ['projects.projid'], ),
     sa.PrimaryKeyConstraint('project_id')
     )
