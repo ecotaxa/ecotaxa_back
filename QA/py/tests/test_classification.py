@@ -227,6 +227,13 @@ def test_classif(config, database, fastapi, caplog):
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json()['classif_auto_score'] == 0.8
+    
+    assert get_stats(fastapi, prj_id) == {'nb_dubious': 0,
+                                          'nb_predicted': 4,
+                                          'nb_unclassified': 4,
+                                          'nb_validated': 0,
+                                          'projid': prj_id,
+                                          'used_taxa': [-1, crustacea]}
 
     # Admin (me!) thinks that all is a copepod :)
     classify_all(fastapi, obj_ids, copepod_id)
