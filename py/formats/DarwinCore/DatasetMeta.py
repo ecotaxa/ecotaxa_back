@@ -39,17 +39,17 @@ class DatasetMetadata(object):
     def content(self) -> str:
         dataset = etree.Element("dataset")
         meta = self.meta
-        for a_title in meta.titles:
+        for a_title in sorted(meta.titles, key=lambda title: title.json()):
             xml_title = etree_sub_element(dataset, "title")
             xml_title.set("lang", a_title.lang)
             xml_title.text = a_title.title
-        for a_person in meta.creators:
+        for a_person in sorted(meta.creators, key=lambda creator: creator.json()):
             xml_person = etree_sub_element(dataset, "creator")
             self.person_to_xml(xml_person, a_person)
-        for a_person in meta.metadataProviders:
+        for a_person in sorted(meta.metadataProviders, key=lambda provider: provider.json()):
             xml_person = etree_sub_element(dataset, "metadataProvider")
             self.person_to_xml(xml_person, a_person)
-        for a_person in meta.associatedParties:
+        for a_person in sorted(meta.associatedParties, key=lambda party: party.json()):
             xml_person = etree_sub_element(dataset, "associatedParty")
             self.party_to_xml(xml_person, a_person)
         etree_sub_element(dataset, "pubDate").text = meta.pubDate
@@ -95,7 +95,8 @@ class DatasetMetadata(object):
             etree_sub_element(etree_sub_element(xml_maint, "description"), "para").text = meta.maintenance
             etree_sub_element(xml_maint, "maintenanceUpdateFrequency").text = meta.maintenanceUpdateFrequency
         # Contacts
-        for a_person in meta.contacts:
+        for a_person in sorted(meta.contacts, key=lambda person: person.json()):
+            # TODO: Not reached by tests
             xml_person = etree_sub_element(dataset, "contact")
             self.person_to_xml(xml_person, a_person)
         # Additional Metadata
@@ -188,7 +189,7 @@ class DatasetMetadata(object):
         if meta.generalTaxonomicCoverage:
             etree_sub_element(xml_taxo_cov, "generalTaxonomicCoverage").text = meta.generalTaxonomicCoverage
         eml_taxo_cov = meta.taxonomicCoverage
-        for an_eml_taxo in eml_taxo_cov:
+        for an_eml_taxo in sorted(eml_taxo_cov, key=lambda taxo: taxo.json()):
             xml_classif = etree_sub_element(xml_taxo_cov, "taxonomicClassification")
             etree_sub_element(xml_classif, "taxonRankName").text = an_eml_taxo.taxonRankName
             etree_sub_element(xml_classif, "taxonRankValue").text = an_eml_taxo.taxonRankValue

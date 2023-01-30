@@ -78,12 +78,12 @@ This series is part of the long term planktonic monitoring of
     </temporalCoverage>
     <taxonomicCoverage>
       <taxonomicClassification>
-        <taxonRankName>Order</taxonRankName>
-        <taxonRankValue>Cyclopoida</taxonRankValue>
-      </taxonomicClassification>
-      <taxonomicClassification>
         <taxonRankName>Family</taxonRankName>
         <taxonRankValue>Oncaeidae</taxonRankValue>
+      </taxonomicClassification>
+      <taxonomicClassification>
+        <taxonRankName>Order</taxonRankName>
+        <taxonRankValue>Cyclopoida</taxonRankValue>
       </taxonomicClassification>
     </taxonomicCoverage>
   </coverage>
