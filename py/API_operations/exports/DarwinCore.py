@@ -12,6 +12,7 @@
 import datetime
 import re
 from collections import OrderedDict
+from functools import lru_cache
 from typing import Dict, List, Optional, Tuple, cast, Set, Any
 from urllib.parse import quote_plus
 
@@ -29,7 +30,7 @@ from BO.Sample import SampleBO, SampleAggregForTaxon
 from BO.TaxonomySwitch import TaxonomyMapper
 from BO.Vocabulary import Vocabulary, Units
 from DB.Collection import Collection
-from DB.Project import ProjectTaxoStat, ProjectIDT, ProjectIDListT
+from DB.Project import ProjectTaxoStat, ProjectIDT, ProjectIDListT, Project
 from DB.Sample import Sample
 from DB.Taxonomy import Taxonomy
 from DB.User import User, Role
@@ -39,7 +40,8 @@ from data.Countries import countries_by_name
 from formats.DarwinCore.Archive import DwC_Archive, DwcArchive
 from formats.DarwinCore.DatasetMeta import DatasetMetadata
 from formats.DarwinCore.MoF import SamplingNetMeshSizeInMicrons, SampleDeviceApertureAreaInSquareMeters, \
-    AbundancePerUnitVolumeOfTheWaterBody, BiovolumeOfBiologicalEntity, SamplingInstrumentName, CountOfBiologicalEntity
+    AbundancePerUnitVolumeOfTheWaterBody, BiovolumeOfBiologicalEntity, SamplingInstrumentName, CountOfBiologicalEntity, \
+    ImagingInstrumentName
 from formats.DarwinCore.models import DwC_Event, RecordTypeEnum, DwC_Occurrence, OccurrenceStatusEnum, \
     BasisOfRecordEnum, EMLGeoCoverage, EMLTemporalCoverage, EMLMeta, EMLTitle, EMLPerson, EMLKeywordSet, \
     EMLTaxonomicClassification, EMLAdditionalMeta, EMLIdentifier, EMLAssociatedPerson
@@ -495,6 +497,7 @@ class DarwinCoreExport(JobServiceBase):
                 if nb_added == 0:
                     self.warnings.append(
                         "No occurrence added for sample '%s' in project #%d" % (a_sample.orig_id, a_prj_id))
+                self.add_instrument_eMoFs_for_sample(sample=a_sample, arch=arch, event_id=event_id)
 
     nine_nine_re = re.compile("999+.0$")
 
@@ -566,6 +569,25 @@ class DarwinCoreExport(JobServiceBase):
             # Produce net traits even if no net
             arch.emofs.add(SamplingNetMeshSizeInMicrons(event_id, str(net_mesh)))
             arch.emofs.add(SampleDeviceApertureAreaInSquareMeters(event_id, str(net_surf)))
+
+    @lru_cache(maxsize=None)
+    def _get_instrument_url(self, project: Project):
+        """ Cache projects' instrument URL """
+        ret = project.instrument.bodc_url
+        if ret is None:
+            self.warnings.append("Project %s instrument does not have an associated BODC term."
+                                 % (project.projid,))
+        return ret
+
+    def add_instrument_eMoFs_for_sample(self, sample: Sample, arch: DwC_Archive, event_id: str) -> None:
+        """
+            Add imaging instrument eMoF. Unsure at which level the event should be, so kept separated.
+        """
+        instrument_url = self._get_instrument_url(sample.project)
+        if instrument_url is not None:
+            ins = ImagingInstrumentName(event_id=event_id,
+                                        value=instrument_url)
+            arch.emofs.add(ins)
 
     # @classmethod
     # def _add_morpho_counts(cls, count_per_taxon_for_acquis: Dict[ClassifIDT, int],

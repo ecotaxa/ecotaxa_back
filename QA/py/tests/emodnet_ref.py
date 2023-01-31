@@ -216,10 +216,16 @@ m106_mn01_n1_sml	m106_mn01_n1_sml_78418	1992121.390848	Biovolume of biological e
 m106_mn01_n1_sml	m106_mn01_n1_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
 m106_mn01_n1_sml	m106_mn01_n1_sml_45072	0.02	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
 m106_mn01_n1_sml	m106_mn01_n1_sml_45072	355604.586438	Biovolume of biological entity specified elsewhere per unit volume of the water body	Cubic millimetres per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/	http://vocab.nerc.ac.uk/collection/P06/current/CMCM/
+m106_mn01_n1_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
+m106_mn01_n2_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
+m106_mn01_n3_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
 m106_mn04_n4_sml	m106_mn04_n4_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn04_n4_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
 m106_mn04_n5_sml	m106_mn04_n5_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn04_n5_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
 m106_mn04_n6_sml	m106_mn04_n6_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
 m106_mn04_n6_sml	m106_mn04_n6_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn04_n6_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
 """
 # _emofs_no_comp = r"""
 # id	measurementValue	measurementType	measurementUnit	measurementTypeID	measurementUnitID
@@ -231,10 +237,16 @@ _emofs_no_comp = r"""
 id	occurrenceID	measurementValue	measurementType	measurementTypeID
 m106_mn01_n1_sml	m106_mn01_n1_sml_78418	2	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
 m106_mn01_n1_sml	m106_mn01_n1_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
+m106_mn01_n1_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name	https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+m106_mn01_n2_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name	https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+m106_mn01_n3_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name	https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
 m106_mn04_n4_sml	m106_mn04_n4_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
+m106_mn04_n4_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name	https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
 m106_mn04_n5_sml	m106_mn04_n5_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
+m106_mn04_n5_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name	https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
 m106_mn04_n6_sml	m106_mn04_n6_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
 m106_mn04_n6_sml	m106_mn04_n6_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
+m106_mn04_n6_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name	https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
 """
 ref_zip = {"event.txt": _event,
            "eml.xml": _eml,

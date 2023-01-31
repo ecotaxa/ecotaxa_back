@@ -13,6 +13,7 @@ from tests.export_shared import JOB_DOWNLOAD_URL
 from tests.test_classification import _prj_query, OBJECT_SET_CLASSIFY_URL
 from tests.test_collections import COLLECTION_CREATE_URL, COLLECTION_UPDATE_URL, COLLECTION_QUERY_URL
 from tests.test_fastapi import PROJECT_QUERY_URL
+from tests.test_import import PLAIN_FILE
 from tests.test_jobs import wait_for_stable, api_check_job_ok, api_check_job_failed
 from tests.test_update import ACQUISITION_SET_UPDATE_URL, SAMPLE_SET_UPDATE_URL
 from tests.test_update_prj import PROJECT_UPDATE_URL
@@ -40,7 +41,7 @@ def do_test_emodnet_export(config, database, fastapi, caplog):
 
     # Admin imports the project
     from tests.test_import import BAD_FREE_DIR, test_import, do_import, test_import_a_bit_more_skipping
-    prj_id = test_import(config, database, caplog, "EMODNET project")
+    prj_id = test_import(config, database, caplog, "EMODNET project", str(PLAIN_FILE), "UVP6")
     # Add a sample spanning 2 days
     test_import_a_bit_more_skipping(config, database, caplog, "EMODNET project")
     # Add a sample with corrupted or absent needed free columns
