@@ -21,7 +21,8 @@ class GroupDefinitions(str, Enum):
 
 class SubsetReq(BaseModel):
     """ Subset request. """
-    filters: ProjectFiltersDict = Field(title="Filters", description="The filters to apply to project.", default={},
+    filters: ProjectFiltersDict = Field(title="Filters", description="The filters to apply to project.",
+                                        default=ProjectFiltersDict(),
                                         example={"freenum": "n01", "freenumst": "0"})
     dest_prj_id: int = Field(title="Destination project id", description="The destination project ID.", example=22)
     group_type: GroupDefinitions = Field(title="Group type",

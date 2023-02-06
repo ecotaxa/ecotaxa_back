@@ -71,7 +71,6 @@ class DarwinCoreExport(JobServiceBase):
     def init_args(self, args: ArgsDict) -> ArgsDict:
         # A bit unusual to find a method before init(), but here we can visually ensure
         # that arg lists are identical.
-        super().init_args(args)
         args.update({"collection_id": self.collection.id,
                      "dry_run": self.dry_run,
                      "with_zeroes": self.with_zeroes,
@@ -92,7 +91,7 @@ class DarwinCoreExport(JobServiceBase):
         self.collection = collection
         # During processing
         # The Phylo taxa to their WoRMS counterpart
-        self.mapping: Dict[ClassifIDT, WoRMS] = {}
+        self.phylo2worms: Dict[ClassifIDT, WoRMS] = {}
         # The Morpho taxa to their nearest Phylo parent
         self.morpho2phylo: TaxoRemappingT = {}
         self.taxa_per_sample: Dict[str, Set[ClassifIDT]] = {}
@@ -180,7 +179,7 @@ class DarwinCoreExport(JobServiceBase):
                 occurrence_id = an_event_id + "_" + str(a_missing_id)
                 # No need to catch any exception here, the lookup worked during the
                 # "present" records generation.
-                worms = self.mapping[a_missing_id]
+                worms = self.phylo2worms[a_missing_id]
                 occ = DwC_Occurrence(eventID=an_event_id,
                                      occurrenceID=occurrence_id,
                                      individualCount=0,
@@ -415,7 +414,6 @@ class DarwinCoreExport(JobServiceBase):
     def get_taxo_coverage(self, project_ids: ProjectIDListT) -> List[EMLTaxonomicClassification]:
         """
             Taxonomic coverage is the list of taxa which can be found in the projects.
-
         """
         ret: List[EMLTaxonomicClassification] = []
         # Fetch the used taxa in the projects
@@ -425,22 +423,22 @@ class DarwinCoreExport(JobServiceBase):
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid.in_(project_ids))
         used_taxa = {an_id: a_name for (an_id, a_name) in taxo_qry}
         # Map them to WoRMS
-        self.mapping, self.morpho2phylo = TaxonomyMapper(self.ro_session, list(used_taxa.keys())).do_match()
-        assert set(self.mapping.keys()).isdisjoint(set(self.morpho2phylo.keys()))
+        self.phylo2worms, self.morpho2phylo = TaxonomyMapper(self.ro_session, list(used_taxa.keys())).do_match()
+        assert set(self.phylo2worms.keys()).isdisjoint(set(self.morpho2phylo.keys()))
         # Warnings for non-matches
         for an_id, a_name in used_taxa.items():
-            if an_id not in self.mapping:
+            if an_id not in self.phylo2worms:
                 if not an_id in self.morpho2phylo:
                     self.ignored_taxa[an_id] = (a_name, an_id)
                     self.ignored_count[an_id] = 0
         # TODO: Temporary until the whole system has a WoRMS taxo tree
         # Error out if nothing at all
-        if len(self.mapping) == 0:
+        if len(self.phylo2worms) == 0:
             self.errors.append("Could not match in WoRMS _any_ classification in this project")
             return ret
         # Produce the coverage
         produced = set()
-        for _an_id, a_worms_entry in self.mapping.items():
+        for _an_id, a_worms_entry in self.phylo2worms.items():
             assert a_worms_entry is not None, "None for %d" % _an_id
             rank = a_worms_entry.rank
             value = a_worms_entry.scientificname
@@ -773,7 +771,7 @@ class DarwinCoreExport(JobServiceBase):
         by_lsid: Dict[str, Tuple[str, SampleAggregForTaxon, WoRMS]] = {}
         for an_id, an_aggreg in aggregs.items():
             try:
-                worms = self.mapping[an_id]
+                worms = self.phylo2worms[an_id]
             except KeyError:
                 # Mapping failed, count how many of them
                 if an_id in self.ignored_count:
@@ -799,7 +797,7 @@ class DarwinCoreExport(JobServiceBase):
         # Sort per abundance desc
         # noinspection PyTypeChecker
         by_lsid_desc = OrderedDict(sorted(by_lsid.items(), key=lambda itm: itm[1][1].abundance, reverse=True))
-        # Record production for this sample
+        # Record production for this sample i.e. event
         self.taxa_per_sample[event_id] = set()
         # Loop over WoRMS taxa
         nb_added_occurences = 0

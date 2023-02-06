@@ -13,16 +13,14 @@ from typing import Optional, Tuple, TextIO, cast, Dict, List, Set, Any
 
 from API_models.exports import ExportRsp, ExportReq, ExportTypeEnum, SummaryExportGroupingEnum
 from API_models.filters import ProjectFiltersDict
-from BO.Classification import ClassifIDListT
 from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet
 from BO.ObjectSetQueryPlus import ResultGrouping, IterableRowsT, ObjectSetQueryPlus
-from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
 from BO.Vocabulary import Vocabulary, Units
 from DB.Object import VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL
-from DB.Project import Project, ProjectIDListT
+from DB.Project import Project
 from DB.helpers.Direct import text
 from DB.helpers.SQL import OrderClause
 from FS.CommonDir import ExportFolder
@@ -61,7 +59,6 @@ class ProjectExport(JobServiceBase):
         return ret
 
     def init_args(self, args: ArgsDict) -> ArgsDict:
-        super().init_args(args)
         args["req"] = self.req.dict()
         args["filters"] = self.filters
         return args
@@ -342,7 +339,7 @@ class ProjectExport(JobServiceBase):
         nb_rows = 0
         nb_images = 0
         used_dst_pathes = set()
-        for r in res:
+        for r in res.mappings():
             # Rows from SQLAlchemy are not mutable, so we need a clone for arranging values
             a_row = dict(r)
             if ((splitcsv and (prev_value != a_row[split_field]))  # At each split column values change

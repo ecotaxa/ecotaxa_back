@@ -366,6 +366,7 @@ class TSVFile(object):
             # The data from TSV, to update with. Eventually just an empty dict, but still a dict.
             dict_for_update = dicts_for_update[alias]
 
+            parent: Optional[Union[Sample, Acquisition, Process]]
             if parent_class != Process:
                 # Locate using Sample & Acquisition orig_id
                 parent_orig_id = dict_for_update.get("orig_id")
@@ -374,7 +375,6 @@ class TSVFile(object):
                     # Default with present parent's parent technical ID
                     parent_orig_id = '__DUMMY_ID__%d__' % upper_level_pk
                 # Look for the parent by its (eventually amended) orig_id
-                parent: Optional[Union[Sample, Acquisition]]
                 if parent_class == Sample:
                     parent = how.existing_samples.get(parent_orig_id)
                 else:
@@ -393,14 +393,15 @@ class TSVFile(object):
                 assert parent is not None
 
             # OK we have something to update
-            # Update the DB line using sqlalchemy
+            # So update the DB line using sqlalchemy
             updates = TSVFile.update_orm_object(parent, dict_for_update)
             if len(updates) > 0:
                 logger.info("Updating %s '%s' using %s", alias, parent.orig_id, updates)
                 session.flush()
 
     @staticmethod
-    def update_orm_object(model: Model, update_dict: Dict[str, Any]):
+    def update_orm_object(model: Union[ObjectHeader, Sample, Acquisition, Process, ObjectFields],
+                          update_dict: Dict[str, Any]):
         """
             In-memory update of the ORM record, based on the difference with a needed state.
             :return: An explanation text for the updates to come.
@@ -582,7 +583,8 @@ class TSVFile(object):
                 ret = 3  # new image + new object_head + new object_fields
         return ret
 
-    def deal_with_images(self, where: ImportWhere, how: ImportHow, image_to_write: Bean, instead_image: Path = None):
+    def deal_with_images(self, where: ImportWhere, how: ImportHow, image_to_write: Bean,
+                         instead_image: Optional[Path] = None):
         """
             Generate image, eventually the vignette, create DB line(s) and copy image file into vault.
         :param where:
