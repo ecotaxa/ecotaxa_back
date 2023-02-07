@@ -82,7 +82,7 @@ class ObjectBO(MappedEntity):
             ObjectsClassifHisto.objid == self.header.objid)
         qry = qry.outerjoin(User)
         qry = qry.outerjoin(Taxonomy, Taxonomy.id == och.classif_id)
-        ret = [HistoricalClassification(**rec) for rec in qry]
+        ret = [HistoricalClassification(**rec._mapping) for rec in qry]
         return ret
 
     @staticmethod

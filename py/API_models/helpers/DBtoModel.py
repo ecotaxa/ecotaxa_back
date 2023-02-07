@@ -50,6 +50,7 @@ def _sqlalchemy_to_pydantic(db_model: T, *,
     not_null_cols = set()
     # Build model from ORM fields
     mapper = inspect(db_model)
+    assert mapper is not None
     for attr in mapper.attrs:
         if not isinstance(attr, ColumnProperty):
             continue

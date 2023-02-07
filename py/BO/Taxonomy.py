@@ -65,7 +65,7 @@ class TaxonomyBO(object):
                    "  FROM taxonomy "
                    " WHERE id = ANY (:een)")
         res: Result = session.execute(sql, {"een": list(classif_id_seen)})
-        return {int(r['id']) for r in res}
+        return {an_id for an_id, in res}
 
     @staticmethod
     def keep_phylo(session: Session, classif_id_seen: ClassifIDListT):

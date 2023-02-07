@@ -60,3 +60,4 @@ class ProjectConsistencyChecker(Service, LogEmitter):
         """
             Objects which are partially located in time/space.
         """
+        return []

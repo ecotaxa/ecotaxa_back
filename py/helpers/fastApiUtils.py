@@ -80,8 +80,8 @@ class BearerOrCookieAuth(OAuth2):
     def __init__(
             self,
             tokenUrl: str,
-            scheme_name: str = None,
-            scopes: dict = None,
+            scheme_name: Optional[str] = None,
+            scopes: Optional[dict] = None,
             auto_error: bool = True,
     ):
         if not scopes:
@@ -90,7 +90,7 @@ class BearerOrCookieAuth(OAuth2):
         super().__init__(flows=flows, scheme_name=scheme_name, auto_error=auto_error)
 
     async def __call__(self, request: Request) -> Optional[str]:
-        header_authorization: str = request.headers.get("Authorization")
+        header_authorization: Optional[str] = request.headers.get("Authorization")
         session_cookie: Optional[str] = request.cookies.get("session")
 
         header_scheme, header_param = get_authorization_scheme_param(

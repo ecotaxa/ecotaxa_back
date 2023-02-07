@@ -284,7 +284,7 @@ class ObjectSetQueryPlus(object):
         res = ro_session.execute(text(sql), params)
         if self.sum_exp is None:
             # Pure SQL, emit each row
-            for a_simple_row in res:
+            for a_simple_row in res.mappings():
                 yield dict(a_simple_row)
         else:
             assert self.grouping != ResultGrouping.NO_GROUPING

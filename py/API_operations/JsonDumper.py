@@ -136,7 +136,7 @@ class JsonDumper(Service):
 
         with CodeTimer("Get IDs:", logger):
             res: Result = self.session.execute(text(sql), params)
-        ids = [r['objid'] for r in res]
+        ids = [r['objid'] for r in res.mappings()]
 
         logger.info("NB OBJIDS=%d", len(ids))
 

@@ -413,7 +413,8 @@ class DarwinCoreExport(JobServiceBase):
 
     def get_taxo_coverage(self, project_ids: ProjectIDListT) -> List[EMLTaxonomicClassification]:
         """
-            Taxonomic coverage is the list of taxa which can be found in the projects.
+            Taxonomic coverage is the list of taxa which can be found in the projects, regardless
+            of their validation state.
         """
         ret: List[EMLTaxonomicClassification] = []
         # Fetch the used taxa in the projects
