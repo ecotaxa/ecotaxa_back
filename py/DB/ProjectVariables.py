@@ -19,7 +19,7 @@ class ProjectVariables(Model):
         The definition of variables inside a project.
     """
     __tablename__ = 'projects_variables'
-    project_id: int = Column(INTEGER, ForeignKey('projects.projid'), primary_key=True)
+    project_id: int = Column(INTEGER, ForeignKey('projects.projid', ondelete="CASCADE"), primary_key=True)
 
     # Python expression, the calculation result complies to http://vocab.nerc.ac.uk/collection/P01/current/SSAMPC01/1/
     subsample_coef = Column(VARCHAR)

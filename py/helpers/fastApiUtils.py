@@ -90,7 +90,7 @@ class BearerOrCookieAuth(OAuth2):
         super().__init__(flows=flows, scheme_name=scheme_name, auto_error=auto_error)
 
     async def __call__(self, request: Request) -> Optional[str]:
-        header_authorization: Optional[str] = request.headers.get("Authorization")
+        header_authorization: str = request.headers.get("Authorization", "")
         session_cookie: Optional[str] = request.cookies.get("session")
 
         header_scheme, header_param = get_authorization_scheme_param(
