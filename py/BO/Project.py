@@ -573,6 +573,7 @@ class ProjectBO(object):
         session.query(Project). \
             filter(Project.projid == prj_id).delete()
         # Remove privileges
+        # TODO: Should be in a relationship rule already. To check using DB trace when moving to SQLAlchemy v2
         session.query(ProjectPrivilege). \
             filter(ProjectPrivilege.projid == prj_id).delete()
 

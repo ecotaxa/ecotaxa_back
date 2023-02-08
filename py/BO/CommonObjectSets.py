@@ -18,3 +18,9 @@ class CommonObjectSets(object):
         obj_filter = ProjectFiltersDict(statusfilter='V', samples=str(sample.sampleid))
         obj_set: DescribedObjectSet = DescribedObjectSet(session, sample.projid, None, obj_filter)
         return obj_set
+
+    @staticmethod
+    def predictedInSample(session: Session, sample: Sample) -> DescribedObjectSet:
+        obj_filter = ProjectFiltersDict(statusfilter='P', samples=str(sample.sampleid))
+        obj_set: DescribedObjectSet = DescribedObjectSet(session, sample.projid, None, obj_filter)
+        return obj_set

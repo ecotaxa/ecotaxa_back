@@ -23,6 +23,7 @@ from BO.Classification import ClassifIDT, ClassifIDSetT
 from BO.Collection import CollectionIDT, CollectionBO
 from BO.CommonObjectSets import CommonObjectSets
 from BO.DataLicense import LicenseEnum, DataLicense
+from BO.ObjectSet import DescribedObjectSet
 from BO.ObjectSetQueryPlus import ResultGrouping, TaxoRemappingT, ObjectSetQueryPlus
 from BO.Project import ProjectBO, ProjectTaxoStats
 from BO.Rights import RightsBO
@@ -492,7 +493,10 @@ class DarwinCoreExport(JobServiceBase):
                                 )
                 events.add(evt)
                 self.add_eMoFs_for_sample(sample=a_sample, arch=arch, event_id=event_id)
-                nb_added = self.add_occurences(sample=a_sample, arch=arch, event_id=event_id)
+                # Humans first :)
+                nb_added = self.add_occurences(sample=a_sample, arch=arch, event_id=event_id, predicted=False)
+                by_ml = self.add_occurences(sample=a_sample, arch=arch, event_id=event_id, predicted=True)
+                nb_added += by_ml
                 if nb_added == 0:
                     self.warnings.append(
                         "No occurrence added for sample '%s' in project #%d" % (a_sample.orig_id, a_prj_id))
@@ -588,61 +592,8 @@ class DarwinCoreExport(JobServiceBase):
                                         value=instrument_url)
             arch.emofs.add(ins)
 
-    # @classmethod
-    # def _add_morpho_counts(cls, count_per_taxon_for_acquis: Dict[ClassifIDT, int],
-    #                        morpho2phylo: TaxoRemappingT) -> None:
-    #     """
-    #         If there are Morpho taxa with counts, cumulate and wipe them out.
-    #     """
-    #     for an_id, count_4_acquis in dict(count_per_taxon_for_acquis).items():
-    #         phylo_id = morpho2phylo.get(an_id)
-    #         if phylo_id is not None:
-    #             del count_per_taxon_for_acquis[an_id]
-    #             if phylo_id in count_per_taxon_for_acquis:
-    #                 # Accumulate in parent count
-    #                 count_per_taxon_for_acquis[phylo_id] += count_4_acquis
-    #             else:
-    #                 # Create the parent
-    #                 count_per_taxon_for_acquis[phylo_id] = count_4_acquis
-
-    # @classmethod
-    # def _get_sums_by_taxon(cls, session: Session, acquis_id: AcquisitionIDT) \
-    #         -> Dict[ClassifIDT, int]:
-    #     """
-    #         Compute number of objects validated for each taxon in the acquisition.
-    #     """
-    #     sql = text("SELECT o.classif_id, count(1)"
-    #                "  FROM obj_head o "
-    #                " WHERE o.acquisid = :acq "
-    #                "   AND o.classif_id IS NOT NULL "
-    #                "   AND o.classif_qual = 'V'"
-    #                " GROUP BY o.classif_id")
-    #     res: Result = session.execute(sql, {"acq": acquis_id})
-    #     return {int(classif_id): int(cnt) for (classif_id, cnt) in res.fetchall()}
-
-    # def _aggregate_abundances(self, session: Session, acquis_for_sample: List[Acquisition],
-    #                           morpho2phylo: Optional[TaxoRemappingT]) \
-    #         -> Tuple[Dict[ClassifIDT, SampleAggregForTaxon], AbundancePerAcquisitionT]:
-    #     aggreg_per_taxon: Dict[ClassifIDT, SampleAggregForTaxon] = {}
-    #     count_per_taxon_per_acquis: AbundancePerAcquisitionT = {}
-    #     for an_acquis in acquis_for_sample:
-    #         # Get counts for acquisition (subsample)
-    #         count_per_taxon_for_acquis: Dict[ClassifIDT, int] = self._get_sums_by_taxon(session,
-    #                                                                                     an_acquis.acquisid)
-    #         if morpho2phylo is not None:
-    #             self._add_morpho_counts(count_per_taxon_for_acquis, morpho2phylo)
-    #         count_per_taxon_per_acquis[an_acquis.acquisid] = count_per_taxon_for_acquis
-    #         for an_id, count_4_acquis in count_per_taxon_for_acquis.items():
-    #             aggreg_for_taxon = aggreg_per_taxon.get(an_id)
-    #             if aggreg_for_taxon is None:
-    #                 # Create new aggregation data for this taxon
-    #                 aggreg_per_taxon[an_id] = SampleAggregForTaxon(count_4_acquis, None, None)
-    #             else:
-    #                 # Sum if taxon already there
-    #                 aggreg_for_taxon.abundance += count_4_acquis
-    #     return aggreg_per_taxon, count_per_taxon_per_acquis
-
-    def _aggregate_for_sample(self, sample: Sample, morpho2phylo: Optional[TaxoRemappingT], with_computations: bool) \
+    def _aggregate_for_sample(self, sample: Sample, morpho2phylo: Optional[TaxoRemappingT],
+                              with_computations: bool, predicted: bool) \
             -> Dict[ClassifIDT, SampleAggregForTaxon]:
         """
             :param sample: The Sample for which computations needs to be done.
@@ -665,8 +616,14 @@ class DarwinCoreExport(JobServiceBase):
         # We return all _per taxon_.
         ret: Dict[ClassifIDT, SampleAggregForTaxon] = {}
 
+        # The source data. Note: I know it could be simplified by passing the 'P' or 'V' filter.
+        if predicted:
+            object_set = CommonObjectSets.predictedInSample(self.ro_session, sample)
+        else:
+            object_set = CommonObjectSets.validatedInSample(self.ro_session, sample)
+
         # Start with abundances, 'simple' count but eventually with remapping
-        counts = self.abundances_for_sample(sample, morpho2phylo)
+        counts = self.abundances_for_sample(object_set, morpho2phylo)
         for a_count in counts:
             ret[a_count["txo_id"]] = SampleAggregForTaxon(a_count["count"], None, None)
 
@@ -676,7 +633,7 @@ class DarwinCoreExport(JobServiceBase):
         # Enrich with concentrations
         formulae = {"total_water_volume": "sam.tot_vol",
                     "subsample_coef": "1/ssm.sub_part"}
-        concentrations = self.concentrations_for_sample(formulae, sample, morpho2phylo)
+        concentrations = self.concentrations_for_sample(formulae, object_set, morpho2phylo)
         conc_wrn_txos = []
         for a_conc in concentrations:
             txo_id, conc = a_conc["txo_id"], a_conc["conc"]
@@ -692,7 +649,7 @@ class DarwinCoreExport(JobServiceBase):
         # Enrich with biovolumes, note that we need previous formulae for scaling
         # ESD @see ProjectVarsDefault.equivalent_spherical_volume
         formulae.update({"individual_volume": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel)**3"})
-        biovolumes = self.biovolumes_for_sample(formulae, sample, morpho2phylo)
+        biovolumes = self.biovolumes_for_sample(formulae, object_set, morpho2phylo)
         biovol_wrn_txos = []
         for a_biovol in biovolumes:
             txo_id, biovol = a_biovol["txo_id"], a_biovol["biovol"]
@@ -707,12 +664,11 @@ class DarwinCoreExport(JobServiceBase):
 
         return ret
 
-    def abundances_for_sample(self, sample: Sample, morpho2phylo: Optional[TaxoRemappingT]) \
+    def abundances_for_sample(self, obj_set: DescribedObjectSet, morpho2phylo: Optional[TaxoRemappingT]) \
             -> List[Dict[str, Any]]:
         """
             Compute abundances (count) for given sample.
         """
-        obj_set = CommonObjectSets.validatedInSample(self.ro_session, sample)
         aug_qry = ObjectSetQueryPlus(obj_set)
         if morpho2phylo is not None:
             aug_qry.remap_categories(morpho2phylo)
@@ -721,13 +677,12 @@ class DarwinCoreExport(JobServiceBase):
                              aug_qry.COUNT_STAR: "count"}).set_grouping(ResultGrouping.BY_TAXO)
         return aug_qry.get_result(self.ro_session, lambda e: self.warnings.append(e))
 
-    def concentrations_for_sample(self, formulae: Dict[str, str], sample: Sample,
+    def concentrations_for_sample(self, formulae: Dict[str, str], obj_set: DescribedObjectSet,
                                   morpho2phylo: Optional[TaxoRemappingT]) \
             -> List[Dict[str, Any]]:
         """
             Compute concentration of each taxon for given sample.
         """
-        obj_set = CommonObjectSets.validatedInSample(self.ro_session, sample)
         aug_qry = ObjectSetQueryPlus(obj_set)
         if morpho2phylo is not None:
             aug_qry.remap_categories(morpho2phylo)
@@ -741,13 +696,12 @@ class DarwinCoreExport(JobServiceBase):
         aug_qry.aggregate_with_computed_sum(sum_formula, Vocabulary.concentrations, Units.number_per_cubic_metre)
         return aug_qry.get_result(self.ro_session, lambda e: self.warnings.append(e))
 
-    def biovolumes_for_sample(self, formulae: Dict[str, str], sample: Sample,
+    def biovolumes_for_sample(self, formulae: Dict[str, str], obj_set: DescribedObjectSet,
                               morpho2phylo: Optional[TaxoRemappingT]) \
             -> List[Dict[str, Any]]:
         """
             Compute biovolume of each taxon for given sample.
         """
-        obj_set = CommonObjectSets.validatedInSample(self.ro_session, sample)
         aug_qry = ObjectSetQueryPlus(obj_set)
         if morpho2phylo is not None:
             aug_qry.remap_categories(morpho2phylo)
@@ -760,13 +714,16 @@ class DarwinCoreExport(JobServiceBase):
         aug_qry.set_grouping(ResultGrouping.BY_TAXO)
         return aug_qry.get_result(self.ro_session, lambda e: self.warnings.append(e))
 
-    def add_occurences(self, sample: Sample, arch: DwC_Archive, event_id: str) -> int:
+    def add_occurences(self, sample: Sample, arch: DwC_Archive, event_id: str, predicted: bool) -> int:
         """
             Add DwC occurences, for given sample, into the archive. A single line per WoRMS taxon.
+            If 'predicted' is set, do the counts on predicted (but not validated) objects.
+            Otherwise, use human-validated objects.
         """
         aggregs = self._aggregate_for_sample(sample=sample,
                                              morpho2phylo=self.morpho2phylo if self.auto_morpho else None,
-                                             with_computations=self.with_computations)
+                                             with_computations=self.with_computations,
+                                             predicted=predicted)
 
         # Group by lsid, in order to have a single occurrence
         by_lsid: Dict[str, Tuple[str, SampleAggregForTaxon, WoRMS]] = {}
@@ -805,6 +762,7 @@ class DarwinCoreExport(JobServiceBase):
         for a_lsid, for_lsid in by_lsid_desc.items():
             occurrence_id, aggreg_for_lsid, worms = for_lsid
             self.produced_count += aggreg_for_lsid.abundance
+            # TODO: The record depends on the status (validated or just predicted)
             occ = DwC_Occurrence(eventID=event_id,
                                  occurrenceID=occurrence_id,
                                  # Below is better as an EMOF @see CountOfBiologicalEntity
