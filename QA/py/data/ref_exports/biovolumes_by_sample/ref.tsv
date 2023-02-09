@@ -6,6 +6,7 @@ m106_mn01_n1_sml	Pilimelia	0
 m106_mn01_n1_sml	detritus	0
 m106_mn01_n1_sml	egg<other	0
 m106_mn01_n1_sml	other<living	1128581.0766485808
+m106_mn01_n1_sml	small<egg	0
 m106_mn01_n1_sml	t001	210032.23032797102
 m106_mn01_n2_sml	Cyclopoida	0
 m106_mn01_n2_sml	Micrococcineae	0
@@ -14,14 +15,16 @@ m106_mn01_n2_sml	Pilimelia	0
 m106_mn01_n2_sml	detritus	657777.9545184519
 m106_mn01_n2_sml	egg<other	194359.38302268443
 m106_mn01_n2_sml	other<living	0
+m106_mn01_n2_sml	small<egg	0
 m106_mn01_n2_sml	t001	0
 m106_mn01_n3_sml	Cyclopoida	0
 m106_mn01_n3_sml	Micrococcineae	0
 m106_mn01_n3_sml	Oncaeidae	0
 m106_mn01_n3_sml	Pilimelia	0
 m106_mn01_n3_sml	detritus	657777.9545184519
-m106_mn01_n3_sml	egg<other	194359.38302268443
+m106_mn01_n3_sml	egg<other	0
 m106_mn01_n3_sml	other<living	0
+m106_mn01_n3_sml	small<egg	194359.38302268443
 m106_mn01_n3_sml	t001	0
 m106_mn01_n4_sml	Cyclopoida	0
 m106_mn01_n4_sml	Micrococcineae	582579.9227476643
@@ -30,4 +33,5 @@ m106_mn01_n4_sml	Pilimelia	nan
 m106_mn01_n4_sml	detritus	0
 m106_mn01_n4_sml	egg<other	0
 m106_mn01_n4_sml	other<living	0
+m106_mn01_n4_sml	small<egg	0
 m106_mn01_n4_sml	t001	0

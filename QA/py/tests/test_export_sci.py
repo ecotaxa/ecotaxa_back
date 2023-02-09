@@ -103,6 +103,7 @@ def test_export_abundances(config, database, fastapi, caplog):
                 "pre_mapping": {85012: None,  # t001 -> Remove
                                 84963: None,  # detritus -> Remove
                                 85078: 78418,  # egg<other -> Oncaeidae
+                                92731: 78418,  # small<egg -> Oncaeidae
                                 }})
     req_and_filters = {"filters": filters,
                        "request": req}

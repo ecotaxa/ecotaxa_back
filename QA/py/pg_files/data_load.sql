@@ -27,6 +27,10 @@ COPY public.users_roles (user_id, role_id) FROM stdin;
 6	3
 \.
 
+-- The used ones are in first
+-- e.g. to get some data with lineage:
+-- ecotaxa4=# copy (select * from taxonomy where id in (92731, 85117, 56693, 25928, 16656, 12861,11513,2367,382,8)) to '/tmp/cp.sql';
+-- in case of problem during tests, 'data_load.log' in tests can show the COPY issues
 COPY public.taxonomy (id, parent_id, name, id_source, nbrobj, nbrobjcum, creation_datetime, creator_email, display_name, id_instance, lastupdate_datetime, rename_to, source_desc, source_url, taxostatus, taxotype) FROM stdin;
 45072	1	Cyclopoida	48740	68979	502724	\N	\N	Cyclopoida	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 78418	1	Oncaeidae	87064	199577	64180	\N	\N	Oncaeidae	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
@@ -35,6 +39,15 @@ COPY public.taxonomy (id, parent_id, name, id_source, nbrobj, nbrobjcum, creatio
 99999	1	other	m004	0	0	\N	\N	other<dead	\N	2019-01-29 05:53:34	\N	\N	\N	A	M
 85012	1	t001	m142	180622	\N	\N	\N	t001	\N	2018-01-02 00:00:00	\N	\N	\N	A	M
 85078	1	egg	m129	142336	3465	\N	\N	egg<other	\N	2019-01-29 05:53:34	\N	\N	\N	A	M
+8	2	Opisthokonta	29367	0	26545188	\N	\N	Opisthokonta	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
+382	8	Holozoa	40247	0	26542007	\N	\N	Holozoa	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
+2367	382	Metazoa	40455	445	26541560	\N	\N	Metazoa	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
+11513	2367	Chordata	66472	84	1633987	\N	\N	Chordata	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
+12861	11513	Craniata	66478	0	519587	\N	\N	Craniata<Chordata	\N	2019-01-29 05:53:34	\N	\N	\N	A	P
+16656	12861	Vertebrata	66656	10	519587	\N	\N	Vertebrata<Craniata	\N	2019-01-29 05:53:34	\N	\N	\N	A	P
+56693	25928	Actinopterygii	66657	47270	509496	\N	\N	Actinopterygii	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
+85117	56693	egg	m723	95376	100961	\N	\N	egg<Actinopterygii	\N	2019-01-29 05:53:34	\N	\N	\N	A	M
+92731	85117	small		510	510	2019-01-29 13:57:46	christophe.loots@ifremer.fr	small<egg	1	2019-01-29 13:59:45	\N	Small eggs in the eastern English Channel and southern North Sea during winter. Gathers mainly dab, flounder and rocklings eggs.		N	M
 1	\N	living	0	\N	\N	\N	\N	living<	\N	2020-07-31 13:51:26	\N	\N	\N	A	P
 2	1	Eukaryota	11831	\N	\N	\N	\N	Eukaryota	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 3	1	Bacteria	424	\N	\N	\N	\N	Bacteria	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
@@ -42,7 +55,6 @@ COPY public.taxonomy (id, parent_id, name, id_source, nbrobj, nbrobjcum, creatio
 5	2	Harosa	87173	\N	\N	\N	\N	Harosa	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 6	2	Unknowns	85352	\N	\N	\N	\N	Unknowns	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 7	2	Orphans	79922	\N	\N	\N	\N	Orphans	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
-8	2	Opisthokonta	29367	\N	\N	\N	\N	Opisthokonta	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 9	2	Excavata	28400	\N	\N	\N	\N	Excavata	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 10	2	Eukaryota X	28398	\N	\N	\N	\N	Eukaryota X	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 11	2	environmental samples	28390	\N	\N	\N	\N	environmental samples<Eukaryota	\N	2019-01-29 05:53:34	\N	\N	\N	A	P
@@ -416,7 +428,6 @@ COPY public.taxonomy (id, parent_id, name, id_source, nbrobj, nbrobjcum, creatio
 379	7	Apusomonadida	79923	\N	\N	\N	\N	Apusomonadida	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 380	7	Katablepharidida	29362	\N	\N	\N	\N	Katablepharidida<Orphans<Eukaryota<living	\N	2019-01-29 05:53:34	\N	\N	\N	A	P
 381	8	Opisthokonta X	79914	\N	\N	\N	\N	Opisthokonta X<Opisthokonta	\N	2019-01-29 05:53:34	\N	\N	\N	A	P
-382	8	Holozoa	40247	\N	\N	\N	\N	Holozoa	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 383	8	Holomycota	29368	\N	\N	\N	\N	Holomycota	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 384	9	Metamonada	29018	\N	\N	\N	\N	Metamonada	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 385	9	Malawimonadidae	29014	\N	\N	\N	\N	Malawimonadidae	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
@@ -2401,7 +2412,6 @@ COPY public.taxonomy (id, parent_id, name, id_source, nbrobj, nbrobjcum, creatio
 2364	379	Apusomonadida U01	79924	\N	\N	\N	\N	Apusomonadida U01	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 2365	381	Opisthokonta XX	79917	\N	\N	\N	\N	Opisthokonta XX	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 2366	381	Opisthokonta X	79915	\N	\N	\N	\N	Opisthokonta X<Opisthokonta X	\N	2019-01-29 05:53:34	\N	\N	\N	A	P
-2367	382	Metazoa	40455	\N	\N	\N	\N	Metazoa	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 2368	382	Ichthyosporea	40343	\N	\N	\N	\N	Ichthyosporea	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 2369	382	Filasterea	40336	\N	\N	\N	\N	Filasterea	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 2370	382	Choanozoa	40248	\N	\N	\N	\N	Choanozoa	\N	2018-01-02 00:00:00	\N	\N	\N	A	P

@@ -42,9 +42,10 @@ def do_test_emodnet_export(config, database, fastapi, caplog):
     # Admin imports the project
     from tests.test_import import BAD_FREE_DIR, test_import, do_import, test_import_a_bit_more_skipping
     prj_id = test_import(config, database, caplog, "EMODNET project", str(PLAIN_FILE), "UVP6")
-    # Add a sample spanning 2 days
+    # Add a sample spanning 2 days (m106_mn01_n3_sml) for testing date ranges in event.txt
+    # this sample contains 2 'detritus' at load time
     test_import_a_bit_more_skipping(config, database, caplog, "EMODNET project")
-    # Add a sample with corrupted or absent needed free columns
+    # Add a sample with corrupted or absent needed free columns, for provoking calculation warnings
     do_import(prj_id, BAD_FREE_DIR, ADMIN_USER_ID)
 
     # Get the project for update

@@ -29,7 +29,7 @@ def test_project_stats(config, database, fastapi, caplog):
     assert rsp.status_code == 200
     assert rsp.json() == [{'nb_dubious': 0, 'nb_predicted': 11, 'nb_unclassified': 0, 'nb_validated': 0,
                            'projid': prj_id,
-                           'used_taxa': [45072, 78418, 84963, 85011, 85012, 85078]}]
+                           'used_taxa': [45072, 78418, 84963, 85011, 85012, 85078, 92731]}]
 
     # Get free column statistics
     url = PROJECT_FREE_COLS_STATS_URL.format(project_id=prj_id)
