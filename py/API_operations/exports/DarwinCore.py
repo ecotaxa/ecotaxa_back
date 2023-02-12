@@ -44,8 +44,8 @@ from formats.DarwinCore.MoF import SamplingNetMeshSizeInMicrons, SampleDeviceApe
     AbundancePerUnitVolumeOfTheWaterBody, BiovolumeOfBiologicalEntity, SamplingInstrumentName, CountOfBiologicalEntity, \
     ImagingInstrumentName
 from formats.DarwinCore.models import DwC_Event, RecordTypeEnum, DwC_Occurrence, OccurrenceStatusEnum, \
-    BasisOfRecordEnum, EMLGeoCoverage, EMLTemporalCoverage, EMLMeta, EMLTitle, EMLPerson, EMLKeywordSet, \
-    EMLTaxonomicClassification, EMLAdditionalMeta, EMLIdentifier, EMLAssociatedPerson
+    BasisOfRecordEnum, IdentificationVerificationEnum, EMLGeoCoverage, EMLTemporalCoverage, EMLMeta, EMLTitle, \
+    EMLPerson, EMLKeywordSet, EMLTaxonomicClassification, EMLAdditionalMeta, EMLIdentifier, EMLAssociatedPerson
 from helpers.DateTime import now_time
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 # TODO: Move somewhere else
@@ -101,6 +101,7 @@ class DarwinCoreExport(JobServiceBase):
         self.warnings: List[str] = []
         # Summary for logging issues
         self.validated_count = 0
+        self.predicted_count = 0
         self.produced_count = 0
         self.ignored_count: Dict[ClassifIDT, int] = {}
         self.ignored_morpho: int = 0
@@ -762,7 +763,11 @@ class DarwinCoreExport(JobServiceBase):
         for a_lsid, for_lsid in by_lsid_desc.items():
             occurrence_id, aggreg_for_lsid, worms = for_lsid
             self.produced_count += aggreg_for_lsid.abundance
-            # TODO: The record depends on the status (validated or just predicted)
+            # TODO: More in record depends on the status (validated or just predicted),
+            #  not just identificationVerificationStatus
+            # @see https://github.com/ecotaxa/ecotaxa_front/issues/764#issuecomment-1420324532
+            verif_status = IdentificationVerificationEnum.predictedByMachine if predicted \
+                else IdentificationVerificationEnum.validatedByHuman
             occ = DwC_Occurrence(eventID=event_id,
                                  occurrenceID=occurrence_id,
                                  # Below is better as an EMOF @see CountOfBiologicalEntity
@@ -771,7 +776,8 @@ class DarwinCoreExport(JobServiceBase):
                                  scientificNameID=worms.lsid,
                                  kingdom=worms.kingdom,
                                  occurrenceStatus=OccurrenceStatusEnum.present,
-                                 basisOfRecord=BasisOfRecordEnum.machineObservation)
+                                 basisOfRecord=BasisOfRecordEnum.machineObservation,
+                                 identificationVerificationStatus=verif_status)
             arch.occurences.add(occ)
             nb_added_occurences += 1
             # Add eMoFs if possible and required, but the decision is made inside the def
@@ -832,8 +838,9 @@ class DarwinCoreExport(JobServiceBase):
 
     def log_stats(self) -> None:
         not_produced = sum(self.ignored_count.values())
-        self.warnings.append("Stats: validated:%d produced to zip:%d not produced (M):%d not produced (P):%d"
-                             % (self.validated_count, self.produced_count, self.ignored_morpho, not_produced))
+        self.warnings.append(
+            "Stats: predicted:%d validated:%d produced to zip:%d not produced (M):%d not produced (P):%d"
+            % (self.predicted_count, self.validated_count, self.produced_count, self.ignored_morpho, not_produced))
         if len(self.ignored_count) > 0:
             unmatched = []
             ids = list(self.ignored_count.keys())
@@ -868,3 +875,4 @@ class DarwinCoreExport(JobServiceBase):
         a_stat: ProjectTaxoStats
         for a_stat in ProjectBO.read_taxo_stats(self.session, project_ids, []):
             self.validated_count += a_stat.nb_validated
+            self.predicted_count += a_stat.nb_predicted

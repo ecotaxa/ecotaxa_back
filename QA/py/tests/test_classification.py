@@ -4,6 +4,7 @@
 #
 import logging
 
+from typing import List
 from API_models.filters import ProjectFilters, ProjectFiltersDict
 from starlette import status
 
@@ -14,7 +15,7 @@ from tests.test_subentities import OBJECT_HISTORY_QUERY_URL
 from tests.test_taxa_query import TAXA_SET_QUERY_URL
 
 
-def _prj_query(fastapi, auth, prj_id, **kwargs):
+def _prj_query(fastapi, auth, prj_id, **kwargs) -> List[int]:
     """ Query using the filters in kwargs """
     url = OBJECT_SET_QUERY_URL.format(project_id=prj_id)
     rsp = fastapi.post(url, headers=auth, json=kwargs)

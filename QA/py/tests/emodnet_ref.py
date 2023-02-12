@@ -78,6 +78,10 @@ This series is part of the long term planktonic monitoring of
     </temporalCoverage>
     <taxonomicCoverage>
       <taxonomicClassification>
+        <taxonRankName>Class</taxonRankName>
+        <taxonRankValue>Actinopterygii</taxonRankValue>
+      </taxonomicClassification>
+      <taxonomicClassification>
         <taxonRankName>Family</taxonRankName>
         <taxonRankValue>Oncaeidae</taxonRankValue>
       </taxonomicClassification>
@@ -145,10 +149,11 @@ _meta = r"""
     <field index="1" term="http://rs.tdwg.org/dwc/terms/eventID"/>
     <field index="2" term="http://rs.tdwg.org/dwc/terms/occurrenceID"/>
     <field index="3" term="http://rs.tdwg.org/dwc/terms/basisOfRecord"/>
-    <field index="4" term="http://rs.tdwg.org/dwc/terms/scientificName"/>
-    <field index="5" term="http://rs.tdwg.org/dwc/terms/scientificNameID"/>
-    <field index="6" term="http://rs.tdwg.org/dwc/terms/kingdom"/>
-    <field index="7" term="http://rs.tdwg.org/dwc/terms/occurrenceStatus"/>
+    <field index="4" term="https://dwc.tdwg.org/list/#dwc_identificationVerificationStatus"/>
+    <field index="5" term="http://rs.tdwg.org/dwc/terms/scientificName"/>
+    <field index="6" term="http://rs.tdwg.org/dwc/terms/scientificNameID"/>
+    <field index="7" term="http://rs.tdwg.org/dwc/terms/kingdom"/>
+    <field index="8" term="http://rs.tdwg.org/dwc/terms/occurrenceStatus"/>
   </extension>
 """
 _meta_emofs_with_computations = r"""
@@ -194,13 +199,14 @@ m106_mn04_n5_sml	m106_mn04_n5_sml	sample	IMEV	EMODNET test collection	2014-04-20
 m106_mn04_n6_sml	m106_mn04_n6_sml	sample	IMEV	EMODNET test collection	2014-04-20T04:20:00Z	18.000000	-24.416667	600.0	1000.0
 """
 _occurence = r"""
-id	eventID	occurrenceID	basisOfRecord	scientificName	scientificNameID	kingdom	occurrenceStatus
-m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_78418	MachineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	Animalia	present
-m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_45072	MachineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	Animalia	present
-m106_mn04_n4_sml	m106_mn04_n4_sml	m106_mn04_n4_sml_78418	MachineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	Animalia	present
-m106_mn04_n5_sml	m106_mn04_n5_sml	m106_mn04_n5_sml_78418	MachineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	Animalia	present
-m106_mn04_n6_sml	m106_mn04_n6_sml	m106_mn04_n6_sml_45072	MachineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	Animalia	present
-m106_mn04_n6_sml	m106_mn04_n6_sml	m106_mn04_n6_sml_78418	MachineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	Animalia	present
+id	eventID	occurrenceID	basisOfRecord	identificationVerificationStatus	scientificName	scientificNameID	kingdom	occurrenceStatus
+m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_78418	MachineObservation	ValidatedByHuman	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	Animalia	present
+m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_45072	MachineObservation	ValidatedByHuman	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	Animalia	present
+m106_mn01_n3_sml	m106_mn01_n3_sml	m106_mn01_n3_sml_56693	MachineObservation	PredictedByMachine	Actinopterygii	urn:lsid:marinespecies.org:taxname:10194	Animalia	present
+m106_mn04_n4_sml	m106_mn04_n4_sml	m106_mn04_n4_sml_78418	MachineObservation	ValidatedByHuman	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	Animalia	present
+m106_mn04_n5_sml	m106_mn04_n5_sml	m106_mn04_n5_sml_78418	MachineObservation	ValidatedByHuman	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	Animalia	present
+m106_mn04_n6_sml	m106_mn04_n6_sml	m106_mn04_n6_sml_45072	MachineObservation	ValidatedByHuman	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	Animalia	present
+m106_mn04_n6_sml	m106_mn04_n6_sml	m106_mn04_n6_sml_78418	MachineObservation	ValidatedByHuman	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	Animalia	present
 """
 # _occurence_with_absent = r"""m106_mn01_n2_sml	m106_mn01_n2_sml	m106_mn01_n2_sml_45072	MachineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	0	Animalia	absent
 # m106_mn01_n2_sml	m106_mn01_n2_sml	m106_mn01_n2_sml_78418	MachineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	0	Animalia	absent
@@ -218,6 +224,9 @@ m106_mn01_n1_sml	m106_mn01_n1_sml_45072	0.02	Abundance of biological entity spec
 m106_mn01_n1_sml	m106_mn01_n1_sml_45072	355604.586438	Biovolume of biological entity specified elsewhere per unit volume of the water body	Cubic millimetres per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/	http://vocab.nerc.ac.uk/collection/P06/current/CMCM/
 m106_mn01_n1_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
 m106_mn01_n2_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
+m106_mn01_n3_sml	m106_mn01_n3_sml_56693	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn01_n3_sml	m106_mn01_n3_sml_56693	0.02	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
+m106_mn01_n3_sml	m106_mn01_n3_sml_56693	194359.383023	Biovolume of biological entity specified elsewhere per unit volume of the water body	Cubic millimetres per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/	http://vocab.nerc.ac.uk/collection/P06/current/CMCM/
 m106_mn01_n3_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
 m106_mn04_n4_sml	m106_mn04_n4_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
 m106_mn04_n4_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
@@ -239,6 +248,7 @@ m106_mn01_n1_sml	m106_mn01_n1_sml_78418	2	Count (in assayed sample) of biologica
 m106_mn01_n1_sml	m106_mn01_n1_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
 m106_mn01_n1_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name	https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
 m106_mn01_n2_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name	https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+m106_mn01_n3_sml	m106_mn01_n3_sml_56693	1	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
 m106_mn01_n3_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name	https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
 m106_mn04_n4_sml	m106_mn04_n4_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
 m106_mn04_n4_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name	https://vocab.nerc.ac.uk/collection/P06/current/XXXX/

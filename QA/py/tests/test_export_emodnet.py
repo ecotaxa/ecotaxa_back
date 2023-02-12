@@ -43,7 +43,7 @@ def do_test_emodnet_export(config, database, fastapi, caplog):
     from tests.test_import import BAD_FREE_DIR, test_import, do_import, test_import_a_bit_more_skipping
     prj_id = test_import(config, database, caplog, "EMODNET project", str(PLAIN_FILE), "UVP6")
     # Add a sample spanning 2 days (m106_mn01_n3_sml) for testing date ranges in event.txt
-    # this sample contains 2 'detritus' at load time
+    # this sample contains 2 'detritus' at load time and 1 small<egg (92731) which resolves to nearest Phylo Actinopterygii (56693)
     test_import_a_bit_more_skipping(config, database, caplog, "EMODNET project")
     # Add a sample with corrupted or absent needed free columns, for provoking calculation warnings
     do_import(prj_id, BAD_FREE_DIR, ADMIN_USER_ID)
@@ -81,9 +81,13 @@ def do_test_emodnet_export(config, database, fastapi, caplog):
     #                                 "accepted, not ."]
     # assert rsp.json()["warnings"] == []
 
-    # Validate everything, otherwise no export.
+    # Validate nearly everything, otherwise no export.
     obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
     assert len(obj_ids) == 19
+    # The Actinopterygii object in m106_mn01_n3_sml remains Predicted
+    stay_predicted = _prj_query(fastapi, CREATOR_AUTH, prj_id, taxo="92731")
+    assert len(stay_predicted) == 1
+    obj_ids.remove(stay_predicted[0])
     url = OBJECT_SET_CLASSIFY_URL
     classifications = [-1 for _obj in obj_ids]  # Keep current
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
@@ -138,7 +142,6 @@ This series is part of the long term planktonic monitoring of
         "Could not extract sampling net name and features from sample m106_mn01_n2_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
         "No occurrence added for sample 'm106_mn01_n2_sml' in project #%d" % prj_id,
         "Could not extract sampling net name and features from sample m106_mn01_n3_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
-        "No occurrence added for sample 'm106_mn01_n3_sml' in project #%d" % prj_id,
         "Could not extract sampling net name and features from sample m106_mn04_n4_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
         "Sample 'm106_mn04_n4_sml' taxo(s) #[1, 78418]: Computed concentration is NaN, input data is missing or incorrect",
         "Sample 'm106_mn04_n4_sml' taxo(s) #[1, 78418]: Computed biovolume is NaN, input data is missing or incorrect",
@@ -158,7 +161,7 @@ This series is part of the long term planktonic monitoring of
         "Some values could not be converted to float in {'obj_area': 1583.0, 'sam_tot_vol': '2000', 'ssm_pixel': '10.6', 'ssm_sub_part': 'hi'}",
         "Some values could not be converted to float in {'obj_area': 1583.0, 'sam_tot_vol': '2000', 'ssm_pixel': '10.6', 'ssm_sub_part': 'hi'}",
         "Sample 'm106_mn04_n6_sml' taxo(s) #[1, 45072, 78418]: Computed biovolume is NaN, input data is missing or incorrect",
-        'Stats: validated:19 produced to zip:7 not produced (M):12 not produced (P):0']
+        "Stats: predicted:1 validated:18 produced to zip:8 not produced (M):11 not produced (P):0"]
     assert warns == ref_warns
     assert rsp.json()["errors"] == []
     # job_id = rsp.json()["job_id"]
