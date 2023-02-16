@@ -27,6 +27,9 @@ class CommonFolder(object):
         sub_path = sub_path.lstrip("/")
         return self.path.joinpath(sub_path).as_posix()
 
+    def absolute_path(self, sub_path: str):
+        return Path(self.path.joinpath(sub_path)).absolute()
+
     def list(self, sub_path: str) -> List[DirEntryT]:
         """
             List given sub-path, returning the name of entries and details of zip files.
@@ -34,8 +37,7 @@ class CommonFolder(object):
         ret: List[DirEntryT] = []
         # Leading / implies root directory
         sub_path = sub_path.lstrip("/")
-        abs_path = Path(self.path.joinpath(sub_path))
-        return self.list_dir_into(abs_path, ret)
+        return self.list_dir_into(self.absolute_path(sub_path), ret)
 
     @staticmethod
     def list_dir_into(abs_path, out):

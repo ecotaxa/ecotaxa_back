@@ -55,6 +55,9 @@ class UserDirectory(object):
                 buff = await stream.read(1024)
         return str(dest_path)
 
+    def absolute_path(self, sub_path: str):
+        return Path(tempfile.gettempdir(), self.USER_DIR_PATTERN % self.user_id, sub_path).absolute()
+
     def list(self, sub_path: str) -> List[DirEntryT]:
         """
             Only list the known (with tags) directory.
@@ -62,8 +65,8 @@ class UserDirectory(object):
         # Leading / implies root directory
         sub_path = sub_path.lstrip("/")
         ret: List[DirEntryT] = []
-        path: Path = Path(tempfile.gettempdir(), self.USER_DIR_PATTERN % self.user_id, sub_path)
-        CommonFolder.list_dir_into(path, ret)
+        
+        CommonFolder.list_dir_into(self.absolute_path(sub_path), ret)
         return ret
 
     def contains(self, path_str: str) -> bool:

@@ -68,7 +68,7 @@ class UserFolderService(Service):
         # Format data to return
         entries = [DirectoryEntryModel(name=a_name, type=a_type, size=a_size, mtime=a_mtime)
                    for (a_name, a_type, a_size, a_mtime) in listing]
-        return DirectoryModel(path=sub_path, entries=entries)
+        return DirectoryModel(path=a_dir.absolute_path(sub_path), entries=entries)
 
 
 class CommonFolderService(Service):
