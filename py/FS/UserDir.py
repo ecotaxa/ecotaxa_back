@@ -45,9 +45,8 @@ class UserDirectory(object):
             base_path /= path[:-len(name)]
         TempDirForTasks.ensure_exists(base_path, self.user_dir_cache)
         dest_path = base_path.absolute().joinpath(name)
-        # TODO: Should be an option
-        if dest_path.exists():
-            return str(dest_path)
+        
+        # Copy data from the stream into dest_path
         with open(dest_path, "wb") as fout:
             buff = await stream.read(1024)
             while len(buff) != 0:
