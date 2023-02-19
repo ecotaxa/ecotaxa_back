@@ -56,7 +56,7 @@ scikit-learn==1.0
 #tensorflow-hub==0.12.0
 #tensorflow_addons==0.14.0
 # Used same place as TF, CNN generation
-#pandas==1.3.3
+pandas==1.3.3
 ##lycon==0.2.0 # Conflicts with the version required by TF
 #opencv-python-headless==4.5.3.56
 #imgaug==0.4.0

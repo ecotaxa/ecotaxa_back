@@ -1571,6 +1571,8 @@ def classify_auto_object_set(req: ClassifyAutoReq = Body(...),
     """
     assert len(req.target_ids) == len(req.classifications) == len(req.scores), \
         "Need the same number of objects, classifications and scores"
+    assert all(isinstance(score, float) and 0 <= score <= 1 for score in req.scores), \
+        "Scores should be floats between 0 and 1"
     with ObjectManager() as sce:
         with RightsThrower():
             ret, prj_id, changes = sce.classify_auto_set(current_user, req.target_ids, req.classifications, req.scores,
