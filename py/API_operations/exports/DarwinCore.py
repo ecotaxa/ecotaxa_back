@@ -54,6 +54,7 @@ from ..helpers.JobService import JobServiceBase, ArgsDict
 logger = get_logger(__name__)
 
 AbundancePerAcquisitionT = Dict[AcquisitionIDT, Dict[ClassifIDT, int]]
+LsidT = str  # Life Science Identifier @see https://en.wikipedia.org/wiki/LSID
 
 
 class DarwinCoreExport(JobServiceBase):
@@ -717,7 +718,7 @@ class DarwinCoreExport(JobServiceBase):
 
     def add_occurences(self, sample: Sample, arch: DwC_Archive, event_id: str, predicted: bool) -> int:
         """
-            Add DwC occurences, for given sample, into the archive. A single line per WoRMS taxon.
+            Add DwC occurrences, for given sample, into the archive. A single line per WoRMS taxon.
             If 'predicted' is set, do the counts on predicted (but not validated) objects.
             Otherwise, use human-validated objects.
         """
@@ -727,7 +728,7 @@ class DarwinCoreExport(JobServiceBase):
                                              predicted=predicted)
 
         # Group by lsid, in order to have a single occurrence
-        by_lsid: Dict[str, Tuple[str, SampleAggregForTaxon, WoRMS]] = {}
+        by_lsid: Dict[LsidT, Tuple[str, SampleAggregForTaxon, WoRMS]] = {}
         for an_id, an_aggreg in aggregs.items():
             try:
                 worms = self.phylo2worms[an_id]
@@ -744,14 +745,21 @@ class DarwinCoreExport(JobServiceBase):
             worms_lsid = worms.lsid
             assert worms_lsid is not None
             if worms_lsid in by_lsid:
-                occurrence_id, aggreg_for_lsid, worms = by_lsid[worms_lsid]
-                # Add the taxon ID to complete the occurence
+                # Manage here the mapping of _several_ EcoTaxa taxa to a _single_ Worms entry.
+                # e.g. jb20140319_72396_92230
+                # is because both 72396 (Diphyidae) and 92230 (Diphyidae>bract)
+                #    become Diphyidae 135338 (https://www.marinespecies.org/aphia.php?p=taxdetails&id=135338)
+                occurrence_id, aggreg_for_lsid, _worms = by_lsid[worms_lsid]
+                # Accumulate abundance
                 aggreg_for_lsid.abundance += an_aggreg.abundance
+                # Add the new taxon ID to complete the occurrence ID
                 occurrence_id += "_" + str(an_id)
+                by_lsid[worms_lsid] = (occurrence_id, aggreg_for_lsid, worms)
             else:
-                # Take the original taxo ID to build an occurence
-                occurrence_id, aggreg_for_lsid, worms = event_id + "_" + str(an_id), an_aggreg, worms
-            by_lsid[worms_lsid] = (occurrence_id, aggreg_for_lsid, worms)
+                # Take the original taxo ID to build an occurrence
+                # It's unique because it's based on the sample ID, and we append the taxon EcoTaxa ID
+                occurrence_id = event_id + ("_P" if predicted else "") + "_" + str(an_id)
+                by_lsid[worms_lsid] = (occurrence_id, an_aggreg, worms)
 
         # Sort per abundance desc
         # noinspection PyTypeChecker

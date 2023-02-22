@@ -51,6 +51,7 @@ WEIRD_DIR = DATA_DIR / "import_test_weird"
 ISSUES_DIR = DATA_DIR / "import_issues" / "tsv_issues"
 ISSUES_DIR2 = DATA_DIR / "import_issues" / "no_classif_id"
 ISSUES_DIR3 = DATA_DIR / "import_issues" / "tsv_too_many_cols"
+MIX_OF_STATES = DATA_DIR / "import_mixed_states"
 EMPTY_DIR = DATA_DIR / "import_issues" / "no_relevant_file"
 EMPTY_TSV_DIR = DATA_DIR / "import_issues" / "empty_tsv"
 EMPTY_TSV_DIR2 = DATA_DIR / "import_issues" / "empty_tsv2"
@@ -179,7 +180,7 @@ def test_import_again_irrelevant_skipping(config, database, caplog):
 
 # @pytest.mark.skip()
 @pytest.mark.parametrize("title", ["Test Create Update"])
-def test_import_a_bit_more_skipping(config, database, caplog, title):
+def test_import_a_bit_more_skipping(config, database, caplog, title, path=str(PLUS_DIR)):
     """ Re-import similar files into same project, with an extra one.
         The extra one has missing values in the TSV.
         CANNOT RUN BY ITSELF """
@@ -187,7 +188,7 @@ def test_import_a_bit_more_skipping(config, database, caplog, title):
     srch = search_unique_project(ADMIN_USER_ID, title)
     prj_id = srch.projid  # <- need the project from first test
     # Do preparation
-    params = ImportReq(source_path=str(PLUS_DIR),
+    params = ImportReq(source_path=path,
                        skip_loaded_files=True,
                        skip_existing_objects=True)
     with FileImport(prj_id, params) as sce:

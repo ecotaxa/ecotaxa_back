@@ -88,6 +88,7 @@ def api_check_job_failed(fastapi, job_id, expected_message):
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     job_dict = rsp.json()
     assert (job_dict["state"], job_dict["progress_msg"]) == ('E', expected_message)
+    return rsp
 
 
 def get_job_and_wait_until_ok(fastapi, rsp):
