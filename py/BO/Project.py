@@ -774,6 +774,7 @@ class ProjectBOSet(object):
         qry = qry.options(subqueryload(Project.privs_for_members))
         qry = qry.options(subqueryload(Project.members))
         qry = qry.options(subqueryload(Project.variables))
+        qry = qry.options(subqueryload(Project.instrument))
         qry = qry.filter(Project.projid == any_(prj_ids))
         self.projects: List[ProjectBO] = []
         # De-duplicate
