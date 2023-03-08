@@ -44,12 +44,14 @@ V6_FILE = DATA_DIR / "UVP6_example.zip"
 V6_DIR = DATA_DIR / "import_uvp6_zip_in_dir"
 PLAIN_DIR = DATA_DIR / "import_test"
 UPDATE_DIR = DATA_DIR / "import_update"
+BAD_FREE_DIR = DATA_DIR / "import_bad_free_data"
 SPARSE_DIR = DATA_DIR / "import_sparse"
 PLUS_DIR = DATA_DIR / "import_test_plus"
 WEIRD_DIR = DATA_DIR / "import_test_weird"
 ISSUES_DIR = DATA_DIR / "import_issues" / "tsv_issues"
 ISSUES_DIR2 = DATA_DIR / "import_issues" / "no_classif_id"
 ISSUES_DIR3 = DATA_DIR / "import_issues" / "tsv_too_many_cols"
+MIX_OF_STATES = DATA_DIR / "import_mixed_states"
 EMPTY_DIR = DATA_DIR / "import_issues" / "no_relevant_file"
 EMPTY_TSV_DIR = DATA_DIR / "import_issues" / "empty_tsv"
 EMPTY_TSV_DIR2 = DATA_DIR / "import_issues" / "empty_tsv2"
@@ -105,7 +107,8 @@ def fill_in_if_missing(job):
         # Simulate a missing user and map him to admin
         with JobCRUDService() as sce:
             sce.reply(ADMIN_USER_ID, job_id, {"users": {"admin4test": 1,
-                                                        "elizandro rodriguez": 1},
+                                                        "elizandro rodriguez": 1,
+                                                        "taxo finder": 1},
                                               "taxa": {}})
         return wait_for_stable(job_id)
     else:
@@ -177,7 +180,7 @@ def test_import_again_irrelevant_skipping(config, database, caplog):
 
 # @pytest.mark.skip()
 @pytest.mark.parametrize("title", ["Test Create Update"])
-def test_import_a_bit_more_skipping(config, database, caplog, title):
+def test_import_a_bit_more_skipping(config, database, caplog, title, path=str(PLUS_DIR)):
     """ Re-import similar files into same project, with an extra one.
         The extra one has missing values in the TSV.
         CANNOT RUN BY ITSELF """
@@ -185,7 +188,7 @@ def test_import_a_bit_more_skipping(config, database, caplog, title):
     srch = search_unique_project(ADMIN_USER_ID, title)
     prj_id = srch.projid  # <- need the project from first test
     # Do preparation
-    params = ImportReq(source_path=str(PLUS_DIR),
+    params = ImportReq(source_path=path,
                        skip_loaded_files=True,
                        skip_existing_objects=True)
     with FileImport(prj_id, params) as sce:
@@ -410,6 +413,7 @@ def test_import_empty_tsv(config, database, caplog):
     check_job_errors(job)
     assert len(get_job_errors(job)) == 1
 
+
 def test_import_empty_tsv2(config, database, caplog):
     """ a TSV with nothing at all """
     caplog.set_level(logging.DEBUG)
@@ -421,6 +425,7 @@ def test_import_empty_tsv2(config, database, caplog):
     job = wait_for_stable(rsp.job_id)
     check_job_errors(job)
     assert len(get_job_errors(job)) == 1
+
 
 # @pytest.mark.skip()
 def test_import_issues(config, database, caplog):
@@ -546,6 +551,7 @@ def test_import_sparse(config, database, caplog):
     with AsciiDumper() as sce:
         sce.run(projid=prj_id, out="chk.dmp")
 
+
 def test_import_broken_TSV(config, database, caplog):
     """
         Import a TSV with 0 byte.
@@ -566,6 +572,7 @@ def test_import_broken_TSV(config, database, caplog):
     print("\n".join(caplog.messages))
     with AsciiDumper() as sce:
         sce.run(projid=prj_id, out="chk.dmp")
+
 
 # @pytest.mark.skip()
 def test_import_breaking_unicity(config, database, caplog):

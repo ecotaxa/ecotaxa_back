@@ -16,12 +16,16 @@ if True:
     from .Prediction import Prediction
     from .Process import Process
     from .Project import Project
+    from .ProjectVariables import ProjectVariables
     from .ProjectPrivilege import ProjectPrivilege
     from .Sample import Sample
     from .Task import Task
     from .Taxonomy import Taxonomy
     from .User import User, Role
     from .UserPreferences import UserPreferences
+    from .Instrument import Instrument
+    # noinspection PyUnresolvedReferences
+    from .TaxoRecast import TaxoRecast
     # noinspection PyUnresolvedReferences
     from .WoRMs import WoRMS
     from .helpers.ORM import relationship
@@ -45,6 +49,10 @@ if True:
     CollectionUserRole.collection = relationship(Collection, uselist=False)
     CollectionUserRole.user = relationship(User, uselist=False)  # type:ignore # case2
     
+    # Ancilliary to project
+    ProjectVariables.project = relationship(Project, viewonly=True)  # type:ignore # case2
+    Project.variables = relationship(ProjectVariables, uselist=False)
+
     # Project
     Project.all_samples = relationship(Sample, viewonly=True)
     Sample.project = relationship(Project)  # type:ignore # case2
@@ -69,6 +77,7 @@ if True:
 
     Project.members = relationship(User, secondary=ProjectPrivilege.__tablename__, viewonly=True)
 
+    Project.instrument = relationship(Instrument, viewonly=True)
     # Object
     ObjectHeader.fields = relationship(ObjectFields, uselist=False, viewonly=True)  # type:ignore # case2
     ObjectFields.object = relationship(ObjectHeader, uselist=False)

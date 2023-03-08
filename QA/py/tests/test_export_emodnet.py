@@ -7,11 +7,13 @@ from zipfile import ZipFile
 from starlette import status
 from unittest import mock
 
-from tests.credentials import ADMIN_AUTH, REAL_USER_ID, CREATOR_AUTH
+from tests.credentials import ADMIN_AUTH, REAL_USER_ID, CREATOR_AUTH, ADMIN_USER_ID
 from tests.emodnet_ref import ref_zip, with_zeroes_zip, no_computations_zip
+from tests.export_shared import JOB_DOWNLOAD_URL
 from tests.test_classification import _prj_query, OBJECT_SET_CLASSIFY_URL
 from tests.test_collections import COLLECTION_CREATE_URL, COLLECTION_UPDATE_URL, COLLECTION_QUERY_URL
 from tests.test_fastapi import PROJECT_QUERY_URL
+from tests.test_import import PLAIN_FILE, MIX_OF_STATES
 from tests.test_jobs import wait_for_stable, api_check_job_ok, api_check_job_failed
 from tests.test_update import ACQUISITION_SET_UPDATE_URL, SAMPLE_SET_UPDATE_URL
 from tests.test_update_prj import PROJECT_UPDATE_URL
@@ -20,9 +22,6 @@ COLLECTION_EXPORT_EMODNET_URL = "/collections/{collection_id}/export/darwin_core
                                 "&with_zeroes={zeroes}&with_computations={comp}&auto_morpho={morph}"
 
 COLLECTION_QUERY_BY_TITLE_URL = "/collections/by_title/?q={title}"
-
-JOB_DOWNLOAD_URL = "/jobs/{job_id}/file"
-JOB_LOG_DOWNLOAD_URL = "/jobs/{job_id}/log"
 
 PROJECT_SEARCH_SAMPLES_URL = "/api/samples/search?project_ids={project_id}&id_pattern="
 PROJECT_SEARCH_ACQUIS_URL = "/acquisitions/search?project_id={project_id}"
@@ -38,11 +37,19 @@ def test_emodnet_export(config, database, fastapi, caplog):
 def do_test_emodnet_export(config, database, fastapi, caplog):
     caplog.set_level(logging.FATAL)
 
+    # In these TSVs, we have: object_major, object_minor, object_area, process_pixel
+
     # Admin imports the project
-    from tests.test_import import test_import, test_import_a_bit_more_skipping
-    prj_id = test_import(config, database, caplog, "EMODNET project")
-    # Add a sample spanning 2 days
-    test_import_a_bit_more_skipping(config, database, caplog, "EMODNET project")
+    from tests.test_import import BAD_FREE_DIR, test_import, do_import, test_import_a_bit_more_skipping
+    project = "EMODNET project"
+    prj_id = test_import(config, database, caplog, project, str(PLAIN_FILE), "UVP6")
+    # Add a sample spanning 2 days (m106_mn01_n3_sml) for testing date ranges in event.txt
+    # this sample contains 2 'detritus' at load time and 1 small<egg (92731) which resolves to nearest Phylo Actinopterygii (56693)
+    test_import_a_bit_more_skipping(config, database, caplog, project)
+    # Add a similar but predicted object into same sample m106_mn01_n3_sml
+    test_import_a_bit_more_skipping(config, database, caplog, project, str(MIX_OF_STATES))
+    # Add a sample with corrupted or absent needed free columns, for provoking calculation warnings
+    do_import(prj_id, BAD_FREE_DIR, ADMIN_USER_ID)
 
     # Get the project for update
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
@@ -65,21 +72,26 @@ def do_test_emodnet_export(config, database, fastapi, caplog):
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
-    job = wait_for_stable(job_id)
-    api_check_job_failed(fastapi, job_id, '5 error(s) during run')
-    # TODO: Errors text
-    # assert rsp.json()["errors"] == ['No valid data creator (user or organisation) found for EML metadata.',
-    #                                 'No valid contact user found for EML metadata.',
-    #                                 "No valid metadata provider user found for EML metadata.",
-    #                                 "Collection 'abstract' field is empty",
-    #                                 "Collection license should be one of [<LicenseEnum.CC0: 'CC0 1.0'>, "
-    #                                 "<LicenseEnum.CC_BY: 'CC BY 4.0'>, <LicenseEnum.CC_BY_NC: 'CC BY-NC 4.0'>] to be "
-    #                                 "accepted, not ."]
-    # assert rsp.json()["warnings"] == []
+    wait_for_stable(job_id)
+    rsp = api_check_job_failed(fastapi, job_id, '5 error(s) during run')
+    json = rsp.json()
+    assert json["errors"] == ['No valid data creator (user or organisation) found for EML metadata.',
+                              'No valid contact user found for EML metadata.',
+                              "No valid metadata provider user found for EML metadata.",
+                              "Collection 'abstract' field is empty",
+                              "Collection license should be one of [<LicenseEnum.CC0: 'CC0 1.0'>, "
+                              "<LicenseEnum.CC_BY: 'CC BY 4.0'>, <LicenseEnum.CC_BY_NC: 'CC BY-NC 4.0'>] to be "
+                              "accepted, not ."]
+    assert "warnings" not in json
 
-    # Validate everything, otherwise no export.
+    # Validate nearly everything, otherwise no export.
     obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
-    assert len(obj_ids) == 11
+    assert len(obj_ids) == 20
+    # The first Actinopterygii object in m106_mn01_n3_sml remains Predicted and the second one is imported Validated
+    actinopters = _prj_query(fastapi, CREATOR_AUTH, prj_id, taxo="92731")
+    assert len(actinopters) == 2
+    for an_objid in actinopters:  # No need to validate any of them
+        obj_ids.remove(an_objid)
     url = OBJECT_SET_CLASSIFY_URL
     classifications = [-1 for _obj in obj_ids]  # Keep current
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
@@ -126,11 +138,36 @@ This series is part of the long term planktonic monitoring of
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
-    job = wait_for_stable(job_id)
-    api_check_job_ok(fastapi, job_id)
-    # warns = rsp.json()["warnings"]
-    # # assert warns == []
-    # assert rsp.json()["errors"] == []
+    wait_for_stable(job_id)
+    job_status = api_check_job_ok(fastapi, job_id)
+    warns = job_status["result"]["wrns"]
+    ref_warns = [
+        "Could not extract sampling net name and features from sample m106_mn01_n1_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
+        "Could not extract sampling net name and features from sample m106_mn01_n2_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
+        "No occurrence added for sample 'm106_mn01_n2_sml' in project #%d" % prj_id,
+        "Could not extract sampling net name and features from sample m106_mn01_n3_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
+        "Could not extract sampling net name and features from sample m106_mn04_n4_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
+        "Sample 'm106_mn04_n4_sml' taxo(s) #[1, 78418]: Computed concentration is NaN, input data is missing or incorrect",
+        "Sample 'm106_mn04_n4_sml' taxo(s) #[1, 78418]: Computed biovolume is NaN, input data is missing or incorrect",
+        "Could not extract sampling net name and features from sample m106_mn04_n5_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
+        "Some values could not be converted to float in {'sql_count': 1, 'sam_tot_vol': 'foo', 'ssm_sub_part': '8'}",
+        "Some values could not be converted to float in {'sql_count': 1, 'sam_tot_vol': 'foo', 'ssm_sub_part': '8'}",
+        "Sample 'm106_mn04_n5_sml' taxo(s) #[1, 78418]: Computed concentration is NaN, input data is missing or incorrect",
+        "Some values could not be converted to float in {'obj_area': 1511.0, 'sam_tot_vol': 'foo', 'ssm_pixel': '10.6', 'ssm_sub_part': '8'}",
+        "Some values could not be converted to float in {'obj_area': 1583.0, 'sam_tot_vol': 'foo', 'ssm_pixel': '10.6', 'ssm_sub_part': '8'}",
+        "Sample 'm106_mn04_n5_sml' taxo(s) #[1, 78418]: Computed biovolume is NaN, input data is missing or incorrect",
+        "Could not extract sampling net name and features from sample m106_mn04_n6_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
+        "Some values could not be converted to float in {'sql_count': 1, 'sam_tot_vol': '2000', 'ssm_sub_part': 'hi'}",
+        "Some values could not be converted to float in {'sql_count': 1, 'sam_tot_vol': '2000', 'ssm_sub_part': 'hi'}",
+        "Some values could not be converted to float in {'sql_count': 1, 'sam_tot_vol': '2000', 'ssm_sub_part': 'hi'}",
+        "Sample 'm106_mn04_n6_sml' taxo(s) #[1, 45072, 78418]: Computed concentration is NaN, input data is missing or incorrect",
+        "Some values could not be converted to float in {'obj_area': 1583.0, 'sam_tot_vol': '2000', 'ssm_pixel': '10.6', 'ssm_sub_part': 'hi'}",
+        "Some values could not be converted to float in {'obj_area': 1583.0, 'sam_tot_vol': '2000', 'ssm_pixel': '10.6', 'ssm_sub_part': 'hi'}",
+        "Some values could not be converted to float in {'obj_area': 1583.0, 'sam_tot_vol': '2000', 'ssm_pixel': '10.6', 'ssm_sub_part': 'hi'}",
+        "Sample 'm106_mn04_n6_sml' taxo(s) #[1, 45072, 78418]: Computed biovolume is NaN, input data is missing or incorrect",
+        "Stats: predicted:1 validated:19 produced to zip:9 not produced (M):11 not produced (P):0"]
+    assert warns == ref_warns
+    assert rsp.json()["errors"] == []
     # job_id = rsp.json()["job_id"]
 
     # Download the result zip
@@ -193,11 +230,12 @@ def unzip_and_check(zip_content, ref_content):
 
 
 def add_concentration_data(fastapi, prj_id):
-    # Update Acquisitions & Samples so that there can be a concentration
+    # Update Acquisitions & Samples so that there can be a concentration,
+    # only some of them so that on-purpose erroneous data survives
     url = PROJECT_SEARCH_SAMPLES_URL.format(project_id=prj_id)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
-    sample_ids = [r["sampleid"] for r in rsp.json()]
+    sample_ids = [r["sampleid"] for r in rsp.json() if "mn04" not in r["orig_id"]]
     url = SAMPLE_SET_UPDATE_URL.format(project_id=prj_id)
     req = {"target_ids": sample_ids,
            "updates":
@@ -209,7 +247,7 @@ def add_concentration_data(fastapi, prj_id):
     url = PROJECT_SEARCH_ACQUIS_URL.format(project_id=prj_id)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
-    acquis_ids = [r["acquisid"] for r in rsp.json()]
+    acquis_ids = [r["acquisid"] for r in rsp.json() if "mn04" not in r["orig_id"]]
     url = ACQUISITION_SET_UPDATE_URL.format(project_id=prj_id)
     req = {"target_ids": acquis_ids,
            "updates":

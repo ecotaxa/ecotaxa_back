@@ -5,7 +5,7 @@
 # Switch from UniEUK (present in march 2021) taxonomy to WoRMS.
 #   Data sources are Worms DB table and ToWorms manual file.
 #
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 
 from API_operations.TaxonomyService import TaxonomyService
 from BO.Classification import ClassifIDListT, ClassifIDT
@@ -25,7 +25,7 @@ class TaxonomyMapper(object):
         self.session = session
         self.taxa_ids = set(taxon_ids)
 
-    def do_match(self) -> Tuple[Dict[ClassifIDT, WoRMS], Dict[ClassifIDT, ClassifIDT]]:
+    def do_match(self) -> Tuple[Dict[ClassifIDT, WoRMS], Dict[ClassifIDT, Optional[ClassifIDT]]]:
         """
             Returns: A dict with matched Phylo taxo ids->WoRMS entry. The taxa might be Morpho ones,
                         as the XLSX data source contains such mappings.
@@ -79,7 +79,7 @@ class TaxonomyMapper(object):
             to_worms.add_to_unieuk(needed_parents, taxo_sce)
 
         # Build morpho -> nearest phylo mapping
-        phylo_per_morpho: Dict[ClassifIDT, ClassifIDT] = {}
+        phylo_per_morpho: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
         for a_morpho_id in morpho_ids:
             for a_parent_id in unieuk_per_id[a_morpho_id].id_lineage:
                 if unieuk_per_id[a_parent_id].type == 'P':
@@ -96,6 +96,8 @@ class TaxonomyMapper(object):
         #     assert unieuk_per_id[an_id].type == 'P' # Not true
         for a_morpho_id, a_phylo_id in phylo_per_morpho.items():
             assert unieuk_per_id[a_morpho_id].type == 'M'
+            if a_phylo_id is None:
+                continue
             assert unieuk_per_id[a_phylo_id].type == 'P'
 
         to_worms.check_ancestors()

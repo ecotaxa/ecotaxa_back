@@ -91,7 +91,7 @@ logger = get_logger(__name__)
 fastapi_logger.setLevel(INFO)
 
 app = FastAPI(title="EcoTaxa",
-              version="0.0.30",
+              version="0.0.31",
               # openapi URL as seen from navigator, this is included when /docs is required
               # which serves swagger-ui JS app. Stay in /api sub-path.
               openapi_url="/api/openapi.json",
@@ -1041,7 +1041,8 @@ def update_project(project: ProjectModel,
                                    cnn_network_id=project.cnn_network_id, comments=project.comments,  # type: ignore
                                    contact=project.contact,
                                    managers=project.managers, annotators=project.annotators, viewers=project.viewers,
-                                   license_=project.license)
+                                   license_=project.license,
+                                   bodc_vars=project.bodc_variables)
 
     with DBSyncService(Project, Project.projid, project_id) as ssce: ssce.wait()
     with DBSyncService(ProjectPrivilege, ProjectPrivilege.projid, project_id) as ssce: ssce.wait()
@@ -1570,6 +1571,8 @@ def classify_auto_object_set(req: ClassifyAutoReq = Body(...),
     """
     assert len(req.target_ids) == len(req.classifications) == len(req.scores), \
         "Need the same number of objects, classifications and scores"
+    assert all(isinstance(score, float) and 0 <= score <= 1 for score in req.scores), \
+        "Scores should be floats between 0 and 1"
     with ObjectManager() as sce:
         with RightsThrower():
             ret, prj_id, changes = sce.classify_auto_set(current_user, req.target_ids, req.classifications, req.scores,

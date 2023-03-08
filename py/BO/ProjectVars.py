@@ -8,13 +8,19 @@ import ast
 import re
 from typing import Optional, List
 
-from .Vocabulary import Term
+from DB.ProjectVariables import KNOWN_PROJECT_VARS
+from .Vocabulary import Vocabulary, Units
 
+# LS: I don't want to store this in DB layer...
+TYPES_PER_VAR = {
+    "subsample_coef": (Vocabulary.subsampling_coefficient, Units.dimensionless),
+    "total_water_volume": (Vocabulary.volume_sampled, Units.cubic_metres),
+    "individual_volume": (Vocabulary.volume_mm3, Units.cubic_millimetres)
+}
+# ...but below should prevent any de-sync
+assert KNOWN_PROJECT_VARS == set(TYPES_PER_VAR.keys())
 
-class ProjectVariables(object):
-    """
-        TODO: Load/save/edit from Project
-    """
+from .Vocabulary import Term, Vocabulary
 
 
 class VariableValidity(object):
@@ -57,6 +63,12 @@ class ProjectVar(object):
         self.validator: Optional[VariableValidity] = valid_if
         self.variable_names = self._extract_variable_names()
         self.code = self._compile()
+
+    @staticmethod
+    def from_project(var_name: str, var_formula: str) -> 'ProjectVar':
+        """ Create a variable from its standard name """
+        term, unit = TYPES_PER_VAR[var_name]
+        return ProjectVar(var_formula, term, unit)
 
     def _extract_variable_names(self) -> List[str]:
         """

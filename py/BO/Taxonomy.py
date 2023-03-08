@@ -29,7 +29,7 @@ class TaxonBO(object):
 
     def __init__(self, cat_type: str, display_name: str, nb_objects: int, nb_children_objects: int,
                  lineage: List[str], id_lineage: List[ClassifIDT],
-                 children: List[ClassifIDT] = None,
+                 children: Optional[List[ClassifIDT]] = None,
                  rename_id: Optional[int] = None):
         assert cat_type in ('P', 'M')
         self.type = cat_type
@@ -65,7 +65,7 @@ class TaxonomyBO(object):
                    "  FROM taxonomy "
                    " WHERE id = ANY (:een)")
         res: Result = session.execute(sql, {"een": list(classif_id_seen)})
-        return {int(r['id']) for r in res}
+        return {an_id for an_id, in res}
 
     @staticmethod
     def keep_phylo(session: Session, classif_id_seen: ClassifIDListT):
@@ -79,15 +79,6 @@ class TaxonomyBO(object):
         return {an_id for an_id, in res}
 
     @staticmethod
-    def get_display_names(session: Session, classif_ids: ClassifIDListT) -> List[str]:
-        """
-            Return display names for given IDs
-        """
-        qry = session.query(Taxonomy.display_name).distinct()
-        qry = qry.filter(Taxonomy.id == any_(classif_ids))
-        return [a_name for a_name, in qry]
-
-    @staticmethod
     def resolve_taxa(session: Session, taxo_lookup: Dict[str, Dict[str, Any]], taxon_lower_list):
         """
             Match taxa in taxon_lower_list and return the matched ones in taxo_found.
@@ -99,7 +90,7 @@ class TaxonomyBO(object):
                 WHERE lower(t.name) = ANY(:nms) OR lower(t.display_name) = ANY(:dms) 
                     OR lower(t.name)||'<'||lower(p.name) = ANY(:chv) """)
         res: Result = session.execute(sql, {"nms": taxon_lower_list, "dms": taxon_lower_list, "chv": taxon_lower_list})
-        for rec_taxon in res:
+        for rec_taxon in res.mappings():
             for found_k, found_v in taxo_lookup.items():
                 if ((found_k == rec_taxon['name'])
                         or (found_k == rec_taxon['display_name'])
@@ -120,7 +111,7 @@ class TaxonomyBO(object):
                 LEFT JOIN taxonomy p ON t.parent_id = p.id
                 WHERE t.id = ANY(:ids) """)
         res: Result = session.execute(sql, {"ids": list(id_coll)})
-        for rec_taxon in res:
+        for rec_taxon in res.mappings():
             ret[rec_taxon['id']] = (rec_taxon['name'], rec_taxon['parent_name'])
         return ret
 
@@ -141,7 +132,7 @@ class TaxonomyBO(object):
         """
         sql = text(TaxonomyBO.RQ_CHILDREN)
         res: Result = session.execute(sql, {"ids": id_list})
-        return {int(r['id']) for r in res}
+        return {int(r['id']) for r in res.mappings()}
 
     @staticmethod
     def parents_sql(ref_obj_id: str) -> str:

@@ -6,21 +6,23 @@ import typing
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Dict, Any, Iterable, Optional, Union, OrderedDict as OrderedDictT, Set
+from typing import List, Dict, Any, Iterable, Optional, Union, OrderedDict as OrderedDictT, Set, Tuple
 
 from BO.Classification import ClassifIDListT
-from BO.Instrument import DescribedInstrumentSet
 from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping, TableMapping
 from BO.Prediction import DeepFeatures
 from BO.ProjectPrivilege import ProjectPrivilegeBO
+from BO.ProjectVars import ProjectVar
 from BO.SpaceTime import USED_FIELDS_FOR_SUNPOS, compute_sun_position
 from BO.User import MinimalUserBO, UserActivity, UserIDT, MinimalUserBOListT, UserActivityListT
+from DB import ProjectVariables
 from DB.Acquisition import Acquisition
 from DB.Object import VALIDATED_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, ObjectsClassifHisto, \
     ObjectHeader, ObjectFields
 from DB.Process import Process
 from DB.Project import ProjectIDT, ProjectIDListT, Project
 from DB.ProjectPrivilege import ProjectPrivilege
+from DB.ProjectVariables import KNOWN_PROJECT_VARS
 from DB.Sample import Sample
 from DB.User import Role, User
 from DB.helpers import Session, Result
@@ -65,16 +67,17 @@ class ProjectBO(object):
         A Project business object. So far (but less and less...) mainly a container
         for static API_operations involving it.
     """
-    __slots__ = ["_project", "instrument", "highest_right",
+    __slots__ = ["_project", "instrument", "instrument_url", "highest_right",
                  "obj_free_cols", "sample_free_cols",
                  "acquisition_free_cols", "process_free_cols",
-                 "init_classif_list",
+                 "init_classif_list", "bodc_variables",
                  "contact", "viewers", "annotators", "managers"]
 
     def __init__(self, project: Project):
         self._project = project
-        # Added values
-        self.instrument = ""
+        # Added/copied values
+        self.instrument = project.instrument_id
+        self.instrument_url = None
         self.highest_right = ""  # This field depends on the user asking for the information
         self.obj_free_cols: Dict[str, str] = {}
         self.sample_free_cols: Dict[str, str] = {}
@@ -86,6 +89,8 @@ class ProjectBO(object):
         self.viewers: List[User] = []
         self.annotators: List[User] = []
         self.managers: List[User] = []
+        # Formulas AKA variables, used to compute BODC quantities
+        self.bodc_variables: Dict[str, str] = {}
 
     def get_preset(self) -> ClassifIDListT:
         """
@@ -128,6 +133,17 @@ class ProjectBO(object):
             by_right_fct[a_priv.privilege](priv_user)
             if 'C' == a_priv.extra:
                 self.contact = priv_user
+        self.instrument_url = self._project.instrument.bodc_url
+        # Variables
+        if self._project.variables is not None:
+            self.bodc_variables.update(self._project.variables.to_dict())
+        return self
+
+    def public_enrich(self) -> "ProjectBO":
+        """
+            Enrichment with fields we can expose to public unauthenticated calls.
+        """
+        self.instrument_url = self._project.instrument.bodc_url
         return self
 
     def update(self, session: Session, instrument: Optional[str], title: str, visible: bool, status: str,
@@ -137,13 +153,24 @@ class ProjectBO(object):
                cnn_network_id: str, comments: str,
                contact: Any,
                managers: List[Any], annotators: List[Any], viewers: List[Any],
-               license_: str):
+               license_: str, bodc_vars: Dict):
         assert contact is not None, "A valid Contact is needed."
         proj_id = self._project.projid
         assert instrument is not None, "A valid Instrument is needed."
+        # Validate variables
+        errors: List[str] = []
+        for a_var, its_def in bodc_vars.items():
+            if its_def is None or its_def.strip() == "":
+                continue
+            assert a_var in KNOWN_PROJECT_VARS, "Invalid project variable key: {}".format(a_var)
+            try:
+                var_def = ProjectVar.from_project(a_var, its_def)
+            except TypeError as e:
+                errors.append("Error {} in formula '{}': ".format(str(e), its_def))
+        assert len(errors) == 0, "There are formula errors: " + str(errors)
         # Field reflexes
         if cnn_network_id != self._project.cnn_network_id:
-            # Delete CNN features which depend on the CNN network
+            # Delete CNN features, which depend on the CNN network
             DeepFeatures.delete_all(session, proj_id)
         # Fields update
         self._project.instrument_id = instrument
@@ -183,6 +210,13 @@ class ProjectBO(object):
                                              extra=extra))
         # Sanity check
         assert contact_used, "Could not set Contact, the designated user is not in Managers list."
+        # Variables update, in full
+        bodc_vars_model = self._project.variables
+        if bodc_vars_model is None:
+            # Create record if needed
+            bodc_vars_model = ProjectVariables()
+            self._project.variables = bodc_vars_model
+        bodc_vars_model.load_from_dict(bodc_vars)
         session.commit()
 
     def __getattr__(self, item):
@@ -284,13 +318,27 @@ class ProjectBO(object):
 
     @staticmethod
     def all_samples_orig_id(session: Session,
-                            prj_ids: ProjectIDListT) -> Set[str]:
-        """ Return orig_id (i.e. users' sample_id for all projects). If several projects, it is assumed
-         that project ids come from a Collection, so no naming conflict. """
+                            prj_ids: ProjectIDListT) -> Set[Tuple]:
+        """ Return orig_id (i.e. users' sample_id) for all projects.
+         If several projects, it is assumed that project ids come from a Collection, so no naming conflict. """
+        # TODO: Test that there is indeed no collision, count(project_id) should be 1
         qry = session.query(Sample.orig_id).distinct(Sample.orig_id)
         qry = qry.join(Project)
         qry = qry.filter(Project.projid == any_(prj_ids))
-        return set([an_id for an_id, in qry])
+        return set([(an_id,) for an_id, in qry])
+
+    @staticmethod
+    def all_subsamples_orig_id(session: Session,
+                               prj_ids: ProjectIDListT) -> Set[Tuple]:
+        """ Return Sample orig_id (i.e. users' sample_id) and Acquisition orig_id (i.e. users' acq_id) pairs
+         for all projects. If several projects, it is assumed that project ids come from a Collection,
+         so no naming conflict. """
+        # TODO: Test that there is indeed no collision, count(project_id) should be 1
+        qry = session.query(Sample.orig_id, Acquisition.orig_id).distinct()
+        qry = qry.join(Project)
+        qry = qry.filter(Sample.sampleid == Acquisition.acq_sample_id)
+        qry = qry.filter(Project.projid == any_(prj_ids))
+        return set([(sam_id, acq_id) for sam_id, acq_id in qry])
 
     @staticmethod
     def read_user_stats(session: Session, prj_ids: ProjectIDListT) -> List[ProjectUserStats]:
@@ -525,6 +573,7 @@ class ProjectBO(object):
         session.query(Project). \
             filter(Project.projid == prj_id).delete()
         # Remove privileges
+        # TODO: Should be in a relationship rule already. To check using DB trace when moving to SQLAlchemy v2
         session.query(ProjectPrivilege). \
             filter(ProjectPrivilege.projid == prj_id).delete()
 
@@ -724,6 +773,8 @@ class ProjectBOSet(object):
         # qry = session.query(Project)
         qry = qry.options(subqueryload(Project.privs_for_members))
         qry = qry.options(subqueryload(Project.members))
+        qry = qry.options(subqueryload(Project.variables))
+        qry = qry.options(subqueryload(Project.instrument))
         qry = qry.filter(Project.projid == any_(prj_ids))
         self.projects: List[ProjectBO] = []
         # De-duplicate
@@ -736,14 +787,9 @@ class ProjectBOSet(object):
             self_projects_append = self.projects.append
             for a_proj in projs:
                 if public:
-                    self_projects_append(ProjectBO(a_proj))
+                    self_projects_append(ProjectBO(a_proj).public_enrich())
                 else:
                     self_projects_append(ProjectBO(a_proj).enrich())
-        # Add instruments
-        with CodeTimer("%s set instruments:" % len(prj_ids), logger):
-            instruments = DescribedInstrumentSet(session, prj_ids)
-            for a_project in self.projects:
-                a_project.instrument = instruments.by_project.get(a_project.projid, "?")
 
     def as_list(self) -> List[ProjectBO]:
         return self.projects

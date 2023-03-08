@@ -2,5 +2,9 @@ sampleid	acquisid	taxonid	count
 m106_mn01_n1_sml	generic_m106_mn01_n1_sml	Cyclopoida	1
 m106_mn01_n1_sml	generic_m106_mn01_n1_sml	Oncaeidae	2
 m106_mn01_n1_sml	generic_m106_mn01_n1_sml	other<living	1
+m106_mn01_n2_sml	generic_m106_mn01_n2_sml	Cyclopoida	0
 m106_mn01_n2_sml	generic_m106_mn01_n2_sml	Oncaeidae	1
+m106_mn01_n2_sml	generic_m106_mn01_n2_sml	other<living	0
+m106_mn01_n3_sml	generic_m106_mn01_n3_sml	Cyclopoida	0
 m106_mn01_n3_sml	generic_m106_mn01_n3_sml	Oncaeidae	1
+m106_mn01_n3_sml	generic_m106_mn01_n3_sml	other<living	0

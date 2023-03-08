@@ -38,7 +38,7 @@ class ProjectsService(Service):
             if prj is None:
                 return "Project to clone not found"
             new_prj = clone_of(prj)
-            new_prj.instrument_id = prj.instrument_id  # instrument is a FK, thus no copied by clone_of()
+            new_prj.instrument_id = prj.instrument_id  # instrument is a FK, thus not copied by clone_of()
         else:
             current_user = RightsBO.user_wants_create_project(self.session, current_user_id)
             new_prj = Project()
@@ -48,8 +48,8 @@ class ProjectsService(Service):
         new_prj.visible = req.visible
         self.session.add(new_prj)
         self.session.flush()  # to get the project ID
-        # Add the manage privilege
-        RightsBO.grant(self.session, current_user, Action.ADMINISTRATE, new_prj)
+        # Add the manage privilege & set user as contact
+        RightsBO.grant(self.session, current_user, Action.ADMINISTRATE, new_prj, 'C')
         self.session.commit()
         return new_prj.projid
 

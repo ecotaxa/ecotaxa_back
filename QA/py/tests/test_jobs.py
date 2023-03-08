@@ -16,7 +16,7 @@ def wait_for_stable(job_id: int):
     """ Wait for the job to be in a stable state, i.e. not running """
     with JobCRUDService() as sce:
         assert sce.query(ADMIN_USER_ID, job_id).state == DBJobStateEnum.Pending
-        # TODO ofr testing prediction: JobScheduler.FILTER.clear()
+        # TODO for testing prediction: JobScheduler.FILTER.clear()
         # Manually create a scheduler, so there is no dependency on the way it's used in main.py (launched at interval)
         with JobScheduler() as jsce:
             jsce.run_one()
@@ -27,9 +27,9 @@ def wait_for_stable(job_id: int):
 def check_job_ok(job):
     if job.state != DBJobStateEnum.Finished:
         if job.state == DBJobStateEnum.Asking:
-            print("? " + job.question)
+            print("? " + str(job.question))
         else:
-            print("NOT OK" + job.messages)
+            print("NOT OK" + str(job.messages))
     assert (job.state, job.progress_pct, job.progress_msg) == (DBJobStateEnum.Finished, 100, "Done")
 
 
@@ -63,6 +63,7 @@ def api_check_job_ok(fastapi, job_id):
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     job_dict = rsp.json()
     assert (job_dict["state"], job_dict["progress_pct"], job_dict["progress_msg"]) == ('F', 100, 'Done')
+    return job_dict
 
 
 def api_check_job_errors(fastapi, job_id) -> List[str]:
@@ -87,6 +88,7 @@ def api_check_job_failed(fastapi, job_id, expected_message):
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     job_dict = rsp.json()
     assert (job_dict["state"], job_dict["progress_msg"]) == ('E', expected_message)
+    return rsp
 
 
 def get_job_and_wait_until_ok(fastapi, rsp):

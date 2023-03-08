@@ -1,20 +1,36 @@
 You will find here a few command-line utilities, for some functions which are not triggered by a FastAPI call.
 
-As a first step, you have to evaluate the python venv:
-
+You can either execute the commands below in a `venv` or prepend with proper environment setup as shown.
 
 ### Database migration scripts
+
+See https://alembic.sqlalchemy.org/en/latest/autogenerate.html for background
 
 * As a dev:
 
 To generate diff script for upgrade:
 
-See https://alembic.sqlalchemy.org/en/latest/autogenerate.html
-
-Evalutate the venv first, then:
-
-`PYTHONPATH=.. APP_CONFIG=../config.ini alembic revision --autogenerate -m "say something"
+`PATH=../venv38/bin PYTHONPATH=.. APP_CONFIG=../config.ini alembic revision --autogenerate -m "say something"
 `
+
+Then check the newly appeared .py script which should contain the commands to upgrade the DB. It's often the case that
+some manually generated tables appear there, so adjust manually the content.
+
+Add the new script to the local git repo.
+
+Next step is to generate SQL for DB creation giant SQL in QA directory:
+
+`PATH=../venv38/bin PYTHONPATH=.. APP_CONFIG=../config.ini alembic upgrade --sql head
+`
+
+Copy/paste the last section (signalled by "-- Running upgrade...") at the end of `upgrade_prod.sql`.
+
+Finally upgrade your local DB:
+
+`PATH=../venv38/bin PYTHONPATH=.. APP_CONFIG=../config.ini alembic upgrade head
+`
+
+
 * As an operator, to upgrade a production DB, from docker shell:
 
 ```
@@ -24,6 +40,11 @@ I have no name!@5e55ec7508c5:/app$ cd cmds/
 
 I have no name!@d2637e5ae89c:/app/cmds$ PYTHONPATH=.. alembic upgrade head
 ```
+
+If new tables were created, and the read-only role is present, you will have to grant the right manually:
+
+`ecotaxa=# GRANT SELECT ON ALL TABLES IN SCHEMA public TO readerole;
+`
 
 ### Database related scripts
 

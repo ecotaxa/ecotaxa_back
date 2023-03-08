@@ -71,11 +71,11 @@ class ObjectManager(Service):
         order_clause = self.cook_order_clause(order_field, free_columns_mappings)
 
         # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, filters)
+        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, user_id, filters)
 
         extra_cols = self.add_return_fields(return_fields, free_columns_mappings)
 
-        from_, where_clause, params = object_set.get_sql(user_id, order_clause, extra_cols)
+        from_, where_clause, params = object_set.get_sql(order_clause, extra_cols)
 
         oid_lst, cnt = None, None
         # with ObjectCache(project=prj, mapping=free_columns_mappings,
@@ -235,8 +235,8 @@ class ObjectManager(Service):
             user_id = user.id
 
         # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, filters)
-        from_, where, params = object_set.get_sql(user_id)
+        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, proj_id, user_id, filters)
+        from_, where, params = object_set.get_sql()
         sql = """
     SET LOCAL enable_seqscan=FALSE;
     SELECT COUNT(*) nbr"""
@@ -424,7 +424,7 @@ class ObjectManager(Service):
         return nb_upd, project.projid, all_changes
 
     def classify_auto_set(self, current_user_id: UserIDT,
-                          target_ids: ObjectIDListT, classif_ids: List[ClassifIDListT], scores: List[ClassifScoresListT],
+                          target_ids: ObjectIDListT, classif_ids: ClassifIDListT, scores: List[float],
                           keep_logs: bool) -> Tuple[int, int, ObjectSetClassifChangesT]:
         """
             Classify (from automatic source) a set of objects.
@@ -433,6 +433,21 @@ class ObjectManager(Service):
         object_set, project = self._the_project_for(current_user_id, target_ids, Action.ANNOTATE)
         # Do the raw classification, eventually with history.
         nb_upd, all_changes = object_set.classify_auto(classif_ids, scores, keep_logs)
+        # Propagate changes to update projects_taxo_stat
+        self.propagate_classif_changes(nb_upd, all_changes, project)
+        # Return status
+        return nb_upd, project.projid, all_changes
+
+    def classify_auto_mult_set(self, current_user_id: UserIDT,
+                          target_ids: ObjectIDListT, classif_ids: List[ClassifIDListT], scores: List[ClassifScoresListT],
+                          keep_logs: bool) -> Tuple[int, int, ObjectSetClassifChangesT]:
+        """
+            Classify (from automatic source) a set of objects.
+        """
+        # Get the objects and project, checking rights at the same time.
+        object_set, project = self._the_project_for(current_user_id, target_ids, Action.ANNOTATE)
+        # Do the raw classification, eventually with history.
+        nb_upd, all_changes = object_set.classify_auto_mult(classif_ids, scores, keep_logs)
         # Propagate changes to update projects_taxo_stat
         self.propagate_classif_changes(nb_upd, all_changes, project)
         # Return status

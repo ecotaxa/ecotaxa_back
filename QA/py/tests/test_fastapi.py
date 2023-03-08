@@ -104,8 +104,10 @@ def test_user_get(config, database, fastapi, caplog):
     assert rsp["name"] == "Application Administrator"
 
 
-def test_project_search(config, database, fastapi):
+def test_project_search(config, database, caplog, fastapi):
     url = "/projects/search"
+    from tests.test_import import test_import
+    test_import(config, database, caplog, "Project Search", instrument="UVP6")
     # Ordinary user looking at own projects
     response = fastapi.get(url, headers=USER_AUTH, params={"also_others": False,
                                                            "title_filter": "laur",
@@ -122,8 +124,15 @@ def test_project_search(config, database, fastapi):
                                                               "instrument_filter": "flow",
                                                               "filter_subset": True,
                                                               "for_managing": True})
-    # TODO: Windowing tests
     assert response.json() == []
+    # Admin check of instrument url
+    response = fastapi.get(url, headers=ADMIN_AUTH, params={"also_others": False,
+                                                            "title_filter": "Project Search",
+                                                            "filter_subset": True,
+                                                            "for_managing": True})
+    rsp = response.json()
+    assert rsp[0]['instrument_url'] == 'http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/'
+    # TODO: Windowing tests
 
 
 def test_error(fastapi):

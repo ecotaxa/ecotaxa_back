@@ -373,6 +373,8 @@ class ToWorms(object):
                 if self.unieuk[parent_id].type == 'M':
                     pass
                 else:
+                    if parent_id not in self.actions:
+                        continue
                     # There can be a full Morpho chain, e.g. starting from temporary at the root,
                     # the code below is not reached then
                     parent_action = self.actions[parent_id]

@@ -29,6 +29,8 @@ class Vocabulary(object):
                             "http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/")
     concentrations: Final = Term("Abundance of biological entity specified elsewhere per unit volume of the water body",
                                  "http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/")
+    volume_mm3: Final = Term("Volume in mm³",
+                             "http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/")
 
 
 class Units(Vocabulary):
@@ -41,3 +43,5 @@ class Units(Vocabulary):
                                                     "http://vocab.nerc.ac.uk/collection/P06/current/CMCM/")
     number_per_cubic_metre: Final = Term("Number per cubic metre",
                                          "http://vocab.nerc.ac.uk/collection/P06/current/UPMM/")
+    cubic_millimetres: Final = Term("Cubic millimetres",
+                                         "http://vocab.nerc.ac.uk/collection/P06/current/?/")

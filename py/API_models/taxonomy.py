@@ -30,7 +30,7 @@ class TaxonModel(BaseModel):
     id: int = Field(title="Id", description="The taxon/category IDs.", example=1)
     renm_id: Optional[int] = Field(title="Renm id",
                                    description="The advised replacement ID if the taxon/category is deprecated.",
-                                   example="null")
+                                   default=None, example="null")
     name: str = Field(title="Name", description="The taxon/category verbatim name.", example="living")
     type: str = Field(title="Type", description="The taxon/category type, 'M' for Morpho or 'P' for Phylo.",
                       example="P")

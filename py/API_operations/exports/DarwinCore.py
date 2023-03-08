@@ -12,20 +12,26 @@
 import datetime
 import re
 from collections import OrderedDict
+from functools import lru_cache
 from typing import Dict, List, Optional, Tuple, cast, Set, Any
 from urllib.parse import quote_plus
 
 import BO.ProjectVarsDefault as DefaultVars
 from API_models.exports import DarwinCoreExportRsp
+from BO.Acquisition import AcquisitionIDT
 from BO.Classification import ClassifIDT, ClassifIDSetT
 from BO.Collection import CollectionIDT, CollectionBO
+from BO.CommonObjectSets import CommonObjectSets
 from BO.DataLicense import LicenseEnum, DataLicense
+from BO.ObjectSet import DescribedObjectSet
+from BO.ObjectSetQueryPlus import ResultGrouping, TaxoRemappingT, ObjectSetQueryPlus
 from BO.Project import ProjectBO, ProjectTaxoStats
 from BO.Rights import RightsBO
 from BO.Sample import SampleBO, SampleAggregForTaxon
 from BO.TaxonomySwitch import TaxonomyMapper
+from BO.Vocabulary import Vocabulary, Units
 from DB.Collection import Collection
-from DB.Project import ProjectTaxoStat, ProjectIDT, ProjectIDListT
+from DB.Project import ProjectTaxoStat, ProjectIDT, ProjectIDListT, Project
 from DB.Sample import Sample
 from DB.Taxonomy import Taxonomy
 from DB.User import User, Role
@@ -35,16 +41,20 @@ from data.Countries import countries_by_name
 from formats.DarwinCore.Archive import DwC_Archive, DwcArchive
 from formats.DarwinCore.DatasetMeta import DatasetMetadata
 from formats.DarwinCore.MoF import SamplingNetMeshSizeInMicrons, SampleDeviceApertureAreaInSquareMeters, \
-    AbundancePerUnitVolumeOfTheWaterBody, BiovolumeOfBiologicalEntity, SamplingInstrumentName, CountOfBiologicalEntity
+    AbundancePerUnitVolumeOfTheWaterBody, BiovolumeOfBiologicalEntity, SamplingInstrumentName, CountOfBiologicalEntity, \
+    ImagingInstrumentName
 from formats.DarwinCore.models import DwC_Event, RecordTypeEnum, DwC_Occurrence, OccurrenceStatusEnum, \
-    BasisOfRecordEnum, EMLGeoCoverage, EMLTemporalCoverage, EMLMeta, EMLTitle, EMLPerson, EMLKeywordSet, \
-    EMLTaxonomicClassification, EMLAdditionalMeta, EMLIdentifier, EMLAssociatedPerson
+    BasisOfRecordEnum, IdentificationVerificationEnum, EMLGeoCoverage, EMLTemporalCoverage, EMLMeta, EMLTitle, \
+    EMLPerson, EMLKeywordSet, EMLTaxonomicClassification, EMLAdditionalMeta, EMLIdentifier, EMLAssociatedPerson
 from helpers.DateTime import now_time
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 # TODO: Move somewhere else
 from ..helpers.JobService import JobServiceBase, ArgsDict
 
 logger = get_logger(__name__)
+
+AbundancePerAcquisitionT = Dict[AcquisitionIDT, Dict[ClassifIDT, int]]
+LsidT = str  # Life Science Identifier @see https://en.wikipedia.org/wiki/LSID
 
 
 class DarwinCoreExport(JobServiceBase):
@@ -63,7 +73,6 @@ class DarwinCoreExport(JobServiceBase):
     def init_args(self, args: ArgsDict) -> ArgsDict:
         # A bit unusual to find a method before init(), but here we can visually ensure
         # that arg lists are identical.
-        super().init_args(args)
         args.update({"collection_id": self.collection.id,
                      "dry_run": self.dry_run,
                      "with_zeroes": self.with_zeroes,
@@ -84,15 +93,16 @@ class DarwinCoreExport(JobServiceBase):
         self.collection = collection
         # During processing
         # The Phylo taxa to their WoRMS counterpart
-        self.mapping: Dict[ClassifIDT, WoRMS] = {}
+        self.phylo2worms: Dict[ClassifIDT, WoRMS] = {}
         # The Morpho taxa to their nearest Phylo parent
-        self.morpho2phylo: Dict[ClassifIDT, ClassifIDT] = {}
+        self.morpho2phylo: TaxoRemappingT = {}
         self.taxa_per_sample: Dict[str, Set[ClassifIDT]] = {}
         # Output
         self.errors: List[str] = []
         self.warnings: List[str] = []
         # Summary for logging issues
         self.validated_count = 0
+        self.predicted_count = 0
         self.produced_count = 0
         self.ignored_count: Dict[ClassifIDT, int] = {}
         self.ignored_morpho: int = 0
@@ -172,7 +182,7 @@ class DarwinCoreExport(JobServiceBase):
                 occurrence_id = an_event_id + "_" + str(a_missing_id)
                 # No need to catch any exception here, the lookup worked during the
                 # "present" records generation.
-                worms = self.mapping[a_missing_id]
+                worms = self.phylo2worms[a_missing_id]
                 occ = DwC_Occurrence(eventID=an_event_id,
                                      occurrenceID=occurrence_id,
                                      individualCount=0,
@@ -406,8 +416,8 @@ class DarwinCoreExport(JobServiceBase):
 
     def get_taxo_coverage(self, project_ids: ProjectIDListT) -> List[EMLTaxonomicClassification]:
         """
-            Taxonomic coverage is the list of taxa which can be found in the projects.
-
+            Taxonomic coverage is the list of taxa which can be found in the projects, regardless
+            of their validation state.
         """
         ret: List[EMLTaxonomicClassification] = []
         # Fetch the used taxa in the projects
@@ -417,22 +427,22 @@ class DarwinCoreExport(JobServiceBase):
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid.in_(project_ids))
         used_taxa = {an_id: a_name for (an_id, a_name) in taxo_qry}
         # Map them to WoRMS
-        self.mapping, self.morpho2phylo = TaxonomyMapper(self.ro_session, list(used_taxa.keys())).do_match()
-        assert set(self.mapping.keys()).isdisjoint(set(self.morpho2phylo.keys()))
+        self.phylo2worms, self.morpho2phylo = TaxonomyMapper(self.ro_session, list(used_taxa.keys())).do_match()
+        assert set(self.phylo2worms.keys()).isdisjoint(set(self.morpho2phylo.keys()))
         # Warnings for non-matches
         for an_id, a_name in used_taxa.items():
-            if an_id not in self.mapping:
+            if an_id not in self.phylo2worms:
                 if not an_id in self.morpho2phylo:
                     self.ignored_taxa[an_id] = (a_name, an_id)
                     self.ignored_count[an_id] = 0
         # TODO: Temporary until the whole system has a WoRMS taxo tree
         # Error out if nothing at all
-        if len(self.mapping) == 0:
+        if len(self.phylo2worms) == 0:
             self.errors.append("Could not match in WoRMS _any_ classification in this project")
             return ret
         # Produce the coverage
         produced = set()
-        for _an_id, a_worms_entry in self.mapping.items():
+        for _an_id, a_worms_entry in self.phylo2worms.items():
             assert a_worms_entry is not None, "None for %d" % _an_id
             rank = a_worms_entry.rank
             value = a_worms_entry.scientificname
@@ -485,9 +495,14 @@ class DarwinCoreExport(JobServiceBase):
                                 )
                 events.add(evt)
                 self.add_eMoFs_for_sample(sample=a_sample, arch=arch, event_id=event_id)
-                nb_added = self.add_occurences(sample=a_sample, arch=arch, event_id=event_id)
+                # Humans first :)
+                nb_added = self.add_occurences(sample=a_sample, arch=arch, event_id=event_id, predicted=False)
+                by_ml = self.add_occurences(sample=a_sample, arch=arch, event_id=event_id, predicted=True)
+                nb_added += by_ml
                 if nb_added == 0:
-                    self.warnings.append("No occurrence added for sample '%s' in %d" % (a_sample.orig_id, a_prj_id))
+                    self.warnings.append(
+                        "No occurrence added for sample '%s' in project #%d" % (a_sample.orig_id, a_prj_id))
+                self.add_instrument_eMoFs_for_sample(sample=a_sample, arch=arch, event_id=event_id)
 
     nine_nine_re = re.compile("999+.0$")
 
@@ -506,18 +521,18 @@ class DarwinCoreExport(JobServiceBase):
         # emof = SamplingSpeed(event_id, "2")
         # arch.emofs.add(emof)
         try:
-            sample_volume = SampleBO.get_computed_var(sample, DefaultVars.volume_sampled)
-        except TypeError as _e:
+            total_water_volume = SampleBO.get_computed_var(sample, DefaultVars.volume_sampled)
+        except (TypeError, ValueError) as _e:
             pass
         else:
-            if self.nine_nine_re.match(str(sample_volume)):
-                self.suspicious_vals.setdefault("sample_volume", []).append(
-                    str(sample_volume) + " in " + sample.orig_id)
+            if self.nine_nine_re.match(str(total_water_volume)):
+                self.suspicious_vals.setdefault("total_water_volume", []).append(
+                    str(total_water_volume) + " in " + sample.orig_id)
             # Add sampled water volume
             # 13/04/2021: Removed as it might give the impression that the individual count is
             # the number found inside the volume, when there is subsampling involved.
-            # if sample_volume > 0:
-            #     arch.emofs.add(SampleVolumeInCubicMeters(event_id, str(sample_volume)))
+            # if total_water_volume > 0:
+            #     arch.emofs.add(SampleVolumeInCubicMeters(event_id, str(total_water_volume)))
 
         # Get the net features from the sample
         try:
@@ -560,20 +575,163 @@ class DarwinCoreExport(JobServiceBase):
             arch.emofs.add(SamplingNetMeshSizeInMicrons(event_id, str(net_mesh)))
             arch.emofs.add(SampleDeviceApertureAreaInSquareMeters(event_id, str(net_surf)))
 
-    def add_occurences(self, sample: Sample, arch: DwC_Archive, event_id: str) -> int:
-        """
-            Add DwC occurences, for given sample, into the archive. A single line per WoRMS taxon.
-        """
-        aggregs = SampleBO.aggregate_for_sample(session=self.session, sample=sample,
-                                                morpho2phylo=self.morpho2phylo if self.auto_morpho else None,
-                                                with_computations=self.with_computations,
-                                                warnings=self.warnings)
+    @lru_cache(maxsize=None)
+    def _get_instrument_url(self, project: Project):
+        """ Cache projects' instrument URL """
+        ret = project.instrument.bodc_url
+        if ret is None:
+            self.warnings.append("Project %s instrument does not have an associated BODC term."
+                                 % (project.projid,))
+        return ret
 
-        # Group by lsid, in order to have a single occurence
-        by_lsid: Dict[str, Tuple[str, SampleAggregForTaxon, WoRMS]] = {}
+    def add_instrument_eMoFs_for_sample(self, sample: Sample, arch: DwC_Archive, event_id: str) -> None:
+        """
+            Add imaging instrument eMoF. Unsure at which level the event should be, so kept separated.
+        """
+        instrument_url = self._get_instrument_url(sample.project)
+        if instrument_url is not None:
+            ins = ImagingInstrumentName(event_id=event_id,
+                                        value=instrument_url)
+            arch.emofs.add(ins)
+
+    def _aggregate_for_sample(self, sample: Sample, morpho2phylo: Optional[TaxoRemappingT],
+                              with_computations: bool, predicted: bool) \
+            -> Dict[ClassifIDT, SampleAggregForTaxon]:
+        """
+            :param sample: The Sample for which computations needs to be done.
+            :param with_computations: If not set, just do abundance calculations (e.g. to save time
+                or when it's known to be impossible).
+            :param morpho2phylo: The Morpho taxa to their nearest Phylo parent. If not provided
+                then _no_ up-the-taxa-tree consolidation will be done, i.e. there _will be_ Morpho taxa in 'ret' keys.
+
+            Do the aggregations for the given sample for each taxon and return them.
+            They will become emofs if used from DWC:
+                - 'Abundance' -> CountOfBiologicalEntity -> count of objects group by taxon
+                - 'Concentration' -> AbundancePerUnitVolumeOfTheWaterBody
+                    -> sum(individual_concentration) group by taxon
+                        with individual_concentration = 1 / subsample_coef / total_water_volume
+                - 'Biovolume' -> BiovolumeOfBiologicalEntity -> sum(individual_biovolume) group by taxon
+                    with individual_biovolume = individual_volume / subsample_coef / total_water_volume
+            The abundance can always be computed. The 2 other ones depend on availability of values
+                for the project and the configuration variable.
+        """
+        # We return all _per taxon_.
+        ret: Dict[ClassifIDT, SampleAggregForTaxon] = {}
+
+        # The source data. Note: I know it could be simplified by passing the 'P' or 'V' filter.
+        if predicted:
+            object_set = CommonObjectSets.predictedInSample(self.ro_session, sample)
+        else:
+            object_set = CommonObjectSets.validatedInSample(self.ro_session, sample)
+
+        # Start with abundances, 'simple' count but eventually with remapping
+        counts = self.abundances_for_sample(object_set, morpho2phylo)
+        for a_count in counts:
+            ret[a_count["txo_id"]] = SampleAggregForTaxon(a_count["count"], None, None)
+
+        if not with_computations:
+            return ret
+
+        # Enrich with concentrations
+        formulae = {"total_water_volume": "sam.tot_vol",
+                    "subsample_coef": "1/ssm.sub_part"}
+        concentrations = self.concentrations_for_sample(formulae, object_set, morpho2phylo)
+        conc_wrn_txos = []
+        for a_conc in concentrations:
+            txo_id, conc = a_conc["txo_id"], a_conc["conc"]
+            if conc == conc:  # NaN test
+                ret[txo_id].concentration = conc
+            else:
+                conc_wrn_txos.append(txo_id)
+        if len(conc_wrn_txos) > 0:
+            wrn = "Sample '{}' taxo(s) #{}: Computed concentration is NaN, input data is missing or incorrect"
+            wrn = wrn.format(sample.orig_id, conc_wrn_txos)
+            self.warnings.append(wrn)
+
+        # Enrich with biovolumes, note that we need previous formulae for scaling
+        # ESD @see ProjectVarsDefault.equivalent_spherical_volume
+        formulae.update({"individual_volume": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel)**3"})
+        biovolumes = self.biovolumes_for_sample(formulae, object_set, morpho2phylo)
+        biovol_wrn_txos = []
+        for a_biovol in biovolumes:
+            txo_id, biovol = a_biovol["txo_id"], a_biovol["biovol"]
+            if biovol == biovol:  # NaN test
+                ret[txo_id].biovolume = biovol
+            else:
+                biovol_wrn_txos.append(txo_id)
+        if len(biovol_wrn_txos) > 0:
+            wrn = "Sample '{}' taxo(s) #{}: Computed biovolume is NaN, input data is missing or incorrect"
+            wrn = wrn.format(sample.orig_id, biovol_wrn_txos)
+            self.warnings.append(wrn)
+
+        return ret
+
+    def abundances_for_sample(self, obj_set: DescribedObjectSet, morpho2phylo: Optional[TaxoRemappingT]) \
+            -> List[Dict[str, Any]]:
+        """
+            Compute abundances (count) for given sample.
+        """
+        aug_qry = ObjectSetQueryPlus(obj_set)
+        if morpho2phylo is not None:
+            aug_qry.remap_categories(morpho2phylo)
+        aug_qry.add_selects(["txo.id", aug_qry.COUNT_STAR])
+        aug_qry.set_aliases({"txo.id": "txo_id",
+                             aug_qry.COUNT_STAR: "count"}).set_grouping(ResultGrouping.BY_TAXO)
+        return aug_qry.get_result(self.ro_session, lambda e: self.warnings.append(e))
+
+    def concentrations_for_sample(self, formulae: Dict[str, str], obj_set: DescribedObjectSet,
+                                  morpho2phylo: Optional[TaxoRemappingT]) \
+            -> List[Dict[str, Any]]:
+        """
+            Compute concentration of each taxon for given sample.
+        """
+        aug_qry = ObjectSetQueryPlus(obj_set)
+        if morpho2phylo is not None:
+            aug_qry.remap_categories(morpho2phylo)
+        aug_qry.set_formulae(formulae)
+        sum_formula = "sql_count/subsample_coef/total_water_volume"
+        aug_qry.set_aliases({"txo.id": "txo_id",
+                             "acq.acquisid": "acq_id",
+                             aug_qry.COUNT_STAR: "sql_count",
+                             sum_formula: "conc"})
+        aug_qry.add_selects(["txo.id", "acq.acquisid"]).set_grouping(ResultGrouping.BY_SUBSAMPLE_AND_TAXO)
+        aug_qry.aggregate_with_computed_sum(sum_formula, Vocabulary.concentrations, Units.number_per_cubic_metre)
+        return aug_qry.get_result(self.ro_session, lambda e: self.warnings.append(e))
+
+    def biovolumes_for_sample(self, formulae: Dict[str, str], obj_set: DescribedObjectSet,
+                              morpho2phylo: Optional[TaxoRemappingT]) \
+            -> List[Dict[str, Any]]:
+        """
+            Compute biovolume of each taxon for given sample.
+        """
+        aug_qry = ObjectSetQueryPlus(obj_set)
+        if morpho2phylo is not None:
+            aug_qry.remap_categories(morpho2phylo)
+        aug_qry.set_formulae(formulae)
+        sum_formula = "individual_volume/subsample_coef/total_water_volume"
+        aug_qry.set_aliases({"txo.id": "txo_id",
+                             sum_formula: "biovol"})
+        aug_qry.add_selects(["txo.id"]).aggregate_with_computed_sum(sum_formula, Vocabulary.biovolume,
+                                                                    Units.cubic_millimetres_per_cubic_metre)
+        aug_qry.set_grouping(ResultGrouping.BY_TAXO)
+        return aug_qry.get_result(self.ro_session, lambda e: self.warnings.append(e))
+
+    def add_occurences(self, sample: Sample, arch: DwC_Archive, event_id: str, predicted: bool) -> int:
+        """
+            Add DwC occurrences, for given sample, into the archive. A single line per WoRMS taxon.
+            If 'predicted' is set, do the counts on predicted (but not validated) objects.
+            Otherwise, use human-validated objects.
+        """
+        aggregs = self._aggregate_for_sample(sample=sample,
+                                             morpho2phylo=self.morpho2phylo if self.auto_morpho else None,
+                                             with_computations=self.with_computations,
+                                             predicted=predicted)
+
+        # Group by lsid, in order to have a single occurrence
+        by_lsid: Dict[LsidT, Tuple[str, SampleAggregForTaxon, WoRMS]] = {}
         for an_id, an_aggreg in aggregs.items():
             try:
-                worms = self.mapping[an_id]
+                worms = self.phylo2worms[an_id]
             except KeyError:
                 # Mapping failed, count how many of them
                 if an_id in self.ignored_count:
@@ -587,25 +745,37 @@ class DarwinCoreExport(JobServiceBase):
             worms_lsid = worms.lsid
             assert worms_lsid is not None
             if worms_lsid in by_lsid:
-                occurrence_id, aggreg_for_lsid, worms = by_lsid[worms_lsid]
-                # Add the taxon ID to complete the occurence
+                # Manage here the mapping of _several_ EcoTaxa taxa to a _single_ Worms entry.
+                # e.g. jb20140319_72396_92230
+                # is because both 72396 (Diphyidae) and 92230 (Diphyidae>bract)
+                #    become Diphyidae 135338 (https://www.marinespecies.org/aphia.php?p=taxdetails&id=135338)
+                occurrence_id, aggreg_for_lsid, _worms = by_lsid[worms_lsid]
+                # Accumulate abundance
                 aggreg_for_lsid.abundance += an_aggreg.abundance
+                # Add the new taxon ID to complete the occurrence ID
                 occurrence_id += "_" + str(an_id)
+                by_lsid[worms_lsid] = (occurrence_id, aggreg_for_lsid, worms)
             else:
-                # Take the original taxo ID to build an occurence
-                occurrence_id, aggreg_for_lsid, worms = event_id + "_" + str(an_id), an_aggreg, worms
-            by_lsid[worms_lsid] = (occurrence_id, aggreg_for_lsid, worms)
+                # Take the original taxo ID to build an occurrence
+                # It's unique because it's based on the sample ID, and we append the taxon EcoTaxa ID
+                occurrence_id = event_id + ("_P" if predicted else "") + "_" + str(an_id)
+                by_lsid[worms_lsid] = (occurrence_id, an_aggreg, worms)
 
         # Sort per abundance desc
         # noinspection PyTypeChecker
         by_lsid_desc = OrderedDict(sorted(by_lsid.items(), key=lambda itm: itm[1][1].abundance, reverse=True))
-        # Record production for this sample
+        # Record production for this sample i.e. event
         self.taxa_per_sample[event_id] = set()
         # Loop over WoRMS taxa
         nb_added_occurences = 0
         for a_lsid, for_lsid in by_lsid_desc.items():
             occurrence_id, aggreg_for_lsid, worms = for_lsid
             self.produced_count += aggreg_for_lsid.abundance
+            # TODO: More in record depends on the status (validated or just predicted),
+            #  not just identificationVerificationStatus
+            # @see https://github.com/ecotaxa/ecotaxa_front/issues/764#issuecomment-1420324532
+            verif_status = IdentificationVerificationEnum.predictedByMachine if predicted \
+                else IdentificationVerificationEnum.validatedByHuman
             occ = DwC_Occurrence(eventID=event_id,
                                  occurrenceID=occurrence_id,
                                  # Below is better as an EMOF @see CountOfBiologicalEntity
@@ -614,7 +784,8 @@ class DarwinCoreExport(JobServiceBase):
                                  scientificNameID=worms.lsid,
                                  kingdom=worms.kingdom,
                                  occurrenceStatus=OccurrenceStatusEnum.present,
-                                 basisOfRecord=BasisOfRecordEnum.machineObservation)
+                                 basisOfRecord=BasisOfRecordEnum.machineObservation,
+                                 identificationVerificationStatus=verif_status)
             arch.occurences.add(occ)
             nb_added_occurences += 1
             # Add eMoFs if possible and required, but the decision is made inside the def
@@ -632,7 +803,7 @@ class DarwinCoreExport(JobServiceBase):
     def add_eMoFs_for_occurence(arch: DwC_Archive, event_id: str, occurrence_id: str,
                                 values: SampleAggregForTaxon) -> None:
         """
-            Add eMoF instances, for given occurence, into the archive.
+            Add eMoF instances, for given occurrence, into the archive.
             Conditions are: - the value exists
                             - the value was required by the call
         """
@@ -675,8 +846,9 @@ class DarwinCoreExport(JobServiceBase):
 
     def log_stats(self) -> None:
         not_produced = sum(self.ignored_count.values())
-        self.warnings.append("Stats: validated:%d produced to zip:%d not produced (M):%d not produced (P):%d"
-                             % (self.validated_count, self.produced_count, self.ignored_morpho, not_produced))
+        self.warnings.append(
+            "Stats: predicted:%d validated:%d produced to zip:%d not produced (M):%d not produced (P):%d"
+            % (self.predicted_count, self.validated_count, self.produced_count, self.ignored_morpho, not_produced))
         if len(self.ignored_count) > 0:
             unmatched = []
             ids = list(self.ignored_count.keys())
@@ -711,3 +883,4 @@ class DarwinCoreExport(JobServiceBase):
         a_stat: ProjectTaxoStats
         for a_stat in ProjectBO.read_taxo_stats(self.session, project_ids, []):
             self.validated_count += a_stat.nb_validated
+            self.predicted_count += a_stat.nb_predicted

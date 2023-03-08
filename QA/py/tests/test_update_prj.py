@@ -13,6 +13,7 @@ PROJECT_SETTINGS_UPDATE_URL = "/projects/{project_id}/prediction_settings?settin
 
 
 def test_update_prj(config, database, fastapi, caplog):
+    from tests.test_project_vars import BODC_VARS_KEY
     caplog.set_level(logging.ERROR)
     from tests.test_import import test_import_uvp6
     prj_id = test_import_uvp6(config, database, caplog, "Test Project Updates")
@@ -30,13 +31,17 @@ def test_update_prj(config, database, fastapi, caplog):
                                           'threshold': 't07',
                                           'volimage': 't02'},
                 'annotators': [],
+                BODC_VARS_KEY: {},
                 'highest_right': 'Manage',
                 'classiffieldlist': None,
                 'classifsettings': None,
                 'cnn_network_id': None,
                 'comments': None,
-                'contact': None,
+                'contact': {'email': 'administrator',
+                            'id': 1,
+                            'name': 'Application Administrator'},
                 'instrument': 'UVP6',
+                'instrument_url': 'http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/',
                 'init_classif_list': [],
                 'license': '',
                 'managers': [{'email': 'administrator',
@@ -229,3 +234,37 @@ def test_update_prj_pred_settings(config, database, fastapi, caplog):
     rsp = fastapi.get(qry_url, headers=ADMIN_AUTH)
     read_json = rsp.json()
     assert read_json['classifsettings'] == new_settings
+
+
+def test_update_prj_bodc_vars(config, database, fastapi, caplog):
+    from tests.test_project_vars import BODC_VARS_KEY
+    caplog.set_level(logging.ERROR)
+    from tests.test_import import test_import_uvp6
+    prj_id = test_import_uvp6(config, database, caplog, "Test Project Variables Updates")
+
+    # Do like in legacy app, i.e. fetch/modify/resend
+    qry_url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
+    upd_url = PROJECT_UPDATE_URL.format(project_id=prj_id)
+
+    # Fetch
+    rsp = fastapi.get(qry_url, headers=ADMIN_AUTH)
+    settings_json = rsp.json()
+    assert settings_json[BODC_VARS_KEY] == {}
+
+    # Modify with invalid key
+    settings_json[BODC_VARS_KEY] = {"a": "toto"}
+    rsp = fastapi.put(upd_url, headers=ADMIN_AUTH, json=settings_json)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rsp.text
+
+    vars = {"subsample_coef": "1",
+            "total_water_volume": "2",
+            "individual_volume": "3"}
+    settings_json[BODC_VARS_KEY] = vars
+    # Now it should be OK
+    rsp = fastapi.put(upd_url, headers=ADMIN_AUTH, json=settings_json)
+    assert rsp.status_code == status.HTTP_200_OK, rsp.text
+
+    # Check by re-reading
+    rsp = fastapi.get(qry_url, headers=ADMIN_AUTH)
+    read_json = rsp.json()
+    assert read_json[BODC_VARS_KEY] == vars

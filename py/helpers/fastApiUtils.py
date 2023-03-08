@@ -66,7 +66,7 @@ def dump_openapi(app: FastAPI, main_path: str):  # pragma: no cover
     # Copy here for Git commit but also into another dev tree
     parent_dir = dirname(main_path)
     dests = [Path(parent_dir, "..", "openapi.json"),
-             Path(parent_dir, "..", "..", "ecotaxa_master", "to_back", "openapi.json")]
+             Path(parent_dir, "..", "..", "ecotaxa_front", "to_back", "openapi.json")]
     for dest in dests:
         with dest.open("w") as fd:
             fd.write(json_def)
@@ -80,8 +80,8 @@ class BearerOrCookieAuth(OAuth2):
     def __init__(
             self,
             tokenUrl: str,
-            scheme_name: str = None,
-            scopes: dict = None,
+            scheme_name: Optional[str] = None,
+            scopes: Optional[dict] = None,
             auto_error: bool = True,
     ):
         if not scopes:
@@ -90,7 +90,7 @@ class BearerOrCookieAuth(OAuth2):
         super().__init__(flows=flows, scheme_name=scheme_name, auto_error=auto_error)
 
     async def __call__(self, request: Request) -> Optional[str]:
-        header_authorization: str = request.headers.get("Authorization")
+        header_authorization: str = request.headers.get("Authorization", "")
         session_cookie: Optional[str] = request.cookies.get("session")
 
         header_scheme, header_param = get_authorization_scheme_param(

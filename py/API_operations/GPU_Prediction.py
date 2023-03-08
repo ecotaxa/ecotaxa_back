@@ -39,8 +39,9 @@ PredictForProject.JOB_TYPE = ""
 
 class GPUPredictForProject(PredictForProject):
     """
-        Part of the prediction which needs special HW and libs.
+    Part of the prediction which needs special HW and libs.
     """
+
     JOB_TYPE = "Prediction"
 
     # Remove columns with absent values % exceeding the constant below
@@ -48,44 +49,60 @@ class GPUPredictForProject(PredictForProject):
 
     def do_prediction(self) -> None:
         """
-            The real job.
+        The real job.
         """
         self.out_path = self.temp_for_jobs.base_dir_for(self.job_id)
         req = self.req
         logger.info("Input Param = %s", self.req.__dict__)
 
-        _user, tgt_prj = RightsBO.user_wants(self.session, self._get_owner_id(), Action.READ, self.req.project_id)
+        _user, tgt_prj = RightsBO.user_wants(
+            self.session, self._get_owner_id(), Action.ANNOTATE, self.req.project_id
+        )
 
         if req.use_scn:
             self.update_progress(5, "Ensuring deep learning features are present")
             self.ensure_deep_features(tgt_prj)
 
         self.update_progress(10, "Retrieving learning set data")
-        np_feature_vals, classif_ids, used_features, np_medians_per_feat = self.build_learning_set(req)
+        (
+            np_feature_vals,
+            classif_ids,
+            used_features,
+            np_medians_per_feat,
+        ) = self.build_learning_set(req)
         self.update_progress(20, "Training the classifier")
         classifier = self.build_classifier(np_feature_vals, classif_ids)
 
         self.update_progress(25, "Retrieving objects to classify")
         target_result = self.select_target(tgt_prj, used_features)
-        nb_rows = self.classify(target_result, classifier, used_features, np_medians_per_feat)
+        nb_rows = self.classify(
+            target_result, classifier, used_features, np_medians_per_feat
+        )
 
         final_message = "New category set on %d objects." % nb_rows
         self.update_progress(100, final_message)
         done_infos = {"rowcount": nb_rows}
         self.set_job_result(errors=[], infos=done_infos)
 
-    def build_learning_set(self, req: PredictionReq) -> Tuple[np.ndarray, ClassifIDListT, List[str], Dict[str, float]]:
+    def build_learning_set(
+            self, req: PredictionReq
+    ) -> Tuple[np.ndarray, ClassifIDListT, List[str], Dict[str, float]]:
         """
-            Build the learning set from DB data & req instructions.
-            :returns - A matrix in which each line contains the features for selected (validated) objects.
-                     - The classification for each object, in a list, same order as the matrix lines of course.
-                     - The object features AKA DB columns used for extraction, e.g. 'fre.feret' or 'fre.circ'.
-                       The same list has to be used for objects to predict.
-                     - Medians of existing values per feature, which was used for replacement of missing values
-                       inside the matrix, and hence needs to be used in objects to predict as well.
+        Build the learning set from DB data & req instructions.
+        :returns - A matrix in which each line contains the features for selected (validated) objects.
+                 - The classification for each object, in a list, same order as the matrix lines of course.
+                 - The object features AKA DB columns used for extraction, e.g. 'fre.feret' or 'fre.circ'.
+                   The same list has to be used for objects to predict.
+                 - Medians of existing values per feature, which was used for replacement of missing values
+                   inside the matrix, and hence needs to be used in objects to predict as well.
         """
-        learning_set = LimitedInCategoriesProjectSet(self.ro_session, req.source_project_ids,
-                                                     req.features, req.learning_limit, req.categories)
+        learning_set = LimitedInCategoriesProjectSet(
+            self.ro_session,
+            req.source_project_ids,
+            req.features,
+            req.learning_limit,
+            req.categories,
+        )
         features = list(req.features)
         nb_features = len(features)
         # Read DB values all into memory.
@@ -94,7 +111,9 @@ class GPUPredictForProject(PredictForProject):
         logger.info("Learning set is %s lines * %s columns", obj_count, nb_features)
 
         # Compute medians & variance per _present_ feature
-        np_medians_per_feat, np_variances_per_feat = learning_set.np_stats(np_learning_set)
+        np_medians_per_feat, np_variances_per_feat = learning_set.np_stats(
+            np_learning_set
+        )
         logger.debug("Numpy medians: %s", np_medians_per_feat)
         logger.debug("Numpy variances: %s", np_variances_per_feat)
 
@@ -114,7 +133,9 @@ class GPUPredictForProject(PredictForProject):
             if a_feat in to_del:
                 continue
             if vari == 0:
-                to_del[a_feat] = "Constant :%s" % np_learning_set[0, features.index(a_feat)]
+                to_del[a_feat] = (
+                        "Constant :%s" % np_learning_set[0, features.index(a_feat)]
+                )
         # Replace NaNs with median
         replacements = {}
         for a_feat, nan_count in np_nans_per_feat.items():
@@ -140,18 +161,26 @@ class GPUPredictForProject(PredictForProject):
         if self.req.use_scn:
             self.update_progress(15, "Retrieving deep features")
             logger.info("Adding 50 deep features")
-            np_deep_features = DeepFeatures.np_read_for_objects(self.ro_session, obj_ids)
-            clean_np_features = np.concatenate([clean_np_features, np_deep_features], axis=1)
+            np_deep_features = DeepFeatures.np_read_for_objects(
+                self.ro_session, obj_ids
+            )
+            clean_np_features = np.concatenate(
+                [clean_np_features, np_deep_features], axis=1
+            )
 
         # Apply pre-mapping
-        classif_ids = [req.pre_mapping.get(classif_id, classif_id) for classif_id in classif_ids]
+        classif_ids = [
+            req.pre_mapping.get(classif_id, classif_id) for classif_id in classif_ids
+        ]
 
         return clean_np_features, classif_ids, used_features, np_medians_per_feat
 
     @staticmethod
-    def build_classifier(features: np.ndarray, classif_ids: ClassifIDListT) -> OurRandomForestClassifier:
+    def build_classifier(
+            features: np.ndarray, classif_ids: ClassifIDListT
+    ) -> OurRandomForestClassifier:
         """
-            Build the classifier model and train it with the data & target ids.
+        Build the classifier model and train it with the data & target ids.
         """
         logger.info("Training the classifier")
         ret = OurRandomForestClassifier()
@@ -162,27 +191,44 @@ class GPUPredictForProject(PredictForProject):
 
     def select_target(self, tgt_project: Project, features: List[str]) -> Result:
         """
-            Return an opened cursor for looping over objects to classify.
+        Return an opened cursor for looping over objects to classify.
         """
         # Prepare a where clause and parameters from filter
         user_id = self._get_owner_id()
         filters = self.filters
-        filters['statusfilter'] = 'UP'  # TODO: It overrides other filters
-        object_set: DescribedObjectSet = DescribedObjectSet(self.ro_session, tgt_project.projid, filters)
-        free_columns_mappings = TableMapping(ObjectFields).load_from_equal_list(tgt_project.mappingobj)
+        filters["statusfilter"] = "UP"  # TODO: It overrides other filters
+        object_set: DescribedObjectSet = DescribedObjectSet(
+            self.ro_session, tgt_project.projid, user_id, filters
+        )
+        free_columns_mappings = TableMapping(ObjectFields).load_from_equal_list(
+            tgt_project.mappingobj
+        )
         sel_cols = ObjectManager.add_return_fields(features, free_columns_mappings)
-        from_, where_clause, params = object_set.get_sql(user_id, order_clause=None, select_list=sel_cols)
-        sql = "SET LOCAL enable_seqscan=FALSE; SELECT obh.objid, NULL " + sel_cols + " FROM " + from_.get_sql() + where_clause.get_sql()
+        from_, where_clause, params = object_set.get_sql(
+            order_clause=None, select_list=sel_cols
+        )
+        sql = (
+                "SET LOCAL enable_seqscan=FALSE; SELECT obh.objid, NULL "
+                + sel_cols
+                + " FROM "
+                + from_.get_sql()
+                + where_clause.get_sql()
+        )
         logger.info("Execute SQL : %s" % sql)
         res: Result = self.ro_session.execute(text(sql), params)
         return res
 
     CHUNK_SIZE = 10000
 
-    def classify(self, tgt_res: Result, classifier: OurRandomForestClassifier, features: List[str],
-                 np_medians_per_feat: Dict[str, float]) -> int:
+    def classify(
+            self,
+            tgt_res: Result,
+            classifier: OurRandomForestClassifier,
+            features: List[str],
+            np_medians_per_feat: Dict[str, float],
+    ) -> int:
         """
-            Do the classification job itself, read lines from the DB, classify them and write-back the result.
+        Do the classification job itself, read lines from the DB, classify them and write-back the result.
         """
         total_rows = tgt_res.rowcount  # type:ignore # case1
         done_count = 0
@@ -190,16 +236,21 @@ class GPUPredictForProject(PredictForProject):
         while True:
             obj_ids: ObjectIDListT = []
             unused: ClassifIDListT = []
-            np_chunk = FeatureConsistentProjectSet.np_read(tgt_res, self.CHUNK_SIZE, features,
-                                                           obj_ids, unused, np_medians_per_feat)
+            np_chunk = FeatureConsistentProjectSet.np_read(
+                tgt_res, self.CHUNK_SIZE, features, obj_ids, unused, np_medians_per_feat
+            )
             if self.req.use_scn:
-                np_deep_features_chunk = DeepFeatures.np_read_for_objects(self.ro_session, obj_ids)
+                np_deep_features_chunk = DeepFeatures.np_read_for_objects(
+                    self.ro_session, obj_ids
+                )
                 np_chunk = np.concatenate([np_chunk, np_deep_features_chunk], axis=1)
             logger.info("One chunk of %d", len(obj_ids))
             list_classif_ids, list_scores = classifier.predict_all(np_chunk)
             target_obj_set = EnumeratedObjectSet(self.session, obj_ids)
             # TODO: Remove the keep_logs flag, once sure the new algo is better
-            nb_upd, all_changes = target_obj_set.classify_auto(list_classif_ids, list_scores, keep_logs=True)
+            nb_upd, all_changes = target_obj_set.classify_auto_mult(
+                list_classif_ids, list_scores, keep_logs=True
+            )
             nb_changes += nb_upd
             logger.info("Changes :%s", str(all_changes)[:1000])
             self.session.commit()
@@ -216,11 +267,11 @@ class GPUPredictForProject(PredictForProject):
 
     def ensure_deep_features(self, tgt_project: Project) -> None:
         """
-            Ensure that deep features are present for all involved projects.
-            As of 01/10/2021: SCN_zoocam_group1
-                              SCN_flowcam_group1
-                              SCN_zooscan_group1
-                              SCN_uvp5ccelter_group1
+        Ensure that deep features are present for all involved projects.
+        As of 01/10/2021: SCN_zoocam_group1
+                          SCN_flowcam_group1
+                          SCN_zooscan_group1
+                          SCN_uvp5ccelter_group1
         """
         model_name = tgt_project.cnn_network_id
         assert model_name is not None
@@ -232,7 +283,7 @@ class GPUPredictForProject(PredictForProject):
 
     def _ensure_deep_features_for(self, proj_id: ProjectIDT, model_name: str) -> str:
         """
-            Ensure that deep features are present for given project.
+        Ensure that deep features are present for given project.
         """
         # Get data i.e objects ID and images from the project
         ids_and_images = DeepFeatures.find_missing(self.ro_session, proj_id)

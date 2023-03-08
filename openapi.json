@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.29"
+    "version":"0.0.30"
   },
   "servers":[
     {
@@ -197,7 +197,7 @@
           "users"
         ],
         "summary":"Update User",
-        "description":"**Update the user**, return **NULL upon success.**\n\n🔒 Depending on logged user, different authorizations apply:\n- An administrator or user administrator can change any field with respect of consistency.\n- A user can update own password and mail.\n- An ordinary user cannot update anything for another user.",
+        "description":"**Update the user**, return **NULL upon success.**\n\n🔒 Depending on logged user, different authorizations apply:\n- An administrator or user administrator can change any field with respect of consistency.\n- A user can update own password and name.\n- An ordinary user cannot update anything for another user.",
         "operationId":"update_user",
         "parameters":[
           {
@@ -1160,12 +1160,12 @@
             "in":"query"
           },
           {
-            "description":"One of ['instrument', 'highest_right', 'projid', 'title', 'visible', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id']",
+            "description":"One of ['instrument', 'instrument_url', 'highest_right', 'projid', 'title', 'visible', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id']",
             "required":false,
             "schema":{
               "title":"Order field",
               "type":"string",
-              "description":"One of ['instrument', 'highest_right', 'projid', 'title', 'visible', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id']"
+              "description":"One of ['instrument', 'instrument_url', 'highest_right', 'projid', 'title', 'visible', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id']"
             },
             "example":"instrument",
             "name":"order_field",
@@ -4806,7 +4806,7 @@
           "Files"
         ],
         "summary":"List User Files",
-        "description":"**List the private files** which are usable for some file-related operations.\n\n*e.g. import.*",
+        "description":"**List the private files** which are usable for some file-related operations.\nA sub_path starting with \"/\" is considered relative to user folder.\n\n*e.g. import.*",
         "operationId":"list_user_files",
         "parameters":[
           {
@@ -4952,7 +4952,7 @@
           "WIP"
         ],
         "summary":"System Status",
-        "description":"**Report the status**, mainly used for verifying that the server is up.",
+        "description":"**Report the status**, mainly used for verifying that the server is up.\nDepending on provided credentials, you get more or less information.",
         "operationId":"system_status",
         "responses":{
           "200":{
@@ -5729,7 +5729,7 @@
                 "$ref":"#/components/schemas/ExportTypeEnum"
               }
             ],
-            "description":"The export type: 'TSV', 'BAK', 'DOI' or 'SUM'.",
+            "description":"The export type.",
             "example":"TSV"
           },
           "use_latin1":{
@@ -5783,9 +5783,40 @@
           },
           "sum_subtotal":{
             "title":"Sum subtotal",
-            "type":"string",
-            "description":"For 'SUM' type, how subtotals should be calculated. Per A(cquisition) or S(ample) or ''.",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/SummaryExportGroupingEnum"
+              }
+            ],
+            "description":"For 'SUM', 'ABO', 'CNC' and 'BIV' types, if computations should be combined. Per A(cquisition) or S(ample) or <Empty>(just taxa).",
             "example":"A"
+          },
+          "pre_mapping":{
+            "title":"Categories mapping",
+            "type":"object",
+            "additionalProperties":{
+              "type":"integer"
+            },
+            "description":"For 'ABO', 'CNC' and 'BIV' types types, mapping from present taxon (key) to output replacement one (value). Use a null replacement to _discard_ the present taxon.",
+            "default":{},
+            "example":{
+              "456":956,
+              "2456":213
+            }
+          },
+          "formulae":{
+            "title":"Computation formulas",
+            "type":"object",
+            "additionalProperties":{
+              "type":"string"
+            },
+            "description":"Transitory: For 'CNC' and 'BIV' type, how to get values from DB free columns. Python syntax, prefixes are 'sam', 'ssm' and 'obj'.Variables used in computations are 'total_water_volume', 'subsample_coef' and 'individual_volume'",
+            "default":{},
+            "example":{
+              "subsample_coef":"1/ssm.sub_part",
+              "total_water_volume":"sam.tot_vol/1000",
+              "individual_volume":"4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3"
+            }
           },
           "out_to_ftp":{
             "title":"Out to ftp",
@@ -7026,6 +7057,7 @@
           },
           "statusfilter":{
             "title":"Statusfilter",
+            "maxLength":3,
             "type":"string",
             "description":"Include objects with given status:\n            'NV': Not validated \n            'PV': Predicted or Validated \n            'PVD': Predicted or Validated or Dubious\n            'NVM': Validated, but not by me \n            'VM': Validated by me \n            'U': Not classified\n            other: direct equality comparison with DB value \n        ",
             "example":"NV"
@@ -7348,6 +7380,20 @@
               "nb_images":"t01"
             }
           },
+          "bodc_variables":{
+            "title":"Expressions for computing standard BODC quantities.",
+            "type":"object",
+            "additionalProperties":{
+              "type":"string"
+            },
+            "description":"BODC quantities from columns. Only the 3 keys listed in example are valid.",
+            "default":{},
+            "example":{
+              "subsample_coef":"1/ssm.sub_part",
+              "total_water_volume":"sam.tot_vol/1000",
+              "individual_volume":"4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3"
+            }
+          },
           "init_classif_list":{
             "title":"Init classification list",
             "type":"array",
@@ -7394,7 +7440,13 @@
             "title":"Instrument",
             "type":"string",
             "description":"This project's instrument code.",
-            "example":"zooscan"
+            "example":"Zooscan"
+          },
+          "instrument_url":{
+            "title":"Instrument URL",
+            "type":"string",
+            "description":"This project's instrument BODC definition.",
+            "example":"http://vocab.nerc.ac.uk/collection/L22/current/TOOL1581/"
           },
           "contact":{
             "title":"Contact",
@@ -7898,6 +7950,17 @@
           }
         },
         "description":"Subset response. "
+      },
+      "SummaryExportGroupingEnum":{
+        "title":"SummaryExportGroupingEnum",
+        "enum":[
+          "",
+          "S",
+          "A",
+          "P"
+        ],
+        "type":"string",
+        "description":"It's implied that we minimally group/aggregate by category AKA classification AKA taxon "
       },
       "TaxaSearchRsp":{
         "title":"TaxaSearchRsp",

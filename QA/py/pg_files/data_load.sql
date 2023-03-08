@@ -18,6 +18,7 @@ COPY public.users (id, email, password, name, organisation, active, preferences,
 4	user2	$6$	Ordinary User 2	\N	t	{}	\N	2020-09-27 06:39:48.70106	\N
 5	old_admin	nimda_dlo	Application Administrator Now Retired	\N	f	{"1": {"sortby": "", "ts": 1589266843.5535243, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}, "2": {"sortby": "", "ts": 1589267270.5538993, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}}	\N	2020-05-12 08:59:48.70106	\N
 6	real@users.com	fake_pwd	Real User	Institut de la Mer de Villefranche - IMEV	f	{"1": {"sortby": "", "ts": 1589266843.5535243, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}}	France	2020-10-26 08:59:48.70106	\N
+7	ucrank4@gov.uk	fake_pwd	Udale Crank	Institut de la Mer de Villefranche - IMEV	f	{"1": {"sortby": "", "ts": 1589266843.5535243, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}}	UK	2020-10-26 08:59:48.70106	\N
 \.
 
 SELECT setval('seq_users', (SELECT max(id) FROM public.users), true);
@@ -27,6 +28,10 @@ COPY public.users_roles (user_id, role_id) FROM stdin;
 6	3
 \.
 
+-- The used ones are in first
+-- e.g. to get some data with lineage:
+-- ecotaxa4=# copy (select * from taxonomy where id in (92731, 85117, 56693, 25928, 16656, 12861,11513,2367,382,8)) to '/tmp/cp.sql';
+-- in case of problem during tests, 'data_load.log' in tests can show the COPY issues
 COPY public.taxonomy (id, parent_id, name, id_source, nbrobj, nbrobjcum, creation_datetime, creator_email, display_name, id_instance, lastupdate_datetime, rename_to, source_desc, source_url, taxostatus, taxotype) FROM stdin;
 45072	1	Cyclopoida	48740	68979	502724	\N	\N	Cyclopoida	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 78418	1	Oncaeidae	87064	199577	64180	\N	\N	Oncaeidae	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
@@ -35,6 +40,15 @@ COPY public.taxonomy (id, parent_id, name, id_source, nbrobj, nbrobjcum, creatio
 99999	1	other	m004	0	0	\N	\N	other<dead	\N	2019-01-29 05:53:34	\N	\N	\N	A	M
 85012	1	t001	m142	180622	\N	\N	\N	t001	\N	2018-01-02 00:00:00	\N	\N	\N	A	M
 85078	1	egg	m129	142336	3465	\N	\N	egg<other	\N	2019-01-29 05:53:34	\N	\N	\N	A	M
+8	2	Opisthokonta	29367	0	26545188	\N	\N	Opisthokonta	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
+382	8	Holozoa	40247	0	26542007	\N	\N	Holozoa	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
+2367	382	Metazoa	40455	445	26541560	\N	\N	Metazoa	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
+11513	2367	Chordata	66472	84	1633987	\N	\N	Chordata	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
+12861	11513	Craniata	66478	0	519587	\N	\N	Craniata<Chordata	\N	2019-01-29 05:53:34	\N	\N	\N	A	P
+16656	12861	Vertebrata	66656	10	519587	\N	\N	Vertebrata<Craniata	\N	2019-01-29 05:53:34	\N	\N	\N	A	P
+56693	25928	Actinopterygii	66657	47270	509496	\N	\N	Actinopterygii	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
+85117	56693	egg	m723	95376	100961	\N	\N	egg<Actinopterygii	\N	2019-01-29 05:53:34	\N	\N	\N	A	M
+92731	85117	small		510	510	2019-01-29 13:57:46	christophe.loots@ifremer.fr	small<egg	1	2019-01-29 13:59:45	\N	Small eggs in the eastern English Channel and southern North Sea during winter. Gathers mainly dab, flounder and rocklings eggs.		N	M
 1	\N	living	0	\N	\N	\N	\N	living<	\N	2020-07-31 13:51:26	\N	\N	\N	A	P
 2	1	Eukaryota	11831	\N	\N	\N	\N	Eukaryota	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 3	1	Bacteria	424	\N	\N	\N	\N	Bacteria	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
@@ -42,7 +56,6 @@ COPY public.taxonomy (id, parent_id, name, id_source, nbrobj, nbrobjcum, creatio
 5	2	Harosa	87173	\N	\N	\N	\N	Harosa	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 6	2	Unknowns	85352	\N	\N	\N	\N	Unknowns	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 7	2	Orphans	79922	\N	\N	\N	\N	Orphans	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
-8	2	Opisthokonta	29367	\N	\N	\N	\N	Opisthokonta	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 9	2	Excavata	28400	\N	\N	\N	\N	Excavata	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 10	2	Eukaryota X	28398	\N	\N	\N	\N	Eukaryota X	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 11	2	environmental samples	28390	\N	\N	\N	\N	environmental samples<Eukaryota	\N	2019-01-29 05:53:34	\N	\N	\N	A	P
@@ -416,7 +429,6 @@ COPY public.taxonomy (id, parent_id, name, id_source, nbrobj, nbrobjcum, creatio
 379	7	Apusomonadida	79923	\N	\N	\N	\N	Apusomonadida	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 380	7	Katablepharidida	29362	\N	\N	\N	\N	Katablepharidida<Orphans<Eukaryota<living	\N	2019-01-29 05:53:34	\N	\N	\N	A	P
 381	8	Opisthokonta X	79914	\N	\N	\N	\N	Opisthokonta X<Opisthokonta	\N	2019-01-29 05:53:34	\N	\N	\N	A	P
-382	8	Holozoa	40247	\N	\N	\N	\N	Holozoa	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 383	8	Holomycota	29368	\N	\N	\N	\N	Holomycota	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 384	9	Metamonada	29018	\N	\N	\N	\N	Metamonada	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 385	9	Malawimonadidae	29014	\N	\N	\N	\N	Malawimonadidae	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
@@ -2401,7 +2413,6 @@ COPY public.taxonomy (id, parent_id, name, id_source, nbrobj, nbrobjcum, creatio
 2364	379	Apusomonadida U01	79924	\N	\N	\N	\N	Apusomonadida U01	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 2365	381	Opisthokonta XX	79917	\N	\N	\N	\N	Opisthokonta XX	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 2366	381	Opisthokonta X	79915	\N	\N	\N	\N	Opisthokonta X<Opisthokonta X	\N	2019-01-29 05:53:34	\N	\N	\N	A	P
-2367	382	Metazoa	40455	\N	\N	\N	\N	Metazoa	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 2368	382	Ichthyosporea	40343	\N	\N	\N	\N	Ichthyosporea	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 2369	382	Filasterea	40336	\N	\N	\N	\N	Filasterea	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
 2370	382	Choanozoa	40248	\N	\N	\N	\N	Choanozoa	\N	2018-01-02 00:00:00	\N	\N	\N	A	P
@@ -7702,6 +7713,8 @@ COPY public.taxonomy (id, parent_id, name, id_source, nbrobj, nbrobjcum, creatio
 85016	84959	t005	m217	\N	\N	\N	\N	t005	\N	2018-01-02 00:00:00	\N	\N	\N	A	M
 \.
 
+-- e.g. to get some data with lineage:
+-- ecotaxa4=# copy (select * from worms where aphia_id in (10194, 152352, 1828, 1821, 146419)) to '/tmp/cp.sql';
 COPY public.worms (aphia_id, url, scientificname, authority, status, unacceptreason, taxon_rank_id, rank, valid_aphia_id, valid_name, valid_authority, parent_name_usage_id, kingdom, phylum, class_, "order", family, genus, citation, lsid, is_marine, is_brackish, is_freshwater, is_terrestrial, is_extinct, match_type, modified, all_fetched) FROM stdin;
 1	http://www.marinespecies.org/aphia.php?p=taxdetails&id=1	Biota	\N	accepted	\N	0	\N	1	Biota\N	1	\N	\N	\N	\N	\N	\N	WoRMS (2020). Biota. Accessed at: http://www.marinespecies.org/aphia.php?p=taxdetails&id=1 on 2020-09-17	urn:lsid:marinespecies.org:taxname:1	t	t	t	t	\N	\N	exact	2004-12-21 15:54:05.437	t
 889851	http://www.marinespecies.org/aphia.php?p=taxdetails&id=889851	Sarcotacidea	Yamaguti, 1963	unaccepted	\N	100	Order	1381349	Ergasilida	Khodami, Mercado-Salas, Tang & Martinez Arbizu, 2019	155879	Animalia	Arthropoda	Hexanauplia	Sarcotacidea	\N	\N	Walter, T.C.; Boxshall, G. (2020). World of Copepods database. Sarcotacidea. Accessed through: World Register of Marine Species at: http://www.marinespecies.org/aphia.php?p=taxdetails&id=889851 on 2020-09-20	urn:lsid:marinespecies.org:taxname:889851	t	f	f	f	\N	exact	2016-11-28 11:01:17.91	t
@@ -7716,4 +7729,8 @@ COPY public.worms (aphia_id, url, scientificname, authority, status, unacceptrea
 155879	http://www.marinespecies.org/aphia.php?p=taxdetails&id=155879	Podoplea	Giesbrecht, 1882	accepted	\N	90	Superorder	155879	Podoplea	Giesbrecht, 1882	155876	Animalia	Arthropoda	Hexanauplia	\N	\N	\N	WoRMS (2020). Podoplea. Accessed at: http://www.marinespecies.org/aphia.php?p=taxdetails&id=155879 on 2020-09-19	urn:lsid:marinespecies.org:taxname:155879	t	\N	t	\N	\N	exact	2008-08-27 21:14:09.817	t
 155876	http://www.marinespecies.org/aphia.php?p=taxdetails&id=155876	Neocopepoda	Huys & Boxshall, 1991	accepted	\N	80	Infraclass	155876	Neocopepoda	Huys & Boxshall, 1991	1080	Animalia	Arthropoda	Hexanauplia	\N	\N	\N	WoRMS (2020). Neocopepoda. Accessed at: http://www.marinespecies.org/aphia.php?p=taxdetails&id=155876 on 2020-09-19	urn:lsid:marinespecies.org:taxname:155876	t	t	t	\N	\N	exact	2008-06-23 12:21:53.35	t
 1080	http://www.marinespecies.org/aphia.php?p=taxdetails&id=1080	Copepoda	Milne Edwards, 1840	accepted	\N	70	Subclass	1080	Copepoda	Milne Edwards, 1840	889925	Animalia	Arthropoda	Hexanauplia	\N	\N	\N	WoRMS (2020). Copepoda. Accessed at: http://www.marinespecies.org/aphia.php?p=taxdetails&id=1080 on 2020-09-19	urn:lsid:marinespecies.org:taxname:1080	t	t	t	\N	\N	exact	2016-11-30 12:36:48.403	t
+1821	http://www.marinespecies.org/aphia.php?p=taxdetails&id=1821	Chordata	Haeckel, 1874	accepted	\N	30	Phylum	1821	Chordata	Haeckel, 1874	2	Animalia	Chordata	\N	\N	\N	\N	WoRMS (2020). Chordata. Accessed at: http://www.marinespecies.org/aphia.php?p=taxdetails&id=1821 on 2020-09-17	urn:lsid:marinespecies.org:taxname:1821	t	\N	\N	\N	\N	exact	2004-12-21 15:54:05.437	t
+146419	http://www.marinespecies.org/aphia.php?p=taxdetails&id=146419	Vertebrata	\N	accepted	\N	40	Subphylum	146419	Vertebrata	\N	1821	Animalia	Chordata	\N	\N	\N	\N	WoRMS (2020). Vertebrata. Accessed at: http://www.marinespecies.org/aphia.php?p=taxdetails&id=146419 on 2020-09-19	urn:lsid:marinespecies.org:taxname:146419	t	\N	\N	\N	\N	exact	2004-12-21 15:54:05.437	t
+1828	http://www.marinespecies.org/aphia.php?p=taxdetails&id=1828	Gnathostomata	\N	accepted	\N	50	Superclass	1828	Gnathostomata	\N	146419	Animalia	Chordata	\N	\N	\N	\N	WoRMS (2020). Gnathostomata. Accessed at: http://www.marinespecies.org/aphia.php?p=taxdetails&id=1828 on 2020-09-19	urn:lsid:marinespecies.org:taxname:1828	t	\N	\N	\N	\N	exact	2004-12-21 15:54:05.437	t
+10194	http://www.marinespecies.org/aphia.php?p=taxdetails&id=10194	Actinopterygii	\N	accepted	\N	60	Class	10194	Actinopterygii	\N	1828	Animalia	Chordata	Actinopterygii	\N	\N	\N	WoRMS (2020). Actinopterygii. Accessed at: http://www.marinespecies.org/aphia.php?p=taxdetails&id=10194 on 2020-09-19	urn:lsid:marinespecies.org:taxname:10194	t	\N	\N	\N	\N	exact	2017-02-02 05:40:48.577	t
 \.
