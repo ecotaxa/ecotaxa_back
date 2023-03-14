@@ -28,6 +28,7 @@ OBJECT_SET_REVERT_URL = "/object_set/{project_id}/revert_to_history?dry_run={dry
 OBJECT_SET_RESET_PREDICTED_URL = "/object_set/{project_id}/reset_to_predicted"
 OBJECT_SET_CLASSIFY_URL = "/object_set/classify"
 OBJECT_SET_CLASSIFY_AUTO_URL = "/object_set/classify_auto"
+OBJECT_SET_CLASSIFY_AUTO_URL2 = "/object_set/classify_auto_multiple"
 OBJECT_SET_DELETE_URL = "/object_set/"
 OBJECT_SET_SUMMARY_URL = "/object_set/{project_id}/summary?only_total=False"
 OBJECT_SET_PARENTS_URL = "/object_set/parents"
@@ -68,6 +69,18 @@ def classify_auto_all(fastapi, obj_ids, classif_id, scores=None):
     classifications = [classif_id for _obj in obj_ids]
     if not scores:
         scores = [0.52 for _obj in obj_ids]
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
+                                                      "classifications": classifications,
+                                                      "scores": scores,
+                                                      "keep_log": True})
+    assert rsp.status_code == status.HTTP_200_OK
+
+
+def classify_auto_mult_all(fastapi, obj_ids, classif_id, scores=None):
+    url = OBJECT_SET_CLASSIFY_AUTO_URL2
+    classifications = [classif_id for _obj in obj_ids]
+    if not scores:
+        scores = [[0.52, 0.2, 0.08] for _obj in obj_ids]
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
                                                       "classifications": classifications,
                                                       "scores": scores,
@@ -213,7 +226,7 @@ def test_classif(config, database, fastapi, caplog):
     classify_auto_incorrect(fastapi, obj_ids[:4])
 
     # Super ML result, 4 first objects are crustacea
-    classify_auto_all(fastapi, obj_ids[:4], crustacea)
+    classify_auto_mult_all(fastapi, obj_ids[:4], [crustacea, copepod_id, entomobryomorpha_id])
 
     assert get_stats(fastapi, prj_id) == {'nb_dubious': 0,
                                           'nb_predicted': 4,
@@ -223,7 +236,7 @@ def test_classif(config, database, fastapi, caplog):
                                           'used_taxa': [-1, crustacea]}
 
     # New ML results with a different score for the second object
-    classify_auto_all(fastapi, [obj_ids[1]], crustacea, [0.8])
+    classify_auto_mult_all(fastapi, [obj_ids[1]], [crustacea, copepod_id, entomobryomorpha_id], [[0.8, 0.1, 0.05]])
     url = OBJECT_QUERY_URL.format(object_id=obj_ids[1])
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK

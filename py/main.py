@@ -28,7 +28,7 @@ from API_models.imports import ImportReq, SimpleImportRsp, SimpleImportReq, Impo
 from API_models.login import LoginReq
 from API_models.merge import MergeRsp
 from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp, ClassifyReq, ObjectModel, \
-    ObjectHeaderModel, HistoricalClassificationModel, ObjectSetSummaryRsp, ClassifyAutoReq
+    ObjectHeaderModel, HistoricalClassificationModel, ObjectSetSummaryRsp, ClassifyAutoReq, ClassifyAutoReqMult
 from API_models.prediction import PredictionRsp, PredictionReq, MLModel
 from API_models.subset import SubsetReq, SubsetRsp
 from API_models.taxonomy import TaxaSearchRsp, TaxonModel, TaxonomyTreeStatus, TaxonUsageModel, TaxonCentral
@@ -1576,6 +1576,34 @@ def classify_auto_object_set(req: ClassifyAutoReq = Body(...),
     with ObjectManager() as sce:
         with RightsThrower():
             ret, prj_id, changes = sce.classify_auto_set(current_user, req.target_ids, req.classifications, req.scores,
+                                                         req.keep_log)
+        with DBSyncService(ProjectTaxoStat, ProjectTaxoStat.projid, prj_id) as ssce: ssce.wait()
+        return ret
+
+
+@app.post("/object_set/classify_auto_multiple", operation_id="classify_auto_mult_object_set", tags=['objects'],
+          responses={
+              200: {
+                  "content": {
+                      "application/json": {
+                          "example": 3
+                      }
+                  }
+              }
+          },
+          response_model=int)
+def classify_auto_mult_object_set(req: ClassifyAutoReqMult = Body(...),
+                             current_user: int = Depends(get_current_user)) -> int:
+    """
+        **Set automatic classification** of a set of objects.
+
+        **Returns the number of updated entities.**
+    """
+    assert len(req.target_ids) == len(req.classifications) == len(req.scores), \
+        "Need the same number of objects, classifications and scores"
+    with ObjectManager() as sce:
+        with RightsThrower():
+            ret, prj_id, changes = sce.classify_auto_mult_set(current_user, req.target_ids, req.classifications, req.scores,
                                                          req.keep_log)
         with DBSyncService(ProjectTaxoStat, ProjectTaxoStat.projid, prj_id) as ssce: ssce.wait()
         return ret
