@@ -9,6 +9,12 @@ from typing import List
 from API_models.filters import ProjectFilters, ProjectFiltersDict
 from starlette import status
 
+from API_operations.CRUD.ObjectParents import SamplesService
+from DB.Prediction import Prediction
+from DB.helpers.Core import select
+from DB.helpers.ORM import any_
+from DB.helpers import Result
+
 from tests.credentials import CREATOR_AUTH, ORDINARY_USER2_USER_ID, ADMIN_AUTH
 from tests.test_objectset_query import OBJECT_SET_QUERY_URL
 from tests.test_prj_admin import PROJECT_CLASSIF_STATS_URL
@@ -53,6 +59,23 @@ def get_stats(fastapi, prj_id):
     stats_rsp = fastapi.get(stats_url, headers=ADMIN_AUTH)
     assert stats_rsp.status_code == status.HTTP_200_OK
     return stats_rsp.json()[0]
+
+
+def get_predictions_stats(obj_ids):
+    with SamplesService() as sce:
+        qry = select(Prediction.object_id, Prediction.discarded)
+        qry = qry.where(Prediction.object_id == any_(obj_ids))
+        res: Result = sce.session.execute(qry)
+        pred_stats = {'n_predicted_objects': 0, 'n_predictions': 0, 'n_discarded': 0}
+        pred_objects = list()
+        for rec in res.fetchall():
+            if rec['object_id'] not in pred_objects:
+                pred_objects.append(rec['object_id'])
+                pred_stats['n_predicted_objects'] += 1
+            pred_stats['n_predictions'] += 1
+            if rec['discarded'] :
+                pred_stats['n_discarded'] += 1
+    return pred_stats
 
 
 def classify_all(fastapi, obj_ids, classif_id):
@@ -235,6 +258,10 @@ def test_classif(config, database, fastapi, caplog):
                                           'projid': prj_id,
                                           'used_taxa': [-1, crustacea]}
 
+    assert get_predictions_stats(obj_ids) == {'n_predicted_objects': 4,
+                                              'n_predictions': 12,
+                                              'n_discarded': 0}
+
     # New ML results with a different score for the second object
     classify_auto_mult_all(fastapi, [obj_ids[1]], [crustacea, copepod_id, entomobryomorpha_id], [[0.8, 0.1, 0.05]])
     url = OBJECT_QUERY_URL.format(object_id=obj_ids[1])
@@ -248,6 +275,16 @@ def test_classif(config, database, fastapi, caplog):
                                           'nb_validated': 0,
                                           'projid': prj_id,
                                           'used_taxa': [-1, crustacea]}
+
+    assert get_predictions_stats(obj_ids) == {'n_predicted_objects': 4,
+                                              'n_predictions': 12,
+                                              'n_discarded': 0}
+
+    with SamplesService() as sce:
+        qry = select(Prediction.classif_id, Prediction.score)
+        qry = qry.where(Prediction.object_id == obj_ids[1])
+        res: Result = sce.session.execute(qry)
+        assert res.fetchall() == [(crustacea, 0.8), (copepod_id, 0.1), (entomobryomorpha_id, 0.05)]
 
     # Admin (me!) thinks that all is a copepod :)
     classify_all(fastapi, obj_ids, copepod_id)
