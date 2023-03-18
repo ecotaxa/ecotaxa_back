@@ -1325,7 +1325,7 @@ def get_object_set(project_id: int = Path(..., description="Internal, numeric id
                    filters: ProjectFilters = Body(...),
                    fields: Optional[str] = Query(title="Fields", description='''
 
-Specify the needed object (and ancilliary entities) fields.
+Specify the needed object (and ancillary entities) fields.
                    
 It follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.
 
@@ -1359,10 +1359,14 @@ name, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatu
                                                       default=None, example="obj.longitude"),
                    # TODO: order_field should be a user-visible field name, not nXXX, in case of free field
                    window_start: Optional[int] = Query(default=None, title="Window start",
-                                                       description="Allows to return only a slice of the result. Skip window_start before returning data.",
+                                                       description='''
+Allows to return only a slice of the result, by skipping window_start objects before returning data.
+If no **unique order** is specified, the result can vary for same call and conditions.''',
                                                        example="10"),
                    window_size: Optional[int] = Query(default=None, title="Window size",
-                                                      description="Allows to return only a slice of the result. Return only window_size lines.",
+                                                      description='''
+Allows to return only a slice of the result, by returning a _maximum_ of window_size lines.
+If no **unique order** is specified, the result can vary for same call and conditions.''',
                                                       example="100"),
                    current_user: Optional[int] = Depends(get_optional_current_user)) -> MyORJSONResponse:
     """

@@ -59,10 +59,10 @@ def test_queries(config, database, fastapi, caplog):
     by_free_col_rev = _prj_query(fastapi, CREATOR_AUTH, prj_id, order="-fre.area")
     assert by_free_col == list(reversed(by_free_col_rev))
 
-    limit_4 = _prj_query(fastapi, CREATOR_AUTH, prj_id, size=4)
+    limit_4 = _prj_query(fastapi, CREATOR_AUTH, prj_id, size=4, order="obj.objid")
     assert len(limit_4) == 4
 
-    limit_4_start_4 = _prj_query(fastapi, CREATOR_AUTH, prj_id, start=4, size=4)
+    limit_4_start_4 = _prj_query(fastapi, CREATOR_AUTH, prj_id, start=4, size=4, order="obj.objid")
     assert len(limit_4_start_4) == 4
 
     assert set(limit_4).isdisjoint(set(limit_4_start_4))
