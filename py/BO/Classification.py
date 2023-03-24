@@ -42,6 +42,6 @@ class HistoricalClassification():
     classif_who: int  # 'UserIDT' makes a circular dependency issue
     classif_type: str
     classif_qual: str
-    classif_score: float
+    pred_id: int
     user_name: str
     taxon_name: str

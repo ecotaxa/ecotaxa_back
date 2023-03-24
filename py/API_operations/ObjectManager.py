@@ -423,20 +423,6 @@ class ObjectManager(Service):
         # Return status
         return nb_upd, project.projid, all_changes
 
-    def classify_auto_set(self, current_user_id: UserIDT,
-                          target_ids: ObjectIDListT, classif_ids: ClassifIDListT, scores: List[float],
-                          keep_logs: bool) -> Tuple[int, int, ObjectSetClassifChangesT]:
-        """
-            Classify (from automatic source) a set of objects.
-        """
-        # Get the objects and project, checking rights at the same time.
-        object_set, project = self._the_project_for(current_user_id, target_ids, Action.ANNOTATE)
-        # Do the raw classification, eventually with history.
-        nb_upd, all_changes = object_set.classify_auto(classif_ids, scores, keep_logs)
-        # Propagate changes to update projects_taxo_stat
-        self.propagate_classif_changes(nb_upd, all_changes, project)
-        # Return status
-        return nb_upd, project.projid, all_changes
 
     def classify_auto_mult_set(self, current_user_id: UserIDT,
                           target_ids: ObjectIDListT, classif_ids: List[ClassifIDListT], scores: List[ClassifScoresListT],

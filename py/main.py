@@ -1551,36 +1551,6 @@ def classify_object_set(req: ClassifyReq = Body(...),
         return ret
 
 
-@app.post("/object_set/classify_auto", operation_id="classify_auto_object_set", tags=['objects'],
-          responses={
-              200: {
-                  "content": {
-                      "application/json": {
-                          "example": 3
-                      }
-                  }
-              }
-          },
-          response_model=int)
-def classify_auto_object_set(req: ClassifyAutoReq = Body(...),
-                             current_user: int = Depends(get_current_user)) -> int:
-    """
-        **Set automatic classification** of a set of objects.
-
-        **Returns the number of updated entities.**
-    """
-    assert len(req.target_ids) == len(req.classifications) == len(req.scores), \
-        "Need the same number of objects, classifications and scores"
-    assert all(isinstance(score, float) and 0 <= score <= 1 for score in req.scores), \
-        "Scores should be floats between 0 and 1"
-    with ObjectManager() as sce:
-        with RightsThrower():
-            ret, prj_id, changes = sce.classify_auto_set(current_user, req.target_ids, req.classifications, req.scores,
-                                                         req.keep_log)
-        with DBSyncService(ProjectTaxoStat, ProjectTaxoStat.projid, prj_id) as ssce: ssce.wait()
-        return ret
-
-
 @app.post("/object_set/classify_auto_multiple", operation_id="classify_auto_mult_object_set", tags=['objects'],
           responses={
               200: {
@@ -1601,6 +1571,8 @@ def classify_auto_mult_object_set(req: ClassifyAutoReqMult = Body(...),
     """
     assert len(req.target_ids) == len(req.classifications) == len(req.scores), \
         "Need the same number of objects, classifications and scores"
+    assert all(isinstance(score, float) and 0 <= score <= 1 for scores in req.scores for score in scores), \
+        "Scores should be floats between 0 and 1"
     with ObjectManager() as sce:
         with RightsThrower():
             ret, prj_id, changes = sce.classify_auto_mult_set(current_user, req.target_ids, req.classifications, req.scores,

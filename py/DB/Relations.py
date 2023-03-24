@@ -89,9 +89,6 @@ if True:
                                            uselist=False)
     User.classified_objects = relationship(ObjectHeader)
 
-    ObjectHeader.classif_auto = relationship(Taxonomy, primaryjoin="Taxonomy.id==foreign(ObjectHeader.classif_auto_id)",
-                                             uselist=False)
-
     ObjectCNNFeature.object = relationship(ObjectHeader, foreign_keys="ObjectHeader.objid",
                                            primaryjoin="ObjectCNNFeature.objcnnid==ObjectHeader.objid", uselist=False)
     ObjectHeader.cnn_features = relationship(ObjectCNNFeature, uselist=False)
@@ -104,7 +101,7 @@ if True:
     ObjectHeader.history = relationship(ObjectsClassifHisto, viewonly=True)
     ObjectsClassifHisto.object = relationship(ObjectHeader)
     
-    ObjectHeader.prediction = relationship(Prediction)
+    ObjectHeader.prediction = relationship(Prediction, foreign_keys="ObjectHeader.pred_id")
     
     # Task
     Task.owner = relationship(User)

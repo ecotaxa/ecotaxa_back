@@ -76,7 +76,7 @@ class ObjectBO(MappedEntity):
         qry = self._session.query(och.objid, och.classif_id,
                                   och.classif_date, och.classif_who,
                                   och.classif_type, och.classif_qual,
-                                  och.classif_score,
+                                  och.pred_id,
                                   User.name.label("user_name"),
                                   Taxonomy.display_name.label("taxon_name")).filter(
             ObjectsClassifHisto.objid == self.header.objid)

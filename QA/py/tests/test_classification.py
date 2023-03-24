@@ -87,18 +87,6 @@ def classify_all(fastapi, obj_ids, classif_id):
     assert rsp.status_code == status.HTTP_200_OK
 
 
-def classify_auto_all(fastapi, obj_ids, classif_id, scores=None):
-    url = OBJECT_SET_CLASSIFY_AUTO_URL
-    classifications = [classif_id for _obj in obj_ids]
-    if not scores:
-        scores = [0.52 for _obj in obj_ids]
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
-                                                      "classifications": classifications,
-                                                      "scores": scores,
-                                                      "keep_log": True})
-    assert rsp.status_code == status.HTTP_200_OK
-
-
 def classify_auto_mult_all(fastapi, obj_ids, classif_id, scores=None):
     url = OBJECT_SET_CLASSIFY_AUTO_URL2
     classifications = [classif_id for _obj in obj_ids]
@@ -112,25 +100,26 @@ def classify_auto_mult_all(fastapi, obj_ids, classif_id, scores=None):
 
 
 def classify_auto_incorrect(fastapi, obj_ids):
-    url = OBJECT_SET_CLASSIFY_AUTO_URL
-    classifications = [-1 for _obj in obj_ids]
+    url = OBJECT_SET_CLASSIFY_AUTO_URL2
+    n = 3
+    classifications = [[-1] * n for _obj in obj_ids]
 
     # List of scores of a different length, should raise an error
-    scores = [0.1 for _obj in obj_ids[:-1]]
+    scores = [[0.1] * n for _obj in obj_ids[:-1]]
     with pytest.raises(AssertionError):
         rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
                                                           "classifications": classifications,
                                                           "scores": scores,
                                                           "keep_log": True})
     # List of scores outside [0, 1], should raise an error
-    scores = [2. for _obj in obj_ids]
+    scores = [[2.] * n for _obj in obj_ids]
     with pytest.raises(AssertionError):
         rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
                                                           "classifications": classifications,
                                                           "scores": scores,
                                                           "keep_log": True})
     # List of scores with wrong type, should fail
-    scores = [None for _obj in obj_ids]
+    scores = [[None] * n for _obj in obj_ids]
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
                                                       "classifications": classifications,
                                                       "scores": scores,
@@ -267,7 +256,6 @@ def test_classif(config, database, fastapi, caplog):
     url = OBJECT_QUERY_URL.format(object_id=obj_ids[1])
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json()['classif_auto_score'] == 0.8
 
     assert get_stats(fastapi, prj_id) == {'nb_dubious': 0,
                                           'nb_predicted': 4,
@@ -304,7 +292,7 @@ def test_classif(config, database, fastapi, caplog):
     classif[0]['classif_date'] = "now"
     assert classif == [
         {'objid': obj_ids[0], 'classif_id': crustacea, 'classif_date': 'now', 'classif_who': None,
-         'classif_type': 'A', 'classif_qual': 'P', 'classif_score': 0.52, 'user_name': None, 'taxon_name': 'Crustacea'}]
+         'classif_type': 'A', 'classif_qual': 'P', 'pred_id': 1, 'user_name': None, 'taxon_name': 'Crustacea'}]
 
     # Revert on validated objects
     url = OBJECT_SET_REVERT_URL.format(project_id=prj_id, dry_run=False, tgt_usr="")
@@ -355,7 +343,7 @@ def test_classif(config, database, fastapi, caplog):
     assert classif2 == [{'classif_date': 'hopefully just now',
                          'classif_id': copepod_id,
                          'classif_qual': 'V',
-                         'classif_score': None,
+                         'pred_id': 1,
                          'classif_type': 'M',
                          'classif_who': 1,
                          'objid': obj_ids[0],
@@ -364,7 +352,7 @@ def test_classif(config, database, fastapi, caplog):
                         {'classif_date': 'a bit before',
                          'classif_id': crustacea,
                          'classif_qual': 'P',
-                         'classif_score': 0.52,
+                         'pred_id': 1,
                          'classif_type': 'A',
                          'classif_who': None,
                          'objid': obj_ids[0],
