@@ -30,7 +30,7 @@ target_metadata = Project.metadata
 
 from cmds.db_upg.db_conn import conn  # type:ignore
 
-config.set_main_option('sqlalchemy.url', str(conn.url))
+config.set_main_option("sqlalchemy.url", str(conn.url))
 
 
 def run_migrations_offline():
@@ -71,9 +71,7 @@ def run_migrations_online():
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

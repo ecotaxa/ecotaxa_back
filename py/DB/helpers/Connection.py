@@ -18,8 +18,11 @@ def check_sqlalchemy_version() -> None:
     version = sqlalchemy.__version__
     expected_version = "1.4.31"
     if version != expected_version:  # pragma: no cover
-        logger.fatal("Not the expected SQLAlchemy version (%s instead of %s), exiting to avoid data corruption",
-                     version, expected_version)
+        logger.fatal(
+            "Not the expected SQLAlchemy version (%s instead of %s), exiting to avoid data corruption",
+            version,
+            expected_version,
+        )
         exit(-1)
 
 
@@ -36,39 +39,46 @@ def check_sqlalchemy_version() -> None:
 #     crs.close()
 #     dbapi_conn.commit()
 
+
 class Connection(object):
     """
-        A connection to the DB via SQLAlchemy.
+    A connection to the DB via SQLAlchemy.
     """
+
     APP_NAME: ClassVar = "ecotaxa_back"
 
-    def __init__(self, user, password, db, host, port='5432', read_only=False):
+    def __init__(self, user, password, db, host, port="5432", read_only=False):
         """
-            Open a SQLAlchemy connection, i.e. an engine.
+        Open a SQLAlchemy connection, i.e. an engine.
         """
         if read_only:
-            exec_options = {'postgresql_readonly': True}
+            exec_options = {"postgresql_readonly": True}
         else:
             exec_options = {}
         # We connect with the help of the PostgreSQL URL
-        url = 'postgresql://{}:{}@{}:{}/{}'
+        url = "postgresql://{}:{}@{}:{}/{}"
         url = url.format(user, password, host, port, db)
-        engine = sqlalchemy.create_engine(url, client_encoding='utf8',
-                                          echo=False, echo_pool=False,
-                                          # echo=True, echo_pool="debug",
-                                          executemany_mode='batch',
-                                          # Reminder: QueuePool is default implementation
-                                          # Avoid too many stale sessions, we need at max:
-                                          # - 1 session for serving requests
-                                          # - 1 session for knowing which jobs to run,
-                                          #   _or running the job_ as we don't look for other jobs if one is running
-                                          pool_size=2, max_overflow=1,
-                                          # This way we can restart the DB and sessions will re-establish themselves
-                                          # the cost is 1 (simple) query per connection pool recycle.
-                                          pool_pre_ping=True,
-                                          execution_options=exec_options,
-                                          connect_args={"application_name": self.APP_NAME},
-                                          future=True)
+        engine = sqlalchemy.create_engine(
+            url,
+            client_encoding="utf8",
+            echo=False,
+            echo_pool=False,
+            # echo=True, echo_pool="debug",
+            executemany_mode="batch",
+            # Reminder: QueuePool is default implementation
+            # Avoid too many stale sessions, we need at max:
+            # - 1 session for serving requests
+            # - 1 session for knowing which jobs to run,
+            #   _or running the job_ as we don't look for other jobs if one is running
+            pool_size=2,
+            max_overflow=1,
+            # This way we can restart the DB and sessions will re-establish themselves
+            # the cost is 1 (simple) query per connection pool recycle.
+            pool_pre_ping=True,
+            execution_options=exec_options,
+            connect_args={"application_name": self.APP_NAME},
+            future=True,
+        )
         self.session_factory = sessionmaker(bind=engine)
         self._meta: MetaData = sqlalchemy.MetaData(bind=engine)
         self._meta.reflect()
@@ -80,14 +90,14 @@ class Connection(object):
 
     def get_session(self) -> Session:
         """
-            Get a fresh or recycled session from the connection.
+        Get a fresh or recycled session from the connection.
         """
         ret = self.session_factory()
         return ret
 
     def exec_outside_transaction(self, statement: str) -> None:
         """
-            Execute raw SQL outside of any transaction (which is created by default by SQLA)
+        Execute raw SQL outside of any transaction (which is created by default by SQLA)
         """
         with self.engine.connect() as conn:
             conn.execute(text("commit"))
@@ -95,6 +105,6 @@ class Connection(object):
 
     def get_metadata(self) -> MetaData:
         """
-            Get the metadata (for admin operations).
+        Get the metadata (for admin operations).
         """
         return self._meta

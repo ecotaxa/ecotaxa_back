@@ -15,26 +15,27 @@ JobIDT = int
 
 
 class DBJobStateEnum(str, Enum):
-    Pending = 'P'  # Waiting for an execution thread
-    Running = 'R'  # Being executed inside a thread
-    Asking = 'A'  # Needing user information before resuming
-    Error = 'E'  # Stopped with error
-    Finished = 'F'  # Done
+    Pending = "P"  # Waiting for an execution thread
+    Running = "R"  # Being executed inside a thread
+    Asking = "A"  # Needing user information before resuming
+    Error = "E"  # Stopped with error
+    Finished = "F"  # Done
 
 
 class Job(Model):
     """
-        Description of long-running processing operations, back-end side.
-        The jobs might need to communicate with the UI for getting input.
-        A job db row does not _always_ have a corresponding thread:
-            - When it's pending, no associated thread.
-            - When it's in question mode, no associated thread either.
-            - When done or in error, no thread.
+    Description of long-running processing operations, back-end side.
+    The jobs might need to communicate with the UI for getting input.
+    A job db row does not _always_ have a corresponding thread:
+        - When it's pending, no associated thread.
+        - When it's in question mode, no associated thread either.
+        - When done or in error, no thread.
     """
-    __tablename__ = 'job'
-    id: int = Column(INTEGER, Sequence('seq_temp_tasks'), primary_key=True)
+
+    __tablename__ = "job"
+    id: int = Column(INTEGER, Sequence("seq_temp_tasks"), primary_key=True)
     """ Unique identifier, from a sequence """
-    owner_id: int = Column(INTEGER, ForeignKey('users.id'), nullable=False)
+    owner_id: int = Column(INTEGER, ForeignKey("users.id"), nullable=False)
     """ The user who created and thus owns the job """
     type: str = Column(VARCHAR(80), nullable=False)
     """ The job type, e.g. import, export... """
@@ -65,4 +66,6 @@ class Job(Model):
     owner: relationship
 
     def __str__(self):
-        return "{0} ({1}): {2}/{3}".format(self.id, self.type, self.owner_id, self.params)
+        return "{0} ({1}): {2}/{3}".format(
+            self.id, self.type, self.owner_id, self.params
+        )

@@ -9,9 +9,9 @@ from .helpers.Postgres import VARCHAR, INTEGER, DATE
 
 
 class Task(Model):
-    __tablename__ = 'temp_tasks'
-    id = Column(INTEGER, Sequence('seq_temp_tasks'), primary_key=True)
-    owner_id = Column(INTEGER, ForeignKey('users.id'))
+    __tablename__ = "temp_tasks"
+    id = Column(INTEGER, Sequence("seq_temp_tasks"), primary_key=True)
+    owner_id = Column(INTEGER, ForeignKey("users.id"))
     taskclass = Column(VARCHAR(80))
     taskstate = Column(VARCHAR(80))
     taskstep = Column(INTEGER)

@@ -29,16 +29,30 @@ from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Taxonomy import TaxonBO, WoRMSSetFromTaxaSet
 from data.structs.TaxaTree import TaxaTree
 
-P = ParamSpec('P')
+P = ParamSpec("P")
 
 XLSX = "Correspondance WoRMS.xlsx"
-TABS = ['Cas 1a', 'Cas 2a', 'Cas 3a', 'Cas 4a',
-        'Cas 1b', 'Cas 2b', 'Cas 3b', 'Cas 4b',
-        'Cas 1c', 'Cas 2c', 'Cas 3c', 'Cas 4c',
-        'Cas 1d',
-        'Cas 1e', 'Cas 2e', 'Cas 3e', 'Cas 4e',
-        'Cas 1f',
-        'Cas 1g']
+TABS = [
+    "Cas 1a",
+    "Cas 2a",
+    "Cas 3a",
+    "Cas 4a",
+    "Cas 1b",
+    "Cas 2b",
+    "Cas 3b",
+    "Cas 4b",
+    "Cas 1c",
+    "Cas 2c",
+    "Cas 3c",
+    "Cas 4c",
+    "Cas 1d",
+    "Cas 1e",
+    "Cas 2e",
+    "Cas 3e",
+    "Cas 4e",
+    "Cas 1f",
+    "Cas 1g",
+]
 HERE = dirname(realpath(__file__))
 ECOTAXOSERVER_URL = "http://ecotaxoserver.obs-vlfr.fr/browsetaxo/"
 WORMS_URL = "http://www.marinespecies.org/aphia.php?p=taxdetails"
@@ -46,7 +60,7 @@ WORMS_URL = "http://www.marinespecies.org/aphia.php?p=taxdetails"
 
 class Action(object):  # class action :)
     """
-        The actions to do on an EcoTaxa category, from XLSX file.
+    The actions to do on an EcoTaxa category, from XLSX file.
     """
 
     def __init__(self, eco_id: int, cell_coords: str):
@@ -100,28 +114,40 @@ class Action(object):  # class action :)
 
     def set_target_worms(self, aphia_id: ClassifIDT) -> None:
         if self.link_with_aphia_id is not None and self.link_with_aphia_id != aphia_id:
-            print("In %s: %d -> %d or %d -> %d ?" % (self.coords, self.eco_id,
-                                                     self.link_with_aphia_id, self.eco_id, aphia_id))
+            print(
+                "In %s: %d -> %d or %d -> %d ?"
+                % (
+                    self.coords,
+                    self.eco_id,
+                    self.link_with_aphia_id,
+                    self.eco_id,
+                    aphia_id,
+                )
+            )
         self.link_with_aphia_id = aphia_id
 
     def something_to_do(self) -> bool:
-        return (self.link_with_aphia_id is not None
-                or self.eco_parent is not None
-                or self.worms_parent_id is not None
-                or self.make_morpho
-                or self.deprecated
-                or self.new_name is not None
-                or self.text is not None)
+        return (
+            self.link_with_aphia_id is not None
+            or self.eco_parent is not None
+            or self.worms_parent_id is not None
+            or self.make_morpho
+            or self.deprecated
+            or self.new_name is not None
+            or self.text is not None
+        )
 
     def manual_action(self) -> bool:
         """ """
-        return (self.link_with_aphia_id is None
-                and self.eco_parent is None
-                and self.worms_parent_id is None
-                and not self.make_morpho
-                and not self.deprecated
-                and self.new_name is None
-                and self.text is not None)
+        return (
+            self.link_with_aphia_id is None
+            and self.eco_parent is None
+            and self.worms_parent_id is None
+            and not self.make_morpho
+            and not self.deprecated
+            and self.new_name is None
+            and self.text is not None
+        )
 
     def __str__(self) -> str:
         ret = ""
@@ -142,9 +168,7 @@ class Action(object):  # class action :)
         return ret
 
     def something_to_do_on_present(self) -> bool:
-        return (self.make_morpho
-                or self.deprecated
-                or self.eco_parent is not None)
+        return self.make_morpho or self.deprecated or self.eco_parent is not None
 
     def to_do_on_present(self) -> str:
         ret = []
@@ -177,13 +201,16 @@ class Action(object):  # class action :)
         return self.link_with_aphia_id is None and self.worms_parent_id is None
 
     def possible_aphia_ids(self) -> List[int]:
-        return [an_id for an_id in (self.link_with_aphia_id, self.worms_parent_id)
-                if an_id is not None]
+        return [
+            an_id
+            for an_id in (self.link_with_aphia_id, self.worms_parent_id)
+            if an_id is not None
+        ]
 
 
 class ToWorms(object):
     """
-        Read the XLSX data source and map IDs.
+    Read the XLSX data source and map IDs.
     """
 
     def __init__(self) -> None:
@@ -197,28 +224,31 @@ class ToWorms(object):
             self.analyze(workbook[a_tab])
         # The source (present) taxa
         self.unieuk: Dict[int, TaxonBO] = {}
-        self.unieuk_tree: TaxaTree = TaxaTree(0, 'root')
+        self.unieuk_tree: TaxaTree = TaxaTree(0, "root")
         # The target worms taxa
         self.worms: Dict[int, TaxonBO] = {}
-        self.worms_tree: TaxaTree = TaxaTree(0, 'worms')
+        self.worms_tree: TaxaTree = TaxaTree(0, "worms")
         # The link b/w the two trees
         self.done_remaps: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
 
     def pre_validate(self) -> List[str]:
         """
-            Validate the actions, regardless of any context.
+        Validate the actions, regardless of any context.
         """
         # Local validation
         ret: List[str] = []
         for an_id, an_action in self.actions.items():
             invalid_reason = an_action.invalid_reason()
             if invalid_reason:
-                ret.append("Invalid action in %s: (%s) %s" % (an_action.coords, invalid_reason, str(an_action)))
+                ret.append(
+                    "Invalid action in %s: (%s) %s"
+                    % (an_action.coords, invalid_reason, str(an_action))
+                )
         return ret
 
     def prepare(self) -> None:
         """
-            Scan the actions and prepare the application. Build in-memory trees (origin, destination).
+        Scan the actions and prepare the application. Build in-memory trees (origin, destination).
         """
         with TaxonomyService() as taxo_sce:
             all_eco_ids = list(self.actions.keys())
@@ -231,14 +261,22 @@ class ToWorms(object):
             # assert len(self.unieuk_tree.children) <= 3
 
             # Gather all potential targets, as node aphia_id or parent aphia_id
-            target_or_parents = [an_action.link_with_aphia_id
-                                 for an_action in self.actions.values()
-                                 if an_action.link_with_aphia_id is not None]
-            target_or_parents.extend([an_action.worms_parent_id
-                                      for an_action in self.actions.values()
-                                      if an_action.worms_parent_id is not None])
+            target_or_parents = [
+                an_action.link_with_aphia_id
+                for an_action in self.actions.values()
+                if an_action.link_with_aphia_id is not None
+            ]
+            target_or_parents.extend(
+                [
+                    an_action.worms_parent_id
+                    for an_action in self.actions.values()
+                    if an_action.worms_parent_id is not None
+                ]
+            )
             target_or_parents = list(set(target_or_parents))
-            worms_taxo_infos: List[TaxonBO] = taxo_sce.query_worms_set(target_or_parents)
+            worms_taxo_infos: List[TaxonBO] = taxo_sce.query_worms_set(
+                target_or_parents
+            )
             worms_aphia_ids = set([a_taxon.id for a_taxon in worms_taxo_infos])
             # # Commented out for tests
             # assert len(worms_taxo_infos) == len(target_or_parents), "%s missing or extra" % str(
@@ -280,7 +318,10 @@ class ToWorms(object):
 
         # No rename to same name as final aphia
         for an_id, an_action in self.actions.items():
-            if an_action.new_name is not None and an_action.link_with_aphia_id is not None:
+            if (
+                an_action.new_name is not None
+                and an_action.link_with_aphia_id is not None
+            ):
                 if an_action.link_with_aphia_id not in self.worms:
                     # TODO
                     continue
@@ -296,10 +337,17 @@ class ToWorms(object):
         #                       )
         # morhpo_sql = "update taxonomy set taxotype='M' where id in (" + morpho_ids + ")"
         # print("To morpho:%s" % morhpo_sql)
-        to_do = [an_action for an_action in self.actions.values() if an_action.something_to_do()]
+        to_do = [
+            an_action
+            for an_action in self.actions.values()
+            if an_action.something_to_do()
+        ]
         print("%d actions to do on existing entries" % len(to_do))
-        text_actions = ["On %d, '%s'" % (an_action.eco_id, an_action.text)
-                        for an_action in self.actions.values() if an_action.manual_action()]
+        text_actions = [
+            "On %d, '%s'" % (an_action.eco_id, an_action.text)
+            for an_action in self.actions.values()
+            if an_action.manual_action()
+        ]
         print("To do manually\n" + "\n".join(text_actions))
         print("Source tree size: %d" % self.unieuk_tree.size())
         print("WoRMS tree size: %d" % self.worms_tree.size())
@@ -310,8 +358,8 @@ class ToWorms(object):
 
     def apply(self) -> None:
         """
-            Apply the actions onto present tree.
-            We go thru the tree top-down, i.e. highest-level taxa first.
+        Apply the actions onto present tree.
+        We go thru the tree top-down, i.e. highest-level taxa first.
         """
         for a_node in self.unieuk_tree.top_to_bottom_ite():
             try:
@@ -343,8 +391,9 @@ class ToWorms(object):
                 except KeyError:  # For tests
                     continue
                 if an_info.id != 11226:  # Holodinophyta
-                    assert an_info.type == 'M' or action.make_morpho, 'Not Morpho: %d %s' % (
-                        an_info.id, str(an_info.lineage))
+                    assert (
+                        an_info.type == "M" or action.make_morpho
+                    ), "Not Morpho: %d %s" % (an_info.id, str(an_info.lineage))
                 # print("    -W>", target_info.top_down_lineage(":"))
                 # if action.worms_parent_id is not None:
                 #     target_info = self.worms[action.worms_parent_id]
@@ -370,7 +419,7 @@ class ToWorms(object):
                 if parent_id not in self.unieuk:
                     # Intermediate node from fetched lineage
                     continue
-                if self.unieuk[parent_id].type == 'M':
+                if self.unieuk[parent_id].type == "M":
                     pass
                 else:
                     if parent_id not in self.actions:
@@ -379,15 +428,25 @@ class ToWorms(object):
                     # the code below is not reached then
                     parent_action = self.actions[parent_id]
                     possible_aphia_ids = parent_action.possible_aphia_ids()
-                    possible_aphia_names = [self.worms[aphia_id].name for aphia_id in possible_aphia_ids]
-                    if an_info.id not in (85234,  # Branch change
-                                          85213,  # Branch change
-                                          ):
+                    possible_aphia_names = [
+                        self.worms[aphia_id].name for aphia_id in possible_aphia_ids
+                    ]
+                    if an_info.id not in (
+                        85234,  # Branch change
+                        85213,  # Branch change
+                    ):
                         if target_info.id not in possible_aphia_ids:
-                            print("for eco %s(%d), target %s(%d) not in %s %s" % (
-                                an_info.name, an_info.id,
-                                target_info.name, target_info.id,
-                                possible_aphia_ids, possible_aphia_names))
+                            print(
+                                "for eco %s(%d), target %s(%d) not in %s %s"
+                                % (
+                                    an_info.name,
+                                    an_info.id,
+                                    target_info.name,
+                                    target_info.id,
+                                    possible_aphia_ids,
+                                    possible_aphia_names,
+                                )
+                            )
                     break
 
     def check_closure(self) -> None:
@@ -426,10 +485,11 @@ class ToWorms(object):
             print("Missing parents: %s" % str(missing_parents))
 
     @staticmethod
-    def find_in_header(cell_iterable: Iterable[Cell], optional: bool = False, *args: Any) \
-            -> Tuple[Optional[int], ...]:
+    def find_in_header(
+        cell_iterable: Iterable[Cell], optional: bool = False, *args: Any
+    ) -> Tuple[Optional[int], ...]:
         """
-            Return 0-based indices of the requested columns in the Cell list.
+        Return 0-based indices of the requested columns in the Cell list.
         """
         ret: List[Optional[int]] = []
         for a_col in args:
@@ -446,7 +506,7 @@ class ToWorms(object):
 
     def analyze(self, a_tab: Worksheet) -> None:
         """
-            Go thru the spreadsheet and scan identifiers.
+        Go thru the spreadsheet and scan identifiers.
         """
         with TaxonomyService() as taxo_sce:
             tab_name = a_tab.title
@@ -454,20 +514,27 @@ class ToWorms(object):
             tab_iter = iter(a_tab)
             header = next(tab_iter)
             # print(tab_name)
-            eco_id_col, aphia_id_col = self.find_in_header(header, False, 'eco_id',
-                                                           'final_aphia_id')
+            eco_id_col, aphia_id_col = self.find_in_header(
+                header, False, "eco_id", "final_aphia_id"
+            )
             assert eco_id_col is not None and aphia_id_col is not None
-            (make_morpho_id_col,
-             deprecate_col,
-             rename_col,
-             parent_aphia_id_col,
-             parent_worms_col,
-             action_col) = self.find_in_header(header, True, 'make_morpho',
-                                               'deprecate',
-                                               'rename_as',
-                                               'final_parent_aphia_id',
-                                               'parent_aphia_name',
-                                               'action')
+            (
+                make_morpho_id_col,
+                deprecate_col,
+                rename_col,
+                parent_aphia_id_col,
+                parent_worms_col,
+                action_col,
+            ) = self.find_in_header(
+                header,
+                True,
+                "make_morpho",
+                "deprecate",
+                "rename_as",
+                "final_parent_aphia_id",
+                "parent_aphia_name",
+                "action",
+            )
             a_line: List[Cell]
             for a_line in tab_iter:
                 a_line = list(a_line)  # tuples are slow in random access
@@ -485,8 +552,9 @@ class ToWorms(object):
                     continue
                 assert isinstance(eco_str_id, str)
                 # We have e.g. =HYPERLINK("http://ecotaxoserver.obs-vlfr.fr/browsetaxo/?id=93066","93066")
-                assert ECOTAXOSERVER_URL in eco_str_id, "Unexpected eco_id value '%s' in tab '%r'" \
-                                                        % (eco_str_id, tab_name)
+                assert (
+                    ECOTAXOSERVER_URL in eco_str_id
+                ), "Unexpected eco_id value '%s' in tab '%r'" % (eco_str_id, tab_name)
                 eco_id = int(eco_str_id.split('"')[3])
                 cell_str = str(eco_id_cell).replace("ReadOnlyCell ", "")
 
@@ -501,12 +569,19 @@ class ToWorms(object):
                     if a_line[action_col] is not None:
                         action_cell = a_line[action_col]
                         if action_cell is not None:
-                            if action_cell.fill.bgColor.rgb != '00000000':
+                            if action_cell.fill.bgColor.rgb != "00000000":
                                 info = taxo_sce.query(eco_id)
                                 assert info is not None
-                                print("Ignored actions for '%s' in %s line due to color: '%s', %d obj %d children" %
-                                      (info.name, cell_str, action_cell.value, info.nb_objects,
-                                       info.nb_children_objects))
+                                print(
+                                    "Ignored actions for '%s' in %s line due to color: '%s', %d obj %d children"
+                                    % (
+                                        info.name,
+                                        cell_str,
+                                        action_cell.value,
+                                        info.nb_objects,
+                                        info.nb_children_objects,
+                                    )
+                                )
                                 continue
                             else:
                                 call_val = action_cell.value
@@ -523,8 +598,10 @@ class ToWorms(object):
                     # Deprecate action
                     deprecate_opt = a_line[deprecate_col]
                     deprecate_val = deprecate_opt.value
-                    assert deprecate_val in (None, '', 'x'), "Unexpected deprecate %s" % deprecate_val
-                    if deprecate_opt.value == 'x':
+                    assert deprecate_val in (None, "", "x"), (
+                        "Unexpected deprecate %s" % deprecate_val
+                    )
+                    if deprecate_opt.value == "x":
                         action_for_eco_id.deprecate()
                     else:
                         action_for_eco_id.dont_deprecate()
@@ -565,7 +642,9 @@ class ToWorms(object):
                 action_for_eco_id.set_target_worms(aphia_id)
 
     @staticmethod
-    def read_aphia_id_value(aphia_str_id: Union[str, int], tab_name: str) -> Optional[int]:
+    def read_aphia_id_value(
+        aphia_str_id: Union[str, int], tab_name: str
+    ) -> Optional[int]:
         if isinstance(aphia_str_id, str):
             if WORMS_URL in aphia_str_id:
                 aphia_id = int(aphia_str_id.split('"')[3])
@@ -581,32 +660,43 @@ class ToWorms(object):
 
     def check_sums(self) -> None:
         """
-            Check if the trees/ignored contain the same number of objects.
+        Check if the trees/ignored contain the same number of objects.
         """
-        nothing_to_do = set([an_action.eco_id for an_action in self.actions.values()
-                             if an_action.not_mapped_to_worms()])
-        not_worms_how_many = [[a_present.id, a_present.nb_objects, a_present.name]
-                              for a_present in self.unieuk.values()
-                              if a_present.id in nothing_to_do]
+        nothing_to_do = set(
+            [
+                an_action.eco_id
+                for an_action in self.actions.values()
+                if an_action.not_mapped_to_worms()
+            ]
+        )
+        not_worms_how_many = [
+            [a_present.id, a_present.nb_objects, a_present.name]
+            for a_present in self.unieuk.values()
+            if a_present.id in nothing_to_do
+        ]
         not_worms_how_many.sort(key=lambda elem: -elem[1])  # type:ignore
         not_worms_objs = sum([not_worms[1] for not_worms in not_worms_how_many])
         print("Not to WoRMS: %s" % str(not_worms_how_many))
         eco_sum = self.unieuk_tree.nb_objects
         worms_sum = self.worms_tree.nb_objects
-        print("From %d validated objects in %d categories, to WoRMS: %d, not to WoRMS: %s" %
-              (eco_sum, len(self.unieuk), worms_sum, not_worms_objs))
+        print(
+            "From %d validated objects in %d categories, to WoRMS: %d, not to WoRMS: %s"
+            % (eco_sum, len(self.unieuk), worms_sum, not_worms_objs)
+        )
         # Fails. TODO
         # assert worms_sum + not_worms_objs == eco_sum
 
     def old_way(self) -> None:
         """
-            Mapping the old way, for stats.
+        Mapping the old way, for stats.
         """
         with TaxonomyService() as taxo_sce:
-            eco_tree = TaxaTree(0, 'root')
+            eco_tree = TaxaTree(0, "root")
             all_eco_ids = list(self.unieuk.keys())
             ecotaxa_taxo_infos: List[TaxonBO] = taxo_sce.query_set(all_eco_ids)
-            assert len(ecotaxa_taxo_infos) == len(all_eco_ids), "In old_way, some categories don't resolve"
+            assert len(ecotaxa_taxo_infos) == len(
+                all_eco_ids
+            ), "In old_way, some categories don't resolve"
             for an_info in ecotaxa_taxo_infos:
                 eco_tree.add_path(list(zip(an_info.id_lineage, an_info.lineage)))
                 # Juste copy the number of objects, no cumulate
@@ -614,20 +704,22 @@ class ToWorms(object):
 
             mapping = WoRMSSetFromTaxaSet(taxo_sce.session, all_eco_ids).res
 
-        worms_tree: TaxaTree = TaxaTree(0, 'worms')
+        worms_tree: TaxaTree = TaxaTree(0, "worms")
         all_worms_ids = [a_worms_info.aphia_id for a_worms_info in mapping.values()]
         worms_taxo_infos: List[TaxonBO] = taxo_sce.query_worms_set(all_worms_ids)
         for an_info in worms_taxo_infos:
             worms_tree.add_path(list(zip(an_info.id_lineage, an_info.lineage)))
 
         for an_eco_id, a_worms in mapping.items():
-            worms_tree.find_node(a_worms.aphia_id).add_to_node(eco_tree.find_node(an_eco_id).nb_objects)
+            worms_tree.find_node(a_worms.aphia_id).add_to_node(
+                eco_tree.find_node(an_eco_id).nb_objects
+            )
 
         worms_sum = worms_tree.nb_objects
         print("Old-way comparison: %d" % worms_sum)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     to_worms = ToWorms()
     to_worms.pre_validate()
     to_worms.prepare()

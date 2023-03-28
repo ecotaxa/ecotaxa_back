@@ -18,6 +18,7 @@ client = TestClient(app)
 def fastapi() -> TestClient:
     # Overwrite a method in URLSafeTimedSerializer
     from helpers import fastApiUtils
+
     fastApiUtils.build_serializer()
     sav_loads = fastApiUtils._serializer.loads
     fastApiUtils._serializer.loads = lambda s, max_age: {"user_id": s}

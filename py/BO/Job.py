@@ -19,8 +19,9 @@ logger = get_logger(__name__)
 
 class JobBO(object):
     """
-        Thin wrapper over DB job.
+    Thin wrapper over DB job.
     """
+
     # Pending message
     PENDING_MESSAGE: Final = "Waiting for a slot"
     # An ack of Asking state
@@ -30,7 +31,16 @@ class JobBO(object):
     # An ack of Kill action
     KILLED_MESSAGE: Final = "Killed"
 
-    __slots__ = ['_job', '_session', 'params', 'result', 'errors', 'question', 'reply', 'inside']
+    __slots__ = [
+        "_job",
+        "_session",
+        "params",
+        "result",
+        "errors",
+        "question",
+        "reply",
+        "inside",
+    ]
 
     def __init__(self, db_job: Job):
         self._job = db_job
@@ -77,29 +87,29 @@ class JobBO(object):
         self._job.question = json_dumps(question)
 
     def __getattr__(self, item):
-        """ Fallback for 'not found' field after the C getattr() call.
-            If we did not enrich a Job field somehow then return it """
+        """Fallback for 'not found' field after the C getattr() call.
+        If we did not enrich a Job field somehow then return it"""
         return getattr(self._job, item)
 
     def __setattr__(self, item, value):
-        """ Set the attribute in the underlying DB object """
+        """Set the attribute in the underlying DB object"""
         if item in self.__slots__:
             super().__setattr__(item, value)
         else:
             setattr(self._job, item, value)
 
     @classmethod
-    def get_one(cls, session: Session, job_id: JobIDT) -> Optional['JobBO']:
+    def get_one(cls, session: Session, job_id: JobIDT) -> Optional["JobBO"]:
         job = session.query(Job).get(job_id)
         if job is None:
             return None
         return JobBO(job)
 
     @classmethod
-    def get_for_update(cls, session: Session, job_id: JobIDT) -> 'JobBO':
+    def get_for_update(cls, session: Session, job_id: JobIDT) -> "JobBO":
         """
-            Return a single JobBO. If used in a 'with' context, the session will commit on context exit.
-            Note: it's not only the Job which will be committed, but the _whole_ session.
+        Return a single JobBO. If used in a 'with' context, the session will commit on context exit.
+        Note: it's not only the Job which will be committed, but the _whole_ session.
         """
         job = session.query(Job).get(job_id)
         if job is None:
@@ -122,9 +132,11 @@ class JobBO(object):
         self._session = None
 
     @classmethod
-    def create_job(cls, session: Session, user_id: UserIDT, job_type: str, args: Dict) -> Job:
+    def create_job(
+        cls, session: Session, user_id: UserIDT, job_type: str, args: Dict
+    ) -> Job:
         """
-            Add a job, as pending, into the DB. The job does not start until a scheduler takes it.
+        Add a job, as pending, into the DB. The job does not start until a scheduler takes it.
         """
         job = Job()
         job.state = DBJobStateEnum.Pending

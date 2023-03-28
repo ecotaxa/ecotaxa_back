@@ -16,8 +16,9 @@ ClassifIDCollT = Iterable[int]
 @dataclass()
 class HistoricalLastClassif:
     """
-        Association b/w an object and a former taxonomy entry.
+    Association b/w an object and a former taxonomy entry.
     """
+
     objid: int
     classif_id: ClassifIDT
     histo_classif_date: datetime.datetime
@@ -27,14 +28,15 @@ class HistoricalLastClassif:
     histo_classif_who: int
 
 
-HistoricalClassificationListT = List['HistoricalClassification']
+HistoricalClassificationListT = List["HistoricalClassification"]
 
 
 @dataclass()
-class HistoricalClassification():
+class HistoricalClassification:
     """
-        Former Taxonomy change operations onto an object, with names for display.
+    Former Taxonomy change operations onto an object, with names for display.
     """
+
     objid: int
     classif_id: ClassifIDT
     classif_date: datetime.datetime

@@ -9,7 +9,12 @@ if True:
     # Trick to prevent accidental re-export of the DB Models involved
     from .Acquisition import Acquisition
     from .CNNFeature import ObjectCNNFeature
-    from .Collection import Collection, CollectionProject, CollectionUserRole, CollectionOrgaRole
+    from .Collection import (
+        Collection,
+        CollectionProject,
+        CollectionUserRole,
+        CollectionOrgaRole,
+    )
     from .Image import Image
     from .Job import Job
     from .Object import ObjectHeader, ObjectFields, ObjectsClassifHisto
@@ -23,8 +28,10 @@ if True:
     from .User import User, Role
     from .UserPreferences import UserPreferences
     from .Instrument import Instrument
+
     # noinspection PyUnresolvedReferences
     from .TaxoRecast import TaxoRecast
+
     # noinspection PyUnresolvedReferences
     from .WoRMs import WoRMS
     from .helpers.ORM import relationship
@@ -34,14 +41,22 @@ if True:
     Role.users = relationship(User, secondary="users_roles", viewonly=True)
 
     # User preferences
-    User.preferences_for_projects = relationship(UserPreferences, lazy='dynamic')
+    User.preferences_for_projects = relationship(UserPreferences, lazy="dynamic")
 
     # Collection
-    Collection.projects = relationship(Project, secondary=CollectionProject.__tablename__)
-    Collection.contact_user = relationship(User, foreign_keys=[Collection.contact_user_id],  # type:ignore # case2
-                                           uselist=False)
-    Collection.provider_user = relationship(User, foreign_keys=[Collection.provider_user_id],  # type:ignore # case2
-                                            uselist=False)
+    Collection.projects = relationship(
+        Project, secondary=CollectionProject.__tablename__
+    )
+    Collection.contact_user = relationship(
+        User,
+        foreign_keys=[Collection.contact_user_id],  # type:ignore # case2
+        uselist=False,
+    )
+    Collection.provider_user = relationship(
+        User,
+        foreign_keys=[Collection.provider_user_id],  # type:ignore # case2
+        uselist=False,
+    )
     Collection.users_by_role = relationship(CollectionUserRole, viewonly=True)
     Collection.organisations_by_role = relationship(CollectionOrgaRole)
 
@@ -49,7 +64,9 @@ if True:
     CollectionUserRole.user = relationship(User, uselist=False)  # type:ignore # case2
 
     # Ancilliary to project
-    ProjectVariables.project = relationship(Project, viewonly=True)  # type:ignore # case2
+    ProjectVariables.project = relationship(
+        Project, viewonly=True
+    )  # type:ignore # case2
     Project.variables = relationship(ProjectVariables, uselist=False)
 
     # Project
@@ -68,31 +85,53 @@ if True:
     # Project.owner = relationship(User, primaryjoin="User.id==Project.owner_id",
     #                              foreign_keys="User.id", uselist=False)
 
-    ProjectPrivilege.project = relationship(Project, cascade="all, delete-orphan", single_parent=True)
+    ProjectPrivilege.project = relationship(
+        Project, cascade="all, delete-orphan", single_parent=True
+    )
     Project.privs_for_members = relationship(ProjectPrivilege, viewonly=True)
 
-    ProjectPrivilege.user = relationship(User, cascade="all, delete-orphan", single_parent=True)  # type:ignore # case2
+    ProjectPrivilege.user = relationship(
+        User, cascade="all, delete-orphan", single_parent=True
+    )  # type:ignore # case2
     User.privs_on_projects = relationship(ProjectPrivilege, viewonly=True)
 
-    Project.members = relationship(User, secondary=ProjectPrivilege.__tablename__, viewonly=True)
+    Project.members = relationship(
+        User, secondary=ProjectPrivilege.__tablename__, viewonly=True
+    )
 
     Project.instrument = relationship(Instrument, viewonly=True)
     # Object
-    ObjectHeader.fields = relationship(ObjectFields, uselist=False, viewonly=True)  # type:ignore # case2
+    ObjectHeader.fields = relationship(
+        ObjectFields, uselist=False, viewonly=True
+    )  # type:ignore # case2
     ObjectFields.object = relationship(ObjectHeader, uselist=False)
 
-    ObjectHeader.classif = relationship(Taxonomy, primaryjoin="Taxonomy.id==ObjectHeader.classif_id",
-                                        foreign_keys="Taxonomy.id", uselist=False)
-    ObjectHeader.classifier = relationship(User, primaryjoin="User.id==ObjectHeader.classif_who",
-                                           foreign_keys="User.id",
-                                           uselist=False)
+    ObjectHeader.classif = relationship(
+        Taxonomy,
+        primaryjoin="Taxonomy.id==ObjectHeader.classif_id",
+        foreign_keys="Taxonomy.id",
+        uselist=False,
+    )
+    ObjectHeader.classifier = relationship(
+        User,
+        primaryjoin="User.id==ObjectHeader.classif_who",
+        foreign_keys="User.id",
+        uselist=False,
+    )
     User.classified_objects = relationship(ObjectHeader)
 
-    ObjectHeader.classif_auto = relationship(Taxonomy, primaryjoin="Taxonomy.id==foreign(ObjectHeader.classif_auto_id)",
-                                             uselist=False)
+    ObjectHeader.classif_auto = relationship(
+        Taxonomy,
+        primaryjoin="Taxonomy.id==foreign(ObjectHeader.classif_auto_id)",
+        uselist=False,
+    )
 
-    ObjectCNNFeature.object = relationship(ObjectHeader, foreign_keys="ObjectHeader.objid",
-                                           primaryjoin="ObjectCNNFeature.objcnnid==ObjectHeader.objid", uselist=False)
+    ObjectCNNFeature.object = relationship(
+        ObjectHeader,
+        foreign_keys="ObjectHeader.objid",
+        primaryjoin="ObjectCNNFeature.objcnnid==ObjectHeader.objid",
+        uselist=False,
+    )
     ObjectHeader.cnn_features = relationship(ObjectCNNFeature, uselist=False)
 
     ObjectHeader.all_images = relationship(Image)

@@ -39,8 +39,7 @@ class CNNFeatureTrainer(MachineLearningBase):
         super().__init__(vault, model_dir)
 
     def run(self, csv_in: IO, model_name: str):
-
-        logger.info('Set options')
+        logger.info("Set options")
 
         ckpt_dir = self.model_dir.get_checkpoints_dir(model_name)
 
@@ -51,7 +50,9 @@ class CNNFeatureTrainer(MachineLearningBase):
         crop = self.read_crop(model_name)
 
         # CNN structure (see cnn.Create and cnn.Compile)
-        fe_url = 'https://tfhub.dev/google/imagenet/mobilenet_v2_140_224/feature_vector/4'
+        fe_url = (
+            "https://tfhub.dev/google/imagenet/mobilenet_v2_140_224/feature_vector/4"
+        )
         input_shape = (224, 224, 3)
         fe_trainable = True
         # fc_layers_sizes = [1792, 896]
@@ -61,27 +62,27 @@ class CNNFeatureTrainer(MachineLearningBase):
 
         # CNN training (see cnn.Train)
         use_class_weight = True
-        lr_method = 'decay'
+        lr_method = "decay"
         initial_lr = 0.0005
         decay_rate = 0.97
-        loss = 'cce'
+        loss = "cce"
         epochs = 2
         workers = 10
 
-        logger.info('Prepare datasets')
+        logger.info("Prepare datasets")
 
         # read DataFrame with image ids, paths and labels
-        in_df = pd.read_csv(csv_in, index_col='id')
+        in_df = pd.read_csv(csv_in, index_col="id")
 
         # extract a validation set to monitor performance while training
         seed = 1
         # 90% in train
-        df_train = in_df.groupby('label').sample(frac=0.9, random_state=seed)
+        df_train = in_df.groupby("label").sample(frac=0.9, random_state=seed)
         # the remaining 10% in val
         df_val = in_df.loc[set(in_df.index) - set(df_train.index)]
 
         # count nb of examples per class in the training set
-        class_counts = df_train.groupby('label').size()
+        class_counts = df_train.groupby("label").size()
 
         # list classes
         classes = class_counts.index.to_list()
@@ -102,25 +103,40 @@ class CNNFeatureTrainer(MachineLearningBase):
 
         # define data generators
         train_batches = generator.EcoTaxaGenerator(
-            images_paths=self.full_img_paths(df_train['img_path'].values),
+            images_paths=self.full_img_paths(df_train["img_path"].values),
             input_shape=input_shape,
-            labels=df_train['label'].values, classes=classes,
-            batch_size=batch_size, augment=augment, shuffle=True, crop=crop)
+            labels=df_train["label"].values,
+            classes=classes,
+            batch_size=batch_size,
+            augment=augment,
+            shuffle=True,
+            crop=crop,
+        )
 
         val_batches = generator.EcoTaxaGenerator(
-            images_paths=self.full_img_paths(df_val['img_path'].values),
+            images_paths=self.full_img_paths(df_val["img_path"].values),
             input_shape=input_shape,
-            labels=df_val['label'].values, classes=classes,
-            batch_size=batch_size, augment=False, shuffle=False, crop=crop)
+            labels=df_val["label"].values,
+            classes=classes,
+            batch_size=batch_size,
+            augment=False,
+            shuffle=False,
+            crop=crop,
+        )
         # NB: do not shuffle or augment data for validation, it is useless
 
         total_batches = generator.EcoTaxaGenerator(
-            images_paths=self.full_img_paths(in_df['img_path'].values),
+            images_paths=self.full_img_paths(in_df["img_path"].values),
             input_shape=input_shape,
-            labels=None, classes=None,
-            batch_size=batch_size, augment=False, shuffle=False, crop=crop)
+            labels=None,
+            classes=None,
+            batch_size=batch_size,
+            augment=False,
+            shuffle=False,
+            crop=crop,
+        )
 
-        logger.info('Prepare model')
+        logger.info("Prepare model")
 
         # try loading the model from a previous training checkpoint
         my_cnn, initial_epoch = cnn.Load(ckpt_dir.as_posix())
@@ -128,9 +144,11 @@ class CNNFeatureTrainer(MachineLearningBase):
         # if nothing is loaded this means the model was never trained
         # in this case, define it
         if my_cnn is not None:
-            logger.info('  restart from model trained until epoch ' + str(initial_epoch))
+            logger.info(
+                "  restart from model trained until epoch " + str(initial_epoch)
+            )
         else:
-            logger.info('  define model')
+            logger.info("  define model")
             # define CNN
             my_cnn = cnn.Create(
                 # feature extractor
@@ -142,10 +160,10 @@ class CNNFeatureTrainer(MachineLearningBase):
                 fc_layers_dropout=fc_layers_dropout,
                 # classification layer
                 classif_layer_size=nb_of_classes,
-                classif_layer_dropout=classif_layer_dropout
+                classif_layer_dropout=classif_layer_dropout,
             )
 
-            logger.info('  compile model')
+            logger.info("  compile model")
             # compile CNN
             my_cnn = cnn.Compile(
                 my_cnn,
@@ -153,10 +171,10 @@ class CNNFeatureTrainer(MachineLearningBase):
                 lr_method=lr_method,
                 decay_steps=len(train_batches),
                 decay_rate=decay_rate,
-                loss=loss
+                loss=loss,
             )
 
-        logger.info('Train model')
+        logger.info("Train model")
 
         # train CNN
         _history = cnn.Train(
@@ -167,27 +185,24 @@ class CNNFeatureTrainer(MachineLearningBase):
             initial_epoch=initial_epoch,
             class_weight=class_weight,
             output_dir=ckpt_dir.as_posix(),
-            workers=workers
+            workers=workers,
         )
         # TODO deal with history for restarts
         # TODO check learning rate for restarts
 
-        logger.info('Evaluate model')
+        logger.info("Evaluate model")
 
         # predict classes for all dataset
         pred = cnn.Predict(
-            model=my_cnn,
-            batches=total_batches,
-            classes=classes,
-            workers=workers
+            model=my_cnn, batches=total_batches, classes=classes, workers=workers
         )
 
         # compute a few scores, just for fun
-        in_df['predicted_label'] = pred
+        in_df["predicted_label"] = pred
         metrics.accuracy_score(y_true=in_df.label, y_pred=in_df.predicted_label)
         metrics.confusion_matrix(y_true=in_df.label, y_pred=in_df.predicted_label)
 
-        logger.info('Create feature extractor')
+        logger.info("Create feature extractor")
 
         # save model
         # TODO: Seems not really needed
@@ -195,10 +210,15 @@ class CNNFeatureTrainer(MachineLearningBase):
 
         # drop the Dense and Dropout layers to get only the feature extractor
         my_fe = tf.keras.models.Sequential(
-            [layer for layer in my_cnn.layers
-             if not (isinstance(layer, tf.keras.layers.Dense) |
-                     isinstance(layer, tf.keras.layers.Dropout))
-             ])
+            [
+                layer
+                for layer in my_cnn.layers
+                if not (
+                    isinstance(layer, tf.keras.layers.Dense)
+                    | isinstance(layer, tf.keras.layers.Dropout)
+                )
+            ]
+        )
         my_fe.summary(print_fn=logger.info)
 
         # save feature extractor

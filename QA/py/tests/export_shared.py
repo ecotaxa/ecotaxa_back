@@ -16,12 +16,15 @@ def recursive_list_dir(pth: str):
     dir_list = [pth]
     files = []
     while len(dir_list) > 0:
-        for (dirpath, dirnames, filenames) in os.walk(dir_list.pop()):
-            dirpath = dirpath[len(pth) + 1:]
+        for dirpath, dirnames, filenames in os.walk(dir_list.pop()):
+            dirpath = dirpath[len(pth) + 1 :]
             dir_list.extend(dirnames)
-            files.extend(map(lambda n: os.path.join(*n),
-                             zip([dirpath] * len(filenames),
-                                 filenames)))
+            files.extend(
+                map(
+                    lambda n: os.path.join(*n),
+                    zip([dirpath] * len(filenames), filenames),
+                )
+            )
     return files
 
 
@@ -48,11 +51,22 @@ def one_tsv_check(content_bin, name, only_hdr, ref_dir_path):
     file_content = TextIOWrapper(BytesIO(content_bin), "utf-8-sig").readlines()
     print("".join(file_content))
     ref_content = open(ref_dir_path / name).readlines()
-    assert len(file_content) == len(ref_content), "For %s, not same number of lines %s vs %s" % (
-    ref_dir_path, len(ref_content), len(file_content))
+    assert len(file_content) == len(
+        ref_content
+    ), "For %s, not same number of lines %s vs %s" % (
+        ref_dir_path,
+        len(ref_content),
+        len(file_content),
+    )
     num_line = 1
     for act, ref in zip(file_content, ref_content):
-        assert act == ref, "diff A'%s'E'%s' in %s/%s line %d" % (act, ref, ref_dir_path, name, num_line)
+        assert act == ref, "diff A'%s'E'%s' in %s/%s line %d" % (
+            act,
+            ref,
+            ref_dir_path,
+            name,
+            num_line,
+        )
         if only_hdr:
             break
         num_line += 1

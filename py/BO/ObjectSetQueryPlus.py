@@ -36,8 +36,9 @@ TaxoRemappingT = Dict[ClassifIDT, Optional[ClassifIDT]]
 
 class ResultGrouping(enum.IntEnum):
     """
-        How to group results.
+    How to group results.
     """
+
     NO_GROUPING = 0  # Return individual rows
     BY_TAXO = 1  # Aggregates are per taxo
     BY_SAMPLE = 2  # Aggregates are per sample
@@ -47,25 +48,26 @@ class ResultGrouping(enum.IntEnum):
     BY_SUBSAMPLE_AND_TAXO = BY_TAXO + BY_SUBSAMPLE
     BY_SAMPLE_SUBSAMPLE_AND_TAXO = BY_TAXO + BY_SUBSAMPLE + BY_SAMPLE
     BY_SAMPLE_AND_SUBSAMPLE = BY_SUBSAMPLE + BY_SAMPLE
-    BY_PROJECT_AND_TAXO = BY_TAXO + BY_SUBSAMPLE + BY_SAMPLE + BY_PROJECT  # One day, for Collections
+    BY_PROJECT_AND_TAXO = (
+        BY_TAXO + BY_SUBSAMPLE + BY_SAMPLE + BY_PROJECT
+    )  # One day, for Collections
 
     @classmethod
-    def without_taxo(cls, val: 'ResultGrouping') -> 'ResultGrouping':
+    def without_taxo(cls, val: "ResultGrouping") -> "ResultGrouping":
         return val & ~cls.BY_TAXO  # type:ignore
 
 
 class ObjectSetQueryPlus(object):
-    """
+    """ """
 
-    """
     COUNT_STAR = "COUNT(*)"
     TAXONOMY_PK = "txo.id"
     SAMPLE_PK = "sam.sampleid"
     SUBSAMPLE_PK = "acq.acquisid"
     # The namings, from _formulae_ point of view
-    SAMPLE_PREFIX = 'sam'
-    SUBSAMPLE_PREFIX = 'ssm'
-    OBJECT_PREFIX = 'obj'
+    SAMPLE_PREFIX = "sam"
+    SUBSAMPLE_PREFIX = "ssm"
+    OBJECT_PREFIX = "obj"
     KNOWN_PREFIXES = [SAMPLE_PREFIX, SUBSAMPLE_PREFIX, OBJECT_PREFIX]
 
     def __init__(self, obj_set: DescribedObjectSet):
@@ -80,11 +82,13 @@ class ObjectSetQueryPlus(object):
         self.grouping: ResultGrouping = ResultGrouping.NO_GROUPING  # The grouping
         self.sum_exp: Optional[ComputedVar] = None  # A complex aggregate
 
-    def set_grouping(self, grouping: ResultGrouping) -> 'ObjectSetQueryPlus':
+    def set_grouping(self, grouping: ResultGrouping) -> "ObjectSetQueryPlus":
         """
-            Group results at this level.
+        Group results at this level.
         """
-        assert grouping & ResultGrouping.BY_PROJECT != ResultGrouping.BY_PROJECT, "Single project for now"
+        assert (
+            grouping & ResultGrouping.BY_PROJECT != ResultGrouping.BY_PROJECT
+        ), "Single project for now"
         # Sanity check, we cannot group if no data from grouping level
         if grouping & ResultGrouping.BY_TAXO:
             self._check_select_contains("txo.")
@@ -103,39 +107,41 @@ class ObjectSetQueryPlus(object):
                     return
         assert False, "one of %s is needed in select list, for grouping" % str(prfxs)
 
-    def set_aliases(self, aliases: Dict[str, str]) -> 'ObjectSetQueryPlus':
+    def set_aliases(self, aliases: Dict[str, str]) -> "ObjectSetQueryPlus":
         """
-            The result will have these as header columns.
+        The result will have these as header columns.
         """
         self.defs_to_alias.update(aliases)
         return self
 
-    def remap_categories(self, taxo_mappings: TaxoRemappingT) -> 'ObjectSetQueryPlus':
+    def remap_categories(self, taxo_mappings: TaxoRemappingT) -> "ObjectSetQueryPlus":
         """
-            The result will not contain any category in keys, only the ones in values.
+        The result will not contain any category in keys, only the ones in values.
         """
         self.taxo_mapping = taxo_mappings
         return self
 
-    def set_formulae(self, formulae: Dict[str, str]) -> 'ObjectSetQueryPlus':
+    def set_formulae(self, formulae: Dict[str, str]) -> "ObjectSetQueryPlus":
         """
-            Set the formulae, i.e. the way to extract significant values from free columns.
+        Set the formulae, i.e. the way to extract significant values from free columns.
         """
         self.formulae = formulae
         return self
 
-    def add_selects(self, cols_list: List[str]) -> 'ObjectSetQueryPlus':
+    def add_selects(self, cols_list: List[str]) -> "ObjectSetQueryPlus":
         """
-            Augment what is needed as output.
+        Augment what is needed as output.
         """
         self.sql_select_list.extend(cols_list)
         return self
 
-    def _resolve_refs(self, aliases: Dict[str, str]) -> Dict[Tuple[str, str], Tuple[str, str]]:
+    def _resolve_refs(
+        self, aliases: Dict[str, str]
+    ) -> Dict[Tuple[str, str], Tuple[str, str]]:
         """
-            Resolve references, e.g. sam.tot_vol -> sam.t05. The prefixes are valid.
-            As this is meant to complement ObjectSet queries, we use SQL table aliases from there.
-            TODO: As we're here, it would be nice to include plain non-free columns as well.
+        Resolve references, e.g. sam.tot_vol -> sam.t05. The prefixes are valid.
+        As this is meant to complement ObjectSet queries, we use SQL table aliases from there.
+        TODO: As we're here, it would be nice to include plain non-free columns as well.
         """
         assert self.sum_exp
         ret: Dict[Tuple[str, str], Tuple[str, str]] = {}
@@ -155,8 +161,10 @@ class ObjectSetQueryPlus(object):
                 real_col1 = mapping.process_mappings.tsv_cols_to_real.get(free_col)
                 real_col2 = mapping.acquisition_mappings.tsv_cols_to_real.get(free_col)
                 if real_col1 is not None and real_col2 is not None:
-                    raise Exception("%s.%s is ambiguous, as %s is present in both Process and Acquisition free columns"
-                                    % (prfx, free_col, free_col))
+                    raise Exception(
+                        "%s.%s is ambiguous, as %s is present in both Process and Acquisition free columns"
+                        % (prfx, free_col, free_col)
+                    )
                 elif real_col1 is not None:
                     real_col = real_col1
                     real_tbl = "prc"  # TODO: Use a constant from ObjectSet
@@ -167,21 +175,30 @@ class ObjectSetQueryPlus(object):
                 real_col = mapping.object_mappings.tsv_cols_to_real.get(free_col)
                 real_tbl = "obf"  # TODO: Use a constant from ObjectSet
             if real_col is None:
-                raise Exception("Could not resolve %s.%s in project free columns" % (prfx, free_col))
+                raise Exception(
+                    "Could not resolve %s.%s in project free columns" % (prfx, free_col)
+                )
             assert real_tbl
             ret[(prfx, free_col)] = (real_tbl, real_col)
         return ret
 
-    def aggregate_with_computed_sum(self, sum_expression: str, term: Term, unit: Term) -> 'ObjectSetQueryPlus':
+    def aggregate_with_computed_sum(
+        self, sum_expression: str, term: Term, unit: Term
+    ) -> "ObjectSetQueryPlus":
         """
-            Add a computed (i.e. from formula) sum to the query, with given name, for each grouping.
+        Add a computed (i.e. from formula) sum to the query, with given name, for each grouping.
         """
         # Validate & compile straight away
         self.sum_exp = ComputedVar(sum_expression, term, unit)
         # Allow to reference a SQL output in the formula, not itself of course
-        aliases_to_def = {an_alias: a_def for (a_def, an_alias) in self.defs_to_alias.items()
-                          if a_def != sum_expression}
-        self.sum_exp.expand_extract_refs(self.formulae, self.KNOWN_PREFIXES, aliases_to_def)
+        aliases_to_def = {
+            an_alias: a_def
+            for (a_def, an_alias) in self.defs_to_alias.items()
+            if a_def != sum_expression
+        }
+        self.sum_exp.expand_extract_refs(
+            self.formulae, self.KNOWN_PREFIXES, aliases_to_def
+        )
         # Resolve references
         resolved = self._resolve_refs(aliases_to_def)
         self.sum_exp.replace_python_refs_with_SQL(resolved)
@@ -213,8 +230,8 @@ class ObjectSetQueryPlus(object):
 
     def _add_tech_selects(self, select: SelectClause) -> None:
         """
-            Add the selected columns implied/needed by expression expansion.
-            e.g. sam.t07 AS sam_tot_vol, acq.t03 AS ssm_sub_part
+        Add the selected columns implied/needed by expression expansion.
+        e.g. sam.t07 AS sam_tot_vol, acq.t03 AS ssm_sub_part
         """
         if self.sum_exp:
             aggreg_in_exp = self.COUNT_STAR in self.sum_exp.references.values()
@@ -228,7 +245,7 @@ class ObjectSetQueryPlus(object):
 
     def get_sql(self) -> Tuple[str, SQLParamDict]:
         """
-            Compose the query and return it.
+        Compose the query and return it.
         """
         # Build SL, aliased parts if relevant
         select = self._selects_4_output()
@@ -253,16 +270,25 @@ class ObjectSetQueryPlus(object):
         from_, where, params = self.obj_set.get_sql(order_clause, select_clause)
         if len(self.taxo_mapping) > 0:
             select_clause = self._amend_query_for_mapping(from_, select_clause)
-        sql = select_clause + " FROM " + from_.get_sql() + where.get_sql() + group_clause + order_clause.get_sql()
+        sql = (
+            select_clause
+            + " FROM "
+            + from_.get_sql()
+            + where.get_sql()
+            + group_clause
+            + order_clause.get_sql()
+        )
         return sql, params
 
     def _amend_query_for_mapping(self, from_, select_clause):
         """
-            From parts of the ObjectSet SQL, inject the needed mapping, with a CTE.
+        From parts of the ObjectSet SQL, inject the needed mapping, with a CTE.
         """
         pairs = []
         for from_txo, to_txo in self.taxo_mapping.items():
-            pairs.append("(%d,%s)" % (from_txo, "NULL" if to_txo is None else str(to_txo)))
+            pairs.append(
+                "(%d,%s)" % (from_txo, "NULL" if to_txo is None else str(to_txo))
+            )
         cte_txt = "WITH mpg (src_id, dst_id)" + " AS (VALUES " + ",".join(pairs) + ") "
         txo_join, idx = from_.find_join("taxonomy txo")
         # Read: when there was no mapping then lookup using classif_id else pick lookup even if null
@@ -273,9 +299,11 @@ class ObjectSetQueryPlus(object):
         select_clause = cte_txt + select_clause
         return select_clause
 
-    def get_row_source(self, ro_session: Session, wrn_fct: Optional[Callable[[str], None]] = None) -> RowSourceT:
+    def get_row_source(
+        self, ro_session: Session, wrn_fct: Optional[Callable[[str], None]] = None
+    ) -> RowSourceT:
         """
-            Build a generator to loop over query results, eventually enriched.
+        Build a generator to loop over query results, eventually enriched.
         """
         # Data side
         sql, params = self.get_sql()
@@ -313,7 +341,10 @@ class ObjectSetQueryPlus(object):
                 val, nan_because_bad = eval_bnd(vars_row)
                 if val != val:  # NaN test
                     if nan_because_bad:
-                        wrn_msg = "Some values could not be converted to float in %s" % str(dict(vars_row))
+                        wrn_msg = (
+                            "Some values could not be converted to float in %s"
+                            % str(dict(vars_row))
+                        )
                         if wrn_fct is not None:
                             wrn_fct(wrn_msg)
                 keys = tuple(a_row[keys_idx:])
@@ -335,24 +366,32 @@ class ObjectSetQueryPlus(object):
                 out_row[dest_col] = vals_sum
                 yield out_row
 
-    def get_result(self, ro_session: Session, wrn_fct: Optional[Callable[[str], None]] = None) -> List[Dict[str, Any]]:
+    def get_result(
+        self, ro_session: Session, wrn_fct: Optional[Callable[[str], None]] = None
+    ) -> List[Dict[str, Any]]:
         """
-            Read the row source, in full, and return it.
+        Read the row source, in full, and return it.
         """
         src = self.get_row_source(ro_session, wrn_fct)
         return [a_row for a_row in src]
 
-    def write_result_to_csv(self, ro_session: Session, file_path: Path,
-                            wrn_fct: Optional[Callable[[str], None]]) -> int:
+    def write_result_to_csv(
+        self,
+        ro_session: Session,
+        file_path: Path,
+        wrn_fct: Optional[Callable[[str], None]],
+    ) -> int:
         """
-            Write all from row source into CSV.
+        Write all from row source into CSV.
         """
-        nb_lines = self.write_row_source_to_csv(self.get_row_source(ro_session, wrn_fct), file_path)
+        nb_lines = self.write_row_source_to_csv(
+            self.get_row_source(ro_session, wrn_fct), file_path
+        )
         return nb_lines
 
     def _selects_4_output(self) -> SelectClause:
         """
-            Compute the selected expressions which will become TSV columns.
+        Compute the selected expressions which will become TSV columns.
         """
         ret = SelectClause()
         sels = self.sql_select_list[:]
@@ -366,18 +405,20 @@ class ObjectSetQueryPlus(object):
 
     def _get_header(self) -> List[str]:
         """
-            Return the CSV header from SQL column.
+        Return the CSV header from SQL column.
         """
         return self._selects_4_output().aliases
 
     def write_row_source_to_csv(self, res: IterableRowsT, out_file: Path) -> int:
         """
-            Write many rows, from mem or cursor, into the output file.
+        Write many rows, from mem or cursor, into the output file.
         """
         nb_lines = 0
-        with open(out_file, 'w') as csv_file:
+        with open(out_file, "w") as csv_file:
             col_names = self._get_header()
-            wtr = csv.DictWriter(csv_file, col_names, delimiter='\t', quotechar='"', lineterminator='\n')
+            wtr = csv.DictWriter(
+                csv_file, col_names, delimiter="\t", quotechar='"', lineterminator="\n"
+            )
             wtr.writeheader()
             for a_row in res:
                 # There is a nice sanity check here, that all rows have the structure defined in the header

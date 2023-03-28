@@ -67,7 +67,7 @@ typer[all]==0.4.0
 # https://github.com/tiangolo/typer/issues/377
 click==8.0.4
 # More recent mypy
-mypy==0.940
+mypy==1.1.1
 # END OF BACK-END REQUIREMENTS
 # Testing & QA additions
 tox==3.24.3

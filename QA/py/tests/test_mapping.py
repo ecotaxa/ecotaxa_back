@@ -85,13 +85,16 @@ def test_mapping1():
     a_mapping = TableMapping(ObjectFields)
     a_mapping.load_from_equal_list(MAPP)
     assert len(a_mapping) == 70
-    assert a_mapping.max_by_type('n') == 69
-    assert a_mapping.max_by_type('t') == 1
-    a_mapping.add_column_for_table('lol', 't')
-    assert a_mapping.max_by_type('t') == 2
+    assert a_mapping.max_by_type("n") == 69
+    assert a_mapping.max_by_type("t") == 1
+    a_mapping.add_column_for_table("lol", "t")
+    assert a_mapping.max_by_type("t") == 2
     enc: str = a_mapping.as_equal_list()
     assert enc.split("=") == (MAPP + "\nt02=lol").split("=")
-    assert list(a_mapping.find_tsv_cols(["cdexc", "no", "toto"]).values()) == ["n69", "t01"]
+    assert list(a_mapping.find_tsv_cols(["cdexc", "no", "toto"]).values()) == [
+        "n69",
+        "t01",
+    ]
 
 
 MAPP2 = """n01=lat_end
@@ -129,12 +132,18 @@ def test_reshuff():
     dst_mapping = TableMapping(ObjectFields)
     dst_mapping.load_from_equal_list(MAPP_DST)
     remap = src_mapping.transforms_from(dst_mapping)
-    assert remap == [('n01', 'n05'), ('n02', 'n01'), ('n03', 'n04'), ('n04', 'n03'), ('n05', 'n02')]
+    assert remap == [
+        ("n01", "n05"),
+        ("n02", "n01"),
+        ("n03", "n04"),
+        ("n04", "n03"),
+        ("n05", "n02"),
+    ]
 
 
 def test_overflow():
     """
-        Check that if there are too many fields, it fails.
+    Check that if there are too many fields, it fails.
     """
     a_mapping = TableMapping(ObjectFields)
     a_mapping.load_from_equal_list(MAPP2)
@@ -156,7 +165,7 @@ n06=wtf"""
 
 def test_augment1():
     """
-        Check that we can addition mappings.
+    Check that we can addition mappings.
     """
     # Simple case, one column extra
     dest_mapping = TableMapping(ObjectFields).load_from_equal_list(MAPP2)
@@ -170,7 +179,7 @@ def test_augment1():
 
 def test_augment2():
     """
-        Check that we can addition mappings.
+    Check that we can addition mappings.
     """
     # Simple case, one column extra
     dest_mapping = TableMapping(ObjectFields).load_from_equal_list(MAPP_DST)
@@ -179,7 +188,13 @@ def test_augment2():
     # 5, all in common
     assert len(aug) == 5
     assert not errs
-    assert remap == [('n01', 'n02'), ('n02', 'n05'), ('n03', 'n04'), ('n04', 'n03'), ('n05', 'n01')]
+    assert remap == [
+        ("n01", "n02"),
+        ("n02", "n05"),
+        ("n03", "n04"),
+        ("n04", "n03"),
+        ("n05", "n01"),
+    ]
 
 
 MAPP_DST2 = """n01=stddev
@@ -199,7 +214,7 @@ n125=stddev"""
 
 def test_augment3():
     """
-        Check that we can addition mappings.
+    Check that we can addition mappings.
     """
     # Simple case, one column extra
     dest_mapping = TableMapping(ObjectFields).load_from_equal_list(MAPP_DST2)
@@ -208,15 +223,17 @@ def test_augment3():
     # 7, wtf and nada are extra
     assert len(aug) == 7
     assert not errs
-    assert remaps == [RemapOp(frm='n01', to='n02'),
-                      RemapOp(frm='n02', to='n05'),
-                      RemapOp(frm='n03', to='n04'),
-                      RemapOp(frm='n04', to='n06'),  # Newly added
-                      RemapOp(frm='n07', to='n03'),
-                      RemapOp(frm='n111', to='n07'),  # Newly added
-                      RemapOp(frm='n125', to='n01'),
-                      RemapOp(frm=None, to='n111'),
-                      RemapOp(frm=None, to='n125')]
+    assert remaps == [
+        RemapOp(frm="n01", to="n02"),
+        RemapOp(frm="n02", to="n05"),
+        RemapOp(frm="n03", to="n04"),
+        RemapOp(frm="n04", to="n06"),  # Newly added
+        RemapOp(frm="n07", to="n03"),
+        RemapOp(frm="n111", to="n07"),  # Newly added
+        RemapOp(frm="n125", to="n01"),
+        RemapOp(frm=None, to="n111"),
+        RemapOp(frm=None, to="n125"),
+    ]
 
 
 MAPP_SRC3 = """
@@ -371,11 +388,14 @@ t15=annotation
 
 def test_augment4():
     """
-        Check that we have a decent error if the remapping doesn't work for e.g. types reason.
+    Check that we have a decent error if the remapping doesn't work for e.g. types reason.
     """
     # Simple case, one column extra
     dest_mapping = TableMapping(ObjectFields).load_from_equal_list(MAPP_DST3)
     src_mapping = TableMapping(ObjectFields).load_from_equal_list(MAPP_SRC3)
     with pytest.raises(AssertionError) as e_info:
         aug, remaps, errs = dest_mapping.augmented_with(src_mapping)
-    assert e_info.value.args[0] == "Destination column 'cutted20' aka 'n56' and source column 'cutted20' aka 't14' have different types!"
+    assert (
+        e_info.value.args[0]
+        == "Destination column 'cutted20' aka 'n56' and source column 'cutted20' aka 't14' have different types!"
+    )

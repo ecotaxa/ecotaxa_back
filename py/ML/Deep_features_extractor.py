@@ -31,8 +31,9 @@ logger = get_logger(__name__)
 
 class DeepFeaturesExtractor(MachineLearningBase):
     """
-        Extract CNN features from a set of objects for which renew is necessary.
+    Extract CNN features from a set of objects for which renew is necessary.
     """
+
     BATCH_SIZE = 16  # size of images batches in GPU memory
     WORKERS = 10  # number of parallel threads to prepare batches
 
@@ -44,19 +45,19 @@ class DeepFeaturesExtractor(MachineLearningBase):
         super().__init__(vault, model_dir)
 
     def run(self, ids_and_images: Dict[ObjectIDT, str], model_name: str):
-        logger.info('Load feature extractor and dimensionality reducer')
+        logger.info("Load feature extractor and dimensionality reducer")
 
         input_shape, my_fe, pca = self.load_model(model_name)
         crop = self.read_crop(model_name)
 
-        logger.info('Load data')
+        logger.info("Load data")
 
         # Prepare a df with input data
         df_data = [(obj, fil, None) for obj, fil in ids_and_images.items()]
         df = pd.DataFrame(df_data, columns=["id", "img_path", "label"])
         df.set_index(["id"], inplace=True, verify_integrity=True)
 
-        logger.info('Extract features')
+        logger.info("Extract features")
 
         features_df = self.predict_dataframe(df, input_shape, crop, my_fe, pca)
 
@@ -64,17 +65,24 @@ class DeepFeaturesExtractor(MachineLearningBase):
 
     def predict_dataframe(self, in_df, input_shape, crop, my_fe, pca):
         """
-            Predict what's in in_df and return the result dataframe.
+        Predict what's in in_df and return the result dataframe.
         """
         # prepare data batches
         batches = generator.EcoTaxaGenerator(
             images_paths=self.full_img_paths(in_df.img_path.values),
             input_shape=input_shape,
-            labels=None, classes=None,
+            labels=None,
+            classes=None,
             # NB: we don't need the labels here, we just run images through the network
-            batch_size=self.BATCH_SIZE, augment=False, shuffle=False, crop=crop)
+            batch_size=self.BATCH_SIZE,
+            augment=False,
+            shuffle=False,
+            crop=crop,
+        )
         # extract features by going through the batches
-        full_features = my_fe.predict(batches, max_queue_size=max(10, self.WORKERS * 2), workers=self.WORKERS)
+        full_features = my_fe.predict(
+            batches, max_queue_size=max(10, self.WORKERS * 2), workers=self.WORKERS
+        )
         # and reduce their dimension
         reduced_features = pca.transform(full_features)
         # make a result dataframe
@@ -83,35 +91,39 @@ class DeepFeaturesExtractor(MachineLearningBase):
 
     def load_model(self, model_name):
         """
-            Load saved model and PCA params, for the given model.
+        Load saved model and PCA params, for the given model.
         """
-        my_fe = configured_tf.keras.models.load_model(self.model_dir.extractor_path(model_name))
+        my_fe = configured_tf.keras.models.load_model(
+            self.model_dir.extractor_path(model_name)
+        )
         # get model input shape
         input_shape = my_fe.layers[0].input_shape
         # remove the None element at the start (which is where the batch size goes)
         input_shape = tuple(x for x in input_shape if x is not None)
-        with open(self.model_dir.reducer_pickle_path(model_name), 'rb') as pca_file:
+        with open(self.model_dir.reducer_pickle_path(model_name), "rb") as pca_file:
             pca = pickle.load(pca_file)
         return input_shape, my_fe, pca
 
     def test(self, csv_in: IO, model_name: str) -> StringIO:
         """
-            Try the model.
+        Try the model.
         """
-        logger.info('TEST: Load feature extractor and dimensionality reducer')
+        logger.info("TEST: Load feature extractor and dimensionality reducer")
 
         input_shape, my_fe, pca = self.load_model(model_name)
 
-        logger.info('TEST: Load data and extract features')
+        logger.info("TEST: Load data and extract features")
 
         # read DataFrame with image ids, paths and labels
         # NB: those would be in the database in EcoTaxa
-        df = pd.read_csv(csv_in, index_col='id')
+        df = pd.read_csv(csv_in, index_col="id")
 
         no_crop = (0, 0, 0, 0)
-        reduced_features_df = self.predict_dataframe(df, input_shape, no_crop, my_fe, pca)
+        reduced_features_df = self.predict_dataframe(
+            df, input_shape, no_crop, my_fe, pca
+        )
 
-        logger.info('TEST: Dumping a few rows')
+        logger.info("TEST: Dumping a few rows")
 
         ret = StringIO()
         reduced_features_df.to_csv(ret)

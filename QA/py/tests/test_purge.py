@@ -18,6 +18,7 @@ from tests.test_subset_merge import check_project
 def test_purge_plain(config, database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
     from tests.test_import import test_import
+
     prj_id = test_import(config, database, caplog, "Test Purge")
     # Delete full
     with ProjectsService() as sce:
@@ -31,10 +32,11 @@ def test_purge_plain(config, database, fastapi, caplog):
 def test_purge_partial(config, database, caplog):
     caplog.set_level(logging.ERROR)
     from tests.test_import import test_import
+
     prj_id = test_import(config, database, caplog, "Test Purge partial")
     # Delete using wrong object IDs
     obj_ids = [500000 + i for i in range(15)]
-    with  ObjectManager() as sce:
+    with ObjectManager() as sce:
         r = sce.delete(current_user_id=ADMIN_USER_ID, object_ids=obj_ids)
     assert r == (0, 0, 0, 0)
     check_project(prj_id)

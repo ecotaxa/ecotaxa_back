@@ -45,7 +45,11 @@ def _init_security(sess):
     if len(the_admin) == 0:
         typer.echo("Adding user '%s'" % THE_ADMIN)
         # noinspection PyArgumentList
-        adm_user = User(email=THE_ADMIN, password=THE_ADMIN_PASSWORD, name="Application Administrator")
+        adm_user = User(
+            email=THE_ADMIN,
+            password=THE_ADMIN_PASSWORD,
+            name="Application Administrator",
+        )
         all_roles = {a_role.name: a_role for a_role in sess.query(Role)}
         RightsBO.set_allowed_actions(adm_user, [Action.ADMINISTRATE_APP], all_roles)
         sess.add(adm_user)

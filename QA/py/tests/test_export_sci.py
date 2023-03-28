@@ -14,13 +14,16 @@ from tests.test_jobs import get_job_and_wait_until_ok
 from tests.test_objectset_query import _prj_query
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
-formulae = {"subsample_coef": "1/ssm.sub_part",
-            "total_water_volume": "sam.tot_vol",  # Volumes are in m3 already for this data
-            "individual_volume": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel)**3"}
+formulae = {
+    "subsample_coef": "1/ssm.sub_part",
+    "total_water_volume": "sam.tot_vol",  # Volumes are in m3 already for this data
+    "individual_volume": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel)**3",
+}
 
 
 def set_formulae_in_project(fastapi, prj_id: int, prj_formulae: Dict):
     from tests.test_project_vars import BODC_VARS_KEY
+
     read_url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
     rsp = fastapi.get(read_url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
@@ -36,27 +39,33 @@ def test_export_abundances(config, database, fastapi, caplog):
 
     # Admin imports the project, which is an export expected result
     from tests.test_import import test_import
+
     path = str(DATA_DIR / "ref_exports" / "bak_all_images")
     prj_id = test_import(config, database, caplog, "TSV sci export", path=path)
-    set_formulae_in_project(fastapi, prj_id, formulae)  # Note: This is _not_ needed for abundances
+    set_formulae_in_project(
+        fastapi, prj_id, formulae
+    )  # Note: This is _not_ needed for abundances
 
     # Validate all, otherwise empty report
     obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
     url = OBJECT_SET_CLASSIFY_URL
     classifications = [-1 for _obj in obj_ids]  # Keep current
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
-                                                      "classifications": classifications,
-                                                      "wanted_qualification": "V"})
+    rsp = fastapi.post(
+        url,
+        headers=ADMIN_AUTH,
+        json={
+            "target_ids": obj_ids,
+            "classifications": classifications,
+            "wanted_qualification": "V",
+        },
+    )
     assert rsp.status_code == status.HTTP_200_OK
 
     # Abundance export whole project
     filters = {}
     req = _req_tmpl.copy()
-    req.update({"project_id": prj_id,
-                "exp_type": "ABO",
-                "sum_subtotal": ""})
-    req_and_filters = {"filters": filters,
-                       "request": req}
+    req.update({"project_id": prj_id, "exp_type": "ABO", "sum_subtotal": ""})
+    req_and_filters = {"filters": filters, "request": req}
     rsp = fastapi.post(OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters)
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -67,11 +76,8 @@ def test_export_abundances(config, database, fastapi, caplog):
     # Abundance export by sample
     filters = {}
     req = _req_tmpl.copy()
-    req.update({"project_id": prj_id,
-                "exp_type": "ABO",
-                "sum_subtotal": "S"})
-    req_and_filters = {"filters": filters,
-                       "request": req}
+    req.update({"project_id": prj_id, "exp_type": "ABO", "sum_subtotal": "S"})
+    req_and_filters = {"filters": filters, "request": req}
     rsp = fastapi.post(OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters)
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -82,11 +88,8 @@ def test_export_abundances(config, database, fastapi, caplog):
     # Abundance export by subsample
     filters = {}
     req = _req_tmpl.copy()
-    req.update({"project_id": prj_id,
-                "exp_type": "ABO",
-                "sum_subtotal": "A"})
-    req_and_filters = {"filters": filters,
-                       "request": req}
+    req.update({"project_id": prj_id, "exp_type": "ABO", "sum_subtotal": "A"})
+    req_and_filters = {"filters": filters, "request": req}
     rsp = fastapi.post(OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters)
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -97,16 +100,20 @@ def test_export_abundances(config, database, fastapi, caplog):
     # Abundance export by subsample but playing with taxa mapping
     filters = {}
     req = _req_tmpl.copy()
-    req.update({"project_id": prj_id,
-                "exp_type": "ABO",
-                "sum_subtotal": "A",
-                "pre_mapping": {85012: None,  # t001 -> Remove
-                                84963: None,  # detritus -> Remove
-                                85078: 78418,  # egg<other -> Oncaeidae
-                                92731: 78418,  # small<egg -> Oncaeidae
-                                }})
-    req_and_filters = {"filters": filters,
-                       "request": req}
+    req.update(
+        {
+            "project_id": prj_id,
+            "exp_type": "ABO",
+            "sum_subtotal": "A",
+            "pre_mapping": {
+                85012: None,  # t001 -> Remove
+                84963: None,  # detritus -> Remove
+                85078: 78418,  # egg<other -> Oncaeidae
+                92731: 78418,  # small<egg -> Oncaeidae
+            },
+        }
+    )
+    req_and_filters = {"filters": filters, "request": req}
     rsp = fastapi.post(OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters)
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -116,9 +123,14 @@ def test_export_abundances(config, database, fastapi, caplog):
 
 
 def test_export_conc_biovol(config, database, fastapi, caplog):
-    """ Specific test for concentrations and biovolume """
+    """Specific test for concentrations and biovolume"""
     # Admin imports the project
-    from tests.test_import import test_import, test_import_a_bit_more_skipping, WEIRD_DIR
+    from tests.test_import import (
+        test_import,
+        test_import_a_bit_more_skipping,
+        WEIRD_DIR,
+    )
+
     prj_id = test_import(config, database, caplog, "SCISUM project")
     # Add a sample spanning 2 days
     test_import_a_bit_more_skipping(config, database, caplog, "SCISUM project")
@@ -137,19 +149,22 @@ def test_export_conc_biovol(config, database, fastapi, caplog):
     assert len(obj_ids) == 15
     url = OBJECT_SET_CLASSIFY_URL
     classifications = [-1 for _obj in obj_ids]  # Keep current
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
-                                                      "classifications": classifications,
-                                                      "wanted_qualification": "V"})
+    rsp = fastapi.post(
+        url,
+        headers=ADMIN_AUTH,
+        json={
+            "target_ids": obj_ids,
+            "classifications": classifications,
+            "wanted_qualification": "V",
+        },
+    )
     assert rsp.status_code == status.HTTP_200_OK
 
     # Concentrations export by sample
     filters = {}
     req = _req_tmpl.copy()
-    req.update({"project_id": prj_id,
-                "exp_type": "CNC",
-                "sum_subtotal": "S"})
-    req_and_filters = {"filters": filters,
-                       "request": req}
+    req.update({"project_id": prj_id, "exp_type": "CNC", "sum_subtotal": "S"})
+    req_and_filters = {"filters": filters, "request": req}
     rsp = fastapi.post(OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
@@ -159,11 +174,8 @@ def test_export_conc_biovol(config, database, fastapi, caplog):
     # Biovolume export by sample
     filters = {}
     req = _req_tmpl.copy()
-    req.update({"project_id": prj_id,
-                "exp_type": "BIV",
-                "sum_subtotal": "S"})
-    req_and_filters = {"filters": filters,
-                       "request": req}
+    req.update({"project_id": prj_id, "exp_type": "BIV", "sum_subtotal": "S"})
+    req_and_filters = {"filters": filters, "request": req}
     rsp = fastapi.post(OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
@@ -180,48 +192,57 @@ def test_export_conc_biovol(config, database, fastapi, caplog):
 
 
 def test_export_abundances_filtered_by_taxo(config, database, fastapi, caplog):
-    """ Simulate calls to export with an active filter """
+    """Simulate calls to export with an active filter"""
     caplog.set_level(logging.FATAL)
 
     # TODO: Dup code for the data load
     # Admin imports the project, which is an export expected result
     from tests.test_import import test_import
+
     path = str(DATA_DIR / "ref_exports" / "bak_all_images")
     prj_id = test_import(config, database, caplog, "TSV sci export filtered", path=path)
-    set_formulae_in_project(fastapi, prj_id, formulae) # Not needed
+    set_formulae_in_project(fastapi, prj_id, formulae)  # Not needed
 
     # Validate all, otherwise empty report
     obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
     url = OBJECT_SET_CLASSIFY_URL
     classifications = [-1 for _obj in obj_ids]  # Keep current
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
-                                                      "classifications": classifications,
-                                                      "wanted_qualification": "V"})
+    rsp = fastapi.post(
+        url,
+        headers=ADMIN_AUTH,
+        json={
+            "target_ids": obj_ids,
+            "classifications": classifications,
+            "wanted_qualification": "V",
+        },
+    )
     assert rsp.status_code == status.HTTP_200_OK
 
     # Abundance export, per sample with a filter on a category
-    filters = {"taxo": "45072",
-               "taxochild": "Y"}  # TODO: Not very useful as the test has a very reduced tree
+    filters = {
+        "taxo": "45072",
+        "taxochild": "Y",
+    }  # TODO: Not very useful as the test has a very reduced tree
     req = _req_tmpl.copy()
-    req.update({"project_id": prj_id,
-                "exp_type": "ABO",
-                "sum_subtotal": "S"})
-    req_and_filters = {"filters": filters,
-                       "request": req}
+    req.update({"project_id": prj_id, "exp_type": "ABO", "sum_subtotal": "S"})
+    req_and_filters = {"filters": filters, "request": req}
     rsp = fastapi.post(OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters)
     assert rsp.status_code == status.HTTP_200_OK
 
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
-    download_and_check(fastapi, job_id, "abundances_by_sample_filtered_on_cat", only_hdr=True)
+    download_and_check(
+        fastapi, job_id, "abundances_by_sample_filtered_on_cat", only_hdr=True
+    )
 
 
 def test_export_abundances_filtered_by_sample(config, database, fastapi, caplog):
-    """ Simulate calls to export with an active filter """
+    """Simulate calls to export with an active filter"""
     caplog.set_level(logging.FATAL)
 
     # TODO: Dup code for the data load
     # Admin imports the project, which is an export expected result
     from tests.test_import import test_import
+
     path = str(DATA_DIR / "ref_exports" / "bak_all_images")
     prj_id = test_import(config, database, caplog, "TSV sci export filtered", path=path)
     set_formulae_in_project(fastapi, prj_id, formulae)
@@ -230,9 +251,15 @@ def test_export_abundances_filtered_by_sample(config, database, fastapi, caplog)
     obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
     url = OBJECT_SET_CLASSIFY_URL
     classifications = [-1 for _obj in obj_ids]  # Keep current
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
-                                                      "classifications": classifications,
-                                                      "wanted_qualification": "V"})
+    rsp = fastapi.post(
+        url,
+        headers=ADMIN_AUTH,
+        json={
+            "target_ids": obj_ids,
+            "classifications": classifications,
+            "wanted_qualification": "V",
+        },
+    )
     assert rsp.status_code == status.HTTP_200_OK
 
     # Abundance export, per sample with a filter on samples
@@ -243,13 +270,12 @@ def test_export_abundances_filtered_by_sample(config, database, fastapi, caplog)
     sample_ids = [str(r["sampleid"]) for r in rsp.json() if "n2" not in r["orig_id"]]
     filters = {"samples": ",".join(sample_ids)}
     req = _req_tmpl.copy()
-    req.update({"project_id": prj_id,
-                "exp_type": "ABO",
-                "sum_subtotal": "S"})
-    req_and_filters = {"filters": filters,
-                       "request": req}
+    req.update({"project_id": prj_id, "exp_type": "ABO", "sum_subtotal": "S"})
+    req_and_filters = {"filters": filters, "request": req}
     rsp = fastapi.post(OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters)
     assert rsp.status_code == status.HTTP_200_OK
 
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
-    download_and_check(fastapi, job_id, "abundances_by_sample_filtered_on_sample", only_hdr=True)
+    download_and_check(
+        fastapi, job_id, "abundances_by_sample_filtered_on_sample", only_hdr=True
+    )

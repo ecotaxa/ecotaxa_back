@@ -16,9 +16,9 @@ SAMPLE_FREE_COLUMNS = 31
 
 class Sample(Model):
     # Historical (plural) name of the table
-    __tablename__ = 'samples'
-    sampleid: int = Column(INTEGER, Sequence('seq_samples'), primary_key=True)
-    projid: int = Column(INTEGER, ForeignKey('projects.projid'), nullable=False)
+    __tablename__ = "samples"
+    sampleid: int = Column(INTEGER, Sequence("seq_samples"), primary_key=True)
+    projid: int = Column(INTEGER, ForeignKey("projects.projid"), nullable=False)
     # i.e. sample_id from TSV
     orig_id: str = Column(VARCHAR(255), nullable=False)
     latitude = Column(DOUBLE_PRECISION)
@@ -33,10 +33,12 @@ class Sample(Model):
         return self.sampleid
 
     @classmethod
-    def get_orig_id_and_model(cls, session: Session, prj_id: ProjectIDT) -> Dict[str, 'Sample']:
+    def get_orig_id_and_model(
+        cls, session: Session, prj_id: ProjectIDT
+    ) -> Dict[str, "Sample"]:
         """
-            Read in memory all Samples for given project and return them indexed by their user-visible
-            unique key, AKA orig_id.
+        Read in memory all Samples for given project and return them indexed by their user-visible
+        unique key, AKA orig_id.
         """
         res = session.query(Sample)
         res = res.join(Project)
@@ -50,7 +52,8 @@ class Sample(Model):
             Create sample geo from objects one.
         TODO: Should be in a BO
         """
-        sql = text("""
+        sql = text(
+            """
         UPDATE samples usam 
            SET latitude = sll.latitude, longitude = sll.longitude
           FROM (SELECT sam.sampleid, MIN(obh.latitude) latitude, MIN(obh.longitude) longitude
@@ -62,18 +65,21 @@ class Sample(Model):
                    AND obh.longitude IS NOT NULL
               GROUP BY sam.sampleid) sll               
          WHERE usam.sampleid = sll.sampleid 
-           AND projid = :projid """)
-        session.execute(sql, {'projid': prj_id})
+           AND projid = :projid """
+        )
+        session.execute(sql, {"projid": prj_id})
         session.commit()
 
     @classmethod
     def get_sample_summary(cls, session: Session, sample_id: int) -> List:
-        sql = text("""
+        sql = text(
+            """
             SELECT MIN(obh.objdate+obh.objtime), MAX(obh.objdate+obh.objtime), MIN(obh.depth_min), MAX(obh.depth_max)
               FROM obj_head obh 
               JOIN acquisitions acq on acq.acquisid = obh.acquisid 
               JOIN samples sam on sam.sampleid = acq.acq_sample_id 
-             WHERE sam.sampleid = :smp """)
+             WHERE sam.sampleid = :smp """
+        )
         res: Result = session.execute(sql, {"smp": sample_id})
         return [a_val for a_val in res.one()]
 
@@ -87,4 +93,4 @@ class Sample(Model):
 for i in range(1, SAMPLE_FREE_COLUMNS):
     setattr(Sample, "t%02d" % i, Column(VARCHAR(250)))
 
-Index('IS_SamplesProjectOrigId', Sample.projid, Sample.orig_id, unique=True)
+Index("IS_SamplesProjectOrigId", Sample.projid, Sample.orig_id, unique=True)

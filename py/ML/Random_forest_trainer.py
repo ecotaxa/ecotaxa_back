@@ -7,9 +7,9 @@
 # @see README.md
 #
 
-class RandomForestTrainer(object):
-    """
 
-    """
+class RandomForestTrainer(object):
+    """ """
+
     def __init__(self):
         pass

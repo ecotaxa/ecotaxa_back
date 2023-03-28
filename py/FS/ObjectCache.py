@@ -35,18 +35,27 @@ logger = get_logger(__name__)
 # TODO: Once used, remove the ignore in tox.ini
 #
 
+
 # noinspection SqlDialectInspection,SqlResolve
 class ObjectCache(object):  # pragma: no cover
     """
-        The cache, in read-only mode.
+    The cache, in read-only mode.
     """
+
     LOCKER_SQLITE_TBL = "locker"
     SQLITE_FIELDS_TBL = "feature"  # This one seldom changes
     SQLITE_OBJ_TBL = "object"  # This one changes more often
 
-    def __init__(self, project: Project, mapping: TableMapping,
-                 where_clause: WhereClause, order_clause: Optional[OrderClause],
-                 params: Dict[str, Any], window_start: Optional[int], window_size: Optional[int]):
+    def __init__(
+        self,
+        project: Project,
+        mapping: TableMapping,
+        where_clause: WhereClause,
+        order_clause: Optional[OrderClause],
+        params: Dict[str, Any],
+        window_start: Optional[int],
+        window_size: Optional[int],
+    ):
         self.sort_fields = ProjectBO.get_sort_db_columns(project, mapping=mapping)
         self.projid = project.projid
         # Store the PG query specifics
@@ -82,12 +91,12 @@ class ObjectCache(object):  # pragma: no cover
 
     def _can_accelerate(self) -> Tuple[bool, str]:
         """
-            We can accelerate the query by narrowing 'window_size' objids
-            under the following conditions:
-             - The cache exists and is usable
-             - AND there is a window_size (obviously)
-             - AND the order clause columns are all contained in the cache
-             - AND ALL filtering criteria are on cached columns
+        We can accelerate the query by narrowing 'window_size' objids
+        under the following conditions:
+         - The cache exists and is usable
+         - AND there is a window_size (obviously)
+         - AND the order clause columns are all contained in the cache
+         - AND ALL filtering criteria are on cached columns
         """
         if self.pg_window_size is None:
             ret = False, "No query window"
@@ -102,33 +111,44 @@ class ObjectCache(object):  # pragma: no cover
         else:
             features_meta = self.meta.tables[self.SQLITE_FIELDS_TBL]
             objects_meta = self.meta.tables[self.SQLITE_OBJ_TBL]
-            cached_cols = {"obh." + a_col.name for a_col in objects_meta.columns} \
-                .union({"obf." + a_col.name for a_col in features_meta.columns})
+            cached_cols = {"obh." + a_col.name for a_col in objects_meta.columns}.union(
+                {"obf." + a_col.name for a_col in features_meta.columns}
+            )
             oc_refs = self.pg_order.referenced_columns()
             in_order_not_in_cache = set(oc_refs).difference(cached_cols)
             if len(in_order_not_in_cache) > 0:
                 # Order clause is simple and 100% compatible b/w DB brands.
-                ret = False, "Some column(s) in ORDER not in cache: %s" % in_order_not_in_cache
+                ret = (
+                    False,
+                    "Some column(s) in ORDER not in cache: %s" % in_order_not_in_cache,
+                )
             else:
                 # Where clause is a bit more tricky
                 ret = self.try_sqlite_ize(self.pg_where, cached_cols, self.pg_params)
         self.can = ret
         return ret
 
-    def try_sqlite_ize(self, where_clause: WhereClause, cached_cols: Set[str], params: Dict):
+    def try_sqlite_ize(
+        self, where_clause: WhereClause, cached_cols: Set[str], params: Dict
+    ):
         """
-            See if where_clause can become an equivalent SQLite one.
-            We need the same data & semantic equivalence
+        See if where_clause can become an equivalent SQLite one.
+        We need the same data & semantic equivalence
         """
         for an_and, its_refs in where_clause.conds_and_refs():
             if its_refs.issubset(cached_cols):
                 if "= ANY" in an_and:
-                    an_and = an_and.replace("= ANY", "IN (SELECT value FROM json_each") + ")"
+                    an_and = (
+                        an_and.replace("= ANY", "IN (SELECT value FROM json_each") + ")"
+                    )
                 elif "ILIKE" in an_and:
                     an_and = an_and.replace("ILIKE", "LIKE")
                 self.cache_where *= an_and
             else:
-                ret = False, "Condition in WHERE not in cache: %s (%s)" % (an_and, its_refs)
+                ret = False, "Condition in WHERE not in cache: %s (%s)" % (
+                    an_and,
+                    its_refs,
+                )
                 break
         else:
             ret = True, "With filter"
@@ -141,8 +161,8 @@ class ObjectCache(object):  # pragma: no cover
     @staticmethod
     def to_sqlite_params(pg_params):
         """
-            Make SQLite params from PG ones. Tightly linked with above try_sqlite_ize and
-            the generated SQL in ObjectSet.
+        Make SQLite params from PG ones. Tightly linked with above try_sqlite_ize and
+        the generated SQL in ObjectSet.
         """
         ret = {}
         for a_param, a_val in pg_params.items():
@@ -168,14 +188,15 @@ class ObjectCache(object):  # pragma: no cover
         assert self.pg_order is not None
         refs_sql = self.cache_where.get_sql() + self.pg_order.get_sql()
         if "obh." in refs_sql and "obf." in refs_sql:
-            return ("SELECT objid FROM %s obh JOIN %s obf ON obf.objfid = obh.objid" %
-                    (self.SQLITE_OBJ_TBL, self.SQLITE_FIELDS_TBL))
+            return "SELECT objid FROM %s obh JOIN %s obf ON obf.objfid = obh.objid" % (
+                self.SQLITE_OBJ_TBL,
+                self.SQLITE_FIELDS_TBL,
+            )
         elif "obf." in refs_sql:
             return "SELECT objfid FROM %s obf " % self.SQLITE_FIELDS_TBL
         return "SELECT objid FROM %s obh" % self.SQLITE_OBJ_TBL
 
-    def pump_cache(self) -> \
-            Tuple[Optional[List[int]], Optional[int]]:
+    def pump_cache(self) -> Tuple[Optional[List[int]], Optional[int]]:
         ok, why = self._can_accelerate()
         if not ok:
             logger.info("Not using cache because %s", why)
@@ -189,7 +210,11 @@ class ObjectCache(object):  # pragma: no cover
         # noinspection SqlResolve
         where_sql = self.cache_where.get_sql()
         read_sql = self._from() + " %s %s LIMIT %d OFFSET %d" % (
-            where_sql, self.pg_order.get_sql(), self.pg_window_size, self.pg_window_start)
+            where_sql,
+            self.pg_order.get_sql(),
+            self.pg_window_size,
+            self.pg_window_start,
+        )
         try:
             with CodeTimer("SQLite read using '%s':" % read_sql, logger):
                 assert self.conn
@@ -213,7 +238,7 @@ class ObjectCache(object):  # pragma: no cover
             with CodeTimer("SQLite count using '%s':" % read_sql, logger):
                 assert self.conn
                 res: Cursor = self.conn.execute(read_sql, self.where_params)
-                cnt, = res.fetchone()
+                (cnt,) = res.fetchone()
                 res.close()
             return cnt
         except (OperationalError, ProgrammingError) as e:
@@ -226,7 +251,7 @@ class ObjectCache(object):  # pragma: no cover
 # noinspection SqlDialectInspection
 class ObjectCacheWriter(object):  # pragma: no cover
     """
-        The cache, in write mode
+    The cache, in write mode
     """
 
     def __init__(self, cache: ObjectCache):
@@ -235,14 +260,21 @@ class ObjectCacheWriter(object):  # pragma: no cover
         sort_feature_col = ""
         if len(cache.sort_fields) > 0:
             sort_feature_col = "," + ", ".join(cache.sort_fields)
-        self.feature_sql = " SELECT objid AS objfid %s " % sort_feature_col + \
-                           " FROM objects WHERE projid = %d" % self.projid
-        self.object_sql = " SELECT objid, classif_id, classif_qual " \
-                          " FROM objects WHERE projid = %d" % self.projid
+        self.feature_sql = (
+            " SELECT objid AS objfid %s " % sort_feature_col
+            + " FROM objects WHERE projid = %d" % self.projid
+        )
+        self.object_sql = (
+            " SELECT objid, classif_id, classif_qual "
+            " FROM objects WHERE projid = %d" % self.projid
+        )
 
     def bg_fetch_fill(self, pg_conn: Connection) -> None:
-        thrd = Thread(name="cache fetcher for %d" % self.projid,
-                      target=self._fetch_and_write, args=(pg_conn,))
+        thrd = Thread(
+            name="cache fetcher for %d" % self.projid,
+            target=self._fetch_and_write,
+            args=(pg_conn,),
+        )
         thrd.start()
         thrd.join()
 
@@ -259,8 +291,12 @@ class ObjectCacheWriter(object):  # pragma: no cover
             # Get a lock on the whole DB
             self.conn.execute("create table %s (foo)" % ObjectCache.LOCKER_SQLITE_TBL)
             locker_present = True
-            nb_obj_rows = self.query_pg_and_cache(ObjectCache.SQLITE_OBJ_TBL, pg_sess, self.object_sql)
-            nb_feat_rows = self.query_pg_and_cache(ObjectCache.SQLITE_FIELDS_TBL, pg_sess, self.feature_sql)
+            nb_obj_rows = self.query_pg_and_cache(
+                ObjectCache.SQLITE_OBJ_TBL, pg_sess, self.object_sql
+            )
+            nb_feat_rows = self.query_pg_and_cache(
+                ObjectCache.SQLITE_FIELDS_TBL, pg_sess, self.feature_sql
+            )
         except OperationalError as e:
             if "table %s already exists" % ObjectCache.LOCKER_SQLITE_TBL in str(e):
                 logger.info("%d locker table exists" % self.projid)
@@ -275,9 +311,16 @@ class ObjectCacheWriter(object):  # pragma: no cover
                 self.conn.execute("drop table %s" % ObjectCache.LOCKER_SQLITE_TBL)
             pg_sess.close()
             self.conn.close()
-        logger.info("BG cache thread on %d done. %d and %d rows", self.projid, nb_feat_rows, nb_obj_rows)
+        logger.info(
+            "BG cache thread on %d done. %d and %d rows",
+            self.projid,
+            nb_feat_rows,
+            nb_obj_rows,
+        )
 
-    def query_pg_and_cache(self, table_name: str, pg_sess: Session, cache_sql: str) -> int:
+    def query_pg_and_cache(
+        self, table_name: str, pg_sess: Session, cache_sql: str
+    ) -> int:
         logger.info("For cache fetch: %s", cache_sql)
         res: Result = pg_sess.execute(text(cache_sql))
         tbl_cols = self.create_sqlite_table(table_name, res)
@@ -285,8 +328,11 @@ class ObjectCacheWriter(object):  # pragma: no cover
         return nb_ins
 
     def pg_to_sqlite(self, table_name: str, table_cols: List[str], res: Result) -> int:
-        ins_sql = "INSERT INTO %s (%s) VALUES (%s)" \
-                  % (table_name, ",".join([a_col for a_col in table_cols]), ",".join("?" * len(table_cols)))
+        ins_sql = "INSERT INTO %s (%s) VALUES (%s)" % (
+            table_name,
+            ",".join([a_col for a_col in table_cols]),
+            ",".join("?" * len(table_cols)),
+        )
         nb_ins = 0
         res_arr = []
         for rec in res:
@@ -306,12 +352,13 @@ class ObjectCacheWriter(object):  # pragma: no cover
         return nb_ins
 
     # https://www.sqlite.org/datatype3.html
-    PG_TO_SQLITE = {20: 'INTEGER',  # PG bigint
-                    23: 'INTEGER',  # PG integer
-                    701: 'REAL',  # PG double
-                    1042: 'TEXT',  # PG char
-                    1043: 'TEXT'  # PG varchar
-                    }
+    PG_TO_SQLITE = {
+        20: "INTEGER",  # PG bigint
+        23: "INTEGER",  # PG integer
+        701: "REAL",  # PG double
+        1042: "TEXT",  # PG char
+        1043: "TEXT",  # PG varchar
+    }
 
     def create_sqlite_table(self, table_name: str, res: Result) -> List[str]:
         # Create the table from resultset structure & content
@@ -323,37 +370,46 @@ class ObjectCacheWriter(object):  # pragma: no cover
             sqlite_type = self.PG_TO_SQLITE[pg_type]
             col_name = a_desc.name
             # First column is PK per convention and usage
-            sqlite_col = "%s %s %s" % (col_name, sqlite_type, "PRIMARY KEY" if not ret else "")
+            sqlite_col = "%s %s %s" % (
+                col_name,
+                sqlite_type,
+                "PRIMARY KEY" if not ret else "",
+            )
             ret.append(col_name)
             sqlite_cols.append(sqlite_col)
         create_table = "CREATE TABLE %s (" % table_name + ",".join(sqlite_cols) + ")"
         self.conn.execute(create_table)
         for a_col in ret[1:]:
             # Index all columns but PK of course
-            self.conn.execute("CREATE INDEX %s_%s ON %s (%s)" %
-                              (table_name, a_col, table_name, a_col))
+            self.conn.execute(
+                "CREATE INDEX %s_%s ON %s (%s)" % (table_name, a_col, table_name, a_col)
+            )
         return ret
 
 
 # noinspection SqlDialectInspection,SqlResolve
 class ObjectCacheUpdater(object):  # pragma: no cover
     """
-        The cache, in update mode.
+    The cache, in update mode.
     """
 
     def __init__(self, projid: ProjectIDT):
         self.projid = projid
 
     def update_objects(self, object_ids: List[int], params: Dict) -> None:
-        upd_sql = "UPDATE object SET classif_id = :classif_id, classif_qual = :classif_qual" \
-                  " WHERE objid IN (SELECT value FROM json_each(:obj_ids))"
+        upd_sql = (
+            "UPDATE object SET classif_id = :classif_id, classif_qual = :classif_qual"
+            " WHERE objid IN (SELECT value FROM json_each(:obj_ids))"
+        )
         params["obj_ids"] = str(object_ids)
         try:
             self._safe_update(upd_sql, params)
         except Exception as e:
             # TODO: Several kinds of error here. File not exists is OK, while a problem
             # during write means that the whole DB is out of sync and thus should be wiped
-            logger.error("Cache updater excepts: %s while executing '%s'", str(e), upd_sql)
+            logger.error(
+                "Cache updater excepts: %s while executing '%s'", str(e), upd_sql
+            )
 
     def _safe_update(self, upd_sql: str, params: Dict):
         file_name = ObjectCache.file_name(self.projid)

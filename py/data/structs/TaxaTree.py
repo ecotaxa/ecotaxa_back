@@ -11,12 +11,16 @@ from BO.Classification import ClassifIDT
 
 class TaxaTree(object):
     """
-        A tree of taxa.
+    A tree of taxa.
     """
 
-    def __init__(self, taxo_id: ClassifIDT, name: str,
-                 all_nodes: Optional[Dict[ClassifIDT, 'TaxaTree']] = None,
-                 parent: Optional['TaxaTree'] = None):
+    def __init__(
+        self,
+        taxo_id: ClassifIDT,
+        name: str,
+        all_nodes: Optional[Dict[ClassifIDT, "TaxaTree"]] = None,
+        parent: Optional["TaxaTree"] = None,
+    ):
         # Node identity
         self.id = taxo_id
         self.name = name
@@ -35,7 +39,7 @@ class TaxaTree(object):
 
     def add_path(self, path: List[Tuple[ClassifIDT, str]]) -> None:
         """
-            Add a path into the tree. Paths are root-last.
+        Add a path into the tree. Paths are root-last.
         """
         if len(path) == 0:
             return
@@ -53,7 +57,9 @@ class TaxaTree(object):
         return ret
 
     def print(self, indent=0, with_children=True) -> None:
-        print(("|  " * indent) + self.name + "(%d): %d objs" % (self.id, self.nb_objects))
+        print(
+            ("|  " * indent) + self.name + "(%d): %d objs" % (self.id, self.nb_objects)
+        )
         if not with_children:
             return
         for a_child in self.children.values():
@@ -62,7 +68,7 @@ class TaxaTree(object):
     def __str__(self) -> str:
         return self.name + ">"
 
-    def find_node(self, taxo_id: ClassifIDT) -> 'TaxaTree':
+    def find_node(self, taxo_id: ClassifIDT) -> "TaxaTree":
         return self.all_nodes[taxo_id]
 
     def add_to_node(self, nb_objects: int):
@@ -72,7 +78,7 @@ class TaxaTree(object):
 
     def newick(self):
         """
-            https://en.wikipedia.org/wiki/Newick_format
+        https://en.wikipedia.org/wiki/Newick_format
         """
         ret = "(" + self.name
         ret += ",".join([a_child.newick() for a_child in self.children.values()])
@@ -81,7 +87,7 @@ class TaxaTree(object):
 
     def parents_ite(self) -> Generator["TaxaTree", None, None]:
         """
-            An iterator for climbing the tree.
+        An iterator for climbing the tree.
         """
         parent = self.parent
         while parent is not None:
@@ -97,7 +103,7 @@ class TaxaTree(object):
 
     def closure(self) -> List[Tuple[int, int]]:
         """
-            List of edges with transitive closure.
+        List of edges with transitive closure.
         """
         ret = []
         if self.parent is None:
@@ -114,9 +120,11 @@ class TaxaTree(object):
 
 
 def do_test_closure():
-    t = TaxaTree(0, 'root')
-    pathes = [[(1, 'A'), (2, 'B'), (3, 'C'), (4, 'D')],
-              [(1, 'A'), (2, 'B'), (3, 'C'), (5, 'E')]]
+    t = TaxaTree(0, "root")
+    pathes = [
+        [(1, "A"), (2, "B"), (3, "C"), (4, "D")],
+        [(1, "A"), (2, "B"), (3, "C"), (5, "E")],
+    ]
     for a_pth in pathes:
         t.add_path(list(reversed(a_pth)))
     t.find_node(1).nb_objects = 6
@@ -128,5 +136,5 @@ def do_test_closure():
     print(sorted(closure))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     do_test_closure()

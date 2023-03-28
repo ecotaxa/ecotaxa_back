@@ -6,7 +6,17 @@ import typing
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Dict, Any, Iterable, Optional, Union, OrderedDict as OrderedDictT, Set, Tuple
+from typing import (
+    List,
+    Dict,
+    Any,
+    Iterable,
+    Optional,
+    Union,
+    OrderedDict as OrderedDictT,
+    Set,
+    Tuple,
+)
 
 from BO.Classification import ClassifIDListT
 from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping, TableMapping
@@ -14,11 +24,23 @@ from BO.Prediction import DeepFeatures
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.ProjectVars import ProjectVar
 from BO.SpaceTime import USED_FIELDS_FOR_SUNPOS, compute_sun_position
-from BO.User import MinimalUserBO, UserActivity, UserIDT, MinimalUserBOListT, UserActivityListT
+from BO.User import (
+    MinimalUserBO,
+    UserActivity,
+    UserIDT,
+    MinimalUserBOListT,
+    UserActivityListT,
+)
 from DB import ProjectVariables
 from DB.Acquisition import Acquisition
-from DB.Object import VALIDATED_CLASSIF_QUAL, PREDICTED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, ObjectsClassifHisto, \
-    ObjectHeader, ObjectFields
+from DB.Object import (
+    VALIDATED_CLASSIF_QUAL,
+    PREDICTED_CLASSIF_QUAL,
+    DUBIOUS_CLASSIF_QUAL,
+    ObjectsClassifHisto,
+    ObjectHeader,
+    ObjectFields,
+)
 from DB.Process import Process
 from DB.Project import ProjectIDT, ProjectIDListT, Project
 from DB.ProjectPrivilege import ProjectPrivilege
@@ -29,7 +51,15 @@ from DB.helpers import Session, Result
 from DB.helpers.Bean import Bean
 from DB.helpers.Core import select
 from DB.helpers.Direct import text
-from DB.helpers.ORM import Delete, Query, any_, and_, subqueryload, minimal_table_of, func
+from DB.helpers.ORM import (
+    Delete,
+    Query,
+    any_,
+    and_,
+    subqueryload,
+    minimal_table_of,
+    func,
+)
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -39,10 +69,11 @@ ChangeTypeT = Dict[int, Dict[str, int]]
 
 
 @dataclass()
-class ProjectTaxoStats():
+class ProjectTaxoStats:
     """
-        Taxonomy statistics for a project.
+    Taxonomy statistics for a project.
     """
+
     projid: ProjectIDT
     used_taxa: ClassifIDListT
     nb_unclassified: int
@@ -52,10 +83,11 @@ class ProjectTaxoStats():
 
 
 @dataclass()
-class ProjectUserStats():
+class ProjectUserStats:
     """
-        User statistics for a project.
+    User statistics for a project.
     """
+
     projid: ProjectIDT
     annotators: MinimalUserBOListT
     activities: UserActivityListT
@@ -64,21 +96,35 @@ class ProjectUserStats():
 # noinspection SqlDialectInspection
 class ProjectBO(object):
     """
-        A Project business object. So far (but less and less...) mainly a container
-        for static API_operations involving it.
+    A Project business object. So far (but less and less...) mainly a container
+    for static API_operations involving it.
     """
-    __slots__ = ["_project", "instrument", "instrument_url", "highest_right",
-                 "obj_free_cols", "sample_free_cols",
-                 "acquisition_free_cols", "process_free_cols",
-                 "init_classif_list", "bodc_variables",
-                 "contact", "viewers", "annotators", "managers"]
+
+    __slots__ = [
+        "_project",
+        "instrument",
+        "instrument_url",
+        "highest_right",
+        "obj_free_cols",
+        "sample_free_cols",
+        "acquisition_free_cols",
+        "process_free_cols",
+        "init_classif_list",
+        "bodc_variables",
+        "contact",
+        "viewers",
+        "annotators",
+        "managers",
+    ]
 
     def __init__(self, project: Project):
         self._project = project
         # Added/copied values
         self.instrument = project.instrument_id
         self.instrument_url = None
-        self.highest_right = ""  # This field depends on the user asking for the information
+        self.highest_right = (
+            ""  # This field depends on the user asking for the information
+        )
         self.obj_free_cols: Dict[str, str] = {}
         self.sample_free_cols: Dict[str, str] = {}
         self.acquisition_free_cols: Dict[str, str] = {}
@@ -94,7 +140,7 @@ class ProjectBO(object):
 
     def get_preset(self) -> ClassifIDListT:
         """
-            Return the list of preset classification IDs.
+        Return the list of preset classification IDs.
         """
         if not self._project:
             return []
@@ -105,7 +151,7 @@ class ProjectBO(object):
 
     def enrich(self) -> "ProjectBO":
         """
-            Add DB fields and relations as (hopefully more) meaningful attributes
+        Add DB fields and relations as (hopefully more) meaningful attributes
         """
         # Decode mappings to avoid exposing internal field
         mappings = ProjectMapping().load_from_project(self._project)
@@ -118,12 +164,16 @@ class ProjectBO(object):
         db_list = db_list if db_list else ""
         self.init_classif_list = [int(x) for x in db_list.split(",") if x.isdigit()]
         # Dispatch members by right
-        by_right_fct = {ProjectPrivilegeBO.MANAGE: self.managers.append,
-                        ProjectPrivilegeBO.ANNOTATE: self.annotators.append,
-                        ProjectPrivilegeBO.VIEW: self.viewers.append}
+        by_right_fct = {
+            ProjectPrivilegeBO.MANAGE: self.managers.append,
+            ProjectPrivilegeBO.ANNOTATE: self.annotators.append,
+            ProjectPrivilegeBO.VIEW: self.viewers.append,
+        }
         a_priv: ProjectPrivilege
         # noinspection PyTypeChecker
-        for a_priv in self._project.privs_for_members:  # Use ORM to navigate in relationship
+        for (
+            a_priv
+        ) in self._project.privs_for_members:  # Use ORM to navigate in relationship
             priv_user = a_priv.user
             if priv_user is None:  # TODO: There is a line with NULL somewhere in DB
                 continue
@@ -131,7 +181,7 @@ class ProjectBO(object):
                 continue
             assert a_priv.privilege is not None
             by_right_fct[a_priv.privilege](priv_user)
-            if 'C' == a_priv.extra:
+            if "C" == a_priv.extra:
                 self.contact = priv_user
         self.instrument_url = self._project.instrument.bodc_url
         # Variables
@@ -141,19 +191,31 @@ class ProjectBO(object):
 
     def public_enrich(self) -> "ProjectBO":
         """
-            Enrichment with fields we can expose to public unauthenticated calls.
+        Enrichment with fields we can expose to public unauthenticated calls.
         """
         self.instrument_url = self._project.instrument.bodc_url
         return self
 
-    def update(self, session: Session, instrument: Optional[str], title: str, visible: bool, status: str,
-               description: str,
-               init_classif_list: List[int],
-               classiffieldlist: str, popoverfieldlist: str,
-               cnn_network_id: str, comments: str,
-               contact: Any,
-               managers: List[Any], annotators: List[Any], viewers: List[Any],
-               license_: str, bodc_vars: Dict):
+    def update(
+        self,
+        session: Session,
+        instrument: Optional[str],
+        title: str,
+        visible: bool,
+        status: str,
+        description: str,
+        init_classif_list: List[int],
+        classiffieldlist: str,
+        popoverfieldlist: str,
+        cnn_network_id: str,
+        comments: str,
+        contact: Any,
+        managers: List[Any],
+        annotators: List[Any],
+        viewers: List[Any],
+        license_: str,
+        bodc_vars: Dict,
+    ):
         assert contact is not None, "A valid Contact is needed."
         proj_id = self._project.projid
         assert instrument is not None, "A valid Instrument is needed."
@@ -162,7 +224,9 @@ class ProjectBO(object):
         for a_var, its_def in bodc_vars.items():
             if its_def is None or its_def.strip() == "":
                 continue
-            assert a_var in KNOWN_PROJECT_VARS, "Invalid project variable key: {}".format(a_var)
+            assert (
+                a_var in KNOWN_PROJECT_VARS
+            ), "Invalid project variable key: {}".format(a_var)
             try:
                 var_def = ProjectVar.from_project(a_var, its_def)
             except TypeError as e:
@@ -184,17 +248,22 @@ class ProjectBO(object):
         self._project.comments = comments
         self._project.license = license_
         # Inverse for extracted values
-        self._project.initclassiflist = ",".join([str(cl_id) for cl_id in init_classif_list])
+        self._project.initclassiflist = ",".join(
+            [str(cl_id) for cl_id in init_classif_list]
+        )
         # Inverse for users by privilege
         # Dispatch members by right
         # TODO: Nothing prevents or cares about redundant rights, such as adding same
         #     user as both Viewer and Annotator.
-        by_right = {ProjectPrivilegeBO.MANAGE: managers,
-                    ProjectPrivilegeBO.ANNOTATE: annotators,
-                    ProjectPrivilegeBO.VIEW: viewers}
+        by_right = {
+            ProjectPrivilegeBO.MANAGE: managers,
+            ProjectPrivilegeBO.ANNOTATE: annotators,
+            ProjectPrivilegeBO.VIEW: viewers,
+        }
         # Remove all to avoid tricky diffs
-        session.query(ProjectPrivilege). \
-            filter(ProjectPrivilege.projid == proj_id).delete()
+        session.query(ProjectPrivilege).filter(
+            ProjectPrivilege.projid == proj_id
+        ).delete()
         # Add all
         contact_used = False
         for a_right, a_user_list in by_right.items():
@@ -202,14 +271,17 @@ class ProjectBO(object):
                 # Set flag for contact person
                 extra = None
                 if a_user.id == contact.id and a_right == ProjectPrivilegeBO.MANAGE:
-                    extra = 'C'
+                    extra = "C"
                     contact_used = True
-                session.add(ProjectPrivilege(projid=proj_id,
-                                             member=a_user.id,
-                                             privilege=a_right,
-                                             extra=extra))
+                session.add(
+                    ProjectPrivilege(
+                        projid=proj_id, member=a_user.id, privilege=a_right, extra=extra
+                    )
+                )
         # Sanity check
-        assert contact_used, "Could not set Contact, the designated user is not in Managers list."
+        assert (
+            contact_used
+        ), "Could not set Contact, the designated user is not in Managers list."
         # Variables update, in full
         bodc_vars_model = self._project.variables
         if bodc_vars_model is None:
@@ -220,48 +292,71 @@ class ProjectBO(object):
         session.commit()
 
     def __getattr__(self, item):
-        """ Fallback for 'not found' field after the C getattr() call.
-            If we did not enrich a Project field somehow then return it """
+        """Fallback for 'not found' field after the C getattr() call.
+        If we did not enrich a Project field somehow then return it"""
         return getattr(self._project, item)
 
     def get_all_num_columns_values(self, session: Session):
         """
-            Get all numerical free fields values for all objects in a project.
+        Get all numerical free fields values for all objects in a project.
         """
         from DB.helpers.ORM import MetaData
+
         metadata = MetaData(bind=session.get_bind())
         # TODO: Cache in a member
         mappings = ProjectMapping().load_from_project(self._project)
-        num_fields_cols = set([col for col in mappings.object_mappings.tsv_cols_to_real.values()
-                               if col[0] == 'n'])
-        obj_fields_tbl = minimal_table_of(metadata, ObjectFields, num_fields_cols, exact_floats=True)
+        num_fields_cols = set(
+            [
+                col
+                for col in mappings.object_mappings.tsv_cols_to_real.values()
+                if col[0] == "n"
+            ]
+        )
+        obj_fields_tbl = minimal_table_of(
+            metadata, ObjectFields, num_fields_cols, exact_floats=True
+        )
         qry = session.query(Project)
-        qry = qry.join(Project.all_samples).join(Sample.all_acquisitions).join(Acquisition.all_objects)
+        qry = (
+            qry.join(Project.all_samples)
+            .join(Sample.all_acquisitions)
+            .join(Acquisition.all_objects)
+        )
         qry = qry.join(obj_fields_tbl, ObjectHeader.objid == obj_fields_tbl.c.objfid)
         qry = qry.filter(Project.projid == self._project.projid)
         qry = qry.order_by(Acquisition.acquisid)
-        qry = qry.with_entities(Acquisition.acquisid, Acquisition.orig_id, obj_fields_tbl)
+        qry = qry.with_entities(
+            Acquisition.acquisid, Acquisition.orig_id, obj_fields_tbl
+        )
         return qry.all()
 
     @staticmethod
     def update_taxo_stats(session: Session, projid: int):
-        sql = text("""
+        sql = text(
+            """
         DELETE FROM projects_taxo_stat pts
          WHERE pts.projid = :prjid;
         INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
         SELECT sam.projid, COALESCE(obh.classif_id, -1) id, COUNT(*) nbr, 
-               COUNT(CASE WHEN obh.classif_qual = '""" + VALIDATED_CLASSIF_QUAL + """' THEN 1 END) nbr_v,
-               COUNT(CASE WHEN obh.classif_qual = '""" + DUBIOUS_CLASSIF_QUAL + """' THEN 1 END) nbr_d, 
-               COUNT(CASE WHEN obh.classif_qual = '""" + PREDICTED_CLASSIF_QUAL + """' THEN 1 END) nbr_p
+               COUNT(CASE WHEN obh.classif_qual = '"""
+            + VALIDATED_CLASSIF_QUAL
+            + """' THEN 1 END) nbr_v,
+               COUNT(CASE WHEN obh.classif_qual = '"""
+            + DUBIOUS_CLASSIF_QUAL
+            + """' THEN 1 END) nbr_d, 
+               COUNT(CASE WHEN obh.classif_qual = '"""
+            + PREDICTED_CLASSIF_QUAL
+            + """' THEN 1 END) nbr_p
           FROM obj_head obh
           JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
           JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prjid 
-        GROUP BY sam.projid, obh.classif_id;""")
-        session.execute(sql, {'prjid': projid})
+        GROUP BY sam.projid, obh.classif_id;"""
+        )
+        session.execute(sql, {"prjid": projid})
 
     @staticmethod
     def update_stats(session: Session, projid: int):
-        sql = text("""
+        sql = text(
+            """
         UPDATE projects
            SET objcount=tsp.nbr_sum, 
                pctclassified=100.0*nbrclassified/tsp.nbr_sum, 
@@ -273,22 +368,23 @@ class ProjectBO(object):
                WHERE projid = :prjid
               GROUP BY projid) tsp ON prj.projid = tsp.projid
         WHERE projects.projid = :prjid 
-          AND prj.projid = :prjid""")
-        session.execute(sql, {'prjid': projid})
+          AND prj.projid = :prjid"""
+        )
+        session.execute(sql, {"prjid": projid})
 
     @staticmethod
-    def read_taxo_stats(session: Session,
-                        prj_ids: ProjectIDListT,
-                        taxa_ids: Union[str, ClassifIDListT]) -> List[ProjectTaxoStats]:
+    def read_taxo_stats(
+        session: Session, prj_ids: ProjectIDListT, taxa_ids: Union[str, ClassifIDListT]
+    ) -> List[ProjectTaxoStats]:
         sql = """
         SELECT pts.projid, ARRAY_AGG(pts.id) as used_taxa, 
                SUM(CASE WHEN pts.id = -1 THEN pts.nbr ELSE 0 END) as nb_unclassified, 
                SUM(pts.nbr_v) as nb_validated, SUM(pts.nbr_d) as nb_dubious, SUM(pts.nbr_p) as nb_predicted
           FROM projects_taxo_stat pts
          WHERE pts.projid = ANY(:ids)"""
-        params: Dict[str, Any] = {'ids': prj_ids}
+        params: Dict[str, Any] = {"ids": prj_ids}
         if len(taxa_ids) > 0:
-            if taxa_ids == 'all':
+            if taxa_ids == "all":
                 pass
             else:
                 sql += " AND pts.id = ANY(:tids)"
@@ -305,22 +401,25 @@ class ProjectBO(object):
         return ret
 
     @staticmethod
-    def validated_categories_ids(session: Session,
-                                 prj_ids: ProjectIDListT) -> ClassifIDListT:
-        """ Return display_name for all categories with at least one validated object,
-        in provided project list. """
+    def validated_categories_ids(
+        session: Session, prj_ids: ProjectIDListT
+    ) -> ClassifIDListT:
+        """Return display_name for all categories with at least one validated object,
+        in provided project list."""
         qry = session.query(ObjectHeader.classif_id).distinct(ObjectHeader.classif_id)
         qry = qry.join(Acquisition).join(Sample).join(Project)
         qry = qry.filter(Project.projid == any_(prj_ids))
         qry = qry.filter(ObjectHeader.classif_qual == VALIDATED_CLASSIF_QUAL)
-        with CodeTimer("Validated category IDs for %s, qry: %s " % (len(prj_ids), str(qry)), logger):
+        with CodeTimer(
+            "Validated category IDs for %s, qry: %s " % (len(prj_ids), str(qry)), logger
+        ):
             return [an_id for an_id, in qry]
 
     @staticmethod
-    def all_samples_orig_id(session: Session,
-                            prj_ids: ProjectIDListT) -> Set[Tuple]:
-        """ Return orig_id (i.e. users' sample_id) for all projects.
-         If several projects, it is assumed that project ids come from a Collection, so no naming conflict. """
+    def all_samples_orig_id(session: Session, prj_ids: ProjectIDListT) -> Set[Tuple]:
+        """Return orig_id (i.e. users' sample_id) for all projects.
+        If several projects, it is assumed that project ids come from a Collection, so no naming conflict.
+        """
         # TODO: Test that there is indeed no collision, count(project_id) should be 1
         qry = session.query(Sample.orig_id).distinct(Sample.orig_id)
         qry = qry.join(Project)
@@ -328,11 +427,10 @@ class ProjectBO(object):
         return set([(an_id,) for an_id, in qry])
 
     @staticmethod
-    def all_subsamples_orig_id(session: Session,
-                               prj_ids: ProjectIDListT) -> Set[Tuple]:
-        """ Return Sample orig_id (i.e. users' sample_id) and Acquisition orig_id (i.e. users' acq_id) pairs
-         for all projects. If several projects, it is assumed that project ids come from a Collection,
-         so no naming conflict. """
+    def all_subsamples_orig_id(session: Session, prj_ids: ProjectIDListT) -> Set[Tuple]:
+        """Return Sample orig_id (i.e. users' sample_id) and Acquisition orig_id (i.e. users' acq_id) pairs
+        for all projects. If several projects, it is assumed that project ids come from a Collection,
+        so no naming conflict."""
         # TODO: Test that there is indeed no collision, count(project_id) should be 1
         qry = session.query(Sample.orig_id, Acquisition.orig_id).distinct()
         qry = qry.join(Project)
@@ -341,17 +439,23 @@ class ProjectBO(object):
         return set([(sam_id, acq_id) for sam_id, acq_id in qry])
 
     @staticmethod
-    def read_user_stats(session: Session, prj_ids: ProjectIDListT) -> List[ProjectUserStats]:
+    def read_user_stats(
+        session: Session, prj_ids: ProjectIDListT
+    ) -> List[ProjectUserStats]:
         """
-            Read the users (annotators) involved in each project.
-            Also compute a summary of their activity. This can only be an estimate since, e.g.
-            imported data contains exact same data as the one obtained from live actions.
+        Read the users (annotators) involved in each project.
+        Also compute a summary of their activity. This can only be an estimate since, e.g.
+        imported data contains exact same data as the one obtained from live actions.
         """
         # Activity count: Count 1 for present classification for a user per object.
         #  Of course, the classification date is the latest for the user.
-        pqry = session.query(Project.projid, User.id, User.name,
-                             func.count(ObjectHeader.objid),
-                             func.max(ObjectHeader.classif_when))
+        pqry = session.query(
+            Project.projid,
+            User.id,
+            User.name,
+            func.count(ObjectHeader.objid),
+            func.max(ObjectHeader.classif_when),
+        )
         pqry = pqry.join(Sample).join(Acquisition).join(ObjectHeader)
         pqry = pqry.join(User, User.id == ObjectHeader.classif_who)
         pqry = pqry.filter(Project.projid == any_(prj_ids))
@@ -362,7 +466,10 @@ class ProjectBO(object):
         user_activities: Dict[UserIDT, UserActivity] = {}
         user_activities_per_project = {}
         stats_per_project = {}
-        with CodeTimer("user present stats for %d projects, qry: %s:" % (len(prj_ids), str(pqry)), logger):
+        with CodeTimer(
+            "user present stats for %d projects, qry: %s:" % (len(prj_ids), str(pqry)),
+            logger,
+        ):
             last_prj: Optional[int] = None
             for projid, user_id, user_name, cnt, last_date in pqry:
                 last_date_str = last_date.replace(microsecond=0).isoformat()
@@ -381,15 +488,27 @@ class ProjectBO(object):
                 user_activities[user_id] = user_activity
         # Activity count update: Add 1 for each entry in history for each user.
         # The dates in history are ignored, except for users which do not appear in first resultset.
-        hqry = session.query(Project.projid, User.id, User.name,
-                             func.count(ObjectsClassifHisto.objid),
-                             func.max(ObjectsClassifHisto.classif_date))
-        hqry = hqry.join(Sample).join(Acquisition).join(ObjectHeader).join(ObjectsClassifHisto)
+        hqry = session.query(
+            Project.projid,
+            User.id,
+            User.name,
+            func.count(ObjectsClassifHisto.objid),
+            func.max(ObjectsClassifHisto.classif_date),
+        )
+        hqry = (
+            hqry.join(Sample)
+            .join(Acquisition)
+            .join(ObjectHeader)
+            .join(ObjectsClassifHisto)
+        )
         hqry = hqry.join(User, User.id == ObjectsClassifHisto.classif_who)
         hqry = hqry.filter(Project.projid == any_(prj_ids))
         hqry = hqry.group_by(Project.projid, User.id)
         hqry = hqry.order_by(Project.projid, User.name)
-        with CodeTimer("user history stats for %d projects, qry: %s:" % (len(prj_ids), str(hqry)), logger):
+        with CodeTimer(
+            "user history stats for %d projects, qry: %s:" % (len(prj_ids), str(hqry)),
+            logger,
+        ):
             last_prj = None
             for projid, user_id, user_name, cnt, last_date in hqry:
                 last_date_str = last_date.replace(microsecond=0).isoformat()
@@ -414,12 +533,15 @@ class ProjectBO(object):
         return ret
 
     @staticmethod
-    def projects_for_user(session: Session, user: User,
-                          for_managing: bool = False,
-                          not_granted: bool = False,
-                          title_filter: str = '',
-                          instrument_filter: str = '',
-                          filter_subset: bool = False) -> List[ProjectIDT]:
+    def projects_for_user(
+        session: Session,
+        user: User,
+        for_managing: bool = False,
+        not_granted: bool = False,
+        title_filter: str = "",
+        instrument_filter: str = "",
+        filter_subset: bool = False,
+    ) -> List[ProjectIDT]:
         """
         :param session:
         :param user: The user for which the list is needed.
@@ -437,10 +559,14 @@ class ProjectBO(object):
 
         # Default query: all projects, eventually with first manager information
         # noinspection SqlResolve
-        sql = """SELECT prj.projid
-               FROM projects prj
-               LEFT JOIN ( """ + ProjectPrivilegeBO.first_manager_by_project() + """ ) fpm 
+        sql = (
+            """SELECT prj.projid
+                   FROM projects prj
+                   LEFT JOIN ( """
+            + ProjectPrivilegeBO.first_manager_by_project()
+            + """ ) fpm 
                       ON fpm.projid = prj.projid """
+        )
         if not_granted:
             if not user.has_role(Role.APP_ADMINISTRATOR):
                 # Add the projects for which no entry is found in ProjectPrivilege
@@ -462,17 +588,20 @@ class ProjectBO(object):
                           ON prj.projid = prp.projid 
                          AND prp.member = :user_id """
                 if for_managing:
-                    sql += """
-                         AND prp.privilege = '%s' """ % ProjectPrivilegeBO.MANAGE
+                    sql += (
+                        """
+                             AND prp.privilege = '%s' """
+                        % ProjectPrivilegeBO.MANAGE
+                    )
             sql += " WHERE 1 = 1 "
 
-        if title_filter != '':
+        if title_filter != "":
             sql += """ 
                     AND ( prj.title ILIKE '%%'|| :title ||'%%'
                           OR TO_CHAR(prj.projid,'999999') LIKE '%%'|| :title ) """
             sql_params["title"] = title_filter
 
-        if instrument_filter != '':
+        if instrument_filter != "":
             sql += """
                      AND prj.instrument_id ILIKE '%%'|| :instrum ||'%%' """
             sql_params["instrum"] = instrument_filter
@@ -488,14 +617,15 @@ class ProjectBO(object):
         return ret
 
     @staticmethod
-    def list_public_projects(session: Session,
-                             title_filter: str = '') -> List[ProjectIDT]:
+    def list_public_projects(
+        session: Session, title_filter: str = ""
+    ) -> List[ProjectIDT]:
         """
         :param session:
         :param title_filter: If set, filter out the projects with title not matching the required string.
         :return: The project IDs
         """
-        pattern = '%' + title_filter + '%'
+        pattern = "%" + title_filter + "%"
         qry = session.query(Project.projid)
         qry = qry.filter(Project.visible)
         qry = qry.filter(Project.title.ilike(pattern))
@@ -503,22 +633,30 @@ class ProjectBO(object):
         return ret
 
     @classmethod
-    def get_bounding_geo(cls, session: Session, project_ids: ProjectIDListT) -> Iterable[float]:
+    def get_bounding_geo(
+        cls, session: Session, project_ids: ProjectIDListT
+    ) -> Iterable[float]:
         # TODO: Why using the view?
-        sql = ("SELECT min(o.latitude), max(o.latitude), min(o.longitude), max(o.longitude)"
-               "  FROM objects o "
-               " WHERE o.projid = ANY(:prj)")
+        sql = (
+            "SELECT min(o.latitude), max(o.latitude), min(o.longitude), max(o.longitude)"
+            "  FROM objects o "
+            " WHERE o.projid = ANY(:prj)"
+        )
         res: Result = session.execute(text(sql), {"prj": project_ids})
         vals = res.first()
         assert vals
         return [a_val for a_val in vals]
 
     @classmethod
-    def get_date_range(cls, session: Session, project_ids: ProjectIDListT) -> Iterable[datetime]:
+    def get_date_range(
+        cls, session: Session, project_ids: ProjectIDListT
+    ) -> Iterable[datetime]:
         # TODO: Why using the view?
-        sql = ("SELECT min(o.objdate), max(o.objdate)"
-               "  FROM objects o "
-               " WHERE o.projid = ANY(:prj)")
+        sql = (
+            "SELECT min(o.objdate), max(o.objdate)"
+            "  FROM objects o "
+            " WHERE o.projid = ANY(:prj)"
+        )
         res: Result = session.execute(text(sql), {"prj": project_ids})
         vals = res.first()
         assert vals
@@ -527,7 +665,7 @@ class ProjectBO(object):
     @staticmethod
     def do_after_load(session: Session, prj_id: int) -> None:
         """
-            After loading of data, update various cross counts.
+        After loading of data, update various cross counts.
         """
         # Ensure the ORM has no shadow copy before going to plain SQL
         session.expunge_all()
@@ -539,21 +677,25 @@ class ProjectBO(object):
     @classmethod
     def delete_object_parents(cls, session: Session, prj_id: int) -> List[int]:
         """
-            Remove object parents, also project children entities, in the project.
+        Remove object parents, also project children entities, in the project.
         """
         # The EcoTaxa samples which are going to disappear.
-        soon_deleted_samples: Query[Any] = Query(Sample.sampleid).filter(Sample.projid == prj_id)
+        soon_deleted_samples: Query[Any] = Query(Sample.sampleid).filter(
+            Sample.projid == prj_id
+        )
 
         ret = []
-        del_acquis_qry: Delete = Acquisition.__table__. \
-            delete().where(Acquisition.acq_sample_id.in_(soon_deleted_samples))
+        del_acquis_qry: Delete = Acquisition.__table__.delete().where(
+            Acquisition.acq_sample_id.in_(soon_deleted_samples)
+        )
         logger.info("Del acquisitions :%s", str(del_acquis_qry))
         gone_acqs = session.execute(del_acquis_qry).rowcount  # type:ignore  # case1
         ret.append(gone_acqs)
         logger.info("%d rows deleted", gone_acqs)
 
-        del_sample_qry: Delete = Sample.__table__. \
-            delete().where(Sample.sampleid.in_(soon_deleted_samples))
+        del_sample_qry: Delete = Sample.__table__.delete().where(
+            Sample.sampleid.in_(soon_deleted_samples)
+        )
         logger.info("Del samples :%s", str(del_sample_qry))
         gone_sams = session.execute(del_sample_qry).rowcount  # type:ignore  # case1
         ret.append(gone_sams)
@@ -566,25 +708,29 @@ class ProjectBO(object):
     @staticmethod
     def delete(session: Session, prj_id: int) -> None:
         """
-            Completely remove the project. It is assumed that contained objects have been removed.
+        Completely remove the project. It is assumed that contained objects have been removed.
         """
         # TODO: Remove from user preferences
         # Remove project
-        session.query(Project). \
-            filter(Project.projid == prj_id).delete()
+        session.query(Project).filter(Project.projid == prj_id).delete()
         # Remove privileges
         # TODO: Should be in a relationship rule already. To check using DB trace when moving to SQLAlchemy v2
-        session.query(ProjectPrivilege). \
-            filter(ProjectPrivilege.projid == prj_id).delete()
+        session.query(ProjectPrivilege).filter(
+            ProjectPrivilege.projid == prj_id
+        ).delete()
 
     @staticmethod
-    def remap(session: Session, prj_id: int, table: MappedTableTypeT, remaps: List[RemapOp]) -> None:
+    def remap(
+        session: Session, prj_id: int, table: MappedTableTypeT, remaps: List[RemapOp]
+    ) -> None:
         """
-            Apply remapping operations onto the given table for given project.
+        Apply remapping operations onto the given table for given project.
         """
         # Do the remapping, including blanking of unused columns
-        values = {a_remap.to: text(a_remap.frm) if a_remap.frm is not None else a_remap.frm
-                  for a_remap in remaps}
+        values = {
+            a_remap.to: text(a_remap.frm) if a_remap.frm is not None else a_remap.frm
+            for a_remap in remaps
+        }
         qry: Query[Any] = session.query(table)
         samples_4_prj: Query[Any]
         acqs_4_samples: Query[Any]
@@ -595,52 +741,67 @@ class ProjectBO(object):
             qry = qry.filter(Acquisition.acq_sample_id.in_(samples_4_prj))
         elif table == Process:
             samples_4_prj = Query(Sample.sampleid).filter(Sample.projid == prj_id)
-            acqs_4_samples = Query(Acquisition.acquisid).filter(Acquisition.acq_sample_id.in_(samples_4_prj))
+            acqs_4_samples = Query(Acquisition.acquisid).filter(
+                Acquisition.acq_sample_id.in_(samples_4_prj)
+            )
             qry = qry.filter(Process.processid.in_(acqs_4_samples))
         elif table == ObjectFields:
             samples_4_prj = Query(Sample.sampleid).filter(Sample.projid == prj_id)
-            acqs_4_samples = Query(Acquisition.acquisid).filter(Acquisition.acq_sample_id.in_(samples_4_prj))
-            objs_for_acqs: Query[Any] = Query(ObjectHeader.objid).filter(ObjectHeader.acquisid.in_(acqs_4_samples))
+            acqs_4_samples = Query(Acquisition.acquisid).filter(
+                Acquisition.acq_sample_id.in_(samples_4_prj)
+            )
+            objs_for_acqs: Query[Any] = Query(ObjectHeader.objid).filter(
+                ObjectHeader.acquisid.in_(acqs_4_samples)
+            )
             qry = qry.filter(ObjectFields.objfid.in_(objs_for_acqs))
         rowcount = qry.update(values=values, synchronize_session=False)
 
         logger.info("Remap query for %s: %s -> %d", table.__tablename__, qry, rowcount)
 
     @classmethod
-    def get_all_object_ids(cls, session: Session,
-                           prj_id: int) -> List[int]:  # TODO: Problem with recursive import -> ObjectIDListT:
+    def get_all_object_ids(
+        cls, session: Session, prj_id: int
+    ) -> List[int]:  # TODO: Problem with recursive import -> ObjectIDListT:
         """
-            Return the full list of objects IDs inside a project.
-            TODO: Maybe better in ObjectBO
+        Return the full list of objects IDs inside a project.
+        TODO: Maybe better in ObjectBO
         """
         qry = session.query(ObjectHeader.objid)
         qry = qry.join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
-        qry = qry.join(Sample, and_(Sample.sampleid == Acquisition.acq_sample_id,
-                                    Sample.projid == prj_id))
+        qry = qry.join(
+            Sample,
+            and_(Sample.sampleid == Acquisition.acq_sample_id, Sample.projid == prj_id),
+        )
         return [an_id for an_id, in qry]
 
     @classmethod
-    def get_all_object_ids_with_first_image(cls, session: Session, prj_id: int) -> Dict[Any, str]:  # ObjectIDT
+    def get_all_object_ids_with_first_image(
+        cls, session: Session, prj_id: int
+    ) -> Dict[Any, str]:  # ObjectIDT
         """
-            Return the full list of objects IDs and first image file name inside a project.
+        Return the full list of objects IDs and first image file name inside a project.
         """
-        sql = text("""
+        sql = text(
+            """
     SELECT obh.objid, img.file_name
       FROM obj_head obh
       JOIN images img ON obh.objid = img.objid 
                      AND img.imgrank = (SELECT MIN(img3.imgrank) FROM images img3 WHERE img3.objid = obh.objid)
       JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
       JOIN samples sam ON sam.sampleid = acq.acq_sample_id
-     WHERE sam.projid = :prj""")
+     WHERE sam.projid = :prj"""
+        )
         res: Result = session.execute(sql, {"prj": prj_id})
         return {objid: file_name for (objid, file_name) in res.fetchall()}
 
     @classmethod
-    def incremental_update_taxo_stats(cls, session: Session, prj_id: int, collated_changes: ChangeTypeT) -> None:
+    def incremental_update_taxo_stats(
+        cls, session: Session, prj_id: int, collated_changes: ChangeTypeT
+    ) -> None:
         """
-            Do not recompute the full stats for a project (which can be long).
-            Instead, apply deltas because in this context we know them.
-            TODO: All SQL to SQLAlchemy form
+        Do not recompute the full stats for a project (which can be long).
+        Instead, apply deltas because in this context we know them.
+        TODO: All SQL to SQLAlchemy form
         """
         needed_ids = list(collated_changes.keys())
         # Lock taxo lines to prevent re-entering, during validation it's often a handful of them.
@@ -662,34 +823,45 @@ class ProjectBO(object):
         if len(ids_not_in_db) > 0:
             # Insert rows for missing IDs
             # TODO: We can't lock what does not exists, so it can fail here.
-            pts_ins = """INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
-                         SELECT :prj, COALESCE(obh.classif_id, -1), COUNT(*) nbr, 
-                                COUNT(CASE WHEN obh.classif_qual = '""" + VALIDATED_CLASSIF_QUAL + """' THEN 1 END) nbr_v,
-                                COUNT(CASE WHEN obh.classif_qual = '""" + DUBIOUS_CLASSIF_QUAL + """' THEN 1 END) nbr_d,
-                                COUNT(CASE WHEN obh.classif_qual = '""" + PREDICTED_CLASSIF_QUAL + """' THEN 1 END) nbr_p
+            pts_ins = (
+                """INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
+                             SELECT :prj, COALESCE(obh.classif_id, -1), COUNT(*) nbr, 
+                                    COUNT(CASE WHEN obh.classif_qual = '"""
+                + VALIDATED_CLASSIF_QUAL
+                + """' THEN 1 END) nbr_v,
+                                COUNT(CASE WHEN obh.classif_qual = '"""
+                + DUBIOUS_CLASSIF_QUAL
+                + """' THEN 1 END) nbr_d,
+                                COUNT(CASE WHEN obh.classif_qual = '"""
+                + PREDICTED_CLASSIF_QUAL
+                + """' THEN 1 END) nbr_p
                            FROM obj_head obh
                            JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
                            JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prj 
                           WHERE COALESCE(obh.classif_id, -1) = ANY(:ids)
                        GROUP BY obh.classif_id"""
-            session.execute(text(pts_ins), {'prj': prj_id, 'ids': list(ids_not_in_db)})
+            )
+            session.execute(text(pts_ins), {"prj": prj_id, "ids": list(ids_not_in_db)})
         # Apply delta
         for classif_id, chg in collated_changes.items():
             if classif_id in ids_not_in_db:
                 # The line was created just above, with OK values
                 continue
-            if ids_in_db[classif_id] + chg['n'] == 0:
+            if ids_in_db[classif_id] + chg["n"] == 0:
                 # The delta means 0 for this taxon in this project, delete the line
-                sqlparam = {'prj': prj_id, 'cid': classif_id}
+                sqlparam = {"prj": prj_id, "cid": classif_id}
                 ts_sql = """DELETE FROM projects_taxo_stat 
                              WHERE projid = :prj AND id = :cid"""
             else:
                 # General case
-                sqlparam = {'prj': prj_id, 'cid': classif_id,
-                            'nul': chg['n'],
-                            'val': chg[VALIDATED_CLASSIF_QUAL],
-                            'dub': chg[DUBIOUS_CLASSIF_QUAL],
-                            'prd': chg[PREDICTED_CLASSIF_QUAL]}
+                sqlparam = {
+                    "prj": prj_id,
+                    "cid": classif_id,
+                    "nul": chg["n"],
+                    "val": chg[VALIDATED_CLASSIF_QUAL],
+                    "dub": chg[DUBIOUS_CLASSIF_QUAL],
+                    "prd": chg[PREDICTED_CLASSIF_QUAL],
+                }
                 ts_sql = """UPDATE projects_taxo_stat 
                                SET nbr=nbr+:nul, nbr_v=nbr_v+:val, nbr_d=nbr_d+:dub, nbr_p=nbr_p+:prd 
                              WHERE projid = :prj AND id = :cid"""
@@ -698,7 +870,7 @@ class ProjectBO(object):
     @classmethod
     def get_sort_fields(cls, project: Project) -> OrderedDictT[str, str]:
         """
-            Return the content of 'Fields available for sorting & Display In the manual classification page'
+        Return the content of 'Fields available for sorting & Display In the manual classification page'
         """
         # e.g. area=area [pixel]
         #      meangreyobjet=mean [0-255]
@@ -716,9 +888,11 @@ class ProjectBO(object):
         return ret
 
     @classmethod
-    def get_sort_db_columns(cls, project: Project, mapping: Optional[TableMapping]) -> List[str]:
+    def get_sort_db_columns(
+        cls, project: Project, mapping: Optional[TableMapping]
+    ) -> List[str]:
         """
-            Get sort list as DB columns, e.g. typically t03, n34
+        Get sort list as DB columns, e.g. typically t03, n34
         """
         sort_list = cls.get_sort_fields(project)
         if mapping is None:
@@ -729,15 +903,19 @@ class ProjectBO(object):
     @classmethod
     def recompute_sunpos(cls, session: Session, prj_id: ProjectIDT) -> int:
         """
-            Recompute sun position for all objects.
-            :return the number of objects with sun position changed
+        Recompute sun position for all objects.
+        :return the number of objects with sun position changed
         """
         used_fields = sorted(USED_FIELDS_FOR_SUNPOS)
-        qry_cols = [ObjectHeader.objid, ObjectHeader.sunpos] + [getattr(ObjectHeader, fld) for fld in used_fields]
+        qry_cols = [ObjectHeader.objid, ObjectHeader.sunpos] + [
+            getattr(ObjectHeader, fld) for fld in used_fields
+        ]
         qry = session.query(*qry_cols)
         qry = qry.join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
-        qry = qry.join(Sample, and_(Sample.sampleid == Acquisition.acq_sample_id,
-                                    Sample.projid == prj_id))
+        qry = qry.join(
+            Sample,
+            and_(Sample.sampleid == Acquisition.acq_sample_id, Sample.projid == prj_id),
+        )
         ret = 0
         cache: Dict[typing.Tuple[Any], str] = {}
         for a_line in qry:
@@ -764,7 +942,7 @@ class ProjectBO(object):
 
 class ProjectBOSet(object):
     """
-        Many projects...
+    Many projects...
     """
 
     def __init__(self, session: Session, prj_ids: ProjectIDListT, public: bool = False):
@@ -780,7 +958,7 @@ class ProjectBOSet(object):
         # De-duplicate
         projs = []
         with CodeTimer("%s BO projects query:" % len(prj_ids), logger):
-            for a_proj, in session.execute(qry):
+            for (a_proj,) in session.execute(qry):
                 projs.append(a_proj)
         # Build BOs and enrich
         with CodeTimer("%s BO projects init:" % len(projs), logger):
@@ -797,7 +975,7 @@ class ProjectBOSet(object):
     @staticmethod
     def get_one(session: Session, prj_ids: ProjectIDT) -> Optional[ProjectBO]:
         """
-            Get a single BO per its id
+        Get a single BO per its id
         """
         mini_set = ProjectBOSet(session, [prj_ids])
         if len(mini_set.projects) > 0:

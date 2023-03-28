@@ -17,24 +17,31 @@ from tests.test_update_prj import PROJECT_UPDATE_URL
 def test_error_var():
     # A typo in the formula
     with pytest.raises(TypeError) as e_info:
-        _myvar = ProjectVar("4.0/3.0*",
-                            Vocabulary.biovolume,
-                            Units.cubic_millimetres_per_cubic_metre)
+        _myvar = ProjectVar(
+            "4.0/3.0*", Vocabulary.biovolume, Units.cubic_millimetres_per_cubic_metre
+        )
 
 
 def test_empty_var():
     # Various "nothing"s
     for a_val in (None, ""):
         with pytest.raises(TypeError) as e_info:
-            _myvar = ProjectVar(a_val,
-                                Vocabulary.biovolume,
-                                Units.cubic_millimetres_per_cubic_metre)
+            _myvar = ProjectVar(
+                a_val, Vocabulary.biovolume, Units.cubic_millimetres_per_cubic_metre
+            )
 
 
 def test_parse_expr():
     expr = "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3+Unexpanded+w3ird"
     vars = ProjectVar.find_vars(expr)
-    assert vars == ['Unexpanded', 'math.pi', 'math.sqrt', 'obj.area', 'ssm.pixel_size', 'w3ird']
+    assert vars == [
+        "Unexpanded",
+        "math.pi",
+        "math.sqrt",
+        "obj.area",
+        "ssm.pixel_size",
+        "w3ird",
+    ]
 
 
 BODC_VARS_KEY = "bodc_variables"
@@ -54,7 +61,9 @@ def test_project_vars(config, database, fastapi, caplog):
     upd_json[BODC_VARS_KEY] = "toto"
     url = PROJECT_UPDATE_URL.format(project_id=prj_id)
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
-    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rsp.reason + str(rsp.content)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rsp.reason + str(
+        rsp.content
+    )
     # Good format update with nothing
     vars = {}
     upd_json[BODC_VARS_KEY] = vars
@@ -63,7 +72,9 @@ def test_project_vars(config, database, fastapi, caplog):
     # Good format update with bad keys
     vars["e"] = 1
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
-    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rsp.reason + str(rsp.text)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rsp.reason + str(
+        rsp.text
+    )
     # Good format update with good key
     del vars["e"]
     vars["subsample_coef"] = "1/sub_part"
@@ -78,7 +89,9 @@ def test_project_vars(config, database, fastapi, caplog):
     # Syntax error in formula
     vars["subsample_coef"] = "1/toto tutu"
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
-    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rsp.reason + str(rsp.text)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rsp.reason + str(
+        rsp.text
+    )
     # TODO: Unknown col in formula
     # vars["subsample_coef"] = "1/sup_part"
     # rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)

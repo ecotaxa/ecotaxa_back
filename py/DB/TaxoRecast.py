@@ -5,8 +5,6 @@
 
 from __future__ import annotations
 
-from typing import List, TYPE_CHECKING
-
 from DB.helpers.ORM import Model
 from .helpers.DDL import Column, ForeignKey
 from .helpers.Postgres import VARCHAR, INTEGER
@@ -16,13 +14,14 @@ PREDICTION_OPERATION = "predict"
 
 class TaxoRecast(Model):
     """
-        Make taxa appear as others (map) or disappear (filter) to an operation, in a given context.
+    Make taxa appear as others (map) or disappear (filter) to an operation, in a given context.
     """
-    __tablename__ = 'taxo_recast'
+
+    __tablename__ = "taxo_recast"
     # The context is: all projects in this specific collection
-    collection_id: int = Column(INTEGER, ForeignKey('collection.id'), primary_key=True)
+    collection_id: int = Column(INTEGER, ForeignKey("collection.id"), primary_key=True)
     # The context is: this specific project
-    project_id: int = Column(INTEGER, ForeignKey('projects.projid'), primary_key=True)
+    project_id: int = Column(INTEGER, ForeignKey("projects.projid"), primary_key=True)
     # During this operation
     operation: str = Column(VARCHAR(32), nullable=False, primary_key=True)
     # Transforms in the form of a dict/JSON object {from:to} with to being null means "filter out"

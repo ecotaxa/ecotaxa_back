@@ -22,8 +22,8 @@ if TYPE_CHECKING:
 
 
 class User(Model):
-    __tablename__ = 'users'
-    id: int = Column(Integer, Sequence('seq_users'), primary_key=True)
+    __tablename__ = "users"
+    id: int = Column(Integer, Sequence("seq_users"), primary_key=True)
     email: str = Column(String(255), unique=True, nullable=False)
     password = Column(String(255))
     name: str = Column(String(255), nullable=False)
@@ -37,7 +37,7 @@ class User(Model):
     usercreationreason = Column(String(1000))
 
     # Mail status: 'V' for verified, 'W' for wrong
-    mail_status = Column(CHAR, server_default=' ')
+    mail_status = Column(CHAR, server_default=" ")
     # Date the mail status was set
     mail_status_date = Column(TIMESTAMP)
 
@@ -51,22 +51,29 @@ class User(Model):
     preferences_for_projects: relationship
 
     @staticmethod
-    def find_users(session: Session, names: List[str], emails: List[str], found_users: dict):
+    def find_users(
+        session: Session, names: List[str], emails: List[str], found_users: dict
+    ):
         """
-            Find the users in DB, by name or email.
-            :param session:
-            :param emails:
-            :param names:
-            :param found_users: A dict in
+        Find the users in DB, by name or email.
+        :param session:
+        :param emails:
+        :param names:
+        :param found_users: A dict in
         """
-        sql = text("SELECT id, LOWER(name), LOWER(email) "
-                   "  FROM users "
-                   " WHERE LOWER(name) = ANY(:nms) or email = ANY(:ems) ")
+        sql = text(
+            "SELECT id, LOWER(name), LOWER(email) "
+            "  FROM users "
+            " WHERE LOWER(name) = ANY(:nms) or email = ANY(:ems) "
+        )
         res: Result = session.execute(sql, {"nms": names, "ems": emails})
         for rec in res:
             for u in found_users:
-                if u == rec[1] or none_to_empty(found_users[u].get('email')).lower() == rec[2]:
-                    found_users[u]['id'] = rec[0]
+                if (
+                    u == rec[1]
+                    or none_to_empty(found_users[u].get("email")).lower() == rec[2]
+                ):
+                    found_users[u]["id"] = rec[0]
 
     def has_role(self, role: str) -> bool:
         # TODO: Cache a bit. All roles are just python objects due to SQLAlchemy magic.
@@ -78,9 +85,10 @@ class User(Model):
 
 class Role(Model):
     """
-        The roles granted to users.
+    The roles granted to users.
     """
-    __tablename__ = 'roles'
+
+    __tablename__ = "roles"
     id = Column(Integer(), primary_key=True)  # ,Sequence('seq_roles')
     name = Column(String(80), unique=True, nullable=False)
     # The relationships are created in Relations.py but the typing here helps the IDE
@@ -98,10 +106,10 @@ class Role(Model):
         return "{0} ({1})".format(self.name, self.id)
 
 
-@event.listens_for(Role.__table__, 'after_create')
+@event.listens_for(Role.__table__, "after_create")
 def insert_initial_role_values(_table, sess, **kwargs):
     """
-        Create default roles without granting them to anyone.
+    Create default roles without granting them to anyone.
     """
     for role_id, a_role in enumerate(Role.ALL_ROLES, 1):
         ins = Insert(Role).values((role_id, a_role))
@@ -110,25 +118,27 @@ def insert_initial_role_values(_table, sess, **kwargs):
 
 class UserRole(Model):
     """
-        Many-to-many relationship b/w User and Roles.
+    Many-to-many relationship b/w User and Roles.
     """
-    __tablename__ = 'users_roles'
+
+    __tablename__ = "users_roles"
     user_id = Column(Integer(), ForeignKey("users.id"), primary_key=True)
     role_id = Column(Integer(), ForeignKey("roles.id"), primary_key=True)
 
 
 class Country(Model):
     """
-        TODO: There is no FK from users
+    TODO: There is no FK from users
     """
-    __tablename__ = 'countrylist'
+
+    __tablename__ = "countrylist"
     countryname = Column(String(50), primary_key=True, nullable=False)
 
 
-@event.listens_for(Country.__table__, 'after_create')
+@event.listens_for(Country.__table__, "after_create")
 def insert_initial_country_values(_table, sess, **kwargs):
     """
-        Create default countries after table creation.
+    Create default countries after table creation.
     """
     for a_country in countries_by_name.keys():
         ins = Insert(Country).values((a_country,))

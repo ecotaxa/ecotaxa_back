@@ -263,18 +263,24 @@ m106_mn04_n6_sml	m106_mn04_n6_sml_45072	1	Count (in assayed sample) of biologica
 m106_mn04_n6_sml	m106_mn04_n6_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
 m106_mn04_n6_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name	https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
 """
-ref_zip = {"event.txt": _event,
-           "eml.xml": _eml,
-           "extendedmeasurementorfact.txt": _emofs,
-           "meta.xml": _meta + _meta_emofs_with_computations,
-           "occurrence.txt": _occurence}
-with_zeroes_zip = {"event.txt": _event,
-                   "eml.xml": _eml,
-                   "extendedmeasurementorfact.txt": _emofs,
-                   "meta.xml": _meta + _meta_emofs_with_computations,
-                   "occurrence.txt": _occurence + _occurence_with_absent}
-no_computations_zip = {"event.txt": _event,
-                       "eml.xml": _eml,
-                       "extendedmeasurementorfact.txt": _emofs_no_comp,
-                       "meta.xml": _meta + _meta_emofs_without_computations,
-                       "occurrence.txt": _occurence}
+ref_zip = {
+    "event.txt": _event,
+    "eml.xml": _eml,
+    "extendedmeasurementorfact.txt": _emofs,
+    "meta.xml": _meta + _meta_emofs_with_computations,
+    "occurrence.txt": _occurence,
+}
+with_zeroes_zip = {
+    "event.txt": _event,
+    "eml.xml": _eml,
+    "extendedmeasurementorfact.txt": _emofs,
+    "meta.xml": _meta + _meta_emofs_with_computations,
+    "occurrence.txt": _occurence + _occurence_with_absent,
+}
+no_computations_zip = {
+    "event.txt": _event,
+    "eml.xml": _eml,
+    "extendedmeasurementorfact.txt": _emofs_no_comp,
+    "meta.xml": _meta + _meta_emofs_without_computations,
+    "occurrence.txt": _occurence,
+}

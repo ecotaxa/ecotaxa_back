@@ -11,7 +11,7 @@ TREE_STATUS_URL = "/taxa/status"
 
 
 def test_taxotree_status(config, database, fastapi, caplog):
-    """ This depends on the DB which has a subset of the production one """
+    """This depends on the DB which has a subset of the production one"""
     caplog.set_level(logging.ERROR)
 
     url = TREE_STATUS_URL
@@ -24,10 +24,10 @@ def test_taxotree_status(config, database, fastapi, caplog):
     rsp = fastapi.get(url, headers=USER_AUTH)
     # Security barrier. No special right but we need a registered user.
     assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json() == {'last_refresh': None}
+    assert rsp.json() == {"last_refresh": None}
 
     # Second authenticated call, as the _only_ line in DB table should exist now
     rsp = fastapi.get(url, headers=USER_AUTH)
     # Security barrier. No special right but we need a registered user.
     assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json() == {'last_refresh': None}
+    assert rsp.json() == {"last_refresh": None}

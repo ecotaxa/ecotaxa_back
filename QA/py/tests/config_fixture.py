@@ -34,10 +34,10 @@ def config() -> EcoTaxaConfig:
     ProjectExport.ROWS_REPORT_EVERY = 5
     ProjectExport.IMAGES_REPORT_EVERY = 7
     # Empty Vault
-    vault = Vault((HERE / 'vault').as_posix())
+    vault = Vault((HERE / "vault").as_posix())
     shutil.rmtree(vault.path.joinpath("0000").as_posix(), ignore_errors=True)
     # env variable to conf
-    os.environ["APP_CONFIG"] = (HERE / 'config.ini').as_posix()
+    os.environ["APP_CONFIG"] = (HERE / "config.ini").as_posix()
     yield conf
     # Teardown
     conf.cleanup()

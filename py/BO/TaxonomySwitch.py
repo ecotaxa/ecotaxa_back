@@ -17,15 +17,17 @@ from data.ToWorms import ToWorms
 
 class TaxonomyMapper(object):
     """
-        Take a set of present classification IDs and find the best possible set
-        of corresponding aphia_ids.
+    Take a set of present classification IDs and find the best possible set
+    of corresponding aphia_ids.
     """
 
     def __init__(self, session: Session, taxon_ids: ClassifIDListT):
         self.session = session
         self.taxa_ids = set(taxon_ids)
 
-    def do_match(self) -> Tuple[Dict[ClassifIDT, WoRMS], Dict[ClassifIDT, Optional[ClassifIDT]]]:
+    def do_match(
+        self,
+    ) -> Tuple[Dict[ClassifIDT, WoRMS], Dict[ClassifIDT, Optional[ClassifIDT]]]:
         """
             Returns: A dict with matched Phylo taxo ids->WoRMS entry. The taxa might be Morpho ones,
                         as the XLSX data source contains such mappings.
@@ -82,7 +84,7 @@ class TaxonomyMapper(object):
         phylo_per_morpho: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
         for a_morpho_id in morpho_ids:
             for a_parent_id in unieuk_per_id[a_morpho_id].id_lineage:
-                if unieuk_per_id[a_parent_id].type == 'P':
+                if unieuk_per_id[a_parent_id].type == "P":
                     phylo_per_morpho[a_morpho_id] = a_parent_id
                     if a_parent_id not in ret:
                         phylo_auto_ids.add(a_parent_id)
@@ -95,10 +97,10 @@ class TaxonomyMapper(object):
         # for an_id in ret.keys():
         #     assert unieuk_per_id[an_id].type == 'P' # Not true
         for a_morpho_id, a_phylo_id in phylo_per_morpho.items():
-            assert unieuk_per_id[a_morpho_id].type == 'M'
+            assert unieuk_per_id[a_morpho_id].type == "M"
             if a_phylo_id is None:
                 continue
-            assert unieuk_per_id[a_phylo_id].type == 'P'
+            assert unieuk_per_id[a_phylo_id].type == "P"
 
         to_worms.check_ancestors()
         to_worms.check_closure()

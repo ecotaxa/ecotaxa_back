@@ -9,20 +9,26 @@ from pathlib import Path
 
 import pytest
 from API_models.crud import *
+
 # noinspection PyPackageRequirements
 from API_models.imports import *
+
 # noinspection PyPackageRequirements
 from API_operations.AsciiDump import AsciiDumper
+
 # noinspection PyPackageRequirements
 from API_operations.CRUD.Jobs import JobCRUDService
+
 # Import services
 # noinspection PyPackageRequirements
 from API_operations.CRUD.Projects import ProjectsService
 from API_operations.Consistency import ProjectConsistencyChecker
+
 # noinspection PyPackageRequirements
 from API_operations.imports.Import import FileImport
 from API_operations.JsonDumper import JsonDumper
 from DB.Job import DBJobStateEnum
+
 # # noinspection PyUnresolvedReferences
 # from tests.config_fixture import config
 # # noinspection PyUnresolvedReferences
@@ -30,8 +36,16 @@ from DB.Job import DBJobStateEnum
 from starlette import status
 
 from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID
-from tests.test_jobs import wait_for_stable, check_job_ok, get_job_errors, check_job_errors, api_wait_for_stable_job, \
-    FILE_IMPORT_URL, api_check_job_errors, api_check_job_questions
+from tests.test_jobs import (
+    wait_for_stable,
+    check_job_ok,
+    get_job_errors,
+    check_job_errors,
+    api_wait_for_stable_job,
+    FILE_IMPORT_URL,
+    api_check_job_errors,
+    api_check_job_questions,
+)
 
 # All files paths are now relative to root shared directory
 TEST_DIR = Path(dirname(realpath(__file__))).resolve()
@@ -63,7 +77,9 @@ AMBIG_DIR = DATA_DIR / "import de categories ambigues"
 def create_project(owner, title, instrument=None):
     with ProjectsService() as sce:
         if instrument:
-            prj_id = sce.create(owner, CreateProjectReq(title=title, instrument=instrument))
+            prj_id = sce.create(
+                owner, CreateProjectReq(title=title, instrument=instrument)
+            )
         else:
             prj_id = sce.create(owner, CreateProjectReq(title=title))
         return prj_id
@@ -88,7 +104,7 @@ def dump_project(asker: int, prj_id: int, fd: Any):
 
 
 def do_import(prj_id: int, source_path: str, user_id: int):
-    """ Import helper for tests """
+    """Import helper for tests"""
     # Do preparation, preparation
     params = ImportReq(source_path=str(source_path))
     with FileImport(prj_id, params) as sce:
@@ -103,13 +119,24 @@ def fill_in_if_missing(job):
     if job.state == DBJobStateEnum.Asking:
         job_id = job.id
         # Missing user or taxa -> should proceed to step 2 for filling missing
-        assert job.progress_msg == "Some users or taxonomic references could not be matched"
+        assert (
+            job.progress_msg
+            == "Some users or taxonomic references could not be matched"
+        )
         # Simulate a missing user and map him to admin
         with JobCRUDService() as sce:
-            sce.reply(ADMIN_USER_ID, job_id, {"users": {"admin4test": 1,
-                                                        "elizandro rodriguez": 1,
-                                                        "taxo finder": 1},
-                                              "taxa": {}})
+            sce.reply(
+                ADMIN_USER_ID,
+                job_id,
+                {
+                    "users": {
+                        "admin4test": 1,
+                        "elizandro rodriguez": 1,
+                        "taxo finder": 1,
+                    },
+                    "taxa": {},
+                },
+            )
         return wait_for_stable(job_id)
     else:
         return job
@@ -133,15 +160,15 @@ def test_import(config, database, caplog, title, path=str(PLAIN_FILE), instrumen
 
 # @pytest.mark.skip()
 def test_import_again_skipping(config, database, caplog):
-    """ Re-import similar files into same project
-        CANNOT RUN BY ITSELF """
+    """Re-import similar files into same project
+    CANNOT RUN BY ITSELF"""
     caplog.set_level(logging.DEBUG)
     srch = search_unique_project(ADMIN_USER_ID, "Test Create Update")
     prj_id = srch.projid  # <- need the project from first test
     # Do preparation
-    params = ImportReq(source_path=str(PLAIN_FILE),
-                       skip_loaded_files=True,
-                       skip_existing_objects=True)
+    params = ImportReq(
+        source_path=str(PLAIN_FILE), skip_loaded_files=True, skip_existing_objects=True
+    )
     with FileImport(prj_id, params) as sce:
         rsp: ImportRsp = sce.run(ADMIN_USER_ID)
     job = wait_for_stable(rsp.job_id)
@@ -157,15 +184,17 @@ def test_import_again_skipping(config, database, caplog):
 
 # @pytest.mark.skip()
 def test_import_again_irrelevant_skipping(config, database, caplog):
-    """ Re-import similar files into same project
-        CANNOT RUN BY ITSELF """
+    """Re-import similar files into same project
+    CANNOT RUN BY ITSELF"""
     caplog.set_level(logging.DEBUG)
     srch = search_unique_project(ADMIN_USER_ID, "Test Create Update")
     prj_id = srch.projid  # <- need the project from first test
     # Do preparation
-    params = ImportReq(source_path=str(EMPTY_TSV_IN_UPD_DIR),
-                       skip_loaded_files=True,
-                       skip_existing_objects=True)
+    params = ImportReq(
+        source_path=str(EMPTY_TSV_IN_UPD_DIR),
+        skip_loaded_files=True,
+        skip_existing_objects=True,
+    )
     with FileImport(prj_id, params) as sce:
         rsp: ImportRsp = sce.run(ADMIN_USER_ID)
     job = wait_for_stable(rsp.job_id)
@@ -180,17 +209,19 @@ def test_import_again_irrelevant_skipping(config, database, caplog):
 
 # @pytest.mark.skip()
 @pytest.mark.parametrize("title", ["Test Create Update"])
-def test_import_a_bit_more_skipping(config, database, caplog, title, path=str(PLUS_DIR)):
-    """ Re-import similar files into same project, with an extra one.
-        The extra one has missing values in the TSV.
-        CANNOT RUN BY ITSELF """
+def test_import_a_bit_more_skipping(
+    config, database, caplog, title, path=str(PLUS_DIR)
+):
+    """Re-import similar files into same project, with an extra one.
+    The extra one has missing values in the TSV.
+    CANNOT RUN BY ITSELF"""
     caplog.set_level(logging.DEBUG)
     srch = search_unique_project(ADMIN_USER_ID, title)
     prj_id = srch.projid  # <- need the project from first test
     # Do preparation
-    params = ImportReq(source_path=path,
-                       skip_loaded_files=True,
-                       skip_existing_objects=True)
+    params = ImportReq(
+        source_path=path, skip_loaded_files=True, skip_existing_objects=True
+    )
     with FileImport(prj_id, params) as sce:
         rsp: ImportRsp = sce.run(ADMIN_USER_ID)
     job = wait_for_stable(rsp.job_id)
@@ -214,8 +245,8 @@ def test_import_a_bit_more_skipping(config, database, caplog, title, path=str(PL
 
 
 def test_import_again_not_skipping_tsv_skipping_imgs(config, database, caplog):
-    """ Re-import into same project, not skipping TSVs
-        CANNOT RUN BY ITSELF """
+    """Re-import into same project, not skipping TSVs
+    CANNOT RUN BY ITSELF"""
     caplog.set_level(logging.DEBUG)
     srch = search_unique_project(ADMIN_USER_ID, "Test Create Update")
     prj_id = srch.projid  # <- need the project from first test
@@ -229,21 +260,21 @@ def test_import_again_not_skipping_tsv_skipping_imgs(config, database, caplog):
 
 
 def import_plain(prj_id):
-    params = ImportReq(source_path=str(PLAIN_DIR),
-                       skip_existing_objects=True)
+    params = ImportReq(source_path=str(PLAIN_DIR), skip_existing_objects=True)
     with FileImport(prj_id, params) as sce:
         rsp: ImportRsp = sce.run(ADMIN_USER_ID)
     job = wait_for_stable(rsp.job_id)
 
     assert job.state == DBJobStateEnum.Asking
-    assert job.question == {"missing_users": ["admin4test", "elizandro rodriguez"],
-                            "missing_taxa": ["other", "ozzeur"]}
+    assert job.question == {
+        "missing_users": ["admin4test", "elizandro rodriguez"],
+        "missing_taxa": ["other", "ozzeur"],
+    }
 
-    reply = {"users": {'admin4test': 1,
-                       'elizandro rodriguez': 1},  # Map to admin
-             "taxa": {'other': 99999,  # 'other<dead'
-                      'ozzeur': 85011  # 'other<living'
-                      }}
+    reply = {
+        "users": {"admin4test": 1, "elizandro rodriguez": 1},  # Map to admin
+        "taxa": {"other": 99999, "ozzeur": 85011},  # 'other<dead'  # 'other<living'
+    }
     with JobCRUDService() as sce:
         sce.reply(ADMIN_USER_ID, rsp.job_id, reply)
     job = wait_for_stable(rsp.job_id)
@@ -252,8 +283,8 @@ def import_plain(prj_id):
 
 # @pytest.mark.skip()
 def test_import_again_not_skipping_nor_imgs(config, database, caplog):
-    """ Re-import into same project, not skipping TSVs or images
-        CANNOT RUN BY ITSELF """
+    """Re-import into same project, not skipping TSVs or images
+    CANNOT RUN BY ITSELF"""
     caplog.set_level(logging.DEBUG)
     srch = search_unique_project(ADMIN_USER_ID, "Test Create Update")
     prj_id = srch.projid  # <- need the project from first test
@@ -262,8 +293,9 @@ def test_import_again_not_skipping_nor_imgs(config, database, caplog):
         rsp: ImportRsp = sce.run(ADMIN_USER_ID)
     job = wait_for_stable(rsp.job_id)
     check_job_errors(job)
-    nb_errs = len([an_err for an_err in get_job_errors(job)
-                   if "Duplicate object" in an_err])
+    nb_errs = len(
+        [an_err for an_err in get_job_errors(job) if "Duplicate object" in an_err]
+    )
     assert nb_errs == 11
 
 
@@ -277,23 +309,23 @@ def test_equal_dump_prj1(config, database, caplog):
 
 # @pytest.mark.skip()
 def test_import_update(config, database, caplog):
-    """ Update TSVs """
+    """Update TSVs"""
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test Import update")
 
     # Plain import first
     import_plain(prj_id)
     with AsciiDumper() as dump_sce:
-        dump_sce.run(projid=prj_id, out='before_upd.txt')
+        dump_sce.run(projid=prj_id, out="before_upd.txt")
 
     # Update using initial import data, should do nothing
-    do_import_update(prj_id, caplog, 'Yes', str(PLAIN_DIR))
+    do_import_update(prj_id, caplog, "Yes", str(PLAIN_DIR))
     print("Import update 0:" + "\n".join(caplog.messages))
     upds = [msg for msg in caplog.messages if msg.startswith("Updating")]
     assert upds == []
 
     # Update without classif, 10 cells
-    do_import_update(prj_id, caplog, 'Yes')
+    do_import_update(prj_id, caplog, "Yes")
     print("Import update 1:" + "\n".join(caplog.messages))
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
     # 9 fields + 7 derived sun positions
@@ -302,15 +334,17 @@ def test_import_update(config, database, caplog):
     assert saves == ["Batch save objects of 0/0/0/0/0"] * 3
 
     # Update classif, 2 cells, one classif ID and one classif quality
-    do_import_update(prj_id, caplog, 'Cla')
+    do_import_update(prj_id, caplog, "Cla")
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
     print("Import update 2:" + "\n".join(caplog.messages))
     assert nb_upds == 2
     # 1 line corresponds to nothing, on purpose
-    nb_notfound = len([msg for msg in caplog.messages if "not found while updating" in msg])
+    nb_notfound = len(
+        [msg for msg in caplog.messages if "not found while updating" in msg]
+    )
     assert nb_notfound == 2
     with AsciiDumper() as dump_sce:
-        dump_sce.run(projid=prj_id, out='after_upd.txt')
+        dump_sce.run(projid=prj_id, out="after_upd.txt")
     # Check that all went fine
     for a_msg in caplog.records:
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
@@ -318,13 +352,13 @@ def test_import_update(config, database, caplog):
     saves = [msg for msg in caplog.messages if "Batch save objects" in msg]
     assert saves == ["Batch save objects of 0/0/0/0/0"] * 3
 
-    do_import_update(prj_id, caplog, 'Yes')
+    do_import_update(prj_id, caplog, "Yes")
     print("Import update 3:" + "\n".join(caplog.messages))
     assert len(caplog.messages) > 0
     upds = [msg for msg in caplog.messages if msg.startswith("Updating")]
     assert upds == []
     with AsciiDumper() as dump_sce:
-        dump_sce.run(projid=prj_id, out='after_upd_3.txt')
+        dump_sce.run(projid=prj_id, out="after_upd_3.txt")
 
 
 # Ensure that re-updating updates nothing. This is tricky due to floats storage on DB.
@@ -332,22 +366,23 @@ def test_import_update(config, database, caplog):
 def do_import_update(prj_id, caplog, classif, source=None):
     if source is None:
         source = str(UPDATE_DIR)
-    params = ImportReq(skip_existing_objects=True,
-                       update_mode=classif,
-                       source_path=source)
+    params = ImportReq(
+        skip_existing_objects=True, update_mode=classif, source_path=source
+    )
     with FileImport(prj_id, params) as sce:
         rsp: ImportRsp = sce.run(ADMIN_USER_ID)
     job = wait_for_stable(rsp.job_id)
 
     assert job.state == DBJobStateEnum.Asking
-    assert job.question == {"missing_users": ["admin4test", "elizandro rodriguez"],
-                            "missing_taxa": ["other", "ozzeur"]}
+    assert job.question == {
+        "missing_users": ["admin4test", "elizandro rodriguez"],
+        "missing_taxa": ["other", "ozzeur"],
+    }
 
-    reply = {"users": {'admin4test': 1,
-                       'elizandro rodriguez': 1},  # Map to admin
-             "taxa": {'other': 99999,  # 'other<dead'
-                      'ozzeur': 85011  # 'other<living'
-                      }}
+    reply = {
+        "users": {"admin4test": 1, "elizandro rodriguez": 1},  # Map to admin
+        "taxa": {"other": 99999, "ozzeur": 85011},  # 'other<dead'  # 'other<living'
+    }
     caplog.clear()
     with JobCRUDService() as sce:
         sce.reply(ADMIN_USER_ID, rsp.job_id, reply)
@@ -388,7 +423,7 @@ def test_equal_dump_prj2(config, database, caplog):
 
 # @pytest.mark.skip()
 def test_import_empty(config, database, caplog):
-    """ Nothing relevant to import """
+    """Nothing relevant to import"""
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 3")
 
@@ -402,7 +437,7 @@ def test_import_empty(config, database, caplog):
 
 # @pytest.mark.skip()
 def test_import_empty_tsv(config, database, caplog):
-    """ a TSV with header but no data """
+    """a TSV with header but no data"""
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 3")
 
@@ -415,7 +450,7 @@ def test_import_empty_tsv(config, database, caplog):
 
 
 def test_import_empty_tsv2(config, database, caplog):
-    """ a TSV with nothing at all """
+    """a TSV with nothing at all"""
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 2.6.3")
 
@@ -429,7 +464,7 @@ def test_import_empty_tsv2(config, database, caplog):
 
 # @pytest.mark.skip()
 def test_import_issues(config, database, caplog):
-    """ The TSV contains loads of problems """
+    """The TSV contains loads of problems"""
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 4")
 
@@ -453,12 +488,13 @@ def test_import_issues(config, database, caplog):
         "Error while reading image 'm106_mn01_n3_sml_corrupted_image.jpg' "
         "from file ecotaxa_m106_mn01_n3_sml.tsv: cannot identify image file '.../m106_mn01_n3_sml_corrupted_image.jpg' <class 'PIL.UnidentifiedImageError'>",
         "Missing object_id in line '5' of file ecotaxa_m106_mn01_n3_sml.tsv. ",
-        "Missing Image 'nada.png' in file ecotaxa_m106_mn01_n3_sml.tsv. "]
+        "Missing Image 'nada.png' in file ecotaxa_m106_mn01_n3_sml.tsv. ",
+    ]
 
     # @pytest.mark.skip()
 
     def test_import_classif_issue(config, database, caplog):
-        """ The TSV contains an unknown classification id """
+        """The TSV contains an unknown classification id"""
         caplog.set_level(logging.DEBUG)
         prj_id = create_project(ADMIN_USER_ID, "Test LS 5")
 
@@ -469,14 +505,15 @@ def test_import_issues(config, database, caplog):
         check_job_errors(job)
         errors = get_job_errors(job)
         assert errors == [
-            "Some specified classif_id don't exist, correct them prior to reload: 99999999"]
+            "Some specified classif_id don't exist, correct them prior to reload: 99999999"
+        ]
 
 
 # @pytest.mark.skip()
 def test_import_too_many_custom_columns(config, database, caplog):
-    """ The TSV contains too many custom columns.
-        Not a realistic case, but it simulates what happens if importing into a project with
-         mappings """
+    """The TSV contains too many custom columns.
+    Not a realistic case, but it simulates what happens if importing into a project with
+     mappings"""
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 6")
 
@@ -486,18 +523,20 @@ def test_import_too_many_custom_columns(config, database, caplog):
     job = wait_for_stable(rsp.job_id)
     check_job_errors(job)
     errors = get_job_errors(job)
-    assert errors == ['Field acq_cus29, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too '
-                      'many custom fields, or bad type.',
-                      'Field acq_cus30, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too '
-                      'many custom fields, or bad type.',
-                      'Field acq_cus31, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too '
-                      'many custom fields, or bad type.']
+    assert errors == [
+        "Field acq_cus29, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too "
+        "many custom fields, or bad type.",
+        "Field acq_cus30, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too "
+        "many custom fields, or bad type.",
+        "Field acq_cus31, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too "
+        "many custom fields, or bad type.",
+    ]
 
 
 # @pytest.mark.skip()
 def test_import_ambiguous_classification(config, database, fastapi, caplog):
-    """ See https://github.com/oceanomics/ecotaxa_dev/issues/87
-        Do it via API """
+    """See https://github.com/oceanomics/ecotaxa_dev/issues/87
+    Do it via API"""
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 7")
 
@@ -508,13 +547,16 @@ def test_import_ambiguous_classification(config, database, fastapi, caplog):
     job_id = rsp.json()["job_id"]
     api_wait_for_stable_job(fastapi, job_id)
     questions = api_check_job_questions(fastapi, job_id)
-    assert questions == {"missing_users": [], "missing_taxa": ["part (annelida)", "part"]}
+    assert questions == {
+        "missing_users": [],
+        "missing_taxa": ["part (annelida)", "part"],
+    }
 
 
 # @pytest.mark.skip()
 def test_import_uvp6_zip_in_dir(config, database, caplog):
     """
-        An *Images.zip inside a directory.
+    An *Images.zip inside a directory.
     """
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 8")
@@ -532,7 +574,7 @@ def test_import_uvp6_zip_in_dir(config, database, caplog):
 # @pytest.mark.skip()
 def test_import_sparse(config, database, caplog):
     """
-        Import a sparse file, some columns are missing.
+    Import a sparse file, some columns are missing.
     """
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test Sparse")
@@ -542,11 +584,10 @@ def test_import_sparse(config, database, caplog):
         rsp: ImportRsp = sce.run(ADMIN_USER_ID)
     job = wait_for_stable(rsp.job_id)
     errors = check_job_errors(job)
-    assert errors == \
-           [
-               "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field acq_id is mandatory as there are some acq columns: ['acq_hardware', 'acq_imgtype', 'acq_instrument'].",
-               "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field sample_id is mandatory as there are some sample columns: ['sample_program', 'sample_ship', 'sample_stationid']."
-           ]
+    assert errors == [
+        "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field acq_id is mandatory as there are some acq columns: ['acq_hardware', 'acq_imgtype', 'acq_instrument'].",
+        "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field sample_id is mandatory as there are some sample columns: ['sample_program', 'sample_ship', 'sample_stationid'].",
+    ]
     print("\n".join(caplog.messages))
     with AsciiDumper() as sce:
         sce.run(projid=prj_id, out="chk.dmp")
@@ -554,7 +595,7 @@ def test_import_sparse(config, database, caplog):
 
 def test_import_broken_TSV(config, database, caplog):
     """
-        Import a TSV with 0 byte.
+    Import a TSV with 0 byte.
     """
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test Sparse")
@@ -564,11 +605,10 @@ def test_import_broken_TSV(config, database, caplog):
         rsp: ImportRsp = sce.run(ADMIN_USER_ID)
     job = wait_for_stable(rsp.job_id)
     errors = check_job_errors(job)
-    assert errors == \
-           [
-               "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field acq_id is mandatory as there are some acq columns: ['acq_hardware', 'acq_imgtype', 'acq_instrument'].",
-               "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field sample_id is mandatory as there are some sample columns: ['sample_program', 'sample_ship', 'sample_stationid']."
-           ]
+    assert errors == [
+        "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field acq_id is mandatory as there are some acq columns: ['acq_hardware', 'acq_imgtype', 'acq_instrument'].",
+        "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field sample_id is mandatory as there are some sample columns: ['sample_program', 'sample_ship', 'sample_stationid'].",
+    ]
     print("\n".join(caplog.messages))
     with AsciiDumper() as sce:
         sce.run(projid=prj_id, out="chk.dmp")
@@ -577,14 +617,14 @@ def test_import_broken_TSV(config, database, caplog):
 # @pytest.mark.skip()
 def test_import_breaking_unicity(config, database, caplog):
     """
-        Sample orig_id is unique per project
-        Acquisition orig_id is unique per project and belongs to a single Sample
-        Process orig_id is unique per acquisition (structurally as it's 1<->1 relationship)
-        So, if:
-            S("a") -> A("b") -> P ("c")
-        Then:
-            S("a2") -> A("b") is illegal
-        Message should be like 'Acquisition 'b' already belongs to sample 'a' so it cannot be created under 'a2'
+    Sample orig_id is unique per project
+    Acquisition orig_id is unique per project and belongs to a single Sample
+    Process orig_id is unique per acquisition (structurally as it's 1<->1 relationship)
+    So, if:
+        S("a") -> A("b") -> P ("c")
+    Then:
+        S("a2") -> A("b") is illegal
+    Message should be like 'Acquisition 'b' already belongs to sample 'a' so it cannot be created under 'a2'
     """
     caplog.set_level(logging.DEBUG)
     srch = search_unique_project(ADMIN_USER_ID, "Test Create Update")
@@ -596,19 +636,22 @@ def test_import_breaking_unicity(config, database, caplog):
         rsp: ImportRsp = sce.run(ADMIN_USER_ID)
     job = wait_for_stable(rsp.job_id)
     errors = check_job_errors(job)
-    assert errors == ["Acquisition 'generic_m106_mn01_n1_sml' is already associated with sample "
-                      "'{'m106_mn01_n1_sml'}', it cannot be associated as well with "
-                      "'m106_mn01_n1_sml_brk"]
+    assert errors == [
+        "Acquisition 'generic_m106_mn01_n1_sml' is already associated with sample "
+        "'{'m106_mn01_n1_sml'}', it cannot be associated as well with "
+        "'m106_mn01_n1_sml_brk"
+    ]
 
 
 # @pytest.mark.skip()
 def test_issue_483(config, database, caplog):
     """
-        Too large image.
+    Too large image.
     """
     # Inject a very small maximum size inside the library, so basically any image
     # will raise a Decompression bomb
     from PIL import Image
+
     sav = Image.MAX_IMAGE_PIXELS
     Image.MAX_IMAGE_PIXELS = 512
     try:

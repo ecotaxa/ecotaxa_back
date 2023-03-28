@@ -23,9 +23,10 @@ logger = get_logger(__name__)
 
 class DBWriter(object):
     """
-        Database writer for import/subset/CNN (with optimizations).
-        @see SQLAlchemy Core documentation for principles.
+    Database writer for import/subset/CNN (with optimizations).
+    @see SQLAlchemy Core documentation for principles.
     """
+
     SEQUENCE_CACHE_SIZE: ClassVar = 100
 
     def __init__(self, session: Session):
@@ -44,12 +45,16 @@ class DBWriter(object):
 
         # Save a bit of time for commit
         self.session.execute(text("SET synchronous_commit TO OFF;"))
-        self.obj_seq_cache = SequenceCache(self.session, "seq_objects", self.SEQUENCE_CACHE_SIZE)
-        self.img_seq_cache = SequenceCache(self.session, "seq_images", self.SEQUENCE_CACHE_SIZE)
+        self.obj_seq_cache = SequenceCache(
+            self.session, "seq_objects", self.SEQUENCE_CACHE_SIZE
+        )
+        self.img_seq_cache = SequenceCache(
+            self.session, "seq_images", self.SEQUENCE_CACHE_SIZE
+        )
 
     # The properties used in code, not in mapping. If not listed here they are not persisted
     # TODO: Provoke a crash at runtime for tests if one is forgotten. Dropping data silently is bad.
-    obj_head_prog_cols = {'sunpos', 'random_value', 'acquisid', 'sampleid'}
+    obj_head_prog_cols = {"sunpos", "random_value", "acquisid", "sampleid"}
     obj_fields_prog_cols: Dict[str, str] = {}
 
     # The generated classes are objects of course, but classes as well, so the variable names
@@ -68,8 +73,12 @@ class DBWriter(object):
 
         ObjectFieldsView = Bean
         if "obj_field" in target_fields:
-            obj_fields_cols = target_fields["obj_field"].union(self.obj_fields_prog_cols)
-            self.obj_fields_tbl = minimal_table_of(metadata, ObjectFields, obj_fields_cols)
+            obj_fields_cols = target_fields["obj_field"].union(
+                self.obj_fields_prog_cols
+            )
+            self.obj_fields_tbl = minimal_table_of(
+                metadata, ObjectFields, obj_fields_cols
+            )
         else:
             self.obj_fields_tbl = ObjectFields.__table__
 
@@ -80,17 +89,29 @@ class DBWriter(object):
         return ObjectView, ObjectFieldsView, ImageView
 
     def do_bulk_save(self) -> None:
-        nb_bulks = "%d/%d/%d/%d/%d" % (len(self.obj_bulks), len(self.obj_fields_bulks),
-                                    len(self.obj_cnn_bulks), len(self.img_bulks),
-                                    len(self.obj_history_bulks))
+        nb_bulks = "%d/%d/%d/%d/%d" % (
+            len(self.obj_bulks),
+            len(self.obj_fields_bulks),
+            len(self.obj_cnn_bulks),
+            len(self.img_bulks),
+            len(self.obj_history_bulks),
+        )
         # TODO: Can be reused?
-        inserts = [self.obj_tbl.insert(), self.obj_fields_tbl.insert(),
-                   self.obj_cnn_tbl.insert(), self.img_tbl.insert(),
-                   self.obj_history_tbl.insert()]
+        inserts = [
+            self.obj_tbl.insert(),
+            self.obj_fields_tbl.insert(),
+            self.obj_cnn_tbl.insert(),
+            self.img_tbl.insert(),
+            self.obj_history_tbl.insert(),
+        ]
         # TODO: SQLAlchemy compiled_cache?
-        bulk_sets = [self.obj_bulks, self.obj_fields_bulks,
-                     self.obj_cnn_bulks, self.img_bulks,
-                     self.obj_history_bulks]
+        bulk_sets = [
+            self.obj_bulks,
+            self.obj_fields_bulks,
+            self.obj_cnn_bulks,
+            self.img_bulks,
+            self.obj_history_bulks,
+        ]
         for a_bulk_set, an_insert in zip(bulk_sets, inserts):
             if not a_bulk_set:
                 continue
@@ -98,8 +119,13 @@ class DBWriter(object):
             a_bulk_set.clear()
         logger.info("Batch save objects of %s", nb_bulks)
 
-    def add_db_entities(self, object_head_to_write: Bean, object_fields_to_write: Bean,
-                        image_to_write: Optional[Bean], new_records: int) -> None:
+    def add_db_entities(
+        self,
+        object_head_to_write: Bean,
+        object_fields_to_write: Bean,
+        image_to_write: Optional[Bean],
+        new_records: int,
+    ) -> None:
         # Bulk mode or Core do not create links (using ORM relationship), so we have to do manually
         if new_records > 1:
             # There is a new image and more

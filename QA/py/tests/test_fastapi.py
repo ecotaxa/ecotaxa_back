@@ -5,7 +5,13 @@ from fastapi import status
 
 from main import app
 
-from tests.credentials import ADMIN_AUTH, USER_AUTH, CREATOR_AUTH, ADMIN_USER_ID, USER2_AUTH
+from tests.credentials import (
+    ADMIN_AUTH,
+    USER_AUTH,
+    CREATOR_AUTH,
+    ADMIN_USER_ID,
+    USER2_AUTH,
+)
 
 
 def test_users(config, database, fastapi):
@@ -29,7 +35,7 @@ def test_user_me(config, database, fastapi):
     response = fastapi.get(url, headers=ADMIN_AUTH)
     # Check that we can do with auth
     assert response.status_code == status.HTTP_200_OK
-    assert response.json()["name"] == 'Application Administrator'
+    assert response.json()["name"] == "Application Administrator"
 
 
 def test_create_project(config, database, fastapi, caplog):
@@ -38,9 +44,9 @@ def test_create_project(config, database, fastapi, caplog):
     # Check that we cannot do without auth
     response = fastapi.post(url, json={"title": "Oh no"})
     assert response.status_code == status.HTTP_403_FORBIDDEN
-    # Check that we cannot do as ordinary user
-    response = fastapi.post(url, headers=USER_AUTH, json={"title": "Oh no again"})
-    assert response.status_code == status.HTTP_403_FORBIDDEN
+    # Check that we can also do as ordinary user
+    response = fastapi.post(url, headers=USER_AUTH, json={"title": "Oh now yes"})
+    assert response.status_code == status.HTTP_200_OK
     # Check that we can do as admin
     response = fastapi.post(url, headers=ADMIN_AUTH, json={"title": "Oh yes"})
     assert response.status_code == status.HTTP_200_OK
@@ -54,14 +60,19 @@ def test_create_project(config, database, fastapi, caplog):
 def test_clone_project(config, database, fastapi, caplog):
     caplog.set_level(logging.CRITICAL)
     from tests.test_import import test_import
+
     prj_id = test_import(config, database, caplog, "Clone source")
     caplog.set_level(logging.DEBUG)
     url = "/projects/create"
     # Failing attempt
-    response = fastapi.post(url, headers=ADMIN_AUTH, json={"title": "Clone of 1", "clone_of_id": -1})
+    response = fastapi.post(
+        url, headers=ADMIN_AUTH, json={"title": "Clone of 1", "clone_of_id": -1}
+    )
     assert response.status_code == status.HTTP_404_NOT_FOUND
     # Working attempt
-    response = fastapi.post(url, headers=ADMIN_AUTH, json={"title": "Clone of 1", "clone_of_id": prj_id})
+    response = fastapi.post(
+        url, headers=ADMIN_AUTH, json={"title": "Clone of 1", "clone_of_id": prj_id}
+    )
     assert response.status_code == status.HTTP_200_OK
     assert int(response.json()) > 0
     # TODO: Check that the clone works
@@ -107,31 +118,59 @@ def test_user_get(config, database, fastapi, caplog):
 def test_project_search(config, database, caplog, fastapi):
     url = "/projects/search"
     from tests.test_import import test_import
+
     test_import(config, database, caplog, "Project Search", instrument="UVP6")
     # Ordinary user looking at own projects
-    response = fastapi.get(url, headers=USER_AUTH, params={"also_others": False,
-                                                           "title_filter": "laur",
-                                                           "instrument_filter": "flow"})
+    response = fastapi.get(
+        url,
+        headers=USER_AUTH,
+        params={
+            "also_others": False,
+            "title_filter": "laur",
+            "instrument_filter": "flow",
+        },
+    )
     assert response.json() == []
     # Ordinary user looking at all projects by curiosity
-    response = fastapi.get(url, headers=USER_AUTH, params={"also_others": True,
-                                                           "title_filter": "laur",
-                                                           "instrument_filter": "flow"})
+    response = fastapi.get(
+        url,
+        headers=USER_AUTH,
+        params={
+            "also_others": True,
+            "title_filter": "laur",
+            "instrument_filter": "flow",
+        },
+    )
     assert response.json() == []
     # Creator user looking at his subsets for removing them
-    response = fastapi.get(url, headers=CREATOR_AUTH, params={"also_others": False,
-                                                              "title_filter": "tara",
-                                                              "instrument_filter": "flow",
-                                                              "filter_subset": True,
-                                                              "for_managing": True})
+    response = fastapi.get(
+        url,
+        headers=CREATOR_AUTH,
+        params={
+            "also_others": False,
+            "title_filter": "tara",
+            "instrument_filter": "flow",
+            "filter_subset": True,
+            "for_managing": True,
+        },
+    )
     assert response.json() == []
     # Admin check of instrument url
-    response = fastapi.get(url, headers=ADMIN_AUTH, params={"also_others": False,
-                                                            "title_filter": "Project Search",
-                                                            "filter_subset": True,
-                                                            "for_managing": True})
+    response = fastapi.get(
+        url,
+        headers=ADMIN_AUTH,
+        params={
+            "also_others": False,
+            "title_filter": "Project Search",
+            "filter_subset": True,
+            "for_managing": True,
+        },
+    )
     rsp = response.json()
-    assert rsp[0]['instrument_url'] == 'http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/'
+    assert (
+        rsp[0]["instrument_url"]
+        == "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/"
+    )
     # TODO: Windowing tests
 
 

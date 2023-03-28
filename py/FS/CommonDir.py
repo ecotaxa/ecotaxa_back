@@ -12,8 +12,8 @@ DirEntryT = Tuple[str, str, int, str]
 
 class CommonFolder(object):
     """
-         The directory where files can be read by everyone.
-         Pointed at by a configuration variable.
+    The directory where files can be read by everyone.
+    Pointed at by a configuration variable.
     """
 
     def __init__(self, path: str):
@@ -21,7 +21,7 @@ class CommonFolder(object):
 
     def path_to(self, sub_path: str) -> str:
         """
-            Return absolute path to given relative subpath.
+        Return absolute path to given relative subpath.
         """
         # Leading / implies root directory
         sub_path = sub_path.lstrip("/")
@@ -29,7 +29,7 @@ class CommonFolder(object):
 
     def list(self, sub_path: str) -> List[DirEntryT]:
         """
-            List given sub-path, returning the name of entries and details of zip files.
+        List given sub-path, returning the name of entries and details of zip files.
         """
         ret: List[DirEntryT] = []
         # Leading / implies root directory
@@ -41,9 +41,9 @@ class CommonFolder(object):
     def list_dir_into(abs_path, out):
         for an_entry in abs_path.iterdir():
             if an_entry.is_dir():
-                e_type = 'D'
+                e_type = "D"
             elif an_entry.is_file():
-                e_type = 'F'
+                e_type = "F"
             else:
                 continue
             entry_sz = 0
@@ -59,7 +59,7 @@ class CommonFolder(object):
 
 class ExportFolder(object):
     """
-         The directory where exports are produced, if asked so.
+    The directory where exports are produced, if asked so.
     """
 
     def __init__(self, path: str):
@@ -67,7 +67,7 @@ class ExportFolder(object):
 
     def receive_from(self, src_path: Path, as_name: str):
         """
-            Copy a file into self, as :param as_name.
+        Copy a file into self, as :param as_name.
         """
         if not self.path.exists():
             self.path.mkdir()

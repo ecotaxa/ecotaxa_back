@@ -1,5 +1,9 @@
 DEFAULT_INSTRUMENTS = [
-    ("CytoSense", "CytoSense flow cytometer", "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1209/"),
+    (
+        "CytoSense",
+        "CytoSense flow cytometer",
+        "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1209/",
+    ),
     ("IFCB", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1588/"),
     ("CPICS", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1582/"),
     ("UVP5HD", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1577/"),
@@ -21,5 +25,5 @@ DEFAULT_INSTRUMENTS = [
     ("Other microscope", "Generic microscope", None),
     ("Other scanner", "Generic scanner", None),
     ("Other flowcytometer", "Generic scanner", None),
-    ("?", "Unknown instrument", None)  # KEEP IT LAST
+    ("?", "Unknown instrument", None),  # KEEP IT LAST
 ]

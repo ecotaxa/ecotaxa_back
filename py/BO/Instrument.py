@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 
 class DescribedInstrumentSet(object):
     """
-        A list of (project ids, instruments ids)
+    A list of (project ids, instruments ids)
     """
 
     def __init__(self, session: Session, project_ids: ProjectIDListT):

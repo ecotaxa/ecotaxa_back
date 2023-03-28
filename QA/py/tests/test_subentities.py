@@ -50,11 +50,12 @@ def test_check_project_via_api(prj_id: int, fastapi):
 def test_subentities(config, database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
     from tests.test_import import test_import_uvp6
+
     prj_id = test_import_uvp6(config, database, caplog, "Test Subset Merge")
     check_project(prj_id)
 
     # Pick the first object
-    with  ObjectManager() as sce:
+    with ObjectManager() as sce:
         qry_rsp, _details, _total = sce.query(ADMIN_USER_ID, prj_id, filters={})
     first_obj = qry_rsp[0]
     first_objid = first_obj[0]  # obj id
@@ -93,12 +94,16 @@ def test_subentities(config, database, fastapi, caplog):
     response = fastapi.get(url, headers=ADMIN_AUTH)
     assert response.status_code == status.HTTP_200_OK
     stats = response.json()
-    assert stats == [{'nb_dubious': 0,
-                      'nb_predicted': 0,
-                      'nb_unclassified': 15,
-                      'nb_validated': 0,
-                      'sample_id': sample_id,
-                      'used_taxa': [-1]}]
+    assert stats == [
+        {
+            "nb_dubious": 0,
+            "nb_predicted": 0,
+            "nb_unclassified": 15,
+            "nb_validated": 0,
+            "sample_id": sample_id,
+            "used_taxa": [-1],
+        }
+    ]
 
     acquis_id = first_obj[1]
     # Wrong ID
@@ -131,7 +136,9 @@ def test_subentities(config, database, fastapi, caplog):
     #  assert response.status_code == status.HTTP_404_NOT_FOUND
     # OK ID
     url = OBJECT_HISTORY_QUERY_URL.format(object_id=first_objid)
-    response = fastapi.get(url)  # The entry point is public and project as well, no need for: , headers=ADMIN_AUTH)
+    response = fastapi.get(
+        url
+    )  # The entry point is public and project as well, no need for: , headers=ADMIN_AUTH)
     assert response.status_code == status.HTTP_200_OK
     classif = response.json()
     assert classif is not None

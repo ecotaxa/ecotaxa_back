@@ -29,24 +29,31 @@ logger = get_logger(__name__)
 
 class DeepFeatures(object):
     """
-        ML predicting algorithm takes as input "features" which can be either input into EcoTaxa, and correspond
-        to various measurements on the image and arbitrary data. @See ObjectFields.
+    ML predicting algorithm takes as input "features" which can be either input into EcoTaxa, and correspond
+    to various measurements on the image and arbitrary data. @See ObjectFields.
 
-        OTOH, it can also _generate_ features, using another class of machine learning algorithm: CNN
-         @see https://en.wikipedia.org/wiki/Convolutional_neural_network
-        These other features are stored in a dedicated DB table @see ObjectCNNFeature.
+    OTOH, it can also _generate_ features, using another class of machine learning algorithm: CNN
+     @see https://en.wikipedia.org/wiki/Convolutional_neural_network
+    These other features are stored in a dedicated DB table @see ObjectCNNFeature.
     """
+
     SAVE_EVERY: ClassVar = 500
 
     @staticmethod
     def delete_all(session: Session, proj_id: ProjectIDT) -> int:
         """
-            Delete all CNN features from DB, for this project.
+        Delete all CNN features from DB, for this project.
         """
         sub_qry = session.query(ObjectHeader.objid)
-        sub_qry = sub_qry.join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
-        sub_qry = sub_qry.join(Sample, and_(Sample.sampleid == Acquisition.acq_sample_id,
-                                            Sample.projid == proj_id))
+        sub_qry = sub_qry.join(
+            Acquisition, Acquisition.acquisid == ObjectHeader.acquisid
+        )
+        sub_qry = sub_qry.join(
+            Sample,
+            and_(
+                Sample.sampleid == Acquisition.acq_sample_id, Sample.projid == proj_id
+            ),
+        )
         qry = session.query(ObjectCNNFeature)
         qry = qry.filter(ObjectCNNFeature.objcnnid.in_(sub_qry))
         nb_deleted = qry.delete(synchronize_session=False)
@@ -55,12 +62,16 @@ class DeepFeatures(object):
     @staticmethod
     def find_missing(session: Session, proj_id: ProjectIDT) -> Dict[ObjectIDT, str]:
         """
-            Find missing cnn features for this project.
+        Find missing cnn features for this project.
         """
         qry = session.query(ObjectHeader.objid, Image.file_name)
         qry = qry.join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
-        qry = qry.join(Sample, and_(Sample.sampleid == Acquisition.acq_sample_id,
-                                    Sample.projid == proj_id))
+        qry = qry.join(
+            Sample,
+            and_(
+                Sample.sampleid == Acquisition.acq_sample_id, Sample.projid == proj_id
+            ),
+        )
         qry = qry.outerjoin(Image)  # For detecting missing images
         qry = qry.outerjoin(ObjectCNNFeature)  # For detecting missing features
         # noinspection PyComparisonWithNone
@@ -79,11 +90,13 @@ class DeepFeatures(object):
     @classmethod
     def save(cls, session: Session, features: Any) -> int:
         """
-            Insert CNN features to DB.
-            Features is an iterable dict-like, a pandas dataframe for the moment.
+        Insert CNN features to DB.
+        Features is an iterable dict-like, a pandas dataframe for the moment.
         """
         writer = DBWriter(session)
-        writer.generators({})  # TODO: A bit weird, DBWriter should be usable straight away
+        writer.generators(
+            {}
+        )  # TODO: A bit weird, DBWriter should be usable straight away
         nb_rows = 0
         # for a_rec in features.to_records(index=True): # This is nice and can produce tuple()
         # but I found no way to feed them into DBWriter without going low-level.
@@ -97,9 +110,11 @@ class DeepFeatures(object):
         return nb_rows
 
     @classmethod
-    def read_for_objects(cls, session: Session, oid_lst: List[int]) -> Result:  # TODO: Should be ObjectIDListT
+    def read_for_objects(
+        cls, session: Session, oid_lst: List[int]
+    ) -> Result:  # TODO: Should be ObjectIDListT
         """
-            Read CNN lines AKA features, in order, for given object_ids
+        Read CNN lines AKA features, in order, for given object_ids
         """
         fk_to_objid = ObjectCNNFeature.objcnnid.name
         sql = "WITH ordr (seq, objid) AS (select * from UNNEST(:seq, :oids)) "
@@ -107,15 +122,14 @@ class DeepFeatures(object):
         sql += " FROM " + ObjectCNNFeature.__tablename__
         sql += " JOIN ordr ON " + fk_to_objid + " = ordr.objid "
         sql += " ORDER BY ordr.seq "
-        params = {"seq": list(range(len(oid_lst))),
-                  "oids": oid_lst}
+        params = {"seq": list(range(len(oid_lst))), "oids": oid_lst}
         res: Result = session.execute(text(sql), params=params)
         return res
 
     @classmethod
     def np_read_for_objects(cls, session: Session, oid_lst: List[int]) -> ndarray:
         """
-            Read CNN lines AKA features, in order, for given object_ids, into a NumPy array
+        Read CNN lines AKA features, in order, for given object_ids, into a NumPy array
         """
         res = cls.read_for_objects(session, oid_lst)
         ret = np.ndarray(shape=(len(oid_lst), len(res.keys())), dtype=np.float32)
@@ -123,5 +137,7 @@ class DeepFeatures(object):
         for a_row in res:
             ret[ndx] = a_row
             ndx += 1
-        assert ndx == len(oid_lst), "No enough CNN features in DB: expected %d read %d" % (len(oid_lst), ndx)
+        assert ndx == len(
+            oid_lst
+        ), "No enough CNN features in DB: expected %d read %d" % (len(oid_lst), ndx)
         return ret

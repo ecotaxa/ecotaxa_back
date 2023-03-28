@@ -9,7 +9,7 @@ from typing import Set, Tuple
 
 class Vault(object):
     """
-         Class mirroring the image vault (filesystem)
+    Class mirroring the image vault (filesystem)
     """
 
     def __init__(self, path: str):
@@ -69,18 +69,19 @@ class Vault(object):
 
     def ensure_there(self, img_maybe: Path, sub_path: str) -> bool:
         """
-            For devs, to ensure an image exists. If it doesn't, get it from main site.
+        For devs, to ensure an image exists. If it doesn't, get it from main site.
         """
         is_there = img_maybe.exists()
         if not is_there:
             import requests
             import tempfile
             from os import unlink
+
             fout = tempfile.mktemp(suffix=sub_path[-4:])
             r = requests.get(self.BASE_URL % sub_path, stream=True)
             if r.status_code != 200:
                 return False
-            with open(fout, 'wb') as f:
+            with open(fout, "wb") as f:
                 for chunk in r.iter_content(1024):
                     f.write(chunk)
             f.close()
@@ -100,7 +101,7 @@ class Vault(object):
         """
         full_path = self.path.joinpath(img_sub_path)
         # For devs.
-        #self.ensure_there(full_path, img_sub_path)
+        # self.ensure_there(full_path, img_sub_path)
         return full_path.as_posix()
 
     def thumbnail_paths(self, img_id: int) -> Tuple[str, str]:
@@ -111,5 +112,5 @@ class Vault(object):
         """
         folder, ndx_in_folder = self.address_for_id(img_id)
         # We force thumbnail format to JPEG
-        sub_path = "%s/%s_mini%s" % (folder, ndx_in_folder, '.jpg')
+        sub_path = "%s/%s_mini%s" % (folder, ndx_in_folder, ".jpg")
         return sub_path, self.path.joinpath(sub_path).as_posix()
