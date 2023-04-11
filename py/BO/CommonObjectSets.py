@@ -10,17 +10,21 @@ from DB.helpers import Session
 
 class CommonObjectSets(object):
     """
-        Some object sets which are used in several places.
+    Some object sets which are used in several places.
     """
 
     @staticmethod
     def validatedInSample(session: Session, sample: Sample) -> DescribedObjectSet:
-        obj_filter = ProjectFiltersDict(statusfilter='V', samples=str(sample.sampleid))
-        obj_set: DescribedObjectSet = DescribedObjectSet(session, sample.projid, None, obj_filter)
+        obj_filter = ProjectFiltersDict(statusfilter="V", samples=str(sample.sampleid))
+        obj_set: DescribedObjectSet = DescribedObjectSet(
+            session, sample.projid, None, obj_filter
+        )
         return obj_set
 
     @staticmethod
     def predictedInSample(session: Session, sample: Sample) -> DescribedObjectSet:
-        obj_filter = ProjectFiltersDict(statusfilter='P', samples=str(sample.sampleid))
-        obj_set: DescribedObjectSet = DescribedObjectSet(session, sample.projid, None, obj_filter)
+        obj_filter = ProjectFiltersDict(statusfilter="P", samples=str(sample.sampleid))
+        obj_set: DescribedObjectSet = DescribedObjectSet(
+            session, sample.projid, None, obj_filter
+        )
         return obj_set

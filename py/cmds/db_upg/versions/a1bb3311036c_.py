@@ -7,8 +7,8 @@ Create Date: 2017-12-15 17:26:59.530614
 """
 
 # revision identifiers, used by Alembic.
-revision = 'a1bb3311036c'
-down_revision = 'e1c32fc967e8'
+revision = "a1bb3311036c"
+down_revision = "e1c32fc967e8"
 
 from alembic import op
 

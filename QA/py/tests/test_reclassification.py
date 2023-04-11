@@ -7,36 +7,46 @@ import logging
 from starlette import status
 
 from tests.credentials import CREATOR_AUTH, ADMIN_AUTH
-from tests.test_classification import _prj_query, get_stats, entomobryomorpha_id, classif_history
+from tests.test_classification import (
+    _prj_query,
+    get_stats,
+    entomobryomorpha_id,
+    classif_history,
+)
 
-OBJECT_SET_RECLASSIFY_URL = "/object_set/{project_id}/reclassify?forced_id={forced_id}&reason={reason}"
+OBJECT_SET_RECLASSIFY_URL = (
+    "/object_set/{project_id}/reclassify?forced_id={forced_id}&reason={reason}"
+)
 
 detritus_classif_id = 84963
 
 
 def reclassify(fastapi, prj_id, from_id, to_id):
-    url = OBJECT_SET_RECLASSIFY_URL.format(project_id=prj_id,
-                                           forced_id=to_id,
-                                           reason='W')
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={'taxo': str(from_id)})
+    url = OBJECT_SET_RECLASSIFY_URL.format(
+        project_id=prj_id, forced_id=to_id, reason="W"
+    )
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"taxo": str(from_id)})
     assert rsp.status_code == status.HTTP_200_OK
 
 
 def test_reclassif(config, database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
     from tests.test_import import test_import
+
     prj_id = test_import(config, database, caplog, "Test Reclassify/Validate")
 
     obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
     assert len(obj_ids) == 8
 
     # All is predicted, see source archive
-    assert get_stats(fastapi, prj_id) == {'nb_dubious': 0,
-                                          'nb_predicted': 8,
-                                          'nb_unclassified': 0,
-                                          'nb_validated': 0,
-                                          'projid': prj_id,
-                                          'used_taxa': [45072, 78418, detritus_classif_id, 85011, 85012, 85078]}
+    assert get_stats(fastapi, prj_id) == {
+        "nb_dubious": 0,
+        "nb_predicted": 8,
+        "nb_unclassified": 0,
+        "nb_validated": 0,
+        "projid": prj_id,
+        "used_taxa": [45072, 78418, detritus_classif_id, 85011, 85012, 85078],
+    }
 
     # We have 2 detritus, see original dataset
     obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id, taxo=str(detritus_classif_id))
@@ -49,30 +59,36 @@ def test_reclassif(config, database, fastapi, caplog):
     reclassify(fastapi, prj_id, detritus_classif_id, entomobryomorpha_id)
 
     # Of course stats changed, detritus is gone and entomobryomorpha appeared
-    assert get_stats(fastapi, prj_id) == {'nb_dubious': 0,
-                                          'nb_predicted': 8,
-                                          'nb_unclassified': 0,
-                                          'nb_validated': 0,
-                                          'projid': prj_id,
-                                          'used_taxa': [entomobryomorpha_id, 45072, 78418, 85011, 85012, 85078]}
+    assert get_stats(fastapi, prj_id) == {
+        "nb_dubious": 0,
+        "nb_predicted": 8,
+        "nb_unclassified": 0,
+        "nb_validated": 0,
+        "projid": prj_id,
+        "used_taxa": [entomobryomorpha_id, 45072, 78418, 85011, 85012, 85078],
+    }
 
     # Ensure a proper history appeared
     for an_obj in obj_ids:
         classif2 = classif_history(fastapi, an_obj)
         assert classif2 is not None
         # Date is not predictable
-        classif2[0]['classif_date'] = 'hopefully just now'
+        classif2[0]["classif_date"] = "hopefully just now"
         # nor object_id
-        classif2[0]['objid'] = 1
-        assert classif2 == [{'classif_date': 'hopefully just now',
-                             'classif_id': detritus_classif_id,
-                             'classif_qual': 'P',
-                             'classif_score': None,
-                             'classif_type': 'M',
-                             'classif_who': 1,
-                             'objid': 1,
-                             'taxon_name': 'detritus',
-                             'user_name': 'Application Administrator'}]
+        classif2[0]["objid"] = 1
+        assert classif2 == [
+            {
+                "classif_date": "hopefully just now",
+                "classif_id": detritus_classif_id,
+                "classif_qual": "P",
+                "classif_score": None,
+                "classif_type": "M",
+                "classif_who": 1,
+                "objid": 1,
+                "taxon_name": "detritus",
+                "user_name": "Application Administrator",
+            }
+        ]
 
     # We now have 0 detritus
     obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id, taxo=str(detritus_classif_id))

@@ -12,8 +12,10 @@ from .helpers.Postgres import BIGINT, REAL
 
 
 class ObjectCNNFeature(Model):
-    __tablename__ = 'obj_cnn_features'
-    objcnnid: int = Column(BIGINT, ForeignKey('obj_head.objid', ondelete="CASCADE"), primary_key=True)
+    __tablename__ = "obj_cnn_features"
+    objcnnid: int = Column(
+        BIGINT, ForeignKey("obj_head.objid", ondelete="CASCADE"), primary_key=True
+    )
     # The relationships are created in Relations.py but the typing here helps the IDE
     object: relationship
 
@@ -27,7 +29,7 @@ for a_feat in DEEP_FEATURES:
 
 class ObjectCNNFeaturesBean(Bean):
     """
-        A bean for feeding DBWriter.
+    A bean for feeding DBWriter.
     """
 
     def __init__(self, obj_id: ObjectIDT, features: List[float]):

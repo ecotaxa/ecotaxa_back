@@ -9,10 +9,11 @@ from typing import Any, List
 
 class SavedModels(object):
     """
-         The ML models are in memory during their building/usage, but they can be serialized.
-         They also need temporary storage while they build.
+    The ML models are in memory during their building/usage, but they can be serialized.
+    They also need temporary storage while they build.
     """
-    MODELS_CONFIG_KEY = 'MODELSAREA'
+
+    MODELS_CONFIG_KEY = "MODELSAREA"
     PRFX = "io_"
     DIM_REDUCER_FILE = "dim_reducer.pickle"
     CROP_FILE = "crop.txt"
@@ -25,7 +26,7 @@ class SavedModels(object):
 
     def list(self) -> List[str]:
         """
-            Enumerate all the possibly usable models in self.
+        Enumerate all the possibly usable models in self.
         """
         ret = []
         if self.path.exists():
@@ -41,7 +42,7 @@ class SavedModels(object):
                 dir_name = a_dir.name
                 if not dir_name.startswith(self.PRFX):
                     continue
-                dir_name = dir_name[len(self.PRFX):]
+                dir_name = dir_name[len(self.PRFX) :]
                 ret.append(dir_name)
         return ret
 
@@ -52,7 +53,7 @@ class SavedModels(object):
         # Directory to save training checkpoints
         # Used during training only
         model_name = self._prefix(model_name)
-        ckpt_dir = self.path / model_name / 'checkpoints'
+        ckpt_dir = self.path / model_name / "checkpoints"
         os.makedirs(ckpt_dir, exist_ok=True)
         return ckpt_dir
 

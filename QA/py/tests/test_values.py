@@ -16,13 +16,13 @@ def test_cleans():
     assert clean_value("NaNaNa") == "NaNaNa"
 
     #
-    assert clean_value_and_none(None) == ''
+    assert clean_value_and_none(None) == ""
     assert clean_value_and_none("NaN", is_numeric=True) == ""
     assert clean_value_and_none("na", is_numeric=True) == ""
     assert clean_value_and_none("NoNoNo \n") == "NoNoNo"
 
     #
-    assert to_float('') is None
-    assert to_float('-inf') is None
-    assert to_float("18.5")-0.5 == 18
+    assert to_float("") is None
+    assert to_float("-inf") is None
+    assert to_float("18.5") - 0.5 == 18
     assert to_float("18,5") is None

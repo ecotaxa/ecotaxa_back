@@ -19,8 +19,8 @@ class ColUpdate(TypedDict):
 
 class ColUpdateList:
     """
-        Formalized way of updating entities in the system.
-            It's, on purpose, not a Dict as we take provision for futures usage when we need an order.
+    Formalized way of updating entities in the system.
+        It's, on purpose, not a Dict as we take provision for futures usage when we need an order.
     """
 
     def __init__(self, iterable: Iterable[ColUpdate]):
@@ -32,6 +32,6 @@ class ColUpdateList:
         for an_update in self.lst:
             upd_col = an_update["ucol"]
             ret[upd_col] = an_update["uval"]
-            if ret[upd_col] == 'current_timestamp':
+            if ret[upd_col] == "current_timestamp":
                 ret[upd_col] = current_timestamp()
         return ret

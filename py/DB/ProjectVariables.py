@@ -16,10 +16,13 @@ KNOWN_PROJECT_VARS = {"subsample_coef", "total_water_volume", "individual_volume
 
 class ProjectVariables(Model):
     """
-        The definition of variables inside a project.
+    The definition of variables inside a project.
     """
-    __tablename__ = 'projects_variables'
-    project_id: int = Column(INTEGER, ForeignKey('projects.projid', ondelete="CASCADE"), primary_key=True)
+
+    __tablename__ = "projects_variables"
+    project_id: int = Column(
+        INTEGER, ForeignKey("projects.projid", ondelete="CASCADE"), primary_key=True
+    )
 
     # Python expression, the calculation result complies to http://vocab.nerc.ac.uk/collection/P01/current/SSAMPC01/1/
     subsample_coef = Column(VARCHAR)
@@ -32,11 +35,15 @@ class ProjectVariables(Model):
     project: relationship
 
     def __str__(self):
-        return "{0}:{1}{2}{3}".format(self.project_id, self.subsample_coef, self.total_water_volume,
-                                      self.individual_volume)
+        return "{0}:{1}{2}{3}".format(
+            self.project_id,
+            self.subsample_coef,
+            self.total_water_volume,
+            self.individual_volume,
+        )
 
-    def load_from_dict(self, vars_dict: Dict[str, Optional[str]]) -> 'ProjectVariables':
-        """ Load self from a dict with proper keys """
+    def load_from_dict(self, vars_dict: Dict[str, Optional[str]]) -> "ProjectVariables":
+        """Load self from a dict with proper keys"""
         for a_var in KNOWN_PROJECT_VARS:
             if a_var in vars_dict:
                 a_val = vars_dict[a_var]
@@ -46,5 +53,5 @@ class ProjectVariables(Model):
         return self
 
     def to_dict(self) -> Dict[str, str]:
-        """ Dict representation of self """
+        """Dict representation of self"""
         return {a_col: getattr(self, a_col) for a_col in KNOWN_PROJECT_VARS}

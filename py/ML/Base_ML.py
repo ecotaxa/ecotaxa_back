@@ -13,8 +13,8 @@ logger = get_logger(__name__)
 
 class MachineLearningBase(object):
     """
-        Base class, as many ML classes share the same data/behavior, which is to access EcoTaxa images/data,
-        and produce data, either in FS or in memory.
+    Base class, as many ML classes share the same data/behavior, which is to access EcoTaxa images/data,
+    and produce data, either in FS or in memory.
     """
 
     def __init__(self, vault: Vault, model_dir: SavedModels):
@@ -23,7 +23,7 @@ class MachineLearningBase(object):
 
     def full_img_paths(self, paths):
         """
-            Prefix image paths to get the physical full path.
+        Prefix image paths to get the physical full path.
         """
         # UNCOMMENT for dev.
         # nb_loaded = 0
@@ -36,7 +36,7 @@ class MachineLearningBase(object):
 
     def read_crop(self, model_name) -> Tuple[int, int, int, int]:
         """
-            Read crop value for the model, it's in a text file containing only bottom crop value for now.
+        Read crop value for the model, it's in a text file containing only bottom crop value for now.
         """
         crop_file = self.model_dir.crop_values_path(model_name)
         with open(crop_file) as f:

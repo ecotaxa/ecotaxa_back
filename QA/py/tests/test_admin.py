@@ -12,6 +12,7 @@ NIGHTLY_URL = "/admin/nightly"
 def test_admin_images(config, database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
     from tests.test_import import test_import_uvp6
+
     prj_id = test_import_uvp6(config, database, caplog, "Test Project Admin")
 
     url = PROJECT_DIGEST_URL.format(project_id=prj_id)
@@ -49,4 +50,3 @@ def test_nightly_job(config, database, fastapi, caplog):
     job_id = rsp.json()
     job = wait_for_stable(job_id)
     check_job_ok(job)
-

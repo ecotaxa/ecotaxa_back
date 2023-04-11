@@ -12,6 +12,7 @@ async def feed_log(nb_lines: int):
         print("line %d" % ln, file=fno)
         await async_sleep(0.001)
 
+
 @pytest.mark.asyncio
 async def test_asyncio():
     try:

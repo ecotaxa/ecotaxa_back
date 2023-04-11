@@ -18,11 +18,11 @@ ACQUISITION_FREE_COLUMNS = 31
 
 class Acquisition(Model):
     # Historical (plural) name of the table
-    __tablename__ = 'acquisitions'
+    __tablename__ = "acquisitions"
     # Self ID
-    acquisid: int = Column(INTEGER, Sequence('seq_acquisitions'), primary_key=True)
+    acquisid: int = Column(INTEGER, Sequence("seq_acquisitions"), primary_key=True)
     # Parent ID
-    acq_sample_id: int = Column(INTEGER, ForeignKey('samples.sampleid'), nullable=False)
+    acq_sample_id: int = Column(INTEGER, ForeignKey("samples.sampleid"), nullable=False)
     # i.e. acq_id from TSV
     orig_id: str = Column(VARCHAR(255), nullable=False)
     # TODO: Put into a dedicated table
@@ -37,7 +37,9 @@ class Acquisition(Model):
         return self.acquisid
 
     @classmethod
-    def get_orig_id_and_model(cls, session: Session, prj_id) -> Dict[Tuple[str, str], 'Acquisition']:
+    def get_orig_id_and_model(
+        cls, session: Session, prj_id
+    ) -> Dict[Tuple[str, str], "Acquisition"]:
         res = session.query(Acquisition, Sample.orig_id)
         res = res.join(Sample)
         res = res.join(Project)
@@ -55,4 +57,4 @@ class Acquisition(Model):
 for i in range(1, ACQUISITION_FREE_COLUMNS):
     setattr(Acquisition, "t%02d" % i, Column(VARCHAR(250)))
 
-Index('IS_AcquisOrigId', Acquisition.acq_sample_id, Acquisition.orig_id, unique=True)
+Index("IS_AcquisOrigId", Acquisition.acq_sample_id, Acquisition.orig_id, unique=True)

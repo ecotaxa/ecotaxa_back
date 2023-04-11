@@ -7,12 +7,15 @@
 import logging
 
 import pytest
+
 # noinspection PyPackageRequirements
 from API_models.imports import *
+
 # Import services
 # noinspection PyPackageRequirements
 # noinspection PyPackageRequirements
 from API_operations.imports.SimpleImport import SimpleImport
+
 # # noinspection PyUnresolvedReferences
 # from tests.config_fixture import config
 # # noinspection PyUnresolvedReferences
@@ -31,22 +34,20 @@ UPLOAD_FILE_URL = "/my_files/"
 @pytest.mark.parametrize("title", ["Test Import Images"])
 def test_import_images_only(config, database, caplog, title):
     """
-        Simple import AKA image only import, with fixed values.
+    Simple import AKA image only import, with fixed values.
     """
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, title)
 
-    vals = {"latitude": "abcde",
-            "longitude": "456.5",
-            "depthmin": "very very low"}
-    params = SimpleImportReq(task_id=0,
-                             source_path=str(PLAIN_DIR),
-                             values=vals)
+    vals = {"latitude": "abcde", "longitude": "456.5", "depthmin": "very very low"}
+    params = SimpleImportReq(task_id=0, source_path=str(PLAIN_DIR), values=vals)
     with SimpleImport(prj_id, params, dry_run=True) as sce:
         rsp = sce.run(ADMIN_USER_ID)
-    assert rsp.errors == ["'abcde' is not a valid value for SimpleImportFields.latitude",
-                          "'456.5' is not a valid value for SimpleImportFields.longitude",
-                          "'very very low' is not a valid value for SimpleImportFields.depthmin"]
+    assert rsp.errors == [
+        "'abcde' is not a valid value for SimpleImportFields.latitude",
+        "'456.5' is not a valid value for SimpleImportFields.longitude",
+        "'very very low' is not a valid value for SimpleImportFields.depthmin",
+    ]
     # Do real import
     vals["latitude"] = "43.8802"
     vals["longitude"] = "7.2329"
@@ -82,19 +83,20 @@ def test_import_images_only(config, database, caplog, title):
 @pytest.mark.parametrize("title", ["Simple via fastapi"])
 def test_api_import_images(config, database, fastapi, caplog, title):
     """
-        Simple import with no fixed values at all, but using the upload directory.
+    Simple import with no fixed values at all, but using the upload directory.
     """
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(CREATOR_USER_ID, title)
 
     with open(PLAIN_FILE_PATH, "rb") as fin:
-        upload_rsp = fastapi.post(UPLOAD_FILE_URL, headers=CREATOR_AUTH, files={"file": fin})
+        upload_rsp = fastapi.post(
+            UPLOAD_FILE_URL, headers=CREATOR_AUTH, files={"file": fin}
+        )
         assert upload_rsp.status_code == 200
         srv_file_path = upload_rsp.json()
 
     url = IMPORT_IMAGES_URL.format(project_id=prj_id, dry_run=False)
-    req = {"source_path": srv_file_path,
-           "values": {}}
+    req = {"source_path": srv_file_path, "values": {}}
     rsp = fastapi.post(url, headers=CREATOR_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]

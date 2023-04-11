@@ -36,7 +36,7 @@ Pixel_Size=73
 
 def test_vignette1():
     """
-        Just a check that the code does not error out.
+    Just a check that the code does not error out.
     """
     config = configparser.ConfigParser()
     config.read_string(CONFIG)

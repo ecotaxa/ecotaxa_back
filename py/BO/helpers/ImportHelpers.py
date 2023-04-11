@@ -17,7 +17,7 @@ from FS.Vault import Vault
 
 class ImportDiagnostic(object):
     """
-        During an import analysis, data and problems collected.
+    During an import analysis, data and problems collected.
     """
 
     def __init__(self) -> None:
@@ -43,7 +43,7 @@ class ImportDiagnostic(object):
 
 class ImportWhere(object):
     """
-        During an import, where to put data, i.e. DB and Images
+    During an import, where to put data, i.e. DB and Images
     """
 
     def __init__(self, db_writer: DBWriter, vault: Vault, temp: Path):
@@ -54,16 +54,22 @@ class ImportWhere(object):
 
 class ImportHow(object):
     """
-        During an import, how to do it, special cases, mappings and so on.
+    During an import, how to do it, special cases, mappings and so on.
     """
 
-    def __init__(self, prj_id, update_mode: str, custom_mapping: ProjectMapping, skip_object_duplicates: bool,
-                 loaded_files: List[str]):
+    def __init__(
+        self,
+        prj_id,
+        update_mode: str,
+        custom_mapping: ProjectMapping,
+        skip_object_duplicates: bool,
+        loaded_files: List[str],
+    ):
         self.prj_id = prj_id
         # Update or create
         # In this mode, no creation of anything, only update
-        self.can_update_only = update_mode in ('Yes', 'Cla')
-        self.update_with_classif = update_mode == 'Cla'
+        self.can_update_only = update_mode in ("Yes", "Cla")
+        self.update_with_classif = update_mode == "Cla"
         # From user choices
         self.files_not_to_import: Set[str] = set()
         self.objects_and_images_to_skip: Set[str] = set()
@@ -98,7 +104,7 @@ class ImportHow(object):
 
     def compute_skipped(self, bundle, _logger) -> None:
         """
-            Compute files _not_ to load.
+        Compute files _not_ to load.
         """
         for relative_name in bundle.possible_files_as_posix():
             if relative_name in self.loaded_files:
@@ -107,7 +113,7 @@ class ImportHow(object):
 
 class ImportStats(object):
     """
-        During an import, the statistics for reporting progress.
+    During an import, the statistics for reporting progress.
     """
 
     def __init__(self, total_rows: int, report_def: Callable):

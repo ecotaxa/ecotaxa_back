@@ -30,7 +30,6 @@ Finally upgrade your local DB:
 `PATH=../venv38/bin PYTHONPATH=.. APP_CONFIG=../config.ini alembic upgrade head
 `
 
-
 * As an operator, to upgrade a production DB, from docker shell:
 
 ```

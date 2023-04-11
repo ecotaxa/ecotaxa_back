@@ -8,7 +8,7 @@ from .helpers.ORM import Model
 
 
 class WoRMS(Model):
-    __tablename__ = 'worms'
+    __tablename__ = "worms"
     # WoRMS record @see http://www.marinespecies.org/rest/
     aphia_id: int = Column(Integer, primary_key=True)
     """ Unique and persistent identifier within WoRMS. Primary key in the database -- """
@@ -80,4 +80,4 @@ class WoRMS(Model):
     all_fetched = Column(Boolean)
 
 
-Index('worms_pp', WoRMS.parent_name_usage_id, WoRMS.aphia_id)
+Index("worms_pp", WoRMS.parent_name_usage_id, WoRMS.aphia_id)

@@ -14,9 +14,13 @@ from tensorflow.keras import layers, optimizers, losses, callbacks
 
 
 def Create(
-        fe_url, input_shape, fe_trainable,
-        fc_layers_sizes, fc_layers_dropout,
-        classif_layer_size, classif_layer_dropout
+    fe_url,
+    input_shape,
+    fe_trainable,
+    fc_layers_sizes,
+    fc_layers_dropout,
+    classif_layer_size,
+    classif_layer_dropout,
 ):
     """
     Generates a CNN model.
@@ -50,12 +54,12 @@ def Create(
     for i in range(len(fc_layers_sizes)):
         if fc_layers_dropout:
             model.add(layers.Dropout(fc_layers_dropout))
-        model.add(layers.Dense(fc_layers_sizes[i], activation='relu'))
+        model.add(layers.Dense(fc_layers_sizes[i], activation="relu"))
 
     # Add classification layer
     if classif_layer_dropout:
         model.add(layers.Dropout(classif_layer_dropout))
-    model.add(layers.Dense(classif_layer_size, activation='softmax'))
+    model.add(layers.Dense(classif_layer_size, activation="softmax"))
 
     # print model summary
     model.summary()
@@ -64,8 +68,7 @@ def Create(
 
 
 def Compile(
-        model, initial_lr, lr_method='constant',
-        decay_steps=1.0, decay_rate=0.5, loss='cce'
+    model, initial_lr, lr_method="constant", decay_steps=1.0, decay_rate=0.5, loss="cce"
 ):
     """
     Compiles a CNN model.
@@ -93,11 +96,11 @@ def Compile(
 
     """
     # Define learning rate
-    if lr_method == 'decay':
+    if lr_method == "decay":
         lr = tf.keras.optimizers.schedules.InverseTimeDecay(
             initial_learning_rate=initial_lr,
             decay_steps=decay_steps,
-            decay_rate=decay_rate
+            decay_rate=decay_rate,
         )
     else:  # Keep constant learning rate
         lr = initial_lr
@@ -106,27 +109,25 @@ def Compile(
     optimizer = optimizers.Adam(learning_rate=lr)
 
     # Define loss
-    if loss == 'cce':
-        loss = losses.CategoricalCrossentropy(from_logits=True,
-                                              reduction=losses.Reduction.SUM_OVER_BATCH_SIZE)
+    if loss == "cce":
+        loss = losses.CategoricalCrossentropy(
+            from_logits=True, reduction=losses.Reduction.SUM_OVER_BATCH_SIZE
+        )
         # TODO consider using
         # https://www.tensorflow.org/api_docs/python/tf/keras/losses/SparseCategoricalCrossentropy
         # to avoid having to one-hot encode the labels
-    elif loss == 'sfce':
-        loss = tfa.losses.SigmoidFocalCrossEntropy(from_logits=True,
-                                                   reduction=losses.Reduction.SUM_OVER_BATCH_SIZE)
+    elif loss == "sfce":
+        loss = tfa.losses.SigmoidFocalCrossEntropy(
+            from_logits=True, reduction=losses.Reduction.SUM_OVER_BATCH_SIZE
+        )
 
     # Compile model
-    model.compile(
-        optimizer=optimizer,
-        loss=loss,
-        metrics=['accuracy']
-    )
+    model.compile(optimizer=optimizer, loss=loss, metrics=["accuracy"])
 
     return model
 
 
-def Load(output_dir='.'):
+def Load(output_dir="."):
     """
     Load a CNN model.
 
@@ -151,7 +152,7 @@ def Load(output_dir='.'):
         model.summary()
 
         # get epoch from file name
-        epoch = int(latest_checkpoint.split('.')[1])
+        epoch = int(latest_checkpoint.split(".")[1])
         # TODO: check if there is a more robust way to get this from the model
     else:
         model = None
@@ -161,8 +162,14 @@ def Load(output_dir='.'):
 
 
 def Train(
-        model, train_batches, valid_batches,
-        epochs, initial_epoch=0, class_weight=None, output_dir='.', workers=1
+    model,
+    train_batches,
+    valid_batches,
+    epochs,
+    initial_epoch=0,
+    class_weight=None,
+    output_dir=".",
+    workers=1,
 ):
     """
     Trains a CNN model.
@@ -185,12 +192,12 @@ def Train(
     # NB: hdf5 does not work for saving full models
     checkpoint_callback = callbacks.ModelCheckpoint(
         filepath=checkpoint_path,
-        monitor='val_loss',
+        monitor="val_loss",
         save_best_only=True,
-        mode='min',
+        mode="min",
         save_weights_only=False,
-        save_freq='epoch',
-        verbose=1
+        save_freq="epoch",
+        verbose=1,
     )
 
     # Fit the model
@@ -202,7 +209,7 @@ def Train(
         validation_data=valid_batches,
         class_weight=class_weight,
         max_queue_size=max(10, workers * 2),
-        workers=workers
+        workers=workers,
     )
 
     return history
@@ -228,9 +235,7 @@ def Predict(model, batches, classes=None, workers=1):
 
     # Predict all batches
     prediction = model.predict(
-        batches,
-        max_queue_size=max(10, workers * 2),
-        workers=workers
+        batches, max_queue_size=max(10, workers * 2), workers=workers
     )
     # NB: pred is an array with:
     # - as many lines as there are items in the batches to predict

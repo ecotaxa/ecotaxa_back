@@ -19,7 +19,7 @@ from DB.helpers.ORM import non_key_cols, ModelT
 
 class MappedTable(metaclass=ABCMeta):
     """
-        A mapped table is included in a project, and shows DB columns possibly differently amongst projects.
+    A mapped table is included in a project, and shows DB columns possibly differently amongst projects.
     """
 
     def __init__(self, session: Session):
@@ -29,9 +29,11 @@ class MappedTable(metaclass=ABCMeta):
     def add_filter(self, upd: Query) -> Query:
         ...  # pragma:nocover
 
-    def _apply_on_all(self, clazz: MappedTableTypeT, project: Project, updates: List[ColUpdate]) -> int:
+    def _apply_on_all(
+        self, clazz: MappedTableTypeT, project: Project, updates: List[ColUpdate]
+    ) -> int:
         """
-            Apply all updates on all impacted rows by their ID.
+        Apply all updates on all impacted rows by their ID.
         """
         prj_mappings = ProjectMapping().load_from_project(project)
         tbl_mappings = prj_mappings.by_table[clazz].tsv_cols_to_real
@@ -43,16 +45,18 @@ class MappedTable(metaclass=ABCMeta):
 
     def _apply_on_all_non_mapped(self, clazz: ModelT, updates: List[ColUpdate]) -> int:
         """
-            Apply all updates on all impacted rows by their ID, for non-mapped clazz.
+        Apply all updates on all impacted rows by their ID, for non-mapped clazz.
         """
         clean_updates = self._sanitize_updates(clazz, {}, updates)
         return self._do_updates(clazz, clean_updates)
 
     @staticmethod
-    def _sanitize_updates(clazz: ModelT, tbl_mappings: Dict[str, str], updates: List[ColUpdate]) -> List[ColUpdate]:
+    def _sanitize_updates(
+        clazz: ModelT, tbl_mappings: Dict[str, str], updates: List[ColUpdate]
+    ) -> List[ColUpdate]:
         """
-            Ensure that the update will do the job, avoiding e.g. non-existing columns.
-            Also does the free columns mapping, if required.
+        Ensure that the update will do the job, avoiding e.g. non-existing columns.
+        Also does the free columns mapping, if required.
         """
         clean_updates = []
         a_col_upd: ColUpdate
@@ -76,7 +80,8 @@ class MappedTable(metaclass=ABCMeta):
         upd = self.session.query(clazz)
         upd = self.add_filter(upd)
         # TODO: Cache update if ObjectHeader or ObjectField
-        affected_rows = upd.update(values=ColUpdateList(updates).as_dict_for_db(),
-                                   synchronize_session=False)
+        affected_rows = upd.update(
+            values=ColUpdateList(updates).as_dict_for_db(), synchronize_session=False
+        )
         self.session.commit()
         return affected_rows

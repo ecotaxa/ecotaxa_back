@@ -14,10 +14,11 @@ PROCESS_FREE_COLUMNS = 31
 
 class Process(Model):
     # DB table
-    __tablename__ = 'process'
+    __tablename__ = "process"
     # Twin table with Acquisitions
-    processid: int = Column(INTEGER, ForeignKey(Acquisition.acquisid, ondelete="CASCADE"),
-                            primary_key=True)
+    processid: int = Column(
+        INTEGER, ForeignKey(Acquisition.acquisid, ondelete="CASCADE"), primary_key=True
+    )
     # i.e. process_id from TSV
     orig_id = Column(VARCHAR(255), nullable=False)
 

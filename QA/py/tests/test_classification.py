@@ -23,14 +23,16 @@ from tests.test_taxa_query import TAXA_SET_QUERY_URL
 
 
 def _prj_query(fastapi, auth, prj_id, **kwargs) -> List[int]:
-    """ Query using the filters in kwargs """
+    """Query using the filters in kwargs"""
     url = OBJECT_SET_QUERY_URL.format(project_id=prj_id)
     rsp = fastapi.post(url, headers=auth, json=kwargs)
     obj_ids = rsp.json()["object_ids"]
     return obj_ids
 
 
-OBJECT_SET_REVERT_URL = "/object_set/{project_id}/revert_to_history?dry_run={dry_run}{tgt_usr}"
+OBJECT_SET_REVERT_URL = (
+    "/object_set/{project_id}/revert_to_history?dry_run={dry_run}{tgt_usr}"
+)
 OBJECT_SET_RESET_PREDICTED_URL = "/object_set/{project_id}/reset_to_predicted"
 OBJECT_SET_CLASSIFY_URL = "/object_set/classify"
 OBJECT_SET_CLASSIFY_AUTO_URL = "/object_set/classify_auto"
@@ -81,9 +83,15 @@ def get_predictions_stats(obj_ids):
 def classify_all(fastapi, obj_ids, classif_id):
     url = OBJECT_SET_CLASSIFY_URL
     classifications = [classif_id for _obj in obj_ids]
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
-                                                      "classifications": classifications,
-                                                      "wanted_qualification": "V"})
+    rsp = fastapi.post(
+        url,
+        headers=ADMIN_AUTH,
+        json={
+            "target_ids": obj_ids,
+            "classifications": classifications,
+            "wanted_qualification": "V",
+        },
+    )
     assert rsp.status_code == status.HTTP_200_OK
 
 
@@ -92,10 +100,16 @@ def classify_auto_mult_all(fastapi, obj_ids, classif_id, scores=None):
     classifications = [classif_id for _obj in obj_ids]
     if not scores:
         scores = [[0.52, 0.2, 0.08] for _obj in obj_ids]
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
-                                                      "classifications": classifications,
-                                                      "scores": scores,
-                                                      "keep_log": True})
+    rsp = fastapi.post(
+        url,
+        headers=ADMIN_AUTH,
+        json={
+            "target_ids": obj_ids,
+            "classifications": classifications,
+            "scores": scores,
+            "keep_log": True,
+        },
+    )
     assert rsp.status_code == status.HTTP_200_OK
 
 
@@ -107,23 +121,41 @@ def classify_auto_incorrect(fastapi, obj_ids):
     # List of scores of a different length, should raise an error
     scores = [[0.1] * n for _obj in obj_ids[:-1]]
     with pytest.raises(AssertionError):
-        rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
-                                                          "classifications": classifications,
-                                                          "scores": scores,
-                                                          "keep_log": True})
+        rsp = fastapi.post(
+            url,
+            headers=ADMIN_AUTH,
+            json={
+                "target_ids": obj_ids,
+                "classifications": classifications,
+                "scores": scores,
+                "keep_log": True,
+            },
+        )
     # List of scores outside [0, 1], should raise an error
     scores = [[2.] * n for _obj in obj_ids]
     with pytest.raises(AssertionError):
-        rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
-                                                          "classifications": classifications,
-                                                          "scores": scores,
-                                                          "keep_log": True})
+        rsp = fastapi.post(
+            url,
+            headers=ADMIN_AUTH,
+            json={
+                "target_ids": obj_ids,
+                "classifications": classifications,
+                "scores": scores,
+                "keep_log": True,
+            },
+        )
     # List of scores with wrong type, should fail
     scores = [[None] * n for _obj in obj_ids]
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
-                                                      "classifications": classifications,
-                                                      "scores": scores,
-                                                      "keep_log": True})
+    rsp = fastapi.post(
+        url,
+        headers=ADMIN_AUTH,
+        json={
+            "target_ids": obj_ids,
+            "classifications": classifications,
+            "scores": scores,
+            "keep_log": True,
+        },
+    )
     assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
@@ -132,50 +164,63 @@ def classify_auto_incorrect(fastapi, obj_ids):
 def test_classif(config, database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
     from tests.test_import import test_import
+
     prj_id = test_import(config, database, caplog, "Test Classify/Validate")
 
     obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
     assert len(obj_ids) == 8
 
     # See if the taxa we are going to use are OK
-    rsp = fastapi.get(TAXA_SET_QUERY_URL.format(taxa_ids="%d+%d" % (copepod_id, entomobryomorpha_id)))
+    rsp = fastapi.get(
+        TAXA_SET_QUERY_URL.format(taxa_ids="%d+%d" % (copepod_id, entomobryomorpha_id))
+    )
     # Note: There is no real lineage in test DB
-    assert rsp.json() == [{'children': [84964],
-                           'display_name': 'Copepoda',
-                           'id': 25828,
-                           'id_lineage': [25828, 16621, 12846, 11517, 2367, 382, 8, 2, 1],
-                           'lineage': ['Copepoda',
-                                       'Maxillopoda',
-                                       'Crustacea',
-                                       'Arthropoda',
-                                       'Metazoa',
-                                       'Holozoa',
-                                       'Opisthokonta',
-                                       'Eukaryota',
-                                       'living'],
-                           'name': 'Copepoda',
-                           'nb_children_objects': 0,
-                           'nb_objects': 0,
-                           'renm_id': None,
-                           'type': 'P'},
-                          {'children': [],
-                           'display_name': 'Entomobryomorpha',
-                           'id': 25835,
-                           'id_lineage': [25835, 16630, 12845, 11517, 2367, 382, 8, 2, 1],
-                           'lineage': ['Entomobryomorpha',
-                                       'Collembola',
-                                       'Hexapoda',
-                                       'Arthropoda',
-                                       'Metazoa',
-                                       'Holozoa',
-                                       'Opisthokonta',
-                                       'Eukaryota',
-                                       'living'],
-                           'name': 'Entomobryomorpha',
-                           'nb_children_objects': 0,
-                           'nb_objects': 0,
-                           'renm_id': None,
-                           'type': 'P'}]
+    assert rsp.json() == [
+        {
+            "children": [84964],
+            "display_name": "Copepoda",
+            "id": 25828,
+            "id_lineage": [25828, 16621, 12846, 11517, 2367, 382, 8, 2, 1],
+            "lineage": [
+                "Copepoda",
+                "Maxillopoda",
+                "Crustacea",
+                "Arthropoda",
+                "Metazoa",
+                "Holozoa",
+                "Opisthokonta",
+                "Eukaryota",
+                "living",
+            ],
+            "name": "Copepoda",
+            "nb_children_objects": 0,
+            "nb_objects": 0,
+            "renm_id": None,
+            "type": "P",
+        },
+        {
+            "children": [],
+            "display_name": "Entomobryomorpha",
+            "id": 25835,
+            "id_lineage": [25835, 16630, 12845, 11517, 2367, 382, 8, 2, 1],
+            "lineage": [
+                "Entomobryomorpha",
+                "Collembola",
+                "Hexapoda",
+                "Arthropoda",
+                "Metazoa",
+                "Holozoa",
+                "Opisthokonta",
+                "Eukaryota",
+                "living",
+            ],
+            "name": "Entomobryomorpha",
+            "nb_children_objects": 0,
+            "nb_objects": 0,
+            "renm_id": None,
+            "type": "P",
+        },
+    ]
 
     # Initial stats just after load
 
@@ -187,16 +232,21 @@ def test_classif(config, database, fastapi, caplog):
         return stats_rsp.json()
 
     # All is predicted, see source archive
-    assert get_stats(fastapi, prj_id) == {'nb_dubious': 0,
-                                          'nb_predicted': 8,
-                                          'nb_unclassified': 0,
-                                          'nb_validated': 0,
-                                          'projid': prj_id,
-                                          'used_taxa': [45072, 78418, 84963, 85011, 85012, 85078]}
+    assert get_stats(fastapi, prj_id) == {
+        "nb_dubious": 0,
+        "nb_predicted": 8,
+        "nb_unclassified": 0,
+        "nb_validated": 0,
+        "projid": prj_id,
+        "used_taxa": [45072, 78418, 84963, 85011, 85012, 85078],
+    }
 
     # Try a revert on a fresh project
-    url = OBJECT_SET_REVERT_URL.format(project_id=prj_id, dry_run=True,
-                                       tgt_usr="&target=" + str(ORDINARY_USER2_USER_ID))
+    url = OBJECT_SET_REVERT_URL.format(
+        project_id=prj_id,
+        dry_run=True,
+        tgt_usr="&target=" + str(ORDINARY_USER2_USER_ID),
+    )
     rsp = fastapi.post(url, headers=CREATOR_AUTH, json={})
     # Security barrier
     assert rsp.status_code == status.HTTP_403_FORBIDDEN
@@ -206,8 +256,8 @@ def test_classif(config, database, fastapi, caplog):
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
     assert rsp.status_code == status.HTTP_200_OK
     stats = rsp.json()
-    assert len(stats['classif_info']) == 6
-    assert len(stats['last_entries']) == 8
+    assert len(stats["classif_info"]) == 6
+    assert len(stats["last_entries"]) == 8
     # Working revert, erase all from import
     url = OBJECT_SET_REVERT_URL.format(project_id=prj_id, dry_run=False, tgt_usr="")
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
@@ -216,18 +266,22 @@ def test_classif(config, database, fastapi, caplog):
     # assert stats == {'classif_info': {}, 'last_entries': []}
 
     # Same stats
-    assert get_stats(fastapi, prj_id) == {'nb_dubious': 0,
-                                          'nb_predicted': 0,
-                                          'nb_unclassified': 8,
-                                          'nb_validated': 0,
-                                          'projid': prj_id,
-                                          'used_taxa': [-1]}
+    assert get_stats(fastapi, prj_id) == {
+        "nb_dubious": 0,
+        "nb_predicted": 0,
+        "nb_unclassified": 8,
+        "nb_validated": 0,
+        "projid": prj_id,
+        "used_taxa": [-1],
+    }
 
     obj_stats = get_object_set_stats()
-    assert obj_stats == {'dubious_objects': 0,
-                         'predicted_objects': 0,
-                         'total_objects': 8,
-                         'validated_objects': 0}
+    assert obj_stats == {
+        "dubious_objects": 0,
+        "predicted_objects": 0,
+        "total_objects": 8,
+        "validated_objects": 0,
+    }
 
     # Reset all to predicted
     url = OBJECT_SET_RESET_PREDICTED_URL.format(project_id=prj_id)
@@ -240,13 +294,15 @@ def test_classif(config, database, fastapi, caplog):
     # Super ML result, 4 first objects are crustacea
     classify_auto_mult_all(fastapi, obj_ids[:4], [crustacea, copepod_id, entomobryomorpha_id])
 
-    assert get_stats(fastapi, prj_id) == {'nb_dubious': 0,
-                                          'nb_predicted': 4,
-                                          'nb_unclassified': 4,
-                                          'nb_validated': 0,
-                                          'projid': prj_id,
-                                          'used_taxa': [-1, crustacea]}
-
+    assert get_stats(fastapi, prj_id) == {
+        "nb_dubious": 0,
+        "nb_predicted": 4,
+        "nb_unclassified": 4,
+        "nb_validated": 0,
+        "projid": prj_id,
+        "used_taxa": [-1, crustacea],
+    }
+    
     assert get_predictions_stats(obj_ids) == {'n_predicted_objects': 4,
                                               'n_predictions': 12,
                                               'n_discarded': 0}
@@ -257,12 +313,14 @@ def test_classif(config, database, fastapi, caplog):
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
 
-    assert get_stats(fastapi, prj_id) == {'nb_dubious': 0,
-                                          'nb_predicted': 4,
-                                          'nb_unclassified': 4,
-                                          'nb_validated': 0,
-                                          'projid': prj_id,
-                                          'used_taxa': [-1, crustacea]}
+    assert get_stats(fastapi, prj_id) == {
+        "nb_dubious": 0,
+        "nb_predicted": 4,
+        "nb_unclassified": 4,
+        "nb_validated": 0,
+        "projid": prj_id,
+        "used_taxa": [-1, crustacea],
+    }
 
     assert get_predictions_stats(obj_ids) == {'n_predicted_objects': 4,
                                               'n_predictions': 12,
@@ -278,21 +336,33 @@ def test_classif(config, database, fastapi, caplog):
     classify_all(fastapi, obj_ids, copepod_id)
 
     # Same stats
-    assert get_stats(fastapi, prj_id) == {'nb_dubious': 0,
-                                          'nb_predicted': 0,
-                                          'nb_unclassified': 0,
-                                          'nb_validated': 8,
-                                          'projid': prj_id,
-                                          'used_taxa': [copepod_id]}  # No more Unclassified and Copepod is in +
+    assert get_stats(fastapi, prj_id) == {
+        "nb_dubious": 0,
+        "nb_predicted": 0,
+        "nb_unclassified": 0,
+        "nb_validated": 8,
+        "projid": prj_id,
+        "used_taxa": [copepod_id],
+    }  # No more Unclassified and Copepod is in +
 
     # No history yet as the object was just created
     classif = classif_history(fastapi, obj_ids[0])
     assert len(classif) == 1
-    assert classif[0]['classif_date'] is not None  # e.g. 2021-09-12T09:28:03.278626
-    classif[0]['classif_date'] = "now"
+    assert classif[0]["classif_date"] is not None  # e.g. 2021-09-12T09:28:03.278626
+    classif[0]["classif_date"] = "now"
     assert classif == [
-        {'objid': obj_ids[0], 'classif_id': crustacea, 'classif_date': 'now', 'classif_who': None,
-         'classif_type': 'A', 'classif_qual': 'P', 'pred_id': 1, 'user_name': None, 'taxon_name': 'Crustacea'}]
+        {
+            "objid": obj_ids[0],
+            "classif_id": crustacea,
+            "classif_date": "now",
+            "classif_who": None,
+            "classif_type": "A",
+            "classif_qual": "P",
+            "pred_id": 1,
+            "user_name": None,
+            "taxon_name": "Crustacea",
+        }
+    ]
 
     # Revert on validated objects
     url = OBJECT_SET_REVERT_URL.format(project_id=prj_id, dry_run=False, tgt_usr="")
@@ -300,24 +370,28 @@ def test_classif(config, database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
     stats = rsp.json()
 
-    assert get_stats(fastapi, prj_id) == {'nb_dubious': 0,
-                                          'nb_predicted': 4,
-                                          'nb_unclassified': 4,
-                                          'nb_validated': 0,
-                                          'projid': prj_id,
-                                          'used_taxa': [-1, crustacea]}
+    assert get_stats(fastapi, prj_id) == {
+        "nb_dubious": 0,
+        "nb_predicted": 4,
+        "nb_unclassified": 4,
+        "nb_validated": 0,
+        "projid": prj_id,
+        "used_taxa": [-1, crustacea],
+    }
 
     # Second revert, should not change since the last record in history is the same
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
     assert rsp.status_code == status.HTTP_200_OK
     stats = rsp.json()
 
-    assert get_stats(fastapi, prj_id) == {'nb_dubious': 0,
-                                          'nb_predicted': 4,
-                                          'nb_unclassified': 4,
-                                          'nb_validated': 0,
-                                          'projid': prj_id,
-                                          'used_taxa': [-1, crustacea]}
+    assert get_stats(fastapi, prj_id) == {
+        "nb_dubious": 0,
+        "nb_predicted": 4,
+        "nb_unclassified": 4,
+        "nb_validated": 0,
+        "projid": prj_id,
+        "used_taxa": [-1, crustacea],
+    }
 
     # Apply validation again after revert
     classify_all(fastapi, obj_ids, copepod_id)
@@ -328,9 +402,15 @@ def test_classif(config, database, fastapi, caplog):
     def classify_all_no_change(classif_id):
         url = OBJECT_SET_CLASSIFY_URL
         classifications = [-1 for _obj in obj_ids]
-        rsp = fastapi.post(url, headers=ADMIN_AUTH, json={"target_ids": obj_ids,
-                                                          "classifications": classifications,
-                                                          "wanted_qualification": "V"})
+        rsp = fastapi.post(
+            url,
+            headers=ADMIN_AUTH,
+            json={
+                "target_ids": obj_ids,
+                "classifications": classifications,
+                "wanted_qualification": "V",
+            },
+        )
         assert rsp.status_code == status.HTTP_200_OK
 
     classify_all_no_change(entomobryomorpha_id)
@@ -338,45 +418,53 @@ def test_classif(config, database, fastapi, caplog):
     classif2 = classif_history(fastapi, obj_ids[0])
     assert classif2 is not None
     # Date is not predictable
-    classif2[0]['classif_date'] = 'hopefully just now'
-    classif2[1]['classif_date'] = 'a bit before'
-    assert classif2 == [{'classif_date': 'hopefully just now',
-                         'classif_id': copepod_id,
-                         'classif_qual': 'V',
-                         'pred_id': 1,
-                         'classif_type': 'M',
-                         'classif_who': 1,
-                         'objid': obj_ids[0],
-                         'taxon_name': 'Copepoda',
-                         'user_name': 'Application Administrator'},
-                        {'classif_date': 'a bit before',
-                         'classif_id': crustacea,
-                         'classif_qual': 'P',
-                         'pred_id': 1,
-                         'classif_type': 'A',
-                         'classif_who': None,
-                         'objid': obj_ids[0],
-                         'taxon_name': 'Crustacea',
-                         'user_name': None}]
+    classif2[0]["classif_date"] = "hopefully just now"
+    classif2[1]["classif_date"] = "a bit before"
+    assert classif2 == [
+        {
+            "classif_date": "hopefully just now",
+            "classif_id": copepod_id,
+            "classif_qual": "V",
+            "pred_id": 1,
+            "classif_type": "M",
+            "classif_who": 1,
+            "objid": obj_ids[0],
+            "taxon_name": "Copepoda",
+            "user_name": "Application Administrator",
+        },
+        {
+            "classif_date": "a bit before",
+            "classif_id": crustacea,
+            "classif_qual": "P",
+            "pred_id": 1,
+            "classif_type": "A",
+            "classif_who": None,
+            "objid": obj_ids[0],
+            "taxon_name": "Crustacea",
+            "user_name": None,
+        },
+    ]
 
     # There should be 0 predicted
-    obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id, statusfilter='P')
+    obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id, statusfilter="P")
     assert len(obj_ids) == 0
     # There should be 8 validated
-    obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id, statusfilter='V')
+    obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id, statusfilter="V")
     assert len(obj_ids) == 8
 
     url = PROJECT_CLASSIF_STATS_URL.format(prj_ids="%s" % prj_id)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json() == [{'nb_dubious': 0,
-                           'nb_predicted': 0,
-                           'nb_unclassified': 0,
-                           'nb_validated': 8,
-                           'projid': prj_id,
-                           'used_taxa':
-                               [
-                                   entomobryomorpha_id]}]  # <- copepod is gone, unclassified as well, replaced with entomobryomorpha
+    assert rsp.json() == [
+        {
+            "nb_dubious": 0,
+            "nb_predicted": 0,
+            "nb_unclassified": 0,
+            "nb_validated": 8,
+            "projid": prj_id,
+            "used_taxa": [entomobryomorpha_id],
+        }
+    ]  # <- copepod is gone, unclassified as well, replaced with entomobryomorpha
 
     # Reset to predicted on validated objects
     url = OBJECT_SET_RESET_PREDICTED_URL.format(project_id=prj_id)
@@ -384,12 +472,14 @@ def test_classif(config, database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
     stats = rsp.json()
 
-    assert get_stats(fastapi, prj_id) == {'nb_dubious': 0,
-                                          'nb_predicted': 8,
-                                          'nb_unclassified': 0,
-                                          'nb_validated': 0,
-                                          'projid': prj_id,
-                                          'used_taxa': [entomobryomorpha_id]}
+    assert get_stats(fastapi, prj_id) == {
+        "nb_dubious": 0,
+        "nb_predicted": 8,
+        "nb_unclassified": 0,
+        "nb_validated": 0,
+        "projid": prj_id,
+        "used_taxa": [entomobryomorpha_id],
+    }
 
     # Revert after reset to predicted
     url = OBJECT_SET_REVERT_URL.format(project_id=prj_id, dry_run=False, tgt_usr="")
@@ -397,12 +487,14 @@ def test_classif(config, database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
     stats = rsp.json()
 
-    assert get_stats(fastapi, prj_id) == {'nb_dubious': 0,
-                                          'nb_predicted': 0,
-                                          'nb_unclassified': 0,
-                                          'nb_validated': 8,
-                                          'projid': prj_id,
-                                          'used_taxa': [entomobryomorpha_id]}
+    assert get_stats(fastapi, prj_id) == {
+        "nb_dubious": 0,
+        "nb_predicted": 0,
+        "nb_unclassified": 0,
+        "nb_validated": 8,
+        "projid": prj_id,
+        "used_taxa": [entomobryomorpha_id],
+    }
 
     # Delete some object via API, why not?
     rsp = fastapi.delete(OBJECT_SET_DELETE_URL, headers=ADMIN_AUTH, json=obj_ids[:4])
@@ -412,21 +504,25 @@ def test_classif(config, database, fastapi, caplog):
     rsp = fastapi.post(OBJECT_SET_PARENTS_URL, headers=ADMIN_AUTH, json=obj_ids)
     assert rsp.status_code == status.HTTP_200_OK
     resp = rsp.json()
-    assert len(resp['acquisition_ids']) == 4
-    for prj in resp['project_ids']:
+    assert len(resp["acquisition_ids"]) == 4
+    for prj in resp["project_ids"]:
         assert prj == prj_id
-    assert resp['total_ids'] == 4
+    assert resp["total_ids"] == 4
 
     # Try user stats on the project
     url = PROJECT_SET_USER_STATS.format(prj_ids=str(prj_id))
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     stats = rsp.json()
     # The ref stats were obtained with a run in may 2022
-    ref_stats = [{"projid": prj_id,
-                  "annotators": [{"id": 1,
-                                  "name": "Application Administrator"}],
-                  "activities": [{"id": 1, "nb_actions": 12,
-                                  "last_annot": "2022-05-12T14:21:15"}]}]
+    ref_stats = [
+        {
+            "projid": prj_id,
+            "annotators": [{"id": 1, "name": "Application Administrator"}],
+            "activities": [
+                {"id": 1, "nb_actions": 12, "last_annot": "2022-05-12T14:21:15"}
+            ],
+        }
+    ]
     # Fix the date on both sides
     ref_stats[0]["activities"][0]["last_annot"] = "FIXED DATE"
     stats[0]["activities"][0]["last_annot"] = "FIXED DATE"

@@ -12,16 +12,28 @@ import pytest
 from starlette import status
 
 from tests.credentials import ADMIN_USER_ID, CREATOR_AUTH, CREATOR_USER_ID
-from tests.test_import import FILE_IMPORT_URL, SHARED_DIR, PLAIN_DIR, PLAIN_FILE, V6_FILE, create_project, \
-    PLAIN_FILE_PATH
-from tests.test_jobs import wait_for_stable, api_wait_for_stable_job, api_check_job_ok, api_check_job_errors
+from tests.test_import import (
+    FILE_IMPORT_URL,
+    SHARED_DIR,
+    PLAIN_DIR,
+    PLAIN_FILE,
+    V6_FILE,
+    create_project,
+    PLAIN_FILE_PATH,
+)
+from tests.test_jobs import (
+    wait_for_stable,
+    api_wait_for_stable_job,
+    api_check_job_ok,
+    api_check_job_errors,
+)
 from tests.test_import_simple import UPLOAD_FILE_URL
 
 
 @pytest.mark.parametrize("title", ["Try my files"])
 def test_my_files(config, database, fastapi, caplog, title):
     """
-        Simple import with no fixed values at all, but using the upload directory.
+    Simple import with no fixed values at all, but using the upload directory.
     """
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(CREATOR_USER_ID, title)
@@ -34,9 +46,12 @@ def test_my_files(config, database, fastapi, caplog, title):
 
     # Upload this file
     with open(DEST_FILE_NAME, "rb") as fin:
-        upload_rsp = fastapi.post(UPLOAD_FILE_URL, headers=CREATOR_AUTH,
-                                  data={"tag": TAG},  # /!\ If no tag -> random use-once directory!
-                                  files={"file": fin})
+        upload_rsp = fastapi.post(
+            UPLOAD_FILE_URL,
+            headers=CREATOR_AUTH,
+            data={"tag": TAG},  # /!\ If no tag -> random use-once directory!
+            files={"file": fin},
+        )
         assert upload_rsp.status_code == 200
         srv_file_path = upload_rsp.json()
         assert TAG in srv_file_path
@@ -47,7 +62,12 @@ def test_my_files(config, database, fastapi, caplog, title):
     my_files_root: Dict = list_rsp.json()
     assert my_files_root["path"] == ""
     assert len(my_files_root["entries"]) == 1
-    assert my_files_root["entries"][0] == {'mtime': '', 'name': TAG, 'size': 0, 'type': 'D'}
+    assert my_files_root["entries"][0] == {
+        "mtime": "",
+        "name": TAG,
+        "size": 0,
+        "type": "D",
+    }
 
     # The file is stored in the subdirectory
     list_rsp = fastapi.get(UPLOAD_FILE_URL + TAG, headers=CREATOR_AUTH)
@@ -57,7 +77,7 @@ def test_my_files(config, database, fastapi, caplog, title):
     assert len(my_files_subdir["entries"]) == 1
     the_file = my_files_subdir["entries"][0]
     del the_file["mtime"]  # Unpredictable
-    assert the_file == {'name': DEST_FILE_NAME, 'size': 22654, 'type': 'F'}
+    assert the_file == {"name": DEST_FILE_NAME, "size": 22654, "type": "F"}
 
     # Import the file without the right path -> Error
     url = FILE_IMPORT_URL.format(project_id=prj_id)
@@ -71,11 +91,11 @@ def test_my_files(config, database, fastapi, caplog, title):
 
     # Import the file with the right path
     # The below (unfortunately) hard-coded path is valid on current configuration of EcoTaxa
-    file_path = "/tmp/ecotaxa_user.{}/{}/{}" \
-        .format(CREATOR_USER_ID,  # Should come from /api/users/me
-                TAG,  # existing tag, created the on the first file creation with it
-                DEST_FILE_NAME  # can come from an entry in GET /my_files/TAG
-                )
+    file_path = "/tmp/ecotaxa_user.{}/{}/{}".format(
+        CREATOR_USER_ID,  # Should come from /api/users/me
+        TAG,  # existing tag, created the on the first file creation with it
+        DEST_FILE_NAME,  # can come from an entry in GET /my_files/TAG
+    )
     req = {"source_path": file_path}
     rsp = fastapi.post(url, headers=CREATOR_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK

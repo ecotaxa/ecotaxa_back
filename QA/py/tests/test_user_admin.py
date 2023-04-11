@@ -19,21 +19,20 @@ def test_user_update(config, database, fastapi, caplog):
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == 200
     read_json = rsp.json()
-    ref_json = {'email': 'user',
-                'id': 2,
-                'name': 'Ordinary User'}
+    ref_json = {"email": "user", "id": 2, "name": "Ordinary User"}
     assert read_json == ref_json
 
     # Failing update
-    upd_json = {'email': 'user',
-                'id': 2,
-                'organisation': 'e',
-                'name': 'S'}
+    upd_json = {"email": "user", "id": 2, "organisation": "e", "name": "S"}
     url = USER_UPDATE_URL.format(user_id=ORDINARY_USER_USER_ID)
     rsp = fastapi.put(url, headers=USER_AUTH, json=upd_json)
     assert rsp.status_code == 422
-    assert rsp.json() == {'detail': ['name is too short, 3 chars minimum',
-                                     'organisation is too short, 3 chars minimum']}
+    assert rsp.json() == {
+        "detail": [
+            "name is too short, 3 chars minimum",
+            "organisation is too short, 3 chars minimum",
+        ]
+    }
 
     # Self update
     url = USER_UPDATE_URL.format(user_id=ORDINARY_USER_USER_ID)
@@ -48,20 +47,16 @@ def test_user_create(config, database, fastapi, caplog):
 
     # Create as an admin
     url = USER_CREATE_URL
-    usr_json = {
-        'email': 'user',
-        'id': None,
-        'name': 'Ordinary User'
-    }
+    usr_json = {"email": "user", "id": None, "name": "Ordinary User"}
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=usr_json)
     assert rsp.status_code == 422
-    assert rsp.json() == {'detail': ['email already corresponds to another user']}
+    assert rsp.json() == {"detail": ["email already corresponds to another user"]}
     url = USER_CREATE_URL
     usr_json = {
-        'id': None,
-        'email': 'ddduser5',
-        'name': 'Application Administrator Now Retired'
+        "id": None,
+        "email": "ddduser5",
+        "name": "Application Administrator Now Retired",
     }
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=usr_json)
     assert rsp.status_code == 422
-    assert rsp.json() == {'detail': ['name already corresponds to another user']}
+    assert rsp.json() == {"detail": ["name already corresponds to another user"]}

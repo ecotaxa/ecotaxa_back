@@ -12,7 +12,15 @@ from typing import List, Tuple
 # noinspection PyUnresolvedReferences
 from sqlalchemy import VARCHAR, INTEGER, CHAR
 # noinspection PyUnresolvedReferences
-from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, REAL, DATE, TIMESTAMP, BIGINT, BYTEA, BOOLEAN
+from sqlalchemy.dialects.postgresql import (
+    DOUBLE_PRECISION,
+    REAL,
+    DATE,
+    TIMESTAMP,
+    BIGINT,
+    BYTEA,
+    BOOLEAN
+)
 # noinspection PyUnresolvedReferences
 from sqlalchemy.dialects.postgresql import dialect as pg_dialect
 # noinspection PyUnresolvedReferences
@@ -23,14 +31,16 @@ from .ORM import text, Session, column, Integer
 
 def populate(store1, sess, seq_name, size):
     store = store1
-    res = sess.execute("select nextval('%s') FROM generate_series(1,%d)" % (seq_name, size))
+    res = sess.execute(
+        "select nextval('%s') FROM generate_series(1,%d)" % (seq_name, size)
+    )
     for a_num in res:
         store.append(a_num[0])
 
 
 class SequenceCache(object):
     """
-        Generate and keep in memory some valid sequence numbers.
+    Generate and keep in memory some valid sequence numbers.
     """
 
     def __init__(self, session: Session, seq_name: str, size: int):
@@ -51,9 +61,9 @@ class SequenceCache(object):
 
 def db_server_now(session: Session) -> datetime:
     """
-        Return the current time on DB server.
+    Return the current time on DB server.
     """
-    return session.scalar(text('select now()'))
+    return session.scalar(text("select now()"))
 
 
 class DateFormat(int, Enum):
@@ -62,8 +72,8 @@ class DateFormat(int, Enum):
 
 def timestamp_to_str(ts: datetime, fmt: int = DateFormat.ISO_8601_2004_E) -> str:
     """
-        Convert a postgres timestamp to a string.
-        As per DBAPI, it's mapped to a DateTime.
+    Convert a postgres timestamp to a string.
+    As per DBAPI, it's mapped to a DateTime.
     """
     assert fmt == DateFormat.ISO_8601_2004_E
     # e.g. 2009-02-20T08:40Z as we have UTC dates
@@ -95,6 +105,8 @@ def values_cte(name: str, cols: Tuple[str, str], values: List[Tuple[int, int]]):
     # Giving names to columns is OK in the text but does not propagate to the WITH statement:
     #    vals_text = sa.text(cte_txt).columns(column(cols[0], Integer), column(cols[1], Integer))
     # The columns are named "columnX" by PG
-    vals_text = text(cte_txt).columns(column("column1", Integer), column("column2", Integer))
+    vals_text = text(cte_txt).columns(
+        column("column1", Integer), column("column2", Integer)
+    )
     ret = vals_text.cte(name=name)
     return ret

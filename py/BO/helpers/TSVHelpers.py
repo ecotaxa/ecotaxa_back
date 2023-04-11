@@ -5,24 +5,24 @@ from typing import Optional
 
 def clean_value(value: Optional[str], is_numeric: bool = False) -> str:
     """
-        Remove spaces and map 2 special values to empty string, which is _accepted_ like an empty column.
+    Remove spaces and map 2 special values to empty string, which is _accepted_ like an empty column.
     """
     if value is None:
-        return ''
+        return ""
     value = value.strip()
     #    if len(value) < 4 and value.lower() in ('nan', 'na'):
     # TODO: Use RE and benchmark
-    if is_numeric and value.lower() in ('nan', 'na'):
-        return ''
+    if is_numeric and value.lower() in ("nan", "na"):
+        return ""
     return value
 
 
 def clean_value_and_none(value: Optional[str], is_numeric: bool = False):
     """
-        Like previous but accept None as well.
+    Like previous but accept None as well.
     """
     if value is None:
-        return ''
+        return ""
     return clean_value(value, is_numeric)
 
 
@@ -35,7 +35,7 @@ def to_float(value: str) -> Optional[float]:
     :param value:
     :return:
     """
-    if value == '':
+    if value == "":
         return None
     try:
         ret = float(value)
@@ -53,7 +53,7 @@ def none_to_empty(value: Optional[str]):
     :return:
     """
     if value is None:
-        return ''
+        return ""
     return value
 
 

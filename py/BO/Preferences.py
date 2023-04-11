@@ -16,8 +16,9 @@ from DB.helpers.ORM import Session
 
 class Preferences(object):
     """
-        Preferences are stored in column with same name in DB.
+    Preferences are stored in column with same name in DB.
     """
+
     RECENT_PROJECTS_KEY = "proj_mru"
     MAX_MRU_KEPT = 5  # Something tells me it's going to change...
 
@@ -48,7 +49,7 @@ class Preferences(object):
 
     def recent_projects(self, session: Session) -> Iterable[Tuple[int, str]]:
         """
-            Return display information for last used projects.
+        Return display information for last used projects.
         """
         mru = self.prefs.get(self.RECENT_PROJECTS_KEY, [])
         qry = session.query(Project.projid, Project.title)

@@ -27,7 +27,7 @@ logger = get_logger(__name__)
 
 class DimensionReducer(MachineLearningBase):
     """
-        PCA on dimensions
+    PCA on dimensions
     """
 
     def __init__(self, vault: Vault, model_dir: SavedModels):
@@ -38,14 +38,14 @@ class DimensionReducer(MachineLearningBase):
         super().__init__(vault, model_dir)
 
     def run(self, csv_in: IO, model_name: str):
-        logger.info('Set options')
+        logger.info("Set options")
 
         batch_size = 16  # size of images batches in GPU memory
         workers = 10  # number of parallel threads to prepare batches
         n_dims = 50  # number of dimensions to keep after dimensionality reduction
         crop = self.read_crop(model_name)
 
-        logger.info('Load feature extractor')
+        logger.info("Load feature extractor")
 
         # save feature extractor
         my_fe = tf.keras.models.load_model(self.model_dir.extractor_path(model_name))
@@ -55,22 +55,29 @@ class DimensionReducer(MachineLearningBase):
         # remove the None element at the start (which is where the batch size goes)
         input_shape = tuple(x for x in input_shape if x is not None)
 
-        logger.info('Load data and extract features for the training set')
+        logger.info("Load data and extract features for the training set")
 
         # read DataFrame with image ids, paths and labels
-        df = pd.read_csv(csv_in, index_col='id')
+        df = pd.read_csv(csv_in, index_col="id")
 
         # prepare data batches
         batches = generator.EcoTaxaGenerator(
             images_paths=self.full_img_paths(df.img_path.values),
             input_shape=input_shape,
-            labels=None, classes=None,
-            batch_size=batch_size, augment=False, shuffle=False, crop=crop)
+            labels=None,
+            classes=None,
+            batch_size=batch_size,
+            augment=False,
+            shuffle=False,
+            crop=crop,
+        )
 
         # extract features by going through the batches
-        features = my_fe.predict(batches, max_queue_size=max(10, workers * 2), workers=workers)
+        features = my_fe.predict(
+            batches, max_queue_size=max(10, workers * 2), workers=workers
+        )
 
-        logger.info('Fit dimensionality reduction')
+        logger.info("Fit dimensionality reduction")
 
         # define the PCA
         pca = PCA(n_components=n_dims)
@@ -78,5 +85,5 @@ class DimensionReducer(MachineLearningBase):
         pca.fit(features)
 
         # save it for later application
-        with open(self.model_dir.reducer_pickle_path(model_name), 'wb') as pca_file:
+        with open(self.model_dir.reducer_pickle_path(model_name), "wb") as pca_file:
             pickle.dump(pca, pca_file)

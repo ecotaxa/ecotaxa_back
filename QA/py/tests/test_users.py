@@ -17,16 +17,25 @@ def test_prefs_set_get(config, database, fastapi, caplog):
     prefs_for_test = "foo bar boo"
     # Set to something
     with UserService() as sce:
-        sce.set_preferences_per_project(user_id=ADMIN_USER_ID, project_id=prj_id, key="tst",
-                                        value=prefs_for_test)
+        sce.set_preferences_per_project(
+            user_id=ADMIN_USER_ID, project_id=prj_id, key="tst", value=prefs_for_test
+        )
     # Check it's still there
     with UserService() as sce:
-        prefs = sce.get_preferences_per_project(user_id=ADMIN_USER_ID, project_id=prj_id, key="tst")
+        prefs = sce.get_preferences_per_project(
+            user_id=ADMIN_USER_ID, project_id=prj_id, key="tst"
+        )
         assert prefs == prefs_for_test
         # No error in get if wrong project
-        assert '' == sce.get_preferences_per_project(user_id=ADMIN_USER_ID, project_id=-1, key="tst")
+        assert "" == sce.get_preferences_per_project(
+            user_id=ADMIN_USER_ID, project_id=-1, key="tst"
+        )
         # No error in get if wrong key
-        assert '' == sce.get_preferences_per_project(user_id=ADMIN_USER_ID, project_id=prj_id, key="test")
+        assert "" == sce.get_preferences_per_project(
+            user_id=ADMIN_USER_ID, project_id=prj_id, key="test"
+        )
         # Error in set if wrong project
         with pytest.raises(Exception):
-            sce.set_preferences_per_project(user_id=ADMIN_USER_ID, project_id=-1, key="tst", value="crash!")
+            sce.set_preferences_per_project(
+                user_id=ADMIN_USER_ID, project_id=-1, key="tst", value="crash!"
+            )

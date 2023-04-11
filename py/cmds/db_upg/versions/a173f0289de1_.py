@@ -7,8 +7,8 @@ Create Date: 2022-02-22 10:08:08.029594
 """
 
 # revision identifiers, used by Alembic.
-revision = 'a173f0289de1'
-down_revision = 'beaa3e8e4033'
+revision = "a173f0289de1"
+down_revision = "beaa3e8e4033"
 
 import sqlalchemy as sa
 from alembic import op
@@ -36,27 +36,29 @@ def upgrade():
     # op.drop_table('dbplyr_006')
     # op.drop_table('dbplyr_007')
 
-    op.drop_index('IS_TempTaxoIdFinal', table_name='temp_taxo')
-    op.drop_index('IS_TempTaxoParent', table_name='temp_taxo')
-    op.drop_table('temp_taxo')
+    op.drop_index("IS_TempTaxoIdFinal", table_name="temp_taxo")
+    op.drop_index("IS_TempTaxoParent", table_name="temp_taxo")
+    op.drop_table("temp_taxo")
 
-    op.drop_table('part_histopart_det')
-    op.drop_table('part_projects_res')
-    op.drop_index('is_part_samples_prj', table_name='part_samples')
-    op.drop_index('is_part_samples_sampleid', table_name='part_samples')
-    op.drop_table('part_histopart_reduit')
-    op.drop_table('part_histocat_lst')
-    op.drop_index('is_part_projects_projid', table_name='part_projects')
-    op.drop_table('part_ctd')
-    op.drop_table('part_histocat')
-    op.drop_table('part_samples')
-    op.drop_table('part_projects')
+    op.drop_table("part_histopart_det")
+    op.drop_table("part_projects_res")
+    op.drop_index("is_part_samples_prj", table_name="part_samples")
+    op.drop_index("is_part_samples_sampleid", table_name="part_samples")
+    op.drop_table("part_histopart_reduit")
+    op.drop_table("part_histocat_lst")
+    op.drop_index("is_part_projects_projid", table_name="part_projects")
+    op.drop_table("part_ctd")
+    op.drop_table("part_histocat")
+    op.drop_table("part_samples")
+    op.drop_table("part_projects")
 
-    op.alter_column('samples', 'projid', existing_type=sa.INTEGER(), nullable=False)
+    op.alter_column("samples", "projid", existing_type=sa.INTEGER(), nullable=False)
 
     # Deduplicate before unicity
     op.execute(_dedup_acquis_orig_id)
-    op.create_index('IS_AcquisOrigId', 'acquisitions', ['acq_sample_id', 'orig_id'], unique=True)
+    op.create_index(
+        "IS_AcquisOrigId", "acquisitions", ["acq_sample_id", "orig_id"], unique=True
+    )
 
     # TODO: Why? no real diff here.
     # op.drop_constraint('obj_head_acquisid_fkey', 'obj_head', type_='foreignkey')
@@ -64,9 +66,13 @@ def upgrade():
 
     # Clean member which is null in 1 line
     op.execute(_remove_useless_privs)
-    op.alter_column('projectspriv', 'member', existing_type=sa.INTEGER(), nullable=False)
-    op.drop_constraint('projectspriv_member_fkey', 'projectspriv', type_='foreignkey')
-    op.create_foreign_key(None, 'projectspriv', 'users', ['member'], ['id'], ondelete='CASCADE')
+    op.alter_column(
+        "projectspriv", "member", existing_type=sa.INTEGER(), nullable=False
+    )
+    op.drop_constraint("projectspriv_member_fkey", "projectspriv", type_="foreignkey")
+    op.create_foreign_key(
+        None, "projectspriv", "users", ["member"], ["id"], ondelete="CASCADE"
+    )
 
     # ### end Alembic commands ###
 

@@ -18,7 +18,7 @@ from .Vault import Vault
 
 class VaultRemover(Thread):
     """
-        Classical usage of a Queue to spool the job to a background task.
+    Classical usage of a Queue to spool the job to a background task.
     """
 
     def __init__(self, config: Config, logger: Logger):
@@ -29,23 +29,23 @@ class VaultRemover(Thread):
         self.files_queue: Queue[Optional[str]] = Queue()
         self.logger = logger
 
-    def do_start(self) -> 'VaultRemover':
+    def do_start(self) -> "VaultRemover":
         """
-            Start and return self for nice one-line syntax :)
+        Start and return self for nice one-line syntax :)
         """
         super().start()
         return self
 
     def add_files(self, files: List[str]) -> None:
         """
-            Add more files for processing.
+        Add more files for processing.
         """
         for a_file in files:
             self.files_queue.put(a_file)
 
     def run(self) -> None:
         """
-            As long as the queue is not signalled empty, process one file.
+        As long as the queue is not signalled empty, process one file.
         """
         queue = self.files_queue
         problems = []
@@ -66,9 +66,11 @@ class VaultRemover(Thread):
 
     def wait_for_done(self) -> None:
         """
-            Signal the thread that we have no more files, and wait for the job done.
+        Signal the thread that we have no more files, and wait for the job done.
         """
-        self.logger.info("Approximately %d files in deletion queue", self.files_queue.qsize())
+        self.logger.info(
+            "Approximately %d files in deletion queue", self.files_queue.qsize()
+        )
         self.files_queue.put(None)
         with CodeTimer("Wait for files removal: ", self.logger):
             self.join()

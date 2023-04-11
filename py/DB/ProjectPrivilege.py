@@ -17,18 +17,23 @@ if TYPE_CHECKING:
 
 class ProjectPrivilege(Model):
     """
-        What users can do on a project.
-        Is an Association object, @see https://docs.sqlalchemy.org/en/13/orm/basic_relationships.html#association-object
+    What users can do on a project.
+    Is an Association object, @see https://docs.sqlalchemy.org/en/13/orm/basic_relationships.html#association-object
     """
-    __tablename__ = 'projectspriv'
+
+    __tablename__ = "projectspriv"
     # TODO: Isn't there a natural PK with all columns?
-    id: int = Column(INTEGER, Sequence('seq_projectspriv'), primary_key=True)
+    id: int = Column(INTEGER, Sequence("seq_projectspriv"), primary_key=True)
 
     # links
-    projid: int = Column(INTEGER, ForeignKey('projects.projid', ondelete="CASCADE"), nullable=False)
+    projid: int = Column(
+        INTEGER, ForeignKey("projects.projid", ondelete="CASCADE"), nullable=False
+    )
     # TODO: Same as project: if a user is gone, no interest in keeping its privileges.
     # OTOH we don't so far (17 Aug 2020) delete users.
-    member: int = Column(INTEGER, ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
+    member: int = Column(
+        INTEGER, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
 
     # association value
     privilege = Column(VARCHAR(255), nullable=False)
@@ -44,4 +49,4 @@ class ProjectPrivilege(Model):
         return "{0} ({1})".format(self.member, self.privilege)
 
 
-Index('IS_ProjectsPriv', ProjectPrivilege.projid, ProjectPrivilege.member, unique=True)
+Index("IS_ProjectsPriv", ProjectPrivilege.projid, ProjectPrivilege.member, unique=True)

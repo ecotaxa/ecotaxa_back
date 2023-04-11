@@ -37,14 +37,20 @@ def _get_proj(obj: ObjectHeader) -> Project:
 
 class ObjectBO(MappedEntity):
     """
-        An object, as seen from user. No storage/DB-related distinction here.
+    An object, as seen from user. No storage/DB-related distinction here.
     """
-    FREE_COLUMNS_ATTRIBUTE: ClassVar = 'fields'
-    PROJECT_ACCESSOR: ClassVar = _get_proj
-    MAPPING_IN_PROJECT: ClassVar = 'object_mappings'
 
-    def __init__(self, session: Session, object_id: ObjectIDT,
-                 db_object: Optional[ObjectHeader] = None, db_fields: Optional[Model] = None):
+    FREE_COLUMNS_ATTRIBUTE: ClassVar = "fields"
+    PROJECT_ACCESSOR: ClassVar = _get_proj
+    MAPPING_IN_PROJECT: ClassVar = "object_mappings"
+
+    def __init__(
+            self,
+            session: Session,
+            object_id: ObjectIDT,
+            db_object: Optional[ObjectHeader] = None,
+            db_fields: Optional[Model] = None,
+    ):
         super().__init__(session)
         # Below is needed because validity test reads the attribute
         self.fields: Optional[ObjectFields] = None
@@ -70,16 +76,20 @@ class ObjectBO(MappedEntity):
 
     def get_history(self) -> HistoricalClassificationListT:
         """
-            Return classification history, user-displayable with names lookup but keeping IDs.
+        Return classification history, user-displayable with names lookup but keeping IDs.
         """
         och = ObjectsClassifHisto
-        qry = self._session.query(och.objid, och.classif_id,
-                                  och.classif_date, och.classif_who,
-                                  och.classif_type, och.classif_qual,
-                                  och.pred_id,
-                                  User.name.label("user_name"),
-                                  Taxonomy.display_name.label("taxon_name")).filter(
-            ObjectsClassifHisto.objid == self.header.objid)
+        qry = self._session.query(
+            och.objid,
+            och.classif_id,
+            och.classif_date,
+            och.classif_who,
+            och.classif_type,
+            och.classif_qual,
+            och.pred_id,
+            User.name.label("user_name"),
+            Taxonomy.display_name.label("taxon_name"),
+        ).filter(ObjectsClassifHisto.objid == self.header.objid)
         qry = qry.outerjoin(User)
         qry = qry.outerjoin(Taxonomy, Taxonomy.id == och.classif_id)
         ret = [HistoricalClassification(**rec._mapping) for rec in qry]
@@ -94,7 +104,7 @@ class ObjectBO(MappedEntity):
         if prfx == "obj":
             if name in ObjectHeader.__dict__:
                 return "obh." + name
-            elif name == 'imgcount':
+            elif name == "imgcount":
                 return "(SELECT COUNT(img2.imgrank) FROM images img2 WHERE img2.objid = obh.objid) AS imgcount"
         elif prfx == "fre":
             if name in mappings.tsv_cols_to_real:
@@ -117,8 +127,9 @@ class ObjectBO(MappedEntity):
         return None
 
     @classmethod
-    def resolve_fields(cls, fields_list: Optional[List[str]],
-                       mappings: TableMapping) -> List[str]:
+    def resolve_fields(
+            cls, fields_list: Optional[List[str]], mappings: TableMapping
+    ) -> List[str]:
         if fields_list is None or len(fields_list) == 0:
             return []
         ret = []
@@ -131,8 +142,8 @@ class ObjectBO(MappedEntity):
         return ret
 
     def __getattr__(self, item):
-        """ Fallback for 'not found' field after the C getattr() call.
-            If we did not enrich/modify an Object field somehow then return it """
+        """Fallback for 'not found' field after the C getattr() call.
+        If we did not enrich/modify an Object field somehow then return it"""
         try:
             return getattr(self.header, item)
         except AttributeError:
@@ -141,18 +152,24 @@ class ObjectBO(MappedEntity):
 
 class ObjectBOSet(object):
     """
-        Lots of ObjectBOs, because working one by one is slow...
-        Also cook a view on the fields in use
-        TODO: Apply calculations onto set.
+    Lots of ObjectBOs, because working one by one is slow...
+    Also cook a view on the fields in use
+    TODO: Apply calculations onto set.
     """
 
     def __init__(self, session: Session, object_ids: Any, obj_mapping: TableMapping):
         needed_cols = obj_mapping.real_cols_to_tsv.keys()
         # noinspection PyPep8Naming
-        ReducedObjectFields = minimal_model_of(MetaData(), ObjectFields, set(needed_cols))
+        ReducedObjectFields = minimal_model_of(
+            MetaData(), ObjectFields, set(needed_cols)
+        )
         qry = session.query(ObjectHeader, ReducedObjectFields)
         qry = qry.filter(ObjectHeader.objid.in_(object_ids))
         # noinspection PyUnresolvedReferences
-        qry = qry.join(ReducedObjectFields, ObjectHeader.objid == ReducedObjectFields.objfid)  # type:ignore
+        qry = qry.join(
+            ReducedObjectFields, ObjectHeader.objid == ReducedObjectFields.objfid  # type:ignore
+        )
         qry = qry.options(joinedload(ObjectHeader.all_images))
-        self.all = [ObjectBO(session, 0, an_obj, its_fields) for an_obj, its_fields in qry]
+        self.all = [
+            ObjectBO(session, 0, an_obj, its_fields) for an_obj, its_fields in qry
+        ]

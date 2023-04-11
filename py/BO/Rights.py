@@ -33,14 +33,15 @@ NOT_FOUND = "Not found"
 
 class RightsBO(object):
     """
-        Centralized place for checking/granting rights over various entities in the app.
+    Centralized place for checking/granting rights over various entities in the app.
     """
 
     @staticmethod
-    def user_wants(session: Session, user_id: int, action: Action, prj_id: int) \
-            -> Tuple[User, Project]:
+    def user_wants(
+        session: Session, user_id: int, action: Action, prj_id: int
+    ) -> Tuple[User, Project]:
         """
-            Check rights for the user to do this specific action onto this project.
+        Check rights for the user to do this specific action onto this project.
         """
         # Load ORM entities
         user: Optional[User] = session.query(User).get(user_id)
@@ -54,20 +55,27 @@ class RightsBO(object):
         else:
             a_priv: ProjectPrivilege
             # Collect privileges for user on project
-            rights_on_proj = {a_priv.privilege for a_priv in user.privs_on_projects
-                              if a_priv.projid == prj_id}
+            rights_on_proj = {
+                a_priv.privilege
+                for a_priv in user.privs_on_projects
+                if a_priv.projid == prj_id
+            }
             if action == Action.ADMINISTRATE:
                 assert ProjectPrivilegeBO.MANAGE in rights_on_proj, NOT_AUTHORIZED
             elif action == Action.ANNOTATE:
                 # TODO: Bah, not nice
-                assert ProjectPrivilegeBO.ANNOTATE in rights_on_proj \
-                       or ProjectPrivilegeBO.MANAGE in rights_on_proj, NOT_AUTHORIZED
+                assert (
+                    ProjectPrivilegeBO.ANNOTATE in rights_on_proj
+                    or ProjectPrivilegeBO.MANAGE in rights_on_proj
+                ), NOT_AUTHORIZED
             elif action == Action.READ:
                 # TODO: Bah, not nice either
-                assert project.visible \
-                       or ProjectPrivilegeBO.VIEW in rights_on_proj \
-                       or ProjectPrivilegeBO.ANNOTATE in rights_on_proj \
-                       or ProjectPrivilegeBO.MANAGE in rights_on_proj, NOT_AUTHORIZED
+                assert (
+                    project.visible
+                    or ProjectPrivilegeBO.VIEW in rights_on_proj
+                    or ProjectPrivilegeBO.ANNOTATE in rights_on_proj
+                    or ProjectPrivilegeBO.MANAGE in rights_on_proj
+                ), NOT_AUTHORIZED
             else:
                 raise Exception("Not implemented")
         # Keep the last accessed projects
@@ -78,7 +86,7 @@ class RightsBO(object):
     @staticmethod
     def highest_right_on(user: User, prj_id: int) -> str:
         """
-            Return the highest right for this user onto this project.
+        Return the highest right for this user onto this project.
         """
         # Check
         if user.has_role(Role.APP_ADMINISTRATOR):
@@ -87,8 +95,11 @@ class RightsBO(object):
         else:
             a_priv: ProjectPrivilege
             # Collect privileges for user on project
-            rights_on_proj = {a_priv.privilege for a_priv in user.privs_on_projects
-                              if a_priv.projid == prj_id}
+            rights_on_proj = {
+                a_priv.privilege
+                for a_priv in user.privs_on_projects
+                if a_priv.projid == prj_id
+            }
             if ProjectPrivilegeBO.MANAGE in rights_on_proj:
                 return ProjectPrivilegeBO.MANAGE
             elif ProjectPrivilegeBO.ANNOTATE in rights_on_proj:
@@ -98,16 +109,17 @@ class RightsBO(object):
         return ""
 
     @staticmethod
-    def user_wants_create_project(session: Session, user_id: int) \
-            -> User:
+    def user_wants_create_project(session: Session, user_id: int) -> User:
         """
-            Check rights for the user to do this specific action.
+        Check rights for the user to do this specific action.
         """
         # Load ORM entity
         user: Optional[User] = session.query(User).get(user_id)
         assert user is not None, NOT_AUTHORIZED
         # Check
-        assert Action.CREATE_PROJECT in RightsBO.get_allowed_actions(user), NOT_AUTHORIZED
+        assert Action.CREATE_PROJECT in RightsBO.get_allowed_actions(
+            user
+        ), NOT_AUTHORIZED
         return user
 
     @staticmethod
@@ -115,10 +127,18 @@ class RightsBO(object):
         ret = []
         if user.has_role(Role.APP_ADMINISTRATOR):
             # King of the world
-            ret.extend([Action.CREATE_PROJECT, Action.ADMINISTRATE_APP, Action.ADMINISTRATE_USERS, Action.CREATE_TAXON])
+            ret.extend(
+                [
+                    Action.CREATE_PROJECT,
+                    Action.ADMINISTRATE_APP,
+                    Action.ADMINISTRATE_USERS,
+                    Action.CREATE_TAXON,
+                ]
+            )
         else:
-            if user.has_role(Role.PROJECT_CREATOR):
-                ret.append(Action.CREATE_PROJECT)
+            # Remove Project Creator - any user can create a project
+            # if user.has_role(Role.PROJECT_CREATOR):
+            ret.append(Action.CREATE_PROJECT)
             if user.has_role(Role.USERS_ADMINISTRATOR):
                 ret.append(Action.ADMINISTRATE_USERS)
             a_priv: ProjectPrivilege
@@ -131,13 +151,15 @@ class RightsBO(object):
 
     @staticmethod
     def set_allowed_actions(user: User, actions: List[Action], all_roles: Dict):
-        """ Set roles so that list of actions is possible """
+        """Set roles so that list of actions is possible"""
         roles = set()
         for an_action in actions:
             if an_action == Action.CREATE_TAXON:
                 pass
             elif an_action == Action.CREATE_PROJECT:
-                roles.add(all_roles[Role.PROJECT_CREATOR])
+                # Remove Project Creator Role - role not needed to action 'create project'
+                # roles.add(all_roles[Role.PROJECT_CREATOR])
+                pass
             elif an_action == Action.ADMINISTRATE_USERS:
                 roles.add(all_roles[Role.USERS_ADMINISTRATOR])
             elif an_action == Action.ADMINISTRATE_APP:
@@ -146,10 +168,9 @@ class RightsBO(object):
         user.roles.extend(roles)
 
     @staticmethod
-    def anonymous_wants(session: Session, action: Action, prj_id: int) \
-            -> Project:
+    def anonymous_wants(session: Session, action: Action, prj_id: int) -> Project:
         """
-            Check rights for an anonymous user to do this action.
+        Check rights for an anonymous user to do this action.
         """
         # Load ORM entities
         project: Optional[Project] = session.query(Project).get(prj_id)
@@ -163,7 +184,7 @@ class RightsBO(object):
     @staticmethod
     def user_has_role(session: Session, user_id: int, role: str) -> User:
         """
-            Check user role. Should be temporary until a proper action is defined, e.g. refresh taxo tree.
+        Check user role. Should be temporary until a proper action is defined, e.g. refresh taxo tree.
         """
         # Load ORM entity
         user = session.query(User).get(user_id)
@@ -175,8 +196,8 @@ class RightsBO(object):
     @staticmethod
     def user_can_add_taxonomy(session: Session, user_id: int) -> User:
         """
-            A user can add a taxonomy entry, if he/she is admin on the whole app
-            or on any project.
+        A user can add a taxonomy entry, if he/she is admin on the whole app
+        or on any project.
         """
         # Load ORM entity
         user = session.query(User).get(user_id)
@@ -186,9 +207,15 @@ class RightsBO(object):
         return user
 
     @staticmethod
-    def grant(session: Session, user: User, action: Action, prj: Project, extra: Optional[str] = None):
+    def grant(
+        session: Session,
+        user: User,
+        action: Action,
+        prj: Project,
+        extra: Optional[str] = None,
+    ):
         """
-            Grant the possibility to do this action on this project to this user.
+        Grant the possibility to do this action on this project to this user.
         """
         privilege = ProjectPrivilege()
         privilege.privilege = ACTION_TO_PRIV[action]

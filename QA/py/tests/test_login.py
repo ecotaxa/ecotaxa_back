@@ -21,28 +21,23 @@ client = TestClient(app)
 def test_plain_API_login(config, database, caplog):
     url = LOGIN_URL
     # Wrong params
-    rsp = client.post(url, data={"usernazme": "foo",
-                                 "password": "bar"})
+    rsp = client.post(url, data={"usernazme": "foo", "password": "bar"})
     assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
     # OK params, wrong values
-    rsp = client.post(url, json={"username": "foo",
-                                 "password": "bar"})
+    rsp = client.post(url, json={"username": "foo", "password": "bar"})
     assert rsp.status_code == status.HTTP_403_FORBIDDEN
 
     # Plaintext password in DB
-    rsp = client.post(url, json={"username": "administrator",
-                                 "password": "ecotaxa"})
+    rsp = client.post(url, json={"username": "administrator", "password": "ecotaxa"})
     assert rsp.status_code == status.HTTP_200_OK
 
     # Good password but inactive account
-    rsp = client.post(url, json={"username": "old_admin",
-                                 "password": "nimda_dlo"})
+    rsp = client.post(url, json={"username": "old_admin", "password": "nimda_dlo"})
     assert rsp.status_code == status.HTTP_403_FORBIDDEN
 
     # Crypted password in DB
-    rsp = client.post(url, json={"username": "creator",
-                                 "password": "nimda"})
+    rsp = client.post(url, json={"username": "creator", "password": "nimda"})
     assert rsp.status_code == status.HTTP_200_OK
     token = rsp.json()
     # Token is quite random (that's good), so below is just a visual example
@@ -60,14 +55,16 @@ def test_plain_API_login(config, database, caplog):
     rsp = client.get(USER_ME_URL, headers={"Authorization": "Bearer " + token})
     assert rsp.status_code == status.HTTP_200_OK
     me_as_user = rsp.json()
-    del me_as_user['last_used_projects']
-    del me_as_user['password']
-    assert me_as_user == {'active': True,
-                          'country': None,
-                          'email': 'creator',
-                          'id': 3,
-                          'name': 'User Creating Projects',
-                          'organisation': None,
-                          'usercreationdate': '2020-05-13T08:59:48.701060',
-                          'usercreationreason': None,
-                          'can_do': [1, 4]}
+    del me_as_user["last_used_projects"]
+    del me_as_user["password"]
+    assert me_as_user == {
+        "active": True,
+        "country": None,
+        "email": "creator",
+        "id": 3,
+        "name": "User Creating Projects",
+        "organisation": None,
+        "usercreationdate": "2020-05-13T08:59:48.701060",
+        "usercreationreason": None,
+        "can_do": [1, 4],
+    }

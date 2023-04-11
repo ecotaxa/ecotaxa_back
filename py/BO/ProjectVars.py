@@ -15,21 +15,26 @@ from .Vocabulary import Vocabulary, Units
 TYPES_PER_VAR = {
     "subsample_coef": (Vocabulary.subsampling_coefficient, Units.dimensionless),
     "total_water_volume": (Vocabulary.volume_sampled, Units.cubic_metres),
-    "individual_volume": (Vocabulary.volume_mm3, Units.cubic_millimetres)
+    "individual_volume": (Vocabulary.volume_mm3, Units.cubic_millimetres),
 }
 # ...but below should prevent any de-sync
 assert KNOWN_PROJECT_VARS == set(TYPES_PER_VAR.keys())
 
-from .Vocabulary import Term, Vocabulary
+from .Vocabulary import Term
 
 
 class VariableValidity(object):
     """
-        Expression of a validity interval.
+    Expression of a validity interval.
     """
 
-    def __init__(self, expr: str, min_val: Optional[float] = None, max_val: Optional[float] = None,
-                 excluded_val: Optional[float] = None):
+    def __init__(
+        self,
+        expr: str,
+        min_val: Optional[float] = None,
+        max_val: Optional[float] = None,
+        excluded_val: Optional[float] = None,
+    ):
         self.expr = expr
         self.min_val = min_val
         self.max_val = max_val
@@ -45,12 +50,17 @@ class VariableValidity(object):
 
 class ProjectVar(object):
     """
-        Examples:
-            "4.0/3.0*math.pi*(major/2*pixel_size)*(minor/2*pixel_size)**2"
+    Examples:
+        "4.0/3.0*math.pi*(major/2*pixel_size)*(minor/2*pixel_size)**2"
     """
 
-    def __init__(self, var_formula: str, term: Term, unit: Term,
-                 valid_if: Optional[VariableValidity] = None):
+    def __init__(
+        self,
+        var_formula: str,
+        term: Term,
+        unit: Term,
+        valid_if: Optional[VariableValidity] = None,
+    ):
         """
             Description of a project variable.
         :param var_formula: The formula for computing the variable.
@@ -65,17 +75,17 @@ class ProjectVar(object):
         self.code = self._compile()
 
     @staticmethod
-    def from_project(var_name: str, var_formula: str) -> 'ProjectVar':
-        """ Create a variable from its standard name """
+    def from_project(var_name: str, var_formula: str) -> "ProjectVar":
+        """Create a variable from its standard name"""
         term, unit = TYPES_PER_VAR[var_name]
         return ProjectVar(var_formula, term, unit)
 
     def _extract_variable_names(self) -> List[str]:
         """
-            Analyze the formula from syntactic point of view and extract variables.
+        Analyze the formula from syntactic point of view and extract variables.
         """
         try:
-            formula_ast = ast.parse(self.formula, '<formula>', 'eval')
+            formula_ast = ast.parse(self.formula, "<formula>", "eval")
         except Exception as e:
             # Basically anything can happen here
             raise TypeError(str(e))
@@ -86,7 +96,7 @@ class ProjectVar(object):
         return ret
 
     def _compile(self):
-        return compile(self.formula, '<formula>', 'eval')
+        return compile(self.formula, "<formula>", "eval")
 
     def is_valid(self, a_val):
         if self.validator is not None:
@@ -98,7 +108,7 @@ class ProjectVar(object):
 
     @classmethod
     def find_vars(cls, sum_exp) -> List[str]:
-        """ Find the variables inside the expression """
+        """Find the variables inside the expression"""
         # TODO: Some free vars are really weird
         refs = [a_match.group(0) for a_match in cls.VAR_RE.finditer(sum_exp)]
         return sorted(set(refs))

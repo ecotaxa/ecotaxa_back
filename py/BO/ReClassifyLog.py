@@ -20,17 +20,26 @@ logger = get_logger(__name__)
 
 class ReClassificationBO(object):
     """
-        The DB table @see TaxonomyChangeLog keeps atomic changes, but for querying we
-        need mostly aggregates.
+    The DB table @see TaxonomyChangeLog keeps atomic changes, but for querying we
+    need mostly aggregates.
     """
 
     @staticmethod
-    def add_log(session: Session, from_id: ClassifIDT, to_id: ClassifIDT,
-                project_id: ProjectIDT, why: str, impacted: int, log_time: datetime):
+    def add_log(
+        session: Session,
+        from_id: ClassifIDT,
+        to_id: ClassifIDT,
+        project_id: ProjectIDT,
+        why: str,
+        impacted: int,
+        log_time: datetime,
+    ):
         """
-            Add a log line. In practice, a previous log might be in already, and erased by a rollback.
+        Add a log line. In practice, a previous log might be in already, and erased by a rollback.
         """
-        already_there = session.query(TaxonomyChangeLog).get((from_id, to_id, project_id))
+        already_there = session.query(TaxonomyChangeLog).get(
+            (from_id, to_id, project_id)
+        )
         if already_there is None:
             new_line = TaxonomyChangeLog()
             new_line.from_id = from_id
@@ -45,19 +54,28 @@ class ReClassificationBO(object):
         session.commit()
 
     @staticmethod
-    def previous_choices(session: Session, src_ids: ClassifIDListT) -> Dict[ClassifIDT, ClassifIDT]:
+    def previous_choices(
+        session: Session, src_ids: ClassifIDListT
+    ) -> Dict[ClassifIDT, ClassifIDT]:
         """
-            Return the non-advised choice made in the majority of projects, in the past, for these categories.
+        Return the non-advised choice made in the majority of projects, in the past, for these categories.
         """
-        qry = session.query(TaxonomyChangeLog.from_id, TaxonomyChangeLog.to_id,
-                            func.count(TaxonomyChangeLog.project_id))
+        qry = session.query(
+            TaxonomyChangeLog.from_id,
+            TaxonomyChangeLog.to_id,
+            func.count(TaxonomyChangeLog.project_id),
+        )
         qry = qry.join(Taxonomy, Taxonomy.id == TaxonomyChangeLog.from_id)
         qry = qry.filter(TaxonomyChangeLog.from_id == any_(src_ids))
-        qry = qry.filter(TaxonomyChangeLog.to_id != Taxonomy.rename_to)  # Exclude advised
+        qry = qry.filter(
+            TaxonomyChangeLog.to_id != Taxonomy.rename_to
+        )  # Exclude advised
         qry = qry.group_by(TaxonomyChangeLog.from_id, TaxonomyChangeLog.to_id)
         # Present the most projects first, and if deuce take the most recent first
-        qry = qry.order_by(func.count(TaxonomyChangeLog.project_id).desc(),
-                           func.max(TaxonomyChangeLog.occurred_on))
+        qry = qry.order_by(
+            func.count(TaxonomyChangeLog.project_id).desc(),
+            func.max(TaxonomyChangeLog.occurred_on),
+        )
         ret = {}
         for from_id, to_id, nb_prjs in qry:
             if from_id not in ret:
@@ -68,11 +86,15 @@ class ReClassificationBO(object):
     @staticmethod
     def history_for_project(session: Session, project_id: ProjectIDT) -> List[Dict]:
         """
-            Return the choices made on this project during classification.
+        Return the choices made on this project during classification.
         """
-        qry = session.query(TaxonomyChangeLog.from_id, TaxonomyChangeLog.to_id, Taxonomy.name)
+        qry = session.query(
+            TaxonomyChangeLog.from_id, TaxonomyChangeLog.to_id, Taxonomy.name
+        )
         qry = qry.join(Taxonomy, Taxonomy.id == TaxonomyChangeLog.to_id)
         qry = qry.filter(TaxonomyChangeLog.project_id == project_id)
         qry = qry.order_by(TaxonomyChangeLog.occurred_on)
-        return [{"from": from_id, "to": to_id, "name": to_name}
-                for from_id, to_id, to_name in qry]
+        return [
+            {"from": from_id, "to": to_id, "name": to_name}
+            for from_id, to_id, to_name in qry
+        ]

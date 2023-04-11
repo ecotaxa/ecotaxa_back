@@ -29,25 +29,26 @@ def _get_proj(prc: Process):
 
 class ProcessBO(MappedEntity):
     """
-        A processing, which is _how_ collected [sub]samples were treated to give images.
+    A processing, which is _how_ collected [sub]samples were treated to give images.
     """
-    FREE_COLUMNS_ATTRIBUTE: ClassVar = 'process'
+
+    FREE_COLUMNS_ATTRIBUTE: ClassVar = "process"
     PROJECT_ACCESSOR: ClassVar = _get_proj
-    MAPPING_IN_PROJECT: ClassVar = 'process_mappings'
+    MAPPING_IN_PROJECT: ClassVar = "process_mappings"
 
     def __init__(self, session: Session, process_id: ProcessIDT):
         super().__init__(session)
         self.process = session.query(Process).get(process_id)
 
     def __getattr__(self, item):
-        """ Fallback for 'not found' field after the C getattr() call.
-            If we did not enrich a Sample field somehow then return it """
+        """Fallback for 'not found' field after the C getattr() call.
+        If we did not enrich a Sample field somehow then return it"""
         return getattr(self.process, item)
 
 
 class EnumeratedProcessSet(MappedTable):
     """
-        A list of process-es, known by their IDs.
+    A list of process-es, known by their IDs.
     """
 
     def __init__(self, session: Session, ids: ProcessIDListT):
@@ -56,7 +57,7 @@ class EnumeratedProcessSet(MappedTable):
 
     def get_projects_ids(self) -> ProjectIDListT:
         """
-            Return the project IDs for the held process IDs.
+        Return the project IDs for the held process IDs.
         """
         qry = self.session.query(Project.projid).distinct(Project.projid)
         qry = qry.join(Project.all_samples)
@@ -68,7 +69,7 @@ class EnumeratedProcessSet(MappedTable):
 
     def apply_on_all(self, project: Project, updates: ColUpdateList) -> int:
         """
-            Apply all updates on all processes pointed at by the list.
+        Apply all updates on all processes pointed at by the list.
         """
         return self._apply_on_all(Process, project, updates.lst)
 

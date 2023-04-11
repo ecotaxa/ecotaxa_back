@@ -9,7 +9,7 @@ from .ORM import _analyze_cols, Model
 
 class Bean(dict):
     """
-        Holder with just fields & value
+    Holder with just fields & value
     """
 
     # TODO: A proper subclass with known fields
@@ -19,14 +19,14 @@ class Bean(dict):
     #     self.cols = cols
 
     def __getattr__(self, attr):
-        """ To support e.g. obj.latitude """
+        """To support e.g. obj.latitude"""
         try:
             return self[attr]
         except KeyError:
             raise AttributeError()
 
     def __setattr__(self, key, value):
-        """ To support e.g. obj.prjid = 1 """
+        """To support e.g. obj.prjid = 1"""
         # assert key in self.cols
         self[key] = value
 
@@ -36,10 +36,10 @@ class Bean(dict):
 
 def bean_of(an_obj: Optional[Model]) -> Optional[Bean]:
     """
-        Return a plain bean from an ORM-mapped object. All keys are nullified for safety.
-        None in, None out.
-        :param an_obj:
-        :return:
+    Return a plain bean from an ORM-mapped object. All keys are nullified for safety.
+    None in, None out.
+    :param an_obj:
+    :return:
     """
     if an_obj is None:
         return None
@@ -50,6 +50,3 @@ def bean_of(an_obj: Optional[Model]) -> Optional[Bean]:
     for a_col in to_copy:
         ret[a_col] = getattr(an_obj, a_col)
     return ret
-
-
-

@@ -16,8 +16,9 @@ from BO.Classification import ClassifIDListT
 
 class OurRandomForestClassifier(object):
     """
-        A random forest classifier, tuned for EcoTaxa
+    A random forest classifier, tuned for EcoTaxa
     """
+
     # Tuning
     N_ESTIMATORS = 300
     MIN_SAMPLES_LEAF = 5
@@ -25,25 +26,27 @@ class OurRandomForestClassifier(object):
     # CPU resources
     WORKERS = 6
 
-    def __init__(self)  -> None:
+    def __init__(self) -> None:
         # We can build the classifier right away, it's just allocation
-        self.cls = RandomForestClassifier(n_estimators=self.N_ESTIMATORS,
-                                          min_samples_leaf=self.MIN_SAMPLES_LEAF,
-                                          n_jobs=self.WORKERS,
-                                          class_weight=self.CLASS_WEIGHT,
-                                          verbose=True)  # TODO: verbose sends logs we can't see :(
+        self.cls = RandomForestClassifier(
+            n_estimators=self.N_ESTIMATORS,
+            min_samples_leaf=self.MIN_SAMPLES_LEAF,
+            n_jobs=self.WORKERS,
+            class_weight=self.CLASS_WEIGHT,
+            verbose=True,
+        )  # TODO: verbose sends logs we can't see :(
 
     def learn_from(self, training_samples: np.ndarray, target_values: np.ndarray):
         """
-            Learn the classifier from given data.
+        Learn the classifier from given data.
         """
         self.cls.fit(training_samples, target_values)
 
     def predict(self, to_predict: np.ndarray) -> Tuple[ClassifIDListT, List[float]]:
         """
-            Predict, i.e. return the most likely target value (classif_id) for the given objects.
-            Input np array must have the same columns as in training samples during build.
-            For each input line, the returned array contain the best guessed classification ID, and its score.
+        Predict, i.e. return the most likely target value (classif_id) for the given objects.
+        Input np array must have the same columns as in training samples during build.
+        For each input line, the returned array contain the best guessed classification ID, and its score.
         """
         predict_result = self.cls.predict_proba(to_predict)
         max_proba = np.argmax(predict_result, axis=1)

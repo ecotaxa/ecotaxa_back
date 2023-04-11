@@ -10,7 +10,7 @@ from typing import Optional, Set
 
 class TempDirForTasks(object):
     """
-        Base directory for storing data for all BG operations AKA Jobs.
+    Base directory for storing data for all BG operations AKA Jobs.
     """
 
     def __init__(self, path: str):
@@ -51,7 +51,7 @@ class TempDirForTasks(object):
 
     def erase_for(self, job_id: int):
         """
-            Wipe temp directory for this job ID.
+        Wipe temp directory for this job ID.
         """
         temp_for_job = self.base_dir_for(job_id)
         try:

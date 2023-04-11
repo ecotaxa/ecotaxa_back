@@ -31,16 +31,21 @@ if TYPE_CHECKING:
 
 class Project(Model):
     """
-        Top-level holder of image data.
+    Top-level holder of image data.
     """
-    __tablename__ = 'projects'
-    projid: int = Column(INTEGER, Sequence('seq_projects'), primary_key=True)
+
+    __tablename__ = "projects"
+    projid: int = Column(INTEGER, Sequence("seq_projects"), primary_key=True)
     title: str = Column(VARCHAR(255), nullable=False)
-    instrument_id: str = Column(VARCHAR(32), ForeignKey(Instrument.instrument_id), nullable=False)
+    instrument_id: str = Column(
+        VARCHAR(32), ForeignKey(Instrument.instrument_id), nullable=False
+    )
 
     visible = Column(Boolean(), default=True)
     license = Column(VARCHAR(16), default=LicenseEnum.NO_LICENSE, nullable=False)
-    status = Column(VARCHAR(40), default=ANNOTATE_STATUS)  # Annotate, ExploreOnly, Annotate No Prediction
+    status = Column(
+        VARCHAR(40), default=ANNOTATE_STATUS
+    )  # Annotate, ExploreOnly, Annotate No Prediction
     # The mappings for this Project
     # TODO: What happens if there is a conflict from one import to another?
     mappingobj = Column(VARCHAR)
@@ -54,8 +59,12 @@ class Project(Model):
     # Settings
     classifsettings = Column(VARCHAR)  # Settings for Automatic classification.
     initclassiflist = Column(VARCHAR)  # Initial list of categories
-    classiffieldlist = Column(VARCHAR)  # Fields available on sort & displayed field of Manual classif screen
-    popoverfieldlist = Column(VARCHAR)  # Fields available on popover of Manual classif screen
+    classiffieldlist = Column(
+        VARCHAR
+    )  # Fields available on sort & displayed field of Manual classif screen
+    popoverfieldlist = Column(
+        VARCHAR
+    )  # Fields available on popover of Manual classif screen
     comments = Column(VARCHAR)
     description = Column(VARCHAR)
     # Note: It's loaded file_s_
@@ -85,10 +94,13 @@ class Project(Model):
 
 class ProjectTaxoStat(Model):
     """
-        Taxonomy statistics for a project. One line per taxonomy ID per project.
+    Taxonomy statistics for a project. One line per taxonomy ID per project.
     """
-    __tablename__ = 'projects_taxo_stat'
-    projid = Column(INTEGER, ForeignKey('projects.projid', ondelete="CASCADE"), primary_key=True)
+
+    __tablename__ = "projects_taxo_stat"
+    projid = Column(
+        INTEGER, ForeignKey("projects.projid", ondelete="CASCADE"), primary_key=True
+    )
     # FK to Taxonomy, but there is the special "-1" value (for unclassified) preventing an official FK
     id = Column(INTEGER, primary_key=True)
     # Number of objects in this category for this project.

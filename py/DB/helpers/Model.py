@@ -11,7 +11,6 @@ if False:  # pragma: no cover
 
     from DB.helpers.ORM import Model
 
-
     def view_of(_metadata, clazz, to_keep: Set[str]) -> Type[Model]:
         """
             Return a Model, i.e. a SQLAlchemy mapper with only the given fields.
@@ -29,14 +28,13 @@ if False:  # pragma: no cover
 
         class Ret(Model):
             __tablename__ = clazz.__tablename__
-            __mapper_args__ = {
-                'include_properties': incl
-            }
+            __mapper_args__ = {"include_properties": incl}
 
         return Ret
 
-
-    def partial_clone_of(metadata: MetaData, clazz, to_keep: Set[str], new_pks: List[Union[str, tuple]]) -> Type[Model]:
+    def partial_clone_of(
+        metadata: MetaData, clazz, to_keep: Set[str], new_pks: List[Union[str, tuple]]
+    ) -> Type[Model]:
         """
             Return a Model, i.e. a SQLAlchemy mapper Class with only the given fields.
         :param new_pks: The new primary keys to add to produced mapper.
@@ -63,17 +61,17 @@ if False:  # pragma: no cover
             if isinstance(a_pk, tuple):
                 (name, type_) = a_pk
                 cols.append(Column(name=name, type_=type_, primary_key=True))
-        args = ["temp_" + clazz.__tablename__,
-                metadata]
+        args = ["temp_" + clazz.__tablename__, metadata]
         args.extend(cols)
 
-        ret = Table(*args, prefixes=['TEMPORARY'])
+        ret = Table(*args, prefixes=["TEMPORARY"])
 
         # Create class on the fly
         class Ret(Model):
             __table__ = ret
 
         return Ret
+
 
 # if __name__ == '__main__':
 #     def print_table(tbl: Table):

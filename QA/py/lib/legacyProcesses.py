@@ -13,7 +13,7 @@ from .processes import SyncSubProcess
 
 class LegacyProcess(object):
     """
-        A process in legacy version of EcoTaxa
+    A process in legacy version of EcoTaxa
     """
 
     def __init__(self):
@@ -24,7 +24,7 @@ class LegacyProcess(object):
 
 class Manage(LegacyProcess):
     """
-        Manage.py commands
+    Manage.py commands
     """
 
     def run_create_db(self):

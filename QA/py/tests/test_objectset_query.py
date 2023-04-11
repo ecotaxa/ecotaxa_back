@@ -13,7 +13,7 @@ OBJECT_SET_QUERY_URL = "/object_set/{project_id}/query"  # ?order_field={order}&
 
 # TODO: Dup/extend of the same in test_classification.py
 def _prj_query(fastapi, auth, prj_id, order=None, start=None, size=None, **kwargs):
-    """ Query using the filters in kwargs """
+    """Query using the filters in kwargs"""
     params = []
     if order:
         params.append("order_field=%s" % order)
@@ -35,6 +35,7 @@ def test_queries(config, database, fastapi, caplog):
 
     # Admin imports the project
     from tests.test_import import test_import, test_import_a_bit_more_skipping
+
     prj_id = test_import(config, database, caplog, "Queries test project")
     # Add a sample spanning 2 days
     test_import_a_bit_more_skipping(config, database, caplog, "Queries test project")
@@ -59,10 +60,12 @@ def test_queries(config, database, fastapi, caplog):
     by_free_col_rev = _prj_query(fastapi, CREATOR_AUTH, prj_id, order="-fre.area")
     assert by_free_col == list(reversed(by_free_col_rev))
 
-    limit_4 = _prj_query(fastapi, CREATOR_AUTH, prj_id, size=4)
+    limit_4 = _prj_query(fastapi, CREATOR_AUTH, prj_id, size=4, order="obj.objid")
     assert len(limit_4) == 4
 
-    limit_4_start_4 = _prj_query(fastapi, CREATOR_AUTH, prj_id, start=4, size=4)
+    limit_4_start_4 = _prj_query(
+        fastapi, CREATOR_AUTH, prj_id, start=4, size=4, order="obj.objid"
+    )
     assert len(limit_4_start_4) == 4
 
     assert set(limit_4).isdisjoint(set(limit_4_start_4))

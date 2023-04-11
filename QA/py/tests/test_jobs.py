@@ -13,7 +13,7 @@ FILE_IMPORT_URL = "/file_import/{project_id}"
 
 
 def wait_for_stable(job_id: int):
-    """ Wait for the job to be in a stable state, i.e. not running """
+    """Wait for the job to be in a stable state, i.e. not running"""
     with JobCRUDService() as sce:
         assert sce.query(ADMIN_USER_ID, job_id).state == DBJobStateEnum.Pending
         # TODO for testing prediction: JobScheduler.FILTER.clear()
@@ -30,12 +30,20 @@ def check_job_ok(job):
             print("? " + str(job.question))
         else:
             print("NOT OK" + str(job.messages))
-    assert (job.state, job.progress_pct, job.progress_msg) == (DBJobStateEnum.Finished, 100, "Done")
+    assert (job.state, job.progress_pct, job.progress_msg) == (
+        DBJobStateEnum.Finished,
+        100,
+        "Done",
+    )
 
 
 def check_job_errors(job) -> List[str]:
-    assert job.state == DBJobStateEnum.Error, "Job is :%s" % [job.state, job.progress_pct, job.progress_msg,
-                                                              job.question]
+    assert job.state == DBJobStateEnum.Error, "Job is :%s" % [
+        job.state,
+        job.progress_pct,
+        job.progress_msg,
+        job.question,
+    ]
     return json.loads(job.messages)
 
 
@@ -50,7 +58,7 @@ def api_wait_for_stable_job(fastapi, job_id):
     while True:
         rsp = fastapi.get(url, headers=ADMIN_AUTH)
         job_dict = rsp.json()
-        if job_dict["state"] in ('F', 'A', 'E'):
+        if job_dict["state"] in ("F", "A", "E"):
             return job_dict
         time.sleep(0.1)
         waited += 1
@@ -62,7 +70,11 @@ def api_check_job_ok(fastapi, job_id):
     url = JOB_QUERY_URL.format(job_id=job_id)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     job_dict = rsp.json()
-    assert (job_dict["state"], job_dict["progress_pct"], job_dict["progress_msg"]) == ('F', 100, 'Done')
+    assert (job_dict["state"], job_dict["progress_pct"], job_dict["progress_msg"]) == (
+        "F",
+        100,
+        "Done",
+    )
     return job_dict
 
 
@@ -87,7 +99,7 @@ def api_check_job_failed(fastapi, job_id, expected_message):
     url = JOB_QUERY_URL.format(job_id=job_id)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     job_dict = rsp.json()
-    assert (job_dict["state"], job_dict["progress_msg"]) == ('E', expected_message)
+    assert (job_dict["state"], job_dict["progress_msg"]) == ("E", expected_message)
     return rsp
 
 
