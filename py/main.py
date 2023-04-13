@@ -28,7 +28,7 @@ from API_models.imports import ImportReq, SimpleImportRsp, SimpleImportReq, Impo
 from API_models.login import LoginReq
 from API_models.merge import MergeRsp
 from API_models.objects import ObjectSetQueryRsp, ObjectSetRevertToHistoryRsp, ClassifyReq, ObjectModel, \
-    ObjectHeaderModel, HistoricalClassificationModel, ObjectSetSummaryRsp, ClassifyAutoReq
+    HistoricalClassificationModel, ObjectSetSummaryRsp, ClassifyAutoReq, ObjectHeaderModel
 from API_models.prediction import PredictionRsp, PredictionReq, MLModel
 from API_models.subset import SubsetReq, SubsetRsp
 from API_models.taxonomy import TaxaSearchRsp, TaxonModel, TaxonomyTreeStatus, TaxonUsageModel, TaxonCentral
@@ -306,7 +306,7 @@ def search_user(current_user: int = Depends(get_current_user),
                                                description="Search by name, use % for searching with 'any char'.",
                                                example="%userNa%")) -> List[User]:
     """
-        **Search users using various criteria**, search is case insensitive and might contain % chars.
+        **Search users using various criteria**, search is case-insensitive and might contain % chars.
     """
     with UserService() as sce:
         ret = sce.search(current_user, by_name)
@@ -506,11 +506,11 @@ def update_collection(collection: CollectionModel = Body(...),
         if present_collection is None:
             raise HTTPException(status_code=404, detail="Collection not found")
         present_collection.update(session=sce.session,
-                                  title=collection.title, short_title=collection.short_title,  # type: ignore
+                                  title=collection.title, short_title=collection.short_title,
                                   project_ids=collection.project_ids,
                                   provider_user=collection.provider_user, contact_user=collection.contact_user,
-                                  citation=collection.citation, abstract=collection.abstract,  # type: ignore
-                                  description=collection.description,  # type: ignore
+                                  citation=collection.citation, abstract=collection.abstract,
+                                  description=collection.description,
                                   creator_users=collection.creator_users, associate_users=collection.associate_users,
                                   creator_orgs=collection.creator_organisations,
                                   associate_orgs=collection.associate_organisations)
@@ -734,7 +734,7 @@ def project_set_get_stats(ids: str = Query(..., title="Ids",
                      }
                  }
              }
-         }, response_model=List[ProjectUserStatsModel])  # type: ignore
+         }, response_model=List[ProjectUserStatsModel])
 def project_set_get_user_stats(ids: str = Query(..., title="Ids",
                                                 description="String containing the list of one or more id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
                                                 example="1"),
@@ -1033,12 +1033,12 @@ def update_project(project: ProjectModel,
         with ValidityThrower():
             present_project.update(session=sce.session,
                                    instrument=project.instrument,
-                                   title=project.title, visible=project.visible, status=project.status,  # type: ignore
-                                   description=project.description,  # type: ignore
+                                   title=project.title, visible=project.visible, status=project.status,
+                                   description=project.description,
                                    init_classif_list=project.init_classif_list,
-                                   classiffieldlist=project.classiffieldlist,  # type: ignore
-                                   popoverfieldlist=project.popoverfieldlist,  # type: ignore
-                                   cnn_network_id=project.cnn_network_id, comments=project.comments,  # type: ignore
+                                   classiffieldlist=project.classiffieldlist,
+                                   popoverfieldlist=project.popoverfieldlist,
+                                   cnn_network_id=project.cnn_network_id, comments=project.comments,
                                    contact=project.contact,
                                    managers=project.managers, annotators=project.annotators, viewers=project.viewers,
                                    license_=project.license,
@@ -1112,7 +1112,7 @@ def samples_search(project_ids: str = Query(..., title="Project Ids",
                      }
                  }
              }
-         }, response_model=List[SampleTaxoStatsModel])  # type:ignore # case7
+         }, response_model=List[SampleTaxoStatsModel])
 def sample_set_get_stats(sample_ids: str = Query(..., title="Sample Ids",
                                                  description="String containing the list of one or more sample ids separated by non-num char.",
                                                  example="15,5"),
@@ -1731,7 +1731,7 @@ def object_query(
                      }
                  }
              }
-         }, response_model=List[HistoricalClassificationModel])  # type:ignore # case7
+         }, response_model=List[HistoricalClassificationModel])
 def object_query_history(
         object_id: int = Path(..., description="Internal, the unique numeric id of this object.", example=1),
         current_user: Optional[int] = Depends(get_optional_current_user)) \

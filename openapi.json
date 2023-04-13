@@ -457,7 +457,7 @@
           "users"
         ],
         "summary":"Search User",
-        "description":"**Search users using various criteria**, search is case insensitive and might contain % chars.",
+        "description":"**Search users using various criteria**, search is case-insensitive and might contain % chars.",
         "operationId":"search_user",
         "parameters":[
           {
@@ -7606,6 +7606,10 @@
       },
       "ProjectSummaryModel":{
         "title":"ProjectSummaryModel",
+        "required":[
+          "projid",
+          "title"
+        ],
         "type":"object",
         "properties":{
           "projid":{
@@ -8218,6 +8222,8 @@
       "TaxonUsageModel":{
         "title":"TaxonUsageModel",
         "required":[
+          "projid",
+          "title",
           "nb_validated"
         ],
         "type":"object",

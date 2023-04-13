@@ -6,7 +6,7 @@
 # An Object as seen by the user, i.e. the fields regardless of their storage.
 # An Object cannot exist outside of a project due to "free" columns.
 #
-from typing import Tuple, List, Optional, Any, ClassVar
+from typing import Tuple, List, Optional, Any, ClassVar, Union
 
 from sqlalchemy import MetaData
 
@@ -53,7 +53,7 @@ class ObjectBO(MappedEntity):
     ):
         super().__init__(session)
         # Below is needed because validity test reads the attribute
-        self.fields: Optional[ObjectFields] = None
+        self.fields: Optional[Union[ObjectFields, Model]] = None
         self.header: ObjectHeader
         if db_object is None:
             # Initialize from the unique ID
@@ -66,9 +66,9 @@ class ObjectBO(MappedEntity):
                 return
             self.fields = self.header.fields
         else:
-            # Initialize from provided models
+            # Initialize from provided model
             self.header = db_object
-            self.fields = db_fields  # type:ignore
+            self.fields = db_fields
         self.sample_id = self.header.acquisition.acq_sample_id
         self.project_id = self.header.acquisition.sample.projid
         # noinspection PyTypeChecker

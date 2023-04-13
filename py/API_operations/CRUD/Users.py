@@ -51,10 +51,10 @@ class UserService(Service):
             assert current_user.has_role(Role.APP_ADMINISTRATOR), NOT_AUTHORIZED
             actions = new_user.can_do
         same_email_user = self.ro_session.query(User).filter(
-            User.email == new_user.email).scalar()  # type:ignore # case2
+            User.email == new_user.email).scalar()
         assert same_email_user is None, ["email already corresponds to another user"]
         same_name_user = self.ro_session.query(User).filter(
-            User.name == new_user.name).scalar()  # type:ignore # case2
+            User.name == new_user.name).scalar()
         assert same_name_user is None, ["name already corresponds to another user"]
         usr = User()
         self.session.add(usr)
@@ -93,12 +93,12 @@ class UserService(Service):
         return ret
 
     def _get_full_user(self, db_usr: User) -> UserModelWithRights:
-        ret = UserModelWithRights.from_orm(db_usr)  # type:ignore # case3
+        ret = UserModelWithRights.from_orm(db_usr)
         mru_projs = Preferences(db_usr).recent_projects(session=self.ro_session)
         ret.last_used_projects = [ProjectSummaryModel(projid=prj_id, title=prj_title)
                                   for prj_id, prj_title in mru_projs]
         ret.can_do = [act.value for act in RightsBO.get_allowed_actions(db_usr)]
-        ret.password = "?"  # type:ignore # case3
+        ret.password = "?"
         return ret
 
     def search(self, current_user_id: UserIDT, by_name: Optional[str]) -> List[User]:

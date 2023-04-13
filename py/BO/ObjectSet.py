@@ -52,8 +52,8 @@ from DB.Sample import Sample
 from DB.helpers import Result
 from DB.helpers.Core import select
 from DB.helpers.Direct import text, func
-from DB.helpers.ORM import Row, Delete, Update, Insert, any_, and_, or_, case
-from DB.helpers.Postgres import pg_insert
+from DB.helpers.ORM import Row, Delete, Update, any_, and_, or_, case
+from DB.helpers.Postgres import pg_insert, PgInsert
 from DB.helpers.SQL import WhereClause, SQLParamDict, FromClause, OrderClause
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
@@ -390,9 +390,9 @@ class EnumeratedObjectSet(MappedTable):
             and_(oh.objid == any_(self.object_ids), qual_cond)
         )
         # Insert into the log table
-        ins_qry: Insert = pg_insert(och.__table__)
+        ins_qry: PgInsert = pg_insert(och.__table__)
         ins_qry = ins_qry.from_select(ins_columns, sel_subqry)
-        ins_qry = ins_qry.on_conflict_do_nothing(  # type:ignore
+        ins_qry = ins_qry.on_conflict_do_nothing(
             constraint="objectsclassifhisto_pkey"
         )
         # TODO: mypy crashes due to pg_dialect below

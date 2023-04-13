@@ -3,7 +3,8 @@
 SQLAlchemy==1.4.31
 psycopg2-binary==2.9.3
 astral==2.2
-pydantic==1.9.0
+# Last (April 2023) pydantic
+pydantic[mypy]==1.10.7
 # Image processing libs.
 # Machine learning with no GPU
 scikit-learn==1.0

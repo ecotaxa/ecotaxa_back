@@ -20,8 +20,8 @@ numpy~=1.19.2
 # Backbone of the app
 fastapi==0.73.0
 fastapi-utils==0.2.1
-# Pin a recent (as of Jan 2022) pydantic
-pydantic==1.9.0
+# Last (April 2023) pydantic
+pydantic[mypy]==1.10.7
 # Speed up openapi response serialization
 orjson==3.6.6
 types-orjson==3.6.2
@@ -67,7 +67,7 @@ typer[all]==0.4.0
 # https://github.com/tiangolo/typer/issues/377
 click==8.0.4
 # More recent mypy
-mypy==0.940
+mypy==1.2.0
 # END OF BACK-END REQUIREMENTS
 # Testing & QA additions
 tox==3.24.3

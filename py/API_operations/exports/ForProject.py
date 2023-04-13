@@ -367,7 +367,7 @@ class ProjectExport(JobServiceBase):
                 if req.exp_type == ExportTypeEnum.dig_obj_ident:
                     # Images will be stored in a per-category directory, but there is a single TSV at the Zip root
                     categ = a_row['object_annotation_category']
-                    categ_id: Optional[int] = a_row['object_annotation_category_id']  # type:ignore
+                    categ_id: Optional[int] = a_row['object_annotation_category_id']
                     # All names cannot directly become directories
                     a_row['img_file_name'] = self.get_DOI_imgfile_name(a_row['objid'], a_row['img_rank'],
                                                                        categ, categ_id, a_row['img_file_name'])

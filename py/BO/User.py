@@ -134,7 +134,7 @@ class UserBO(object):
         # name & email are mandatory by DB constraints and therefore made so by pydantic model
         errors: List[str] = []
         for a_field in (User.name, User.email, User.organisation, User.country):
-            field_name = a_field.name  # type:ignore
+            field_name = a_field.name
             val = getattr(user_model, field_name)
             if val is None:
                 continue

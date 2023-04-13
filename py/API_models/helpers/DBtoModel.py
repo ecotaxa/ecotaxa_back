@@ -4,15 +4,13 @@
 #
 #  Attempt to map as automatically as possible the DB model into CRUD objects.
 #
-from typing import Type, TypeVar, Dict, Any, Generic, Union, Tuple
+from typing import Dict, Any
 
-from pydantic.fields import ModelField
-from pydantic.generics import GenericModel, GenericModelT
 from sqlalchemy import inspect
 from sqlalchemy.orm import ColumnProperty
 
 from API_models.helpers import PydanticModelT
-from DB.helpers.ORM import Model
+from DB.helpers.ORM import ModelT
 from helpers.pydantic import BaseConfig, create_model
 
 
@@ -20,46 +18,32 @@ class OrmConfig(BaseConfig):
     orm_mode = True
 
 
-# Generify the def with input type
-T = TypeVar('T')
-
-DBT = TypeVar('DBT', bound=Model)
-CT = TypeVar('CT')
-
-
-# Ref: https://pydantic-docs.helpmanual.io/usage/models/#generic-models
-class SQLAlchemy2Pydantic(GenericModel, Generic[DBT, CT]):
-    def __class_getitem__(cls: Type[GenericModelT], params: Union[Type[Any], Tuple[Type[Any], ...]]) -> Type[Any]:
-        db_model, how = params  # type:ignore # too much generic for mypy
-        # TODO: Remove the 'exclude' completely. If no doc, not included.
-        try:
-            exclude = how.exclude
-        except AttributeError:
-            exclude = None
-        ret = _sqlalchemy_to_pydantic(db_model, exclude=exclude, field_infos=how.description)
-        return ret
-
-
-def _sqlalchemy_to_pydantic(db_model: T, *,
-                            config: Type[BaseConfig] = OrmConfig,
-                            exclude=None,
-                            field_infos: Dict[str, Any]) -> PydanticModelT:
-    if exclude is None:
-        exclude = []
-    fields = {}
+def combine_models(db_model: ModelT,
+                   pydantic_model: PydanticModelT) -> PydanticModelT:
+    """
+        Combine DB model with a plain Pydantic one. The result is a new model with _only_ fields
+        from the pydantic, but types, nullity and default values from DB.
+        -> Fields missing in pydantic model are not in result.
+        The resulting model class in conventionally the pydantic's one removing first char.
+    """
+    fields: Dict[str, Any] = {}
     not_null_cols = set()
+    # Pydantic fields
+    pydantic_fields = pydantic_model.__fields__
+    pydantic_fields_names = set(pydantic_fields.keys())
     # Build model from ORM fields
     mapper = inspect(db_model)
     assert mapper is not None
     for attr in mapper.attrs:
         if not isinstance(attr, ColumnProperty):
+            # Exclude e.g. relationships
             continue
         if not attr.columns:
             continue
         column = attr.columns[0]
         python_type = column.type.python_type
         name = attr.key
-        if name not in field_infos.keys():
+        if name not in pydantic_fields_names:
             continue
         default = None
         if column.default is None and not column.nullable:
@@ -68,14 +52,12 @@ def _sqlalchemy_to_pydantic(db_model: T, *,
             not_null_cols.add(name)
         fields[name] = (python_type, default)
     ret: PydanticModelT = create_model(
-        db_model.__name__ + "Model", __config__=config, **fields  # type: ignore
+        pydantic_model.__name__[1:], __config__=OrmConfig, **fields
     )
-    # Add field info if available
-    if field_infos is not None:
-        # Amend with Field() calls, for doc. Let crash (KeyError) if desync with base.
-        for a_field_name, a_field_info in field_infos.items():
-            the_desc_field: ModelField = ret.__fields__[a_field_name]
-            the_desc_field.field_info = a_field_info
+    # Copy field information from the Pydantic model
+    for a_field_name, a_field in pydantic_fields.items():
+        ret_field = ret.__fields__[a_field_name]
+        ret_field.field_info = a_field.field_info
     # Set required for not null columns
     for a_not_null_col in not_null_cols:
         ret.__fields__[a_not_null_col].required = True

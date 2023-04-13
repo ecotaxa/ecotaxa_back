@@ -33,7 +33,7 @@ class ProjectTopology(object):
          - orig_id AKA object_id must become unique per project.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Every object has a path
         self.paths: Dict[SampleOrigIDT, Dict[AcquisitionOrigIDT, Set[ObjectIDT]]] = {}
         # Each acquisition (as identified by its orig_id) has a parent, but eventually several of them.

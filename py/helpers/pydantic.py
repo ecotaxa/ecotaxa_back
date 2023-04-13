@@ -4,11 +4,22 @@
 #
 
 # noinspection PyUnresolvedReferences,PyPackageRequirements
-from typing import List, Any, Optional, Dict
+from typing import List, Any, Optional, Dict, Type
 
 # Just to avoid tagging every "pydantic" reference in PyCharm, as pydantic is included in FastAPI
 # noinspection PyUnresolvedReferences
 from pydantic import BaseConfig, BaseModel, Field, create_model, root_validator, dataclasses
+
+
+class DescriptiveModel(BaseModel):
+    """ Just fields descriptions, these models can be combined
+    with various containers to be sent across the wire. """
+
+    class Config:
+        arbitrary_types_allowed = True
+
+
+PydanticDescriptionT = Type[DescriptiveModel]
 
 
 def sort_and_prune(a_list: List[Any], order_field: Optional[str],
