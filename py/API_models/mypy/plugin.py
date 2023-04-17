@@ -12,7 +12,12 @@ from mypy.nodes import (
     Block,
     TypeInfo,
     SymbolTable,
-    GDEF, NameExpr, Var, FuncDef, TypeVarExpr, Decorator,
+    GDEF,
+    NameExpr,
+    Var,
+    FuncDef,
+    TypeVarExpr,
+    Decorator,
 )
 from mypy.plugin import (
     Plugin,
@@ -26,8 +31,14 @@ ColTypesT = Dict[str, Type]
 def _get_2_call_args(ctx: DynamicClassDefContext) -> Tuple[TypeInfo, TypeInfo]:
     arg1, arg2 = ctx.call.args
     if not isinstance(arg1, NameExpr) or not isinstance(arg2, NameExpr):
-        ctx.api.msg.fail("EcoTaxa plugin: Class args " + str(arg1) + " and " + str(arg2) + " must be simple names",
-                         None)
+        ctx.api.msg.fail(
+            "EcoTaxa plugin: Class args "
+            + str(arg1)
+            + " and "
+            + str(arg2)
+            + " must be simple names",
+            None,
+        )
     assert isinstance(arg1, NameExpr) and isinstance(arg2, NameExpr)
     return _get_class_info_from_arg(ctx, arg1), _get_class_info_from_arg(ctx, arg2)
 
@@ -42,18 +53,26 @@ def _db_model_2_pydantic_class_maker_callback(ctx: DynamicClassDefContext) -> No
             col_types[a_col] = a_type.type.args[0]  # type:ignore
 
     class_name = ctx.name
-    _add_pydantic_clone(ctx, class_name, pydantic_model_type_info, col_types, from_orm=True)
+    _add_pydantic_clone(
+        ctx, class_name, pydantic_model_type_info, col_types, from_orm=True
+    )
 
 
-def _dataclass_2_pydantic_class_maker_callback_with_suffix(ctx: DynamicClassDefContext) -> None:
+def _dataclass_2_pydantic_class_maker_callback_with_suffix(
+    ctx: DynamicClassDefContext,
+) -> None:
     return _dataclass_2_pydantic_class_maker_callback(ctx, True)
 
 
-def _dataclass_2_pydantic_class_maker_callback_without_suffix(ctx: DynamicClassDefContext) -> None:
+def _dataclass_2_pydantic_class_maker_callback_without_suffix(
+    ctx: DynamicClassDefContext,
+) -> None:
     return _dataclass_2_pydantic_class_maker_callback(ctx, False)
 
 
-def _dataclass_2_pydantic_class_maker_callback(ctx: DynamicClassDefContext, with_suffix: bool = False) -> None:
+def _dataclass_2_pydantic_class_maker_callback(
+    ctx: DynamicClassDefContext, with_suffix: bool = False
+) -> None:
     data_class_type_info, pydantic_model_type_info = _get_2_call_args(ctx)
 
     col_types: ColTypesT = {}
@@ -72,7 +91,12 @@ def _typeddict_2_pydantic_class_maker(ctx: DynamicClassDefContext) -> None:
 
     typeddict_type = typeddict_type_info.typeddict_type
     if typeddict_type is None:
-        ctx.api.msg.fail("EcoTaxa plugin: TypedDict arg " + str(typeddict_type_info) + " is not a typed dict", None)
+        ctx.api.msg.fail(
+            "EcoTaxa plugin: TypedDict arg "
+            + str(typeddict_type_info)
+            + " is not a typed dict",
+            None,
+        )
     assert typeddict_type
     col_types: ColTypesT = {}
     for a_field_name, an_info in typeddict_type.items.items():
@@ -82,10 +106,14 @@ def _typeddict_2_pydantic_class_maker(ctx: DynamicClassDefContext) -> None:
     _add_pydantic_clone(ctx, class_name, pydantic_model_type_info, col_types)
 
 
-def _get_class_info_from_arg(ctx: DynamicClassDefContext, class_arg: NameExpr) -> TypeInfo:
+def _get_class_info_from_arg(
+    ctx: DynamicClassDefContext, class_arg: NameExpr
+) -> TypeInfo:
     class_name = class_arg.fullname
     if class_name is None:
-        ctx.api.msg.fail("EcoTaxa plugin: Class arg " + str(class_arg) + " has no name", None)
+        ctx.api.msg.fail(
+            "EcoTaxa plugin: Class arg " + str(class_arg) + " has no name", None
+        )
     assert class_name
     return _get_class_info(ctx, class_name)
 
@@ -102,8 +130,13 @@ def _get_class_info(ctx: DynamicClassDefContext, class_name: str) -> TypeInfo:
     return class_type_info
 
 
-def _add_pydantic_clone(ctx: DynamicClassDefContext, class_name: str, pydantic_model_type_info: TypeInfo,
-                        col_types: ColTypesT, from_orm: bool = False):
+def _add_pydantic_clone(
+    ctx: DynamicClassDefContext,
+    class_name: str,
+    pydantic_model_type_info: TypeInfo,
+    col_types: ColTypesT,
+    from_orm: bool = False,
+):
     # Fetch from context the base & metaclasses
     base_model_info = _get_class_info(ctx, "pydantic.main.BaseModel")
     metaclass_info = _get_class_info(ctx, "pydantic.main.ModelMetaclass")
@@ -118,7 +151,7 @@ def _add_pydantic_clone(ctx: DynamicClassDefContext, class_name: str, pydantic_m
     info.fallback_to_any = False  # Strict check of fields
     info.metadata = pydantic_model_type_info.metadata.copy()
     if from_orm:
-        info.metadata['pydantic-mypy-metadata']['config']['orm_mode'] = True
+        info.metadata["pydantic-mypy-metadata"]["config"]["orm_mode"] = True
     # Clone names
     info_names = SymbolTable()
     for a_name, a_sym in pydantic_model_type_info.names.items():
@@ -129,9 +162,12 @@ def _add_pydantic_clone(ctx: DynamicClassDefContext, class_name: str, pydantic_m
             sym_node.info = info
             if a_name not in col_types:
                 ctx.api.msg.fail(
-                    "EcoTaxa plugin: No type info for field '" + a_name + "' while augmenting " +
-                    str(pydantic_model_type_info.fullname),
-                    None)
+                    "EcoTaxa plugin: No type info for field '"
+                    + a_name
+                    + "' while augmenting "
+                    + str(pydantic_model_type_info.fullname),
+                    None,
+                )
             else:
                 sym_node.type = col_types[a_name]
         elif isinstance(sym_node, FuncDef):  # e.g.  __init__
@@ -156,12 +192,14 @@ class CustomPlugin(Plugin):
     DB_2_PYDANTIC = "API_models.helpers.DBtoModel.combine_models"
     # The magic primitives Dataclass + Pydantic model -> Pydantic model
     DATACLASS_2_PYDANTIC = "API_models.helpers.DataclassToModel.dataclass_to_model"
-    DATACLASS_2_PYDANTIC_WITH_SUFFIX = "API_models.helpers.DataclassToModel.dataclass_to_model_with_suffix"
+    DATACLASS_2_PYDANTIC_WITH_SUFFIX = (
+        "API_models.helpers.DataclassToModel.dataclass_to_model_with_suffix"
+    )
     # The magic primitive TypedDict + Pydantic model -> Pydantic model
     TYPEDDICT_2_PYDANTIC = "API_models.helpers.TypedDictToModel.typed_dict_to_model"
 
     def get_dynamic_class_hook(
-            self, fullname: str
+        self, fullname: str
     ) -> Optional[Callable[[DynamicClassDefContext], None]]:
         if fullname == self.DB_2_PYDANTIC:
             return _db_model_2_pydantic_class_maker_callback

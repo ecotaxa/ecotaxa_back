@@ -45,7 +45,7 @@ class ImageBO(object):
 
     @staticmethod
     def dimensions_and_resize(
-            max_dim: int, vault: Vault, sub_path: str, image_to_write: Bean
+        max_dim: int, vault: Vault, sub_path: str, image_to_write: Bean
     ) -> Optional[str]:
         """
         Get dimensions from given image, return a string with the error in case of issue.

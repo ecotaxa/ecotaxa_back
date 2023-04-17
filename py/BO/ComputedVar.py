@@ -25,10 +25,10 @@ class ComputedVar(ProjectVar):
         self.references: OrderedDictT[str, str] = OrderedDict()
 
     def expand_extract_refs(
-            self,
-            defs: Dict[str, str],
-            valid_prefixes: List[str],
-            names_and_defs: Dict[str, str],
+        self,
+        defs: Dict[str, str],
+        valid_prefixes: List[str],
+        names_and_defs: Dict[str, str],
     ):
         """
         Expand the formula using given inside-variables definitions and get references, checking they are allowed.
@@ -86,12 +86,12 @@ class ComputedVar(ProjectVar):
             nan_due_to_bad_input = self._is_bad_input(row)
             return math.nan, nan_due_to_bad_input
         except (
-                NameError
+            NameError
         ):  # this 'should not' happen, but during dev, the raise below allows to set a breakpoint
             raise
 
     def replace_python_refs_with_SQL(
-            self, replacements: Dict[Tuple[str, str], Tuple[str, str]]
+        self, replacements: Dict[Tuple[str, str], Tuple[str, str]]
     ):
         """
         Replace the references in expanded_formula formula & recompile.

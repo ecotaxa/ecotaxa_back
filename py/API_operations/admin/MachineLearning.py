@@ -28,7 +28,7 @@ logger = get_logger(__name__)
 
 class MachineLearningService(Service):
     """
-        Admin part of ML in EcoTaxa.
+    Admin part of ML in EcoTaxa.
     """
 
     def __init__(self) -> None:
@@ -36,19 +36,24 @@ class MachineLearningService(Service):
         self.vault = Vault(join(self.config.vault_dir()))
         self.models_dir = SavedModels(self.config)
 
-    def train(self, current_user_id: UserIDT,
-              prj_id: ProjectIDT,
-              out_model: str) -> str:
+    def train(
+        self, current_user_id: UserIDT, prj_id: ProjectIDT, out_model: str
+    ) -> str:
         # Security barrier
-        _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
-        obj_filter = ProjectFiltersDict(statusfilter='V')
+        _user = RightsBO.user_has_role(
+            self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
+        )
+        obj_filter = ProjectFiltersDict(statusfilter="V")
         with ObjectManager() as mgr:
             # Query like the API would do
-            obj_with_parents, details, total = mgr.query(current_user_id=current_user_id, proj_id=prj_id,
-                                                         return_fields=["txo.display_name", "img.file_name"],
-                                                         order_field="obj.objid",
-                                                         window_size=2000,
-                                                         filters=obj_filter)
+            obj_with_parents, details, total = mgr.query(
+                current_user_id=current_user_id,
+                proj_id=prj_id,
+                return_fields=["txo.display_name", "img.file_name"],
+                order_field="obj.objid",
+                window_size=2000,
+                filters=obj_filter,
+            )
         # Prepare input data, in the form of CSV text:
         # e.g. 1,data/images/1.jpg,Cladocera
         pd_csv = StringIO()

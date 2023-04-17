@@ -23,7 +23,7 @@ class CountOfBiologicalEntity(DwC_ExtendedMeasurementOrFact):
             occurrenceID=occurrence_id,
             measurementType="Count (in assayed sample) of biological entity specified elsewhere",
             measurementTypeID="http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/",
-            measurementValue=value
+            measurementValue=value,
         )
 
 
@@ -37,7 +37,7 @@ class AbundancePerUnitAreaOfTheBed(DwC_ExtendedMeasurementOrFact):
             measurementTypeID="http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL02/",
             measurementValue=value,
             measurementUnit="N/km2",
-            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/NPKM/"
+            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/NPKM/",
         )
 
 
@@ -52,7 +52,7 @@ class AbundancePerUnitVolumeOfTheWaterBody(DwC_ExtendedMeasurementOrFact):
             measurementTypeID="http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/",
             measurementValue=value,
             measurementUnit="Number per cubic metre",
-            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/UPMM/"
+            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/UPMM/",
         )
 
 
@@ -67,7 +67,7 @@ class BiovolumeOfBiologicalEntity(DwC_ExtendedMeasurementOrFact):
             measurementTypeID="http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/",
             measurementValue=value,
             measurementUnit="Cubic millimetres per cubic metre",
-            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/CMCM/"
+            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/CMCM/",
         )
 
 
@@ -84,6 +84,7 @@ class BiovolumeOfBiologicalEntity(DwC_ExtendedMeasurementOrFact):
 #             measurementUnitID=""
 #         )
 
+
 class SamplingInstrumentName(DwC_ExtendedMeasurementOrFact):
     # One of: http://vocab.nerc.ac.uk/collection/L22/current/
     # e.g. http://vocab.nerc.ac.uk/collection/L22/current/TOOL1252/
@@ -93,7 +94,7 @@ class SamplingInstrumentName(DwC_ExtendedMeasurementOrFact):
             measurementType="Sampling instrument name",
             measurementTypeID="http://vocab.nerc.ac.uk/collection/Q01/current/Q0100002/",
             measurementValue=value,  # e.g."Otter-Trawl Maireta System (OTMS)",
-            measurementValueID=value_id
+            measurementValueID=value_id,
         )
 
 
@@ -119,7 +120,7 @@ class SampleDeviceApertureAreaInSquareMeters(DwC_ExtendedMeasurementOrFact):
             measurementTypeID="http://vocab.nerc.ac.uk/collection/Q01/current/Q0100017/",
             measurementValue=value,
             measurementUnit="Square metres",
-            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/UMSQ/"
+            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/UMSQ/",
         )
 
 
@@ -134,7 +135,7 @@ class SampleDeviceApertureLength(DwC_ExtendedMeasurementOrFact):
             measurementTypeID="http://vocab.nerc.ac.uk/collection/Q01/current/Q0100014/",
             measurementValue=value,
             measurementUnit="Metres",
-            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/ULAA/"
+            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/ULAA/",
         )
 
 
@@ -146,7 +147,7 @@ class SampleDeviceDiameterInMeters(DwC_ExtendedMeasurementOrFact):
             measurementTypeID="http://vocab.nerc.ac.uk/collection/Q01/current/Q0100012/",
             measurementValue=value,
             measurementUnit="Metres",
-            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/ULAA/"
+            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/ULAA/",
         )
 
 
@@ -158,7 +159,7 @@ class SamplingNetMeshSizeInMillimeters(DwC_ExtendedMeasurementOrFact):
             measurementTypeID="http://vocab.nerc.ac.uk/collection/Q01/current/Q0100015/",
             measurementValue=value,
             measurementUnit="Millimetres",
-            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/UXMM/"
+            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/UXMM/",
         )
 
 
@@ -170,7 +171,7 @@ class SamplingNetMeshSizeInMicrons(DwC_ExtendedMeasurementOrFact):
             measurementTypeID="http://vocab.nerc.ac.uk/collection/Q01/current/Q0100015/",
             measurementValue=value,
             measurementUnit="Micrometres (microns)",
-            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/UMIC/"
+            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/UMIC/",
         )
 
 
@@ -182,7 +183,7 @@ class SampleVolumeInCubicMeters(DwC_ExtendedMeasurementOrFact):
             measurementTypeID="http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/",
             measurementValue=value,
             measurementUnit="Cubic metres",
-            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/MCUB/"
+            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/MCUB/",
         )
 
 
@@ -193,5 +194,5 @@ class ImagingInstrumentName(DwC_ExtendedMeasurementOrFact):
             measurementType="Imaging instrument name",
             measurementTypeID="https://vocab.nerc.ac.uk/collection/P06/current/XXXX/",
             # Requested: https://github.com/nvs-vocabs/Q01/issues/1
-            measurementValue=value
+            measurementValue=value,
         )

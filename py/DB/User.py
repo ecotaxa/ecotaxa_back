@@ -52,7 +52,7 @@ class User(Model):
 
     @staticmethod
     def find_users(
-            session: Session, names: List[str], emails: List[str], found_users: dict
+        session: Session, names: List[str], emails: List[str], found_users: dict
     ):
         """
         Find the users in DB, by name or email.
@@ -70,8 +70,8 @@ class User(Model):
         for rec in res:
             for u in found_users:
                 if (
-                        u == rec[1]
-                        or none_to_empty(found_users[u].get("email")).lower() == rec[2]
+                    u == rec[1]
+                    or none_to_empty(found_users[u].get("email")).lower() == rec[2]
                 ):
                     found_users[u]["id"] = rec[0]
 

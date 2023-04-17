@@ -7,16 +7,18 @@ import logging
 from abc import ABC
 from threading import get_ident
 
-LOGGING_FORMAT = '%(process)d:%(threadName)s:%(asctime)s:%(name)s:%(levelname)s %(message)s'
-ALT_LOGGING_FORMAT = '%(asctime)s:%(name)s:%(levelname)s %(message)s'
+LOGGING_FORMAT = (
+    "%(process)d:%(threadName)s:%(asctime)s:%(name)s:%(levelname)s %(message)s"
+)
+ALT_LOGGING_FORMAT = "%(asctime)s:%(name)s:%(levelname)s %(message)s"
 LOG_FILE_TEMPLATE = "ecotaxa_back_%d.log"
 LOG_FILE = LOG_FILE_TEMPLATE % 0  # os.getpid()
 
 
 class PerThreadHandler(logging.Handler):
     """
-        A constant Handler to a switching destination.
-        It acts as a simple relay to another handler.
+    A constant Handler to a switching destination.
+    It acts as a simple relay to another handler.
     """
 
     def __init__(self, handler):
@@ -59,11 +61,12 @@ def get_logger(name) -> logging.Logger:
 
 class LogEmitter(ABC):
     """
-        Just to force presence of the right primitive for log emitter classes, and add a member to the switcher.
+    Just to force presence of the right primitive for log emitter classes, and add a member to the switcher.
     """
 
     @abc.abstractmethod
-    def log_file_path(self) -> str: ...
+    def log_file_path(self) -> str:
+        ...
 
     def __init__(self):
         self.switcher = None
@@ -71,7 +74,7 @@ class LogEmitter(ABC):
 
 class LogsSwitcher(object):
     """
-        Redirect logs to the file provided by the log-emitting object.
+    Redirect logs to the file provided by the log-emitting object.
     """
 
     def __init__(self, log_emitter: LogEmitter):

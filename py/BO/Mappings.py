@@ -259,7 +259,7 @@ class ProjectMapping(object):
         return self
 
     def add_column(
-            self, target_table: str, tsv_table: str, tsv_field: str, sel_type
+        self, target_table: str, tsv_table: str, tsv_field: str, sel_type
     ) -> Tuple[bool, str]:
         """
         A new custom column was found, add it into the right bucket.
@@ -415,7 +415,7 @@ class TableMapping(object):
         return ret
 
     def augmented_with(
-            self, source: "TableMapping"
+        self, source: "TableMapping"
     ) -> Tuple["TableMapping", List[RemapOp], List[str]]:
         """
         Compute a new mapping self + source. Returns it, plus the necessary operations to do on source
@@ -448,13 +448,13 @@ class TableMapping(object):
                     # TSV column is present but mapped to a different DB column...
                     # hopefully of same type
                     assert real_col_in_dest[0] == a_real_src_col[0], (
-                            "Destination column '%s' aka '%s' and source column '%s' aka '%s' have different types!"
-                            % (
-                                a_tsv_src_col,
-                                real_col_in_dest,
-                                a_tsv_src_col,
-                                a_real_src_col,
-                            )
+                        "Destination column '%s' aka '%s' and source column '%s' aka '%s' have different types!"
+                        % (
+                            a_tsv_src_col,
+                            real_col_in_dest,
+                            a_tsv_src_col,
+                            a_real_src_col,
+                        )
                     )
                     remaps.append(RemapOp(a_real_src_col, real_col_in_dest))
                 else:

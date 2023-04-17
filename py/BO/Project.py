@@ -172,7 +172,7 @@ class ProjectBO(object):
         a_priv: ProjectPrivilege
         # noinspection PyTypeChecker
         for (
-                a_priv
+            a_priv
         ) in self._project.privs_for_members:  # Use ORM to navigate in relationship
             priv_user = a_priv.user
             if priv_user is None:  # TODO: There is a line with NULL somewhere in DB
@@ -197,24 +197,24 @@ class ProjectBO(object):
         return self
 
     def update(
-            self,
-            session: Session,
-            instrument: Optional[str],
-            title: str,
-            visible: Optional[bool],
-            status: Optional[str],
-            description: Optional[str],
-            init_classif_list: List[int],
-            classiffieldlist: Optional[str],
-            popoverfieldlist: Optional[str],
-            cnn_network_id: Optional[str],
-            comments: Optional[str],
-            contact: Any,
-            managers: List[Any],
-            annotators: List[Any],
-            viewers: List[Any],
-            license_: str,
-            bodc_vars: Dict,
+        self,
+        session: Session,
+        instrument: Optional[str],
+        title: str,
+        visible: Optional[bool],
+        status: Optional[str],
+        description: Optional[str],
+        init_classif_list: List[int],
+        classiffieldlist: Optional[str],
+        popoverfieldlist: Optional[str],
+        cnn_network_id: Optional[str],
+        comments: Optional[str],
+        contact: Any,
+        managers: List[Any],
+        annotators: List[Any],
+        viewers: List[Any],
+        license_: str,
+        bodc_vars: Dict,
     ):
         assert contact is not None, "A valid Contact is needed."
         proj_id = self._project.projid
@@ -225,7 +225,7 @@ class ProjectBO(object):
             if its_def is None or its_def.strip() == "":
                 continue
             assert (
-                    a_var in KNOWN_PROJECT_VARS
+                a_var in KNOWN_PROJECT_VARS
             ), "Invalid project variable key: {}".format(a_var)
             try:
                 var_def = ProjectVar.from_project(a_var, its_def)
@@ -374,7 +374,7 @@ class ProjectBO(object):
 
     @staticmethod
     def read_taxo_stats(
-            session: Session, prj_ids: ProjectIDListT, taxa_ids: Union[str, ClassifIDListT]
+        session: Session, prj_ids: ProjectIDListT, taxa_ids: Union[str, ClassifIDListT]
     ) -> List[ProjectTaxoStats]:
         sql = """
         SELECT pts.projid, ARRAY_AGG(pts.id) as used_taxa, 
@@ -402,7 +402,7 @@ class ProjectBO(object):
 
     @staticmethod
     def validated_categories_ids(
-            session: Session, prj_ids: ProjectIDListT
+        session: Session, prj_ids: ProjectIDListT
     ) -> ClassifIDListT:
         """Return display_name for all categories with at least one validated object,
         in provided project list."""
@@ -411,7 +411,7 @@ class ProjectBO(object):
         qry = qry.filter(Project.projid == any_(prj_ids))
         qry = qry.filter(ObjectHeader.classif_qual == VALIDATED_CLASSIF_QUAL)
         with CodeTimer(
-                "Validated category IDs for %s, qry: %s " % (len(prj_ids), str(qry)), logger
+            "Validated category IDs for %s, qry: %s " % (len(prj_ids), str(qry)), logger
         ):
             return [an_id for an_id, in qry]
 
@@ -440,7 +440,7 @@ class ProjectBO(object):
 
     @staticmethod
     def read_user_stats(
-            session: Session, prj_ids: ProjectIDListT
+        session: Session, prj_ids: ProjectIDListT
     ) -> List[ProjectUserStats]:
         """
         Read the users (annotators) involved in each project.
@@ -467,8 +467,8 @@ class ProjectBO(object):
         user_activities_per_project = {}
         stats_per_project = {}
         with CodeTimer(
-                "user present stats for %d projects, qry: %s:" % (len(prj_ids), str(pqry)),
-                logger,
+            "user present stats for %d projects, qry: %s:" % (len(prj_ids), str(pqry)),
+            logger,
         ):
             last_prj: Optional[int] = None
             for projid, user_id, user_name, cnt, last_date in pqry:
@@ -506,8 +506,8 @@ class ProjectBO(object):
         hqry = hqry.group_by(Project.projid, User.id)
         hqry = hqry.order_by(Project.projid, User.name)
         with CodeTimer(
-                "user history stats for %d projects, qry: %s:" % (len(prj_ids), str(hqry)),
-                logger,
+            "user history stats for %d projects, qry: %s:" % (len(prj_ids), str(hqry)),
+            logger,
         ):
             last_prj = None
             for projid, user_id, user_name, cnt, last_date in hqry:
@@ -534,13 +534,13 @@ class ProjectBO(object):
 
     @staticmethod
     def projects_for_user(
-            session: Session,
-            user: User,
-            for_managing: bool = False,
-            not_granted: bool = False,
-            title_filter: str = "",
-            instrument_filter: str = "",
-            filter_subset: bool = False,
+        session: Session,
+        user: User,
+        for_managing: bool = False,
+        not_granted: bool = False,
+        title_filter: str = "",
+        instrument_filter: str = "",
+        filter_subset: bool = False,
     ) -> List[ProjectIDT]:
         """
         :param session:
@@ -560,11 +560,11 @@ class ProjectBO(object):
         # Default query: all projects, eventually with first manager information
         # noinspection SqlResolve
         sql = (
-                """SELECT prj.projid
+            """SELECT prj.projid
                        FROM projects prj
                        LEFT JOIN ( """
-                + ProjectPrivilegeBO.first_manager_by_project()
-                + """ ) fpm 
+            + ProjectPrivilegeBO.first_manager_by_project()
+            + """ ) fpm 
                       ON fpm.projid = prj.projid """
         )
         if not_granted:
@@ -589,9 +589,9 @@ class ProjectBO(object):
                          AND prp.member = :user_id """
                 if for_managing:
                     sql += (
-                            """
+                        """
                                  AND prp.privilege = '%s' """
-                            % ProjectPrivilegeBO.MANAGE
+                        % ProjectPrivilegeBO.MANAGE
                     )
             sql += " WHERE 1 = 1 "
 
@@ -618,7 +618,7 @@ class ProjectBO(object):
 
     @staticmethod
     def list_public_projects(
-            session: Session, title_filter: str = ""
+        session: Session, title_filter: str = ""
     ) -> List[ProjectIDT]:
         """
         :param session:
@@ -634,7 +634,7 @@ class ProjectBO(object):
 
     @classmethod
     def get_bounding_geo(
-            cls, session: Session, project_ids: ProjectIDListT
+        cls, session: Session, project_ids: ProjectIDListT
     ) -> Iterable[float]:
         # TODO: Why using the view?
         sql = (
@@ -649,7 +649,7 @@ class ProjectBO(object):
 
     @classmethod
     def get_date_range(
-            cls, session: Session, project_ids: ProjectIDListT
+        cls, session: Session, project_ids: ProjectIDListT
     ) -> Iterable[datetime]:
         # TODO: Why using the view?
         sql = (
@@ -721,7 +721,7 @@ class ProjectBO(object):
 
     @staticmethod
     def remap(
-            session: Session, prj_id: int, table: MappedTableTypeT, remaps: List[RemapOp]
+        session: Session, prj_id: int, table: MappedTableTypeT, remaps: List[RemapOp]
     ) -> None:
         """
         Apply remapping operations onto the given table for given project.
@@ -760,7 +760,7 @@ class ProjectBO(object):
 
     @classmethod
     def get_all_object_ids(
-            cls, session: Session, prj_id: int
+        cls, session: Session, prj_id: int
     ) -> List[int]:  # TODO: Problem with recursive import -> ObjectIDListT:
         """
         Return the full list of objects IDs inside a project.
@@ -776,7 +776,7 @@ class ProjectBO(object):
 
     @classmethod
     def get_all_object_ids_with_first_image(
-            cls, session: Session, prj_id: int
+        cls, session: Session, prj_id: int
     ) -> Dict[Any, str]:  # ObjectIDT
         """
         Return the full list of objects IDs and first image file name inside a project.
@@ -796,7 +796,7 @@ class ProjectBO(object):
 
     @classmethod
     def incremental_update_taxo_stats(
-            cls, session: Session, prj_id: int, collated_changes: ChangeTypeT
+        cls, session: Session, prj_id: int, collated_changes: ChangeTypeT
     ) -> None:
         """
         Do not recompute the full stats for a project (which can be long).
@@ -824,17 +824,17 @@ class ProjectBO(object):
             # Insert rows for missing IDs
             # TODO: We can't lock what does not exists, so it can fail here.
             pts_ins = (
-                    """INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
+                """INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
                                  SELECT :prj, COALESCE(obh.classif_id, -1), COUNT(*) nbr, 
                                         COUNT(CASE WHEN obh.classif_qual = '"""
-                    + VALIDATED_CLASSIF_QUAL
-                    + """' THEN 1 END) nbr_v,
+                + VALIDATED_CLASSIF_QUAL
+                + """' THEN 1 END) nbr_v,
                                 COUNT(CASE WHEN obh.classif_qual = '"""
-                    + DUBIOUS_CLASSIF_QUAL
-                    + """' THEN 1 END) nbr_d,
+                + DUBIOUS_CLASSIF_QUAL
+                + """' THEN 1 END) nbr_d,
                                 COUNT(CASE WHEN obh.classif_qual = '"""
-                    + PREDICTED_CLASSIF_QUAL
-                    + """' THEN 1 END) nbr_p
+                + PREDICTED_CLASSIF_QUAL
+                + """' THEN 1 END) nbr_p
                            FROM obj_head obh
                            JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
                            JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prj 
@@ -889,7 +889,7 @@ class ProjectBO(object):
 
     @classmethod
     def get_sort_db_columns(
-            cls, project: Project, mapping: Optional[TableMapping]
+        cls, project: Project, mapping: Optional[TableMapping]
     ) -> List[str]:
         """
         Get sort list as DB columns, e.g. typically t03, n34

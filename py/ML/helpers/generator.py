@@ -43,16 +43,16 @@ class EcoTaxaGenerator(utils.Sequence):
     """
 
     def __init__(
-            self,
-            images_paths,
-            input_shape,
-            labels=None,
-            classes=None,
-            batch_size=32,
-            shuffle=False,
-            augment=False,
-            upscale=True,
-            crop=(0, 0, 0, 0),
+        self,
+        images_paths,
+        input_shape,
+        labels=None,
+        classes=None,
+        batch_size=32,
+        shuffle=False,
+        augment=False,
+        upscale=True,
+        crop=(0, 0, 0, 0),
     ):
         """Initialization of settings"""
         # initialize constants
@@ -106,8 +106,8 @@ class EcoTaxaGenerator(utils.Sequence):
             (
                 img[:, 0],  # left column
                 img[:, w - 1],  # right column
-                img[0, 1: w - 2],  # top line without corners
-                img[h - 1, 1: w - 2],  # bottom line without corners
+                img[0, 1 : w - 2],  # top line without corners
+                img[h - 1, 1 : w - 2],  # bottom line without corners
             ),
             axis=0,
         )
@@ -149,7 +149,7 @@ class EcoTaxaGenerator(utils.Sequence):
         """Generate one batch of data"""
 
         # pick indexes of images for this batch
-        indexes = self.indexes[index * self.batch_size: (index + 1) * self.batch_size]
+        indexes = self.indexes[index * self.batch_size : (index + 1) * self.batch_size]
 
         # select and load images from this batch
         batch_paths = [self.images_paths[i] for i in indexes]
@@ -211,7 +211,7 @@ class EcoTaxaGenerator(utils.Sequence):
             offset_hor = int((input_size - w) / 2)  # on left and right of image
 
             # replace pixels by input image
-            img_square[offset_ver: offset_ver + h, offset_hor: offset_hor + w] = img
+            img_square[offset_ver : offset_ver + h, offset_hor : offset_hor + w] = img
             batch_prepared_images.append(img_square)
 
             # self.dbg_save(img_square, "/tmp/out_rsz.jpg")

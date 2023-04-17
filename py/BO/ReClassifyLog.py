@@ -26,13 +26,13 @@ class ReClassificationBO(object):
 
     @staticmethod
     def add_log(
-            session: Session,
-            from_id: ClassifIDT,
-            to_id: ClassifIDT,
-            project_id: ProjectIDT,
-            why: str,
-            impacted: int,
-            log_time: datetime,
+        session: Session,
+        from_id: ClassifIDT,
+        to_id: ClassifIDT,
+        project_id: ProjectIDT,
+        why: str,
+        impacted: int,
+        log_time: datetime,
     ):
         """
         Add a log line. In practice, a previous log might be in already, and erased by a rollback.
@@ -55,7 +55,7 @@ class ReClassificationBO(object):
 
     @staticmethod
     def previous_choices(
-            session: Session, src_ids: ClassifIDListT
+        session: Session, src_ids: ClassifIDListT
     ) -> Dict[ClassifIDT, ClassifIDT]:
         """
         Return the non-advised choice made in the majority of projects, in the past, for these categories.

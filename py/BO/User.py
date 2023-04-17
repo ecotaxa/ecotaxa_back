@@ -27,7 +27,7 @@ class UserBO(object):
 
     @staticmethod
     def get_preferences_per_project(
-            session: Session, user_id: int, project_id: int, key: str
+        session: Session, user_id: int, project_id: int, key: str
     ) -> Any:
         """
         Get a preference, for given project and user. Keys are not standardized (for now).
@@ -47,7 +47,7 @@ class UserBO(object):
 
     @staticmethod
     def set_preferences_per_project(
-            session: Session, user_id: int, project_id: int, key: str, value: Any
+        session: Session, user_id: int, project_id: int, key: str, value: Any
     ):
         """
         Set preference for a key, for given project and user. The key disappears if set to empty string.
@@ -84,7 +84,7 @@ class UserBO(object):
 
     @classmethod
     def merge_mru(
-            cls, before: ClassifIDListT, incoming: ClassifIDListT
+        cls, before: ClassifIDListT, incoming: ClassifIDListT
     ) -> ClassifIDListT:
         """
         Update recently used list.
@@ -116,7 +116,7 @@ class UserBO(object):
 
     @classmethod
     def set_mru(
-            cls, session: Session, user_id: int, project_id: int, mru: ClassifIDListT
+        cls, session: Session, user_id: int, project_id: int, mru: ClassifIDListT
     ):
         """
         Set classification MRU.

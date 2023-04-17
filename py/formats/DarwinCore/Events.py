@@ -9,7 +9,7 @@ from formats.TxtFromModels import TxtFileWithModel
 
 class Events(TxtFileWithModel):
     """
-        The DwC Events we are going to export.
+    The DwC Events we are going to export.
     """
 
     def __init__(self):

@@ -74,9 +74,9 @@ class FileImport(ImportServiceBase):
         with LogsSwitcher(self):
             job = self._get_job()
             if job.progress_msg in (
-                    None,
-                    JobBO.PENDING_MESSAGE,
-                    JobBO.RESTARTING_MESSAGE,
+                None,
+                JobBO.PENDING_MESSAGE,
+                JobBO.RESTARTING_MESSAGE,
             ):
                 self.do_validate()
             elif job.progress_msg == JobBO.REPLIED_MESSAGE:
@@ -150,7 +150,7 @@ class FileImport(ImportServiceBase):
             self.do_real()
 
     def _collect_existing_and_validate(
-            self, source_dir_or_zip: str, loaded_files: List[str]
+        self, source_dir_or_zip: str, loaded_files: List[str]
     ) -> Tuple[ImportHow, ImportDiagnostic, int]:
         """
         Prepare the import by checking what's inside the project and scanning files to input.
@@ -174,7 +174,7 @@ class FileImport(ImportServiceBase):
         import_diag = ImportDiagnostic()
         if not self.req.skip_existing_objects:
             with CodeTimer(
-                    "collect_existing: Existing images for %d: " % self.prj_id, logger
+                "collect_existing: Existing images for %d: " % self.prj_id, logger
             ):
                 import_diag.existing_objects_and_image = Image.fetch_existing_images(
                     self.session, self.prj_id
@@ -187,9 +187,9 @@ class FileImport(ImportServiceBase):
         return import_how, import_diag, nb_rows
 
     def resolve_references(
-            self,
-            users_found: Dict[str, Dict[str, Any]],
-            taxo_found: Dict[str, Optional[int]],
+        self,
+        users_found: Dict[str, Dict[str, Any]],
+        taxo_found: Dict[str, Optional[int]],
     ):
         """
         We have references inside the TSVs, to users or categories.
@@ -202,10 +202,10 @@ class FileImport(ImportServiceBase):
 
     @staticmethod
     def complete_references(
-            users_found: Dict[str, Dict[str, Any]],
-            taxo_found: Dict[str, Optional[int]],
-            more_users: Dict[str, UserIDT],
-            more_taxo: Dict[str, ClassifIDT],
+        users_found: Dict[str, Dict[str, Any]],
+        taxo_found: Dict[str, Optional[int]],
+        more_users: Dict[str, UserIDT],
+        more_taxo: Dict[str, ClassifIDT],
     ) -> None:
         """
         Use provided more_* dict for overriding the *_found data.
@@ -217,7 +217,7 @@ class FileImport(ImportServiceBase):
 
     @staticmethod
     def validate_references(
-            users_found: Dict, taxo_found: Dict[str, Optional[int]]
+        users_found: Dict, taxo_found: Dict[str, Optional[int]]
     ) -> Tuple[List[str], List[str]]:
         """
         After collection of references, ensure completeness.

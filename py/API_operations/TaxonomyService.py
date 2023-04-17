@@ -22,28 +22,26 @@ logger = get_logger(__name__)
 
 
 class TaxonomyService(Service):
-    """
-
-    """
+    """ """
 
     def __init__(self) -> None:
         super().__init__()
 
     def status(self, _current_user_id: UserIDT) -> Optional[datetime]:
         """
-            Return the freshness status of the taxonomy tree.
-            Fresh == recently updated from the Taxonomy server.
+        Return the freshness status of the taxonomy tree.
+        Fresh == recently updated from the Taxonomy server.
         """
         tree_info = TaxonomyBO.get_tree_status(self.session)
         # The column is NULL-able so this can happen:
         # tree_info.lastserverversioncheck_datetime is None
         return tree_info.lastserverversioncheck_datetime
 
-    def search(self, current_user_id: Optional[UserIDT],
-               prj_id: Optional[int],
-               query: str) -> List[TaxaSearchRsp]:
+    def search(
+        self, current_user_id: Optional[UserIDT], prj_id: Optional[int], query: str
+    ) -> List[TaxaSearchRsp]:
         """
-            See caller doctext for specifications.
+        See caller doctext for specifications.
         """
         query_len = len(query)
         # Arrange query
@@ -82,19 +80,20 @@ class TaxonomyService(Service):
                 # And arrange they are in first
                 return_order = {cl_id: num for num, cl_id in enumerate(limit_ids_to)}
         # Do the query
-        res = TaxonomyBO.query(self.ro_session, limit_ids_to, include_ids, display_name_term, name_terms)
+        res = TaxonomyBO.query(
+            self.ro_session, limit_ids_to, include_ids, display_name_term, name_terms
+        )
         mru_ret = []
         preset_ret = []
         others_ret = []
         # Carefully order the result
         for a_rec in res:
-            classif_id = a_rec['id']
-            renm_id = a_rec['rename_to']
+            classif_id = a_rec["id"]
+            renm_id = a_rec["rename_to"]
             is_preset = 1 if classif_id in preset else 0
-            to_add = TaxaSearchRsp(id=classif_id,
-                                   renm_id=renm_id,
-                                   text=a_rec['display_name'],
-                                   pr=is_preset)
+            to_add = TaxaSearchRsp(
+                id=classif_id, renm_id=renm_id, text=a_rec["display_name"], pr=is_preset
+            )
             if classif_id in return_order:
                 mru_ret.append(to_add)
             elif is_preset:
@@ -106,7 +105,7 @@ class TaxonomyService(Service):
 
     def query_roots(self) -> List[TaxonBO]:
         """
-            Return root (no parents) categories/taxa.
+        Return root (no parents) categories/taxa.
         """
         qry = self.ro_session.query(Taxonomy.id)
         qry = qry.filter(Taxonomy.parent_id.is_(None))
@@ -121,24 +120,29 @@ class TaxonomyService(Service):
             return ret[0]
 
     def query_usage(self, taxon_id: ClassifIDT) -> List[Dict[str, Any]]:
-        taxo_and_prjs_qry = self.session.query(ProjectTaxoStat.nbr_v, Project.projid, Project.title)
-        taxo_and_prjs_qry = taxo_and_prjs_qry.filter((Project.projid == ProjectTaxoStat.projid)
-                                                     & (ProjectTaxoStat.nbr_v > 0)
-                                                     & (ProjectTaxoStat.id == taxon_id))
+        taxo_and_prjs_qry = self.session.query(
+            ProjectTaxoStat.nbr_v, Project.projid, Project.title
+        )
+        taxo_and_prjs_qry = taxo_and_prjs_qry.filter(
+            (Project.projid == ProjectTaxoStat.projid)
+            & (ProjectTaxoStat.nbr_v > 0)
+            & (ProjectTaxoStat.id == taxon_id)
+        )
         taxo_and_prjs_qry = taxo_and_prjs_qry.order_by(ProjectTaxoStat.nbr_v.desc())
         logger.info("qry:%s", taxo_and_prjs_qry)
-        ret = [{
-            "projid": projid,
-            "title": title,
-            "nb_validated": nbr_v
-        } for nbr_v, projid, title in taxo_and_prjs_qry]
+        ret = [
+            {"projid": projid, "title": title, "nb_validated": nbr_v}
+            for nbr_v, projid, title in taxo_and_prjs_qry
+        ]
         return ret
 
     def query_set(self, taxon_ids: ClassifIDListT) -> List[TaxonBO]:
         ret = TaxonBOSet(self.ro_session, taxon_ids)
         return ret.taxa
 
-    def most_used_non_advised(self, _current_user_id: Optional[UserIDT], taxon_ids: ClassifIDListT) -> List[TaxonBO]:
+    def most_used_non_advised(
+        self, _current_user_id: Optional[UserIDT], taxon_ids: ClassifIDListT
+    ) -> List[TaxonBO]:
         prev_choices = ReClassificationBO.previous_choices(self.ro_session, taxon_ids)
         ret_taxa = []
         for a_taxon_id in taxon_ids:
@@ -146,17 +150,21 @@ class TaxonomyService(Service):
             found_choice = prev_choices.get(a_taxon_id, a_taxon_id)
             ret_taxa.append(found_choice)
         # Index as we need exact order
-        ret_dict = {a_taxon.id: a_taxon for a_taxon in TaxonBOSet(self.ro_session, ret_taxa).taxa}
+        ret_dict = {
+            a_taxon.id: a_taxon
+            for a_taxon in TaxonBOSet(self.ro_session, ret_taxa).taxa
+        }
         return [ret_dict[txid] for txid in ret_taxa]
 
-    def reclassification_history(self, _current_user_id: Optional[UserIDT], project_id: ProjectIDT) \
-            -> List[Dict[str, Any]]:
+    def reclassification_history(
+        self, _current_user_id: Optional[UserIDT], project_id: ProjectIDT
+    ) -> List[Dict[str, Any]]:
         history = ReClassificationBO.history_for_project(self.ro_session, project_id)
         return history
 
     def query_worms(self, aphia_id: ClassifIDT) -> Optional[TaxonBO]:
         """
-            Return information about an entry in WoRMS table.
+        Return information about an entry in WoRMS table.
         """
         ret = self.query_worms_set([aphia_id])
         if not ret:

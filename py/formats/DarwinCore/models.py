@@ -14,51 +14,66 @@ Url = str
 
 class EMODNetMeta(BaseModel):
     """
-        The dataset metadata. Not to be confused with DwC metadata, which describes
-        how data is organized.
+    The dataset metadata. Not to be confused with DwC metadata, which describes
+    how data is organized.
     """
+
     provider: str = Field(title="Person providing the metadata: name, institute, email")
     title: str = Field(title="Dataset title in English")
-    orig_title: Optional[str] = Field(title="Dataset title in original language (and language)")
+    orig_title: Optional[str] = Field(
+        title="Dataset title in original language (and language)"
+    )
     contact: str = Field(title="Contact person for the dataset: name, institute, email")
     creator: List[str] = Field(title="Data creator(s): (name), institute", min_items=1)
-    other_persons: List[str] = Field(title="Other person(s) associated with the dataset - Highly recommended")
+    other_persons: List[str] = Field(
+        title="Other person(s) associated with the dataset - Highly recommended"
+    )
     citation: str = Field(title="Dataset citation")
     license: str = Field(title="License or terms of use")
     abstract: str = Field(title="Abstract")
-    extended_description: Optional[str] = Field(title="Extended description-Highly recommended")
+    extended_description: Optional[str] = Field(
+        title="Extended description-Highly recommended"
+    )
     geo_coverage: str = Field(title="Geographical coverage")
     temporal_coverage: str = Field(title="Temporal coverage")
     taxonomic_coverage: str = Field(title="Taxonomic coverage")
     themes: List[str] = Field(title="Themes", min_items=1)
     keywords: List[str] = Field(title="Keywords")
     websites: List[Url] = Field(title="Websites")
-    related_publications: List[str] = Field(title="Publications related to the dataset - Highly recommended")
+    related_publications: List[str] = Field(
+        title="Publications related to the dataset - Highly recommended"
+    )
 
 
 # Some values from https://www.dublincore.org/specifications/dublin-core/dcmi-type-vocabulary/2010-10-11/
 
+
 class RecordTypeEnum(str, Enum):
-    Collection = 'Collection'
-    Dataset = 'Dataset'
-    Event = 'Event'
-    StillImage = 'StillImage'
-    Text = 'Text'
-    MovingImage = 'MovingImage'
-    PhysicalObject = 'PhysicalObject'
+    Collection = "Collection"
+    Dataset = "Dataset"
+    Event = "Event"
+    StillImage = "StillImage"
+    Text = "Text"
+    MovingImage = "MovingImage"
+    PhysicalObject = "PhysicalObject"
     # These 2 are not 'official'
-    cruise = 'cruise'
-    sample = 'sample'
+    cruise = "cruise"
+    sample = "sample"
 
 
 # https://dwc.tdwg.org/ Darwin Core for terms below
 
+
 class DwcEvent(BaseModel):
     # Unicity
-    eventID: str = Field(term="http://rs.tdwg.org/dwc/terms/eventID", is_id=True, dup_id=True)
+    eventID: str = Field(
+        term="http://rs.tdwg.org/dwc/terms/eventID", is_id=True, dup_id=True
+    )
     # Record DwC field
     type: RecordTypeEnum = Field(term="http://purl.org/dc/terms/type")
-    parentEventID: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/parentEventID")
+    parentEventID: Optional[str] = Field(
+        term="http://rs.tdwg.org/dwc/terms/parentEventID"
+    )
 
     institutionCode: str = Field(term="http://rs.tdwg.org/dwc/terms/institutionCode")
     """ The name (or acronym) in use by the institution having custody of the object(s) or 
@@ -71,12 +86,19 @@ class DwcEvent(BaseModel):
     # Location DwC fields
     decimalLatitude: str = Field(term="http://rs.tdwg.org/dwc/terms/decimalLatitude")
     decimalLongitude: str = Field(term="http://rs.tdwg.org/dwc/terms/decimalLongitude")
-    geodeticDatum: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/geodeticDatum")
+    geodeticDatum: Optional[str] = Field(
+        term="http://rs.tdwg.org/dwc/terms/geodeticDatum"
+    )
 
     coordinateUncertaintyInMeters: Optional[str] = Field(
-        term="http://rs.tdwg.org/dwc/terms/coordinateUncertaintyInMeters")
-    minimumDepthInMeters: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/minimumDepthInMeters")
-    maximumDepthInMeters: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/maximumDepthInMeters")
+        term="http://rs.tdwg.org/dwc/terms/coordinateUncertaintyInMeters"
+    )
+    minimumDepthInMeters: Optional[str] = Field(
+        term="http://rs.tdwg.org/dwc/terms/minimumDepthInMeters"
+    )
+    maximumDepthInMeters: Optional[str] = Field(
+        term="http://rs.tdwg.org/dwc/terms/maximumDepthInMeters"
+    )
     footprintWKT: Optional[str] = Field(term="http://purl.org/dc/terms/type")
 
     # Record DwC field
@@ -88,38 +110,43 @@ DwC_Event = DwcEvent
 
 
 class BasisOfRecordEnum(str, Enum):
-    materialSample = 'MaterialSample'
-    preservedSpecimen = 'PreservedSpecimen'
-    humanObservation = 'HumanObservation'
-    machineObservation = 'MachineObservation'
-    livingSpecimen = 'LivingSpecimen'
+    materialSample = "MaterialSample"
+    preservedSpecimen = "PreservedSpecimen"
+    humanObservation = "HumanObservation"
+    machineObservation = "MachineObservation"
+    livingSpecimen = "LivingSpecimen"
 
 
 class IdentificationVerificationEnum(str, Enum):
     # for identifications generated by an algorithm and not validated by human.
-    predictedByMachine = 'PredictedByMachine'
+    predictedByMachine = "PredictedByMachine"
     # for identifications generated by an algorithm and verified to be correct by a
     # human, this is also referred as validated data
-    validatedByHuman = 'ValidatedByHuman'
+    validatedByHuman = "ValidatedByHuman"
 
 
 class OccurrenceStatusEnum(str, Enum):
-    present = 'present'
-    absent = 'absent'
+    present = "present"
+    absent = "absent"
 
 
 class DwcOccurrence(BaseModel):
     # Unicity
-    eventID: str = Field(term="http://rs.tdwg.org/dwc/terms/eventID", is_id=True, dup_id=True)
+    eventID: str = Field(
+        term="http://rs.tdwg.org/dwc/terms/eventID", is_id=True, dup_id=True
+    )
     occurrenceID: str = Field(term="http://rs.tdwg.org/dwc/terms/occurrenceID")
 
     # Record-level fields
-    basisOfRecord: BasisOfRecordEnum = Field(term="http://rs.tdwg.org/dwc/terms/basisOfRecord")
+    basisOfRecord: BasisOfRecordEnum = Field(
+        term="http://rs.tdwg.org/dwc/terms/basisOfRecord"
+    )
 
     # identified By # TODO
 
-    identificationVerificationStatus: Optional[IdentificationVerificationEnum] \
-        = Field(term="https://dwc.tdwg.org/list/#dwc_identificationVerificationStatus")
+    identificationVerificationStatus: Optional[IdentificationVerificationEnum] = Field(
+        term="https://dwc.tdwg.org/list/#dwc_identificationVerificationStatus"
+    )
     # identification References # TODO
     # associated Media # TODO
 
@@ -129,24 +156,36 @@ class DwcOccurrence(BaseModel):
     scientificNameID: str = Field(term="http://rs.tdwg.org/dwc/terms/scientificNameID")
 
     # Count field
-    individualCount: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/individualCount")
+    individualCount: Optional[str] = Field(
+        term="http://rs.tdwg.org/dwc/terms/individualCount"
+    )
 
     # Taxon fields
     # Even if the LSID is not ambiguous from marinespecies.org, the GBIF backbone mixes several
     # sources of taxonomy so setting the below helps in solving ambiguities.
     kingdom: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/kingdom")
     taxonRank: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/taxonRank")
-    scientificNameAuthorship: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/scientificNameAuthorship")
+    scientificNameAuthorship: Optional[str] = Field(
+        term="http://rs.tdwg.org/dwc/terms/scientificNameAuthorship"
+    )
 
     # Occurrence fields
-    occurrenceStatus: OccurrenceStatusEnum = Field(term="http://rs.tdwg.org/dwc/terms/occurrenceStatus")
+    occurrenceStatus: OccurrenceStatusEnum = Field(
+        term="http://rs.tdwg.org/dwc/terms/occurrenceStatus"
+    )
 
     # For museum
-    collectionCode: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/collectionCode")
-    catalogNumber: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/catalogNumber")
+    collectionCode: Optional[str] = Field(
+        term="http://rs.tdwg.org/dwc/terms/collectionCode"
+    )
+    catalogNumber: Optional[str] = Field(
+        term="http://rs.tdwg.org/dwc/terms/catalogNumber"
+    )
 
     # Identification fields, eg. "cf."
-    identificationQualifier: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/identificationQualifier")
+    identificationQualifier: Optional[str] = Field(
+        term="http://rs.tdwg.org/dwc/terms/identificationQualifier"
+    )
 
     # Record DwC fields
     modified: Optional[str] = Field(term="http://purl.org/dc/terms/modified")
@@ -157,24 +196,35 @@ DwC_Occurrence = DwcOccurrence
 
 class DwcExtendedMeasurementOrFact(BaseModel):
     """
-        In case of doubt, eMoF table is better as more precise.
-        E.g. prefer eMoF for samplingProtocol rather than DwC field.
+    In case of doubt, eMoF table is better as more precise.
+    E.g. prefer eMoF for samplingProtocol rather than DwC field.
     """
+
     # Unicity is determined by the eventID alone if the EMOF is related to
     # the whole event, or by the pair (eventID, occurrenceID) if related to an occurence, so...
-    eventID: str = Field(term="http://rs.tdwg.org/dwc/terms/eventID", is_id=True, dup_id=False)
+    eventID: str = Field(
+        term="http://rs.tdwg.org/dwc/terms/eventID", is_id=True, dup_id=False
+    )
     # ...if related to the whole event, occurrenceID must not be present
-    occurrenceID: Optional[str] = Field(term="http://rs.tdwg.org/dwc/terms/occurrenceID")
+    occurrenceID: Optional[str] = Field(
+        term="http://rs.tdwg.org/dwc/terms/occurrenceID"
+    )
 
     # Note: although measurementType, measurementValue and measurementUnit are free text fields,
     # it is recommended to fill them in with the "preferred label" given by the BODC parameter.
-    measurementValue: str = Field(title="measurement value, free text",
-                                  term="http://rs.tdwg.org/dwc/terms/measurementValue")
+    measurementValue: str = Field(
+        title="measurement value, free text",
+        term="http://rs.tdwg.org/dwc/terms/measurementValue",
+    )
     # https://www.bodc.ac.uk/resources/vocabularies/vocabulary_search/L22/
-    measurementType: str = Field(title="measurement type, free text",
-                                 term="http://rs.tdwg.org/dwc/terms/measurementType")
-    measurementUnit: Optional[str] = Field(title="measurement unit, free text",
-                                           term="http://rs.tdwg.org/dwc/terms/measurementUnit")
+    measurementType: str = Field(
+        title="measurement type, free text",
+        term="http://rs.tdwg.org/dwc/terms/measurementType",
+    )
+    measurementUnit: Optional[str] = Field(
+        title="measurement unit, free text",
+        term="http://rs.tdwg.org/dwc/terms/measurementUnit",
+    )
     # Controlled vocabulary
     # https://www.bodc.ac.uk/resources/vocabularies/vocabulary_search/P01/
     # examples:
@@ -182,17 +232,24 @@ class DwcExtendedMeasurementOrFact(BaseModel):
     #   Salinity of the water body with CTD: search for "salinity%CTD"
     #   Measurements related to lithology (sediment characteristics): "lithology"
     # http://seadatanet.maris2.nl/bandit/browse_step.php for just P01
-    measurementValueID: Optional[str] = Field(title="controlled vocabulary value ID",
-                                              term="http://rs.iobis.org/obis/terms/measurementValueID")
+    measurementValueID: Optional[str] = Field(
+        title="controlled vocabulary value ID",
+        term="http://rs.iobis.org/obis/terms/measurementValueID",
+    )
 
-    measurementTypeID: str = Field(title="controlled vocabulary type ID",
-                                   term="http://rs.iobis.org/obis/terms/measurementTypeID")
+    measurementTypeID: str = Field(
+        title="controlled vocabulary type ID",
+        term="http://rs.iobis.org/obis/terms/measurementTypeID",
+    )
     # http://vocab.nerc.ac.uk/collection/P06/current/
-    measurementUnitID: Optional[str] = Field(title="controlled vocabulary unit ID",
-                                             term="http://rs.iobis.org/obis/terms/measurementUnitID")
+    measurementUnitID: Optional[str] = Field(
+        title="controlled vocabulary unit ID",
+        term="http://rs.iobis.org/obis/terms/measurementUnitID",
+    )
 
-    measurementRemarks: Optional[str] = Field(title="free text",
-                                              term="http://rs.iobis.org/obis/terms/measurementRemarks")
+    measurementRemarks: Optional[str] = Field(
+        title="free text", term="http://rs.iobis.org/obis/terms/measurementRemarks"
+    )
 
 
 DwC_ExtendedMeasurementOrFact = DwcExtendedMeasurementOrFact
@@ -202,20 +259,24 @@ DwC_ExtendedMeasurementOrFact = DwcExtendedMeasurementOrFact
 
 # Specs: https://eml.ecoinformatics.org/schema/index.html
 
+
 class EMLIdentifier(BaseModel):
     """
-        EML unique identifier for the document
+    EML unique identifier for the document
     """
+
     packageId: str = Field(title="Unique ID for this dataset in the system.")
     system: str = Field(title="The system providing unicity, e.g. https://doi.org")
-    scope: Optional[str] = Field(title="The scope of the ID inside the system",
-                                 default="system")
+    scope: Optional[str] = Field(
+        title="The scope of the ID inside the system", default="system"
+    )
 
 
 class EMLTitle(BaseModel):
     """
-        EML title with optional lang.
+    EML title with optional lang.
     """
+
     title: str = Field(title="Descriptive title(s) - not too short")
     """ A good title allows a user to a first assessment whether the dataset is useful for the intended purpose. 
     EMODnet Biology recommends including the region and time period of sampling."""
@@ -224,8 +285,9 @@ class EMLTitle(BaseModel):
 
 class EMLPerson(BaseModel):
     """
-        A person for EML metadata. Can be, in fact, simply an organization.
+    A person for EML metadata. Can be, in fact, simply an organization.
     """
+
     givenName: Optional[str]
     surName: Optional[str]
 
@@ -258,20 +320,22 @@ class EMLAssociatedPerson(EMLPerson):
 
 class EMLKeywordSet(BaseModel):
     """
-        EML keyword set
-        Relevant keywords facilitate the discovery of a dataset. An indication of the represented functional groups
-        can help in a general search (e.g. plankton, benthos, zooplankton, phytoplankton, macrobenthos, meiobenthos …).
-        Assigned keywords can be related to taxonomy, habitat, geography or relevant keywords extracted from thesauri
-        such as the ASFA thesaurus, the CAB thesaurus or GCMD keywords.
+    EML keyword set
+    Relevant keywords facilitate the discovery of a dataset. An indication of the represented functional groups
+    can help in a general search (e.g. plankton, benthos, zooplankton, phytoplankton, macrobenthos, meiobenthos …).
+    Assigned keywords can be related to taxonomy, habitat, geography or relevant keywords extracted from thesauri
+    such as the ASFA thesaurus, the CAB thesaurus or GCMD keywords.
     """
+
     keywords: List[str]
     keywordThesaurus: str
 
 
 class EMLGeoCoverage(BaseModel):
     """
-        EML metadata coverage - geographic
+    EML metadata coverage - geographic
     """
+
     geographicDescription: str
     """ Better use http://www.marineregions.org/ """
     westBoundingCoordinate: str
@@ -282,9 +346,10 @@ class EMLGeoCoverage(BaseModel):
 
 class EMLTemporalCoverage(BaseModel):
     """
-        EML metadata coverage - temporal
-         Use ISO 8601
+    EML metadata coverage - temporal
+     Use ISO 8601
     """
+
     singleDateTime: Optional[str]
     beginDate: Optional[str]
     endDate: Optional[str]
@@ -292,16 +357,18 @@ class EMLTemporalCoverage(BaseModel):
     # noinspection PyMethodParameters
     @root_validator(pre=True)
     def check_at_least_a_date(cls, values):
-        assert 'singleDateTime' in values or ('beginDate' in values and 'endDate' in values), \
-            'singleDateTime or beginDate+endDate should be specified'
+        assert "singleDateTime" in values or (
+            "beginDate" in values and "endDate" in values
+        ), "singleDateTime or beginDate+endDate should be specified"
         return values
 
 
 class EMLTaxonomicClassification(BaseModel):
     """
-        EML metadata coverage - taxonomic
-        https://eml.ecoinformatics.org/schema/eml-coverage_xsd.html
+    EML metadata coverage - taxonomic
+    https://eml.ecoinformatics.org/schema/eml-coverage_xsd.html
     """
+
     taxonRankName: str
     """ e.g. phylum """
     taxonRankValue: str
@@ -311,7 +378,7 @@ class EMLTaxonomicClassification(BaseModel):
 
 class EMLMethod(BaseModel):
     """
-        EML method - unused
+    EML method - unused
     """
 
     methodStep: str
@@ -328,7 +395,7 @@ class EMLMethod(BaseModel):
 
 class EMLProject(BaseModel):
     """
-        EML project
+    EML project
     """
 
     title: str
@@ -350,8 +417,9 @@ class EMLProject(BaseModel):
 
 class EMLAdditionalMeta(BaseModel):
     """
-        EML additional metadata
+    EML additional metadata
     """
+
     dateStamp: str
     """ The dateTime the metadata document was created or modified (ISO 8601)."""
     metadataLanguage: str = Field(title="Title language, ISO-639.2", default="eng")
@@ -378,13 +446,18 @@ class EMLAdditionalMeta(BaseModel):
 
 class EMLMeta(BaseModel):
     """
-        EML metadata
+    EML metadata
     """
+
     identifier: EMLIdentifier = Field(title="The unique identifier for the collection")
     titles: List[EMLTitle] = Field(title="Titles, at least 1", min_items=1)
     creators: List[EMLPerson] = Field(title="Creators, at least 1", min_items=1)
-    metadataProviders: List[EMLPerson] = Field(title="Metadata providers, at least 1", min_items=1)
-    associatedParties: List[EMLAssociatedPerson] = Field(title="Associated parties, at least 1", min_items=0)
+    metadataProviders: List[EMLPerson] = Field(
+        title="Metadata providers, at least 1", min_items=1
+    )
+    associatedParties: List[EMLAssociatedPerson] = Field(
+        title="Associated parties, at least 1", min_items=0
+    )
     contacts: List[EMLPerson] = Field(title="Contacts, at least 1", min_items=1)
     pubDate: str
     """ The date that the resource was published. Use ISO 8601. """

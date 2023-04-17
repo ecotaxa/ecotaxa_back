@@ -17,7 +17,7 @@ ENV_KEY = "APP_CONFIG"
 
 class Config(object):
     """
-        The application configuration
+    The application configuration
     """
 
     def __init__(self):
@@ -48,22 +48,22 @@ class Config(object):
 
     def get_db_address(self, read_only: bool = False) -> Tuple[str, int, str]:
         prfx = "RO_" if read_only else ""
-        host = self.parser.get(prfx + 'DB_HOST')
-        port = self.parser.getint(prfx + 'DB_PORT', 5432)
-        db_name = self.parser.get(prfx + 'DB_DATABASE')
+        host = self.parser.get(prfx + "DB_HOST")
+        port = self.parser.getint(prfx + "DB_PORT", 5432)
+        db_name = self.parser.get(prfx + "DB_DATABASE")
         return host, port, db_name
 
     def get_db_credentials(self, read_only: bool = False) -> Tuple[str, str]:
         prfx = "RO_" if read_only else ""
-        user = self.parser.get(prfx + 'DB_USER')
-        password = self.parser.get(prfx + 'DB_PASSWORD')
+        user = self.parser.get(prfx + "DB_USER")
+        password = self.parser.get(prfx + "DB_PASSWORD")
         return user, password
 
     def get_thumbnails_limit(self) -> int:
-        return self.parser.getint('THUMBSIZELIMIT')
+        return self.parser.getint("THUMBSIZELIMIT")
 
     def get_app_manager(self) -> Tuple[Optional[str], Optional[str]]:
-        return self.parser.get('APPMANAGER_NAME'), self.parser.get('APPMANAGER_EMAIL')
+        return self.parser.get("APPMANAGER_NAME"), self.parser.get("APPMANAGER_EMAIL")
 
     def get_cnf(self, key: str, default: Optional[str] = None) -> Optional[str]:
         # TODO: stop using so we can enumerate the keys

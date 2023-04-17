@@ -9,18 +9,21 @@ from API_models.helpers import BaseModel as PydanticModel
 
 class TxtFileWithModel(object):
     """
-        Holder class for a set of pydantic model derived instances, which can then be output as
-        a txt file, which is fact a TSV one.
-            Format is explained at: https://dwc.tdwg.org/text/
+    Holder class for a set of pydantic model derived instances, which can then be output as
+    a txt file, which is fact a TSV one.
+        Format is explained at: https://dwc.tdwg.org/text/
     """
-    MODEL_TYPES = {"Event": "core",
-                   "Occurrence": "extension",
-                   "ExtendedMeasurementOrFact": "extension"}
+
+    MODEL_TYPES = {
+        "Event": "core",
+        "Occurrence": "extension",
+        "ExtendedMeasurementOrFact": "extension",
+    }
 
     def __init__(self, model: Type[PydanticModel], name: str):
         """
-            :param model: DwC class
-            :param name: the file name where information will be written
+        :param model: DwC class
+        :param name: the file name where information will be written
         """
         self.model = model
         self.id_col_name, self.must_duplicate_id = self.id_col_from_model(model)
@@ -28,9 +31,11 @@ class TxtFileWithModel(object):
         # All starts with "Dwc"
         self.model_name = model.__name__[3:]
         assert self.model_name in self.MODEL_TYPES
-        self.namespace = "http://rs.iobis.org/obis/terms" \
-            if 'Measurement' in self.model_name \
+        self.namespace = (
+            "http://rs.iobis.org/obis/terms"
+            if "Measurement" in self.model_name
             else "http://rs.tdwg.org/dwc/terms"
+        )
         self.fields: Set[str] = set()
         """ the set of fields for which we have at least one value """
         self.all: List[Dict[str, Any]] = []
@@ -49,7 +54,9 @@ class TxtFileWithModel(object):
 
     def add_entity(self, an_entity):
         # Strip the pydantic model to the minimum.
-        entity_dict = an_entity.dict(exclude_unset=True, exclude_none=True, exclude_defaults=True)
+        entity_dict = an_entity.dict(
+            exclude_unset=True, exclude_none=True, exclude_defaults=True
+        )
         # If the id is provided...
         if self.id_col_name in entity_dict:
             # ...copy it
@@ -97,7 +104,12 @@ class TxtFileWithModel(object):
         ignoreHeaderLines="1" rowType="%s/%s">
     <files>
       <location>%s</location>
-    </files> """ % (self.MODEL_TYPES[self.model_name], self.namespace, self.model_name, self.name)
+    </files> """ % (
+            self.MODEL_TYPES[self.model_name],
+            self.namespace,
+            self.model_name,
+            self.name,
+        )
 
     def meta_end(self):
         return "  </%s>" % self.MODEL_TYPES[self.model_name]

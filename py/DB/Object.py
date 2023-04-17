@@ -119,7 +119,7 @@ class ObjectHeader(Model):
 
     @classmethod
     def fetch_existing_objects(
-            cls, session: Session, prj_id: ProjectIDT
+        cls, session: Session, prj_id: ProjectIDT
     ) -> Dict[str, int]:
         # TODO: Why using the view?
         sql = text(

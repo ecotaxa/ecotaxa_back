@@ -7,6 +7,7 @@
 import dataclasses
 import datetime
 from typing import Optional, Dict, List, Type, Any
+
 # noinspection PyUnresolvedReferences,PyProtectedMember
 from typing import _GenericAlias  # type: ignore
 
@@ -21,17 +22,20 @@ from helpers.pydantic import PydanticDescriptionT
 # noinspection PyPackageRequirements
 
 
-def dataclass_to_model_with_suffix(data_class: Type, pydantic_class: Optional[PydanticDescriptionT] = None) \
-        -> PydanticModelT:
+def dataclass_to_model_with_suffix(
+    data_class: Type, pydantic_class: Optional[PydanticDescriptionT] = None
+) -> PydanticModelT:
     """
-        Return a model from dataclass, the name of the produced model is dataclass' one + "Model"
+    Return a model from dataclass, the name of the produced model is dataclass' one + "Model"
     """
     return dataclass_to_model(data_class, pydantic_class, True)
 
 
-def dataclass_to_model(data_class: Type, pydantic_class: Optional[PydanticDescriptionT] = None,
-                       add_suffix: bool = False) \
-        -> PydanticModelT:
+def dataclass_to_model(
+    data_class: Type,
+    pydantic_class: Optional[PydanticDescriptionT] = None,
+    add_suffix: bool = False,
+) -> PydanticModelT:
     model_fields: Dict[str, Any] = {}
     a_field: dataclasses.Field
     for a_field in dataclasses.fields(data_class):
@@ -63,7 +67,9 @@ def dataclass_to_model(data_class: Type, pydantic_class: Optional[PydanticDescri
                 # TODO: I did not find how to introspect a type from typings, so below is a bit ugly
                 contained_class_full_name = str_type[12:-1]
                 try:
-                    to_import, contained_class_name = contained_class_full_name.rsplit(".", 1)
+                    to_import, contained_class_name = contained_class_full_name.rsplit(
+                        ".", 1
+                    )
                     globs: Dict = {}
                     exec("import " + to_import, globs)
                     if contained_class_full_name == "typing.Union[float, NoneType]":
@@ -79,19 +85,22 @@ def dataclass_to_model(data_class: Type, pydantic_class: Optional[PydanticDescri
             # Pydantic maps everything to object, no doc or fields or types
             pass
         else:
-            raise Exception("Not managed yet :", fld_type, a_field.name)  # pragma:nocover
+            raise Exception(
+                "Not managed yet :", fld_type, a_field.name
+            )  # pragma:nocover
         model_fields[a_field.name] = (fld_type, default)
     model_name = data_class.__name__ + ("Model" if add_suffix else "")
-    ret: PydanticModelT = create_model(
-        model_name, **model_fields
-    )
+    ret: PydanticModelT = create_model(model_name, **model_fields)
     # Inject an iterator into the dataclass
     # As when converting a plain object to a Model, pydantic tries to call dict(obj).
     #   See in pydantic/main.py
     #   @classmethod
     #   def validate(cls: Type['Model'], value: Any) -> 'Model':
-    setattr(data_class, "__iter__", lambda self: iter([(fld, getattr(self, fld))
-                                                       for fld in model_fields.keys()]))
+    setattr(
+        data_class,
+        "__iter__",
+        lambda self: iter([(fld, getattr(self, fld)) for fld in model_fields.keys()]),
+    )
     if pydantic_class is not None:
         # Amend with Field() calls, for doc. Let crash (KeyError) if desync with base.
         for a_field_name, a_field_desc in pydantic_class.__fields__.items():

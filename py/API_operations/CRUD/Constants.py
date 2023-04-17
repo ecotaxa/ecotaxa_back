@@ -10,7 +10,7 @@ from ..helpers.Service import Service
 
 class ConstantsService(Service):
     """
-        App uptime constants.
+    App uptime constants.
     """
 
     def get(self) -> Constants:
@@ -18,5 +18,8 @@ class ConstantsService(Service):
         app_manager = self.config.get_app_manager()
         if all(app_manager):
             ret.app_manager = list(app_manager)  # type:ignore # mypy doesn't know all()
-        ret.countries = [a_country for (a_country,) in self.session.query(text('countryname from countrylist'))]
+        ret.countries = [
+            a_country
+            for (a_country,) in self.session.query(text("countryname from countrylist"))
+        ]
         return ret

@@ -11,7 +11,7 @@ from typing import Coroutine
 
 def async_bg_run(coro: Coroutine):
     """
-        Run in 'background' the given coroutine.
+    Run in 'background' the given coroutine.
     """
     loop = asyncio.events.get_running_loop()
     return loop.create_task(coro)
@@ -19,14 +19,14 @@ def async_bg_run(coro: Coroutine):
 
 async def async_sleep(tim: float):
     """
-        Pseudo-sleep which gives control to other coroutines.
+    Pseudo-sleep which gives control to other coroutines.
     """
     await asyncio.sleep(tim)
 
 
 async def log_streamer(file_name: str, magic: str):
     """
-        Return a file line by line, until the magic sentence is found.
+    Return a file line by line, until the magic sentence is found.
     """
     while True:
         try:

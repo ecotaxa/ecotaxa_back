@@ -48,14 +48,14 @@ class FeatureConsistentProjectSet(object):
     """
 
     def __init__(
-            self, session: Session, prj_ids: ProjectIDListT, column_names: List[str]
+        self, session: Session, prj_ids: ProjectIDListT, column_names: List[str]
     ):
         self.session = session
         self.prj_ids = prj_ids
         self.column_names = column_names
 
     def _projects_with_mappings(
-            self,
+        self,
     ) -> Generator[Tuple[Project, List[str]], None, None]:
         """
         Iterator self list of project, returning them + mapped free columns.
@@ -168,7 +168,7 @@ class FeatureConsistentProjectSet(object):
         return res
 
     def np_read_all(
-            self,
+        self,
     ) -> Tuple[ndarray, List[int], ClassifIDListT]:  # TODO: ObjectIDListT
         """
         Read the dataset as a numpy array. NULL and infinities become an np NaN.
@@ -182,12 +182,12 @@ class FeatureConsistentProjectSet(object):
 
     @staticmethod
     def np_read(
-            res: Result,
-            nb_lines: int,
-            columns: List[str],
-            obj_ids: ObjectIDListT,
-            classif_ids: ClassifIDListT,
-            replacements: Dict[str, float],
+        res: Result,
+        nb_lines: int,
+        columns: List[str],
+        obj_ids: ObjectIDListT,
+        classif_ids: ClassifIDListT,
+        replacements: Dict[str, float],
     ) -> np.ndarray:
         # Allocate memory in one go
         # TODO: float32 is a shameless attempt to save memory
@@ -236,12 +236,12 @@ class LimitedInCategoriesProjectSet(FeatureConsistentProjectSet):
     """
 
     def __init__(
-            self,
-            session: Session,
-            prj_ids: ProjectIDListT,
-            column_names: List[str],
-            random_limit: Optional[int],
-            categories: List[ClassifIDT],
+        self,
+        session: Session,
+        prj_ids: ProjectIDListT,
+        column_names: List[str],
+        random_limit: Optional[int],
+        categories: List[ClassifIDT],
     ):
         """
         :param random_limit: If set, pick only 'fixed random' objects number from each category, inside
@@ -250,7 +250,7 @@ class LimitedInCategoriesProjectSet(FeatureConsistentProjectSet):
         Otherwise, the subclass just does the same as its base.
         """
         assert random_limit is None or (
-                random_limit is not None and len(categories) > 0
+            random_limit is not None and len(categories) > 0
         )
         super().__init__(session=session, prj_ids=prj_ids, column_names=column_names)
         self.random_limit = random_limit

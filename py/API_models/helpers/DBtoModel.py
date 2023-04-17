@@ -18,13 +18,12 @@ class OrmConfig(BaseConfig):
     orm_mode = True
 
 
-def combine_models(db_model: ModelT,
-                   pydantic_model: PydanticModelT) -> PydanticModelT:
+def combine_models(db_model: ModelT, pydantic_model: PydanticModelT) -> PydanticModelT:
     """
-        Combine DB model with a plain Pydantic one. The result is a new model with _only_ fields
-        from the pydantic, but types, nullity and default values from DB.
-        -> Fields missing in pydantic model are not in result.
-        The resulting model class in conventionally the pydantic's one removing first char.
+    Combine DB model with a plain Pydantic one. The result is a new model with _only_ fields
+    from the pydantic, but types, nullity and default values from DB.
+    -> Fields missing in pydantic model are not in result.
+    The resulting model class in conventionally the pydantic's one removing first char.
     """
     fields: Dict[str, Any] = {}
     not_null_cols = set()

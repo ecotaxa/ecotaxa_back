@@ -31,7 +31,9 @@ from helpers.AppConfig import Config
 from .starlette import status, PlainTextResponse
 
 
-async def internal_server_error_handler(_request: Any, exc: Exception) -> PlainTextResponse:
+async def internal_server_error_handler(
+    _request: Any, exc: Exception
+) -> PlainTextResponse:
     """
         Override internal error handler, so that we don't have to look at logs on server side in case of problem.
     :param _request:
@@ -54,19 +56,25 @@ async def internal_server_error_handler(_request: Any, exc: Exception) -> PlainT
 # In a development environment, dump the API definition at each run
 def dump_openapi(app: FastAPI, main_path: str):  # pragma: no cover
     import sys
+
     if "uvicorn" not in sys.argv:
         return  # It's not dev
     import json
     from pathlib import Path
-    json_def = json.dumps(app.openapi(),
-                          ensure_ascii=False,
-                          allow_nan=False,
-                          indent=2,
-                          separators=(",", ":"))
+
+    json_def = json.dumps(
+        app.openapi(),
+        ensure_ascii=False,
+        allow_nan=False,
+        indent=2,
+        separators=(",", ":"),
+    )
     # Copy here for Git commit but also into another dev tree
     parent_dir = dirname(main_path)
-    dests = [Path(parent_dir, "..", "openapi.json"),
-             Path(parent_dir, "..", "..", "ecotaxa_front", "to_back", "openapi.json")]
+    dests = [
+        Path(parent_dir, "..", "openapi.json"),
+        Path(parent_dir, "..", "..", "ecotaxa_front", "to_back", "openapi.json"),
+    ]
     for dest in dests:
         with dest.open("w") as fd:
             fd.write(json_def)
@@ -74,15 +82,15 @@ def dump_openapi(app: FastAPI, main_path: str):  # pragma: no cover
 
 class BearerOrCookieAuth(OAuth2):
     """
-        Credits to https://medium.com/data-rebels/fastapi-how-to-add-basic-and-cookie-authentication-a45c85ef47d3
+    Credits to https://medium.com/data-rebels/fastapi-how-to-add-basic-and-cookie-authentication-a45c85ef47d3
     """
 
     def __init__(
-            self,
-            tokenUrl: str,
-            scheme_name: Optional[str] = None,
-            scopes: Optional[dict] = None,
-            auto_error: bool = True,
+        self,
+        tokenUrl: str,
+        scheme_name: Optional[str] = None,
+        scopes: Optional[dict] = None,
+        auto_error: bool = True,
     ):
         if not scopes:
             scopes = {}
@@ -133,16 +141,19 @@ def build_serializer() -> URLSafeTimedSerializer:
         secret_key = Config().secret_key()
         # Hardcoded in Flask
         salt = b"cookie-session"
-        _serializer = URLSafeTimedSerializer(secret_key=secret_key, salt=salt,
-                                             signer=TimestampSigner,
-                                             signer_kwargs={'key_derivation': 'hmac'})
+        _serializer = URLSafeTimedSerializer(
+            secret_key=secret_key,
+            salt=salt,
+            signer=TimestampSigner,
+            signer_kwargs={"key_derivation": "hmac"},
+        )
     return _serializer
 
 
 def _get_current_user(token) -> int:  # pragma: no cover
     """
-        Extract current user from auth string, anything going wrong means security exception.
-        Not reasonable to test automatically, so excluded from code coverage measurement.
+    Extract current user from auth string, anything going wrong means security exception.
+    Not reasonable to test automatically, so excluded from code coverage measurement.
     """
     try:
         payload = build_serializer().loads(token, max_age=MAX_TOKEN_AGE)
@@ -162,10 +173,11 @@ def _get_current_user(token) -> int:  # pragma: no cover
     return ret
 
 
-async def get_optional_current_user(token: str = Depends(mixed_scheme_nothrow)) \
-        -> Optional[int]:  # pragma: no cover
+async def get_optional_current_user(
+    token: str = Depends(mixed_scheme_nothrow),
+) -> Optional[int]:  # pragma: no cover
     """
-        There _can_ be a user in the request, get the id if the case.
+    There _can_ be a user in the request, get the id if the case.
     """
     if token is None:
         return None
@@ -177,25 +189,23 @@ async def get_optional_current_user(token: str = Depends(mixed_scheme_nothrow)) 
 
 async def get_current_user(token: str = Depends(mixed_scheme)) -> int:
     """
-        Just relay the call to the private def above.
+    Just relay the call to the private def above.
     """
     return _get_current_user(token)
 
 
 _forbidden_exception = HTTPException(
-    status_code=status.HTTP_403_FORBIDDEN,
-    detail="You can't do this."
+    status_code=status.HTTP_403_FORBIDDEN, detail="You can't do this."
 )
 
 _not_found_exception = HTTPException(
-    status_code=status.HTTP_404_NOT_FOUND,
-    detail="Not found."
+    status_code=status.HTTP_404_NOT_FOUND, detail="Not found."
 )
 
 
 class RightsThrower(AbstractContextManager):
     """
-        Transform any AssertionError, during exit block of "with" syntax, into an HTTP error.
+    Transform any AssertionError, during exit block of "with" syntax, into an HTTP error.
     """
 
     def __enter__(self):
@@ -216,8 +226,8 @@ class RightsThrower(AbstractContextManager):
 
 class ValidityThrower(object):
     """
-        Transform any AssertionError, during exit block of "with" syntax,
-        into an HTTP 422 error.
+    Transform any AssertionError, during exit block of "with" syntax,
+    into an HTTP 422 error.
     """
 
     def __enter__(self):
@@ -228,15 +238,19 @@ class ValidityThrower(object):
             # An exception was thrown
             if exc_type == AssertionError:
                 if exc_val.args:
-                    raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc_val.args[0])
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=exc_val.args[0],
+                    )
             # Re-raise
             return False
 
 
 class MyORJSONResponse(JSONResponse):
     """
-        A copy/paste of ORJSONResponse but setting some permissive parameters on the 'dumps' call.
+    A copy/paste of ORJSONResponse but setting some permissive parameters on the 'dumps' call.
     """
+
     media_type = "application/json"
 
     type_to_fields: Dict[Any, List[str]] = {}
@@ -262,16 +276,18 @@ class MyORJSONResponse(JSONResponse):
 
         def render(self, content: Any) -> bytes:
             try:
-                ret = orjson.dumps(content, option=orjson.OPT_NON_STR_KEYS,
-                                   default=MyORJSONResponse.orjson_default)
+                ret = orjson.dumps(
+                    content,
+                    option=orjson.OPT_NON_STR_KEYS,
+                    default=MyORJSONResponse.orjson_default,
+                )
             except TypeError as te:
                 # I saw e.g. Missing Image \'gr_200\\u00b5m_20180322_tot_1_161.jpg\
                 err_msg = str(te)
                 logging.warning("Orjson problem '%s' encoding %s", err_msg, content)
                 # Switch to more permissive encoding
-                ret = json.dumps(content).encode("utf-8", errors='replace')
+                ret = json.dumps(content).encode("utf-8", errors="replace")
             return ret
-
 
     except ImportError:
         # noinspection PyUnusedLocal

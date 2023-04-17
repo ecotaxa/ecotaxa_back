@@ -11,7 +11,7 @@ from FS.Vault import Vault
 
 class ImageService(Service):
     """
-        Minimal image server.
+    Minimal image server.
     """
 
     def __init__(self) -> None:

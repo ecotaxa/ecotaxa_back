@@ -14,7 +14,7 @@ from formats.DarwinCore.eMoFs import ExtendedMeasurementOrFacts
 
 class DwcArchive(object):
     """
-        A Darwin Core archive.
+    A Darwin Core archive.
     """
 
     def __init__(self, meta: DatasetMetadata, path: Path):
@@ -31,12 +31,20 @@ class DwcArchive(object):
 
     def build(self) -> None:
         """
-            Build the produced archive file.
+        Build the produced archive file.
         """
-        zipfile = ZipFile(self.path, mode="w", allowZip64=True, compression=ZIP_DEFLATED)
+        zipfile = ZipFile(
+            self.path, mode="w", allowZip64=True, compression=ZIP_DEFLATED
+        )
         parent_dir = self.path.parent
         # TODO: Better typings, classes below should have a trait
-        all_files = [self.dataset_meta, self.meta, self.events, self.occurences, self.emofs]
+        all_files = [
+            self.dataset_meta,
+            self.meta,
+            self.events,
+            self.occurences,
+            self.emofs,
+        ]
         for a_file in all_files:
             # Write the objects into real files
             dest_file = parent_dir / a_file.name  # type:ignore

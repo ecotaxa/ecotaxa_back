@@ -20,7 +20,7 @@ logger = get_logger(__name__)
 
 class JobRunner(Thread):
     """
-        Run background part of a job.
+    Run background part of a job.
     """
 
     def __init__(self, a_db_job: JobBO):
@@ -29,7 +29,7 @@ class JobRunner(Thread):
 
     def run(self) -> None:
         """
-           Run the background part of the service.
+        Run the background part of the service.
         """
         try:
             sce = JobScheduler.instantiate(self.db_job)
@@ -42,8 +42,8 @@ class JobRunner(Thread):
     @staticmethod
     def tech_error(job_id: JobIDT, te: Any) -> None:
         """
-            Technical problem, which cannot be managed by the service as it was not possible
-            to create it. Report here.
+        Technical problem, which cannot be managed by the service as it was not possible
+        to create it. Report here.
         """
         session = Service().session
         the_job = session.query(Job).get(job_id)
@@ -55,9 +55,10 @@ class JobRunner(Thread):
 
 class JobScheduler(Service):
     """
-        In charge of launching/monitoring sub processes i.e. keep sync b/w processes and their images in jobs DB table.
-        These are not really processes, just threads, so far.
+    In charge of launching/monitoring sub processes i.e. keep sync b/w processes and their images in jobs DB table.
+    These are not really processes, just threads, so far.
     """
+
     # Filter out these job types
     FILTER: ClassVar[List[str]] = []
     # Include only these job types
@@ -71,7 +72,7 @@ class JobScheduler(Service):
 
     def run_one(self) -> None:
         """
-            Pick first pending job and run it, except if already running.
+        Pick first pending job and run it, except if already running.
         """
         cls = JobScheduler
         if cls.the_runner is not None:
@@ -109,7 +110,9 @@ class JobScheduler(Service):
 
     @staticmethod
     def instantiate(a_job: JobBO):
-        sce_class = JobServiceBase.find_jobservice_class_by_type(JobServiceBase, a_job.type)
+        sce_class = JobServiceBase.find_jobservice_class_by_type(
+            JobServiceBase, a_job.type
+        )
         if sce_class is None:
             msg = "Found %s in DB and could not match to a Service" % a_job.type
             logger.error(msg)
@@ -127,7 +130,7 @@ class JobScheduler(Service):
 
     @classmethod
     def is_sane_on_shutdown(cls) -> bool:
-        """ Ensure that nothing runs before shutdown """
+        """Ensure that nothing runs before shutdown"""
         if cls.the_runner is None:
             return True
         if cls.the_runner.is_alive():
@@ -137,7 +140,7 @@ class JobScheduler(Service):
     @classmethod
     def launch_at_interval(cls, interval: int) -> None:
         """
-            Launch a job if possible, then wait a bit before accessing next one.
+        Launch a job if possible, then wait a bit before accessing next one.
         """
 
         def launch() -> None:

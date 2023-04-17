@@ -38,7 +38,7 @@ class Acquisition(Model):
 
     @classmethod
     def get_orig_id_and_model(
-            cls, session: Session, prj_id
+        cls, session: Session, prj_id
     ) -> Dict[Tuple[str, str], "Acquisition"]:
         res = session.query(Acquisition, Sample.orig_id)
         res = res.join(Sample)

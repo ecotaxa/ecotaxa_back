@@ -12,7 +12,7 @@ import requests
 
 class EcoTaxoServerClient(object):
     """
-        A class encapsulating the dialog with EcoTaxoServer.
+    A class encapsulating the dialog with EcoTaxoServer.
     """
 
     def __init__(self, url: str, instance_id: str, secret_key: str):
@@ -26,12 +26,13 @@ class EcoTaxoServerClient(object):
 
     def call(self, endpoint: str, endpoint_params: Dict[str, Any]):
         """
-            Issue a REST query on EcoTaxoServer
+        Issue a REST query on EcoTaxoServer
         """
-        params = {'id_instance': self.instance_id,
-                  'sharedsecret': self.secret_key,
-                  'ecotaxa_version': "2.5.11"  # TODO: Wondering why this param
-                  }
+        params = {
+            "id_instance": self.instance_id,
+            "sharedsecret": self.secret_key,
+            "ecotaxa_version": "2.5.11",  # TODO: Wondering why this param
+        }
         params.update(endpoint_params)
         r = requests.post(self.url + endpoint, params)
         return r.json()

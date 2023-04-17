@@ -21,6 +21,7 @@ from typing import (
     Any,
     OrderedDict as OrderedDictT,
     cast,
+    Final,
 )
 
 # A Postgresl insert generator, needed for the key conflict clause
@@ -80,11 +81,11 @@ class DescribedObjectSet(object):
     """
 
     def __init__(
-            self,
-            session: Session,
-            prj_id: int,
-            user_id: Optional[UserIDT],
-            filters: ProjectFiltersDict,
+        self,
+        session: Session,
+        prj_id: int,
+        user_id: Optional[UserIDT],
+        filters: ProjectFiltersDict,
     ):
         """
         :param user_id: The 'current' user, in case the filter refers to him/her.
@@ -94,10 +95,10 @@ class DescribedObjectSet(object):
         self.filters = ObjectSetFilter(session, filters)
 
     def get_sql(
-            self,
-            order_clause: Optional[OrderClause] = None,
-            select_list: str = "",
-            all_images: bool = False,
+        self,
+        order_clause: Optional[OrderClause] = None,
+        select_list: str = "",
+        all_images: bool = False,
     ) -> Tuple[FromClause, WhereClause, SQLParamDict]:
         """
         Construct SQL parts for getting the IDs of objects.
@@ -118,7 +119,7 @@ class DescribedObjectSet(object):
             "samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :projid"
         )
         column_referencing_sql = (
-                obj_where.get_sql() + order_clause.get_sql() + select_list
+            obj_where.get_sql() + order_clause.get_sql() + select_list
         )
         if "prj." in column_referencing_sql:
             selected_tables += "projects prj ON prj.projid = sam.projid"
@@ -186,7 +187,7 @@ class EnumeratedObjectSet(MappedTable):
         """
         lst = self.object_ids
         for idx in range(0, len(lst), chunk_size):
-            yield lst[idx: idx + chunk_size]
+            yield lst[idx : idx + chunk_size]
 
     def get_projects_ids(self) -> ProjectIDListT:
         """
@@ -202,7 +203,7 @@ class EnumeratedObjectSet(MappedTable):
 
     @staticmethod
     def _delete_chunk(
-            session: Session, a_chunk: ObjectIDListT
+        session: Session, a_chunk: ObjectIDListT
     ) -> Tuple[int, int, List[str]]:
         """
         Delete a chunk from self's object list.
@@ -237,7 +238,7 @@ class EnumeratedObjectSet(MappedTable):
         return nb_objs, nb_img_rows, img_files
 
     def delete(
-            self, chunk_size: int, do_with_files: Optional[Callable[[List[str]], None]]
+        self, chunk_size: int, do_with_files: Optional[Callable[[List[str]], None]]
     ) -> Tuple[int, int, List[str]]:
         """
         Delete all objects in this set, in 'small' DB transactions.
@@ -392,9 +393,7 @@ class EnumeratedObjectSet(MappedTable):
         # Insert into the log table
         ins_qry: PgInsert = pg_insert(och.__table__)
         ins_qry = ins_qry.from_select(ins_columns, sel_subqry)
-        ins_qry = ins_qry.on_conflict_do_nothing(
-            constraint="objectsclassifhisto_pkey"
-        )
+        ins_qry = ins_qry.on_conflict_do_nothing(constraint="objectsclassifhisto_pkey")
         # TODO: mypy crashes due to pg_dialect below
         # logger.info("Histo query: %s", ins_qry.compile(dialect=pg_dialect()))
         nb_objs = self.session.execute(ins_qry).rowcount  # type:ignore  # case1
@@ -427,7 +426,7 @@ class EnumeratedObjectSet(MappedTable):
         return ret
 
     def _get_last_classif_history(
-            self, from_user_id: Optional[int], but_not_from_user_id: Optional[int]
+        self, from_user_id: Optional[int], but_not_from_user_id: Optional[int]
     ) -> List[HistoricalLastClassif]:
         """
         Query for last classification history on all objects of self, mixed with present state in order
@@ -495,7 +494,7 @@ class EnumeratedObjectSet(MappedTable):
         return ret
 
     def revert_to_history(
-            self, from_user_id: Optional[int], but_not_from_user_id: Optional[int]
+        self, from_user_id: Optional[int], but_not_from_user_id: Optional[int]
     ) -> List[HistoricalLastClassif]:
         """
             Update self's objects so that current classification becomes the last one from hist_user_id,
@@ -520,7 +519,7 @@ class EnumeratedObjectSet(MappedTable):
         return histo
 
     def evaluate_revert_to_history(
-            self, from_user_id: Optional[int], but_not_from_user_id: Optional[int]
+        self, from_user_id: Optional[int], but_not_from_user_id: Optional[int]
     ) -> List[HistoricalLastClassif]:
         """
         Same as @see revert_to_history but don't commit the changes, just return them.
@@ -529,11 +528,11 @@ class EnumeratedObjectSet(MappedTable):
         return histo
 
     def classify_validate(
-            self,
-            user_id: UserIDT,
-            classif_ids: ClassifIDListT,
-            wanted_qualif: str,
-            log_timestamp: datetime.datetime,
+        self,
+        user_id: UserIDT,
+        classif_ids: ClassifIDListT,
+        wanted_qualif: str,
+        log_timestamp: datetime.datetime,
     ) -> Tuple[int, ObjectSetClassifChangesT]:
         """
         Set current classifications in self and/or validate current classification.
@@ -580,9 +579,9 @@ class EnumeratedObjectSet(MappedTable):
             # Operator change
             prev_operator_id: Optional[int] = prev_obj["classif_who"]
             if (
-                    prev_classif_id == new_classif_id
-                    and prev_classif_qual == target_qualif
-                    and prev_operator_id == user_id
+                prev_classif_id == new_classif_id
+                and prev_classif_qual == target_qualif
+                and prev_operator_id == user_id
             ):
                 continue
             # There was at least 1 field change for this object
@@ -637,7 +636,7 @@ class EnumeratedObjectSet(MappedTable):
         return nb_updated, all_changes
 
     def classify_auto(
-            self, classif_ids: ClassifIDListT, scores: List[float], keep_logs: bool
+        self, classif_ids: ClassifIDListT, scores: List[float], keep_logs: bool
     ) -> Tuple[int, ObjectSetClassifChangesT]:
         """
         Set automatic classifications in self.
@@ -754,8 +753,8 @@ class ObjectSetFilter(object):
     A filter, inside an object set.
     """
 
-    TO_COL = {"score": ObjectHeader.classif_auto_score.name}
-    TAXO_KEYS = ["taxo", "taxochild"]
+    TO_COL: Final = {"score": ObjectHeader.classif_auto_score.name}
+    TAXO_KEYS: Final = ["taxo", "taxochild"]
 
     def __init__(self, session: Session, filters: ProjectFiltersDict):
         """
@@ -879,10 +878,10 @@ class ObjectSetFilter(object):
             return None
 
     def get_sql_filter(
-            self,
-            where_clause: WhereClause,
-            params: SQLParamDict,
-            user_id: Optional[UserIDT],
+        self,
+        where_clause: WhereClause,
+        params: SQLParamDict,
+        user_id: Optional[UserIDT],
     ) -> None:
         """
             The generated SQL assumes that, in the query:
@@ -906,9 +905,9 @@ class ObjectSetFilter(object):
             if self.taxo_child:
                 # TODO: In this case a single taxon is allowed. Not very consistent
                 where_clause *= (
-                        "obh.classif_id IN ("
-                        + TaxonomyBO.RQ_CHILDREN.replace(":ids", ":taxo")
-                        + ")"
+                    "obh.classif_id IN ("
+                    + TaxonomyBO.RQ_CHILDREN.replace(":ids", ":taxo")
+                    + ")"
                 )
                 params["taxo"] = [int(self.taxo)]
             else:
@@ -918,8 +917,8 @@ class ObjectSetFilter(object):
         if self.status_filter:
             if self.status_filter == "NV":
                 where_clause *= (
-                        "(obh.classif_qual != '%s' OR obh.classif_qual IS NULL)"
-                        % VALIDATED_CLASSIF_QUAL
+                    "(obh.classif_qual != '%s' OR obh.classif_qual IS NULL)"
+                    % VALIDATED_CLASSIF_QUAL
                 )
             elif self.status_filter == "PV":
                 where_clause *= "obh.classif_qual IN ('%s','%s')" % (
@@ -936,8 +935,8 @@ class ObjectSetFilter(object):
                 where_clause *= "obh.classif_qual IS NULL"
             elif self.status_filter == "UP":  # Updateable by Prediction
                 where_clause *= (
-                        "(obh.classif_qual = '%s' OR obh.classif_qual IS NULL)"
-                        % PREDICTED_CLASSIF_QUAL
+                    "(obh.classif_qual = '%s' OR obh.classif_qual IS NULL)"
+                    % PREDICTED_CLASSIF_QUAL
                 )
             elif self.status_filter == "PVD":
                 where_clause *= "obh.classif_qual IS NOT NULL"
@@ -1008,7 +1007,7 @@ class ObjectSetFilter(object):
             params["validtodate"] = self.validated_to
 
         if self.free_num and (
-                self.free_num_start or self.free_num_end
+            self.free_num_start or self.free_num_end
         ):  # e.g. "on02" and 5
             if self.free_num_start:
                 comp_op = " >= "
@@ -1046,13 +1045,13 @@ class ObjectSetFilter(object):
 
         if self.annotators:
             where_clause *= (
-                    "(obh.classif_who = ANY (:filt_annot) "
-                    " OR exists (SELECT och.classif_who "
-                    "              FROM "
-                    + ObjectsClassifHisto.__tablename__
-                    + " och "
-                    + "             WHERE och.objid = obh.objid "
-                      "               AND och.classif_who = ANY (:filt_annot) ) )"
+                "(obh.classif_who = ANY (:filt_annot) "
+                " OR exists (SELECT och.classif_who "
+                "              FROM "
+                + ObjectsClassifHisto.__tablename__
+                + " och "
+                + "             WHERE och.objid = obh.objid "
+                "               AND och.classif_who = ANY (:filt_annot) ) )"
             )
             params["filt_annot"] = [int(x) for x in self.annotators.split(",")]
         elif self.last_annotators:

@@ -26,6 +26,7 @@ from DB.helpers.Direct import text
 from ML.Deep_features_extractor import DeepFeaturesExtractor
 from ML.Random_forest_classifier import OurRandomForestClassifier
 from helpers.DynamicLogs import get_logger
+
 # TODO: Move somewhere else
 from helpers.Timer import CodeTimer
 from .ObjectManager import ObjectManager
@@ -85,7 +86,7 @@ class GPUPredictForProject(PredictForProject):
         self.set_job_result(errors=[], infos=done_infos)
 
     def build_learning_set(
-            self, req: PredictionReq
+        self, req: PredictionReq
     ) -> Tuple[np.ndarray, ClassifIDListT, List[str], Dict[str, float]]:
         """
         Build the learning set from DB data & req instructions.
@@ -134,7 +135,7 @@ class GPUPredictForProject(PredictForProject):
                 continue
             if vari == 0:
                 to_del[a_feat] = (
-                        "Constant :%s" % np_learning_set[0, features.index(a_feat)]
+                    "Constant :%s" % np_learning_set[0, features.index(a_feat)]
                 )
         # Replace NaNs with median
         replacements = {}
@@ -177,7 +178,7 @@ class GPUPredictForProject(PredictForProject):
 
     @staticmethod
     def build_classifier(
-            features: np.ndarray, classif_ids: ClassifIDListT
+        features: np.ndarray, classif_ids: ClassifIDListT
     ) -> OurRandomForestClassifier:
         """
         Build the classifier model and train it with the data & target ids.
@@ -208,11 +209,11 @@ class GPUPredictForProject(PredictForProject):
             order_clause=None, select_list=sel_cols
         )
         sql = (
-                "SET LOCAL enable_seqscan=FALSE; SELECT obh.objid, NULL "
-                + sel_cols
-                + " FROM "
-                + from_.get_sql()
-                + where_clause.get_sql()
+            "SET LOCAL enable_seqscan=FALSE; SELECT obh.objid, NULL "
+            + sel_cols
+            + " FROM "
+            + from_.get_sql()
+            + where_clause.get_sql()
         )
         logger.info("Execute SQL : %s" % sql)
         res: Result = self.ro_session.execute(text(sql), params)
@@ -221,11 +222,11 @@ class GPUPredictForProject(PredictForProject):
     CHUNK_SIZE = 10000
 
     def classify(
-            self,
-            tgt_res: Result,
-            classifier: OurRandomForestClassifier,
-            features: List[str],
-            np_medians_per_feat: Dict[str, float],
+        self,
+        tgt_res: Result,
+        classifier: OurRandomForestClassifier,
+        features: List[str],
+        np_medians_per_feat: Dict[str, float],
     ) -> int:
         """
         Do the classification job itself, read lines from the DB, classify them and write-back the result.

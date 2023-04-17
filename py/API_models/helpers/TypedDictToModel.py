@@ -18,8 +18,9 @@ from helpers.pydantic import PydanticDescriptionT
 # noinspection PyPackageRequirements
 
 
-def typed_dict_to_model(typed_dict_class: Type,
-                        pydantic_class: PydanticDescriptionT) -> PydanticModelT:
+def typed_dict_to_model(
+    typed_dict_class: Type, pydantic_class: PydanticDescriptionT
+) -> PydanticModelT:
     annotations: Dict[str, Any] = {}
     for name, field in typed_dict_class.__annotations__.items():
         if field == Optional[str]:

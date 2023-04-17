@@ -6,7 +6,7 @@
 #
 import ast
 import re
-from typing import Optional, List
+from typing import Optional, List, Final
 
 from DB.ProjectVariables import KNOWN_PROJECT_VARS
 from .Vocabulary import Vocabulary, Units
@@ -29,11 +29,11 @@ class VariableValidity(object):
     """
 
     def __init__(
-            self,
-            expr: str,
-            min_val: Optional[float] = None,
-            max_val: Optional[float] = None,
-            excluded_val: Optional[float] = None,
+        self,
+        expr: str,
+        min_val: Optional[float] = None,
+        max_val: Optional[float] = None,
+        excluded_val: Optional[float] = None,
     ):
         self.expr = expr
         self.min_val = min_val
@@ -55,11 +55,11 @@ class ProjectVar(object):
     """
 
     def __init__(
-            self,
-            var_formula: str,
-            term: Term,
-            unit: Term,
-            valid_if: Optional[VariableValidity] = None,
+        self,
+        var_formula: str,
+        term: Term,
+        unit: Term,
+        valid_if: Optional[VariableValidity] = None,
     ):
         """
             Description of a project variable.
@@ -104,7 +104,7 @@ class ProjectVar(object):
         return True
 
     IDENT_RE = r"[a-zA-Z][a-zA-Z0-9_]*"
-    VAR_RE = re.compile(r"{idt}(\.{idt})?".format(idt=IDENT_RE))
+    VAR_RE: Final = re.compile(r"{idt}(\.{idt})?".format(idt=IDENT_RE))
 
     @classmethod
     def find_vars(cls, sum_exp) -> List[str]:

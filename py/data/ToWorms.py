@@ -128,25 +128,25 @@ class Action(object):  # class action :)
 
     def something_to_do(self) -> bool:
         return (
-                self.link_with_aphia_id is not None
-                or self.eco_parent is not None
-                or self.worms_parent_id is not None
-                or self.make_morpho
-                or self.deprecated
-                or self.new_name is not None
-                or self.text is not None
+            self.link_with_aphia_id is not None
+            or self.eco_parent is not None
+            or self.worms_parent_id is not None
+            or self.make_morpho
+            or self.deprecated
+            or self.new_name is not None
+            or self.text is not None
         )
 
     def manual_action(self) -> bool:
         """ """
         return (
-                self.link_with_aphia_id is None
-                and self.eco_parent is None
-                and self.worms_parent_id is None
-                and not self.make_morpho
-                and not self.deprecated
-                and self.new_name is None
-                and self.text is not None
+            self.link_with_aphia_id is None
+            and self.eco_parent is None
+            and self.worms_parent_id is None
+            and not self.make_morpho
+            and not self.deprecated
+            and self.new_name is None
+            and self.text is not None
         )
 
     def __str__(self) -> str:
@@ -319,8 +319,8 @@ class ToWorms(object):
         # No rename to same name as final aphia
         for an_id, an_action in self.actions.items():
             if (
-                    an_action.new_name is not None
-                    and an_action.link_with_aphia_id is not None
+                an_action.new_name is not None
+                and an_action.link_with_aphia_id is not None
             ):
                 if an_action.link_with_aphia_id not in self.worms:
                     # TODO
@@ -392,7 +392,7 @@ class ToWorms(object):
                     continue
                 if an_info.id != 11226:  # Holodinophyta
                     assert (
-                            an_info.type == "M" or action.make_morpho
+                        an_info.type == "M" or action.make_morpho
                     ), "Not Morpho: %d %s" % (an_info.id, str(an_info.lineage))
                 # print("    -W>", target_info.top_down_lineage(":"))
                 # if action.worms_parent_id is not None:
@@ -432,8 +432,8 @@ class ToWorms(object):
                         self.worms[aphia_id].name for aphia_id in possible_aphia_ids
                     ]
                     if an_info.id not in (
-                            85234,  # Branch change
-                            85213,  # Branch change
+                        85234,  # Branch change
+                        85213,  # Branch change
                     ):
                         if target_info.id not in possible_aphia_ids:
                             print(
@@ -486,7 +486,7 @@ class ToWorms(object):
 
     @staticmethod
     def find_in_header(
-            cell_iterable: Iterable[Cell], optional: bool = False, *args: Any
+        cell_iterable: Iterable[Cell], optional: bool = False, *args: Any
     ) -> Tuple[Optional[int], ...]:
         """
         Return 0-based indices of the requested columns in the Cell list.
@@ -553,7 +553,7 @@ class ToWorms(object):
                 assert isinstance(eco_str_id, str)
                 # We have e.g. =HYPERLINK("http://ecotaxoserver.obs-vlfr.fr/browsetaxo/?id=93066","93066")
                 assert (
-                        ECOTAXOSERVER_URL in eco_str_id
+                    ECOTAXOSERVER_URL in eco_str_id
                 ), "Unexpected eco_id value '%s' in tab '%r'" % (eco_str_id, tab_name)
                 eco_id = int(eco_str_id.split('"')[3])
                 cell_str = str(eco_id_cell).replace("ReadOnlyCell ", "")
@@ -599,7 +599,7 @@ class ToWorms(object):
                     deprecate_opt = a_line[deprecate_col]
                     deprecate_val = deprecate_opt.value
                     assert deprecate_val in (None, "", "x"), (
-                            "Unexpected deprecate %s" % deprecate_val
+                        "Unexpected deprecate %s" % deprecate_val
                     )
                     if deprecate_opt.value == "x":
                         action_for_eco_id.deprecate()
@@ -643,7 +643,7 @@ class ToWorms(object):
 
     @staticmethod
     def read_aphia_id_value(
-            aphia_str_id: Union[str, int], tab_name: str
+        aphia_str_id: Union[str, int], tab_name: str
     ) -> Optional[int]:
         if isinstance(aphia_str_id, str):
             if WORMS_URL in aphia_str_id:

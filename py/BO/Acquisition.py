@@ -53,10 +53,10 @@ class AcquisitionBO(MappedEntity):
 
     @classmethod
     def get_all_object_ids(
-            cls,
-            session: Session,
-            acquis_id: AcquisitionIDT,
-            classif_ids: Optional[ClassifIDListT] = None,
+        cls,
+        session: Session,
+        acquis_id: AcquisitionIDT,
+        classif_ids: Optional[ClassifIDListT] = None,
     ) -> List[int]:
         qry = session.query(ObjectHeader.objid)
         qry = qry.join(

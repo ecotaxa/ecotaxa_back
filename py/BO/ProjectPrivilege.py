@@ -24,13 +24,13 @@ class ProjectPrivilegeBO(object):
         Return SQL chunk for all managers for all projects.
         """
         return (
-                """ SELECT u.email, u.name, pp.projid, rank() 
+            """ SELECT u.email, u.name, pp.projid, rank() 
                              OVER (PARTITION BY pp.projid ORDER BY pp.id) rang
                              FROM projectspriv pp 
                              JOIN users u ON pp.member = u.id
                             WHERE pp.privilege = '"""
-                + cls.MANAGE
-                + """' 
+            + cls.MANAGE
+            + """' 
                       AND u.active = true """
         )
 
@@ -41,9 +41,9 @@ class ProjectPrivilegeBO(object):
         """
         # noinspection SqlResolve
         return (
-                """ SELECT * from ( """
-                + cls.managers_by_project()
-                + """ ) qpp 
+            """ SELECT * from ( """
+            + cls.managers_by_project()
+            + """ ) qpp 
                     WHERE rang = 1 """
         )
 

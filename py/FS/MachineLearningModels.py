@@ -42,7 +42,7 @@ class SavedModels(object):
                 dir_name = a_dir.name
                 if not dir_name.startswith(self.PRFX):
                     continue
-                dir_name = dir_name[len(self.PRFX):]
+                dir_name = dir_name[len(self.PRFX) :]
                 ret.append(dir_name)
         return ret
 

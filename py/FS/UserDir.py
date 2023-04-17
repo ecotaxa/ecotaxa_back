@@ -78,7 +78,7 @@ class UserDirectory(object):
         if len(parts) < 3:
             return False
         if parts[1] == tempfile.gettempprefix() and parts[2].endswith(
-                self._user_suffix()
+            self._user_suffix()
         ):
             return True
         return False

@@ -17,10 +17,10 @@ from helpers.DynamicLogs import LogsSwitcher, LogEmitter
 
 class AcquisitionStats(object):
     """
-        Small stats for an acquisition of a free column values inside.
-        - min/max of values
-        - distribution of != values
-        - mode, i.e. freq of most frequent value
+    Small stats for an acquisition of a free column values inside.
+    - min/max of values
+    - distribution of != values
+    - mode, i.e. freq of most frequent value
     """
 
     def __init__(self, acquis_orig_id: str, acquis_id: AcquisitionIDT):
@@ -41,8 +41,12 @@ class AcquisitionStats(object):
             self.distribs = [{a_val: 1} for a_val in values]
             self.first = False
         else:
-            self.minima = [Decimal.min(new, pres) for new, pres in zip(values, self.minima)]
-            self.maxima = [Decimal.max(new, pres) for new, pres in zip(values, self.maxima)]
+            self.minima = [
+                Decimal.min(new, pres) for new, pres in zip(values, self.minima)
+            ]
+            self.maxima = [
+                Decimal.max(new, pres) for new, pres in zip(values, self.maxima)
+            ]
             for a_distrib, a_val in zip(self.distribs, values):
                 if a_val in a_distrib:
                     a_distrib[a_val] += 1
@@ -66,15 +70,24 @@ class AcquisitionStats(object):
 
     def __str__(self) -> str:
         ret = "%s (%d): " % (self.acquis_orig_id, self.nb_objs)
-        ret += ",".join(["[%s,%s,#%d,u%s]"
-                         % (self.remove_exponent(min_val), self.remove_exponent(max_val), len(distrib), a_mode)
-                         for min_val, max_val, distrib, a_mode in
-                         zip(self.minima, self.maxima, self.distribs, self.modes)])
+        ret += ",".join(
+            [
+                "[%s,%s,#%d,u%s]"
+                % (
+                    self.remove_exponent(min_val),
+                    self.remove_exponent(max_val),
+                    len(distrib),
+                    a_mode,
+                )
+                for min_val, max_val, distrib, a_mode in zip(
+                    self.minima, self.maxima, self.distribs, self.modes
+                )
+            ]
+        )
         return ret
 
 
 class ProjectStatsFetcher(Service, LogEmitter):
-
     def __init__(self, prj_id: int):
         super().__init__()
         self.prj_id = prj_id
@@ -88,7 +101,9 @@ class ProjectStatsFetcher(Service, LogEmitter):
 
     def do_run(self, current_user_id: int) -> List[str]:
         # Security check
-        _user, project = RightsBO.user_wants(self.session, current_user_id, Action.READ, self.prj_id)
+        _user, project = RightsBO.user_wants(
+            self.session, current_user_id, Action.READ, self.prj_id
+        )
         # OK
         proj_bo = ProjectBO(project).enrich()
         ret = []
@@ -99,8 +114,9 @@ class ProjectStatsFetcher(Service, LogEmitter):
         acquis_stats: AcquisitionStats = AcquisitionStats("", 0)
         for a_row in free_cols_vals:
             acquis_id, acquis_orig_id, objid, *free_vals = a_row
-            free_vals = [a_val if a_val is not None else Decimal('nan')
-                         for a_val in free_vals]
+            free_vals = [
+                a_val if a_val is not None else Decimal("nan") for a_val in free_vals
+            ]
             if acquis_id == acquis_stats.acquis_id:
                 # Same acquisition
                 pass

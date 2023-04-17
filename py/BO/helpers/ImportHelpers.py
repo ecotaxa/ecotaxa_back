@@ -58,12 +58,12 @@ class ImportHow(object):
     """
 
     def __init__(
-            self,
-            prj_id,
-            update_mode: str,
-            custom_mapping: ProjectMapping,
-            skip_object_duplicates: bool,
-            loaded_files: List[str],
+        self,
+        prj_id,
+        update_mode: str,
+        custom_mapping: ProjectMapping,
+        skip_object_duplicates: bool,
+        loaded_files: List[str],
     ):
         self.prj_id = prj_id
         # Update or create

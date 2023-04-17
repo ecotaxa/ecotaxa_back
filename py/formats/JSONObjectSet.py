@@ -19,34 +19,37 @@ from DB.helpers.ORM import ModelT, Column, RelationshipProperty
 JSONDesc = Dict[Union[Column, RelationshipProperty], str]
 
 JSON_FIELDS: Dict[ModelT, JSONDesc] = {
-    Project: {Project.title: "ttl",
-              Project.all_samples: "samples",  # type:ignore # case2
-              },
-    Sample: {Sample.sampleid: "id",
-             Sample.orig_id: "sid",
-             Sample.dataportal_descriptor: "dsc",
-             Sample.all_acquisitions: "acquisitions"
-             },
-    Acquisition: {Acquisition.acquisid: "id",
-                  Acquisition.orig_id: "aid",
-                  Acquisition.process: "processings",
-                  Acquisition.all_objects: "objects"
-                  },
-    Process: {Process.processid: "id",
-              Process.orig_id: "pid",
-              },
-    ObjectHeader: {ObjectHeader.orig_id: "oid",
-                   ObjectHeader.classif_id: "mcat",
-                   ObjectHeader.classif_auto_id: "acat",
-                   ObjectHeader.all_images: "images",  # type:ignore # case2
-                   ObjectHeader.depth_min: "depth_min",
-                   ObjectHeader.depth_max: "depth_max",
-                   ObjectHeader.latitude: "latitude",
-                   ObjectHeader.longitude: "longitude",
-                   ObjectHeader.fields: "fields",  # type:ignore # 1-1 so should be joined right away and disappear
-                   },
+    Project: {
+        Project.title: "ttl",
+        Project.all_samples: "samples",  # type:ignore # case2
+    },
+    Sample: {
+        Sample.sampleid: "id",
+        Sample.orig_id: "sid",
+        Sample.dataportal_descriptor: "dsc",
+        Sample.all_acquisitions: "acquisitions",
+    },
+    Acquisition: {
+        Acquisition.acquisid: "id",
+        Acquisition.orig_id: "aid",
+        Acquisition.process: "processings",
+        Acquisition.all_objects: "objects",
+    },
+    Process: {
+        Process.processid: "id",
+        Process.orig_id: "pid",
+    },
+    ObjectHeader: {
+        ObjectHeader.orig_id: "oid",
+        ObjectHeader.classif_id: "mcat",
+        ObjectHeader.classif_auto_id: "acat",
+        ObjectHeader.all_images: "images",  # type:ignore # case2
+        ObjectHeader.depth_min: "depth_min",
+        ObjectHeader.depth_max: "depth_max",
+        ObjectHeader.latitude: "latitude",
+        ObjectHeader.longitude: "longitude",
+        ObjectHeader.fields: "fields",  # type:ignore # 1-1 so should be joined right away and disappear
+    },
     ObjectFields: {},
-    Image: {Image.file_name: "fil",
-            Image.imgrank: "rnk"
-            }
+    Image: {Image.file_name: "fil", Image.imgrank: "rnk"},
 }

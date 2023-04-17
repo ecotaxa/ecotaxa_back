@@ -12,19 +12,19 @@ from .helpers.Service import Service
 
 class StatusService(Service):
     """
-        A utility service for ensuring the sanity of environment/config.
-        Useful inside a docker container.
+    A utility service for ensuring the sanity of environment/config.
+    Useful inside a docker container.
     """
 
     def __init__(self) -> None:
         super().__init__()
 
     # TODO: Use const from elsewhere
-    PATHS_IN_CONF = ['SERVERLOADAREA', 'FTPEXPORTAREA', 'MODELSAREA']
+    PATHS_IN_CONF = ["SERVERLOADAREA", "FTPEXPORTAREA", "MODELSAREA"]
 
     def run(self, current_user_id: Optional[UserIDT]) -> str:
         """
-            Produce the answer.
+        Produce the answer.
         """
         if current_user_id is None:
             return "UP!"
@@ -37,7 +37,7 @@ class StatusService(Service):
             if not is_admin and not "appmanager" in k:
                 continue
             v = self.config.get_cnf(k)
-            if 'secret' in k.lower() or 'salt' in k.lower() or 'password' in k.lower():
+            if "secret" in k.lower() or "salt" in k.lower() or "password" in k.lower():
                 v = "*************"
             ret.append("  %s: %s" % (k, v))
         ret.append("Paths:")

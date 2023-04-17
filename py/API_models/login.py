@@ -9,9 +9,14 @@ from helpers.pydantic import BaseModel, Field
 
 
 class LoginReq(BaseModel):
-    password: str = Field(title="User's password", description="User password.", example="test!")
-    username: str = Field(title="User's email", description="User email used during registration.",
-                          example="ecotaxa.api.user@gmail.com")
+    password: str = Field(
+        title="User's password", description="User password.", example="test!"
+    )
+    username: str = Field(
+        title="User's email",
+        description="User email used during registration.",
+        example="ecotaxa.api.user@gmail.com",
+    )
 
     class Config:
         schema_extra = {"title": "Login request Model"}

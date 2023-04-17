@@ -26,7 +26,7 @@ class TaxonomyMapper(object):
         self.taxa_ids = set(taxon_ids)
 
     def do_match(
-            self,
+        self,
     ) -> Tuple[Dict[ClassifIDT, WoRMS], Dict[ClassifIDT, Optional[ClassifIDT]]]:
         """
             Returns: A dict with matched Phylo taxo ids->WoRMS entry. The taxa might be Morpho ones,

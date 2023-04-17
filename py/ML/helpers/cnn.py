@@ -14,13 +14,13 @@ from tensorflow.keras import layers, optimizers, losses, callbacks
 
 
 def Create(
-        fe_url,
-        input_shape,
-        fe_trainable,
-        fc_layers_sizes,
-        fc_layers_dropout,
-        classif_layer_size,
-        classif_layer_dropout,
+    fe_url,
+    input_shape,
+    fe_trainable,
+    fc_layers_sizes,
+    fc_layers_dropout,
+    classif_layer_size,
+    classif_layer_dropout,
 ):
     """
     Generates a CNN model.
@@ -68,7 +68,7 @@ def Create(
 
 
 def Compile(
-        model, initial_lr, lr_method="constant", decay_steps=1.0, decay_rate=0.5, loss="cce"
+    model, initial_lr, lr_method="constant", decay_steps=1.0, decay_rate=0.5, loss="cce"
 ):
     """
     Compiles a CNN model.
@@ -162,14 +162,14 @@ def Load(output_dir="."):
 
 
 def Train(
-        model,
-        train_batches,
-        valid_batches,
-        epochs,
-        initial_epoch=0,
-        class_weight=None,
-        output_dir=".",
-        workers=1,
+    model,
+    train_batches,
+    valid_batches,
+    epochs,
+    initial_epoch=0,
+    class_weight=None,
+    output_dir=".",
+    workers=1,
 ):
     """
     Trains a CNN model.
