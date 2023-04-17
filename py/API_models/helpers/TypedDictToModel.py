@@ -12,7 +12,7 @@ from typing import Optional, Dict, Any, Type
 from pydantic import create_model
 
 from API_models.helpers import PydanticModelT
-from helpers.pydantic import DescriptiveModel, PydanticDescriptionT
+from helpers.pydantic import PydanticDescriptionT
 
 
 # noinspection PyPackageRequirements
