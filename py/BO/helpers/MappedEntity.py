@@ -49,11 +49,11 @@ class MappedEntity(metaclass=ABCMeta):
 
     @classmethod
     def get_free_fields(
-        cls,
-        mapped: Any,  # TODO: Should be 'MappedEntity'
-        field_list: List[str],
-        field_types: List[Any],
-        field_absent_vals: List[Any],
+            cls,
+            mapped: Any,  # TODO: Should be 'MappedEntity'
+            field_list: List[str],
+            field_types: List[Any],
+            field_absent_vals: List[Any],
     ) -> List[Any]:
         """
         Get free fields _values_ for the mapped entity, inside the project
@@ -74,14 +74,14 @@ class MappedEntity(metaclass=ABCMeta):
 
     @classmethod
     def _get_values(
-        cls, mapped_obj, mapped_cols, field_types, field_absent_vals
+            cls, mapped_obj, mapped_cols, field_types, field_absent_vals
     ) -> Tuple[List, OrderedDict]:
         # Fetch the raw values from the mapped entity. No distinction between types text and numeric
         vals = [getattr(mapped_obj, real_col) for real_col in mapped_cols.values()]
         ret = OrderedDict()
         errs = []
         for a_field, a_val, a_type, an_absent_val in zip(
-            mapped_cols.keys(), vals, field_types, field_absent_vals
+                mapped_cols.keys(), vals, field_types, field_absent_vals
         ):
             try:
                 # convert (cast) to target type
@@ -101,11 +101,11 @@ class MappedEntity(metaclass=ABCMeta):
 
     @classmethod
     def get_computed_var(
-        cls,
-        mapped: Any,  # TODO: Should be 'MappedEntity'
-        var: ProjectVar,
-        mapping: Optional[ProjectMapping] = None,
-        constants: Optional[Dict] = None,
+            cls,
+            mapped: Any,  # TODO: Should be 'MappedEntity'
+            var: ProjectVar,
+            mapping: Optional[ProjectMapping] = None,
+            constants: Optional[Dict] = None,
     ) -> Any:
         """
         For given mapped entity, return the result of evaluating the formula (which returns a variable).

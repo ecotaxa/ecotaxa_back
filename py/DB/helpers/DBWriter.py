@@ -120,11 +120,11 @@ class DBWriter(object):
         logger.info("Batch save objects of %s", nb_bulks)
 
     def add_db_entities(
-        self,
-        object_head_to_write: Bean,
-        object_fields_to_write: Bean,
-        image_to_write: Optional[Bean],
-        new_records: int,
+            self,
+            object_head_to_write: Bean,
+            object_fields_to_write: Bean,
+            image_to_write: Optional[Bean],
+            new_records: int,
     ) -> None:
         # Bulk mode or Core do not create links (using ORM relationship), so we have to do manually
         if new_records > 1:

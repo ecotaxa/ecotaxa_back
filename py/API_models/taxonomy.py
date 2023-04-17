@@ -11,6 +11,7 @@ from API_models.helpers.DBtoModel import OrmConfig, combine_models
 from DB import Taxonomy
 from helpers.pydantic import BaseModel, Field
 
+
 class TaxaSearchRsp(BaseModel):
     id: int = Field(title="Id", description="The taxon/category IDs.", example=14334)
     renm_id: Optional[int] = Field(title="Renm_id",

@@ -37,17 +37,17 @@ def compute_sun_position(object_head_to_write: Bean):
     # Compute sun position if not already done
     global astral_cache
     if not (
-        astral_cache["date"] == object_head_to_write.objdate
-        and astral_cache["time"] == object_head_to_write.objtime
-        and astral_cache["long"] == object_head_to_write.longitude
-        and astral_cache["lat"] == object_head_to_write.latitude
+            astral_cache["date"] == object_head_to_write.objdate
+            and astral_cache["time"] == object_head_to_write.objtime
+            and astral_cache["long"] == object_head_to_write.longitude
+            and astral_cache["lat"] == object_head_to_write.latitude
     ):
         # Columns in definition are indeed nullable
         if (
-            object_head_to_write.objdate is None
-            or object_head_to_write.objtime is None
-            or object_head_to_write.longitude is None
-            or object_head_to_write.latitude is None
+                object_head_to_write.objdate is None
+                or object_head_to_write.objtime is None
+                or object_head_to_write.longitude is None
+                or object_head_to_write.latitude is None
         ):
             return "?"
         astral_cache = {
@@ -92,7 +92,7 @@ def calc_astral_day_time(date: datetime.date, time, latitude, longitude):
             # Normal interval
             ret = intrv["=>"]
         elif intrv["from:"] > intrv["to:"] and (
-            time >= intrv["from:"] or time <= intrv["to:"]
+                time >= intrv["from:"] or time <= intrv["to:"]
         ):
             # Change of day b/w the 2 parts of the interval
             ret = intrv["=>"]

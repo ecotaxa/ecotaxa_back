@@ -29,7 +29,8 @@ def dataclass_to_model_with_suffix(data_class: Type, pydantic_class: Optional[Py
     return dataclass_to_model(data_class, pydantic_class, True)
 
 
-def dataclass_to_model(data_class: Type, pydantic_class: Optional[PydanticDescriptionT] = None, add_suffix: bool = False) \
+def dataclass_to_model(data_class: Type, pydantic_class: Optional[PydanticDescriptionT] = None,
+                       add_suffix: bool = False) \
         -> PydanticModelT:
     model_fields: Dict[str, Any] = {}
     a_field: dataclasses.Field

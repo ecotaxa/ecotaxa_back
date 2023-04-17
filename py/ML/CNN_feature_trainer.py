@@ -216,7 +216,7 @@ class CNNFeatureTrainer(MachineLearningBase):
                 if not (
                     isinstance(layer, tf.keras.layers.Dense)
                     | isinstance(layer, tf.keras.layers.Dropout)
-                )
+            )
             ]
         )
         my_fe.summary(print_fn=logger.info)

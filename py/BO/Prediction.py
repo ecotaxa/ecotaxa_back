@@ -111,7 +111,7 @@ class DeepFeatures(object):
 
     @classmethod
     def read_for_objects(
-        cls, session: Session, oid_lst: List[int]
+            cls, session: Session, oid_lst: List[int]
     ) -> Result:  # TODO: Should be ObjectIDListT
         """
         Read CNN lines AKA features, in order, for given object_ids

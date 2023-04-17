@@ -97,7 +97,7 @@ class Connection(object):
 
     def exec_outside_transaction(self, statement: str) -> None:
         """
-        Execute raw SQL outside of any transaction (which is created by default by SQLA)
+        Execute raw SQL outside any transaction (which is created by default by SQLA)
         """
         with self.engine.connect() as conn:
             conn.execute(text("commit"))

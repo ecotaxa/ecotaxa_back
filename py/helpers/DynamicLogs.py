@@ -61,6 +61,7 @@ class LogEmitter(ABC):
     """
         Just to force presence of the right primitive for log emitter classes, and add a member to the switcher.
     """
+
     @abc.abstractmethod
     def log_file_path(self) -> str: ...
 

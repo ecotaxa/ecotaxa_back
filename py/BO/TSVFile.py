@@ -138,8 +138,8 @@ class TSVFile(object):
 
             # For annotation, if there is both an id and a category then ignore category
             ignore_annotation_category: bool = (
-                "object_annotation_category_id" in field_set
-                and "object_annotation_category" in field_set
+                    "object_annotation_category_id" in field_set
+                    and "object_annotation_category" in field_set
             )
 
             vals_cache: Dict[str, str] = dict()
@@ -310,8 +310,8 @@ class TSVFile(object):
                 field
                 for field in field_set
                 if how.custom_mapping.search_field(field) is not None
-                or field in GlobalMapping.PREDEFINED_FIELDS
-                or field in GlobalMapping.DOUBLED_FIELDS
+                   or field in GlobalMapping.PREDEFINED_FIELDS
+                   or field in GlobalMapping.DOUBLED_FIELDS
             ]
         )
         # Remove classification fields if updating but not classification
@@ -331,10 +331,10 @@ class TSVFile(object):
 
     @staticmethod
     def add_parent_objects(
-        how: ImportHow,
-        session: Session,
-        object_head_to_write,
-        dicts_to_write: Mapping[str, Dict],
+            how: ImportHow,
+            session: Session,
+            object_head_to_write,
+            dicts_to_write: Mapping[str, Dict],
     ):
         """
         Assignment of Sample, Acquisition & Process ID, creating them if necessary.
@@ -421,7 +421,7 @@ class TSVFile(object):
 
     @staticmethod
     def create_parent(
-        session: Session, dict_to_write, prj_id: ProjectIDT, parent_class
+            session: Session, dict_to_write, prj_id: ProjectIDT, parent_class
     ):
         """
             Create the SQLAlchemy wrapper for Sample, Acquisition or Process.
@@ -437,7 +437,7 @@ class TSVFile(object):
 
     @staticmethod
     def update_parent_objects(
-        how: ImportHow, session: Session, dicts_for_update: Mapping[str, Dict]
+            how: ImportHow, session: Session, dicts_for_update: Mapping[str, Dict]
     ):
         """
         Update of Sample, Acquisition & Process.
@@ -489,8 +489,8 @@ class TSVFile(object):
 
     @staticmethod
     def update_orm_object(
-        model: Union[ObjectHeader, Sample, Acquisition, Process, ObjectFields],
-        update_dict: Dict[str, Any],
+            model: Union[ObjectHeader, Sample, Acquisition, Process, ObjectFields],
+            update_dict: Dict[str, Any],
     ):
         """
         In-memory update of the ORM record, based on the difference with a needed state.
@@ -516,7 +516,7 @@ class TSVFile(object):
 
     @staticmethod
     def dispatch_fields_by_table(
-        custom_mapping: ProjectMapping, field_set: Set
+            custom_mapping: ProjectMapping, field_set: Set
     ) -> Dict[str, Set]:
         """
             Build a set of target DB columns by target table.
@@ -539,11 +539,11 @@ class TSVFile(object):
 
     @staticmethod
     def read_fields_to_dicts(
-        how: ImportHow,
-        field_set: Set[str],
-        lig: Dict[str, Optional[str]],
-        dicts_to_write,
-        vals_cache: Dict,
+            how: ImportHow,
+            field_set: Set[str],
+            lig: Dict[str, Optional[str]],
+            dicts_to_write,
+            vals_cache: Dict,
     ):
         """
         Read the data line into target dicts. Values go into the right bucket, i.e. target dict, depending
@@ -617,7 +617,7 @@ class TSVFile(object):
                     ]
                     # better crash than write bad value into the DB
                     assert (
-                        cached_field_value is not None
+                            cached_field_value is not None
                     ), "Column %s: no classification of %s mapped as %s" % (
                         a_field,
                         csv_val,
@@ -650,11 +650,11 @@ class TSVFile(object):
 
     @staticmethod
     def create_or_link_slaves(
-        how: ImportHow,
-        session: Session,
-        object_head_to_write,
-        object_fields_to_write,
-        image_to_write,
+            how: ImportHow,
+            session: Session,
+            object_head_to_write,
+            object_fields_to_write,
+            image_to_write,
     ) -> int:
         """
         Create, link or update slave entities, i.e. head, fields, image.
@@ -669,9 +669,9 @@ class TSVFile(object):
             if how.can_update_only:
                 # noinspection DuplicatedCode
                 for a_cls, its_pk, an_upd in zip(
-                    [ObjectHeader, ObjectFields],
-                    ["objid", "objfid"],
-                    [object_head_to_write, object_fields_to_write],
+                        [ObjectHeader, ObjectFields],
+                        ["objid", "objfid"],
+                        [object_head_to_write, object_fields_to_write],
                 ):
                     filter_for_id = text("%s=%d" % (its_pk, objid))
                     # Fetch the record to update
@@ -682,7 +682,7 @@ class TSVFile(object):
                         if an_upd.nb_fields_from(USED_FIELDS_FOR_SUNPOS) > 0:
                             # Give the bean enough data for computation
                             for a_field in USED_FIELDS_FOR_SUNPOS.difference(
-                                an_upd.keys()
+                                    an_upd.keys()
                             ):
                                 an_upd[a_field] = getattr(obj, a_field)
                             TSVFile.do_sun_position_field(an_upd)
@@ -716,11 +716,11 @@ class TSVFile(object):
         return ret
 
     def deal_with_images(
-        self,
-        where: ImportWhere,
-        how: ImportHow,
-        image_to_write: Bean,
-        instead_image: Optional[Path] = None,
+            self,
+            where: ImportWhere,
+            how: ImportHow,
+            image_to_write: Bean,
+            instead_image: Optional[Path] = None,
     ):
         """
             Generate image, eventually the vignette, create DB line(s) and copy image file into vault.
@@ -1021,8 +1021,8 @@ class TSVFile(object):
                     )
             elif a_field == "object_annotation_category":
                 if (
-                    clean_value_and_none(lig.get("object_annotation_category_id", ""))
-                    == ""
+                        clean_value_and_none(lig.get("object_annotation_category_id", ""))
+                        == ""
                 ):
                     # Apply the mapping, if and only if there is no id
                     csv_val = how.taxo_mapping.get(csv_val.lower(), csv_val)

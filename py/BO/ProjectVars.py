@@ -29,11 +29,11 @@ class VariableValidity(object):
     """
 
     def __init__(
-        self,
-        expr: str,
-        min_val: Optional[float] = None,
-        max_val: Optional[float] = None,
-        excluded_val: Optional[float] = None,
+            self,
+            expr: str,
+            min_val: Optional[float] = None,
+            max_val: Optional[float] = None,
+            excluded_val: Optional[float] = None,
     ):
         self.expr = expr
         self.min_val = min_val
@@ -55,11 +55,11 @@ class ProjectVar(object):
     """
 
     def __init__(
-        self,
-        var_formula: str,
-        term: Term,
-        unit: Term,
-        valid_if: Optional[VariableValidity] = None,
+            self,
+            var_formula: str,
+            term: Term,
+            unit: Term,
+            valid_if: Optional[VariableValidity] = None,
     ):
         """
             Description of a project variable.

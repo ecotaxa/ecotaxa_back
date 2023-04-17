@@ -30,7 +30,7 @@ class MappedTable(metaclass=ABCMeta):
         ...  # pragma:nocover
 
     def _apply_on_all(
-        self, clazz: MappedTableTypeT, project: Project, updates: List[ColUpdate]
+            self, clazz: MappedTableTypeT, project: Project, updates: List[ColUpdate]
     ) -> int:
         """
         Apply all updates on all impacted rows by their ID.
@@ -52,7 +52,7 @@ class MappedTable(metaclass=ABCMeta):
 
     @staticmethod
     def _sanitize_updates(
-        clazz: ModelT, tbl_mappings: Dict[str, str], updates: List[ColUpdate]
+            clazz: ModelT, tbl_mappings: Dict[str, str], updates: List[ColUpdate]
     ) -> List[ColUpdate]:
         """
         Ensure that the update will do the job, avoiding e.g. non-existing columns.

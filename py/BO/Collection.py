@@ -125,20 +125,20 @@ class CollectionBO(object):
         assert len(problems) == 0, "\n".join(problems)
 
     def update(
-        self,
-        session: Session,
-        title: str,
-        short_title: Optional[str],
-        project_ids: ProjectIDListT,
-        provider_user: Any,
-        contact_user: Any,
-        citation: Optional[str],
-        abstract: Optional[str],
-        description: Optional[str],
-        creator_users: List[Any],
-        associate_users: List[Any],
-        creator_orgs: List[Any],
-        associate_orgs: List[Any],
+            self,
+            session: Session,
+            title: str,
+            short_title: Optional[str],
+            project_ids: ProjectIDListT,
+            provider_user: Any,
+            contact_user: Any,
+            citation: Optional[str],
+            abstract: Optional[str],
+            description: Optional[str],
+            creator_users: List[Any],
+            associate_users: List[Any],
+            creator_orgs: List[Any],
+            associate_orgs: List[Any],
     ):
         project_ids.sort()
         # TODO: projects update using given list
@@ -221,7 +221,7 @@ class CollectionBO(object):
 
     @staticmethod
     def create(
-        session: Session, title: str, project_ids: ProjectIDListT
+            session: Session, title: str, project_ids: ProjectIDListT
     ) -> CollectionIDT:
         """
         Create using minimum fields.

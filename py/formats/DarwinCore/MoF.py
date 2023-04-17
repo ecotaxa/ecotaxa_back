@@ -191,6 +191,7 @@ class ImagingInstrumentName(DwC_ExtendedMeasurementOrFact):
         super().__init__(
             eventID=event_id,
             measurementType="Imaging instrument name",
-            measurementTypeID="https://vocab.nerc.ac.uk/collection/P06/current/XXXX/", # Requested: https://github.com/nvs-vocabs/Q01/issues/1
+            measurementTypeID="https://vocab.nerc.ac.uk/collection/P06/current/XXXX/",
+            # Requested: https://github.com/nvs-vocabs/Q01/issues/1
             measurementValue=value
         )

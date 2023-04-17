@@ -49,7 +49,7 @@ class ResultGrouping(enum.IntEnum):
     BY_SAMPLE_SUBSAMPLE_AND_TAXO = BY_TAXO + BY_SUBSAMPLE + BY_SAMPLE
     BY_SAMPLE_AND_SUBSAMPLE = BY_SUBSAMPLE + BY_SAMPLE
     BY_PROJECT_AND_TAXO = (
-        BY_TAXO + BY_SUBSAMPLE + BY_SAMPLE + BY_PROJECT
+            BY_TAXO + BY_SUBSAMPLE + BY_SAMPLE + BY_PROJECT
     )  # One day, for Collections
 
     @classmethod
@@ -87,7 +87,7 @@ class ObjectSetQueryPlus(object):
         Group results at this level.
         """
         assert (
-            grouping & ResultGrouping.BY_PROJECT != ResultGrouping.BY_PROJECT
+                grouping & ResultGrouping.BY_PROJECT != ResultGrouping.BY_PROJECT
         ), "Single project for now"
         # Sanity check, we cannot group if no data from grouping level
         if grouping & ResultGrouping.BY_TAXO:
@@ -136,7 +136,7 @@ class ObjectSetQueryPlus(object):
         return self
 
     def _resolve_refs(
-        self, aliases: Dict[str, str]
+            self, aliases: Dict[str, str]
     ) -> Dict[Tuple[str, str], Tuple[str, str]]:
         """
         Resolve references, e.g. sam.tot_vol -> sam.t05. The prefixes are valid.
@@ -183,7 +183,7 @@ class ObjectSetQueryPlus(object):
         return ret
 
     def aggregate_with_computed_sum(
-        self, sum_expression: str, term: Term, unit: Term
+            self, sum_expression: str, term: Term, unit: Term
     ) -> "ObjectSetQueryPlus":
         """
         Add a computed (i.e. from formula) sum to the query, with given name, for each grouping.
@@ -271,12 +271,12 @@ class ObjectSetQueryPlus(object):
         if len(self.taxo_mapping) > 0:
             select_clause = self._amend_query_for_mapping(from_, select_clause)
         sql = (
-            select_clause
-            + " FROM "
-            + from_.get_sql()
-            + where.get_sql()
-            + group_clause
-            + order_clause.get_sql()
+                select_clause
+                + " FROM "
+                + from_.get_sql()
+                + where.get_sql()
+                + group_clause
+                + order_clause.get_sql()
         )
         return sql, params
 
@@ -300,7 +300,7 @@ class ObjectSetQueryPlus(object):
         return select_clause
 
     def get_row_source(
-        self, ro_session: Session, wrn_fct: Optional[Callable[[str], None]] = None
+            self, ro_session: Session, wrn_fct: Optional[Callable[[str], None]] = None
     ) -> RowSourceT:
         """
         Build a generator to loop over query results, eventually enriched.
@@ -342,8 +342,8 @@ class ObjectSetQueryPlus(object):
                 if val != val:  # NaN test
                     if nan_because_bad:
                         wrn_msg = (
-                            "Some values could not be converted to float in %s"
-                            % str(dict(vars_row))
+                                "Some values could not be converted to float in %s"
+                                % str(dict(vars_row))
                         )
                         if wrn_fct is not None:
                             wrn_fct(wrn_msg)
@@ -367,7 +367,7 @@ class ObjectSetQueryPlus(object):
                 yield out_row
 
     def get_result(
-        self, ro_session: Session, wrn_fct: Optional[Callable[[str], None]] = None
+            self, ro_session: Session, wrn_fct: Optional[Callable[[str], None]] = None
     ) -> List[Dict[str, Any]]:
         """
         Read the row source, in full, and return it.
@@ -376,10 +376,10 @@ class ObjectSetQueryPlus(object):
         return [a_row for a_row in src]
 
     def write_result_to_csv(
-        self,
-        ro_session: Session,
-        file_path: Path,
-        wrn_fct: Optional[Callable[[str], None]],
+            self,
+            ro_session: Session,
+            file_path: Path,
+            wrn_fct: Optional[Callable[[str], None]],
     ) -> int:
         """
         Write all from row source into CSV.

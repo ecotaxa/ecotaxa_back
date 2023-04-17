@@ -39,15 +39,15 @@ class TaxonBO(object):
     ]
 
     def __init__(
-        self,
-        cat_type: str,
-        display_name: str,
-        nb_objects: int,
-        nb_children_objects: int,
-        lineage: List[str],
-        id_lineage: List[ClassifIDT],
-        children: Optional[List[ClassifIDT]] = None,
-        rename_id: Optional[int] = None,
+            self,
+            cat_type: str,
+            display_name: str,
+            nb_objects: int,
+            nb_children_objects: int,
+            lineage: List[str],
+            id_lineage: List[ClassifIDT],
+            children: Optional[List[ClassifIDT]] = None,
+            rename_id: Optional[int] = None,
     ):
         assert cat_type in ("P", "M")
         self.type = cat_type
@@ -98,7 +98,7 @@ class TaxonomyBO(object):
 
     @staticmethod
     def resolve_taxa(
-        session: Session, taxo_lookup: Dict[str, Dict[str, Any]], taxon_lower_list
+            session: Session, taxo_lookup: Dict[str, Dict[str, Any]], taxon_lower_list
     ):
         """
         Match taxa in taxon_lower_list and return the matched ones in taxo_found.
@@ -118,20 +118,20 @@ class TaxonomyBO(object):
         for rec_taxon in res.mappings():
             for found_k, found_v in taxo_lookup.items():
                 if (
-                    (found_k == rec_taxon["name"])
-                    or (found_k == rec_taxon["display_name"])
-                    or (found_k == rec_taxon["computedchevronname"])
-                    or (
+                        (found_k == rec_taxon["name"])
+                        or (found_k == rec_taxon["display_name"])
+                        or (found_k == rec_taxon["computedchevronname"])
+                        or (
                         ("alterdisplayname" in found_v)
                         and (found_v["alterdisplayname"] == rec_taxon["display_name"])
-                    )
+                )
                 ):
                     taxo_lookup[found_k]["nbr"] += 1
                     taxo_lookup[found_k]["id"] = rec_taxon["id"]
 
     @staticmethod
     def names_with_parent_for(
-        session: Session, id_coll: ClassifIDCollT
+            session: Session, id_coll: ClassifIDCollT
     ) -> ClassifSetInfoT:
         """
         Get taxa names from id list.
@@ -210,12 +210,12 @@ class TaxonomyBO(object):
 
     @classmethod
     def query(
-        cls,
-        session: Session,
-        restrict_to: ClassifIDListT,
-        priority_set: ClassifIDListT,
-        display_name_filter: str,
-        name_filters: List[str],
+            cls,
+            session: Session,
+            restrict_to: ClassifIDListT,
+            priority_set: ClassifIDListT,
+            display_name_filter: str,
+            name_filters: List[str],
     ):
         """
         :param session:

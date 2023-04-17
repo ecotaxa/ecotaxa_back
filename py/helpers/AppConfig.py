@@ -71,4 +71,3 @@ class Config(object):
 
     def list_cnf(self) -> KeysView[str]:
         return self.parser.keys()
-

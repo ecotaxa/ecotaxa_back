@@ -159,7 +159,7 @@ def non_key_cols(orm_clazz: ModelT) -> Set[str]:
 
 
 def minimal_table_of(
-    metadata: MetaData, clazz, to_keep: Set[str], exact_floats=False
+        metadata: MetaData, clazz, to_keep: Set[str], exact_floats=False
 ) -> Table:
     """
         Return a Table, i.e. a SQLAlchemy mapper, with only the given fields.
@@ -187,7 +187,7 @@ def minimal_table_of(
 
 
 def minimal_model_of(
-    metadata: MetaData, clazz, to_keep: Set[str], exact_floats=False
+        metadata: MetaData, clazz, to_keep: Set[str], exact_floats=False
 ) -> Type[Model]:
     """
     Same as just above, but return a proper Model.

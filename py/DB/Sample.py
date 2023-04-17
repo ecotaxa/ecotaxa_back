@@ -34,7 +34,7 @@ class Sample(Model):
 
     @classmethod
     def get_orig_id_and_model(
-        cls, session: Session, prj_id: ProjectIDT
+            cls, session: Session, prj_id: ProjectIDT
     ) -> Dict[str, "Sample"]:
         """
         Read in memory all Samples for given project and return them indexed by their user-visible

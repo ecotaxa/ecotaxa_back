@@ -76,7 +76,7 @@ class InBundle(object):
             yield relative_file.as_posix()
 
     def do_import(
-        self, where: ImportWhere, how: ImportHow, rowcount: int, report_def: Callable
+            self, where: ImportWhere, how: ImportHow, rowcount: int, report_def: Callable
     ) -> int:
         """
         Import the full bundle, i.e. every contained file.
@@ -107,7 +107,7 @@ class InBundle(object):
         return ret
 
     def import_each_file(
-        self, where: ImportWhere, how: ImportHow, stats: ImportStats
+            self, where: ImportWhere, how: ImportHow, stats: ImportStats
     ) -> int:
         """
         Import each file in the bundle.
@@ -165,7 +165,7 @@ class InBundle(object):
 
     @staticmethod
     def fetch_existing_ranks(
-        session: Session, prj_id: ProjectIDT
+            session: Session, prj_id: ProjectIDT
     ) -> Dict[int, Set[int]]:
         """
         Get existing image ranks from the project
@@ -174,7 +174,7 @@ class InBundle(object):
 
     @staticmethod
     def fetch_existing_parents(
-        session: Session, prj_id: ProjectIDT
+            session: Session, prj_id: ProjectIDT
     ) -> Tuple[Dict[str, Sample], Dict[Tuple[str, str], Acquisition]]:
         """
         Get from DB the present ORM instances for the tables we are going to update,
@@ -187,18 +187,18 @@ class InBundle(object):
         return ret
 
     def validate_import(
-        self,
-        how: ImportHow,
-        diag: ImportDiagnostic,
-        session: Session,
-        report_def: Callable,
+            self,
+            how: ImportHow,
+            diag: ImportDiagnostic,
+            session: Session,
+            report_def: Callable,
     ) -> int:
         """
         Validate the full bundle, i.e. every contained file.
         :return:
         """
         with CodeTimer(
-            "validate_import: Existing images for %d: " % how.prj_id, logger
+                "validate_import: Existing images for %d: " % how.prj_id, logger
         ):
             how.objects_and_images_to_skip = Image.fetch_existing_images(
                 session, how.prj_id
@@ -255,7 +255,7 @@ class InBundle(object):
         return total_row_count
 
     def validate_each_file(
-        self, how: ImportHow, diag: ImportDiagnostic, report_def: Callable
+            self, how: ImportHow, diag: ImportDiagnostic, report_def: Callable
     ) -> int:
         total_row_count = 0
         for num_file, sub_bundle in enumerate(self.sub_bundles):
@@ -290,14 +290,14 @@ class InBundle(object):
 
     @staticmethod
     def check_classif(
-        session: Session, diag: ImportDiagnostic, classif_id_seen
+            session: Session, diag: ImportDiagnostic, classif_id_seen
     ) -> None:
         classif_id_found_in_db = TaxonomyBO.find_ids(session, list(classif_id_seen))
         classif_id_not_found_in_db = classif_id_seen.difference(classif_id_found_in_db)
         if len(classif_id_not_found_in_db) > 0:
             msg = (
-                "Some specified classif_id don't exist, correct them prior to reload: %s"
-                % (",".join([str(x) for x in classif_id_not_found_in_db]))
+                    "Some specified classif_id don't exist, correct them prior to reload: %s"
+                    % (",".join([str(x) for x in classif_id_not_found_in_db]))
             )
             diag.error(msg)
             logger.error(msg)

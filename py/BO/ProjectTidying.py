@@ -67,7 +67,7 @@ class ProjectTopology(object):
             objs_for_acquisition.add(objid)
 
     def add_association(
-        self, sample_orig_id: SampleOrigIDT, acquisition_orig_id: AcquisitionOrigIDT
+            self, sample_orig_id: SampleOrigIDT, acquisition_orig_id: AcquisitionOrigIDT
     ):
         """
         Add the given association while keeping structures in sync.
@@ -85,7 +85,7 @@ class ProjectTopology(object):
         return objs_for_acquisition
 
     def evaluate_add_association(
-        self, sample_orig_id: SampleOrigIDT, acquisition_orig_id: AcquisitionOrigIDT
+            self, sample_orig_id: SampleOrigIDT, acquisition_orig_id: AcquisitionOrigIDT
     ) -> Optional[str]:
         """
         Complain if adding the given would lead to damage the wanted topology.
@@ -98,8 +98,8 @@ class ProjectTopology(object):
             # Known association -> OK
             return None
         return (
-            "Acquisition '%s' is already associated with sample '%s', it cannot be associated as well with '%s"
-            % (acquisition_orig_id, parents_for_acq, sample_orig_id)
+                "Acquisition '%s' is already associated with sample '%s', it cannot be associated as well with '%s"
+                % (acquisition_orig_id, parents_for_acq, sample_orig_id)
         )
 
     def get_inconsistencies(self) -> List[str]:

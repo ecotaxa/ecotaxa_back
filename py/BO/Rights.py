@@ -38,7 +38,7 @@ class RightsBO(object):
 
     @staticmethod
     def user_wants(
-        session: Session, user_id: int, action: Action, prj_id: int
+            session: Session, user_id: int, action: Action, prj_id: int
     ) -> Tuple[User, Project]:
         """
         Check rights for the user to do this specific action onto this project.
@@ -65,16 +65,16 @@ class RightsBO(object):
             elif action == Action.ANNOTATE:
                 # TODO: Bah, not nice
                 assert (
-                    ProjectPrivilegeBO.ANNOTATE in rights_on_proj
-                    or ProjectPrivilegeBO.MANAGE in rights_on_proj
+                        ProjectPrivilegeBO.ANNOTATE in rights_on_proj
+                        or ProjectPrivilegeBO.MANAGE in rights_on_proj
                 ), NOT_AUTHORIZED
             elif action == Action.READ:
                 # TODO: Bah, not nice either
                 assert (
-                    project.visible
-                    or ProjectPrivilegeBO.VIEW in rights_on_proj
-                    or ProjectPrivilegeBO.ANNOTATE in rights_on_proj
-                    or ProjectPrivilegeBO.MANAGE in rights_on_proj
+                        project.visible
+                        or ProjectPrivilegeBO.VIEW in rights_on_proj
+                        or ProjectPrivilegeBO.ANNOTATE in rights_on_proj
+                        or ProjectPrivilegeBO.MANAGE in rights_on_proj
                 ), NOT_AUTHORIZED
             else:
                 raise Exception("Not implemented")
@@ -208,11 +208,11 @@ class RightsBO(object):
 
     @staticmethod
     def grant(
-        session: Session,
-        user: User,
-        action: Action,
-        prj: Project,
-        extra: Optional[str] = None,
+            session: Session,
+            user: User,
+            action: Action,
+            prj: Project,
+            extra: Optional[str] = None,
     ):
         """
         Grant the possibility to do this action on this project to this user.

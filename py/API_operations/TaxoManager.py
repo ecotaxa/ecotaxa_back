@@ -424,7 +424,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
                 prev_level.all_fetched = False
                 self.session.commit()
                 return "%d was not found, so parent %d was marked as incomplete" % \
-                       (aphia_id_for_level, prev_level.aphia_id)
+                    (aphia_id_for_level, prev_level.aphia_id)
             lineage = lineage["child"]
             prev_level = db_entry
         return "All OK"

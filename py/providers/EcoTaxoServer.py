@@ -30,7 +30,7 @@ class EcoTaxoServerClient(object):
         """
         params = {'id_instance': self.instance_id,
                   'sharedsecret': self.secret_key,
-                  'ecotaxa_version': "2.5.11" # TODO: Wondering why this param
+                  'ecotaxa_version': "2.5.11"  # TODO: Wondering why this param
                   }
         params.update(endpoint_params)
         r = requests.post(self.url + endpoint, params)

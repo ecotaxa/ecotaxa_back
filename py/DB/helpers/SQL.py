@@ -133,11 +133,11 @@ class OrderClause(object):
         self.columns: List[str] = []
 
     def add_expression(
-        self,
-        alias: Optional[str],
-        expr: str,
-        asc_or_desc: Optional[str] = None,
-        invert_nulls_first: bool = False,
+            self,
+            alias: Optional[str],
+            expr: str,
+            asc_or_desc: Optional[str] = None,
+            invert_nulls_first: bool = False,
     ) -> None:
         if asc_or_desc is None:
             asc_or_desc = "ASC"

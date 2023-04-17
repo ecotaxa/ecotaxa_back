@@ -47,14 +47,14 @@ class ObjectCache(object):  # pragma: no cover
     SQLITE_OBJ_TBL = "object"  # This one changes more often
 
     def __init__(
-        self,
-        project: Project,
-        mapping: TableMapping,
-        where_clause: WhereClause,
-        order_clause: Optional[OrderClause],
-        params: Dict[str, Any],
-        window_start: Optional[int],
-        window_size: Optional[int],
+            self,
+            project: Project,
+            mapping: TableMapping,
+            where_clause: WhereClause,
+            order_clause: Optional[OrderClause],
+            params: Dict[str, Any],
+            window_start: Optional[int],
+            window_size: Optional[int],
     ):
         self.sort_fields = ProjectBO.get_sort_db_columns(project, mapping=mapping)
         self.projid = project.projid
@@ -129,7 +129,7 @@ class ObjectCache(object):  # pragma: no cover
         return ret
 
     def try_sqlite_ize(
-        self, where_clause: WhereClause, cached_cols: Set[str], params: Dict
+            self, where_clause: WhereClause, cached_cols: Set[str], params: Dict
     ):
         """
         See if where_clause can become an equivalent SQLite one.
@@ -139,7 +139,7 @@ class ObjectCache(object):  # pragma: no cover
             if its_refs.issubset(cached_cols):
                 if "= ANY" in an_and:
                     an_and = (
-                        an_and.replace("= ANY", "IN (SELECT value FROM json_each") + ")"
+                            an_and.replace("= ANY", "IN (SELECT value FROM json_each") + ")"
                     )
                 elif "ILIKE" in an_and:
                     an_and = an_and.replace("ILIKE", "LIKE")
@@ -261,12 +261,12 @@ class ObjectCacheWriter(object):  # pragma: no cover
         if len(cache.sort_fields) > 0:
             sort_feature_col = "," + ", ".join(cache.sort_fields)
         self.feature_sql = (
-            " SELECT objid AS objfid %s " % sort_feature_col
-            + " FROM objects WHERE projid = %d" % self.projid
+                " SELECT objid AS objfid %s " % sort_feature_col
+                + " FROM objects WHERE projid = %d" % self.projid
         )
         self.object_sql = (
-            " SELECT objid, classif_id, classif_qual "
-            " FROM objects WHERE projid = %d" % self.projid
+                " SELECT objid, classif_id, classif_qual "
+                " FROM objects WHERE projid = %d" % self.projid
         )
 
     def bg_fetch_fill(self, pg_conn: Connection) -> None:
@@ -319,7 +319,7 @@ class ObjectCacheWriter(object):  # pragma: no cover
         )
 
     def query_pg_and_cache(
-        self, table_name: str, pg_sess: Session, cache_sql: str
+            self, table_name: str, pg_sess: Session, cache_sql: str
     ) -> int:
         logger.info("For cache fetch: %s", cache_sql)
         res: Result = pg_sess.execute(text(cache_sql))

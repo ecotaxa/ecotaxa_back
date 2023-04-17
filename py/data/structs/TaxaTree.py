@@ -15,11 +15,11 @@ class TaxaTree(object):
     """
 
     def __init__(
-        self,
-        taxo_id: ClassifIDT,
-        name: str,
-        all_nodes: Optional[Dict[ClassifIDT, "TaxaTree"]] = None,
-        parent: Optional["TaxaTree"] = None,
+            self,
+            taxo_id: ClassifIDT,
+            name: str,
+            all_nodes: Optional[Dict[ClassifIDT, "TaxaTree"]] = None,
+            parent: Optional["TaxaTree"] = None,
     ):
         # Node identity
         self.id = taxo_id
