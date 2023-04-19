@@ -9,9 +9,7 @@ from logging import Logger
 
 
 class CodeTimer(object):
-    """
-
-    """
+    """ """
 
     def __init__(self, msg: str, logger: Logger):
         self.msg = msg

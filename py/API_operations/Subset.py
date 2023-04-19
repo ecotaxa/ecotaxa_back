@@ -34,21 +34,23 @@ logger = get_logger(__name__)
 
 # Useful typings
 # TODO: Put somewhere else if reused in other classes
-DBObjectTupleT = Tuple[ObjectHeader, ObjectFields, ObjectCNNFeature, Image, Sample, Acquisition, Process]
+DBObjectTupleT = Tuple[
+    ObjectHeader, ObjectFields, ObjectCNNFeature, Image, Sample, Acquisition, Process
+]
 DBObjectTupleListT = List[DBObjectTupleT]
 
 
 class SubsetServiceOnProject(JobServiceOnProjectBase):
     """
-        A task doing the subset operation.
+    A task doing the subset operation.
     """
+
     JOB_TYPE = "Subset"
 
     # Fetch this number of objects at a time, and write them, in a DB session
     CHUNK_SIZE = 100
 
     def __init__(self, prj_id: int, req: SubsetReq):
-
         super().__init__(prj_id)
         # Load the destination project
         dest_prj = self.session.query(Project).get(req.dest_prj_id)
@@ -72,11 +74,13 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
 
     def run(self, current_user_id: int) -> SubsetRsp:
         """
-            Initial run, basically just create the job.
+        Initial run, basically just create the job.
         """
         # Security check
         RightsBO.user_wants(self.session, current_user_id, Action.READ, self.prj_id)
-        RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, self.dest_prj.projid)
+        RightsBO.user_wants(
+            self.session, current_user_id, Action.ADMINISTRATE, self.dest_prj.projid
+        )
         # OK, go background straight away
         self.create_job(self.JOB_TYPE, current_user_id)
         ret = SubsetRsp(job_id=self.job_id)
@@ -84,7 +88,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
 
     def do_background(self) -> None:
         """
-            Background part of the job.
+        Background part of the job.
         """
         with LogsSwitcher(self):
             return self.do_run()
@@ -113,7 +117,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
 
     def _do_clone(self) -> None:
         """
-            Cloning operation itself. Assumes that @see self.to_clone was populated before.
+        Cloning operation itself. Assumes that @see self.to_clone was populated before.
         """
         # Get the mappings in source project, in order to determine the useful columns
         custom_mapping = ProjectMapping().load_from_project(self.prj)
@@ -126,12 +130,18 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         writer.generators({"obj_field": used_columns})
         # Use import helpers
         dest_prj_id = self.dest_prj.projid
-        import_how = ImportHow(prj_id=dest_prj_id, update_mode="No",
-                               custom_mapping=ProjectMapping(),
-                               skip_object_duplicates=False, loaded_files=[])
+        import_how = ImportHow(
+            prj_id=dest_prj_id,
+            update_mode="No",
+            custom_mapping=ProjectMapping(),
+            skip_object_duplicates=False,
+            loaded_files=[],
+        )
         # Get parent (enclosing) Sample, Acquisition. There should be 0 in this context as the project is new.
-        import_how.existing_samples, import_how.existing_acquisitions = \
-            InBundle.fetch_existing_parents(self.session, prj_id=dest_prj_id)
+        (
+            import_how.existing_samples,
+            import_how.existing_acquisitions,
+        ) = InBundle.fetch_existing_parents(self.session, prj_id=dest_prj_id)
 
         self._clone_all(import_how, writer)
         # Copy mappings to destination. We could narrow them to the minimum?
@@ -139,19 +149,34 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
 
     def _db_fetch(self, object_ids: ObjectIDListT) -> Iterable[DBObjectTupleT]:
         """
-            Do a DB read of given objects, with auxiliary objects.
-            :param object_ids: The list of IDs
-            :return:
+        Do a DB read of given objects, with auxiliary objects.
+        :param object_ids: The list of IDs
+        :return:
         """
         # TODO: Depending on filter, the joins could be plain (not outer)
         # E.g. if asked for a set of samples
         ret = self.ro_session.query(ObjectHeader)
-        ret = ret.join(ObjectHeader.acquisition).join(Acquisition.process).join(Acquisition.sample)
-        ret = ret.outerjoin(Image, ObjectHeader.all_images).outerjoin(ObjectCNNFeature).join(ObjectFields)
+        ret = (
+            ret.join(ObjectHeader.acquisition)
+            .join(Acquisition.process)
+            .join(Acquisition.sample)
+        )
+        ret = (
+            ret.outerjoin(Image, ObjectHeader.all_images)
+            .outerjoin(ObjectCNNFeature)
+            .join(ObjectFields)
+        )
         ret = ret.filter(ObjectHeader.objid == any_(object_ids))
         ret = ret.order_by(ObjectHeader.objid, Image.imgid)
-        ret = ret.with_entities(ObjectHeader, ObjectFields, ObjectCNNFeature, Image, Sample, Acquisition,
-                                Process)
+        ret = ret.with_entities(
+            ObjectHeader,
+            ObjectFields,
+            ObjectCNNFeature,
+            Image,
+            Sample,
+            Acquisition,
+            Process,
+        )
 
         if self.first_query:
             logger.info("Query: %s", str(ret))
@@ -159,16 +184,17 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
 
         return ret
 
-    def _db_fetch_histo(self, object_ids: ObjectIDListT) -> Iterable[ObjectsClassifHisto]:
+    def _db_fetch_histo(
+        self, object_ids: ObjectIDListT
+    ) -> Iterable[ObjectsClassifHisto]:
         """
-            Do a DB read of classification history.
+        Do a DB read of classification history.
         """
         ret = self.ro_session.query(ObjectsClassifHisto)
         ret = ret.filter(ObjectsClassifHisto.objid == any_(object_ids))
         return ret
 
     def _clone_all(self, import_how: ImportHow, writer: DBWriter) -> None:
-
         # Bean counting init
         nb_objects = 0
         total_objects = len(self.to_clone)
@@ -194,8 +220,13 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             progress = int(90 * nb_objects / total_objects)
             self.update_progress(10 + progress, "Subset creation in progress")
 
-    def _send_to_writer(self, import_how: ImportHow, writer: DBWriter,
-                        db_tuple: DBObjectTupleT, db_histo: Dict[int, List[ObjectsClassifHisto]]) -> None:
+    def _send_to_writer(
+        self,
+        import_how: ImportHow,
+        writer: DBWriter,
+        db_tuple: DBObjectTupleT,
+        db_histo: Dict[int, List[ObjectsClassifHisto]],
+    ) -> None:
         """
             Send a set of tuples from DB to DB
         :param import_how:
@@ -203,7 +234,15 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         :param db_tuple:
         :return:
         """
-        obj_orm, fields_orm, cnn_features_orm, image_orm, sample_orm, acquisition_orm, process_orm = db_tuple
+        (
+            obj_orm,
+            fields_orm,
+            cnn_features_orm,
+            image_orm,
+            sample_orm,
+            acquisition_orm,
+            process_orm,
+        ) = db_tuple
         assert obj_orm.objid  # mypy
         histo_for_obj = db_histo.get(obj_orm.objid, [])
         histo: List[Bean] = []
@@ -214,26 +253,35 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             bean.classif_who = a_histo.classif_who  # Another erased key
             histo.append(bean)
         # Transform all to key-less beans so they can be absorbed by DBWriter
-        obj, fields, cnn_features, image, sample, acquisition, process = \
-            bean_of(obj_orm), bean_of(fields_orm), bean_of(cnn_features_orm), \
-                bean_of(image_orm), bean_of(sample_orm), \
-                bean_of(acquisition_orm), bean_of(process_orm)
+        obj, fields, cnn_features, image, sample, acquisition, process = (
+            bean_of(obj_orm),
+            bean_of(fields_orm),
+            bean_of(cnn_features_orm),
+            bean_of(image_orm),
+            bean_of(sample_orm),
+            bean_of(acquisition_orm),
+            bean_of(process_orm),
+        )
         # Minimum is object + fields
         assert obj is not None and fields is not None
         # Write parent entities
         assert sample and acquisition and process
-        dict_of_parents = {Sample.__tablename__: sample,
-                           Acquisition.__tablename__: acquisition,
-                           Process.__tablename__: process}
+        dict_of_parents = {
+            Sample.__tablename__: sample,
+            Acquisition.__tablename__: acquisition,
+            Process.__tablename__: process,
+        }
         TSVFile.add_parent_objects(import_how, self.session, obj, dict_of_parents)
         # Propagate last human operator on the object
         obj.classif_who = obj_orm.classif_who
         # Write object and children
-        new_records = TSVFile.create_or_link_slaves(how=import_how,
-                                                    session=self.session,
-                                                    object_head_to_write=obj,
-                                                    object_fields_to_write=fields,
-                                                    image_to_write=image)
+        new_records = TSVFile.create_or_link_slaves(
+            how=import_how,
+            session=self.session,
+            object_head_to_write=obj,
+            object_fields_to_write=fields,
+            image_to_write=image,
+        )
         writer.add_db_entities(obj, fields, image, new_records)
         # Keep track of existing objects
         if new_records > 1:  # TODO: This is a cumbersome way of stating "new object",
@@ -258,14 +306,20 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             # Proceed to thumbnail if any
             if image.thumb_file_name is not None:
                 old_thumbnail_path = self.vault.image_path(image.thumb_file_name)
-                thumb_relative_path, thumb_full_path = self.vault.thumbnail_paths(image.imgid)
-                image.thumb_file_name = None  # In case, don't reference a non-existing file
+                thumb_relative_path, thumb_full_path = self.vault.thumbnail_paths(
+                    image.imgid
+                )
+                image.thumb_file_name = (
+                    None  # In case, don't reference a non-existing file
+                )
                 try:
                     # TODO: Call a primitive in Vault instead
                     shutil.copyfile(old_thumbnail_path, thumb_full_path)
                     image.thumb_file_name = thumb_relative_path
                 except FileNotFoundError:
-                    logger.error("Could not duplicate thumbnail %s, not found", old_imgpath)
+                    logger.error(
+                        "Could not duplicate thumbnail %s, not found", old_imgpath
+                    )
             # Some imgrank are rotten, and the DB does not enforce unicity per object
             images_for_obj = self.images_per_orig_id[obj.orig_id]
             if image.imgrank in images_for_obj:
@@ -274,16 +328,16 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
 
     def _find_what_to_clone(self) -> None:
         """
-            Determine the objects to clone.
+        Determine the objects to clone.
         """
         req = self.req
         # From required subsetting method...
         if req.limit_type == LimitMethods.constant:
-            rank_function = 'rank'
+            rank_function = "rank"
         elif req.limit_type == LimitMethods.percent:
-            rank_function = '100*percent_rank'
+            rank_function = "100*percent_rank"
         else:
-            rank_function = 'FunctionError'
+            rank_function = "FunctionError"
         # And repartition key
         if req.group_type == GroupDefinitions.categories:
             part_key = "obh.classif_id"
@@ -295,19 +349,30 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             part_key = "???"
 
         # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(self.session, self.prj_id, self._get_owner_id(),
-                                                            self.req.filters)
+        object_set: DescribedObjectSet = DescribedObjectSet(
+            self.session, self.prj_id, self._get_owner_id(), self.req.filters
+        )
         from_, where, params = object_set.get_sql()
 
         # noinspection SqlResolve
-        sql = """
+        sql = (
+            """
             SELECT objid FROM (
-                SELECT """ + rank_function + """() OVER (PARTITION BY """ + part_key + """ ORDER BY RANDOM()) rang,
+                SELECT """
+            + rank_function
+            + """() OVER (PARTITION BY """
+            + part_key
+            + """ ORDER BY RANDOM()) rang,
                        obh.objid
-                  FROM """ + from_.get_sql() + """
-                """ + where.get_sql() + """ ) sr
+                  FROM """
+            + from_.get_sql()
+            + """
+                """
+            + where.get_sql()
+            + """ ) sr
             WHERE rang <= :ranklimit """
-        params['ranklimit'] = self.req.limit_value
+        )
+        params["ranklimit"] = self.req.limit_value
 
         logger.info("SQL=%s", sql)
         logger.info("SQLParam=%s", params)

@@ -24,7 +24,7 @@ from sqlalchemy.dialects.postgresql import (
 # noinspection PyUnresolvedReferences
 from sqlalchemy.dialects.postgresql import dialect as pg_dialect
 # noinspection PyUnresolvedReferences
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert, Insert as PgInsert
 
 from .ORM import text, Session, column, Integer
 

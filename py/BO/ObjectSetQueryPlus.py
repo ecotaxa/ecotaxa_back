@@ -11,7 +11,17 @@
 import csv
 import enum
 from pathlib import Path
-from typing import List, Optional, Tuple, Dict, Generator, Any, Iterable, Callable
+from typing import (
+    List,
+    Optional,
+    Tuple,
+    Dict,
+    Generator,
+    Any,
+    Iterable,
+    Callable,
+    Final,
+)
 
 from BO.Classification import ClassifIDT
 from BO.ComputedVar import ComputedVar
@@ -68,7 +78,7 @@ class ObjectSetQueryPlus(object):
     SAMPLE_PREFIX = "sam"
     SUBSAMPLE_PREFIX = "ssm"
     OBJECT_PREFIX = "obj"
-    KNOWN_PREFIXES = [SAMPLE_PREFIX, SUBSAMPLE_PREFIX, OBJECT_PREFIX]
+    KNOWN_PREFIXES: Final = [SAMPLE_PREFIX, SUBSAMPLE_PREFIX, OBJECT_PREFIX]
 
     def __init__(self, obj_set: DescribedObjectSet):
         self.obj_set = obj_set

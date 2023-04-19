@@ -10,9 +10,8 @@ import requests
 
 
 class ReCAPTCHAClient(object):
-    """
+    """ """
 
-    """
     API_ENDPOINT = "https://www.google.com/recaptcha/api/siteverify"
 
     def __init__(self, captcha_id: str, captcha_secret: str):
@@ -24,11 +23,13 @@ class ReCAPTCHAClient(object):
             Call the API verification endpoint
         :return: None if OK, otherwise string with error.
         """
-        api_params = {"response": response,
-                      "secret": self.secret,
-                      "remoteip": remote_ip}
+        api_params = {
+            "response": response,
+            "secret": self.secret,
+            "remoteip": remote_ip,
+        }
         # @see https://developers.google.com/recaptcha/docs/verify
-        rsp = requests.request('GET', url=self.API_ENDPOINT, params=api_params)
-        if rsp.status_code != 200 or not rsp.json()['success']:
+        rsp = requests.request("GET", url=self.API_ENDPOINT, params=api_params)
+        if rsp.status_code != 200 or not rsp.json()["success"]:
             return rsp.text.replace("\n", "")
         return None

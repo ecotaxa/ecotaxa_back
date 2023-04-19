@@ -19,16 +19,19 @@ logger = get_logger(__name__)
 
 class DatabaseService(Service):
     """
-        Admin part of ML in EcoTaxa.
+    Admin part of ML in EcoTaxa.
     """
 
     def __init__(self) -> None:
         super().__init__()
 
-    def execute_query(self, current_user_id: UserIDT,
-                      query: str) -> Tuple[List[str], List[List]]:
+    def execute_query(
+        self, current_user_id: UserIDT, query: str
+    ) -> Tuple[List[str], List[List]]:
         # Security barrier
-        _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
+        _user = RightsBO.user_has_role(
+            self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
+        )
         # Pick the read-only session for safety
         res = self.ro_session.execute(text(query))
         header = [a_col for a_col in res.keys()]

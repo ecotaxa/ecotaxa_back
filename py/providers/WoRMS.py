@@ -17,8 +17,9 @@ from helpers.Asyncio import async_sleep
 
 class WoRMSFinder(object):
     """
-        A utility for finding in WoRMS service the equivalent of a given entry in Taxonomy.
+    A utility for finding in WoRMS service the equivalent of a given entry in Taxonomy.
     """
+
     BASE_URL = "http://www.marinespecies.org"
     client = httpx.AsyncClient(base_url=BASE_URL, timeout=5)
     the_session = None
@@ -52,12 +53,16 @@ class WoRMSFinder(object):
             ret = response.json()
         return ret
 
-    WoRMS_URL_ClassifChildrenByAphia = "/rest/AphiaChildrenByAphiaID/%d?marine_only=false&offset=%d"
+    WoRMS_URL_ClassifChildrenByAphia = (
+        "/rest/AphiaChildrenByAphiaID/%d?marine_only=false&offset=%d"
+    )
 
     CHUNK_SIZE = 50
 
     @classmethod
-    async def aphia_children_by_id(cls, aphia_id: int, page=0) -> Tuple[List[Dict], int]:  # pragma:nocover
+    async def aphia_children_by_id(
+        cls, aphia_id: int, page=0
+    ) -> Tuple[List[Dict], int]:  # pragma:nocover
         # Throttle to 1 req/s
         await async_sleep(1)
         res: List[Dict] = []
@@ -76,7 +81,9 @@ class WoRMSFinder(object):
         elif response.status_code == 200:
             res = response.json()
             if len(res) == cls.CHUNK_SIZE:
-                next_page, cont_queries = await cls.aphia_children_by_id(aphia_id, page + 1)
+                next_page, cont_queries = await cls.aphia_children_by_id(
+                    aphia_id, page + 1
+                )
                 res.extend(next_page)
                 nb_queries += cont_queries
         # else:
@@ -85,7 +92,7 @@ class WoRMSFinder(object):
 
     @classmethod
     def get_session(cls):
-        """ Cache the session to marinespecies.org, for speed and saving resources """
+        """Cache the session to marinespecies.org, for speed and saving resources"""
         session = cls.the_session
         if session is None:
             session = requests.Session()

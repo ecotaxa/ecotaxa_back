@@ -6,7 +6,7 @@
 #
 import ast
 import re
-from typing import Optional, List
+from typing import Optional, List, Final
 
 from DB.ProjectVariables import KNOWN_PROJECT_VARS
 from .Vocabulary import Vocabulary, Units
@@ -104,7 +104,7 @@ class ProjectVar(object):
         return True
 
     IDENT_RE = r"[a-zA-Z][a-zA-Z0-9_]*"
-    VAR_RE = re.compile(r"{idt}(\.{idt})?".format(idt=IDENT_RE))
+    VAR_RE: Final = re.compile(r"{idt}(\.{idt})?".format(idt=IDENT_RE))
 
     @classmethod
     def find_vars(cls, sum_exp) -> List[str]:

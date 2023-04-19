@@ -14,6 +14,8 @@ from helpers.pydantic import BaseModel, Field
 
 
 class MergeRsp(BaseModel):
-    """ Merge response. """
-    errors: List[str] = Field(title="Errors", description="The errors found during processing.",
-                              default=[])
+    """Merge response."""
+
+    errors: List[str] = Field(
+        title="Errors", description="The errors found during processing.", default=[]
+    )

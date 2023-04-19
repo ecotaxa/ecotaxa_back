@@ -25,10 +25,10 @@ class ProjectPrivilegeBO(object):
         """
         return (
             """ SELECT u.email, u.name, pp.projid, rank() 
-                         OVER (PARTITION BY pp.projid ORDER BY pp.id) rang
-                         FROM projectspriv pp 
-                         JOIN users u ON pp.member = u.id
-                        WHERE pp.privilege = '"""
+                             OVER (PARTITION BY pp.projid ORDER BY pp.id) rang
+                             FROM projectspriv pp 
+                             JOIN users u ON pp.member = u.id
+                            WHERE pp.privilege = '"""
             + cls.MANAGE
             + """' 
                       AND u.active = true """

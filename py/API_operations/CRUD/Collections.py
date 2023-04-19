@@ -18,29 +18,41 @@ logger = get_logger(__name__)
 
 class CollectionsService(Service):
     """
-        Basic CRUD operations on Collections
+    Basic CRUD operations on Collections
     """
 
-    def create(self, current_user_id: UserIDT, req: CreateCollectionReq) -> Union[CollectionIDT, str]:
+    def create(
+        self, current_user_id: UserIDT, req: CreateCollectionReq
+    ) -> Union[CollectionIDT, str]:
         """
-            Create a collection.
+        Create a collection.
         """
         # TODO, for now only admins
-        _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
+        _user = RightsBO.user_has_role(
+            self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
+        )
         coll_id = CollectionBO.create(self.session, req.title, req.project_ids)
         return coll_id
 
     def search(self, current_user_id: UserIDT, title: str) -> List[CollectionBO]:
         # TODO, for now only admins
-        _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
+        _user = RightsBO.user_has_role(
+            self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
+        )
         qry = self.ro_session.query(Collection).filter(Collection.title.ilike(title))
         ret = [CollectionBO(a_rec).enrich() for a_rec in qry]
         return ret
 
-    def query(self, current_user_id: UserIDT, coll_id: CollectionIDT, for_update: bool) -> Optional[CollectionBO]:
+    def query(
+        self, current_user_id: UserIDT, coll_id: CollectionIDT, for_update: bool
+    ) -> Optional[CollectionBO]:
         # TODO, for now only admins
-        _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
-        ret = CollectionBO.get_one(self.session if for_update else self.ro_session, coll_id)
+        _user = RightsBO.user_has_role(
+            self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
+        )
+        ret = CollectionBO.get_one(
+            self.session if for_update else self.ro_session, coll_id
+        )
         return ret
 
     def query_by_title(self, title: str) -> CollectionBO:
@@ -59,7 +71,9 @@ class CollectionsService(Service):
 
     def delete(self, current_user_id: UserIDT, coll_id: CollectionIDT) -> int:
         # TODO, for now only admins
-        _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
+        _user = RightsBO.user_has_role(
+            self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
+        )
         CollectionBO.delete(self.session, coll_id)
         self.session.commit()
         return 0

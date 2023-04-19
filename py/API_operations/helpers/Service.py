@@ -15,7 +15,7 @@ from helpers.AppConfig import Config
 
 class BaseService(object):
     """
-        A service, i.e. a stateless object which lives only for the time it does its job.
+    A service, i.e. a stateless object which lives only for the time it does its job.
     """
 
 
@@ -29,13 +29,13 @@ class BaseService(object):
 #
 def _get_default_gateway():  # pragma: no cover
     # TODO: somewhere else
-    for a_line in open('/proc/net/route').readlines():
+    for a_line in open("/proc/net/route").readlines():
         # Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT
         # eth0	00000000	010011AC	0003	0	0	0	00000000	0	0	0
         fields = a_line.split()
         if fields[1] == "00000000":  # default route
             gw = fields[2]
-            ip = [gw[i:i + 2] for i in range(6, -1, -2)]
+            ip = [gw[i : i + 2] for i in range(6, -1, -2)]
             ip = [str(int(i, 16)) for i in ip]
             ip_str = ".".join(ip)
             return ip_str
@@ -43,9 +43,9 @@ def _get_default_gateway():  # pragma: no cover
 
 
 def _turn_localhost_for_docker(host: str):  # pragma: no cover
-    """ Turn localhost to the address as seen from inside the container
-        For win & mac0s there is a solution, environment var host.docker.internal
-         but https://github.com/docker/for-linux/issues/264
+    """Turn localhost to the address as seen from inside the container
+    For win & mac0s there is a solution, environment var host.docker.internal
+     but https://github.com/docker/for-linux/issues/264
     """
     if host == "localhost" and os.getcwd().startswith("/app"):
         # noinspection PyBroadException
@@ -61,11 +61,12 @@ Self = typing.TypeVar("Self")
 
 class Service(BaseService, ContextManager):
     """
-        A service for EcoTaxa. Supplies common useful features like:
-            a DB session
-            filesystem conventions
-            logs redirection
+    A service for EcoTaxa. Supplies common useful features like:
+        a DB session
+        filesystem conventions
+        logs redirection
     """
+
     the_config: Optional[Config] = None
     the_connection: Optional[Connection] = None
     the_readonly_connection: Optional[Connection] = None
@@ -89,7 +90,7 @@ class Service(BaseService, ContextManager):
             conn = Service.the_connection
         # Use a single read-only connection, with fallback to the r/w one
         if not Service.the_readonly_connection:
-            if 'RO_DB_HOST' in config.list_cnf():
+            if "RO_DB_HOST" in config.list_cnf():
                 ro_conn = self.build_connection(config, True)
             else:
                 ro_conn = conn
@@ -110,34 +111,46 @@ class Service(BaseService, ContextManager):
     @staticmethod
     def build_connection(config: Config, read_only: bool = False):
         """
-            Read a connection from the configuration.
+        Read a connection from the configuration.
         """
         prfx = "RO_" if read_only else ""
         host, port, db = config.get_db_address(read_only)
         host = _turn_localhost_for_docker(host)
         user, password = config.get_db_credentials(read_only)
-        conn = Connection(host=host, port=port, db=db,
-                          user=user, password=password, read_only=read_only)
+        conn = Connection(
+            host=host,
+            port=port,
+            db=db,
+            user=user,
+            password=password,
+            read_only=read_only,
+        )
         return conn
 
     @staticmethod
     def build_super_connection(config: Config, user: str, password: str):
         """
-            Build a super-user connection from the configuration, directly to the DB server.
+        Build a super-user connection from the configuration, directly to the DB server.
         """
         host, port, _db = config.get_db_address(False)
         host = _turn_localhost_for_docker(host)
-        conn = Connection(host=host, port=port, db="postgres",
-                          user=user, password=password, read_only=False)
+        conn = Connection(
+            host=host,
+            port=port,
+            db="postgres",
+            user=user,
+            password=password,
+            read_only=False,
+        )
         return conn
 
     @staticmethod
     def abort_ro(rw_session):
         """
-            Raise if SQLAlchemy tries to flush(write) a readonly session.
-            "Should not" happen in production if tests are covering OK.
-            This does not manage plain SQL writing queries, which should be caught as the RO user has no
-            relevant right on the tables.
+        Raise if SQLAlchemy tries to flush(write) a readonly session.
+        "Should not" happen in production if tests are covering OK.
+        This does not manage plain SQL writing queries, which should be caught as the RO user has no
+        relevant right on the tables.
         """
         try:
             ro_session = rw_session.ro
@@ -146,7 +159,9 @@ class Service(BaseService, ContextManager):
         # noinspection PyProtectedMember
         if ro_session._is_clean():
             return
-        assert False, "Trying to ORM-write to a read-only session: %s" % str(ro_session.dirty)
+        assert False, "Trying to ORM-write to a read-only session: %s" % str(
+            ro_session.dirty
+        )
 
     def close_db_sessions(self):
         # Release DB session
@@ -176,7 +191,9 @@ class Service(BaseService, ContextManager):
                 self.close_db_sessions()
             except:
                 pass
-            assert False, "%s: Please use Service-derived classes in a with() context" % str(self)
+            assert (
+                False
+            ), "%s: Please use Service-derived classes in a with() context" % str(self)
 
     def __enter__(self: Self) -> Self:
         # TODO: How to express that it's a subclass?
@@ -188,5 +205,5 @@ class Service(BaseService, ContextManager):
         self.close_db_sessions()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     _get_default_gateway()

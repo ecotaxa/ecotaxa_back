@@ -20,18 +20,20 @@ from ..helpers.Service import Service
 
 class JobCRUDService(Service):
     """
-        Basic query API operations on Jobs.
-        They share temporary space with historical jobs AKA tasks.
+    Basic query API operations on Jobs.
+    They share temporary space with historical jobs AKA tasks.
     """
 
     def list(self, current_user_id: UserIDT, admin_mode: bool) -> List[JobBO]:
         """
-            List jobs, if administrator mode then list all of them (for monitoring) else only return the jobs
-            owned by caller.
+        List jobs, if administrator mode then list all of them (for monitoring) else only return the jobs
+        owned by caller.
         """
         current_user = self.ro_session.query(User).get(current_user_id)
         assert current_user is not None
-        assert not admin_mode or (admin_mode and current_user.has_role(Role.APP_ADMINISTRATOR)), NOT_AUTHORIZED
+        assert not admin_mode or (
+            admin_mode and current_user.has_role(Role.APP_ADMINISTRATOR)
+        ), NOT_AUTHORIZED
         qry = self.ro_session.query(Job)
         if not admin_mode:
             qry = qry.filter(Job.owner_id == current_user_id)
@@ -40,19 +42,21 @@ class JobCRUDService(Service):
 
     def query(self, current_user_id: UserIDT, job_id: JobIDT) -> JobBO:
         """
-            Return a single job BO by its id.
+        Return a single job BO by its id.
         """
         # Sanity & security checks
         job = self.ro_session.query(Job).get(job_id)
         assert job is not None, NOT_FOUND
         current_user = self.ro_session.query(User).get(current_user_id)
         assert current_user is not None
-        assert (job.owner_id == current_user_id) or (current_user.has_role(Role.APP_ADMINISTRATOR)), NOT_AUTHORIZED
+        assert (job.owner_id == current_user_id) or (
+            current_user.has_role(Role.APP_ADMINISTRATOR)
+        ), NOT_AUTHORIZED
         return JobBO(job)
 
     def _query_for_update(self, current_user_id: UserIDT, job_id: JobIDT) -> JobBO:
         """
-            Return a single job BO, from DB, by its id.
+        Return a single job BO, from DB, by its id.
         """
         # Sanity & security checks
         try:
@@ -61,12 +65,16 @@ class JobCRUDService(Service):
             assert False, NOT_FOUND
         current_user = self.ro_session.query(User).get(current_user_id)
         assert current_user is not None
-        assert (job.owner_id == current_user_id) or (current_user.has_role(Role.APP_ADMINISTRATOR)), NOT_AUTHORIZED
+        assert (job.owner_id == current_user_id) or (
+            current_user.has_role(Role.APP_ADMINISTRATOR)
+        ), NOT_AUTHORIZED
         return job
 
-    def get_file_stream(self, current_user_id: UserIDT, job_id: JobIDT) -> Tuple[BinaryIO, int, str, str]:
+    def get_file_stream(
+        self, current_user_id: UserIDT, job_id: JobIDT
+    ) -> Tuple[BinaryIO, int, str, str]:
         """
-            Return a stream containing the produced file associated with this job.
+        Return a stream containing the produced file associated with this job.
         """
         # Sanity & security checks
         with self._query_for_update(current_user_id, job_id) as job_bo:
@@ -101,7 +109,9 @@ class JobCRUDService(Service):
         # Sanity & security checks
         job: JobBO = self.query(current_user_id, job_id)
         temp_for_job = TempDirForTasks(self.config.jobs_dir())
-        log_file_path = temp_for_job.base_dir_for(job.id) / JobServiceBase.JOB_LOG_FILE_NAME
+        log_file_path = (
+            temp_for_job.base_dir_for(job.id) / JobServiceBase.JOB_LOG_FILE_NAME
+        )
         return log_file_path
 
     def restart(self, current_user_id: UserIDT, job_id: JobIDT) -> None:
@@ -111,9 +121,11 @@ class JobCRUDService(Service):
             job_bo.state = DBJobStateEnum.Pending
             job_bo.progress_msg = JobBO.RESTARTING_MESSAGE
 
-    def reply(self, current_user_id: UserIDT, job_id: JobIDT, reply: Dict[str, Any]) -> None:
+    def reply(
+        self, current_user_id: UserIDT, job_id: JobIDT, reply: Dict[str, Any]
+    ) -> None:
         """
-            Store a reply to a question 'asked by' the job.
+        Store a reply to a question 'asked by' the job.
         """
         with self._query_for_update(current_user_id, job_id) as job_bo:
             if job_bo.state not in (DBJobStateEnum.Asking,):
@@ -124,12 +136,16 @@ class JobCRUDService(Service):
 
     def delete(self, current_user_id: UserIDT, job_id: JobIDT) -> None:
         """
-            Erase the job.
+        Erase the job.
         """
         # Security check
         with self._query_for_update(current_user_id, job_id) as job_bo:
             temp_for_job = TempDirForTasks(self.config.jobs_dir())
-            if job_bo.state in (DBJobStateEnum.Finished, DBJobStateEnum.Error, DBJobStateEnum.Pending):
+            if job_bo.state in (
+                DBJobStateEnum.Finished,
+                DBJobStateEnum.Error,
+                DBJobStateEnum.Pending,
+            ):
                 # TODO: Set the job to a state e.g. Trashed and erase in background, better for responsiveness
                 temp_for_job.erase_for(job_id)
                 job_bo.delete()

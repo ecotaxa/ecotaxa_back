@@ -30,7 +30,6 @@ logger = get_logger(__name__)
 
 
 class ImageManagerService(Service):
-
     def __init__(self) -> None:
         super().__init__()
         self.vault = Vault(self.config.vault_dir())
@@ -43,13 +42,15 @@ class ImageManagerService(Service):
                 hash_md5.update(chunk)
         return hash_md5.digest()
 
-    def do_digests(self, current_user_id: UserIDT,
-                   prj_id: Optional[ProjectIDT],
-                   max_digests: int) -> str:
+    def do_digests(
+        self, current_user_id: UserIDT, prj_id: Optional[ProjectIDT], max_digests: int
+    ) -> str:
         """
-            Pick some images without checksum and compute it.
+        Pick some images without checksum and compute it.
         """
-        _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
+        _user = RightsBO.user_has_role(
+            self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
+        )
         qry = self.ro_session.query(Image.file_name)
         if prj_id is not None:
             # Find missing images in a project
@@ -77,16 +78,27 @@ class ImageManagerService(Service):
         if left_for_unknown > 0:
             # Also do unknown image file lines
             miss_qry = self.session.query(ImageFile)
-            miss_qry = miss_qry.filter(and_(ImageFile.state == ImageFileStateEnum.UNKNOWN.value,
-                                            ImageFile.digest_type == '?'))
+            miss_qry = miss_qry.filter(
+                and_(
+                    ImageFile.state == ImageFileStateEnum.UNKNOWN.value,
+                    ImageFile.digest_type == "?",
+                )
+            )
             if prj_id is not None:
                 # Find unknown images in a project
                 miss_qry = miss_qry.outerjoin(Image, Image.file_name == ImageFile.path)
-                miss_qry = miss_qry.join(ObjectHeader).join(Acquisition).join(Sample).join(Project)
+                miss_qry = (
+                    miss_qry.join(ObjectHeader)
+                    .join(Acquisition)
+                    .join(Sample)
+                    .join(Project)
+                )
                 miss_qry = miss_qry.filter(Project.projid == prj_id)
             # On purpose, no "order by" clause. Results are random, but sorting takes a while on lots of images
             miss_qry = miss_qry.limit(left_for_unknown)
-            with CodeTimer("Files with unknown state, query '%s':" % str(miss_qry), logger):
+            with CodeTimer(
+                "Files with unknown state, query '%s':" % str(miss_qry), logger
+            ):
                 missing_ones = [an_img_file for an_img_file in miss_qry]
             for a_missing in missing_ones:
                 cnt += 1
@@ -99,7 +111,7 @@ class ImageManagerService(Service):
         try:
             md5 = self.compute_md5(img_file_path)
             img_file.digest = md5
-            img_file.digest_type = '5'
+            img_file.digest_type = "5"
             img_file.state = ImageFileStateEnum.OK.value
         except FileNotFoundError:
             img_file.state = ImageFileStateEnum.MISSING.value
@@ -107,37 +119,69 @@ class ImageManagerService(Service):
             logger.exception(e)
             img_file.state = ImageFileStateEnum.ERROR.value
 
-    def do_cleanup_dup_same_obj(self, current_user_id: UserIDT,
-                                prj_id: ProjectIDT,
-                                max_deletes: int) -> str:
+    def do_cleanup_dup_same_obj(
+        self, current_user_id: UserIDT, prj_id: ProjectIDT, max_deletes: int
+    ) -> str:
         """
-            Simplest duplication pattern. Inside the same object there are several identical images.
+        Simplest duplication pattern. Inside the same object there are several identical images.
         """
-        _user = RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
+        _user = RightsBO.user_has_role(
+            self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
+        )
         orig_img = aliased(Image, name="orig")
         orig_file = aliased(ImageFile, name="orig_file")
-        qry = self.session.query(orig_img.file_name, orig_img.imgid, Image, ImageFile)  # Select what to delete
-        qry = qry.join(ObjectHeader, ObjectHeader.objid == Image.objid).join(Acquisition).join(Sample).join(Project)
+        qry = self.session.query(
+            orig_img.file_name, orig_img.imgid, Image, ImageFile
+        )  # Select what to delete
+        qry = (
+            qry.join(ObjectHeader, ObjectHeader.objid == Image.objid)
+            .join(Acquisition)
+            .join(Sample)
+            .join(Project)
+        )
         # We consider that original image is the oldest one, so others have a superior ID
-        qry = qry.join(orig_img, and_(orig_img.objid == Image.objid,
-                                      orig_img.orig_file_name == Image.orig_file_name,
-                                      orig_img.width == Image.width,
-                                      orig_img.height == Image.height,
-                                      orig_img.imgid < Image.imgid))
+        qry = qry.join(
+            orig_img,
+            and_(
+                orig_img.objid == Image.objid,
+                orig_img.orig_file_name == Image.orig_file_name,
+                orig_img.width == Image.width,
+                orig_img.height == Image.height,
+                orig_img.imgid < Image.imgid,
+            ),
+        )
         # Must have a checksum, with the same state (sane)
-        qry = qry.join(ImageFile, and_(ImageFile.path == Image.file_name,
-                                       ImageFile.state == ImageFileStateEnum.OK.value))
-        qry = qry.join(orig_file, and_(orig_file.path == orig_img.file_name,
-                                       orig_file.state == ImageFileStateEnum.OK.value))
+        qry = qry.join(
+            ImageFile,
+            and_(
+                ImageFile.path == Image.file_name,
+                ImageFile.state == ImageFileStateEnum.OK.value,
+            ),
+        )
+        qry = qry.join(
+            orig_file,
+            and_(
+                orig_file.path == orig_img.file_name,
+                orig_file.state == ImageFileStateEnum.OK.value,
+            ),
+        )
         # and the same value of course
-        qry = qry.filter(and_(ImageFile.digest_type == orig_file.digest_type,
-                              ImageFile.digest == orig_file.digest))
+        qry = qry.filter(
+            and_(
+                ImageFile.digest_type == orig_file.digest_type,
+                ImageFile.digest == orig_file.digest,
+            )
+        )
         qry = qry.filter(Project.projid == prj_id)
         qry = qry.order_by(Image.objid, orig_img.imgid, Image.imgid)
         qry = qry.limit(max_deletes)
-        with CodeTimer("Dups same objs inside %d, query '%s':" % (prj_id, str(qry)), logger):
-            to_do = [(orig_file_name, orig_img_id, an_image, an_image_file)
-                     for orig_file_name, orig_img_id, an_image, an_image_file in qry]
+        with CodeTimer(
+            "Dups same objs inside %d, query '%s':" % (prj_id, str(qry)), logger
+        ):
+            to_do = [
+                (orig_file_name, orig_img_id, an_image, an_image_file)
+                for orig_file_name, orig_img_id, an_image, an_image_file in qry
+            ]
         ko_not_same = 0
         ko_except = 0
         # Prepare & start a remover thread that will run in // with DB queries
@@ -159,7 +203,12 @@ class ImageManagerService(Service):
                     try:
                         same = filecmp.cmp(orig_path, dup_path, False)
                     except Exception as exc:
-                        logger.info("Exception while comparing orig:%s and dup:%s: %s", orig_path, dup_path, str(exc))
+                        logger.info(
+                            "Exception while comparing orig:%s and dup:%s: %s",
+                            orig_path,
+                            dup_path,
+                            str(exc),
+                        )
                         ko_except += 1
                         continue
                     if not same:
@@ -181,5 +230,7 @@ class ImageManagerService(Service):
         # Wait for the files handled
         self.session.commit()
         remover.wait_for_done()
-        return ("Dupl remover for %s dup images done but %d problems %d false file comp" %
-                (len(deleted_imgids), ko_except, ko_not_same))
+        return (
+            "Dupl remover for %s dup images done but %d problems %d false file comp"
+            % (len(deleted_imgids), ko_except, ko_not_same)
+        )

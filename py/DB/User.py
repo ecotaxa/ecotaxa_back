@@ -25,13 +25,13 @@ class User(Model):
     __tablename__ = "users"
     id: int = Column(Integer, Sequence("seq_users"), primary_key=True)
     email: str = Column(String(255), unique=True, nullable=False)
-    password = Column(String(255))
+    password: str = Column(String(255))
     name: str = Column(String(255), nullable=False)
-    organisation = Column(String(255))
-    active = Column(Boolean(), default=True)
+    organisation: str = Column(String(255))
+    active: bool = Column(Boolean(), default=True)
 
-    preferences = Column(String(40000))
-    country = Column(String(50))
+    preferences: str = Column(String(40000))
+    country: str = Column(String(50))
 
     usercreationdate = Column(TIMESTAMP, default=func.now())
     usercreationreason = Column(String(1000))

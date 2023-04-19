@@ -47,7 +47,15 @@ class Connection(object):
 
     APP_NAME: ClassVar = "ecotaxa_back"
 
-    def __init__(self, user, password, db, host, port="5432", read_only=False):
+    def __init__(
+        self,
+        user: str,
+        password: str,
+        db: str,
+        host: str,
+        port: int = 5432,
+        read_only: bool = False,
+    ):
         """
         Open a SQLAlchemy connection, i.e. an engine.
         """
@@ -97,7 +105,7 @@ class Connection(object):
 
     def exec_outside_transaction(self, statement: str) -> None:
         """
-        Execute raw SQL outside of any transaction (which is created by default by SQLA)
+        Execute raw SQL outside any transaction (which is created by default by SQLA)
         """
         with self.engine.connect() as conn:
             conn.execute(text("commit"))

@@ -201,14 +201,14 @@ class ProjectBO(object):
         session: Session,
         instrument: Optional[str],
         title: str,
-        visible: bool,
-        status: str,
-        description: str,
+        visible: Optional[bool],
+        status: Optional[str],
+        description: Optional[str],
         init_classif_list: List[int],
-        classiffieldlist: str,
-        popoverfieldlist: str,
-        cnn_network_id: str,
-        comments: str,
+        classiffieldlist: Optional[str],
+        popoverfieldlist: Optional[str],
+        cnn_network_id: Optional[str],
+        comments: Optional[str],
         contact: Any,
         managers: List[Any],
         annotators: List[Any],
@@ -561,8 +561,8 @@ class ProjectBO(object):
         # noinspection SqlResolve
         sql = (
             """SELECT prj.projid
-                   FROM projects prj
-                   LEFT JOIN ( """
+                       FROM projects prj
+                       LEFT JOIN ( """
             + ProjectPrivilegeBO.first_manager_by_project()
             + """ ) fpm 
                       ON fpm.projid = prj.projid """
@@ -590,7 +590,7 @@ class ProjectBO(object):
                 if for_managing:
                     sql += (
                         """
-                             AND prp.privilege = '%s' """
+                                 AND prp.privilege = '%s' """
                         % ProjectPrivilegeBO.MANAGE
                     )
             sql += " WHERE 1 = 1 "
@@ -825,8 +825,8 @@ class ProjectBO(object):
             # TODO: We can't lock what does not exists, so it can fail here.
             pts_ins = (
                 """INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
-                             SELECT :prj, COALESCE(obh.classif_id, -1), COUNT(*) nbr, 
-                                    COUNT(CASE WHEN obh.classif_qual = '"""
+                                 SELECT :prj, COALESCE(obh.classif_id, -1), COUNT(*) nbr, 
+                                        COUNT(CASE WHEN obh.classif_qual = '"""
                 + VALIDATED_CLASSIF_QUAL
                 + """' THEN 1 END) nbr_v,
                                 COUNT(CASE WHEN obh.classif_qual = '"""

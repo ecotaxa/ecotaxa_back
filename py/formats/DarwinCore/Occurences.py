@@ -9,7 +9,7 @@ from formats.TxtFromModels import TxtFileWithModel
 
 class Occurences(TxtFileWithModel):
     """
-        The DwC Occurences to export.
+    The DwC Occurences to export.
     """
 
     def __init__(self) -> None:

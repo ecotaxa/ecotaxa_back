@@ -6,7 +6,7 @@
 # An Object as seen by the user, i.e. the fields regardless of their storage.
 # An Object cannot exist outside of a project due to "free" columns.
 #
-from typing import Tuple, List, Optional, Any, ClassVar
+from typing import Tuple, List, Optional, Any, ClassVar, Union
 
 from sqlalchemy import MetaData
 
@@ -45,15 +45,15 @@ class ObjectBO(MappedEntity):
     MAPPING_IN_PROJECT: ClassVar = "object_mappings"
 
     def __init__(
-            self,
-            session: Session,
-            object_id: ObjectIDT,
-            db_object: Optional[ObjectHeader] = None,
-            db_fields: Optional[Model] = None,
+        self,
+        session: Session,
+        object_id: ObjectIDT,
+        db_object: Optional[ObjectHeader] = None,
+        db_fields: Optional[Model] = None,
     ):
         super().__init__(session)
         # Below is needed because validity test reads the attribute
-        self.fields: Optional[ObjectFields] = None
+        self.fields: Optional[Union[ObjectFields, Model]] = None
         self.header: ObjectHeader
         if db_object is None:
             # Initialize from the unique ID
@@ -66,9 +66,9 @@ class ObjectBO(MappedEntity):
                 return
             self.fields = self.header.fields
         else:
-            # Initialize from provided models
+            # Initialize from provided model
             self.header = db_object
-            self.fields = db_fields  # type:ignore
+            self.fields = db_fields
         self.sample_id = self.header.acquisition.acq_sample_id
         self.project_id = self.header.acquisition.sample.projid
         # noinspection PyTypeChecker
@@ -128,7 +128,7 @@ class ObjectBO(MappedEntity):
 
     @classmethod
     def resolve_fields(
-            cls, fields_list: Optional[List[str]], mappings: TableMapping
+        cls, fields_list: Optional[List[str]], mappings: TableMapping
     ) -> List[str]:
         if fields_list is None or len(fields_list) == 0:
             return []
@@ -167,7 +167,8 @@ class ObjectBOSet(object):
         qry = qry.filter(ObjectHeader.objid.in_(object_ids))
         # noinspection PyUnresolvedReferences
         qry = qry.join(
-            ReducedObjectFields, ObjectHeader.objid == ReducedObjectFields.objfid  # type:ignore
+            ReducedObjectFields,
+            ObjectHeader.objid == ReducedObjectFields.objfid,  # type:ignore
         )
         qry = qry.options(joinedload(ObjectHeader.all_images))
         self.all = [

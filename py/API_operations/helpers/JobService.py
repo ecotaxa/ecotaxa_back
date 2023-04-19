@@ -23,12 +23,13 @@ ArgsDict = Dict[str, Any]
 
 class JobServiceBase(Service, LogEmitter, ABC):
     """
-        Common methods and data for asynchronous and long operations.
-        This base class is for the short-lived instances which 'just' do some operations.
-        For long-lived objects, i.e. processes/threads @see JobScheduler class.
+    Common methods and data for asynchronous and long operations.
+    This base class is for the short-lived instances which 'just' do some operations.
+    For long-lived objects, i.e. processes/threads @see JobScheduler class.
     """
+
     JOB_TYPE: str
-    JOB_LOG_FILE_NAME = 'TaskLogBack.txt'
+    JOB_LOG_FILE_NAME = "TaskLogBack.txt"
 
     def __init__(self) -> None:
         super().__init__()
@@ -43,31 +44,33 @@ class JobServiceBase(Service, LogEmitter, ABC):
     @staticmethod
     def find_jobservice_class_by_type(clazz, job_type: str):
         """
-            Find a subclass with given type
+        Find a subclass with given type
         """
         for job_sub_class in clazz.__subclasses__():
             if job_sub_class.JOB_TYPE == job_type:
                 return job_sub_class
             else:
-                for_subclass = JobServiceBase.find_jobservice_class_by_type(job_sub_class, job_type)
+                for_subclass = JobServiceBase.find_jobservice_class_by_type(
+                    job_sub_class, job_type
+                )
                 if for_subclass:
                     return for_subclass
 
     def log_file_path(self) -> str:
         """
-            Return redirected logging output path. @see DynamicLogs and LogEmitter.
+        Return redirected logging output path. @see DynamicLogs and LogEmitter.
         """
         log_file = self.temp_for_jobs.base_dir_for(self.job_id) / self.JOB_LOG_FILE_NAME
         return log_file.as_posix()
 
     @abc.abstractmethod
     def do_background(self) -> None:
-        """ Launch background processing"""
+        """Launch background processing"""
         pass
 
     def run_in_background(self):
         """
-            Background part of the job, standard behavior is to run the method and care for general problems.
+        Background part of the job, standard behavior is to run the method and care for general problems.
         """
         try:
             self.do_background()
@@ -85,7 +88,7 @@ class JobServiceBase(Service, LogEmitter, ABC):
 
     @abc.abstractmethod
     def init_args(self, args: ArgsDict) -> ArgsDict:
-        """ Serialization of __init__ arguments """
+        """Serialization of __init__ arguments"""
         ...
 
     @staticmethod
@@ -93,23 +96,23 @@ class JobServiceBase(Service, LogEmitter, ABC):
         pass
 
     def _save_vars_to_state(self, names: List[str], *values):
-        """ Save variables using provided names """
+        """Save variables using provided names"""
         to_save = {a_name: a_value for a_name, a_value in zip(names, values)}
         with JobBO.get_for_update(self.session, self.job_id) as job_bo:
             job_bo.update_inside(to_save)
         self.saved_state = job_bo.inside
 
     def _load_vars_from_state(self, names: List[str]) -> List[Any]:
-        """ Load variables using provided names """
+        """Load variables using provided names"""
         ret = [self.saved_state[a_name] for a_name in names]
         return ret
 
     def load_state_from(self, job_state: Dict[str, Any]) -> None:
-        """ Injection of service state """
+        """Injection of service state"""
         self.saved_state = job_state
 
     def load_reply_from(self, job_reply: Dict[str, Any]) -> None:
-        """ Injection of service reply to last question """
+        """Injection of service reply to last question"""
         self.last_reply = job_reply
 
     def create_job(self, job_type: str, user_id: UserIDT):
@@ -139,12 +142,13 @@ class JobServiceBase(Service, LogEmitter, ABC):
             job_bo.progress_msg = message
 
     def report_progress(self, current, total):
-        self.update_progress(20 + 80 * current / total,
-                             "Processing files %d/%d" % (current, total))
+        self.update_progress(
+            20 + 80 * current / total, "Processing files %d/%d" % (current, total)
+        )
 
     def set_job_result(self, errors: List[str], infos: Dict[str, Any]):
         """
-            Set job detailed result and final status.
+        Set job detailed result and final status.
         """
         with JobBO.get_for_update(self.session, self.job_id) as job_bo:
             job_bo.set_result(infos)
@@ -160,7 +164,7 @@ class JobServiceBase(Service, LogEmitter, ABC):
 
     def get_job_result(self) -> Any:
         """
-            Get job detailed result.
+        Get job detailed result.
         """
         job_bo = JobBO.get_one(self.session, self.job_id)
         assert job_bo is not None
@@ -168,7 +172,7 @@ class JobServiceBase(Service, LogEmitter, ABC):
 
     def set_job_to_ask(self, message: str, question_data: Dict[str, Any]):
         """
-            Set the job to ask something from user.
+        Set the job to ask something from user.
         """
         logger.info("Asking for: %s", question_data)
         with JobBO.get_for_update(self.session, self.job_id) as job_bo:
@@ -179,8 +183,9 @@ class JobServiceBase(Service, LogEmitter, ABC):
 
 class JobServiceOnProjectBase(JobServiceBase, ABC):
     """
-        Common data for asynchronous and long operations, on a specific project.
+    Common data for asynchronous and long operations, on a specific project.
     """
+
     JOB_TYPE = ""
 
     def __init__(self, prj_id: ProjectIDT):
@@ -192,6 +197,6 @@ class JobServiceOnProjectBase(JobServiceBase, ABC):
         self.prj = prj
 
     def init_args(self, args: Dict) -> Dict:
-        """ Amend init args, for dynamic creation """
+        """Amend init args, for dynamic creation"""
         args["prj_id"] = self.prj_id
         return args

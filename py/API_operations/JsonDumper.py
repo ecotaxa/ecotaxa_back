@@ -28,12 +28,12 @@ logger = get_logger(__name__)
 
 class JsonDumper(Service):
     """
-        Dump in JSON form a project content, with filters.
-            Mapped columns are rendered with their user-visible name (TSV one).
-            The fields are reduced to 4(max)-letter names for saving bandwidth and DB fields independence.
-        TODO as an option:
-            No numeric primary or foreign key is present so the output can be diff-ed.
-            The sub-entities are ordered by their 'natural' key, e.g. sample_id for samples.
+    Dump in JSON form a project content, with filters.
+        Mapped columns are rendered with their user-visible name (TSV one).
+        The fields are reduced to 4(max)-letter names for saving bandwidth and DB fields independence.
+    TODO as an option:
+        No numeric primary or foreign key is present so the output can be diff-ed.
+        The sub-entities are ordered by their 'natural' key, e.g. sample_id for samples.
     """
 
     def __init__(self, current_user: int, prj_id: int, filters: ProjectFiltersDict):
@@ -53,7 +53,7 @@ class JsonDumper(Service):
 
     def run(self, out_stream: TextIO) -> None:
         """
-            Produce the json into given stream.
+        Produce the json into given stream.
         """
         to_stream: Dict[str, Any]
         if self.prj is None:
@@ -71,15 +71,17 @@ class JsonDumper(Service):
 
     def dump_row(self, out_stream: TextIO, a_row: Model) -> Dict[str, Any]:
         """
-            Dump inside returned value the fields and contained/linked entities from a_row.
+        Dump inside returned value the fields and contained/linked entities from a_row.
         """
         ret: Dict[str, Any] = {}
         self._dump_into_dict(out_stream, a_row, ret)
         return ret
 
-    def _dump_into_dict(self, out_stream: TextIO, a_row: Model, tgt_dict: Dict[str, Any]) -> None:
+    def _dump_into_dict(
+        self, out_stream: TextIO, a_row: Model, tgt_dict: Dict[str, Any]
+    ) -> None:
         """
-            Dump inside the tgt_dict all fields and contained/linked entities from a_row.
+        Dump inside the tgt_dict all fields and contained/linked entities from a_row.
         """
         # Ensure there no infinite loop
         assert a_row not in self.already_dumped
@@ -121,12 +123,13 @@ class JsonDumper(Service):
 
     def _find_what_to_dump(self) -> None:
         """
-            Determine the objects to dump.
+        Determine the objects to dump.
         """
         assert self.prj is not None
         # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(self.session, self.prj.projid, self.requester_id,
-                                                            self.filters)
+        object_set: DescribedObjectSet = DescribedObjectSet(
+            self.session, self.prj.projid, self.requester_id, self.filters
+        )
         from_, where, params = object_set.get_sql()
 
         sql = """ SELECT objid FROM """ + from_.get_sql() + where.get_sql()
@@ -136,7 +139,7 @@ class JsonDumper(Service):
 
         with CodeTimer("Get IDs:", logger):
             res: Result = self.session.execute(text(sql), params)
-        ids = [r['objid'] for r in res.mappings()]
+        ids = [r["objid"] for r in res.mappings()]
 
         logger.info("NB OBJIDS=%d", len(ids))
 
@@ -144,19 +147,25 @@ class JsonDumper(Service):
 
     def _db_fetch(self, objids: List[int]) -> List[DBObjectTupleT]:
         """
-            Do a DB read of given objects, with auxiliary objects.
-            Thanks to 'contains_eager' calls, the objects are loaded into SQLAlchemy session.
-            :param objids:
-            :return:
+        Do a DB read of given objects, with auxiliary objects.
+        Thanks to 'contains_eager' calls, the objects are loaded into SQLAlchemy session.
+        :param objids:
+        :return:
         """
-        ret = self.session.query(Project, Sample, Acquisition, Process, ObjectHeader, ObjectFields, Image)
-        ret = ret.join(Sample, Project.all_samples).options(contains_eager(Project.all_samples))
+        ret = self.session.query(
+            Project, Sample, Acquisition, Process, ObjectHeader, ObjectFields, Image
+        )
+        ret = ret.join(Sample, Project.all_samples).options(
+            contains_eager(Project.all_samples)
+        )
         ret = ret.join(Acquisition, Sample.all_acquisitions)
         ret = ret.join(Process, Acquisition.process)
         ret = ret.join(ObjectHeader, Acquisition.all_objects)
         # Natural joins
         ret = ret.join(ObjectFields)
-        ret = ret.join(Image, ObjectHeader.all_images).options(contains_eager(ObjectHeader.all_images))
+        ret = ret.join(Image, ObjectHeader.all_images).options(
+            contains_eager(ObjectHeader.all_images)
+        )
         ret = ret.filter(ObjectHeader.objid == any_(objids))
         ret = ret.order_by(ObjectHeader.objid)
         ret = ret.order_by(Image.imgrank)

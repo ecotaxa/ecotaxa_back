@@ -15,8 +15,8 @@ from .helpers.Service import Service
 
 class ProjectConsistencyChecker(Service, LogEmitter):
     """
-        With time and bugs, some consistency problems could be introduced in projects.
-        This service aims at listing them.
+    With time and bugs, some consistency problems could be introduced in projects.
+    This service aims at listing them.
     """
 
     def __init__(self, prj_id: int):
@@ -41,14 +41,14 @@ class ProjectConsistencyChecker(Service, LogEmitter):
 
     def check_paths_unicity(self) -> List[str]:
         """
-            With S for sample, A for acquisition and P for process:
-            What happened:
-                Import of S1 -> A1 -> P1 -> O1
-                Import of S2 -> A1 -> P1 -> O2
-            Now there are 2 ways to "go to" P1 from the project
-            Since 2.5.0; A and P are merged, but still:
-                S1 -> A1+P1 -> O1
-                S2 -> A1+P1 -> O2
+        With S for sample, A for acquisition and P for process:
+        What happened:
+            Import of S1 -> A1 -> P1 -> O1
+            Import of S2 -> A1 -> P1 -> O2
+        Now there are 2 ways to "go to" P1 from the project
+        Since 2.5.0; A and P are merged, but still:
+            S1 -> A1+P1 -> O1
+            S2 -> A1+P1 -> O2
         """
         ret = []
         topo = ProjectTopology()
@@ -58,6 +58,6 @@ class ProjectConsistencyChecker(Service, LogEmitter):
 
     def check_partial_time_space(self) -> List[str]:
         """
-            Objects which are partially located in time/space.
+        Objects which are partially located in time/space.
         """
         return []

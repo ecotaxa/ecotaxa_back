@@ -669,12 +669,12 @@ class ToWorms(object):
                 if an_action.not_mapped_to_worms()
             ]
         )
-        not_worms_how_many = [
-            [a_present.id, a_present.nb_objects, a_present.name]
+        not_worms_how_many: List[Tuple[int, int, str]] = [
+            (a_present.id, a_present.nb_objects, a_present.name)
             for a_present in self.unieuk.values()
             if a_present.id in nothing_to_do
         ]
-        not_worms_how_many.sort(key=lambda elem: -elem[1])  # type:ignore
+        not_worms_how_many.sort(key=lambda elem: -elem[1])
         not_worms_objs = sum([not_worms[1] for not_worms in not_worms_how_many])
         print("Not to WoRMS: %s" % str(not_worms_how_many))
         eco_sum = self.unieuk_tree.nb_objects

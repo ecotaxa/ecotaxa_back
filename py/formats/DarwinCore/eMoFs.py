@@ -9,7 +9,7 @@ from formats.TxtFromModels import TxtFileWithModel
 
 class ExtendedMeasurementOrFacts(TxtFileWithModel):
     """
-        AKA eMoF
+    AKA eMoF
     """
 
     def __init__(self):

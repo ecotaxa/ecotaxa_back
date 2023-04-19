@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 
 class InstrumentsService(Service):
     """
-        Basic CRUD operation on instrument
+    Basic CRUD operation on instrument
     """
 
     def query(self, project_ids: Optional[ProjectIDListT]) -> List[InstrumentIDT]:

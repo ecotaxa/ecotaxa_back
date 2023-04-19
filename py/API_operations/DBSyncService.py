@@ -17,8 +17,8 @@ logger = get_logger(__name__)
 
 class DBSyncService(Service):
     """
-        The service takes DB row(s) (on master) and then enables to wait
-            until the slave (read-only) has the same row(s).
+    The service takes DB row(s) (on master) and then enables to wait
+        until the slave (read-only) has the same row(s).
     """
 
     def __init__(self, a_table: ModelT, *args):

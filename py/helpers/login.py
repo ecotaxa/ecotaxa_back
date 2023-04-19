@@ -20,8 +20,8 @@ from helpers.fastApiUtils import build_serializer
 
 class LoginService(Service):
     """
-        A service to validate login via the API.
-        TODO: It's crypto, so without cache, it might not be fast. To measure.
+    A service to validate login via the API.
+    TODO: It's crypto, so without cache, it might not be fast. To measure.
     """
 
     def __init__(self) -> None:
@@ -29,19 +29,20 @@ class LoginService(Service):
         # Hashing algos
         pw_hash = self.config.get_cnf("SECURITY_PASSWORD_HASH")
         assert pw_hash is not None, "SECURITY_PASSWORD_HASH not set!"
-        schemes = [pw_hash, 'plaintext']
-        deprecated = ['auto']
+        schemes = [pw_hash, "plaintext"]
+        deprecated = ["auto"]
         self._pwd_context = CryptContext(
-            schemes=schemes,
-            default=pw_hash,
-            deprecated=deprecated)
+            schemes=schemes, default=pw_hash, deprecated=deprecated
+        )
         # Hashing config
         self.password_salt = self.config.get_cnf("SECURITY_PASSWORD_SALT")
         self.password_hash = None
 
     def validate_login(self, username: str, password: str) -> Union[str, bytes]:
         # Fetch the one and only user
-        user_qry = self.session.query(User).filter(User.email == username).filter(User.active)
+        user_qry = (
+            self.session.query(User).filter(User.email == username).filter(User.active)
+        )
         db_users = user_qry.all()
         assert len(db_users) == 1, NOT_AUTHORIZED
         the_user: User = db_users[0]
@@ -87,7 +88,7 @@ class LoginService(Service):
         :param password: The plaintext password to hash
         """
         if self.use_double_hash():
-            password = self.get_hmac(password).decode('ascii')
+            password = self.get_hmac(password).decode("ascii")
 
         return self._pwd_context.hash(password)
         #     **self.config.get_cnf('PASSWORD_HASH_OPTIONS', default={}).get(
@@ -104,11 +105,14 @@ class LoginService(Service):
 
         if salt is None:
             raise RuntimeError(
-                'The configuration value `SECURITY_PASSWORD_SALT` must '
-                'not be None when the value of `SECURITY_PASSWORD_HASH` is '
-                'set to "%s"' % self.password_hash)  # pragma:nocover
+                "The configuration value `SECURITY_PASSWORD_SALT` must "
+                "not be None when the value of `SECURITY_PASSWORD_HASH` is "
+                'set to "%s"' % self.password_hash
+            )  # pragma:nocover
 
-        h = hmac.new(self.encode_string(salt), self.encode_string(password), hashlib.sha512)
+        h = hmac.new(
+            self.encode_string(salt), self.encode_string(password), hashlib.sha512
+        )
         return base64.b64encode(h.digest())
 
     @staticmethod
@@ -118,19 +122,22 @@ class LoginService(Service):
         :param string: The string to encode"""
 
         if isinstance(string, str):
-            string = string.encode('utf-8')
+            string = string.encode("utf-8")
         return string
 
     def use_double_hash(self, password_hash=None) -> bool:
         """Return a bool indicating whether a password should be hashed twice."""
-        single_hash = 'PASSWORD_SINGLE_HASH' in self.config.list_cnf()  # Not the case in EcoTaxa config
+        single_hash = (
+            "PASSWORD_SINGLE_HASH" in self.config.list_cnf()
+        )  # Not the case in EcoTaxa config
         if single_hash and self.password_salt:
-            raise RuntimeError('You may not specify a salt with '
-                               'SECURITY_PASSWORD_SINGLE_HASH')  # pragma:nocover
+            raise RuntimeError(
+                "You may not specify a salt with " "SECURITY_PASSWORD_SINGLE_HASH"
+            )  # pragma:nocover
 
         if password_hash is None:
-            is_plaintext = self.password_hash == 'plaintext'
+            is_plaintext = self.password_hash == "plaintext"
         else:
-            is_plaintext = self._pwd_context.identify(password_hash) == 'plaintext'
+            is_plaintext = self._pwd_context.identify(password_hash) == "plaintext"
 
         return not (is_plaintext or single_hash)

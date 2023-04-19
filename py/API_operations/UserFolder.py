@@ -22,31 +22,38 @@ logger = get_logger(__name__)
 
 class UserFolderService(Service):
     """
-        A service for storing/cleaning user specific folders.
+    A service for storing/cleaning user specific folders.
     """
 
     def __init__(self) -> None:
         super().__init__()
 
-    async def store(self, current_user_id: UserIDT, file: UploadFile,
-                    path: Optional[str] = None, tag: Optional[str] = None) -> str:
+    async def store(
+        self,
+        current_user_id: UserIDT,
+        file: UploadFile,
+        path: Optional[str] = None,
+        tag: Optional[str] = None,
+    ) -> str:
         """
-            Add a file into current user's folder. If a tag is provided, then all files
-            with the same tag are grouped (in a sub-directory). Otherwise, a temp directory
-            with only this file will be created.
-            TODO: Quotas
+        Add a file into current user's folder. If a tag is provided, then all files
+        with the same tag are grouped (in a sub-directory). Otherwise, a temp directory
+        with only this file will be created.
+        TODO: Quotas
         """
         file_name = file.filename
         assert ".." not in file_name, "Forbidden"
         current_user = self.ro_session.query(User).get(current_user_id)
         assert current_user is not None
-        logger.info("Adding '%s' ('%s'/'%s') for '%s'", tag, path, file_name, current_user.name)
+        logger.info(
+            "Adding '%s' ('%s'/'%s') for '%s'", tag, path, file_name, current_user.name
+        )
         ret = await UserDirectory(current_user_id, tag).add_file(file_name, path, file)
         return ret
 
     async def list(self, sub_path: str, current_user_id: UserIDT) -> DirectoryModel:
         """
-            List the files in given subpath of the private folder.
+        List the files in given subpath of the private folder.
         """
         # Leading / implies root directory
         sub_path = sub_path.lstrip("/")
@@ -56,7 +63,9 @@ class UserFolderService(Service):
         return self.list_and_format(folder, sub_path)
 
     @staticmethod
-    def list_and_format(a_dir: Union[UserDirectory, CommonFolder], sub_path: str) -> DirectoryModel:
+    def list_and_format(
+        a_dir: Union[UserDirectory, CommonFolder], sub_path: str
+    ) -> DirectoryModel:
         assert ".." not in sub_path, "Not found"
         try:
             listing = a_dir.list(sub_path)
@@ -66,14 +75,16 @@ class UserFolderService(Service):
             assert False, "Not found"
 
         # Format data to return
-        entries = [DirectoryEntryModel(name=a_name, type=a_type, size=a_size, mtime=a_mtime)
-                   for (a_name, a_type, a_size, a_mtime) in listing]
+        entries = [
+            DirectoryEntryModel(name=a_name, type=a_type, size=a_size, mtime=a_mtime)
+            for (a_name, a_type, a_size, a_mtime) in listing
+        ]
         return DirectoryModel(path=sub_path, entries=entries)
 
 
 class CommonFolderService(Service):
     """
-        A service for navigating in specific shared folder.
+    A service for navigating in specific shared folder.
     """
 
     def __init__(self) -> None:
@@ -81,7 +92,7 @@ class CommonFolderService(Service):
 
     async def list(self, sub_path: str, current_user_id: UserIDT) -> DirectoryModel:
         """
-            List the files in given subpath of the common folder.
+        List the files in given subpath of the common folder.
         """
         current_user = self.ro_session.query(User).get(current_user_id)
         assert current_user is not None, "Not authorized"
