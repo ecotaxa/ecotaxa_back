@@ -26,7 +26,6 @@ from DB.helpers.Direct import text
 from ML.Deep_features_extractor import DeepFeaturesExtractor
 from ML.Random_forest_classifier import OurRandomForestClassifier
 from helpers.DynamicLogs import get_logger
-
 # TODO: Move somewhere else
 from helpers.Timer import CodeTimer
 from .ObjectManager import ObjectManager
@@ -275,7 +274,7 @@ class GPUPredictForProject(PredictForProject):
                           SCN_uvp5ccelter_group1
         """
         model_name = tgt_project.cnn_network_id
-        assert model_name is not None
+        assert model_name, "Target project has no cnn_network_id"
         for a_projid in [tgt_project.projid] + self.req.source_project_ids:
             diag = self._ensure_deep_features_for(a_projid, model_name)
             logger.info(diag)
