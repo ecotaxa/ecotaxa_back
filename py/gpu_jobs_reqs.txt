@@ -4,7 +4,11 @@ SQLAlchemy==1.4.31
 psycopg2-binary==2.9.3
 astral==2.2
 # Last (April 2023) pydantic
-pydantic[mypy]==1.10.7
+# ERROR: Cannot install -r reqs.txt (line 12) and pydantic[mypy]==1.10.7 because these package versions have conflicting dependencies.
+# The conflict is caused by:
+#    pydantic[mypy] 1.10.7 depends on typing-extensions>=4.2.0
+#    tensorflow 2.6.0 depends on typing-extensions~=3.7.4pydantic==1.10.7
+pydantic==1.9.2
 # Image processing libs.
 # Machine learning with no GPU
 scikit-learn==1.0
