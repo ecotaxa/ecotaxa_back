@@ -3,10 +3,10 @@ import logging
 
 # noinspection PyPackageRequirements
 from io import BytesIO
+from unittest import mock
 from zipfile import ZipFile
 
 from starlette import status
-from unittest import mock
 
 from tests.credentials import ADMIN_AUTH, REAL_USER_ID, CREATOR_AUTH, ADMIN_USER_ID
 from tests.emodnet_ref import ref_zip, with_zeroes_zip, no_computations_zip
@@ -43,41 +43,9 @@ def test_emodnet_export(config, database, fastapi, caplog):
 def do_test_emodnet_export(config, database, fastapi, caplog):
     caplog.set_level(logging.FATAL)
 
-    # In these TSVs, we have: object_major, object_minor, object_area, process_pixel
-
-    # Admin imports the project
-    from tests.test_import import (
-        BAD_FREE_DIR,
-        test_import,
-        do_import,
-        test_import_a_bit_more_skipping,
+    coll_id, coll_title, prj_id, prj_json = create_test_collection(
+        caplog, config, database, fastapi, "exp"
     )
-
-    project = "EMODNET project"
-    prj_id = test_import(config, database, caplog, project, str(PLAIN_FILE), "UVP6")
-    # Add a sample spanning 2 days (m106_mn01_n3_sml) for testing date ranges in event.txt
-    # this sample contains 2 'detritus' at load time and 1 small<egg (92731) which resolves to nearest Phylo Actinopterygii (56693)
-    test_import_a_bit_more_skipping(config, database, caplog, project)
-    # Add a similar but predicted object into same sample m106_mn01_n3_sml
-    test_import_a_bit_more_skipping(
-        config, database, caplog, project, str(MIX_OF_STATES)
-    )
-    # Add a sample with corrupted or absent needed free columns, for provoking calculation warnings
-    do_import(prj_id, BAD_FREE_DIR, ADMIN_USER_ID)
-
-    # Get the project for update
-    url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
-    rsp = fastapi.get(url, headers=ADMIN_AUTH)
-    prj_json = rsp.json()
-
-    coll_title = "EMODNET test collection"
-    # Create a minimal collection with only this project
-    url = COLLECTION_CREATE_URL
-    rsp = fastapi.post(
-        url, headers=ADMIN_AUTH, json={"title": coll_title, "project_ids": [prj_id]}
-    )
-    assert rsp.status_code == status.HTTP_200_OK
-    coll_id = rsp.json()
 
     caplog.set_level(logging.DEBUG)
 
@@ -246,6 +214,42 @@ This series is part of the long term planktonic monitoring of
     assert rsp.status_code == status.HTTP_200_OK
     coll_desc = rsp.json()
     assert coll_desc["title"] == coll_title
+
+
+def create_test_collection(caplog, config, database, fastapi, suffix):
+    # In these TSVs, we have: object_major, object_minor, object_area, process_pixel
+    # Admin imports the project
+    from tests.test_import import (
+        BAD_FREE_DIR,
+        test_import,
+        do_import,
+        test_import_a_bit_more_skipping,
+    )
+
+    project = "EMODNET project " + suffix
+    prj_id = test_import(config, database, caplog, project, str(PLAIN_FILE), "UVP6")
+    # Add a sample spanning 2 days (m106_mn01_n3_sml) for testing date ranges in event.txt
+    # this sample contains 2 'detritus' at load time and 1 small<egg (92731) which resolves to nearest Phylo Actinopterygii (56693)
+    test_import_a_bit_more_skipping(config, database, caplog, project)
+    # Add a similar but predicted object into same sample m106_mn01_n3_sml
+    test_import_a_bit_more_skipping(
+        config, database, caplog, project, str(MIX_OF_STATES)
+    )
+    # Add a sample with corrupted or absent needed free columns, for provoking calculation warnings
+    do_import(prj_id, BAD_FREE_DIR, ADMIN_USER_ID)
+    # Get the project for update
+    url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    prj_json = rsp.json()
+    coll_title = "EMODNET test collection " + suffix
+    # Create a minimal collection with only this project
+    url = COLLECTION_CREATE_URL
+    rsp = fastapi.post(
+        url, headers=ADMIN_AUTH, json={"title": coll_title, "project_ids": [prj_id]}
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    coll_id = rsp.json()
+    return coll_id, coll_title, prj_id, prj_json
 
 
 def unzip_and_check(zip_content, ref_content):

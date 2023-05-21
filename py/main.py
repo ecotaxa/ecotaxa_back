@@ -46,7 +46,7 @@ from API_models.crud import (
     ProjectSetColumnStatsModel,
     SampleTaxoStatsModel,
 )
-from API_models.exports import DarwinCoreExportRsp, ExportRsp, ExportReq
+from API_models.exports import DarwinCoreExportRsp, ExportRsp, ExportReq, TaxonomyRecast
 from API_models.filesystem import DirectoryModel
 from API_models.filters import ProjectFilters
 from API_models.helpers.Introspect import plain_columns
@@ -143,7 +143,7 @@ fastapi_logger.setLevel(INFO)
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.31",
+    version="0.0.32",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -676,6 +676,59 @@ def update_collection(
             creator_orgs=collection.creator_organisations,
             associate_orgs=collection.associate_organisations,
         )
+
+
+@app.put(
+    "/collections/{collection_id}/taxo_recast",
+    operation_id="update_collection_taxonomy_recast",
+    tags=["collections"],
+    responses={200: {"content": {"application/json": {"example": null}}}},
+)
+def update_collection_taxo_recast(
+    recast: TaxonomyRecast = Body(...),
+    collection_id: int = Path(
+        ...,
+        description="Internal, the unique numeric id of this collection.",
+        example=1,
+    ),
+    current_user: int = Depends(get_current_user),
+) -> None:
+    """
+    **Create or Update the collection taxonomy recast**.
+
+     **Returns NULL upon success.**
+
+     🔒 *For admins only.*
+    """
+    with CollectionsService() as sce:
+        with RightsThrower():
+            sce.update_taxo_recast(current_user, collection_id, recast)
+
+
+@app.get(
+    "/collections/{collection_id}/taxo_recast",
+    operation_id="update_collection_taxonomy_recast",
+    tags=["collections"],
+    responses={200: {"content": {"application/json": {"from_to": {}}}}},
+)
+def read_collection_taxo_recast(
+    collection_id: int = Path(
+        ...,
+        description="Internal, the unique numeric id of this collection.",
+        example=1,
+    ),
+    current_user: int = Depends(get_current_user),
+) -> TaxonomyRecast:
+    """
+    **Read the collection taxonomy recast**.
+
+     **Returns NULL upon success.**
+
+     🔒 *For admins only.*
+    """
+    with CollectionsService() as sce:
+        with RightsThrower():
+            return sce.read_taxo_recast(current_user, collection_id)
 
 
 @app.get(

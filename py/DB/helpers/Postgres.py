@@ -19,6 +19,7 @@ from sqlalchemy.dialects.postgresql import (
     TIMESTAMP,
     BIGINT,
     BYTEA,
+    JSONB,
 )
 # noinspection PyUnresolvedReferences
 from sqlalchemy.dialects.postgresql import dialect as pg_dialect

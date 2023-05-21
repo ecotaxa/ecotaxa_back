@@ -5,10 +5,13 @@
 from typing import List, Union, Optional
 
 from API_models.crud import CreateCollectionReq
+from API_models.exports import TaxonomyRecast
 from BO.Collection import CollectionBO, CollectionIDT
 from BO.Rights import RightsBO, NOT_FOUND
 from BO.User import UserIDT
+from DB import TaxoRecast
 from DB.Collection import Collection
+from DB.TaxoRecast import DWCA_EXPORT_OPERATION
 from DB.User import Role
 from helpers.DynamicLogs import get_logger
 from ..helpers.Service import Service
@@ -77,3 +80,38 @@ class CollectionsService(Service):
         CollectionBO.delete(self.session, coll_id)
         self.session.commit()
         return 0
+
+    def update_taxo_recast(
+        self, current_user_id: UserIDT, coll_id: CollectionIDT, recast: TaxonomyRecast
+    ):
+        collection = self.query(current_user_id, coll_id, for_update=True)
+        assert collection is not None, NOT_FOUND
+        # Just remove and re-add
+        self._query_recast_for_coll(coll_id).delete()
+        new_recast = TaxoRecast()
+        new_recast.collection_id = coll_id
+        new_recast.operation = DWCA_EXPORT_OPERATION
+        new_recast.transforms = recast.from_to
+        new_recast.documentation = recast.doc if recast.doc else {}
+        self.session.add(new_recast)
+        self.session.commit()
+
+    def read_taxo_recast(
+        self, current_user_id: UserIDT, coll_id: CollectionIDT
+    ) -> TaxonomyRecast:
+        collection = self.query(current_user_id, coll_id, for_update=False)
+        assert collection is not None, NOT_FOUND
+        qry = self._query_recast_for_coll(coll_id)
+        res = list(qry)
+        assert len(res) == 1, NOT_FOUND
+        the_one: TaxoRecast = res[0]
+        ret = TaxonomyRecast(from_to=the_one.transforms, doc=the_one.documentation)
+        return ret
+
+    def _query_recast_for_coll(self, coll_id: CollectionIDT):
+        qry = (
+            self.session.query(TaxoRecast)
+            .filter(TaxoRecast.collection_id == coll_id)
+            .filter(TaxoRecast.operation == DWCA_EXPORT_OPERATION)
+        )
+        return qry

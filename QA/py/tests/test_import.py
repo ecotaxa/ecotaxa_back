@@ -88,6 +88,8 @@ def create_project(owner, title, instrument=None):
 def search_unique_project(asker, title):
     with ProjectsService() as sce:
         srch = sce.search(current_user_id=asker, title_filter=title)
+        if len(srch) != 1:
+            logging.error(msg="No unique project named '" + title + "'")
         assert len(srch) == 1
         return srch[0]
 

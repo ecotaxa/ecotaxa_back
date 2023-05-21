@@ -193,9 +193,17 @@ class ObjectFields(Model):
     objfid = Column(
         BIGINT, ForeignKey(ObjectHeader.objid, ondelete="CASCADE"), primary_key=True
     )
+    # Not a real FK, this is used for a cluster which groups together data blocks by acquisition
+    acquis_id = Column(INTEGER, nullable=True)
     # The relationships are created in Relations.py but the typing here helps the IDE
     object: relationship
 
+
+Index(
+    "obj_field_acquisid_objfid_idx",
+    ObjectFields.__table__.c.acquis_id,
+    ObjectFields.__table__.c.objfid,
+)
 
 # TODO
 # event.listen(

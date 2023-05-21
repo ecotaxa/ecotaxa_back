@@ -6,7 +6,7 @@ _eml = r"""
          xsi:schemaLocation="eml://ecoinformatics.org/eml-2.1.1 http://rs.gbif.org/schema/eml-gbif-profile/1.1/eml.xsd"
          xml:lang="eng">
 <dataset>
-  <title xml:lang="eng">EMODNET test collection</title>
+  <title xml:lang="eng">EMODNET test collection exp</title>
   <creator>
     <individualName>
       <givenName>Real</givenName>
@@ -53,7 +53,7 @@ This series is part of the long term planktonic monitoring of
   </intellectualRights>
   <distribution>
     <online>
-      <url function="information">https://ecotaxa.obs-vlfr.fr/api/collections/by_title?q=EMODNET+test+collection</url>
+      <url function="information">https://ecotaxa.obs-vlfr.fr/api/collections/by_title?q=EMODNET+test+collection+exp</url>
     </online>
   </distribution>
   <coverage>
@@ -191,12 +191,12 @@ _meta_emofs_without_computations = r"""
 """
 _event = r"""
 id	eventID	type	institutionCode	datasetName	eventDate	decimalLatitude	decimalLongitude	minimumDepthInMeters	maximumDepthInMeters
-m106_mn01_n1_sml	m106_mn01_n1_sml	sample	IMEV	EMODNET test collection	2014-04-20T04:20:00Z	18.000000	-24.416667	600.0	1000.0
-m106_mn01_n2_sml	m106_mn01_n2_sml	sample	IMEV	EMODNET test collection	2014-04-20T04:20:00Z	18.000000	-24.416667	300.0	600.0
-m106_mn01_n3_sml	m106_mn01_n3_sml	sample	IMEV	EMODNET test collection	2014-04-20T04:20:00Z/2014-04-21T04:20:00Z	18.000000	-24.416667	300.0	600.0
-m106_mn04_n4_sml	m106_mn04_n4_sml	sample	IMEV	EMODNET test collection	2014-04-20T04:20:00Z	18.000000	-24.416667	600.0	1000.0
-m106_mn04_n5_sml	m106_mn04_n5_sml	sample	IMEV	EMODNET test collection	2014-04-20T04:20:00Z	18.000000	-24.416667	600.0	1000.0
-m106_mn04_n6_sml	m106_mn04_n6_sml	sample	IMEV	EMODNET test collection	2014-04-20T04:20:00Z	18.000000	-24.416667	600.0	1000.0
+m106_mn01_n1_sml	m106_mn01_n1_sml	sample	IMEV	EMODNET test collection exp	2014-04-20T04:20:00Z	18.000000	-24.416667	600.0	1000.0
+m106_mn01_n2_sml	m106_mn01_n2_sml	sample	IMEV	EMODNET test collection exp	2014-04-20T04:20:00Z	18.000000	-24.416667	300.0	600.0
+m106_mn01_n3_sml	m106_mn01_n3_sml	sample	IMEV	EMODNET test collection exp	2014-04-20T04:20:00Z/2014-04-21T04:20:00Z	18.000000	-24.416667	300.0	600.0
+m106_mn04_n4_sml	m106_mn04_n4_sml	sample	IMEV	EMODNET test collection exp	2014-04-20T04:20:00Z	18.000000	-24.416667	600.0	1000.0
+m106_mn04_n5_sml	m106_mn04_n5_sml	sample	IMEV	EMODNET test collection exp	2014-04-20T04:20:00Z	18.000000	-24.416667	600.0	1000.0
+m106_mn04_n6_sml	m106_mn04_n6_sml	sample	IMEV	EMODNET test collection exp	2014-04-20T04:20:00Z	18.000000	-24.416667	600.0	1000.0
 """
 _occurence = r"""
 id	eventID	occurrenceID	basisOfRecord	identificationVerificationStatus	scientificName	scientificNameID	kingdom	occurrenceStatus

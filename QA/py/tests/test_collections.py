@@ -18,7 +18,7 @@ COLLECTION_DELETE_URL = "/collections/{collection_id}"
 INSTRUMENT_QUERY_URL = "/instruments/?project_ids={project_id}"
 
 
-def test_create_collection(config, database, fastapi, caplog):
+def test_collection_lifecycle(config, database, fastapi, caplog):
     caplog.set_level(logging.FATAL)
 
     # Admin imports the project
