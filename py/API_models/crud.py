@@ -12,7 +12,6 @@ from BO.Job import DBJobStateEnum
 from BO.Project import ProjectUserStats
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
-from DB import User
 from DB.Acquisition import Acquisition
 from DB.Collection import Collection
 from DB.Instrument import UNKNOWN_INSTRUMENT
@@ -20,6 +19,7 @@ from DB.Job import Job
 from DB.Process import Process
 from DB.Project import Project
 from DB.Sample import Sample
+from DB.User import User
 from helpers.pydantic import BaseModel, Field, DescriptiveModel
 from .helpers.DBtoModel import combine_models
 from .helpers.DataclassToModel import dataclass_to_model_with_suffix

@@ -12,9 +12,8 @@ from typing import Any, List, Dict, ClassVar
 import numpy as np  # type: ignore
 from numpy import ndarray
 
-from DB import CNNFeature
 from DB.Acquisition import Acquisition
-from DB.CNNFeature import ObjectCNNFeaturesBean, ObjectCNNFeature
+from DB.CNNFeature import DEEP_FEATURES, ObjectCNNFeaturesBean, ObjectCNNFeature
 from DB.Image import Image
 from DB.Object import ObjectHeader, ObjectIDT
 from DB.Project import ProjectIDT
@@ -118,7 +117,7 @@ class DeepFeatures(object):
         """
         fk_to_objid = ObjectCNNFeature.objcnnid.name
         sql = "WITH ordr (seq, objid) AS (select * from UNNEST(:seq, :oids)) "
-        sql += "SELECT " + ",".join(CNNFeature.DEEP_FEATURES)
+        sql += "SELECT " + ",".join(DEEP_FEATURES)
         sql += " FROM " + ObjectCNNFeature.__tablename__
         sql += " JOIN ordr ON " + fk_to_objid + " = ordr.objid "
         sql += " ORDER BY ordr.seq "

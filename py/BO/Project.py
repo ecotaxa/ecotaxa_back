@@ -31,7 +31,6 @@ from BO.User import (
     MinimalUserBOListT,
     UserActivityListT,
 )
-from DB import ProjectVariables
 from DB.Acquisition import Acquisition
 from DB.Object import (
     VALIDATED_CLASSIF_QUAL,
@@ -45,6 +44,7 @@ from DB.Process import Process
 from DB.Project import ProjectIDT, ProjectIDListT, Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.ProjectVariables import KNOWN_PROJECT_VARS
+from DB.ProjectVariables import ProjectVariables
 from DB.Sample import Sample
 from DB.User import Role, User
 from DB.helpers import Session, Result

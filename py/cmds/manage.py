@@ -63,7 +63,7 @@ def _init_security(sess):
 
 @db_app.command(help="Recreate PG sequences with the right values")
 def reset_sequences():
-    from DB import Project
+    from DB.Project import Project
     from DB.helpers.DDL import Sequence
 
     target_metadata = Project.metadata
@@ -139,7 +139,7 @@ def drop(user: str = "postgres", password: str = "", db_name: str = ""):
 def build():
     conn = Service.build_connection(app_config)
     sess = conn.get_session()
-    from DB import Project
+    from DB.Project import Project
 
     # It's the same metadata object for the whole app, so pick one
     meta = Project.metadata

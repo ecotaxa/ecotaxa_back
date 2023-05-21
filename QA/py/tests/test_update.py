@@ -92,7 +92,7 @@ def test_updates(config, database, caplog):
     with open(OUT_JSON_MODIF, "w") as fd:
         dump_project(ADMIN_USER_ID, prj_id, fd)
 
-    # Special column
+    # Special column, this one will eventually add row into classification history
     # TODO: Avoiding diff on purpose, it's just to cover code.
     with ObjectManager() as sce:
         nb_upd = sce.update_set(

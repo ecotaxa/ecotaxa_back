@@ -10,8 +10,7 @@ from typing import Any, Optional, List, ClassVar
 from API_operations.helpers.JobService import JobServiceBase
 from API_operations.helpers.Service import Service
 from BO.Job import JobBO
-from DB import Job
-from DB.Job import DBJobStateEnum, JobIDT
+from DB.Job import Job, DBJobStateEnum, JobIDT
 from DB.helpers.ORM import clone_of
 from helpers.DynamicLogs import get_logger
 

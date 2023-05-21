@@ -8,7 +8,9 @@ from dataclasses import dataclass
 from typing import Any, Final, List
 
 from BO.Classification import ClassifIDListT
-from DB import User, UserPreferences, Session
+from DB import Session
+from DB.User import User
+from DB.UserPreferences import UserPreferences
 from helpers.DynamicLogs import get_logger
 
 # Typings, to be clear that these are not e.g. object IDs

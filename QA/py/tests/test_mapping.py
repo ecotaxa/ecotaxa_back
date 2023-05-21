@@ -4,7 +4,7 @@
 #
 import pytest
 from BO.Mappings import TableMapping, RemapOp
-from DB import ObjectFields
+from DB.Object import ObjectFields
 
 # noinspection PyUnresolvedReferences
 from tests.config_fixture import config

@@ -118,8 +118,9 @@ from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleBO, SampleTaxoStats
 from BO.Taxonomy import TaxonBO
 from BO.User import UserIDT
-from DB import ProjectPrivilege, User
 from DB.Project import ProjectTaxoStat, Project
+from DB.ProjectPrivilege import ProjectPrivilege
+from DB.User import User
 from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import (

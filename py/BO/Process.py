@@ -10,8 +10,10 @@ from typing import List, ClassVar
 from BO.ColumnUpdate import ColUpdateList
 from BO.helpers.MappedEntity import MappedEntity
 from BO.helpers.MappedTable import MappedTable
-from DB import Session, Process, Sample
+from DB import Session
+from DB.Process import Process
 from DB.Project import ProjectIDListT, Project
+from DB.Sample import Sample
 from DB.helpers.ORM import any_
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer

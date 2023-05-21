@@ -5,7 +5,7 @@
 from typing import List, Any, Optional, Set, cast, Dict
 
 from BO.DataLicense import DataLicense, LicenseEnum
-from DB import Session, User, Sample
+from DB import Session
 from DB.Collection import (
     COLLECTION_ROLE_DATA_CREATOR,
     COLLECTION_ROLE_ASSOCIATED_PERSON,
@@ -15,6 +15,8 @@ from DB.Collection import (
     CollectionUserRole,
 )
 from DB.Project import ProjectIDListT, Project
+from DB.Sample import Sample
+from DB.User import User
 from DB.helpers.ORM import contains_eager
 from helpers.DynamicLogs import get_logger
 

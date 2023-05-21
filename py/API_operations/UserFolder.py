@@ -11,7 +11,7 @@ from fastapi import UploadFile
 
 from API_models.filesystem import DirectoryEntryModel, DirectoryModel
 from BO.User import UserIDT
-from DB import User
+from DB.User import User
 from FS.CommonDir import CommonFolder
 from FS.UserDir import UserDirectory
 from helpers.DynamicLogs import get_logger

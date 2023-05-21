@@ -9,9 +9,9 @@ from API_models.exports import TaxonomyRecast
 from BO.Collection import CollectionBO, CollectionIDT
 from BO.Rights import RightsBO, NOT_FOUND
 from BO.User import UserIDT
-from DB import TaxoRecast
 from DB.Collection import Collection
 from DB.TaxoRecast import DWCA_EXPORT_OPERATION
+from DB.TaxoRecast import TaxoRecast
 from DB.User import Role
 from helpers.DynamicLogs import get_logger
 from ..helpers.Service import Service

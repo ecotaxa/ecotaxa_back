@@ -33,9 +33,11 @@ from BO.helpers.ImportHelpers import (
     ImportDiagnostic,
     ImportStats,
 )
-from DB import Sample, Process, Acquisition
+from DB.Acquisition import Acquisition
 from DB.Object import classif_qual_revert, ObjectHeader, ObjectFields
+from DB.Process import Process
 from DB.Project import ProjectIDT
+from DB.Sample import Sample
 from DB.helpers import Session
 from DB.helpers.Bean import Bean
 from DB.helpers.Direct import text

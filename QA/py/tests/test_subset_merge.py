@@ -6,7 +6,6 @@ import json
 import logging
 
 import pytest
-from API_models.crud import *
 
 # noinspection PyPackageRequirements
 from API_models.merge import MergeRsp
@@ -18,7 +17,6 @@ from API_operations.CRUD.Projects import ProjectsService
 
 # noinspection PyPackageRequirements
 from API_operations.Consistency import ProjectConsistencyChecker
-from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
 from API_operations.Subset import SubsetServiceOnProject
 
@@ -27,7 +25,8 @@ from BO.Mappings import ProjectMapping
 
 # OK we need a bit of direct DB access
 # noinspection PyPackageRequirements
-from DB import Project, ObjectFields
+from DB.Project import Project
+from DB.Object import ObjectFields
 
 # noinspection PyPackageRequirements
 from deepdiff import DeepDiff

@@ -4,7 +4,7 @@
 #
 from API_models.filters import ProjectFiltersDict
 from BO.ObjectSet import DescribedObjectSet
-from DB import Sample
+from DB.Sample import Sample
 from DB.helpers import Session
 
 

@@ -18,8 +18,7 @@ from typing import Optional, Tuple, List, Dict, Set, Any
 from BO.Mappings import TableMapping
 from BO.ObjectSet import ObjectIDListT
 from BO.Project import ProjectBO
-from DB import Project
-from DB.Project import ProjectIDT
+from DB.Project import Project, ProjectIDT
 from DB.helpers import Result, Session
 from DB.helpers.Connection import Connection
 from DB.helpers.Direct import text

@@ -10,8 +10,8 @@ from json import loads as json_loads, dumps as json_dumps, JSONDecodeError
 from typing import Dict, Optional, Any, List, Final
 
 from BO.User import UserIDT
-from DB import Job, Session
-from DB.Job import JobIDT, DBJobStateEnum
+from DB import Session
+from DB.Job import Job, JobIDT, DBJobStateEnum
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)

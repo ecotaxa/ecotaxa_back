@@ -10,7 +10,8 @@ from BO.Classification import ClassifIDT
 from BO.Mappings import ProjectMapping
 from BO.ProjectTidying import ProjectTopology
 from BO.Vignette import VignetteMaker
-from DB import Acquisition, Sample
+from DB.Acquisition import Acquisition
+from DB.Sample import Sample
 from DB.helpers.DBWriter import DBWriter
 from FS.Vault import Vault
 

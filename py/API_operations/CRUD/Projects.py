@@ -11,8 +11,8 @@ from BO.Project import ProjectBO, ProjectBOSet, ProjectTaxoStats, ProjectUserSta
 from BO.ProjectSet import ProjectSetColumnStats, LimitedInCategoriesProjectSet
 from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
-from DB import Sample
 from DB.Project import Project, ANNOTATE_STATUS, ProjectIDT, ProjectIDListT
+from DB.Sample import Sample
 from DB.User import User
 from DB.helpers.ORM import clone_of
 from FS.VaultRemover import VaultRemover
