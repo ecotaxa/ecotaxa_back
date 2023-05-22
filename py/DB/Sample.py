@@ -38,11 +38,12 @@ class Sample(Model):
     ) -> Dict[str, "Sample"]:
         """
         Read in memory all Samples for given project and return them indexed by their user-visible
-        unique key, AKA orig_id.
+        unique key, AKA orig_id, in order.
         """
         res = session.query(Sample)
         res = res.join(Project)
         res = res.filter(Project.projid == prj_id)
+        res = res.order_by(Sample.orig_id)
         ret = {r.orig_id: r for r in res}
         return ret
 
