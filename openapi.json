@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.31"
+    "version":"0.0.32"
   },
   "servers":[
     {
@@ -21,7 +21,7 @@
           "authentification"
         ],
         "summary":"Login",
-        "description":"**Login barrier,** \n\nIf successful, the login will returns a **JWT** which will have to be used\nin bearer authentication scheme for subsequent calls.",
+        "description":"**Login barrier,**\n\nIf successful, the login will returns a **JWT** which will have to be used\nin bearer authentication scheme for subsequent calls.",
         "operationId":"login",
         "requestBody":{
           "content":{
@@ -974,14 +974,14 @@
         ]
       }
     },
-    "/collections/{collection_id}/export/darwin_core":{
+    "/collections/{collection_id}/taxo_recast":{
       "get":{
         "tags":[
           "collections"
         ],
-        "summary":"Emodnet Format Export",
-        "description":"**Export the collection in Darwin Core format, e.g. for EMODnet portal**, @see https://www.emodnet-ingestion.eu\n\nProduces a DwC-A (https://dwc.tdwg.org/) archive into a temporary directory, ready for download.\n\nMaybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html\n\n🔒 *For admins only.*",
-        "operationId":"darwin_core_format_export",
+        "summary":"Read Collection Taxo Recast",
+        "description":"**Read the collection taxonomy recast**.\n\n **Returns NULL upon success.**\n\n 🔒 *For admins only.*",
+        "operationId":"update_collection_taxonomy_recast",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this collection.",
@@ -994,54 +994,6 @@
             "example":1,
             "name":"collection_id",
             "in":"path"
-          },
-          {
-            "description":"If set, then only a diagnostic of doability will be done.",
-            "required":true,
-            "schema":{
-              "title":"Dry run",
-              "type":"boolean",
-              "description":"If set, then only a diagnostic of doability will be done."
-            },
-            "example":false,
-            "name":"dry_run",
-            "in":"query"
-          },
-          {
-            "description":"If set, then *absent* records will be generated, in the relevant samples, for categories present in other samples.",
-            "required":true,
-            "schema":{
-              "title":"With zeroes",
-              "type":"boolean",
-              "description":"If set, then *absent* records will be generated, in the relevant samples, for categories present in other samples."
-            },
-            "example":false,
-            "name":"with_zeroes",
-            "in":"query"
-          },
-          {
-            "description":"If set, then any object classified on a Morpho category will be added to the count of the nearest Phylo parent, upward in the tree.",
-            "required":true,
-            "schema":{
-              "title":"Auto morpho",
-              "type":"boolean",
-              "description":"If set, then any object classified on a Morpho category will be added to the count of the nearest Phylo parent, upward in the tree."
-            },
-            "example":false,
-            "name":"auto_morpho",
-            "in":"query"
-          },
-          {
-            "description":"If set, then an attempt will be made to compute organisms concentrations and biovolumes.",
-            "required":true,
-            "schema":{
-              "title":"With computations",
-              "type":"boolean",
-              "description":"If set, then an attempt will be made to compute organisms concentrations and biovolumes."
-            },
-            "example":false,
-            "name":"with_computations",
-            "in":"query"
           }
         ],
         "responses":{
@@ -1049,8 +1001,112 @@
             "description":"Successful Response",
             "content":{
               "application/json":{
+                "schema":{},
+                "from_to":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
                 "schema":{
-                  "$ref":"#/components/schemas/DarwinCoreExportRsp"
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      },
+      "put":{
+        "tags":[
+          "collections"
+        ],
+        "summary":"Update Collection Taxo Recast",
+        "description":"**Create or Update the collection taxonomy recast**.\n\n **Returns NULL upon success.**\n\n 🔒 *For admins only.*",
+        "operationId":"update_collection_taxonomy_recast",
+        "parameters":[
+          {
+            "description":"Internal, the unique numeric id of this collection.",
+            "required":true,
+            "schema":{
+              "title":"Collection Id",
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this collection."
+            },
+            "example":1,
+            "name":"collection_id",
+            "in":"path"
+          }
+        ],
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/TaxonomyRecast"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{},
+                "example":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/collections/export/darwin_core":{
+      "post":{
+        "tags":[
+          "collections"
+        ],
+        "summary":"Emodnet Format Export",
+        "description":"**Export the collection in Darwin Core format, e.g. for EMODnet portal**, @see https://www.emodnet-ingestion.eu\n\nProduces a DwC-A (https://dwc.tdwg.org/) archive into a temporary directory, ready for download.\n\nMaybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html\n\n🔒 *For admins only.*",
+        "operationId":"darwin_core_format_export",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/DarwinCoreExportReq"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/ExportRsp"
                 }
               }
             }
@@ -1914,7 +1970,7 @@
           "projects"
         ],
         "summary":"Project Stats",
-        "description":"**Returns stats** for a project.\n\nThese stats will be returned as a list containing at index :\n- 0 : The **title** of the project,\n- 1 : A string containing all **freecols name and related column number**,\n\n- 2 : **\"(0):\"**\n- 3 :  **\"Total: 0 values, dup 0 values\"**\n\nThen for each acquisition a pair of strings will be added to the list :\n-  A string containing the **acquisition origin id** (the **number of objects for this acquisition**) : and then **small stats for an acquisition of a free column values inside** : [ min of values ; max of values ; distribution of the different values ; mode, i.e. freq of most frequent value]\n-  A string containing the **number of total values** and the **number of duplicates values** \"Total: ... values, dup ... values\"\n\n    ",
+        "description":"**Returns stats** for a project.\n\nThese stats will be returned as a list containing at index :\n- 0 : The **title** of the project,\n- 1 : A string containing all **freecols name and related column number**,\n\n- 2 : **\"(0):\"**\n- 3 :  **\"Total: 0 values, dup 0 values\"**\n\nThen for each acquisition a pair of strings will be added to the list :\n-  A string containing the **acquisition origin id** (the **number of objects for this acquisition**) : and then **small stats for an acquisition of a free column values inside** : [ min of values ; max of values ; distribution of the different values ; mode, i.e. freq of most frequent value]\n-  A string containing the **number of total values** and the **number of duplicates values** \"Total: ... values, dup ... values\"",
         "operationId":"project_stats",
         "parameters":[
           {
@@ -2930,7 +2986,7 @@
           "objects"
         ],
         "summary":"Get Object Set Summary",
-        "description":"For the given project, with given filters, **return the classification summary**.\n\ni.e.:\n\n- Total number of objects\n\nAnd optionally\n\n- Number of Validated ones\n- Number of Dubious ones\n- Number of Predicted ones\n    ",
+        "description":"For the given project, with given filters, **return the classification summary**.\n\ni.e.:\n\n- Total number of objects\n\nAnd optionally\n\n- Number of Validated ones\n- Number of Dubious ones\n- Number of Predicted ones",
         "operationId":"get_object_set_summary",
         "parameters":[
           {
@@ -5533,7 +5589,7 @@
             ]
           }
         },
-        "description":"Values which can be considered identical over the lifetime of the back-end. "
+        "description":"Values which can be considered identical over the lifetime of the back-end."
       },
       "CreateCollectionReq":{
         "title":"Create collection request Model",
@@ -5598,44 +5654,49 @@
           }
         }
       },
-      "DarwinCoreExportRsp":{
-        "title":"DarwinCoreExportRsp",
+      "DarwinCoreExportReq":{
+        "title":"DarwinCoreExportReq",
+        "required":[
+          "collection_id",
+          "dry_run",
+          "with_zeroes",
+          "auto_morpho",
+          "with_computations"
+        ],
         "type":"object",
         "properties":{
-          "errors":{
-            "title":"Errors",
-            "type":"array",
-            "items":{
-              "type":"string"
-            },
-            "description":"Showstopper problems found preventing building the archive.",
-            "default":[],
-            "example":[
-              "No content produced.",
-              " See previous warnings or check the presence of samples in the projects"
-            ]
-          },
-          "warnings":{
-            "title":"Warnings",
-            "type":"array",
-            "items":{
-              "type":"string"
-            },
-            "description":"Problems found while building the archive, which do not prevent producing it.",
-            "default":[],
-            "example":[
-              "No occurrence added for sample '3456' in 1"
-            ]
-          },
-          "job_id":{
-            "title":"Job Id",
+          "collection_id":{
+            "title":"Collection Id",
             "type":"integer",
-            "description":"The created job, 0 if there were problems.",
-            "default":0,
-            "example":12376
+            "description":"The collection to export, by its internal Id.",
+            "example":1
+          },
+          "dry_run":{
+            "title":"Dry run",
+            "type":"boolean",
+            "description":"If set, then only a diagnostic of doability will be done.",
+            "example":false
+          },
+          "with_zeroes":{
+            "title":"With zeroes",
+            "type":"boolean",
+            "description":"If set, then *absent* records will be generated, in the relevant samples, for categories present in other samples.",
+            "example":false
+          },
+          "auto_morpho":{
+            "title":"Auto morpho",
+            "type":"boolean",
+            "description":"If set, then any object classified on a Morpho category will be added to the count of the nearest Phylo parent, upward in the tree.",
+            "example":false
+          },
+          "with_computations":{
+            "title":"With computations",
+            "type":"boolean",
+            "description":"If set, then an attempt will be made to compute organisms concentrations and biovolumes.",
+            "example":false
           }
         },
-        "description":"Darwin Core format export response."
+        "description":"Darwin Core format export request, only allowed format for a Collection. @see https://dwc.tdwg.org/"
       },
       "DirectoryEntryModel":{
         "title":"DirectoryEntryModel",
@@ -5864,7 +5925,7 @@
             "example":12376
           }
         },
-        "description":"Export response."
+        "description":"Export response, for all export jobs, either on Project or Collection"
       },
       "ExportTypeEnum":{
         "title":"ExportTypeEnum",
@@ -6134,7 +6195,7 @@
             "example":"Yes"
           }
         },
-        "description":"Import request, from UI choices. "
+        "description":"Import request, from UI choices."
       },
       "ImportRsp":{
         "title":"ImportRsp",
@@ -6162,7 +6223,7 @@
             ]
           }
         },
-        "description":"Import response. "
+        "description":"Import response."
       },
       "JobModel":{
         "title":"JobModel",
@@ -6367,7 +6428,7 @@
             "default":[]
           }
         },
-        "description":"Merge response. "
+        "description":"Merge response."
       },
       "MinUserModel":{
         "title":"MinUserModel",
@@ -7852,7 +7913,7 @@
             ]
           }
         },
-        "description":"Simple Import request. "
+        "description":"Simple Import request."
       },
       "SimpleImportRsp":{
         "title":"SimpleImportRsp",
@@ -7882,7 +7943,7 @@
             ]
           }
         },
-        "description":"Simple Import, response. "
+        "description":"Simple Import, response."
       },
       "SubsetReq":{
         "title":"Subset request Model",
@@ -7941,7 +8002,7 @@
             "example":10.0
           }
         },
-        "description":"Subset request. "
+        "description":"Subset request."
       },
       "SubsetRsp":{
         "title":"SubsetRsp",
@@ -7957,7 +8018,7 @@
             "example":143
           }
         },
-        "description":"Subset response. "
+        "description":"Subset response."
       },
       "SummaryExportGroupingEnum":{
         "title":"SummaryExportGroupingEnum",
@@ -7968,7 +8029,7 @@
           "P"
         ],
         "type":"string",
-        "description":"It's implied that we minimally group/aggregate by category AKA classification AKA taxon "
+        "description":"It's implied that we minimally group/aggregate by category AKA classification AKA taxon"
       },
       "TaxaSearchRsp":{
         "title":"TaxaSearchRsp",
@@ -8247,6 +8308,42 @@
             "example":129
           }
         }
+      },
+      "TaxonomyRecast":{
+        "title":"TaxonomyRecast",
+        "required":[
+          "from_to"
+        ],
+        "type":"object",
+        "properties":{
+          "from_to":{
+            "title":"Categories mapping",
+            "type":"object",
+            "additionalProperties":{
+              "type":"integer"
+            },
+            "description":"Mapping from seen taxon (key) to output replacement one (value). Use a null replacement to _discard_ the present taxon. Note: keys are strings.",
+            "example":{
+              "456":956,
+              "2456":213
+            }
+          },
+          "doc":{
+            "title":"Mapping documentation",
+            "type":"object",
+            "additionalProperties":{
+              "type":"string"
+            },
+            "description":"To keep memory of the reasons for the above mapping. Note: keys are strings.",
+            "example":{
+              "456":"Up to species",
+              "2456":"Up to nearest non-morpho",
+              "9134":"Detritus"
+            }
+          }
+        },
+        "additionalProperties":false,
+        "description":"In various contexts, a taxo recast (from taxon -> to taxon) setting."
       },
       "TaxonomyTreeStatus":{
         "title":"TaxonomyTreeStatus",
