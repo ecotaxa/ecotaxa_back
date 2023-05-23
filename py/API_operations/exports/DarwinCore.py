@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Tuple, cast, Set, Any
 from urllib.parse import quote_plus
 
 import BO.ProjectVarsDefault as DefaultVars
-from API_models.exports import ExportRsp
+from API_models.exports import ExportRsp, SciExportTypeEnum
 from BO.Acquisition import AcquisitionIDT
 from BO.Classification import ClassifIDT, ClassifIDSetT
 from BO.Collection import CollectionIDT, CollectionBO
@@ -102,6 +102,8 @@ class DarwinCoreExport(JobServiceBase):
                 "with_zeroes": self.with_zeroes,
                 "with_computations": self.with_computations,
                 "auto_morpho": self.auto_morpho,
+                "formulae": self.formulae,
+                "taxo_recast": self.taxo_recast,
             }
         )
         return args
@@ -111,8 +113,10 @@ class DarwinCoreExport(JobServiceBase):
         collection_id: CollectionIDT,
         dry_run: bool,
         with_zeroes: bool,
-        with_computations: bool,
+        with_computations: List[SciExportTypeEnum],
         auto_morpho: bool,
+        formulae: Dict[str, str],
+        taxo_recast: TaxoRemappingT,
     ):
         super().__init__()
         # Input
@@ -123,7 +127,14 @@ class DarwinCoreExport(JobServiceBase):
         collection = self.ro_session.query(Collection).get(collection_id)
         assert collection is not None, "Invalid collection ID"
         self.collection = collection
+        if len(formulae) == 0 and len(with_computations) > 0:
+            assert False, "Need formulae for " + str(with_computations)
+        # TODO: We should have all this at project level now
+        self.formulae = formulae
+        self.taxo_recast = taxo_recast
+        #
         # During processing
+        #
         # The Phylo taxa to their WoRMS counterpart
         self.phylo2worms: Dict[ClassifIDT, WoRMS] = {}
         # The Morpho taxa to their nearest Phylo parent
@@ -735,14 +746,13 @@ class DarwinCoreExport(JobServiceBase):
     def _aggregate_for_sample(
         self,
         sample: Sample,
-        morpho2phylo: Optional[TaxoRemappingT],
-        with_computations: bool,
+        morpho2phylo: TaxoRemappingT,
+        with_computations: List[SciExportTypeEnum],
         predicted: bool,
     ) -> Dict[ClassifIDT, SampleAggregForTaxon]:
         """
         :param sample: The Sample for which computations needs to be done.
-        :param with_computations: If not set, just do abundance calculations (e.g. to save time
-            or when it's known to be impossible).
+        :param with_computations: Computations to do.
         :param morpho2phylo: The Morpho taxa to their nearest Phylo parent. If not provided
             then _no_ up-the-taxa-tree consolidation will be done, i.e. there _will be_ Morpho taxa in 'ret' keys.
 
@@ -766,65 +776,60 @@ class DarwinCoreExport(JobServiceBase):
         else:
             object_set = CommonObjectSets.validatedInSample(self.ro_session, sample)
 
-        # Start with abundances, 'simple' count but eventually with remapping
-        counts = self.abundances_for_sample(object_set, morpho2phylo)
-        for a_count in counts:
-            ret[a_count["txo_id"]] = SampleAggregForTaxon(a_count["count"], None, None)
+        # TODO but the tests assume that: anything here -> go for abundances
+        #  if SciExportTypeEnum.abundances in with_computations:
+        if True:
+            # Abundances, 'simple' count but eventually with remapping
+            counts = self.abundances_for_sample(object_set, morpho2phylo)
+            for a_count in counts:
+                ret[a_count["txo_id"]] = SampleAggregForTaxon(
+                    a_count["count"], None, None
+                )
 
-        if not with_computations:
-            return ret
+        if SciExportTypeEnum.concentrations in with_computations:
+            # Enrich with concentrations
+            concentrations = self.concentrations_for_sample(
+                self.formulae, object_set, morpho2phylo
+            )
+            conc_wrn_txos = []
+            for a_conc in concentrations:
+                txo_id, conc = a_conc["txo_id"], a_conc["conc"]
+                if conc == conc:  # NaN test
+                    ret[txo_id].concentration = conc
+                else:
+                    conc_wrn_txos.append(txo_id)
+            if len(conc_wrn_txos) > 0:
+                wrn = "Sample '{}' taxo(s) #{}: Computed concentration is NaN, input data is missing or incorrect"
+                wrn = wrn.format(sample.orig_id, conc_wrn_txos)
+                self.warnings.append(wrn)
 
-        # Enrich with concentrations
-        formulae = {
-            "total_water_volume": "sam.tot_vol",
-            "subsample_coef": "1/ssm.sub_part",
-        }
-        concentrations = self.concentrations_for_sample(
-            formulae, object_set, morpho2phylo
-        )
-        conc_wrn_txos = []
-        for a_conc in concentrations:
-            txo_id, conc = a_conc["txo_id"], a_conc["conc"]
-            if conc == conc:  # NaN test
-                ret[txo_id].concentration = conc
-            else:
-                conc_wrn_txos.append(txo_id)
-        if len(conc_wrn_txos) > 0:
-            wrn = "Sample '{}' taxo(s) #{}: Computed concentration is NaN, input data is missing or incorrect"
-            wrn = wrn.format(sample.orig_id, conc_wrn_txos)
-            self.warnings.append(wrn)
-
-        # Enrich with biovolumes, note that we need previous formulae for scaling
-        # ESD @see ProjectVarsDefault.equivalent_spherical_volume
-        formulae.update(
-            {
-                "individual_volume": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel)**3"
-            }
-        )
-        biovolumes = self.biovolumes_for_sample(formulae, object_set, morpho2phylo)
-        biovol_wrn_txos = []
-        for a_biovol in biovolumes:
-            txo_id, biovol = a_biovol["txo_id"], a_biovol["biovol"]
-            if biovol == biovol:  # NaN test
-                ret[txo_id].biovolume = biovol
-            else:
-                biovol_wrn_txos.append(txo_id)
-        if len(biovol_wrn_txos) > 0:
-            wrn = "Sample '{}' taxo(s) #{}: Computed biovolume is NaN, input data is missing or incorrect"
-            wrn = wrn.format(sample.orig_id, biovol_wrn_txos)
-            self.warnings.append(wrn)
+        if SciExportTypeEnum.biovols in with_computations:
+            # Enrich with biovolumes, note that we need previous formulae for scaling
+            biovolumes = self.biovolumes_for_sample(
+                self.formulae, object_set, morpho2phylo
+            )
+            biovol_wrn_txos = []
+            for a_biovol in biovolumes:
+                txo_id, biovol = a_biovol["txo_id"], a_biovol["biovol"]
+                if biovol == biovol:  # NaN test
+                    ret[txo_id].biovolume = biovol
+                else:
+                    biovol_wrn_txos.append(txo_id)
+            if len(biovol_wrn_txos) > 0:
+                wrn = "Sample '{}' taxo(s) #{}: Computed biovolume is NaN, input data is missing or incorrect"
+                wrn = wrn.format(sample.orig_id, biovol_wrn_txos)
+                self.warnings.append(wrn)
 
         return ret
 
     def abundances_for_sample(
-        self, obj_set: DescribedObjectSet, morpho2phylo: Optional[TaxoRemappingT]
+        self, obj_set: DescribedObjectSet, morpho2phylo: TaxoRemappingT
     ) -> List[Dict[str, Any]]:
         """
         Compute abundances (count) for given sample.
         """
         aug_qry = ObjectSetQueryPlus(obj_set)
-        if morpho2phylo is not None:
-            aug_qry.remap_categories(morpho2phylo)
+        aug_qry.remap_categories(morpho2phylo)
         aug_qry.add_selects(["txo.id", aug_qry.COUNT_STAR])
         aug_qry.set_aliases(
             {"txo.id": "txo_id", aug_qry.COUNT_STAR: "count"}
@@ -835,14 +840,13 @@ class DarwinCoreExport(JobServiceBase):
         self,
         formulae: Dict[str, str],
         obj_set: DescribedObjectSet,
-        morpho2phylo: Optional[TaxoRemappingT],
+        morpho2phylo: TaxoRemappingT,
     ) -> List[Dict[str, Any]]:
         """
         Compute concentration of each taxon for given sample.
         """
         aug_qry = ObjectSetQueryPlus(obj_set)
-        if morpho2phylo is not None:
-            aug_qry.remap_categories(morpho2phylo)
+        aug_qry.remap_categories(morpho2phylo)
         aug_qry.set_formulae(formulae)
         sum_formula = "sql_count/subsample_coef/total_water_volume"
         aug_qry.set_aliases(
@@ -865,14 +869,13 @@ class DarwinCoreExport(JobServiceBase):
         self,
         formulae: Dict[str, str],
         obj_set: DescribedObjectSet,
-        morpho2phylo: Optional[TaxoRemappingT],
+        morpho2phylo: TaxoRemappingT,
     ) -> List[Dict[str, Any]]:
         """
         Compute biovolume of each taxon for given sample.
         """
         aug_qry = ObjectSetQueryPlus(obj_set)
-        if morpho2phylo is not None:
-            aug_qry.remap_categories(morpho2phylo)
+        aug_qry.remap_categories(morpho2phylo)
         aug_qry.set_formulae(formulae)
         sum_formula = "individual_volume/subsample_coef/total_water_volume"
         aug_qry.set_aliases({"txo.id": "txo_id", sum_formula: "biovol"})
@@ -892,7 +895,7 @@ class DarwinCoreExport(JobServiceBase):
         """
         aggregs = self._aggregate_for_sample(
             sample=sample,
-            morpho2phylo=self.morpho2phylo if self.auto_morpho else None,
+            morpho2phylo=self.morpho2phylo if self.auto_morpho else {},
             with_computations=self.with_computations,
             predicted=predicted,
         )

@@ -11,6 +11,7 @@ from starlette import status
 from tests.credentials import ADMIN_AUTH, REAL_USER_ID, CREATOR_AUTH, ADMIN_USER_ID
 from tests.emodnet_ref import ref_zip, with_zeroes_zip, no_computations_zip
 from tests.export_shared import JOB_DOWNLOAD_URL
+from tests.formulae import uvp_formulae
 from tests.test_classification import _prj_query, OBJECT_SET_CLASSIFY_URL
 from tests.test_collections import (
     COLLECTION_CREATE_URL,
@@ -29,8 +30,13 @@ _req_tmpl = {
     "collection_id": None,
     "dry_run": False,
     "with_zeroes": False,
-    "with_computations": False,
+    "with_computations": [],
     "auto_morpho": True,
+    "formulae": uvp_formulae,
+    "pre_mapping": {
+        45072: 56693,  # Cyclopoida -> Actinopterygii
+        78418: None,  # Oncaeidae -> remove
+    },
 }
 
 COLLECTION_QUERY_BY_TITLE_URL = "/collections/by_title/?q={title}"
@@ -58,7 +64,11 @@ def do_test_emodnet_export(config, database, fastapi, caplog):
     # First attempt with LOTS of missing data
     req = _req_tmpl.copy()
     req.update(
-        {"collection_id": coll_id, "with_zeroes": True, "with_computations": True}
+        {
+            "collection_id": coll_id,
+            "with_zeroes": True,
+            "with_computations": ["ABO", "CNC", "BIV"],
+        }
     )
     rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
@@ -139,7 +149,7 @@ This series is part of the long term planktonic monitoring of
     assert rsp.status_code == status.HTTP_200_OK
 
     req = _req_tmpl.copy()
-    req.update({"collection_id": coll_id, "with_computations": True})
+    req.update({"collection_id": coll_id, "with_computations": ["ABO", "CNC", "BIV"]})
     rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
@@ -192,7 +202,11 @@ This series is part of the long term planktonic monitoring of
 
     req = _req_tmpl.copy()
     req.update(
-        {"collection_id": coll_id, "with_zeroes": True, "with_computations": True}
+        {
+            "collection_id": coll_id,
+            "with_zeroes": True,
+            "with_computations": ["ABO", "CNC", "BIV"],
+        }
     )
     rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK

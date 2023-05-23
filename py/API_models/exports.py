@@ -24,6 +24,15 @@ class ExportTypeEnum(str, Enum):
     biovols = "BIV"  # Biovolume summary https://github.com/ecotaxa/ecotaxa/issues/617
 
 
+class SciExportTypeEnum(str, Enum):
+    """Computed export quantities"""
+
+    # TODO: Identical to just above due to openapi.json generation. Find a workaround.
+    abundances = "ABO"
+    concentrations = "CNC"
+    biovols = "BIV"
+
+
 class SummaryExportGroupingEnum(str, Enum):
     """It's implied that we minimally group/aggregate by category AKA classification AKA taxon"""
 
@@ -146,20 +155,48 @@ class DarwinCoreExportReq(BaseModel):
     )
     with_zeroes: bool = Field(
         title="With zeroes",
-        description="If set, then *absent* records will be generated, in the relevant samples, for categories present in other samples.",
+        description="If set, then *absent* records will be generated, in the relevant samples, "
+        "for categories present in other samples.",
         example=False,
+    )
+    auto_morpho: bool = Field(  # TODO: Really useful? We can't export Morpho anyway
+        title="Auto morpho",
+        description="If set, then any object classified on a Morpho category will be added "
+        "to the count of the nearest Phylo parent, upward in the tree.",
+        example=True,
+        default=True,
+    )
+    with_computations: List[SciExportTypeEnum] = Field(
+        title="With computations",
+        description="If set, then an attempt will be made to compute organisms abundances (ABO), "
+        "concentrations (CNC) or biovolumes (BIV).",
+        example=["ABO"],
+    )
+    # TODO: Is same as TaxonomyRecast below, should get type TaxoRemappingT (or define it here)
+    pre_mapping: Dict[int, Optional[int]] = Field(
+        title="Categories mapping",
+        description="Mapping from present taxon (key) to output replacement one (value)."
+        " Use a null replacement to _discard_ the present taxon."
+        " Note: These are EcoTaxa categories, WoRMS mapping happens after, whatever.",
+        example={456: 956, 2456: 213},
+        default={},
+    )
+    formulae: Dict[str, str] = Field(
+        title="Computation formulas",
+        description="Transitory: How to get values from DB free columns. "
+        "Python syntax, prefixes are 'sam', 'ssm' and 'obj'."
+        "Variables used in computations are 'total_water_volume', 'subsample_coef' "
+        "and 'individual_volume'",
+        example={
+            "subsample_coef": "1/ssm.sub_part",
+            "total_water_volume": "sam.tot_vol/1000",
+            "individual_volume": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3",
+        },
+        default={},
     )
 
-    auto_morpho: bool = Field(
-        title="Auto morpho",
-        description="If set, then any object classified on a Morpho category will be added to the count of the nearest Phylo parent, upward in the tree.",
-        example=False,
-    )
-    with_computations: bool = Field(
-        title="With computations",
-        description="If set, then an attempt will be made to compute organisms concentrations and biovolumes.",
-        example=False,
-    )
+    class Config:
+        extra = Extra.forbid
 
 
 class ExportRsp(BaseModel):

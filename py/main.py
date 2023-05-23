@@ -757,6 +757,8 @@ def emodnet_format_export(
         request.with_zeroes,
         request.with_computations,
         request.auto_morpho,
+        request.formulae,
+        request.pre_mapping,
     ) as sce:
         with RightsThrower():
             return sce.run(current_user)
