@@ -148,16 +148,16 @@ class DarwinCoreExport(JobServiceBase):
     PRODUCED_FILE_NAME = DWC_ZIP_NAME
 
     def run(self, current_user_id: int) -> ExportRsp:
-    """
-    Initial run, basically just create the job.
-    """
-    # TODO, for now only admins
-    _user = RightsBO.user_has_role(
-        self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
-    )
-    # OK, go background straight away
-    self.create_job(self.JOB_TYPE, current_user_id)
-    ret = ExportRsp(job_id=self.job_id)
+        """
+        Initial run, basically just create the job.
+        """
+        # TODO, for now only admins
+        _user = RightsBO.user_has_role(
+            self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
+        )
+        # OK, go background straight away
+        self.create_job(self.JOB_TYPE, current_user_id)
+        ret = ExportRsp(job_id=self.job_id)
         return ret
 
     def do_background(self) -> None:

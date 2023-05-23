@@ -139,34 +139,26 @@ class DarwinCoreExportReq(BaseModel):
         description="The collection to export, by its internal Id.",
         example=1,
     )
-    dry_run: bool = (
-        Field(
-            title="Dry run",
-            description="If set, then only a diagnostic of doability will be done.",
-            example=False,
-        ),
+    dry_run: bool = Field(
+        title="Dry run",
+        description="If set, then only a diagnostic of doability will be done.",
+        example=False,
     )
-    with_zeroes: bool = (
-        Field(
-            title="With zeroes",
-            description="If set, then *absent* records will be generated, in the relevant samples, for categories present in other samples.",
-            example=False,
-        ),
+    with_zeroes: bool = Field(
+        title="With zeroes",
+        description="If set, then *absent* records will be generated, in the relevant samples, for categories present in other samples.",
+        example=False,
     )
-    auto_morpho: bool = (
-        Field(
-            title="Auto morpho",
-            description="If set, then any object classified on a Morpho category will be added to the count of the nearest Phylo parent, upward in the tree.",
-            example=False,
-        ),
+
+    auto_morpho: bool = Field(
+        title="Auto morpho",
+        description="If set, then any object classified on a Morpho category will be added to the count of the nearest Phylo parent, upward in the tree.",
+        example=False,
     )
-    with_computations: bool = (
-        Field(
-            ...,
-            title="With computations",
-            description="If set, then an attempt will be made to compute organisms concentrations and biovolumes.",
-            example=False,
-        ),
+    with_computations: bool = Field(
+        title="With computations",
+        description="If set, then an attempt will be made to compute organisms concentrations and biovolumes.",
+        example=False,
     )
 
 
