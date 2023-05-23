@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Tuple, cast, Set, Any
 from urllib.parse import quote_plus
 
 import BO.ProjectVarsDefault as DefaultVars
-from API_models.exports import DarwinCoreExportRsp
+from API_models.exports import ExportRsp
 from BO.Acquisition import AcquisitionIDT
 from BO.Classification import ClassifIDT, ClassifIDSetT
 from BO.Collection import CollectionIDT, CollectionBO
@@ -69,7 +69,6 @@ from formats.DarwinCore.models import (
 )
 from helpers.DateTime import now_time
 from helpers.DynamicLogs import get_logger, LogsSwitcher
-
 # TODO: Move somewhere else
 from ..helpers.JobService import JobServiceBase, ArgsDict
 
@@ -148,17 +147,17 @@ class DarwinCoreExport(JobServiceBase):
     DWC_ZIP_NAME = "dwca.zip"
     PRODUCED_FILE_NAME = DWC_ZIP_NAME
 
-    def run(self, current_user_id: int) -> DarwinCoreExportRsp:
-        """
-        Initial run, basically just create the job.
-        """
-        # TODO, for now only admins
-        _user = RightsBO.user_has_role(
-            self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
-        )
-        # OK, go background straight away
-        self.create_job(self.JOB_TYPE, current_user_id)
-        ret = DarwinCoreExportRsp(job_id=self.job_id)
+    def run(self, current_user_id: int) -> ExportRsp:
+    """
+    Initial run, basically just create the job.
+    """
+    # TODO, for now only admins
+    _user = RightsBO.user_has_role(
+        self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
+    )
+    # OK, go background straight away
+    self.create_job(self.JOB_TYPE, current_user_id)
+    ret = ExportRsp(job_id=self.job_id)
         return ret
 
     def do_background(self) -> None:

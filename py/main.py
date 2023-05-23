@@ -46,7 +46,7 @@ from API_models.crud import (
     ProjectSetColumnStatsModel,
     SampleTaxoStatsModel,
 )
-from API_models.exports import DarwinCoreExportRsp, ExportRsp, ExportReq, TaxonomyRecast
+from API_models.exports import ExportReq, ExportRsp, TaxonomyRecast, DarwinCoreExportReq
 from API_models.filesystem import DirectoryModel
 from API_models.filters import ProjectFilters
 from API_models.helpers.Introspect import plain_columns
@@ -732,44 +732,16 @@ def read_collection_taxo_recast(
             return sce.read_taxo_recast(current_user, collection_id)
 
 
-@app.get(
-    "/collections/{collection_id}/export/darwin_core",
+@app.post(
+    "/collections/export/darwin_core",
     operation_id="darwin_core_format_export",
     tags=["collections"],
-    response_model=DarwinCoreExportRsp,
+    response_model=ExportRsp,
 )
 def emodnet_format_export(
-    collection_id: int = Path(
-        ...,
-        description="Internal, the unique numeric id of this collection.",
-        example=1,
-    ),
-    dry_run: bool = Query(
-        ...,
-        title="Dry run",
-        description="If set, then only a diagnostic of doability will be done.",
-        example=False,
-    ),
-    with_zeroes: bool = Query(
-        ...,
-        title="With zeroes",
-        description="If set, then *absent* records will be generated, in the relevant samples, for categories present in other samples.",
-        example=False,
-    ),
-    auto_morpho: bool = Query(
-        ...,
-        title="Auto morpho",
-        description="If set, then any object classified on a Morpho category will be added to the count of the nearest Phylo parent, upward in the tree.",
-        example=False,
-    ),
-    with_computations: bool = Query(
-        ...,
-        title="With computations",
-        description="If set, then an attempt will be made to compute organisms concentrations and biovolumes.",
-        example=False,
-    ),
+    request: DarwinCoreExportReq = Body(...),
     current_user: int = Depends(get_current_user),
-) -> DarwinCoreExportRsp:
+) -> ExportRsp:
     """
     **Export the collection in Darwin Core format, e.g. for EMODnet portal**, @see https://www.emodnet-ingestion.eu
 
@@ -780,7 +752,11 @@ def emodnet_format_export(
     🔒 *For admins only.*
     """
     with DarwinCoreExport(
-        collection_id, dry_run, with_zeroes, with_computations, auto_morpho
+        request.collection_id,
+        request.dry_run,
+        request.with_zeroes,
+        request.with_computations,
+        request.auto_morpho,
     ) as sce:
         with RightsThrower():
             return sce.run(current_user)

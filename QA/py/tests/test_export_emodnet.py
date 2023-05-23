@@ -23,10 +23,15 @@ from tests.test_jobs import wait_for_stable, api_check_job_ok, api_check_job_fai
 from tests.test_update import ACQUISITION_SET_UPDATE_URL, SAMPLE_SET_UPDATE_URL
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
-COLLECTION_EXPORT_EMODNET_URL = (
-    "/collections/{collection_id}/export/darwin_core?dry_run={dry}"
-    "&with_zeroes={zeroes}&with_computations={comp}&auto_morpho={morph}"
-)
+COLLECTION_EXPORT_EMODNET_URL = "/collections/export/darwin_core"
+
+_req_tmpl = {
+    "collection_id": None,
+    "dry_run": False,
+    "with_zeroes": False,
+    "with_computations": False,
+    "auto_morpho": True,
+}
 
 COLLECTION_QUERY_BY_TITLE_URL = "/collections/by_title/?q={title}"
 
@@ -51,10 +56,11 @@ def do_test_emodnet_export(config, database, fastapi, caplog):
 
     # Admin exports it
     # First attempt with LOTS of missing data
-    url = COLLECTION_EXPORT_EMODNET_URL.format(
-        collection_id=coll_id, dry=False, zeroes=True, comp=True, morph=True
+    req = _req_tmpl.copy()
+    req.update(
+        {"collection_id": coll_id, "with_zeroes": True, "with_computations": True}
     )
-    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
     wait_for_stable(job_id)
@@ -132,10 +138,9 @@ This series is part of the long term planktonic monitoring of
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=the_coll)
     assert rsp.status_code == status.HTTP_200_OK
 
-    url = COLLECTION_EXPORT_EMODNET_URL.format(
-        collection_id=coll_id, dry=False, zeroes=False, comp=True, morph=True
-    )
-    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    req = _req_tmpl.copy()
+    req.update({"collection_id": coll_id, "with_computations": True})
+    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
     wait_for_stable(job_id)
@@ -185,10 +190,11 @@ This series is part of the long term planktonic monitoring of
     assert rsp.status_code == status.HTTP_200_OK
     unzip_and_check(rsp.content, ref_zip)
 
-    url_with_0s = COLLECTION_EXPORT_EMODNET_URL.format(
-        collection_id=coll_id, dry=False, zeroes=True, comp=True, morph=True
+    req = _req_tmpl.copy()
+    req.update(
+        {"collection_id": coll_id, "with_zeroes": True, "with_computations": True}
     )
-    rsp = fastapi.get(url_with_0s, headers=ADMIN_AUTH)
+    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
     job = wait_for_stable(job_id)
@@ -197,10 +203,9 @@ This series is part of the long term planktonic monitoring of
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
     unzip_and_check(rsp.content, with_zeroes_zip)
 
-    url_raw_data = COLLECTION_EXPORT_EMODNET_URL.format(
-        collection_id=coll_id, dry=False, zeroes=False, comp=False, morph=True
-    )
-    rsp = fastapi.get(url_raw_data, headers=ADMIN_AUTH)
+    req = _req_tmpl.copy()
+    req.update({"collection_id": coll_id})
+    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
     job = wait_for_stable(job_id)

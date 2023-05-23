@@ -10,45 +10,6 @@ from pydantic import Extra
 from helpers.pydantic import BaseModel, Field
 
 
-class DarwinCoreExportReq(BaseModel):
-    """
-    Darwin Core format export request. @see https://dwc.tdwg.org/
-    """
-
-    # meta: EMLMeta = Field(title="EML meta for the produced archive")
-    project_ids: List[int] = Field(
-        title="Project Ids", description="The projects to export.", min_items=1
-    )
-
-
-class DarwinCoreExportRsp(BaseModel):
-    """
-    Darwin Core format export response.
-    """
-
-    errors: List[str] = Field(
-        title="Errors",
-        description="Showstopper problems found preventing building the archive.",
-        example=[
-            "No content produced.",
-            " See previous warnings or check the presence of samples in the projects",
-        ],
-        default=[],
-    )
-    warnings: List[str] = Field(
-        title="Warnings",
-        description="Problems found while building the archive, which do not prevent producing it.",
-        example=["No occurrence added for sample '3456' in 1"],
-        default=[],
-    )
-    job_id: int = Field(
-        title="Job Id",
-        description="The created job, 0 if there were problems.",
-        example=12376,
-        default=0,
-    )
-
-
 class ExportTypeEnum(str, Enum):
     general_tsv = "TSV"
     backup = "BAK"
@@ -168,11 +129,73 @@ class ExportReq(BaseModel):
         schema_extra = {"title": "Export request Model"}
 
 
-# TODO: Should inherit the other way round.
-class ExportRsp(DarwinCoreExportRsp):
+class DarwinCoreExportReq(BaseModel):
     """
-    Export response.
+    Darwin Core format export request, only allowed format for a Collection. @see https://dwc.tdwg.org/
     """
+
+    collection_id: int = Field(
+        title="Collection Id",
+        description="The collection to export, by its internal Id.",
+        example=1,
+    )
+    dry_run: bool = (
+        Field(
+            title="Dry run",
+            description="If set, then only a diagnostic of doability will be done.",
+            example=False,
+        ),
+    )
+    with_zeroes: bool = (
+        Field(
+            title="With zeroes",
+            description="If set, then *absent* records will be generated, in the relevant samples, for categories present in other samples.",
+            example=False,
+        ),
+    )
+    auto_morpho: bool = (
+        Field(
+            title="Auto morpho",
+            description="If set, then any object classified on a Morpho category will be added to the count of the nearest Phylo parent, upward in the tree.",
+            example=False,
+        ),
+    )
+    with_computations: bool = (
+        Field(
+            ...,
+            title="With computations",
+            description="If set, then an attempt will be made to compute organisms concentrations and biovolumes.",
+            example=False,
+        ),
+    )
+
+
+class ExportRsp(BaseModel):
+    """
+    Export response, for all export jobs, either on Project or Collection
+    """
+
+    errors: List[str] = Field(
+        title="Errors",
+        description="Showstopper problems found preventing building the archive.",
+        example=[
+            "No content produced.",
+            " See previous warnings or check the presence of samples in the projects",
+        ],
+        default=[],
+    )
+    warnings: List[str] = Field(
+        title="Warnings",
+        description="Problems found while building the archive, which do not prevent producing it.",
+        example=["No occurrence added for sample '3456' in 1"],
+        default=[],
+    )
+    job_id: int = Field(
+        title="Job Id",
+        description="The created job, 0 if there were problems.",
+        example=12376,
+        default=0,
+    )
 
 
 class TaxonomyRecast(BaseModel):
