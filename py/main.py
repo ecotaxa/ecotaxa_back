@@ -708,9 +708,9 @@ def update_collection_taxo_recast(
 
 @app.get(
     "/collections/{collection_id}/taxo_recast",
-    operation_id="update_collection_taxonomy_recast",
+    operation_id="get_collection_taxonomy_recast",
     tags=["collections"],
-    responses={200: {"content": {"application/json": {"from_to": {}}}}},
+    responses={200: {"content": {"application/json": {"example": {}}}}},
 )
 def read_collection_taxo_recast(
     collection_id: int = Path(

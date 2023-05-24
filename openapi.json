@@ -981,7 +981,7 @@
         ],
         "summary":"Read Collection Taxo Recast",
         "description":"**Read the collection taxonomy recast**.\n\n **Returns NULL upon success.**\n\n 🔒 *For admins only.*",
-        "operationId":"update_collection_taxonomy_recast",
+        "operationId":"get_collection_taxonomy_recast",
         "parameters":[
           {
             "description":"Internal, the unique numeric id of this collection.",
@@ -1002,7 +1002,7 @@
             "content":{
               "application/json":{
                 "schema":{},
-                "from_to":{}
+                "example":{}
               }
             }
           },
