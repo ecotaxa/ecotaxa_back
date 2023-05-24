@@ -94,8 +94,6 @@ class TaxonomyMapper(object):
         ret.update(WoRMSSetFromTaxaSet(self.session, list(phylo_auto_ids)).res)
 
         # Sanity check
-        # for an_id in ret.keys():
-        #     assert unieuk_per_id[an_id].type == 'P' # Not true
         for a_morpho_id, a_phylo_id in phylo_per_morpho.items():
             assert unieuk_per_id[a_morpho_id].type == "M"
             if a_phylo_id is None:

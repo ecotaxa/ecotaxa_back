@@ -99,11 +99,11 @@ class DarwinCoreExport(JobServiceBase):
             {
                 "collection_id": self.collection.id,
                 "dry_run": self.dry_run,
-                "with_zeroes": self.with_zeroes,
-                "with_computations": self.with_computations,
-                "auto_morpho": self.auto_morpho,
-                "formulae": self.formulae,
                 "taxo_recast": self.taxo_recast,
+                "include_predicted": self.include_predicted,
+                "with_absent": self.with_absent,
+                "with_computations": self.with_computations,
+                "formulae": self.formulae,
             }
         )
         return args
@@ -112,32 +112,36 @@ class DarwinCoreExport(JobServiceBase):
         self,
         collection_id: CollectionIDT,
         dry_run: bool,
-        with_zeroes: bool,
-        with_computations: List[SciExportTypeEnum],
-        auto_morpho: bool,
-        formulae: Dict[str, str],
         taxo_recast: TaxoRemappingT,
+        include_predicted: bool,
+        with_absent: bool,
+        with_computations: List[SciExportTypeEnum],
+        formulae: Dict[str, str],
     ):
         super().__init__()
-        # Input
-        self.dry_run = dry_run
-        self.with_zeroes = with_zeroes
-        self.auto_morpho = auto_morpho
-        self.with_computations = with_computations
+        # Old param now constant
+        self.auto_morpho = True
+        # Input params
         collection = self.ro_session.query(Collection).get(collection_id)
         assert collection is not None, "Invalid collection ID"
         self.collection = collection
+        self.dry_run = dry_run
+        self.include_predicted = include_predicted
+        self.taxo_recast = taxo_recast
+        # Output params
+        self.with_absent = with_absent
+        self.with_computations = with_computations
         if len(formulae) == 0 and len(with_computations) > 0:
             assert False, "Need formulae for " + str(with_computations)
         # TODO: We should have all this at project level now
         self.formulae = formulae
-        self.taxo_recast = taxo_recast
         #
         # During processing
         #
         # The Phylo taxa to their WoRMS counterpart
         self.phylo2worms: Dict[ClassifIDT, WoRMS] = {}
         # The Morpho taxa to their nearest Phylo parent
+        # Is computed always for taxonomic coverage
         self.morpho2phylo: TaxoRemappingT = {}
         self.taxa_per_sample: Dict[str, Set[ClassifIDT]] = {}
         # Output
@@ -205,7 +209,7 @@ class DarwinCoreExport(JobServiceBase):
         # Loop over _absent_ data
         # For https://github.com/ecotaxa/ecotaxa_dev/issues/603
         # Loop over taxa which are in the collection but not in present sample
-        if self.with_zeroes:
+        if self.with_absent:
             self.add_absent_occurrences(arch)
         # OK we issue warning in case of individual issue, but if there is no content at all
         # then it's an error
@@ -539,6 +543,7 @@ class DarwinCoreExport(JobServiceBase):
         self.phylo2worms, self.morpho2phylo = TaxonomyMapper(
             self.ro_session, list(used_taxa.keys())
         ).do_match()
+        # Check that no mapped P taxon is present anymore in the transformation to WoRMS
         assert set(self.phylo2worms.keys()).isdisjoint(set(self.morpho2phylo.keys()))
         # Warnings for non-matches
         for an_id, a_name in used_taxa.items():
@@ -614,10 +619,11 @@ class DarwinCoreExport(JobServiceBase):
                 nb_added = self.add_occurences(
                     sample=a_sample, arch=arch, event_id=event_id, predicted=False
                 )
-                by_ml = self.add_occurences(
-                    sample=a_sample, arch=arch, event_id=event_id, predicted=True
-                )
-                nb_added += by_ml
+                if self.include_predicted:
+                    by_ml = self.add_occurences(
+                        sample=a_sample, arch=arch, event_id=event_id, predicted=True
+                    )
+                    nb_added += by_ml
                 if nb_added == 0:
                     self.warnings.append(
                         "No occurrence added for sample '%s' in project #%d"

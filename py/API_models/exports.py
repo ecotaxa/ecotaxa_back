@@ -5,7 +5,7 @@
 from enum import Enum
 from typing import List, Dict, Optional
 
-from pydantic import Extra
+from pydantic import Extra, validator
 
 from helpers.pydantic import BaseModel, Field
 
@@ -134,6 +134,14 @@ class ExportReq(BaseModel):
         example=False,
     )
 
+    # noinspection PyMethodParameters
+    @validator("pre_mapping")
+    def username_alphanumeric(cls, v):
+        assert set(v.keys()).isdisjoint(
+            set(v.values())
+        ), "inconsistent pre_mapping, can't do remap chains or loops"
+        return v
+
     class Config:
         schema_extra = {"title": "Export request Model"}
 
@@ -143,34 +151,18 @@ class DarwinCoreExportReq(BaseModel):
     Darwin Core format export request, only allowed format for a Collection. @see https://dwc.tdwg.org/
     """
 
+    # Input
     collection_id: int = Field(
         title="Collection Id",
         description="The collection to export, by its internal Id.",
         example=1,
     )
+    # Transform
     dry_run: bool = Field(
         title="Dry run",
         description="If set, then only a diagnostic of doability will be done.",
         example=False,
-    )
-    with_zeroes: bool = Field(
-        title="With zeroes",
-        description="If set, then *absent* records will be generated, in the relevant samples, "
-        "for categories present in other samples.",
-        example=False,
-    )
-    auto_morpho: bool = Field(  # TODO: Really useful? We can't export Morpho anyway
-        title="Auto morpho",
-        description="If set, then any object classified on a Morpho category will be added "
-        "to the count of the nearest Phylo parent, upward in the tree.",
-        example=True,
-        default=True,
-    )
-    with_computations: List[SciExportTypeEnum] = Field(
-        title="With computations",
-        description="If set, then an attempt will be made to compute organisms abundances (ABO), "
-        "concentrations (CNC) or biovolumes (BIV).",
-        example=["ABO"],
+        default=False,
     )
     # TODO: Is same as TaxonomyRecast below, should get type TaxoRemappingT (or define it here)
     pre_mapping: Dict[int, Optional[int]] = Field(
@@ -181,12 +173,31 @@ class DarwinCoreExportReq(BaseModel):
         example={456: 956, 2456: 213},
         default={},
     )
+    include_predicted: bool = Field(
+        title="Include predicted",
+        description="If set, then predicted objects, as well as validated ones, will be exported.",
+        example=False,
+        default=False,
+    )
+    # Output
+    with_absent: bool = Field(
+        title="With absent",
+        description="If set, then *absent* records will be generated, in the relevant samples, "
+        "for categories present in other samples.",
+        example=False,
+        default=False,
+    )
+    with_computations: List[SciExportTypeEnum] = Field(
+        title="With computations",
+        description="Compute organisms abundances (ABO), concentrations (CNC) or biovolumes (BIV). Several possible.",
+        example=["ABO"],
+        default=[],
+    )
     formulae: Dict[str, str] = Field(
         title="Computation formulas",
         description="Transitory: How to get values from DB free columns. "
-        "Python syntax, prefixes are 'sam', 'ssm' and 'obj'."
-        "Variables used in computations are 'total_water_volume', 'subsample_coef' "
-        "and 'individual_volume'",
+        "Python syntax, prefixes are 'sam', 'ssm' and 'obj'. "
+        "Variables used in computations are 'total_water_volume', 'subsample_coef' and 'individual_volume'",
         example={
             "subsample_coef": "1/ssm.sub_part",
             "total_water_volume": "sam.tot_vol/1000",
@@ -194,6 +205,14 @@ class DarwinCoreExportReq(BaseModel):
         },
         default={},
     )
+
+    # noinspection PyMethodParameters
+    @validator("pre_mapping")
+    def username_alphanumeric(cls, v):
+        assert set(v.keys()).isdisjoint(
+            set(v.values())
+        ), "inconsistent pre_mapping, can't do remap chains or loops"
+        return v
 
     class Config:
         extra = Extra.forbid

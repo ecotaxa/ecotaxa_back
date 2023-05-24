@@ -270,7 +270,7 @@ ref_zip = {
     "meta.xml": _meta + _meta_emofs_with_computations,
     "occurrence.txt": _occurence,
 }
-with_zeroes_zip = {
+with_absent_zip = {
     "event.txt": _event,
     "eml.xml": _eml,
     "extendedmeasurementorfact.txt": _emofs,
@@ -283,4 +283,21 @@ no_computations_zip = {
     "extendedmeasurementorfact.txt": _emofs_no_comp,
     "meta.xml": _meta + _meta_emofs_without_computations,
     "occurrence.txt": _occurence,
+}
+
+
+def grep_dash_v(block: str, pattern: str):
+    lines = block.split("\n")
+    lines = [a_line for a_line in lines if pattern not in a_line]
+    return "\n".join(lines)
+
+
+no_predicted_zip = {
+    "event.txt": _event,
+    "eml.xml": _eml,
+    "extendedmeasurementorfact.txt": grep_dash_v(
+        _emofs, "sml_P_"
+    ),  # Filter out predicted
+    "meta.xml": _meta + _meta_emofs_with_computations,
+    "occurrence.txt": grep_dash_v(_occurence, "PredictedByMachine"),
 }

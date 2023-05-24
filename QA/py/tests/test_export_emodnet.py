@@ -9,7 +9,12 @@ from zipfile import ZipFile
 from starlette import status
 
 from tests.credentials import ADMIN_AUTH, REAL_USER_ID, CREATOR_AUTH, ADMIN_USER_ID
-from tests.emodnet_ref import ref_zip, with_zeroes_zip, no_computations_zip
+from tests.emodnet_ref import (
+    ref_zip,
+    with_absent_zip,
+    no_computations_zip,
+    no_predicted_zip,
+)
 from tests.export_shared import JOB_DOWNLOAD_URL
 from tests.formulae import uvp_formulae
 from tests.test_classification import _prj_query, OBJECT_SET_CLASSIFY_URL
@@ -29,14 +34,10 @@ COLLECTION_EXPORT_EMODNET_URL = "/collections/export/darwin_core"
 _req_tmpl = {
     "collection_id": None,
     "dry_run": False,
-    "with_zeroes": False,
+    "include_predicted": True,
+    "with_absent": False,
     "with_computations": [],
-    "auto_morpho": True,
     "formulae": uvp_formulae,
-    "pre_mapping": {
-        45072: 56693,  # Cyclopoida -> Actinopterygii
-        78418: None,  # Oncaeidae -> remove
-    },
 }
 
 COLLECTION_QUERY_BY_TITLE_URL = "/collections/by_title/?q={title}"
@@ -66,7 +67,7 @@ def do_test_emodnet_export(config, database, fastapi, caplog):
     req.update(
         {
             "collection_id": coll_id,
-            "with_zeroes": True,
+            "with_absent": True,
             "with_computations": ["ABO", "CNC", "BIV"],
         }
     )
@@ -204,7 +205,7 @@ This series is part of the long term planktonic monitoring of
     req.update(
         {
             "collection_id": coll_id,
-            "with_zeroes": True,
+            "with_absent": True,
             "with_computations": ["ABO", "CNC", "BIV"],
         }
     )
@@ -215,7 +216,7 @@ This series is part of the long term planktonic monitoring of
     api_check_job_ok(fastapi, job_id)
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
-    unzip_and_check(rsp.content, with_zeroes_zip)
+    unzip_and_check(rsp.content, with_absent_zip)
 
     req = _req_tmpl.copy()
     req.update({"collection_id": coll_id})
@@ -227,6 +228,28 @@ This series is part of the long term planktonic monitoring of
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
     unzip_and_check(rsp.content, no_computations_zip)
+
+    # Foreseen options for June 2023-like exports
+    req = _req_tmpl.copy()
+    req.update(
+        {
+            "collection_id": coll_id,
+            "include_predicted": False,
+            "with_computations": ["ABO", "CNC", "BIV"],
+            "pre_mapping": {
+                45072: 56693,  # Cyclopoida -> Actinopterygii
+                78418: None,  # Oncaeidae -> remove
+            },
+        }
+    )
+    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
+    assert rsp.status_code == status.HTTP_200_OK
+    job_id = rsp.json()["job_id"]
+    job = wait_for_stable(job_id)
+    api_check_job_ok(fastapi, job_id)
+    dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
+    rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
+    unzip_and_check(rsp.content, no_predicted_zip)
 
     url_query_back = COLLECTION_QUERY_BY_TITLE_URL.format(title=coll_title)
     rsp = fastapi.get(url_query_back)
@@ -269,6 +292,22 @@ def create_test_collection(caplog, config, database, fastapi, suffix):
     assert rsp.status_code == status.HTTP_200_OK
     coll_id = rsp.json()
     return coll_id, coll_title, prj_id, prj_json
+
+
+def test_emodnet_endpoint(config, database, fastapi, caplog):
+    req = _req_tmpl.copy()
+    req.update(
+        {
+            "collection_id": 0,
+            "pre_mapping": {  # Loop in mapping, not allowed
+                45072: 78418,
+                78418: 45072,
+            },
+        }
+    )
+    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert "inconsistent" in str(rsp.content)
 
 
 def unzip_and_check(zip_content, ref_content):

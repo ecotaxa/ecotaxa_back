@@ -5657,11 +5657,7 @@
       "DarwinCoreExportReq":{
         "title":"DarwinCoreExportReq",
         "required":[
-          "collection_id",
-          "dry_run",
-          "with_zeroes",
-          "auto_morpho",
-          "with_computations"
+          "collection_id"
         ],
         "type":"object",
         "properties":{
@@ -5675,27 +5671,64 @@
             "title":"Dry run",
             "type":"boolean",
             "description":"If set, then only a diagnostic of doability will be done.",
+            "default":false,
             "example":false
           },
-          "with_zeroes":{
-            "title":"With zeroes",
+          "pre_mapping":{
+            "title":"Categories mapping",
+            "type":"object",
+            "additionalProperties":{
+              "type":"integer"
+            },
+            "description":"Mapping from present taxon (key) to output replacement one (value). Use a null replacement to _discard_ the present taxon. Note: These are EcoTaxa categories, WoRMS mapping happens after, whatever.",
+            "default":{},
+            "example":{
+              "456":956,
+              "2456":213
+            }
+          },
+          "include_predicted":{
+            "title":"Include predicted",
+            "type":"boolean",
+            "description":"If set, then predicted objects, as well as validated ones, will be exported.",
+            "default":false,
+            "example":false
+          },
+          "with_absent":{
+            "title":"With absent",
             "type":"boolean",
             "description":"If set, then *absent* records will be generated, in the relevant samples, for categories present in other samples.",
-            "example":false
-          },
-          "auto_morpho":{
-            "title":"Auto morpho",
-            "type":"boolean",
-            "description":"If set, then any object classified on a Morpho category will be added to the count of the nearest Phylo parent, upward in the tree.",
+            "default":false,
             "example":false
           },
           "with_computations":{
             "title":"With computations",
-            "type":"boolean",
-            "description":"If set, then an attempt will be made to compute organisms concentrations and biovolumes.",
-            "example":false
+            "type":"array",
+            "items":{
+              "$ref":"#/components/schemas/SciExportTypeEnum"
+            },
+            "description":"Compute organisms abundances (ABO), concentrations (CNC) or biovolumes (BIV). Several possible.",
+            "default":[],
+            "example":[
+              "ABO"
+            ]
+          },
+          "formulae":{
+            "title":"Computation formulas",
+            "type":"object",
+            "additionalProperties":{
+              "type":"string"
+            },
+            "description":"Transitory: How to get values from DB free columns. Python syntax, prefixes are 'sam', 'ssm' and 'obj'. Variables used in computations are 'total_water_volume', 'subsample_coef' and 'individual_volume'",
+            "default":{},
+            "example":{
+              "subsample_coef":"1/ssm.sub_part",
+              "total_water_volume":"sam.tot_vol/1000",
+              "individual_volume":"4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3"
+            }
           }
         },
+        "additionalProperties":false,
         "description":"Darwin Core format export request, only allowed format for a Collection. @see https://dwc.tdwg.org/"
       },
       "DirectoryEntryModel":{
@@ -7867,6 +7900,16 @@
             "description":"The number of predicted objects inside the sample."
           }
         }
+      },
+      "SciExportTypeEnum":{
+        "title":"SciExportTypeEnum",
+        "enum":[
+          "ABO",
+          "CNC",
+          "BIV"
+        ],
+        "type":"string",
+        "description":"Computed export quantities"
       },
       "SimpleImportReq":{
         "title":"Simple import request Model",

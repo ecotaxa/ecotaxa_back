@@ -754,11 +754,11 @@ def emodnet_format_export(
     with DarwinCoreExport(
         request.collection_id,
         request.dry_run,
-        request.with_zeroes,
-        request.with_computations,
-        request.auto_morpho,
-        request.formulae,
         request.pre_mapping,
+        request.include_predicted,
+        request.with_absent,
+        request.with_computations,
+        request.formulae,
     ) as sce:
         with RightsThrower():
             return sce.run(current_user)
