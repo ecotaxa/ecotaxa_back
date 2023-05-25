@@ -295,10 +295,14 @@ class ObjectSetQueryPlus(object):
         From parts of the ObjectSet SQL, inject the needed mapping, with a CTE.
         """
         pairs = []
+        all_null: bool = True
         for from_txo, to_txo in self.taxo_mapping.items():
-            pairs.append(
-                "(%d,%s)" % (from_txo, "NULL" if to_txo is None else str(to_txo))
-            )
+            all_null = all_null and to_txo is None
+            to_val = "NULL" if to_txo is None else str(to_txo)
+            pairs.append("(%d,%s)" % (from_txo, to_val))
+        # PG needs a type if there is no value at all
+        if all_null:
+            pairs[-1] = pairs[-1][:-1] + "::int)"
         cte_txt = "WITH mpg (src_id, dst_id)" + " AS (VALUES " + ",".join(pairs) + ") "
         txo_join, idx = from_.find_join("taxonomy txo")
         # Read: when there was no mapping then lookup using classif_id else pick lookup even if null

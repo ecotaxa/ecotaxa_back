@@ -127,13 +127,14 @@ class DarwinCoreExport(JobServiceBase):
         self.collection = collection
         self.dry_run = dry_run
         self.include_predicted = include_predicted
-        self.taxo_recast = taxo_recast
+        # Args are serialized in JSON -> keys have become str
+        self.taxo_recast: TaxoRemappingT = {int(k): v for k, v in taxo_recast.items()}
         # Output params
         self.with_absent = with_absent
         self.with_computations = with_computations
         if len(formulae) == 0 and len(with_computations) > 0:
             assert False, "Need formulae for " + str(with_computations)
-        # TODO: We should have all this at project level now
+        # TODO: We have all this at project level now, but how to mix with API?
         self.formulae = formulae
         #
         # During processing
@@ -153,7 +154,7 @@ class DarwinCoreExport(JobServiceBase):
         self.produced_count = 0
         self.ignored_count: Dict[ClassifIDT, int] = {}
         self.ignored_morpho: int = 0
-        self.ignored_taxa: Dict[ClassifIDT, Tuple[str, ClassifIDT]] = {}
+        self.ignored_taxa: Dict[ClassifIDT, Tuple[ClassifIDT, str]] = {}
         self.unknown_nets: Dict[str, List[str]] = {}
         self.empty_samples: List[Tuple[ProjectIDT, str]] = []
         self.stats_per_rank: Dict[str, Dict[str, Any]] = {}
@@ -534,22 +535,53 @@ class DarwinCoreExport(JobServiceBase):
         """
         ret: List[EMLTaxonomicClassification] = []
         # Fetch the used taxa in the projects
-        taxo_qry = self.session.query(ProjectTaxoStat.id, Taxonomy.name).distinct()
-        taxo_qry = taxo_qry.filter(ProjectTaxoStat.id == Taxonomy.id)
+        taxo_qry = self.session.query(ProjectTaxoStat.id).distinct()
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.nbr > 0)
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid.in_(project_ids))
-        used_taxa = {an_id: a_name for (an_id, a_name) in taxo_qry}
+        used_taxa = {an_id for an_id, in taxo_qry}
+        # The recast destination taxa might appear in coverage
+        recast_taxa = used_taxa.copy()
+        for from_, to_ in self.taxo_recast.items():
+            if from_ in used_taxa:
+                recast_taxa.discard(from_)
+                if to_ is not None:
+                    recast_taxa.add(to_)
         # Map them to WoRMS
         self.phylo2worms, self.morpho2phylo = TaxonomyMapper(
-            self.ro_session, list(used_taxa.keys())
+            self.ro_session, list(recast_taxa)
         ).do_match()
-        # Check that no mapped P taxon is present anymore in the transformation to WoRMS
+        # Sanity check that no mapped P taxon is present anymore in the transformation to WoRMS
         assert set(self.phylo2worms.keys()).isdisjoint(set(self.morpho2phylo.keys()))
+        # Update recast to apply during calculations
+        full_recast: TaxoRemappingT = {}
+        provided_recast = self.taxo_recast.copy()
+        for from_, to_ in self.morpho2phylo.items():
+            if to_ in provided_recast:
+                # The target phylo is a recast source
+                recast_to = provided_recast[to_]
+                if recast_to is not None:
+                    full_recast[from_] = recast_to
+                else:
+                    full_recast[from_] = None  # Drop entry
+                del provided_recast[from_]
+            elif from_ in provided_recast:
+                # The source morpho is a recast source
+                # Override with provided recast, if None then drop it's OK
+                full_recast[from_] = provided_recast[from_]
+                del provided_recast[from_]
+            else:
+                # No impact on this entry from provided recast
+                full_recast[from_] = to_
+        # Re-inject what's left
+        full_recast.update(provided_recast)
+        self.morpho2phylo = full_recast
         # Warnings for non-matches
-        for an_id, a_name in used_taxa.items():
+        for an_id in recast_taxa:
             if an_id not in self.phylo2worms:
-                if not an_id in self.morpho2phylo:
-                    self.ignored_taxa[an_id] = (a_name, an_id)
+                if an_id not in self.morpho2phylo:
+                    txon = self.session.get(Taxonomy, an_id)
+                    assert txon is not None
+                    self.ignored_taxa[an_id] = (an_id, txon.name)
                     self.ignored_count[an_id] = 0
         # TODO: Temporary until the whole system has a WoRMS taxo tree
         # Error out if nothing at all
