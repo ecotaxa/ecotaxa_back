@@ -145,7 +145,7 @@ class CollectionBO(object):
         project_ids.sort()
         # TODO: projects update using given list
         assert project_ids == self.project_ids, "Cannot update composing projects yet"
-        # Redo sanity check & aggregation as underlying projects might have changed
+        # Redo sanity check & aggregation as underlying projects might have changed (or not as stated just above. lol)
         self._add_composing_projects(session, project_ids)
         coll_id = self._collection.id
         # Simple fields update

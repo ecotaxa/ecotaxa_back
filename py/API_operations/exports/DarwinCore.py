@@ -537,6 +537,7 @@ class DarwinCoreExport(JobServiceBase):
         # Fetch the used taxa in the projects
         taxo_qry = self.session.query(ProjectTaxoStat.id).distinct()
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.nbr > 0)
+        taxo_qry = taxo_qry.filter(ProjectTaxoStat.id > 0)  # Exclude unclassified
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid.in_(project_ids))
         used_taxa = {an_id for an_id, in taxo_qry}
         # The recast destination taxa might appear in coverage
