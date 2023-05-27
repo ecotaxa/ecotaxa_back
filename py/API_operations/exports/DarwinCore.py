@@ -987,14 +987,6 @@ class DarwinCoreExport(JobServiceBase):
         for a_lsid, for_lsid in by_lsid_desc.items():
             occurrence_id, aggreg_for_lsid, worms = for_lsid
             self.produced_count += aggreg_for_lsid.abundance
-            # TODO: More in record depends on the status (validated or just predicted),
-            #  not just identificationVerificationStatus
-            # @see https://github.com/ecotaxa/ecotaxa_front/issues/764#issuecomment-1420324532
-            verif_status = (
-                IdentificationVerificationEnum.predictedByMachine
-                if predicted
-                else IdentificationVerificationEnum.validatedByHuman
-            )
             occ = DwC_Occurrence(
                 eventID=event_id,
                 occurrenceID=occurrence_id,
@@ -1005,8 +997,17 @@ class DarwinCoreExport(JobServiceBase):
                 kingdom=worms.kingdom,
                 occurrenceStatus=OccurrenceStatusEnum.present,
                 basisOfRecord=BasisOfRecordEnum.machineObservation,
-                identificationVerificationStatus=verif_status,
             )
+            if self.include_predicted:
+                # TODO: More in record depends on the status (validated or just predicted),
+                #  not just identificationVerificationStatus
+                # @see https://github.com/ecotaxa/ecotaxa_front/issues/764#issuecomment-1420324532
+                verif_status = (
+                    IdentificationVerificationEnum.predictedByMachine
+                    if predicted
+                    else IdentificationVerificationEnum.validatedByHuman
+                )
+                occ.identificationVerificationStatus = verif_status
             arch.occurences.add(occ)
             nb_added_occurences += 1
             # Add eMoFs if possible and required, but the decision is made inside the def

@@ -175,7 +175,8 @@ class DarwinCoreExportReq(BaseModel):
     )
     include_predicted: bool = Field(
         title="Include predicted",
-        description="If set, then predicted objects, as well as validated ones, will be exported.",
+        description="If set, then predicted objects, as well as validated ones, will be exported. "
+        "A validation status will allow to distinguish between the two possible statuses.",
         example=False,
         default=False,
     )

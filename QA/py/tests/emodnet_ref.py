@@ -149,7 +149,7 @@ _meta = r"""
     <field index="1" term="http://rs.tdwg.org/dwc/terms/eventID"/>
     <field index="2" term="http://rs.tdwg.org/dwc/terms/occurrenceID"/>
     <field index="3" term="http://rs.tdwg.org/dwc/terms/basisOfRecord"/>
-    <field index="4" term="https://dwc.tdwg.org/list/#dwc_identificationVerificationStatus"/>
+    <field index="4" term="http://rs.tdwg.org/dwc/terms/identificationVerificationStatus"/>
     <field index="5" term="http://rs.tdwg.org/dwc/terms/scientificName"/>
     <field index="6" term="http://rs.tdwg.org/dwc/terms/scientificNameID"/>
     <field index="7" term="http://rs.tdwg.org/dwc/terms/kingdom"/>

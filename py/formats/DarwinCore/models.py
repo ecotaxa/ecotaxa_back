@@ -145,10 +145,14 @@ class DwcOccurrence(BaseModel):
     # identified By # TODO
 
     identificationVerificationStatus: Optional[IdentificationVerificationEnum] = Field(
-        term="https://dwc.tdwg.org/list/#dwc_identificationVerificationStatus"
+        term="http://rs.tdwg.org/dwc/terms/identificationVerificationStatus"
     )
-    # identification References # TODO
-    # associated Media # TODO
+
+    # https://github.com/ecotaxa/ecotaxa_front/issues/764#issuecomment-1508165516
+    # We don't do see comment above
+    # identificationReferences
+    # We don't do see comment above
+    # associatedMedia
 
     # Identification fields
     scientificName: str = Field(term="http://rs.tdwg.org/dwc/terms/scientificName")
