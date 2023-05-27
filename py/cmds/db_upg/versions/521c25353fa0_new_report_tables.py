@@ -23,8 +23,7 @@ def upgrade():
         sa.Column("total_water_volume", sa.VARCHAR(), nullable=True),
         sa.Column("individual_volume", sa.VARCHAR(), nullable=True),
         sa.ForeignKeyConstraint(
-            ["project_id"],
-            ["projects.projid"],
+            ["project_id"], ["projects.projid"], ondelete="CASCADE"
         ),
         sa.PrimaryKeyConstraint("project_id"),
     )

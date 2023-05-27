@@ -227,7 +227,7 @@ create unique index obj_paths$i on obj_paths(projid, sampleid, acquisid, process
 update acquisitions acq set orig_id = '__DUMMY_ID2__'||sam.sampleid||'__'
   from samples sam
  where acq.orig_id is null
-   and exists (select 1 from obj_paths oph 
+   and exists (select 1 from obj_paths oph
                 where oph.projid = acq.projid
                   and oph.sampleid = sam.sampleid
                   and oph.acquisid = acq.acquisid);
@@ -235,7 +235,7 @@ update acquisitions acq set orig_id = '__DUMMY_ID2__'||sam.sampleid||'__'
 update samples sam set orig_id = '__DUMMY_ID2__'||prj.projid||'__'
   from projects prj
  where sam.orig_id is null
-   and exists (select 1 from obj_paths oph 
+   and exists (select 1 from obj_paths oph
                 where oph.projid = sam.projid
                   and oph.sampleid = sam.sampleid);
 
@@ -264,7 +264,7 @@ as select sam.sampleid as dst_id, array_agg(sam2.sampleid) as src_id from sample
                    -- (re) computed columns
                    -- and (sam2.latitude = sam.latitude or (sam2.latitude is null and sam.latitude is null))
                    -- and (sam2.longitude = sam.longitude or (sam2.longitude is null and sam.longitude is null))
-                   and (sam2.dataportal_descriptor = sam.dataportal_descriptor or 
+                   and (sam2.dataportal_descriptor = sam.dataportal_descriptor or
                    (sam2.dataportal_descriptor is null and sam.dataportal_descriptor is null))
                    and (sam2.t01 = sam.t01 or (sam2.t01 is null and sam.t01 is null))
                    and (sam2.t02 = sam.t02 or (sam2.t02 is null and sam.t02 is null))
@@ -309,7 +309,7 @@ commit;
 
 begin;
 create temp table acquis_remap
-as 
+as
 select acq.acquisid as dst_id, array_agg(acq2.acquisid) as src_id from acquisitions acq
  join acquisitions acq2 on acq2.acquisid > acq.acquisid
                    and acq2.projid = acq.projid
@@ -405,23 +405,23 @@ commit;
 
 begin;
 update samples sam
-   set orig_id = orig_id || '_:' || (select count(1) from samples sam2 
+   set orig_id = orig_id || '_:' || (select count(1) from samples sam2
                                       where sam2.projid = sam.projid
                                         and sam2.orig_id = sam.orig_id
                                         and sam2.sampleid < sam.sampleid)
  where exists (select 1 from samples sam2
                where sam2.projid = sam.projid
-                 and sam2.orig_id = sam.orig_id 
+                 and sam2.orig_id = sam.orig_id
                  and sam2.sampleid < sam.sampleid );
 
 update acquisitions acq
-   set orig_id = orig_id || '_:' || (select count(1) from acquisitions acq2 
+   set orig_id = orig_id || '_:' || (select count(1) from acquisitions acq2
                                       where acq2.projid = acq.projid
                                         and acq2.orig_id = acq.orig_id
                                         and acq2.acquisid < acq.acquisid)
  where exists (select 1 from acquisitions acq2
                where acq2.projid = acq.projid
-                 and acq2.orig_id = acq.orig_id 
+                 and acq2.orig_id = acq.orig_id
                  and acq2.acquisid < acq.acquisid );
 commit;
 
@@ -466,9 +466,9 @@ create unique index tmp_acq_proc$ap on tmp_acq_proc(acquisid, processid);
 create unique index tmp_acq_proc$pa on tmp_acq_proc(processid, acquisid);
 
 -- Create one new process per _extra_ acquisition in group
-with procs_with_several_acqs as (select processid, min(acquisid) as min_acquisid 
-                                   from tmp_acq_proc 
-                                  group by processid 
+with procs_with_several_acqs as (select processid, min(acquisid) as min_acquisid
+                                   from tmp_acq_proc
+                                  group by processid
                                  having count(1) > 1)
 update tmp_acq_proc tap
    set processid_to = nextval('seq_process')
@@ -476,19 +476,19 @@ update tmp_acq_proc tap
  where tap.processid = pwsa.processid
    and tap.acquisid > pwsa.min_acquisid;
 
-insert into process (processid, projid, orig_id, 
-                     t01, t02, t03, t04, t05, t06, t07, t08, t09, t10, 
-                     t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, 
+insert into process (processid, projid, orig_id,
+                     t01, t02, t03, t04, t05, t06, t07, t08, t09, t10,
+                     t11, t12, t13, t14, t15, t16, t17, t18, t19, t20,
                      t21, t22, t23, t24, t25, t26, t27, t28, t29, t30)
-select tap.processid_to, prc.projid, prc.orig_id, 
-       prc.t01, prc.t02, prc.t03, prc.t04, prc.t05, prc.t06, prc.t07, prc.t08, prc.t09, prc.t10, 
-       prc.t11, prc.t12, prc.t13, prc.t14, prc.t15, prc.t16, prc.t17, prc.t18, prc.t19, prc.t20, 
+select tap.processid_to, prc.projid, prc.orig_id,
+       prc.t01, prc.t02, prc.t03, prc.t04, prc.t05, prc.t06, prc.t07, prc.t08, prc.t09, prc.t10,
+       prc.t11, prc.t12, prc.t13, prc.t14, prc.t15, prc.t16, prc.t17, prc.t18, prc.t19, prc.t20,
        prc.t21, prc.t22, prc.t23, prc.t24, prc.t25, prc.t26, prc.t27, prc.t28, prc.t29, prc.t30
   from process prc
   join tmp_acq_proc tap on tap.processid = prc.processid and tap.processid_to is not null;
 
 with procs_to_remap as (select acquisid, processid, processid_to
-                                                  from tmp_acq_proc 
+                                                  from tmp_acq_proc
                                                  where processid_to is not null)
 update obj_head obh
    set processid=rmp.processid_to
@@ -497,36 +497,36 @@ update obj_head obh
    and obh.processid = rmp.processid;
 
 -- Create one new acquisition per _extra_ process in group
-with acqs_with_several_procs as (select acquisid, min(processid) as min_processid 
-                                   from tmp_acq_proc 
-                                  group by acquisid 
+with acqs_with_several_procs as (select acquisid, min(processid) as min_processid
+                                   from tmp_acq_proc
+                                  group by acquisid
                                  having count(1) > 1)
 update tmp_acq_proc tap
    set acquisid_to = nextval('seq_acquisitions')
   from acqs_with_several_procs awsp
- where tap.acquisid = awsp.acquisid 
+ where tap.acquisid = awsp.acquisid
    and tap.processid > awsp.min_processid;
 
-insert into acquisitions (acquisid, projid, 
+insert into acquisitions (acquisid, projid,
                           orig_id,
                           instrument,
-                          t01, t02, t03, t04, t05, t06, t07, t08, t09, t10, 
-                          t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, 
+                          t01, t02, t03, t04, t05, t06, t07, t08, t09, t10,
+                          t11, t12, t13, t14, t15, t16, t17, t18, t19, t20,
                           t21, t22, t23, t24, t25, t26, t27, t28, t29, t30)
 select tap.acquisid_to, acq.projid,
-       acq.orig_id || '_:' || (select count(1) from tmp_acq_proc tap2 
+       acq.orig_id || '_:' || (select count(1) from tmp_acq_proc tap2
                                 where tap2.acquisid = tap.acquisid
-                                  and tap2.processid < tap.processid), 
+                                  and tap2.processid < tap.processid),
        acq.instrument,
-       acq.t01, acq.t02, acq.t03, acq.t04, acq.t05, acq.t06, acq.t07, acq.t08, acq.t09, acq.t10, 
-       acq.t11, acq.t12, acq.t13, acq.t14, acq.t15, acq.t16, acq.t17, acq.t18, acq.t19, acq.t20, 
+       acq.t01, acq.t02, acq.t03, acq.t04, acq.t05, acq.t06, acq.t07, acq.t08, acq.t09, acq.t10,
+       acq.t11, acq.t12, acq.t13, acq.t14, acq.t15, acq.t16, acq.t17, acq.t18, acq.t19, acq.t20,
        acq.t21, acq.t22, acq.t23, acq.t24, acq.t25, acq.t26, acq.t27, acq.t28, acq.t29, acq.t30
   from acquisitions acq
   join tmp_acq_proc tap on tap.acquisid = acq.acquisid and tap.acquisid_to is not null;
 
 -- Apply the change to objects where needed
 with acqs_to_remap as (select acquisid, processid, acquisid_to
-                         from tmp_acq_proc 
+                         from tmp_acq_proc
                         where acquisid_to is not null)
 update obj_head obh
    set acquisid=rmp.acquisid_to
@@ -556,12 +556,12 @@ update process prc
  where prc.processid = -coalesce(tap.processid_to, tap.processid);
 
 ALTER TABLE process ADD CONSTRAINT process_pkey PRIMARY KEY (processid);
- 
+
 commit;
 
-create view objects as 
+create view objects as
                   select oh.*, oh.acquisid as processid, ofi.*
-                    from obj_head oh 
+                    from obj_head oh
                     join obj_field ofi on oh.objid=ofi.objfid;
 
 UPDATE alembic_version SET version_num='d3309bb7012e' WHERE alembic_version.version_num = '63d8b0d2196a';
@@ -1146,7 +1146,7 @@ UPDATE alembic_version SET version_num='8ac7e3c29305' WHERE alembic_version.vers
 
 COMMIT;
 
--- Running upgrade 8ac7e3c29305 -> 521c25353fa0
+-- Running upgrade 8ac7e3c29305 -> 521c25353fa0, new report tables
 
 CREATE TABLE projects_variables (
     project_id INTEGER NOT NULL,
@@ -1154,20 +1154,36 @@ CREATE TABLE projects_variables (
     total_water_volume VARCHAR,
     individual_volume VARCHAR,
     PRIMARY KEY (project_id),
-    FOREIGN KEY(project_id) REFERENCES projects (projid)
+    FOREIGN KEY(project_id) REFERENCES projects (projid) ON DELETE CASCADE
 );
 
-CREATE TABLE taxo_recast (
-    collection_id INTEGER NOT NULL,
-    project_id INTEGER NOT NULL,
-    operation VARCHAR(32) NOT NULL,
-    transform VARCHAR NOT NULL,
-    PRIMARY KEY (collection_id, project_id, operation),
-    FOREIGN KEY(collection_id) REFERENCES collection (id),
-    FOREIGN KEY(project_id) REFERENCES projects (projid)
-);
+ALTER TABLE obj_field ADD COLUMN acquis_id INTEGER;
+
+CREATE INDEX obj_field_acquisid_objfid_idx ON obj_field (acquis_id, objfid);
+
+update obj_field set acquis_id = (select acquisid from obj_head where objid = objfid) where acquis_id is null;
 
 UPDATE alembic_version SET version_num='521c25353fa0' WHERE alembic_version.version_num = '8ac7e3c29305';
+
+-- Cluster for perfs - not from Alembic
+
+cluster obj_field using obj_field_acquisid_objfid_idx;
+
+-- Running upgrade 521c25353fa0 -> 34d91185174c, Taxo recast AKA remapping storage
+
+CREATE TABLE taxo_recast (
+    recast_id INTEGER GENERATED ALWAYS AS IDENTITY,
+    collection_id INTEGER,
+    project_id INTEGER,
+    operation VARCHAR(16) NOT NULL,
+    transforms JSONB NOT NULL,
+    documentation JSONB NOT NULL,
+    PRIMARY KEY (recast_id),
+    FOREIGN KEY(collection_id) REFERENCES collection (id) ON DELETE CASCADE,
+    FOREIGN KEY(project_id) REFERENCES projects (projid) ON DELETE CASCADE
+);
+
+UPDATE alembic_version SET version_num='34d91185174c' WHERE alembic_version.version_num = '521c25353fa0';
 
 COMMIT;
 
