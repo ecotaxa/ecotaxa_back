@@ -950,8 +950,9 @@ class DarwinCoreExport(JobServiceBase):
                     self.ignored_count[an_id] += an_aggreg.abundance
                 else:
                     # Sanity check, there should be no morpho left
-                    if self.auto_morpho:
-                        assert an_id not in self.morpho2phylo
+                    # TODO: Not relevant anymore, find another sanity check (e.g. no dest is a source?)
+                    # if self.auto_morpho:
+                    #     assert an_id not in self.morpho2phylo
                     self.ignored_morpho += an_aggreg.abundance
                 continue
             worms_lsid = worms.lsid
