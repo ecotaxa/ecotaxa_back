@@ -78,11 +78,12 @@ class CollectionBO(object):
             COLLECTION_ROLE_ASSOCIATED_PERSON: self.associate_organisations,
         }
         an_org_and_role: CollectionOrgaRole
+        provider = COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER
         for an_org_and_role in self._collection.organisations_by_role:
-    if an_org_and_role.role == COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER:
-        self.code_provider_org = an_org_and_role.organisation
-    else:
-        by_role_org[an_org_and_role.role].append(an_org_and_role.organisation)
+            if an_org_and_role.role == provider:
+                self.code_provider_org = an_org_and_role.organisation
+            else:
+                by_role_org[an_org_and_role.role].append(an_org_and_role.organisation)
         return self
 
     def _read_composing_projects(self):
