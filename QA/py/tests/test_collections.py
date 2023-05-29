@@ -114,6 +114,8 @@ def test_collection_lifecycle(config, database, fastapi, caplog):
     A bit less abstract...
     """
     the_coll["short_title"] = "my-tiny-title"
+    the_coll["associate_organisations"] = ["An org"]
+    the_coll["creator_organisations"] = ["At least one (ONE)"]
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=the_coll)
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -132,13 +134,13 @@ def test_collection_lifecycle(config, database, fastapi, caplog):
             "abstract": """
     A bit less abstract...
     """,
-            "associate_organisations": [],
+            "associate_organisations": ["An org"],
             "associate_users": [],
             "external_id": "?",
             "external_id_system": "?",
             "citation": None,
             "contact_user": None,
-            "creator_organisations": [],
+            "creator_organisations": ["At least one (ONE)"],
             "creator_users": [],
             "description": None,
             "id": coll_id,
