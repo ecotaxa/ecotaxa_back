@@ -66,6 +66,7 @@ class CollectionProject(Model):
 
 COLLECTION_ROLE_DATA_CREATOR = "C"
 COLLECTION_ROLE_ASSOCIATED_PERSON = "A"
+COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER = "P"
 
 
 class CollectionUserRole(Model):

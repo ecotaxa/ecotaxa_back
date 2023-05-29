@@ -18,6 +18,10 @@ _eml = r"""
     </address>
     <electronicMailAddress>real@users.com</electronicMailAddress>
   </creator>
+  <creator>
+    <organizationName>Institut de la Mer de Villefranche (IMEV)</organizationName>
+    <address/>
+  </creator>
   <metadataProvider>
     <individualName>
       <givenName>Real</givenName>

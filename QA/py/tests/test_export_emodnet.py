@@ -144,6 +144,7 @@ This series is part of the long term planktonic monitoring of
         "name": "User Creating Projects",
     }
     the_coll["creator_users"] = [user_doing_all]
+    the_coll["creator_organisations"] = ["Institut de la Mer de Villefranche (IMEV)"]
     the_coll["contact_user"] = user_doing_all
     the_coll["provider_user"] = user_doing_all
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=the_coll)

@@ -190,23 +190,19 @@ class DarwinCoreExport(JobServiceBase):
         # Update DB statistics
         self.update_db_stats()
         # Build metadata with what comes from the collection
-        meta = self.build_meta()
+        meta, institution_code = self.build_meta()
         if meta is None:
             # If we can't have meta there has to be reasons
             assert len(self.errors) > 0
             self.set_job_result(self.errors, {"wrns": self.warnings})
             return
         # Create a container
-        # TODO: Duplicated code
         arch = DwC_Archive(
             DatasetMetadata(meta),
             self.temp_for_jobs.base_dir_for(self.job_id) / self.DWC_ZIP_NAME,
         )
         # Add data from DB
-        # OK because https://edmo.seadatanet.org/v_edmo/browse_step.asp?step=003IMEV_0021
-        # But TODO: hardcoded, implement https://github.com/oceanomics/ecotaxa_dev/issues/514
-        self.institution_code = "IMEV"
-        self.add_events(arch)
+        self.add_events(arch, institution_code)
         # Loop over _absent_ data
         # For https://github.com/ecotaxa/ecotaxa_dev/issues/603
         # Loop over taxa which are in the collection but not in present sample
@@ -357,9 +353,10 @@ class DarwinCoreExport(JobServiceBase):
 
     OK_LICENSES = [LicenseEnum.CC0, LicenseEnum.CC_BY, LicenseEnum.CC_BY_NC]
 
-    def build_meta(self) -> Optional[EMLMeta]:
+    def build_meta(self) -> Tuple[Optional[EMLMeta], str]:
         """
         Various queries/copies on/from the projects for getting metadata.
+        Also extract the institutionCode from the collection.
         """
         ret = None
         the_collection: CollectionBO = CollectionBO(self.collection).enrich()
@@ -398,7 +395,7 @@ class DarwinCoreExport(JobServiceBase):
                 "No valid metadata provider user found for EML metadata."
             )
 
-        associates: List[EMLPerson] = []
+        associates: List[EMLAssociatedPerson] = []
         for a_user in the_collection.associate_users:
             person, errs = self.user_to_eml_person(
                 a_user, "associated person %d" % a_user.id
@@ -411,8 +408,13 @@ class DarwinCoreExport(JobServiceBase):
                     self.eml_person_to_associated_person(person, "originator")
                 )
         for an_org in the_collection.associate_organisations:
-            # noinspection PyTypeChecker
-            associates.append(self.organisation_to_eml_person(an_org))
+            person_from_org = self.organisation_to_eml_person(an_org)
+            role = "originator"
+            if an_org == the_collection.code_provider_org:
+                role = "custody"
+            associates.append(
+                self.eml_person_to_associated_person(person_from_org, role)
+            )
 
         # TODO if needed
         # EMLAssociatedPerson = EMLPerson + specific role
@@ -524,7 +526,7 @@ class DarwinCoreExport(JobServiceBase):
                 additionalMetadata=meta_plus,
                 informationUrl=info_url,
             )
-        return ret
+        return ret, the_collection.get_institution_code()
 
     def get_taxo_coverage(
         self, project_ids: ProjectIDListT
@@ -611,7 +613,7 @@ class DarwinCoreExport(JobServiceBase):
         # Round coordinates to ~ 110mm
         return "%.6f" % lat_or_lon
 
-    def add_events(self, arch: DwC_Archive) -> None:
+    def add_events(self, arch: DwC_Archive, institution_code: str) -> None:
         """
         Add DwC events into the archive.
             We produce sample-type events.
@@ -638,7 +640,7 @@ class DarwinCoreExport(JobServiceBase):
                 evt = DwC_Event(
                     eventID=event_id,
                     type=evt_type,
-                    institutionCode=self.institution_code,
+                    institutionCode=institution_code,
                     datasetName=ds_name,
                     eventDate=evt_date,
                     decimalLatitude=latitude,

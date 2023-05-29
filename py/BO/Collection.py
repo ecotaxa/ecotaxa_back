@@ -2,6 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import re
 from typing import List, Any, Optional, Set, cast, Dict
 
 from BO.DataLicense import DataLicense, LicenseEnum
@@ -13,6 +14,7 @@ from DB.Collection import (
     CollectionOrgaRole,
     Collection,
     CollectionUserRole,
+    COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER,
 )
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
@@ -46,6 +48,7 @@ class CollectionBO(object):
         self.associate_users: List[User] = []
         self.creator_organisations: List[OrganisationIDT] = []
         self.associate_organisations: List[OrganisationIDT] = []
+        self.code_provider_org: Optional[OrganisationIDT] = None
 
     def enrich(self) -> "CollectionBO":
         """
@@ -76,7 +79,10 @@ class CollectionBO(object):
         }
         an_org_and_role: CollectionOrgaRole
         for an_org_and_role in self._collection.organisations_by_role:
-            by_role_org[an_org_and_role.role].append(an_org_and_role.organisation)
+    if an_org_and_role.role == COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER:
+        self.code_provider_org = an_org_and_role.organisation
+    else:
+        by_role_org[an_org_and_role.role].append(an_org_and_role.organisation)
         return self
 
     def _read_composing_projects(self):
@@ -196,6 +202,14 @@ class CollectionBO(object):
                         collection_id=coll_id, organisation=an_org, role=a_role
                     )
                 )
+        # First org is the institutionCode provider
+        session.add(
+            CollectionOrgaRole(
+                collection_id=coll_id,
+                organisation=creator_orgs[0],
+                role=COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER,
+            )
+        )
         session.commit()
 
     def set_composing_projects(self, session: Session, project_ids: ProjectIDListT):
@@ -271,3 +285,18 @@ class CollectionBO(object):
         # Remove collection
         session.query(Collection).filter(Collection.id == coll_id).delete()
         session.commit()
+
+    CODE_RE = re.compile(
+        "\\(([A-Z]+)\\)$"
+    )  # Quite strict, just uppercase letters at the end of the name
+
+    def get_institution_code(self) -> str:
+        """
+        Conventionally, institution code is the first (sent via API) creator org short name.
+        e.g. Institut de la Mer de Villefranche (IMEV) -> IMEV
+        """
+        found = self.CODE_RE.findall(str(self.code_provider_org))
+        if len(found) == 1:
+            return found[0]
+        else:
+            return "?"
