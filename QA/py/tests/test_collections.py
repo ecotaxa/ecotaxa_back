@@ -67,15 +67,7 @@ def test_collection_lifecycle(config, database, fastapi, caplog, who):
         "eHFCM",
     ]
 
-    # Grant project to other user if relevant
-    if who != ADMIN_AUTH:
-        url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
-        rsp = fastapi.get(url, headers=ADMIN_AUTH)
-        prj_json = rsp.json()
-        prj_json["managers"].append(fastapi.get(USER_ME_URL, headers=who).json())
-        url = PROJECT_UPDATE_URL.format(project_id=prj_id)
-        rsp = fastapi.put(url, headers=ADMIN_AUTH, json=prj_json)
-        assert rsp.status_code == status.HTTP_200_OK
+    regrant_if_needed(fastapi, prj_id, who)
 
     # And creates a collection with it
     url = COLLECTION_CREATE_URL
@@ -190,3 +182,15 @@ def test_collection_lifecycle(config, database, fastapi, caplog, who):
     url = COLLECTION_QUERY_URL.format(collection_id=coll_id)
     rsp = fastapi.get(url, headers=who)
     assert rsp.status_code == status.HTTP_404_NOT_FOUND
+
+
+def regrant_if_needed(fastapi, prj_id, who):
+    # Grant project to other user if relevant
+    if who != ADMIN_AUTH:
+        url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
+        rsp = fastapi.get(url, headers=ADMIN_AUTH)
+        prj_json = rsp.json()
+        prj_json["managers"].append(fastapi.get(USER_ME_URL, headers=who).json())
+        url = PROJECT_UPDATE_URL.format(project_id=prj_id)
+        rsp = fastapi.put(url, headers=ADMIN_AUTH, json=prj_json)
+        assert rsp.status_code == status.HTTP_200_OK

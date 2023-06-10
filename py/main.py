@@ -784,7 +784,7 @@ def erase_collection(
 
     i.e. the precious fields, as the projects are just linked-at from the collection.
 
-    🔒 *For admins only.*
+    Note: Only manageable collections can be deleted.
     """
     with CollectionsService() as sce:
         with RightsThrower():

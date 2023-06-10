@@ -19,7 +19,6 @@ from BO.Object import ObjectBO
 from BO.ObjectSet import ObjectIDListT
 from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
-from DB import Role
 from DB.Object import ObjectFields
 from DB.Project import ProjectIDListT, Project
 from DB.helpers import Session, Result
@@ -298,7 +297,7 @@ class PermissionConsistentProjectSet(object):
         self.session = session
         self.prj_ids = prj_ids
 
-    def can_be_administered_by(self, user_id: UserIDT) -> bool:
+    def can_be_administered_by(self, user_id: UserIDT):
+        """We just expect an Exception thrown (or not)"""
         for a_prj_id in self.prj_ids:
             RightsBO.user_wants(self.session, user_id, Action.ADMINISTRATE, a_prj_id)
-        return False
