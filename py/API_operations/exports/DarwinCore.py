@@ -26,7 +26,7 @@ from BO.DataLicense import LicenseEnum, DataLicense
 from BO.ObjectSet import DescribedObjectSet
 from BO.ObjectSetQueryPlus import ResultGrouping, TaxoRemappingT, ObjectSetQueryPlus
 from BO.Project import ProjectBO, ProjectTaxoStats
-from BO.Rights import RightsBO
+from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Sample import SampleBO, SampleAggregForTaxon
 from BO.TaxonomySwitch import TaxonomyMapper
 from BO.Vocabulary import Vocabulary, Units
@@ -34,7 +34,7 @@ from DB.Collection import Collection
 from DB.Project import ProjectTaxoStat, ProjectIDT, ProjectIDListT, Project
 from DB.Sample import Sample
 from DB.Taxonomy import Taxonomy
-from DB.User import User, Role
+from DB.User import User
 from DB.WoRMs import WoRMS
 from DB.helpers.Postgres import timestamp_to_str
 from data.Countries import countries_by_name
@@ -69,6 +69,7 @@ from formats.DarwinCore.models import (
 )
 from helpers.DateTime import now_time
 from helpers.DynamicLogs import get_logger, LogsSwitcher
+
 # TODO: Move somewhere else
 from ..helpers.JobService import JobServiceBase, ArgsDict
 
@@ -124,18 +125,18 @@ class DarwinCoreExport(JobServiceBase):
         # Input params
         collection = self.ro_session.query(Collection).get(collection_id)
         assert collection is not None, "Invalid collection ID"
-        self.collection = collection
-        self.dry_run = dry_run
-        self.include_predicted = include_predicted
+        self.collection: Collection = collection
+        self.dry_run: bool = dry_run
+        self.include_predicted: bool = include_predicted
         # Args are serialized in JSON -> keys have become str
         self.taxo_recast: TaxoRemappingT = {int(k): v for k, v in taxo_recast.items()}
         # Output params
-        self.with_absent = with_absent
-        self.with_computations = with_computations
+        self.with_absent: bool = with_absent
+        self.with_computations: List[SciExportTypeEnum] = with_computations
         if len(formulae) == 0 and len(with_computations) > 0:
             assert False, "Need formulae for " + str(with_computations)
         # TODO: We have all this at project level now, but how to mix with API?
-        self.formulae = formulae
+        self.formulae: Dict[str, str] = formulae
         #
         # During processing
         #
@@ -165,12 +166,12 @@ class DarwinCoreExport(JobServiceBase):
 
     def run(self, current_user_id: int) -> ExportRsp:
         """
-        Initial run, basically just create the job.
+        Initial run, basically just create the job, after permission check.
         """
-        # TODO, for now only admins
-        _user = RightsBO.user_has_role(
-            self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
-        )
+        project_ids = [a_project.projid for a_project in self.collection.projects]
+        PermissionConsistentProjectSet(
+            self.session, project_ids
+        ).can_be_administered_by(current_user_id)
         # OK, go background straight away
         self.create_job(self.JOB_TYPE, current_user_id)
         ret = ExportRsp(job_id=self.job_id)

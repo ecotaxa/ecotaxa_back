@@ -4,7 +4,9 @@ import logging
 import pytest
 from starlette import status
 
-from tests.credentials import ADMIN_AUTH
+from tests.credentials import ADMIN_AUTH, USER_AUTH, CREATOR_AUTH
+from tests.test_fastapi import PROJECT_QUERY_URL, USER_ME_URL
+from tests.test_update_prj import PROJECT_UPDATE_URL
 
 PROJECT_EXPORT_EMODNET_URL = "/export/darwin_core?dry_run=False"
 
@@ -18,10 +20,11 @@ COLLECTION_DELETE_URL = "/collections/{collection_id}"
 INSTRUMENT_QUERY_URL = "/instruments/?project_ids={project_id}"
 
 
-def test_collection_lifecycle(config, database, fastapi, caplog):
+@pytest.mark.parametrize("who", [ADMIN_AUTH, CREATOR_AUTH])
+def test_collection_lifecycle(config, database, fastapi, caplog, who):
     caplog.set_level(logging.FATAL)
 
-    # Admin imports the project
+    # Admin (always) imports the project
     from tests.test_import import test_import
 
     prj_id = test_import(
@@ -64,11 +67,21 @@ def test_collection_lifecycle(config, database, fastapi, caplog):
         "eHFCM",
     ]
 
+    # Grant project to other user if relevant
+    if who != ADMIN_AUTH:
+        url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
+        rsp = fastapi.get(url, headers=ADMIN_AUTH)
+        prj_json = rsp.json()
+        prj_json["managers"].append(fastapi.get(USER_ME_URL, headers=who).json())
+        url = PROJECT_UPDATE_URL.format(project_id=prj_id)
+        rsp = fastapi.put(url, headers=ADMIN_AUTH, json=prj_json)
+        assert rsp.status_code == status.HTTP_200_OK
+
     # And creates a collection with it
     url = COLLECTION_CREATE_URL
     rsp = fastapi.post(
         url,
-        headers=ADMIN_AUTH,
+        headers=who,
         json={"title": "Test collection", "project_ids": [prj_id]},
     )
     assert rsp.status_code == status.HTTP_200_OK
@@ -84,7 +97,7 @@ def test_collection_lifecycle(config, database, fastapi, caplog):
     rsp = fastapi.get(url)
     # No admin, error
     assert rsp.status_code == status.HTTP_403_FORBIDDEN
-    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    rsp = fastapi.get(url, headers=who)
     assert rsp.status_code == status.HTTP_200_OK
     the_coll = rsp.json()
     assert the_coll == {
@@ -116,18 +129,18 @@ def test_collection_lifecycle(config, database, fastapi, caplog):
     the_coll["short_title"] = "my-tiny-title"
     the_coll["associate_organisations"] = ["An org"]
     the_coll["creator_organisations"] = ["At least one (ONE)"]
-    rsp = fastapi.put(url, headers=ADMIN_AUTH, json=the_coll)
+    rsp = fastapi.put(url, headers=who, json=the_coll)
     assert rsp.status_code == status.HTTP_200_OK
 
     # Fail updating the project list
     url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
     the_coll["project_ids"] = [1, 5, 6]
     with pytest.raises(Exception):
-        rsp = fastapi.put(url, headers=ADMIN_AUTH, json=the_coll)
+        rsp = fastapi.put(url, headers=who, json=the_coll)
 
     # Search for it
     url = COLLECTION_SEARCH_URL.format(title="%coll%")
-    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    rsp = fastapi.get(url, headers=who)
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json() == [
         {
@@ -154,26 +167,26 @@ def test_collection_lifecycle(config, database, fastapi, caplog):
 
     # Search by short title
     url = COLLECTION_EXACT_QUERY_URL.format(short_title="my-tiny-title")
-    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    rsp = fastapi.get(url, headers=who)
     assert rsp.status_code == status.HTTP_200_OK
 
     # Wrong search by short title
     url = COLLECTION_EXACT_QUERY_URL.format(short_title="my-absent-title")
-    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    rsp = fastapi.get(url, headers=who)
     assert rsp.status_code == status.HTTP_404_NOT_FOUND
 
     # Empty search test
     url = COLLECTION_SEARCH_URL.format(title="coll%")
-    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    rsp = fastapi.get(url, headers=who)
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json() == []
 
     # Delete the collection
     url = COLLECTION_DELETE_URL.format(collection_id=coll_id)
-    rsp = fastapi.delete(url, headers=ADMIN_AUTH)
+    rsp = fastapi.delete(url, headers=who)
     assert rsp.status_code == status.HTTP_200_OK
 
     # Ensure it's gone
     url = COLLECTION_QUERY_URL.format(collection_id=coll_id)
-    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    rsp = fastapi.get(url, headers=who)
     assert rsp.status_code == status.HTTP_404_NOT_FOUND

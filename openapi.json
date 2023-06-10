@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.32"
+    "version":"0.0.33"
   },
   "servers":[
     {
@@ -624,7 +624,7 @@
           "collections"
         ],
         "summary":"Create Collection",
-        "description":"**Create a collection** with at least one project inside.\n\nReturns the created collection Id.\n\n🔒 *For admins only.*",
+        "description":"**Create a collection** with at least one project inside.\n\nReturns the created collection Id.\n\nNote: 'manage' right is required on all underlying projects.",
         "operationId":"create_collection",
         "requestBody":{
           "content":{
@@ -673,7 +673,7 @@
           "collections"
         ],
         "summary":"Search Collections",
-        "description":"**Search for collections.**\n\n🔒 *For admins only.*",
+        "description":"**Search for collections.**\n\nNote: Only manageable collections are returned.",
         "operationId":"search_collections",
         "parameters":[
           {
@@ -820,7 +820,7 @@
           "collections"
         ],
         "summary":"Get Collection",
-        "description":"Returns **information about the collection** corresponding to the given id.\n\n 🔒 *For admins only.*",
+        "description":"Returns **information about the collection** corresponding to the given id.\n\nNote: The collection is returned only if manageable.",
         "operationId":"get_collection",
         "parameters":[
           {
@@ -869,7 +869,7 @@
           "collections"
         ],
         "summary":"Update Collection",
-        "description":"**Update the collection**. Note that some updates are silently failing when not compatible\n with the composing projects.\n\n **Returns NULL upon success.**\n\n 🔒 *For admins only.*",
+        "description":"**Update the collection**. Note that some updates are silently failing when not compatible\n with the composing projects.\n\n **Returns NULL upon success.**\n\n Note: The collection is updated only if manageable.",
         "operationId":"update_collection",
         "parameters":[
           {
@@ -980,7 +980,7 @@
           "collections"
         ],
         "summary":"Read Collection Taxo Recast",
-        "description":"**Read the collection taxonomy recast**.\n\n **Returns NULL upon success.**\n\n 🔒 *For admins only.*",
+        "description":"**Read the collection taxonomy recast**.\n\n **Returns NULL upon success.**\n\n Note: The collection data is returned only if manageable.",
         "operationId":"get_collection_taxonomy_recast",
         "parameters":[
           {
@@ -1028,7 +1028,7 @@
           "collections"
         ],
         "summary":"Update Collection Taxo Recast",
-        "description":"**Create or Update the collection taxonomy recast**.\n\n **Returns NULL upon success.**\n\n 🔒 *For admins only.*",
+        "description":"**Create or Update the collection taxonomy recast**.\n\n **Returns NULL upon success.**\n\n Note: The collection is updated only if manageable.",
         "operationId":"update_collection_taxonomy_recast",
         "parameters":[
           {
@@ -1088,7 +1088,7 @@
           "collections"
         ],
         "summary":"Emodnet Format Export",
-        "description":"**Export the collection in Darwin Core format, e.g. for EMODnet portal**, @see https://www.emodnet-ingestion.eu\n\nProduces a DwC-A (https://dwc.tdwg.org/) archive into a temporary directory, ready for download.\n\nMaybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html\n\n🔒 *For admins only.*",
+        "description":"**Export the collection in Darwin Core format, e.g. for EMODnet portal**, @see https://www.emodnet-ingestion.eu\n\nProduces a DwC-A (https://dwc.tdwg.org/) archive into a temporary directory, ready for download.\n\nMaybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html\n\nNote: Only manageable collections can be exported.",
         "operationId":"darwin_core_format_export",
         "requestBody":{
           "content":{
@@ -5690,7 +5690,7 @@
           "include_predicted":{
             "title":"Include predicted",
             "type":"boolean",
-            "description":"If set, then predicted objects, as well as validated ones, will be exported.",
+            "description":"If set, then predicted objects, as well as validated ones, will be exported. A validation status will allow to distinguish between the two possible statuses.",
             "default":false,
             "example":false
           },

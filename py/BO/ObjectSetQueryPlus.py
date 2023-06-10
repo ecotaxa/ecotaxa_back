@@ -290,7 +290,7 @@ class ObjectSetQueryPlus(object):
         )
         return sql, params
 
-    def _amend_query_for_mapping(self, from_, select_clause):
+    def _amend_query_for_mapping(self, from_, select_clause: str) -> str:
         """
         From parts of the ObjectSet SQL, inject the needed mapping, with a CTE.
         """

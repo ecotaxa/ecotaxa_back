@@ -144,7 +144,7 @@ fastapi_logger.setLevel(INFO)
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.32",
+    version="0.0.33",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -514,7 +514,7 @@ def create_collection(
 
     Returns the created collection Id.
 
-    🔒 *For admins only.*
+    Note: 'manage' right is required on all underlying projects.
     """
     with CollectionsService() as sce:
         with RightsThrower():
@@ -543,7 +543,7 @@ def search_collections(
     """
     **Search for collections.**
 
-    🔒 *For admins only.*
+    Note: Only manageable collections are returned.
     """
     with CollectionsService() as sce:
         with RightsThrower():
@@ -622,7 +622,7 @@ def get_collection(
     """
     Returns **information about the collection** corresponding to the given id.
 
-     🔒 *For admins only.*
+    Note: The collection is returned only if manageable.
     """
     with CollectionsService() as sce:
         with RightsThrower():
@@ -655,7 +655,7 @@ def update_collection(
 
      **Returns NULL upon success.**
 
-     🔒 *For admins only.*
+     Note: The collection is updated only if manageable.
     """
     with CollectionsService() as sce:
         with RightsThrower():
@@ -699,7 +699,7 @@ def update_collection_taxo_recast(
 
      **Returns NULL upon success.**
 
-     🔒 *For admins only.*
+     Note: The collection is updated only if manageable.
     """
     with CollectionsService() as sce:
         with RightsThrower():
@@ -725,7 +725,7 @@ def read_collection_taxo_recast(
 
      **Returns NULL upon success.**
 
-     🔒 *For admins only.*
+     Note: The collection data is returned only if manageable.
     """
     with CollectionsService() as sce:
         with RightsThrower():
@@ -749,7 +749,7 @@ def emodnet_format_export(
 
     Maybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html
 
-    🔒 *For admins only.*
+    Note: Only manageable collections can be exported.
     """
     with DarwinCoreExport(
         request.collection_id,

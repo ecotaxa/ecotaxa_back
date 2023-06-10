@@ -87,7 +87,6 @@ class CollectionBO(object):
         return self
 
     def _read_composing_projects(self):
-        # noinspection PyTypeChecker
         self.project_ids = sorted([a_rec.projid for a_rec in self._collection.projects])
 
     def _add_composing_projects(self, session: Session, project_ids: ProjectIDListT):

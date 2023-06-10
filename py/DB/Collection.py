@@ -7,7 +7,7 @@
 #
 from __future__ import annotations
 
-from typing import Optional, TYPE_CHECKING, Iterable
+from typing import Optional, TYPE_CHECKING, Iterable, Sequence as SequenceT, List
 
 from DB.helpers.ORM import Model
 from .helpers.DDL import Column, Sequence, ForeignKey, Index
@@ -39,7 +39,7 @@ class Collection(Model):
     description = Column(VARCHAR)
 
     # The relationships are created in Relations.py but the typing here helps IDE
-    projects: relationship
+    projects: List["Project"]
     contact_user: Optional[User]
     provider_user: Optional[User]
     users_by_role: Iterable["CollectionUserRole"]

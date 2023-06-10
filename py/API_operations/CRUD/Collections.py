@@ -7,12 +7,12 @@ from typing import List, Union, Optional
 from API_models.crud import CreateCollectionReq
 from API_models.exports import TaxonomyRecast
 from BO.Collection import CollectionBO, CollectionIDT
-from BO.Rights import RightsBO, NOT_FOUND
+from BO.ProjectSet import PermissionConsistentProjectSet
+from BO.Rights import NOT_FOUND
 from BO.User import UserIDT
 from DB.Collection import Collection
 from DB.TaxoRecast import DWCA_EXPORT_OPERATION
 from DB.TaxoRecast import TaxoRecast
-from DB.User import Role
 from helpers.DynamicLogs import get_logger
 from ..helpers.Service import Service
 
@@ -30,33 +30,46 @@ class CollectionsService(Service):
         """
         Create a collection.
         """
-        # TODO, for now only admins
-        _user = RightsBO.user_has_role(
-            self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
-        )
+        PermissionConsistentProjectSet(
+            self.session, req.project_ids
+        ).can_be_administered_by(current_user_id)
         coll_id = CollectionBO.create(self.session, req.title, req.project_ids)
         return coll_id
 
+    def _check_access(
+        self, a_coll: CollectionBO, user_id: UserIDT
+    ) -> Optional[CollectionBO]:
+        """
+        Quick & dirty access check by catching the exception.
+        """
+        try:
+            PermissionConsistentProjectSet(
+                self.ro_session, a_coll.project_ids
+            ).can_be_administered_by(user_id)
+        except AssertionError:
+            return None
+        return a_coll
+
     def search(self, current_user_id: UserIDT, title: str) -> List[CollectionBO]:
-        # TODO, for now only admins
-        _user = RightsBO.user_has_role(
-            self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
-        )
         qry = self.ro_session.query(Collection).filter(Collection.title.ilike(title))
-        ret = [CollectionBO(a_rec).enrich() for a_rec in qry]
+        ret = []
+        for a_rec in qry:
+            coll_bo = CollectionBO(a_rec).enrich()
+            checked = self._check_access(coll_bo, current_user_id)
+            if checked is None:
+                continue
+            ret.append(checked)
         return ret
 
     def query(
         self, current_user_id: UserIDT, coll_id: CollectionIDT, for_update: bool
     ) -> Optional[CollectionBO]:
-        # TODO, for now only admins
-        _user = RightsBO.user_has_role(
-            self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
-        )
         ret = CollectionBO.get_one(
             self.session if for_update else self.ro_session, coll_id
         )
-        return ret
+        if ret is None:
+            return ret
+        return self._check_access(ret, current_user_id)
 
     def query_by_title(self, title: str) -> CollectionBO:
         # Return a unique collection from its title
@@ -73,10 +86,8 @@ class CollectionsService(Service):
         return ret[0]
 
     def delete(self, current_user_id: UserIDT, coll_id: CollectionIDT) -> int:
-        # TODO, for now only admins
-        _user = RightsBO.user_has_role(
-            self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
-        )
+        collection = self.query(current_user_id, coll_id, for_update=True)
+        assert collection is not None, NOT_FOUND
         CollectionBO.delete(self.session, coll_id)
         self.session.commit()
         return 0

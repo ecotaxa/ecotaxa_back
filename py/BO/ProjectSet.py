@@ -17,6 +17,9 @@ from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Mappings import TableMapping
 from BO.Object import ObjectBO
 from BO.ObjectSet import ObjectIDListT
+from BO.Rights import RightsBO, Action
+from BO.User import UserIDT
+from DB import Role
 from DB.Object import ObjectFields
 from DB.Project import ProjectIDListT, Project
 from DB.helpers import Session, Result
@@ -283,3 +286,19 @@ class LimitedInCategoriesProjectSet(FeatureConsistentProjectSet):
         elif len(self.categories) > 0:
             return self._add_category_filter(sql)
         return sql
+
+
+class PermissionConsistentProjectSet(object):
+    """
+    A list of projects which can be tested, permission-speaking, against a user.
+    """
+
+    def __init__(self, session: Session, prj_ids: ProjectIDListT):
+        assert len(prj_ids) > 0, "Empty project set"
+        self.session = session
+        self.prj_ids = prj_ids
+
+    def can_be_administered_by(self, user_id: UserIDT) -> bool:
+        for a_prj_id in self.prj_ids:
+            RightsBO.user_wants(self.session, user_id, Action.ADMINISTRATE, a_prj_id)
+        return False
