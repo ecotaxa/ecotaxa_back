@@ -44,7 +44,8 @@ class CollectionsService(Service):
         """
         try:
             PermissionConsistentProjectSet(
-                self.ro_session, a_coll.project_ids
+                self.session,
+                a_coll.project_ids,  # Need the R/W session here, as the projects MRU is written to. TODO
             ).can_be_administered_by(user_id)
         except AssertionError:
             return None

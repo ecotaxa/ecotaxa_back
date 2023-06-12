@@ -927,7 +927,7 @@
           "collections"
         ],
         "summary":"Erase Collection",
-        "description":"**Delete the collection**,\n\ni.e. the precious fields, as the projects are just linked-at from the collection.\n\n🔒 *For admins only.*",
+        "description":"**Delete the collection**,\n\ni.e. the precious fields, as the projects are just linked-at from the collection.\n\nNote: Only manageable collections can be deleted.",
         "operationId":"erase_collection",
         "parameters":[
           {
