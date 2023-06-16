@@ -104,13 +104,13 @@ This series is part of the long term planktonic monitoring of
   <contact>
     <individualName>
       <givenName>Real</givenName>
-      <surName>User</surName>
+      <surName>User 3</surName>
     </individualName>
-    <organizationName>IMEV</organizationName>
+    <organizationName>Institute - DDORG</organizationName>
     <address>
-      <country>FR</country>
+      <country>CL</country>
     </address>
-    <electronicMailAddress>real@users.com</electronicMailAddress>
+    <electronicMailAddress>real2@users.com</electronicMailAddress>
   </contact>
 </dataset>
 <additionalMetadata>

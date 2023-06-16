@@ -9,7 +9,13 @@ from zipfile import ZipFile
 import pytest
 from starlette import status
 
-from tests.credentials import ADMIN_AUTH, REAL_USER_ID, CREATOR_AUTH, ADMIN_USER_ID
+from tests.credentials import (
+    ADMIN_AUTH,
+    REAL_USER_ID,
+    CREATOR_AUTH,
+    ADMIN_USER_ID,
+    ORDINARY_USER3_USER_ID,
+)
 from tests.emodnet_ref import (
     ref_zip,
     with_absent_zip,
@@ -147,7 +153,12 @@ This series is part of the long term planktonic monitoring of
     }
     the_coll["creator_users"] = [user_doing_all]
     the_coll["creator_organisations"] = ["Institut de la Mer de Villefranche (IMEV)"]
-    the_coll["contact_user"] = user_doing_all
+    the_coll["contact_user"] = {
+        "id": ORDINARY_USER3_USER_ID,
+        # TODO: below is redundant with ID and ignored, but fails validation (http 422) if not set
+        "email": "?",
+        "name": ".",
+    }
     the_coll["provider_user"] = user_doing_all
     rsp = fastapi.put(url, headers=who, json=the_coll)
     assert rsp.status_code == status.HTTP_200_OK
@@ -199,7 +210,7 @@ This series is part of the long term planktonic monitoring of
     # rsp = fastapi.get(url, headers=REAL_USER_AUTH)
     # assert rsp.status_code == status.HTTP_200_OK
 
-    # Admin can get it
+    # Admin/owner can get it
     rsp = fastapi.get(url, headers=who)
     assert rsp.status_code == status.HTTP_200_OK
     unzip_and_check(rsp.content, ref_zip, who)

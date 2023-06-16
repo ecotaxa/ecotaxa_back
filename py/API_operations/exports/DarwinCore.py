@@ -287,16 +287,15 @@ class DarwinCoreExport(JobServiceBase):
 
         if not user.organisation:
             problems.append(
-                "%s user '%s' has no organization (it should contain a - )."
-                % (for_messages, user.name)
+                "%s user '%s' has no organization." % (for_messages, user.name)
             )
         else:
             try:
-                _dummy, organization = user.organisation.strip().split("-")
+                _dummy, organization = user.organisation.strip().split("-", 1)
                 organization = organization.strip()
             except ValueError:
                 problems.append(
-                    "Cannot determine short organization from %s org: '%s' (need a - )."
+                    "Cannot determine short organization from %s org: '%s' (need at least a - )."
                     % (for_messages, user.organisation)
                 )
 
