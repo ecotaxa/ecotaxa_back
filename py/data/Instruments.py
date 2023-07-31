@@ -18,6 +18,11 @@ DEFAULT_INSTRUMENTS = [
     ("FastCam", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1580/"),
     ("Zooscan", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1581/"),
     ("PlanktoScope", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1579/"),
+    (
+        "Plankton Imager",
+        None,
+        "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1844/",
+    ),
     ("ISIIS", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1561/"),
     ("AMNIS", "AMNIS Imaging Flow Cytometer", None),
     ("eHFCM", None, None),
