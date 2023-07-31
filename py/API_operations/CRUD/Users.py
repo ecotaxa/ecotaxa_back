@@ -455,13 +455,15 @@ class UserService(Service):
 
             if token:
                 user_id = self.validation_service.get_id_from_token(token)
+                if user_id is None:
+                    return
                 usr: Optional[User] = self.session.query(User).get(user_id)
                 if usr is None:
                     raise HTTPException(
                         status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                         detail=NOT_AUTHORIZED,
                     )
-
+                    return
                 self.validation_service.request_activate_user(
                     usr, token=token, action=ACTIVATION_ACTION_UPDATE
                 )
@@ -554,22 +556,25 @@ class UserService(Service):
                     raise HTTPException(
                         status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Not found"
                     )
-                    return -1
-                self.validation_service.verify_temp_password(
-                    str(temp_password), str(temp)
-                )
-                update_src = UserModelWithRights(**user_to_reset.__dict__)
-                update_src.password = resetreq.password
-                self._model_to_db(
-                    user_to_reset, update_src, [User.password], actions=None
-                )
-                # remove temp_user_reset row
-                temp_pw: Optional[TempPasswordReset] = self.ro_session.query(
-                    TempPasswordReset
-                ).get(user_to_reset.id)
-                self.session.delete(temp_pw)
-                self.session.commit()
-                id = user_to_reset.id
+                else:
+                    verified = self.validation_service.verify_temp_password(
+                        str(temp_password), temp
+                    )
+                if verified:
+                    update_src = UserModelWithRights(**user_to_reset.__dict__)
+                    update_src.password = resetreq.password
+                    self._model_to_db(
+                        user_to_reset, update_src, [User.password], actions=None
+                    )
+                    # remove temp_user_reset row
+                    temp_pw: Optional[TempPasswordReset] = self.ro_session.query(
+                        TempPasswordReset
+                    ).get(user_to_reset.id)
+                    self.session.delete(temp_pw)
+                    self.session.commit()
+                    id = user_to_reset.id
+                else:
+                    id = -1
             else:
                 # store a temporary unique password in the db for the user_id
                 user_ask_reset: User = self._get_active_user_by_email(resetreq.email)

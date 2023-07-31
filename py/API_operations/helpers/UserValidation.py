@@ -50,11 +50,15 @@ class UserValidationService(Service):
             self.app_instance = "EcoTaxa.01"
 
     # verify temp password before reset
-    def verify_temp_password(self, temp_password: str, temp: TempPasswordReset) -> bool:
+    def verify_temp_password(
+        self, temp_password: str, temp: Optional[TempPasswordReset]
+    ) -> bool:
         """Returns ``True`` if the temporary password is valid for the specified user id.
         :param temp_password: A plaintext password to verify
         :param user id: The user id to verify against
         """
+        if temp is None:
+            return False
         with LoginService() as sce:
             if sce.use_double_hash(temp.temp_password):
                 verified = sce._pwd_context.verify(
@@ -168,7 +172,7 @@ class UserValidationService(Service):
             tokenreq["id"] = str(id)
         if action != None:
             tokenreq["action"] = action
-        return str(self._build_serializer(self.secret_key).dumps(tokenreq))
+        return str(self._build_serializer(self.secret_key).dumps(tokenreq) or "")
 
     def get_value_from_token(
         self,
