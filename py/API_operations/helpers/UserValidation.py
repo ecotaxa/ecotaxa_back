@@ -149,7 +149,7 @@ class UserValidationService(Service):
 
     def generate_token(
         self,
-        email: str,
+        email: Optional[str] = None,
         id: int = -1,
         ip: Optional[str] = None,
         action: Optional[str] = None,
@@ -159,7 +159,7 @@ class UserValidationService(Service):
         tokenreq["ip"] = ip
         tokenreq["email"] = email
         if id != -1:
-            tokenreq["id"] = id
+            tokenreq["id"] = str(id)
         if action != None:
             tokenreq["action"] = action
 
@@ -218,8 +218,11 @@ class UserValidationService(Service):
         email: Optional[str] = None,
         ip: Optional[str] = None,
         action: Optional[str] = None,
-    ) -> str:
-        return self.get_value_from_token(token, "id", email, ip, action)
+    ) -> int:
+        id = self.get_value_from_token(token, "id", email, ip, action)
+        if id is None:
+            return -1
+        return int(id)
 
     def get_reset_from_token(
         self,

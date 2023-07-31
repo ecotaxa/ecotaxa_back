@@ -707,5 +707,5 @@ class ResetPasswordReq(BaseModel):
         example=1,
         default=-1,
     )
-    email: Optional[str] = Field(title="Email", default=None)
+    email: str = Field(title="Email")
     password: Optional[str] = Field(title="Password", default=None)

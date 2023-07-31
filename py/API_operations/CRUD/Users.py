@@ -25,6 +25,8 @@ from fastapi import HTTPException
 from starlette.status import (
     HTTP_422_UNPROCESSABLE_ENTITY,
     HTTP_403_FORBIDDEN,
+    HTTP_401_UNAUTHORIZED,
+    HTTP_404_NOT_FOUND,
 )
 from ..helpers.UserValidation import (
     UserValidationService,
@@ -227,9 +229,7 @@ class UserService(Service):
     ) -> UserModelWithRights:
         db_usr = self.ro_session.query(User).get(user_id)
         if db_usr is None:
-            raise HTTPException(
-                status_code="HTTP_404_NOT_FOUND", detail="Item not found"
-            )
+            raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Item not found")
         else:
             ret = self._get_full_user(db_usr)
         return ret
@@ -393,7 +393,7 @@ class UserService(Service):
     def email_exists(self, email) -> dict:
         return self.ro_session.query(User).filter(User.email == email).scalar() != None
 
-    def _keep_active(self, current_user: User = None) -> bool:
+    def _keep_active(self, current_user: Optional[User] = None) -> bool:
         if self.validation_service is None:
             return True
         else:
@@ -450,14 +450,14 @@ class UserService(Service):
                 )
             if token:
                 user_id = self.validation_service.get_id_from_token(token)
-                inactive_user: Optional[User] = self.session.query(User).get(user_id)
-                if inactive_user is None:
+                usr: Optional[User] = self.session.query(User).get(user_id)
+                if usr is None:
                     raise HTTPException(
                         status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                         detail=NOT_AUTHORIZED,
                     )
                 self.validation_service.request_activate_user(
-                    inactive_user, token=token, action=ACTIVATION_ACTION_UPDATE
+                    usr, token=token, action=ACTIVATION_ACTION_UPDATE
                 )
             else:
                 raise HTTPException(
@@ -481,9 +481,7 @@ class UserService(Service):
                 update_src.active = True
                 self._model_to_db(inactive_user, update_src, cols_for_upd, actions=None)
                 if self.validation_service is not None:
-                    self.validation_service.inform_user_activestate(
-                        inactive_user, active=True
-                    )
+                    self.validation_service.inform_user_activestate(inactive_user)
         else:
             raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=NOT_AUTHORIZED)
 
@@ -497,7 +495,7 @@ class UserService(Service):
     ) -> UserIDT:
         # active only with a validation_service
         if self.validation_service is None:
-            raise HTTPException(status_code=HTTP_403_UNAUTHORIZED)
+            raise HTTPException(status_code=HTTP_403_FORBIDDEN)
         if current_user_id is not None:
             current_user: Optional[User] = self.ro_session.query(User).get(
                 current_user_id
@@ -543,16 +541,16 @@ class UserService(Service):
                     user_to_reset, update_src, [User.password], actions=None
                 )
                 # remove temp_user_reset row
-                temp: TempPasswordReset = self.ro_session.query(TempPasswordReset).get(
-                    user_to_reset.id
-                )
-                self.session.delete(temp)
+                temp_pw: TempPasswordReset = self.ro_session.query(
+                    TempPasswordReset
+                ).get(user_to_reset.id)
+                self.session.delete(temp_pw)
                 self.session.commit()
                 id = user_to_reset.id
             else:
                 # store a temporary unique password in the db for the user_id
-                user_to_reset: User = self._get_active_user_by_email(resetreq.email)
-                if user_to_reset is None:
+                user_ask_reset: User = self._get_active_user_by_email(resetreq.email)
+                if user_ask_reset is None:
                     raise HTTPException(
                         status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Not found"
                     )
@@ -564,10 +562,10 @@ class UserService(Service):
                     hash_temp_password = sce.hash_password(temp_password)
                     temp: TempPasswordReset = self.ro_session.query(
                         TempPasswordReset
-                    ).get(user_to_reset.id)
+                    ).get(user_ask_reset.id)
                 if temp is None:
                     temp = TempPasswordReset(
-                        user_id=user_to_reset.id, temp_password=hash_temp_password
+                        user_id=user_ask_reset.id, temp_password=hash_temp_password
                     )
                     self.session.add(temp)
                     self.session.commit()
@@ -577,10 +575,10 @@ class UserService(Service):
                     self.session.commit()
 
                 self.validation_service.request_reset_password(
-                    user_to_reset, temp_password=temp_password
+                    user_ask_reset, temp_password=temp_password
                 )
 
                 id = -1
             return id
         else:
-            raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=error)
+            raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail="error???")

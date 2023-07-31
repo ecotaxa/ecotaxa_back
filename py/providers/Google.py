@@ -4,7 +4,7 @@
 #
 # Clients to Google API services, so far just one.
 #
-from typing import Optional
+from typing import Optional, List
 from fastapi import HTTPException
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY, HTTP_401_UNAUTHORIZED
 import requests
@@ -35,7 +35,7 @@ class ReCAPTCHAClient(object):
             return rsp.text.replace("\n", "")
         return None
 
-    def verify_captcha(self, no_bot: list) -> None:
+    def verify_captcha(self, no_bot: Optional[List[str]]) -> None:
         if no_bot is None:
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
