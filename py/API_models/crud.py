@@ -549,38 +549,38 @@ class _AddedToCollection(BaseModel):
     )
     provider_user: Optional[MinUserModel] = Field(
         title="Provider user",
-        description="""Is the person who 
+        description="""Is the person who
         is responsible for the content of this metadata record. Writer of the title and abstract.""",
     )
     contact_user: Optional[MinUserModel] = Field(
         title="Contact user",
-        description="""Is the person who 
-        should be contacted in cases of questions regarding the content of the dataset or any data restrictions. 
+        description="""Is the person who
+        should be contacted in cases of questions regarding the content of the dataset or any data restrictions.
         This is also the person who is most likely to stay involved in the dataset the longest.""",
     )
     creator_users: List[MinUserModel] = Field(
         title="Creator users",
-        description="""All people who 
-        are responsible for the creation of the collection. Data creators should receive credit 
+        description="""All people who
+        are responsible for the creation of the collection. Data creators should receive credit
         for their work and should therefore be included in the citation.""",
         default=[],
     )
     creator_organisations: List[str] = Field(
         title="Creator organisations",
-        description="""All 
-        organisations who are responsible for the creation of the collection. Data creators should 
+        description="""All
+        organisations who are responsible for the creation of the collection. Data creators should
         receive credit for their work and should therefore be included in the citation.""",
         default=[],
     )
     associate_users: List[MinUserModel] = Field(
         title="Associate users",
-        description="""Other person(s) 
+        description="""Other person(s)
         associated with the collection.""",
         default=[],
     )
     associate_organisations: List[str] = Field(
         title="Associate organisations",
-        description="""Other 
+        description="""Other
         organisation(s) associated with the collection.""",
         default=[],
     )
@@ -694,3 +694,18 @@ class JobModel(_JobModelFromDB, _AddedToJob):
     """
     All information about the Job.
     """
+
+
+class ResetPasswordReq(BaseModel):
+    """
+    Minimal user information need to reset the password
+    """
+
+    id: int = Field(
+        title="User Id",
+        description="User unique identifier.",
+        example=1,
+        default=-1,
+    )
+    email: Optional[str] = Field(title="Email", default=None)
+    password: Optional[str] = Field(title="Password", default=None)
