@@ -131,7 +131,7 @@ class MailService(Service):
         self,
         model_name: str,
         recipients: list,
-        values: Optional[ReplaceInMail],
+        values: dict,
         language: str = DEFAULT_LANGUAGE,
         action: Optional[str] = None,
     ) -> MIMEMultipart:
@@ -202,7 +202,7 @@ class MailService(Service):
             url=url,
         )
 
-        mailmsg = self.mail_message(self.MODEL_ACTIVATE, [recipient], replace)
+        mailmsg = self.mail_message(self.MODEL_ACTIVATE, [recipient], replace.__dict__)
         self.send_mail(recipient, mailmsg)
 
     def send_verification_mail(
@@ -215,7 +215,9 @@ class MailService(Service):
         reply_to = self.get_assistance_mail()
         data = ReplaceInMail(email=reply_to, token=token, action=action, url=url)
 
-        mailmsg = self.mail_message(self.MODEL_VERIFY, [recipient], data, action=action)
+        mailmsg = self.mail_message(
+            self.MODEL_VERIFY, [recipient], data.__dict__, action=action
+        )
         self.send_mail(recipient, mailmsg, replyto=reply_to)
 
     def send_reset_password_mail(
@@ -223,7 +225,9 @@ class MailService(Service):
     ) -> None:
         assistance_email = self.get_assistance_mail()
         data = ReplaceInMail(token=token, email=assistance_email, url=url)
-        mailmsg = self.mail_message(self.MODEL_PASSWORD_RESET, [recipient], data)
+        mailmsg = self.mail_message(
+            self.MODEL_PASSWORD_RESET, [recipient], data.__dict__
+        )
         self.send_mail(recipient, mailmsg)
 
     def send_desactivated_mail(self, recipient: str) -> None:
@@ -240,7 +244,7 @@ class MailService(Service):
         assistance_email = self.get_assistance_mail()
         data = ReplaceInMail(email=assistance_email, token=token)
         mailmsg = self.mail_message(
-            self.MODEL_ACTIVATED, [recipient], data, action=action
+            self.MODEL_ACTIVATED, [recipient], data.__dict__, action=action
         )
         self.send_mail(recipient, mailmsg, replyto=assistance_email)
 

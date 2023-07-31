@@ -209,13 +209,15 @@ class UserService(Service):
             )
         self._model_to_db(user_to_update, update_src, cols_for_upd, actions)
         # if the email has changed or the account has been deactivated
+        if self.validation_service is None:
+            return
         if major_data_changed:
             self.validation_service.request_email_verification(
                 user_to_update.email,
                 action=ACTIVATION_ACTION_UPDATE,
                 id=user_to_update.id,
             )
-        elif self.validation_service is not None and activestate != update_src.active:
+        elif activestate != update_src.active:
             # inform the user if its account is desactivated and the validation service is active
             self.validation_service.inform_user_activestate(user_to_update)
 
@@ -450,6 +452,7 @@ class UserService(Service):
                 raise HTTPException(
                     status_code=HTTP_404_NOT_FOUND, detail="Service not active"
                 )
+
             if token:
                 user_id = self.validation_service.get_id_from_token(token)
                 usr: Optional[User] = self.session.query(User).get(user_id)
@@ -458,6 +461,7 @@ class UserService(Service):
                         status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                         detail=NOT_AUTHORIZED,
                     )
+
                 self.validation_service.request_activate_user(
                     usr, token=token, action=ACTIVATION_ACTION_UPDATE
                 )
@@ -486,7 +490,8 @@ class UserService(Service):
                     self.validation_service.inform_user_activestate(inactive_user)
         else:
             raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=NOT_AUTHORIZED)
-            return
+
+        return
 
     # reset user password
     def reset_user_password(
@@ -508,9 +513,9 @@ class UserService(Service):
         if current_user is None:
             # Unauthenticated user asks to reset his password
             # Verify not a robot
-            recaptcha_secret, recaptcha_id = self.config.get_cnf(
-                "RECAPTCHASECRET"
-            ), self.config.get_cnf("RECAPTCHAID")
+            recaptcha_secret, recaptcha_id = str(
+                self.config.get_cnf("RECAPTCHASECRET") or ""
+            ), str(self.config.get_cnf("RECAPTCHAID") or "")
             recaptcha = ReCAPTCHAClient(recaptcha_secret, recaptcha_id)
             recaptcha.verify_captcha(no_bot)
             # verify if the email exists  in the db
@@ -567,7 +572,7 @@ class UserService(Service):
                 temp_password = uuid.uuid4().hex
                 with LoginService() as sce:
                     hash_temp_password = sce.hash_password(temp_password)
-                    temp_rs: TempPasswordReset = self.ro_session.query(
+                    temp_rs: Optional[TempPasswordReset] = self.ro_session.query(
                         TempPasswordReset
                     ).get(user_ask_reset.id)
                 if temp_rs is None:

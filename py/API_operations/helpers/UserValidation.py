@@ -68,6 +68,7 @@ class UserValidationService(Service):
                 status_code=HTTP_401_UNAUTHORIZED,
                 detail=["", "Unauthorized", ""],
             )
+        return verified
 
     # call to request email_verification - validation method is by sending an email with a token
     def request_email_verification(
@@ -167,8 +168,7 @@ class UserValidationService(Service):
             tokenreq["id"] = str(id)
         if action != None:
             tokenreq["action"] = action
-        token = str(self._build_serializer(self.secret_key).dumps(tokenreq))
-        return token
+        return str(self._build_serializer(self.secret_key).dumps(tokenreq))
 
     def get_value_from_token(
         self,
@@ -213,7 +213,7 @@ class UserValidationService(Service):
         email: Optional[str] = None,
         ip: Optional[str] = None,
         action: Optional[str] = None,
-    ) -> str:
+    ) -> Optional[str]:
         return self.get_value_from_token(token, "email", email, ip, action)
 
     def get_id_from_token(
@@ -222,10 +222,10 @@ class UserValidationService(Service):
         email: Optional[str] = None,
         ip: Optional[str] = None,
         action: Optional[str] = None,
-    ) -> int:
+    ) -> Optional[int]:
         id = self.get_value_from_token(token, "id", email, ip, action)
         if id is None:
-            return -1
+            return
         return int(id)
 
     def get_reset_from_token(
@@ -234,7 +234,7 @@ class UserValidationService(Service):
         email: Optional[str] = None,
         ip: Optional[str] = None,
         action: Optional[str] = None,
-    ) -> str:
+    ) -> Optional[str]:
         # the temp_password is stored into action field of the token
         return self.get_value_from_token(token, "action", email, ip, action)
 
