@@ -1,0 +1,17 @@
+{
+  "en_EN": {
+    "active": {
+      "url": "/gui/login",
+      "subject": "EcoTaxa account activation.",
+      "link": "<a href=\"{url}\" style=\"color: rgb(52, 167, 173)\">{url}</a>",
+      "email": "<a href=\"mailto:{email}\">{email}</a>",
+      "body": "<p>Your account has been activated.<br>You can now login to the EcoTaxa application and start creating a  project.{link}.<br>If you have any questions or need additional support,  email: {email}</p>"
+    },
+    "desactive": {
+      "subject": "EcoTaxa account desactivation.",
+      "email": "<a href=\"mailto:{email}\">{email}</a>",
+      "body": "<p>Your account has been desactivated.<br>You cannot login to EcoTaxa anymore.<br>If you have any questions about your data or need additional support,  email: {email}</p>"
+
+    }
+  }
+}

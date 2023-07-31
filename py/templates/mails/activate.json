@@ -1,0 +1,14 @@
+{
+  "en_EN": {
+    "action": {
+      "create": "created",
+      "update": "updated"
+    },
+    "url": "/gui/admin/users/activate",
+    "subject": "EcoTaxa account [{action}]",
+    "link": "<a href=\"{url}/{id}/{token}\" style=\"color: rgb(52, 167, 173)\">{url}/{id}/{token}</a>",
+    "email": "<a href=\"mailto:{email}\">{email}</a>",
+    "data": "<div style=\"padding:1rem;\"><strong>{key}</strong> <span> {value}</span></div>",
+    "body": "<p>Account [{action}]<br>{data}<br>Please click on the following link to validate the account.{link}.<br>Or contact the user for more information : {email}</p>"
+  }
+}
