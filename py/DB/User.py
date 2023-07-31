@@ -143,3 +143,13 @@ def insert_initial_country_values(_table, sess, **kwargs):
     for a_country in countries_by_name.keys():
         ins = Insert(Country).values((a_country,))
         sess.execute(ins)
+
+
+class TempPasswordReset(Model):
+    """
+    store temporary uuid when a reset password is in progress
+    """
+
+    __tablename__ = "user_password_reset"
+    user_id = Column(Integer(), ForeignKey("users.id"), primary_key=True)
+    temp_password = Column(String(255), nullable=False)
