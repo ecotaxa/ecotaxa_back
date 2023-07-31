@@ -504,6 +504,7 @@ class UserService(Service):
         # active only with a validation_service
         if self.validation_service is None:
             raise HTTPException(status_code=HTTP_403_FORBIDDEN)
+            return
         if current_user_id is not None:
             current_user: Optional[User] = self.ro_session.query(User).get(
                 current_user_id
@@ -532,21 +533,31 @@ class UserService(Service):
                     raise HTTPException(
                         status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="No password "
                     )
+                    return
                 email = self.validation_service.get_email_from_token(token)
                 temp_password = self.validation_service.get_reset_from_token(token)
                 user_id = self.validation_service.get_id_from_token(token)
+                if temp_password is None or user_id is None:
+                    raise HTTPException(
+                        status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Not found"
+                    )
+                    return -1
                 user_to_reset: Optional[User] = self.ro_session.query(User).get(user_id)
                 if user_to_reset is None:
                     raise HTTPException(
                         status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Not found"
                     )
+                    return -1
                 # find temporary password
                 temp = self.ro_session.query(TempPasswordReset).get(user_id)
                 if temp is None:
                     raise HTTPException(
                         status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Not found"
                     )
-                self.validation_service.verify_temp_password(temp_password, temp)
+                    return -1
+                self.validation_service.verify_temp_password(
+                    str(temp_password), str(temp)
+                )
                 update_src = UserModelWithRights(**user_to_reset.__dict__)
                 update_src.password = resetreq.password
                 self._model_to_db(
@@ -594,3 +605,4 @@ class UserService(Service):
             return id
         else:
             raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail="error???")
+            return -1

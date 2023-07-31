@@ -191,11 +191,12 @@ class UserValidationService(Service):
                 status_code=HTTP_403_FORBIDDEN,
                 detail=["", "Bad signature or expired", ""],
             )
-
+            return
         if self.app_instance != payload.get("instance"):
             raise HTTPException(
                 status_code=HTTP_403_FORBIDDEN, detail=["", "Bad instance", ""]
             )
+            return
         value = payload.get(name)
         if (
             value
@@ -225,8 +226,9 @@ class UserValidationService(Service):
     ) -> Optional[int]:
         id = self.get_value_from_token(token, "id", email, ip, action)
         if id is None:
-            return
-        return int(id)
+            return None
+        else:
+            return int(id)
 
     def get_reset_from_token(
         self,
