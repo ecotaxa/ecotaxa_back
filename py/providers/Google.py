@@ -37,18 +37,18 @@ class ReCAPTCHAClient(object):
 
     def verify_captcha(self, no_bot: list) -> None:
         if no_bot is None:
-            raise HTTPEception(
+            raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="reCaptcha verif needs data",
             )
         if len(no_bot) != 2:
-            raise HTTPEception(
+            raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="invalid no_bot reason 1",
             )
         for a_str in no_bot:
             if len(a_str) >= 1024:
-                raise HTTPEception(
+                raise HTTPException(
                     status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                     detail="invalid no_bot reason 2",
                 )

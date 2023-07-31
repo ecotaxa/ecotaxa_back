@@ -54,11 +54,11 @@ class UserService(Service):
 
     def __init__(self) -> None:
         super().__init__()
-        try:
+        if self.config.get_cnf("USER_EMAIL_VERIFICATION") == "on":
             with UserValidationService() as sce:
                 self.validation_service = sce
                 self.verify_email = sce.email_verification
-        except:
+        else:
             self.validation_service = None
             self.verify_email = False
 

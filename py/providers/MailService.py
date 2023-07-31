@@ -31,31 +31,26 @@ class ReplaceInMail(BaseModel):
         Field(
             title="email to reply",
             description="Email added at the end of the message",
-            default=None,
         ),
     )
     data: Optional[dict] = Field(
         title="Data",
         description="Data to be included in the message",
         example={"name": "name", "email": "test@mail.com"},
-        default=None,
     )
     action: Optional[str] = (
         Field(
             title="Action",
             description="Create or Update",
-            default=None,
         ),
     )
     token: Optional[str] = Field(
         title="Token",
         description="token added to the link to verify the action - max_age :24h",
-        default=None,
     )
     url: Optional[str] = Field(
         title="URL",
         description="url of the requesting app - will be replaced in the mail message template",
-        default=None,
     )
 
 
@@ -87,13 +82,15 @@ class MailService(Service):
         senderaccount = self.config.get_cnf("SENDER_ACCOUNT")
         if senderaccount == None:
             raise HTTPException(
-                status_code=HTTP_422_INTERNAL_SERVER_ERROR,
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=["", "No sender account", ""],
             )
         self.senderaccount = senderaccount.split(",")
         self.account_validate_email = self.config.get_cnf("ACCOUNT_VALIDATE_EMAIL")
 
-    def send_mail(self, email: str, msg: MIMEMultipart, replyto=None) -> None:
+    def send_mail(
+        self, email: str, msg: MIMEMultipart, replyto: Optional[str] = None
+    ) -> None:
         """
         Sendmail .
         """
@@ -119,7 +116,7 @@ class MailService(Service):
         else:
             logger.info("Email sent to '%s'" % email)
             raise HTTPException(
-                status_code=HTTP_422_INTERNAL_SERVER_ERROR,
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=["", "Mail not sent", ""],
             )
 
@@ -129,7 +126,7 @@ class MailService(Service):
         recipients: list,
         values: dict,
         language: str = DEFAULT_LANGUAGE,
-        action: str = None,
+        action: Optional[str] = None,
     ) -> MIMEMultipart:
 
         model = self.get_mail_message(model_name, language, action)
@@ -177,13 +174,17 @@ class MailService(Service):
         return re.sub(pattrns, "", html)
 
     def send_activation_mail(
-        self, data: dict, token: str = None, action: str = None, url: str = None
+        self,
+        data: dict,
+        token: Optional[str] = None,
+        action: Optional[str] = None,
+        url: Optional[str] = None,
     ) -> None:
         recipient = self.account_validate_email
         if recipient == None:
-            return False
+            return
         if action is None:
-            action = ACTIVATION_ACTION_CREATE
+            action = self.ACTIVATION_ACTION_CREATE
         replace = ReplaceInMail(
             id=data["id"],
             email=data["email"],
@@ -197,16 +198,20 @@ class MailService(Service):
         self.send_mail(recipient, mailmsg)
 
     def send_verification_mail(
-        self, recipient: str, token: str, action: str = None, url: str = None
+        self,
+        recipient: str,
+        token: str,
+        action: Optional[str] = None,
+        url: Optional[str] = None,
     ) -> None:
         reply_to = self.get_assistance_mail()
         data = ReplaceInMail(email=reply_to, token=token, action=action, url=url)
 
         mailmsg = self.mail_message(self.MODEL_VERIFY, [recipient], data, action=action)
-        self.send_mail(recipient, mailmsg, reply_to)
+        self.send_mail(recipient, mailmsg, reply_to=reply_to)
 
     def send_reset_password_mail(
-        self, recipient: str, token: str, url: str = None
+        self, recipient: str, token: str, url: Optional[str] = None
     ) -> None:
         assistance_email = self.get_assistance_mail()
         data = ReplaceInMail(token=token, email=assistance_email, url=url)
@@ -220,18 +225,20 @@ class MailService(Service):
         self,
         recipient: str,
         active: bool = True,
-        action: str = None,
-        token: str = None,
-        url: str = None,
+        action: Optional[str] = None,
+        token: Optional[str] = None,
+        url: Optional[str] = None,
     ) -> None:
         assistance_email = self.get_assistance_mail()
         data = ReplaceInMail(email=assistance_email, token=token)
         mailmsg = self.mail_message(
             self.MODEL_ACTIVATED, [recipient], data, action=action
         )
-        self.send_mail(recipient, mailmsg, assistance_email)
+        self.send_mail(recipient, mailmsg, reply_to=assistance_email)
 
-    def get_mail_message(self, model_name: str, language, action: str = None) -> dict:
+    def get_mail_message(
+        self, model_name: str, language, action: Optional[str] = None
+    ) -> dict:
         import json
 
         filename = self.PATH_MAIL_TEMPLATE.format(name=model_name)
@@ -247,7 +254,7 @@ class MailService(Service):
         else:
             return model
 
-    def get_assistance_mail(self, assistance_email: str = None) -> str:
+    def get_assistance_mail(self, assistance_email: Optional[str] = None) -> str:
         if assistance_email == None:
             assistance_email: str = self.account_validate_email
             if assistance_email == None:

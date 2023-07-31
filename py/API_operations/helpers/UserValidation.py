@@ -4,7 +4,7 @@
 #
 # User Validation Service .
 #
-from typing import Any
+from typing import Optional, Any
 from API_operations.helpers.Service import Service
 from BO.Rights import NOT_AUTHORIZED
 from DB.User import User, TempPasswordReset
@@ -71,7 +71,7 @@ class UserValidationService(Service):
         email: str,
         action: str,
         id: int = -1,
-        url: str = None,
+        url: Optional[str] = None,
         bypass=False,
     ) -> bool:
         if bypass:
@@ -86,9 +86,9 @@ class UserValidationService(Service):
     def request_activate_user(
         self,
         inactive_user: User,
-        token: str = None,
-        action: str = None,
-        url: str = None,
+        token: Optional[str] = None,
+        action: Optional[str] = None,
+        url: Optional[str] = None,
     ) -> None:
         if self.account_validate_email:
             if token:
@@ -111,7 +111,7 @@ class UserValidationService(Service):
                     url=url,
                 )
 
-    def inform_user_activestate(self, user: User, url: str = None) -> None:
+    def inform_user_activestate(self, user: User, url: Optional[str] = None) -> None:
         active = user.active
         action = ACTIVATION_ACTION_ACTIVE
         token = None
@@ -124,11 +124,11 @@ class UserValidationService(Service):
             )
 
     def request_reset_password(
-        self, user_top_reset: User, temp_password: str, url=None
+        self, user_to_reset: User, temp_password: str, url=None
     ) -> None:
         token = self.generate_token(None, id=user_to_reset.id, action=temp_password)
         with MailService() as mailservice:
-            mailservice.send_reset_password_mail(user_to_reset_email, token, url=url)
+            mailservice.send_reset_password_mail(user_to_reset.email, token, url=url)
 
     def keepactive(self) -> bool:
         # check if external validation on registration or profile email modification
@@ -151,8 +151,8 @@ class UserValidationService(Service):
         self,
         email: str,
         id: int = -1,
-        ip: str = None,
-        action: str = None,
+        ip: Optional[str] = None,
+        action: Optional[str] = None,
     ) -> str:
         tokenreq = dict({})
         tokenreq["instance"] = self.app_instance
@@ -170,9 +170,9 @@ class UserValidationService(Service):
         self,
         token: str,
         name: str,
-        email: str = None,
-        ip: str = None,
-        action: str = None,
+        email: Optional[str] = None,
+        ip: Optional[str] = None,
+        action: Optional[str] = None,
     ) -> str:
         if name == "id":
             age = 4
@@ -206,32 +206,32 @@ class UserValidationService(Service):
     def get_email_from_token(
         self,
         token: str,
-        email: str = None,
-        ip: str = None,
-        action: str = None,
+        email: Optional[str] = None,
+        ip: Optional[str] = None,
+        action: Optional[str] = None,
     ) -> str:
         return self.get_value_from_token(token, "email", email, ip, action)
 
     def get_id_from_token(
         self,
         token: str,
-        email: str = None,
-        ip: str = None,
-        action: str = None,
+        email: Optional[str] = None,
+        ip: Optional[str] = None,
+        action: Optional[str] = None,
     ) -> str:
         return self.get_value_from_token(token, "id", email, ip, action)
 
     def get_reset_from_token(
         self,
         token: str,
-        email: str = None,
-        ip: str = None,
-        action: str = None,
+        email: Optional[str] = None,
+        ip: Optional[str] = None,
+        action: Optional[str] = None,
     ) -> str:
         # the temp_password is stored into action field of the token
         return self.get_value_from_token(token, "action", email, ip, action)
 
-    def check_id_from_token(self, token: str, email: str, id: int) -> str:
+    def check_id_from_token(self, token: str, email: str, id: int) -> None:
         try:
             payload = self._build_serializer(self.secret_key).loads(
                 token, max_age=1 * 3600
