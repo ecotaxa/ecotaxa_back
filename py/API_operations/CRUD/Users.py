@@ -42,10 +42,8 @@ class TempPasswordModel(BaseModel):
     user_id: int = Field(
         title="User Id", description="Internal, numeric id of the user.", example=1
     )
-    temp_password: str = (
-        Field(
-            title="Temporary password",
-        ),
+    temp_password: str = Field(
+        title="Temporary password",
     )
 
 
@@ -110,7 +108,7 @@ class UserService(Service):
                     status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                     detail=["", "Item found", ""],
                 )
-            if self.verify_email:
+            if self.validation_service and self.verify_email:
                 waitfor = self.validation_service.request_email_verification(
                     new_user.email,
                     action=ACTIVATION_ACTION_CREATE,
@@ -151,7 +149,7 @@ class UserService(Service):
             actions=actions,
         )
         # if user has to be validated by external service
-        if self.verify_email and not usr.active:
+        if self.validation_service is not None and self.verify_email and not usr.active:
             self.validation_service.request_activate_user(
                 usr, action=ACTIVATION_ACTION_CREATE
             )
@@ -187,7 +185,11 @@ class UserService(Service):
                     detail=["", "Item should not be found", ""],
                 )
             # if mail changed and validation required -> change the user active value
-            if self.verify_email and not self._keep_active(current_user):
+            if (
+                self.validation_service is not None
+                and self.verify_email
+                and not self._keep_active(current_user)
+            ):
                 update_src.active = False
                 major_data_changed = True
 
@@ -484,6 +486,7 @@ class UserService(Service):
                     self.validation_service.inform_user_activestate(inactive_user)
         else:
             raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=NOT_AUTHORIZED)
+            return
 
     # reset user password
     def reset_user_password(

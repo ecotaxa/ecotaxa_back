@@ -43,14 +43,13 @@ class UserValidationService(Service):
                 status_code=HTTP_403_FORBIDDEN,
                 detail="Can't initialize requested validation",
             )
+            return
         # for token generation
         self.app_instance = self.config.get_cnf("INSTANCE_ID")
         if self.app_instance is None:
             self.app_instance = "EcoTaxa.01"
 
-    #
     # verify temp password before reset
-    #
     def verify_temp_password(self, temp_password: str, temp: TempPasswordReset) -> bool:
         """Returns ``True`` if the temporary password is valid for the specified user id.
         :param temp_password: A plaintext password to verify
@@ -168,8 +167,7 @@ class UserValidationService(Service):
             tokenreq["id"] = str(id)
         if action != None:
             tokenreq["action"] = action
-
-        token = self._build_serializer(self.secret_key).dumps(tokenreq)
+        token = str(self._build_serializer(self.secret_key).dumps(tokenreq))
         return token
 
     def get_value_from_token(

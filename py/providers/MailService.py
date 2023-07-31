@@ -79,23 +79,19 @@ class MailService(Service):
     def __init__(self) -> None:
         super().__init__()
         # 0 email - 1 pwd - 2 - dns - 3 port
-        senderaccount = str(self.config.get_cnf("SENDER_ACCOUNT") or "")
-        if senderaccount == "":
+        senderaccount: list = str(self.config.get_cnf("SENDER_ACCOUNT") or "").split(
+            ","
+        )
+        if len(senderaccount) != 4:
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=["", "No sender account", ""],
             )
-        else:
-            senderaccount: list = senderaccount.split(",")
-            if len(senderaccount) != 4:
-                raise HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=["", "No sender account", ""],
-                )
-            self.account_validate_email = str(
-                self.config.get_cnf("ACCOUNT_VALIDATE_EMAIL") or ""
-            )
-            self.senderaccount = senderaccount
+            return
+        self.account_validate_email = str(
+            self.config.get_cnf("ACCOUNT_VALIDATE_EMAIL") or ""
+        )
+        self.senderaccount = senderaccount
 
     def send_mail(
         self, email: str, msg: MIMEMultipart, replyto: Optional[str] = None
@@ -112,7 +108,7 @@ class MailService(Service):
         senderemail = senderaccount[0].strip()
         senderpwd = senderaccount[1].strip()
         senderdns = senderaccount[2].strip()
-        senderport = senderaccount[3].strip()
+        senderport = int(senderaccount[3].strip())
         msg["From"] = senderemail
         recipients = [email]
         if replyto != None:
@@ -135,7 +131,7 @@ class MailService(Service):
         self,
         model_name: str,
         recipients: list,
-        values: dict,
+        values: Optional[ReplaceInMail],
         language: str = DEFAULT_LANGUAGE,
         action: Optional[str] = None,
     ) -> MIMEMultipart:
@@ -145,10 +141,9 @@ class MailService(Service):
         replace = dict({})
 
         for key in self.MODEL_KEYS:
-            replace[key] = ""
             if key == "link" and key in model.keys():
-                if "url" not in values.keys() and url in model.keys():
-                    replace[key] = model["link"].format(url=model["url"])
+                if "url" not in values.keys() and "url" in model.keys():
+                    replace[key] = model["link"].format(url=model["url"], **values)
                 else:
                     replace[key] = model["link"].format(**values)
 
@@ -157,6 +152,8 @@ class MailService(Service):
                     replace[key] = model[key][values[key]]
                 else:
                     replace[key] = model[key].format(**values)
+            else:
+                replace[key] = ""
 
         for key in self.REPLACE_KEYS:
             if key in model.keys() and key in values.keys():
@@ -245,7 +242,7 @@ class MailService(Service):
         mailmsg = self.mail_message(
             self.MODEL_ACTIVATED, [recipient], data, action=action
         )
-        self.send_mail(recipient, mailmsg, reply_to=assistance_email)
+        self.send_mail(recipient, mailmsg, replyto=assistance_email)
 
     def get_mail_message(
         self, model_name: str, language, action: Optional[str] = None
@@ -265,16 +262,13 @@ class MailService(Service):
         else:
             return model
 
-    def get_assistance_mail(
-        self, assistance_email: Optional[str] = None
-    ) -> Optional[str]:
+    def get_assistance_mail(self) -> Optional[str]:
+        assistance_email: Optional[str] = self.account_validate_email
         if assistance_email == None:
-            assistance_email: Optional[str] = self.account_validate_email
-            if assistance_email == None:
-                from API_operations.CRUD.Users import UserService
+            from API_operations.CRUD.Users import UserService
 
-                with UserService() as sce:
-                    users_admins = sce.get_users_admins()
-                assistance_email: Optional[str] = users_admins[0].email
-
+            with UserService() as sce:
+                users_admins = sce.get_users_admins()
+            if len(users_admins):
+                return users_admins[0].email
         return assistance_email
