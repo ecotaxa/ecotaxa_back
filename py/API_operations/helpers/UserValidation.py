@@ -36,8 +36,13 @@ class UserValidationService(Service):
         super().__init__()
         self.email_verification = self.config.get_cnf("USER_EMAIL_VERIFICATION") == "on"
         self.account_validate_email = self.config.get_cnf("ACCOUNT_VALIDATE_EMAIL")
-        self.account_active = self.config.get_cnf("ACCOUNT_ACTIVE_DEFAULT")
-        self.secret_key = self.config.get_cnf("MAILSERVICE_SECRET_KEY")
+        self.account_active = self.config.get_cnf("ACCOUNT_ACTIVE_DEFAULT") == True
+        self.secret_key = str(self.config.get_cnf("MAILSERVICE_SECRET_KEY") or "")
+        if self.secret_key == "" and self.email_verification:
+            HTTPException(
+                status_code=HTTP_403_FORBIDDEN,
+                detail="Can't initialize requested validation",
+            )
         # for token generation
         self.app_instance = self.config.get_cnf("INSTANCE_ID")
         if self.app_instance is None:
@@ -136,6 +141,7 @@ class UserValidationService(Service):
 
     @staticmethod
     def _build_serializer(secret_key: str) -> URLSafeTimedSerializer:
+
         from itsdangerous import TimestampSigner
 
         salt = b"mailservice_salt"
@@ -173,7 +179,7 @@ class UserValidationService(Service):
         email: Optional[str] = None,
         ip: Optional[str] = None,
         action: Optional[str] = None,
-    ) -> str:
+    ) -> Optional[str]:
         if name == "id":
             age = 4
         else:

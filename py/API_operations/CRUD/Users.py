@@ -56,11 +56,11 @@ class UserService(Service):
 
     def __init__(self) -> None:
         super().__init__()
-        if self.config.get_cnf("USER_EMAIL_VERIFICATION") == "on":
+        try:
             with UserValidationService() as sce:
-                self.validation_service = sce
+                self.validation_service: Optional[UserValidationService] = sce
                 self.verify_email = sce.email_verification
-        else:
+        except:
             self.validation_service = None
             self.verify_email = False
 
@@ -97,9 +97,9 @@ class UserService(Service):
         if current_user_id is None:
             # Unauthenticated user tries to create an account
             # Verify not a robot
-            recaptcha_secret, recaptcha_id = self.config.get_cnf(
-                "RECAPTCHASECRET"
-            ), self.config.get_cnf("RECAPTCHAID")
+            recaptcha_secret, recaptcha_id = str(
+                self.config.get_cnf("RECAPTCHASECRET") or ""
+            ), str(self.config.get_cnf("RECAPTCHAID") or "")
             recaptcha = ReCAPTCHAClient(recaptcha_secret, recaptcha_id)
             recaptcha.verify_captcha(no_bot)
             # No right at all
@@ -439,9 +439,9 @@ class UserService(Service):
         if current_user is None or not current_user.active:
             # Unauthenticated user ask for account activation
             # Verify not a robot
-            recaptcha_secret, recaptcha_id = self.config.get_cnf(
-                "RECAPTCHASECRET"
-            ), self.config.get_cnf("RECAPTCHAID")
+            recaptcha_secret, recaptcha_id = str(
+                self.config.get_cnf("RECAPTCHASECRET") or ""
+            ), str(self.config.get_cnf("RECAPTCHAID") or "")
             recaptcha = ReCAPTCHAClient(recaptcha_secret, recaptcha_id)
             recaptcha.verify_captcha(no_bot)
             if self.validation_service is None:
@@ -520,6 +520,10 @@ class UserService(Service):
             Role.USERS_ADMINISTRATOR
         ):
             if token:
+                if resetreq.password is None:
+                    raise HTTPException(
+                        status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="No password "
+                    )
                 email = self.validation_service.get_email_from_token(token)
                 temp_password = self.validation_service.get_reset_from_token(token)
                 user_id = self.validation_service.get_id_from_token(token)
@@ -541,7 +545,7 @@ class UserService(Service):
                     user_to_reset, update_src, [User.password], actions=None
                 )
                 # remove temp_user_reset row
-                temp_pw: TempPasswordReset = self.ro_session.query(
+                temp_pw: Optional[TempPasswordReset] = self.ro_session.query(
                     TempPasswordReset
                 ).get(user_to_reset.id)
                 self.session.delete(temp_pw)
@@ -560,18 +564,18 @@ class UserService(Service):
                 temp_password = uuid.uuid4().hex
                 with LoginService() as sce:
                     hash_temp_password = sce.hash_password(temp_password)
-                    temp: TempPasswordReset = self.ro_session.query(
+                    temp_rs: TempPasswordReset = self.ro_session.query(
                         TempPasswordReset
                     ).get(user_ask_reset.id)
-                if temp is None:
-                    temp = TempPasswordReset(
+                if temp_rs is None:
+                    temp_rs = TempPasswordReset(
                         user_id=user_ask_reset.id, temp_password=hash_temp_password
                     )
-                    self.session.add(temp)
+                    self.session.add(temp_rs)
                     self.session.commit()
 
                 else:
-                    temp.temp_password = hash_temp_password
+                    temp_rs.temp_password = hash_temp_password
                     self.session.commit()
 
                 self.validation_service.request_reset_password(
