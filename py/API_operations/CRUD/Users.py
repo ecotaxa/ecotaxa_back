@@ -4,24 +4,63 @@
 #
 from typing import Optional, List, Any
 
-from API_models.crud import UserModelWithRights, ProjectSummaryModel
+from API_models.crud import (
+    UserModelWithRights,
+    MinUserModel,
+    ProjectSummaryModel,
+    ResetPasswordReq,
+)
 from BO.Classification import ClassifIDListT
 from BO.Preferences import Preferences
 from BO.Rights import RightsBO, NOT_AUTHORIZED
 from BO.User import UserBO, UserIDT, UserIDListT
 from DB.Project import ProjectIDT
-from DB.User import User, Role, UserRole
+from DB.User import User, Role, UserRole, TempPasswordReset
 from helpers.DynamicLogs import get_logger
+from helpers.pydantic import BaseModel, Field
+from helpers.login import LoginService
 from providers.Google import ReCAPTCHAClient
 from ..helpers.Service import Service
+from fastapi import HTTPException
+from starlette.status import (
+    HTTP_422_UNPROCESSABLE_ENTITY,
+    HTTP_403_FORBIDDEN,
+)
+from ..helpers.UserValidation import (
+    UserValidationService,
+    ACTIVATION_ACTION_CREATE,
+    ACTIVATION_ACTION_UPDATE,
+)
+
 
 logger = get_logger(__name__)
+
+
+class TempPasswordModel(BaseModel):
+    user_id: int = Field(
+        title="User Id", description="Internal, numeric id of the user.", example=1
+    )
+    temp_password: str = (
+        Field(
+            title="Temporary password",
+        ),
+    )
 
 
 class UserService(Service):
     """
     Basic CRUD API_operations on User
     """
+
+    def __init__(self) -> None:
+        super().__init__()
+        try:
+            with UserValidationService() as sce:
+                self.validation_service = sce
+                self.verify_email = sce.email_verification
+        except:
+            self.validation_service = None
+            self.verify_email = False
 
     # Configuration keys TODO
 
@@ -32,57 +71,89 @@ class UserService(Service):
         User.organisation,
         User.active,
         User.country,
-        User.usercreationdate,
         User.usercreationreason,
     ]
+    COMMON_UPDATABLE_COLS = [
+        User.email,
+        User.password,
+        User.name,
+        User.organisation,
+        User.active,
+        User.country,
+        User.usercreationreason,
+    ]
+    EXCLUDE_KEYS = ["password", "last_used_projects", "can_do"]
+    # check context to know if the email has to be verifed
 
     def create_user(
         self,
         current_user_id: Optional[UserIDT],
         new_user: UserModelWithRights,
         no_bot: Optional[List[str]],
+        token: Optional[str],
     ) -> UserIDT:
         if current_user_id is None:
             # Unauthenticated user tries to create an account
             # Verify not a robot
-            captcha_secret, captcha_id = self.config.get_cnf(
+            recaptcha_secret, recaptcha_id = self.config.get_cnf(
                 "RECAPTCHASECRET"
             ), self.config.get_cnf("RECAPTCHAID")
-            if captcha_secret and captcha_id:
-                # Basic verification on input
-                assert no_bot is not None, "reCaptcha verif needs data"
-                assert len(no_bot) == 2, "invalid no_bot reason 1"
-                for a_str in no_bot:
-                    assert len(a_str) < 1024, "invalid no_bot reason 2"
-                verifier = ReCAPTCHAClient(captcha_id, captcha_secret)
-                error = verifier.validate(no_bot[0], no_bot[1])
-                assert error is None, error
+            recaptcha = ReCAPTCHAClient(recaptcha_secret, recaptcha_id)
+            recaptcha.verify_captcha(no_bot)
             # No right at all
             actions = None
+            # verify if the email already in the db
+            if self.email_exists(new_user.email):
+                raise HTTPException(
+                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=["", "Item found", ""],
+                )
+            if self.verify_email:
+                waitfor = self.validation_service.request_email_verification(
+                    new_user.email,
+                    action=ACTIVATION_ACTION_CREATE,
+                    bypass=(new_user.name != ""),
+                )
+                if waitfor:
+                    return -1
+            new_user.active = self._keep_active()
         else:
+            if self.email_exists(new_user.email):
+                raise HTTPException(
+                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=["", "Item found", ""],
+                )
             # Must be admin to create an account
             current_user: Optional[User] = self.ro_session.query(User).get(
                 current_user_id
             )
-            assert current_user is not None
-            assert current_user.has_role(Role.APP_ADMINISTRATOR), NOT_AUTHORIZED
-            actions = new_user.can_do
-        same_email_user = (
-            self.ro_session.query(User).filter(User.email == new_user.email).scalar()
-        )
-        assert same_email_user is None, ["email already corresponds to another user"]
-        same_name_user = (
-            self.ro_session.query(User).filter(User.name == new_user.name).scalar()
-        )
-        assert same_name_user is None, ["name already corresponds to another user"]
+            if current_user is None:
+                raise HTTPException(
+                    status_code=HTTP_403_FORBIDDEN, detail=NOT_AUTHORIZED
+                )
+            if current_user.has_role(Role.APP_ADMINISTRATOR) or current_user.has_role(
+                Role.USERS_ADMINISTRATOR
+            ):
+                actions = new_user.can_do
+            else:
+                raise HTTPException(
+                    status_code=HTTP_401_UNAUTHORIZED, detail=NOT_AUTHORIZED
+                )
+
         usr = User()
         self.session.add(usr)
         self._model_to_db(
-            updated_user=usr,
+            user_to_update=usr,
             update_src=new_user,
             cols_for_upd=self.ADMIN_UPDATABLE_COLS,
             actions=actions,
         )
+        # if user has to be validated by external service
+        if self.verify_email and not usr.active:
+            self.validation_service.request_activate_user(
+                usr, action=ACTIVATION_ACTION_CREATE
+            )
+
         return usr.id
 
     def update_user(
@@ -94,20 +165,55 @@ class UserService(Service):
         """
         Update a user, who can be myself or anybody if I'm an app admin.
         """
+        major_data_changed = False
+
         current_user: Optional[User] = self.ro_session.query(User).get(current_user_id)
-        assert current_user is not None
-        updated_user: Optional[User] = self.session.query(User).get(user_id)
-        assert updated_user is not None
-        assert updated_user.id == user_id
-        if current_user.has_role(Role.APP_ADMINISTRATOR):
+        if current_user is None:
+            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=NOT_AUTHORIZED)
+        user_to_update: Optional[User] = self.session.query(User).get(user_id)
+        if user_to_update is None:
+            raise HTTPException(
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="not found"
+            )
+
+        # if email is modified check,if it belongs to another user
+        activestate = user_to_update.active
+        if update_src.email != user_to_update.email:
+            if self.email_exists(update_src.email):
+                raise HTTPException(
+                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=["", "Item should not be found", ""],
+                )
+            # if mail changed and validation required -> change the user active value
+            if self.verify_email and not self._keep_active(current_user):
+                update_src.active = False
+                major_data_changed = True
+
+        if current_user.has_role(Role.APP_ADMINISTRATOR) or current_user.has_role(
+            Role.USERS_ADMINISTRATOR
+        ):
             cols_for_upd = self.ADMIN_UPDATABLE_COLS
             actions = update_src.can_do
+
         elif current_user.id == user_id:
-            cols_for_upd = [User.name, User.password]
+            cols_for_upd = self.COMMON_UPDATABLE_COLS
             actions = None
+
         else:
-            assert False, NOT_AUTHORIZED
-        self._model_to_db(updated_user, update_src, cols_for_upd, actions)
+            raise HTTPException(
+                status_code=HTTP_401_UNAUTHORIZED, detail=NOT_AUTHORIZED
+            )
+        self._model_to_db(user_to_update, update_src, cols_for_upd, actions)
+        # if the email has changed or the account has been deactivated
+        if major_data_changed:
+            self.validation_service.request_email_verification(
+                user_to_update.email,
+                action=ACTIVATION_ACTION_UPDATE,
+                id=user_to_update.id,
+            )
+        elif self.validation_service is not None and activestate != update_src.active:
+            # inform the user if its account is desactivated and the validation service is active
+            self.validation_service.inform_user_activestate(user_to_update)
 
     def search_by_id(
         self, current_user_id: UserIDT, user_id: UserIDT
@@ -120,8 +226,12 @@ class UserService(Service):
         self, current_user_id: UserIDT, user_id: UserIDT
     ) -> UserModelWithRights:
         db_usr = self.ro_session.query(User).get(user_id)
-        assert db_usr is not None
-        ret = self._get_full_user(db_usr)
+        if db_usr is None:
+            raise HTTPException(
+                status_code="HTTP_404_NOT_FOUND", detail="Item not found"
+            )
+        else:
+            ret = self._get_full_user(db_usr)
         return ret
 
     def _get_full_user(self, db_usr: User) -> UserModelWithRights:
@@ -164,19 +274,26 @@ class UserService(Service):
         return self._get_users_with_role(Role.APP_ADMINISTRATOR)
 
     def list(
-        self, current_user_id: UserIDT, user_ids: UserIDListT
+        self,
+        current_user_id: UserIDT,
+        user_ids: UserIDListT,
+        minimize: Optional[str] = None,
     ) -> List[UserModelWithRights]:
         """
         List all users, or some of them by their ids, if requester is admin.
         """
         current_user: Optional[User] = self.ro_session.query(User).get(current_user_id)
 
-        assert current_user is not None
+        if current_user is None:
+            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=NOT_AUTHORIZED)
         ret = []
-        if current_user.has_role(Role.APP_ADMINISTRATOR):
+        if current_user.has_role(Role.APP_ADMINISTRATOR) or current_user.has_role(
+            Role.USERS_ADMINISTRATOR
+        ):
             qry = self.ro_session.query(User)
             if len(user_ids) > 0:
                 qry = qry.filter(User.id.in_(user_ids))
+
             for db_usr in qry:
                 ret.append(self._get_full_user(db_usr))
         return ret
@@ -215,8 +332,28 @@ class UserService(Service):
         mru = UserBO.merge_mru(mru, last_used)
         UserBO.set_mru(self.session, user_id, project_id, mru)
 
+    # add-ons for mail verification and reset password
+    def _is_strong_password(self, password: str) -> bool:
+        import re
+
+        special_chars = "[_@$]"
+        if len(password) >= 8:
+            if (
+                re.search("[a-z]", password)
+                and re.search("[A-Z]", password)
+                and re.search("[0-9]", password)
+                and re.search(special_chars, password)
+                and not re.search("\s", password)
+            ):
+                return True
+        return False
+
     def _model_to_db(
-        self, updated_user: User, update_src: UserModelWithRights, cols_for_upd, actions
+        self,
+        user_to_update: User,
+        update_src: UserModelWithRights,
+        cols_for_upd,
+        actions,
     ) -> None:
         """
         Transfer model values into the DB record.
@@ -226,14 +363,22 @@ class UserService(Service):
         for a_col in cols_for_upd:
             col_name = a_col.name
             new_val = getattr(update_src, col_name)
-            if a_col == User.password and new_val in ("", None):
-                # By policy, don't clear passwords
-                continue
-            setattr(updated_user, col_name, new_val)
+            if a_col == User.password:
+                if new_val in ("", None):
+                    # By policy, don't clear passwords
+                    continue
+                else:
+                    # can check is password is strong
+                    # if not self._is_strong_password(new_val):
+                    #   raise HTTPEception(status_code= HTTP_422_UNPROCESSABLE_ENTITY, detail="password strength")
+                    with LoginService() as sce:
+                        new_val = sce.hash_password(new_val)
+
+            setattr(user_to_update, col_name, new_val)
         if actions is not None:
             # Set roles so that requested actions will be possible
             all_roles = {a_role.name: a_role for a_role in self.session.query(Role)}
-            RightsBO.set_allowed_actions(updated_user, actions, all_roles)
+            RightsBO.set_allowed_actions(user_to_update, actions, all_roles)
         # Commit on DB
         self.session.commit()
 
@@ -244,3 +389,198 @@ class UserService(Service):
         qry = self.ro_session.query(User.organisation).distinct()
         qry = qry.filter(User.organisation.ilike(name))
         return [r for r, in qry if r is not None]
+
+    def email_exists(self, email) -> dict:
+        return self.ro_session.query(User).filter(User.email == email).scalar() != None
+
+    def _keep_active(self, current_user: User = None) -> bool:
+        if self.validation_service is None:
+            return True
+        else:
+            # check if required to change active state of user for revalidation
+            keepactive = self.validation_service.keepactive()
+            if keepactive or (
+                current_user is not None
+                and (
+                    current_user.has_role(Role.APP_ADMINISTRATOR)
+                    or current_user.has_role(Role.USERS_ADMINISTRATOR)
+                )
+            ):
+                return True
+            else:
+                return keepactive
+
+    def _get_active_user_by_email(self, email: str) -> User:
+        qry = (
+            self.ro_session.query(User).filter(User.email == email).filter(User.active)
+        )
+        users = qry.all()
+        if len(users) == 1:
+            return users[0]
+        else:
+            raise HTTPException(
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="not found",
+            )
+
+    # user activation after validation - can be accessed by a normal user with a token ()
+    def activate_user(
+        self,
+        current_user_id: UserIDT,
+        user_id: UserIDT,
+        no_bot: Optional[List[str]],
+        token: Optional[str],
+    ) -> None:
+        """
+        Activate a user, anybody if I'm an app admin or user admin. Can be a user with a token when desactivated after email modification.
+        """
+        current_user: Optional[User] = self.ro_session.query(User).get(current_user_id)
+
+        if current_user is None or not current_user.active:
+            # Unauthenticated user ask for account activation
+            # Verify not a robot
+            recaptcha_secret, recaptcha_id = self.config.get_cnf(
+                "RECAPTCHASECRET"
+            ), self.config.get_cnf("RECAPTCHAID")
+            recaptcha = ReCAPTCHAClient(recaptcha_secret, recaptcha_id)
+            recaptcha.verify_captcha(no_bot)
+            if self.validation_service is None:
+                raise HTTPException(
+                    status_code=HTTP_404_NOT_FOUND, detail="Service not active"
+                )
+            if token:
+                user_id = self.validation_service.get_id_from_token(token)
+                inactive_user: Optional[User] = self.session.query(User).get(user_id)
+                if inactive_user is None:
+                    raise HTTPException(
+                        status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=NOT_AUTHORIZED,
+                    )
+                self.validation_service.request_activate_user(
+                    inactive_user, token=token, action=ACTIVATION_ACTION_UPDATE
+                )
+            else:
+                raise HTTPException(
+                    status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=NOT_AUTHORIZED
+                )
+
+        elif user_id != -1 and (
+            current_user.has_role(Role.APP_ADMINISTRATOR)
+            or current_user.has_role(Role.USERS_ADMINISTRATOR)
+        ):
+
+            inactive_user: Optional[User] = self.session.query(User).get(user_id)
+
+            if inactive_user is None:
+                raise HTTPException(
+                    status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=NOT_AUTHORIZED
+                )
+            elif not inactive_user.active:
+                cols_for_upd = [User.active]
+                update_src = UserModelWithRights(**inactive_user.__dict__)
+                update_src.active = True
+                self._model_to_db(inactive_user, update_src, cols_for_upd, actions=None)
+                if self.validation_service is not None:
+                    self.validation_service.inform_user_activestate(
+                        inactive_user, active=True
+                    )
+        else:
+            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=NOT_AUTHORIZED)
+
+    # reset user password
+    def reset_user_password(
+        self,
+        current_user_id: Optional[UserIDT],
+        resetreq: ResetPasswordReq,
+        no_bot: Optional[List[str]],
+        token: Optional[str],
+    ) -> UserIDT:
+        # active only with a validation_service
+        if self.validation_service is None:
+            raise HTTPException(status_code=HTTP_403_UNAUTHORIZED)
+        if current_user_id is not None:
+            current_user: Optional[User] = self.ro_session.query(User).get(
+                current_user_id
+            )
+        else:
+            current_user = None
+        if current_user is None:
+            # Unauthenticated user asks to reset his password
+            # Verify not a robot
+            recaptcha_secret, recaptcha_id = self.config.get_cnf(
+                "RECAPTCHASECRET"
+            ), self.config.get_cnf("RECAPTCHAID")
+            recaptcha = ReCAPTCHAClient(recaptcha_secret, recaptcha_id)
+            recaptcha.verify_captcha(no_bot)
+            # verify if the email exists  in the db
+            if not token and not self.email_exists(resetreq.email):
+                raise HTTPException(
+                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=["", "Item not found", ""],
+                )
+        elif current_user.has_role(Role.APP_ADMINISTRATOR) or current_user.has_role(
+            Role.USERS_ADMINISTRATOR
+        ):
+            if token:
+                email = self.validation_service.get_email_from_token(token)
+                temp_password = self.validation_service.get_reset_from_token(token)
+                user_id = self.validation_service.get_id_from_token(token)
+                user_to_reset: Optional[User] = self.ro_session.query(User).get(user_id)
+                if user_to_reset is None:
+                    raise HTTPException(
+                        status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Not found"
+                    )
+                # find temporary password
+                temp = self.ro_session.query(TempPasswordReset).get(user_id)
+                if temp is None:
+                    raise HTTPException(
+                        status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Not found"
+                    )
+                self.validation_service.verify_temp_password(temp_password, temp)
+                update_src = UserModelWithRights(**user_to_reset.__dict__)
+                update_src.password = resetreq.password
+                self._model_to_db(
+                    user_to_reset, update_src, [User.password], actions=None
+                )
+                # remove temp_user_reset row
+                temp: TempPasswordReset = self.ro_session.query(TempPasswordReset).get(
+                    user_to_reset.id
+                )
+                self.session.delete(temp)
+                self.session.commit()
+                id = user_to_reset.id
+            else:
+                # store a temporary unique password in the db for the user_id
+                user_to_reset: User = self._get_active_user_by_email(resetreq.email)
+                if user_to_reset is None:
+                    raise HTTPException(
+                        status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Not found"
+                    )
+
+                import uuid
+
+                temp_password = uuid.uuid4().hex
+                with LoginService() as sce:
+                    hash_temp_password = sce.hash_password(temp_password)
+                    temp: TempPasswordReset = self.ro_session.query(
+                        TempPasswordReset
+                    ).get(user_to_reset.id)
+                if temp is None:
+                    temp = TempPasswordReset(
+                        user_id=user_to_reset.id, temp_password=hash_temp_password
+                    )
+                    self.session.add(temp)
+                    self.session.commit()
+
+                else:
+                    temp.temp_password = hash_temp_password
+                    self.session.commit()
+
+                self.validation_service.request_reset_password(
+                    user_to_reset, temp_password=temp_password
+                )
+
+                id = -1
+            return id
+        else:
+            raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=error)
