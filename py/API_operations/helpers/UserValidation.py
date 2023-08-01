@@ -70,7 +70,7 @@ class UserValidationService(Service):
         if not verified:
             raise HTTPException(
                 status_code=HTTP_401_UNAUTHORIZED,
-                detail=["", "Unauthorized", ""],
+                detail=NOT_AUTHORIZED,
             )
         return verified
 
@@ -79,7 +79,7 @@ class UserValidationService(Service):
         self,
         email: str,
         action: str,
-        id: int = -1,
+        id: Optional[int] = -1,
         url: Optional[str] = None,
         bypass=False,
     ) -> bool:
@@ -101,9 +101,6 @@ class UserValidationService(Service):
     ) -> None:
         if self.account_validate_email:
             if token:
-                self.check_id_from_token(
-                    token, email=inactive_user.email, id=inactive_user.id
-                )
                 action = self.get_value_from_token(token, "action")
                 if action is None:
                     action = ACTIVATION_ACTION_CREATE
@@ -193,14 +190,11 @@ class UserValidationService(Service):
         except (SignatureExpired, BadSignature):
             raise HTTPException(
                 status_code=HTTP_403_FORBIDDEN,
-                detail=["", "Bad signature or expired", ""],
+                detail="Bad signature or expired",
             )
             return
         if self.app_instance != payload.get("instance"):
-            raise HTTPException(
-                status_code=HTTP_403_FORBIDDEN, detail=["", "Bad instance", ""]
-            )
-            return
+            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Bad instance")
         value = payload.get(name)
         if (
             value
@@ -209,8 +203,7 @@ class UserValidationService(Service):
         ):
             if ip == None or payload.get("ip") == ip:
                 return value
-        else:
-            return None
+        return None
 
     def get_email_from_token(
         self,
@@ -227,12 +220,8 @@ class UserValidationService(Service):
         email: Optional[str] = None,
         ip: Optional[str] = None,
         action: Optional[str] = None,
-    ) -> Optional[int]:
-        id = self.get_value_from_token(token, "id", email, ip, action)
-        if id is None:
-            return None
-        else:
-            return int(id)
+    ) -> int:
+        return int(self.get_value_from_token(token, "id", email, ip, action) or -1)
 
     def get_reset_from_token(
         self,
@@ -252,7 +241,7 @@ class UserValidationService(Service):
         except:
             raise HTTPException(
                 status_code=HTTP_403_FORBIDDEN,
-                detail=["", "Bad signature - token for creation has expired", ""],
+                detail="Bad signature - token for creation has expired",
             )
 
         if (
@@ -260,9 +249,7 @@ class UserValidationService(Service):
             or payload.get("email") != email
             or payload.get("id") != id
         ):
-            raise HTTPException(
-                status_code=HTTP_403_FORBIDDEN, detail=["", "Invalid token", ""]
-            )
+            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Invalid token")
 
 
 class ValidationException(Exception):

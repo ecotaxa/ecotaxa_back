@@ -535,7 +535,7 @@ def reset_user_password(
     with UserService() as sce:
         with ValidityThrower(), RightsThrower():
             user_id = sce.reset_user_password(current_user, resetreq, no_bot, token)
-            if token:
+            if token and user_id != -1:
                 with DBSyncService(User, User.id, user_id) as ssce:
                     ssce.wait()
 

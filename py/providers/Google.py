@@ -36,22 +36,24 @@ class ReCAPTCHAClient(object):
         return None
 
     def verify_captcha(self, no_bot: Optional[List[str]]) -> None:
+        """
+        get captcha as a list and format to call validate
+        :return: None if OK, otherwise HTTPException.
+        """
+        detail = ""
         if no_bot is None:
+            detail = "reCaptcha verif needs data"
+        elif len(no_bot) != 2:
+            detail = "invalid no_bot reason 1"
+        else:
+            for a_str in no_bot:
+                if len(a_str) == 0 or len(a_str) >= 1024:
+                    detail = "invalid no_bot reason 2"
+        if detail != "":
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="reCaptcha verif needs data",
+                detail=detail,
             )
-        if len(no_bot) != 2:
-            raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="invalid no_bot reason 1",
-            )
-        for a_str in no_bot:
-            if len(a_str) >= 1024:
-                raise HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="invalid no_bot reason 2",
-                )
         remote_ip = no_bot[0]
         response = no_bot[1]
         error = self.validate(remote_ip, response)

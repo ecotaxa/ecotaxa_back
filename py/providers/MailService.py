@@ -5,7 +5,7 @@
 # Maintenance operations on the DB.
 #
 import datetime
-from typing import Optional
+from typing import Optional, Any
 from API_operations.helpers.Service import Service
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 from helpers.pydantic import BaseModel, Field
@@ -82,16 +82,24 @@ class MailService(Service):
         senderaccount: list = str(self.config.get_cnf("SENDER_ACCOUNT") or "").split(
             ","
         )
-        if len(senderaccount) != 4:
+        if len(senderaccount) != 4 or not self.is_email(senderaccount[0]):
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=["", "No sender account", ""],
+                detail="No sender account",
             )
-            return
         self.account_validate_email = str(
             self.config.get_cnf("ACCOUNT_VALIDATE_EMAIL") or ""
         )
         self.senderaccount = senderaccount
+
+    @staticmethod
+    def is_email(email: str) -> bool:
+        import re
+
+        regex = re.compile(
+            r"([A-Za-z0-9]+[.-_])*[A-Za-z0-9]+@[A-Za-z0-9-]+(\.[A-Z|a-z]{2,})+"
+        )
+        return re.fullmatch(regex, email)
 
     def send_mail(
         self, email: str, msg: MIMEMultipart, replyto: Optional[str] = None
@@ -99,8 +107,10 @@ class MailService(Service):
         """
         Sendmail .
         """
-        if email == "":
-            return
+        if not self.is_email(email):
+            return HTTPException(
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="No valid sender mail"
+            )
         import smtplib, ssl
 
         # starttls and 587  - avec ssl 465
@@ -124,7 +134,7 @@ class MailService(Service):
             logger.info("Email sent to '%s'" % email)
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=["", "Mail not sent", ""],
+                detail="Mail not sent",
             )
 
     def mail_message(
@@ -135,29 +145,29 @@ class MailService(Service):
         language: str = DEFAULT_LANGUAGE,
         action: Optional[str] = None,
     ) -> MIMEMultipart:
-
         model = self.get_mail_message(model_name, language, action)
         values = dict(values)
         replace = dict({})
-
         for key in self.MODEL_KEYS:
-            if key == "link" and key in model.keys():
-                if "url" not in values.keys() and "url" in model.keys():
-                    replace[key] = model["link"].format(url=model["url"], **values)
-                else:
-                    replace[key] = model["link"].format(**values)
-
-            if key in model.keys() and key in values.keys():
-                if key == "action":
+            replace[key] = ""
+            if key in model.keys():
+                if (
+                    key == "link"
+                    and (
+                        "url" not in values.keys()
+                        or values["url"] is None
+                        or values["url"].strip() == ""
+                    )
+                    and "url" in model.keys()
+                ):
+                    values["url"] = model["url"]
+                if key in values.keys() and key == "action":
                     replace[key] = model[key][values[key]]
                 else:
                     replace[key] = model[key].format(**values)
-            else:
-                replace[key] = ""
-
         for key in self.REPLACE_KEYS:
-            if key in model.keys() and key in values.keys():
-                if key == "data":
+            if key in values.keys():
+                if key == "data" and type(values["data"]) == "dict":
                     data = []
                     for k, v in values["data"].items():
                         data.append(model["data"].format(key=k, value=v))
@@ -214,7 +224,6 @@ class MailService(Service):
     ) -> None:
         reply_to = self.get_assistance_mail()
         data = ReplaceInMail(email=reply_to, token=token, action=action, url=url)
-
         mailmsg = self.mail_message(
             self.MODEL_VERIFY, [recipient], data.__dict__, action=action
         )
