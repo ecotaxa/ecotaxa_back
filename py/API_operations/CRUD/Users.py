@@ -102,11 +102,8 @@ class UserService(Service):
             # No right at all
             actions = None
             # verify if the email already in the db
-            if self.email_exists(new_user.email):
-                raise HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="Item found",
-                )
+            self.email_exists(new_user.email, False)
+
             if self.verify_email:
                 with UserValidationService() as validation_service:
                     waitfor = validation_service.request_email_verification(
@@ -123,12 +120,7 @@ class UserService(Service):
                     return -1
                 new_user.active = self._keep_active()
         else:
-            if self.email_exists(new_user.email):
-                logger.info("User create : exists '%s'" % new_user.email)
-                raise HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="Item found",
-                )
+            self.email_exists(new_user.email, False)
             # Must be admin to create an account
             current_user: Optional[User] = self.ro_session.query(User).get(
                 current_user_id
@@ -186,11 +178,7 @@ class UserService(Service):
         # if email is modified check,if it belongs to another user
         activestate = user_to_update.active
         if update_src.email != user_to_update.email:
-            if self.email_exists(update_src.email):
-                raise HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="Item should not be found",
-                )
+            self.email_exists(update_src.email, False)
             # if mail changed and validation required -> change the user active value
             if self.verify_email and not self._keep_active(current_user):
                 update_src.active = False
@@ -402,8 +390,22 @@ class UserService(Service):
         qry = qry.filter(User.organisation.ilike(name))
         return [r for r, in qry if r is not None]
 
-    def email_exists(self, email) -> bool:
-        return self.ro_session.query(User).filter(User.email == email).scalar() != None
+    def email_exists(self, email, valid: bool) -> None:
+        """
+        Exception if the mail exist and valid is False or the mail does not exists and valid is True
+        """
+        is_other = (
+            self.ro_session.query(User).filter(User.email == email).scalar() != None
+        )
+        if is_other != valid:
+            if is_other:
+                detail = "email already corresponds to another user"
+            else:
+                detail = "Not found"
+            raise HTTPException(
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=detail,
+            )
 
     def _keep_active(self, current_user: Optional[User] = None) -> bool:
         # check if required to change active state of user for revalidation
@@ -523,11 +525,7 @@ class UserService(Service):
             recaptcha.verify_captcha(no_bot)
             # verify if the email exists  in the db
             if not token:
-                if not self.email_exists(resetreq.email):
-                    raise HTTPException(
-                        status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                        detail="Item not found",
-                    )
+                self.email_exists(resetreq.email, True)
         elif not (
             current_user.has_role(Role.APP_ADMINISTRATOR)
             or current_user.has_role(Role.USERS_ADMINISTRATOR)
