@@ -79,7 +79,7 @@ class UserValidationService(Service):
         self,
         email: str,
         action: str,
-        id: Optional[int] = -1,
+        id: int,
         url: Optional[str] = None,
         bypass=False,
     ) -> bool:

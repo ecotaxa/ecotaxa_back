@@ -99,7 +99,7 @@ class MailService(Service):
         regex = re.compile(
             r"([A-Za-z0-9]+[.-_])*[A-Za-z0-9]+@[A-Za-z0-9-]+(\.[A-Z|a-z]{2,})+"
         )
-        return re.fullmatch(regex, email)
+        return re.fullmatch(regex, email) is not None
 
     def send_mail(
         self, email: str, msg: MIMEMultipart, replyto: Optional[str] = None
@@ -108,7 +108,7 @@ class MailService(Service):
         Sendmail .
         """
         if not self.is_email(email):
-            return HTTPException(
+            HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="No valid sender mail"
             )
         import smtplib, ssl

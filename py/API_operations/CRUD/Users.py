@@ -112,6 +112,7 @@ class UserService(Service):
                 waitfor = self.validation_service.request_email_verification(
                     new_user.email,
                     action=ACTIVATION_ACTION_CREATE,
+                    id=-1,
                     bypass=(new_user.name != ""),
                 )
                 if waitfor:
@@ -493,7 +494,6 @@ class UserService(Service):
         else:
             raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=NOT_AUTHORIZED)
 
-    # reset user password
     def reset_user_password(
         self,
         current_user_id: Optional[UserIDT],
@@ -501,10 +501,12 @@ class UserService(Service):
         no_bot: Optional[List[str]],
         token: Optional[str],
     ) -> UserIDT:
+
         """
         Reset a user password by creating a token and temporary password then sending the informations and update the modified password.
         TODO : move to UserValidation when Users model and "crud ops" are normalized
         """
+
         # active only with a validation_service
         if self.validation_service is None:
             raise HTTPException(status_code=HTTP_403_FORBIDDEN)
@@ -584,32 +586,32 @@ class UserService(Service):
         else:
             # store a temporary unique password in the db for the user_id
             err = True
-            user_ask_reset: Optional[User] = self._get_active_user_by_email(
-                resetreq.email
-            )
-            if user_ask_reset is not None:
-                import uuid
+            email = str(resetreq.email or "")
+            if email != "":
+                user_ask_reset: Optional[User] = self._get_active_user_by_email(email)
+                if user_ask_reset is not None:
+                    import uuid
 
-                temp_password = uuid.uuid4().hex
-                with LoginService() as sce:
-                    hash_temp_password = sce.hash_password(temp_password)
-                    temp_rs: Optional[TempPasswordReset] = self.ro_session.query(
-                        TempPasswordReset
-                    ).get(user_ask_reset.id)
-                if temp_rs is None:
-                    temp_rs = TempPasswordReset(
-                        user_id=user_ask_reset.id, temp_password=hash_temp_password
-                    )
-                    self.session.add(temp_rs)
-                    self.session.commit()
-                else:
-                    temp_rs.temp_password = hash_temp_password
-                    self.session.commit()
-                    self.validation_service.request_reset_password(
-                        user_ask_reset, temp_password=temp_password
-                    )
-                err = False
-                id = -1
+                    temp_password = uuid.uuid4().hex
+                    with LoginService() as sce:
+                        hash_temp_password = sce.hash_password(temp_password)
+                        temp_rs: Optional[TempPasswordReset] = self.ro_session.query(
+                            TempPasswordReset
+                        ).get(user_ask_reset.id)
+                    if temp_rs is None:
+                        temp_rs = TempPasswordReset(
+                            user_id=user_ask_reset.id, temp_password=hash_temp_password
+                        )
+                        self.session.add(temp_rs)
+                        self.session.commit()
+                    else:
+                        temp_rs.temp_password = hash_temp_password
+                        self.session.commit()
+                        self.validation_service.request_reset_password(
+                            user_ask_reset, temp_password=temp_password
+                        )
+                    err = False
+                    id = -1
             if err:
                 raise HTTPException(
                     status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Not found"

@@ -54,8 +54,9 @@ class ReCAPTCHAClient(object):
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=detail,
             )
-        remote_ip = no_bot[0]
-        response = no_bot[1]
-        error = self.validate(remote_ip, response)
-        if error is None:
-            raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=error)
+        else:
+            remote_ip = no_bot[0]
+            response = no_bot[1]
+            error = self.validate(remote_ip, response)
+            if error is None:
+                raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=error)
