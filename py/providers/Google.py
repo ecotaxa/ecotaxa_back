@@ -41,7 +41,8 @@ class ReCAPTCHAClient(object):
         :return: None if OK, otherwise HTTPException.
         """
         detail = ""
-        if no_bot is None:
+        no_bot = list(no_bot or ["", ""])
+        if no_bot == ["", ""]:
             detail = "reCaptcha verif needs data"
         elif len(no_bot) != 2:
             detail = "invalid no_bot reason 1"

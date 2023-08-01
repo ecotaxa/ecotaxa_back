@@ -539,7 +539,7 @@ class UserService(Service):
             raise HTTPException(
                 status_code=HTTP_401_UNAUTHORIZED, detail=NOT_AUTHORIZED
             )
-
+        id = -1
         if token:
             if resetreq.password is None:
                 raise HTTPException(
@@ -611,9 +611,8 @@ class UserService(Service):
                             user_ask_reset, temp_password=temp_password
                         )
                     err = False
-                    id = -1
             if err:
                 raise HTTPException(
                     status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Not found"
                 )
-            return id
+        return id
