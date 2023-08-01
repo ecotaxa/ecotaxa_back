@@ -103,14 +103,15 @@ class UserService(Service):
             actions = None
             # verify if the email already in the db
             self.email_exists(new_user.email, False)
-
-            if self.verify_email:
+            bypass = new_user.name != ""
+            if bypass:
+                self.name_exists(new_user.name, False)
+            elif self.verify_email:
                 with UserValidationService() as validation_service:
                     waitfor = validation_service.request_email_verification(
                         new_user.email,
                         action=ACTIVATION_ACTION_CREATE,
                         id=-1,
-                        bypass=(new_user.name != ""),
                     )
                 if waitfor:
                     logger.info(
@@ -121,6 +122,7 @@ class UserService(Service):
                 new_user.active = self._keep_active()
         else:
             self.email_exists(new_user.email, False)
+            self.name_exists(new_user.name, False)
             # Must be admin to create an account
             current_user: Optional[User] = self.ro_session.query(User).get(
                 current_user_id
@@ -175,8 +177,11 @@ class UserService(Service):
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=NOT_FOUND
             )
 
-        # if email is modified check,if it belongs to another user
         activestate = user_to_update.active
+        # if email is modified check,if it belongs to another user
+        if update_src.name != user_to_update.name:
+            self.name_exists(update_src.name, False)
+        # if email is modified check,if it belongs to another user
         if update_src.email != user_to_update.email:
             self.email_exists(update_src.email, False)
             # if mail changed and validation required -> change the user active value
@@ -343,7 +348,7 @@ class UserService(Service):
                 and re.search("[A-Z]", password)
                 and re.search("[0-9]", password)
                 and re.search(special_chars, password)
-                and not re.search("\s", password)
+                # and not re.search("\s", password)
             ):
                 return True
         return False
@@ -400,6 +405,23 @@ class UserService(Service):
         if is_other != valid:
             if is_other:
                 detail = ["email already corresponds to another user"]
+            else:
+                detail = [NOT_FOUND]
+            raise HTTPException(
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=detail,
+            )
+
+    def name_exists(self, name, valid: bool) -> None:
+        """
+        Exception if the name already  exist and valid is False or the name does not exists and valid is True
+        """
+        is_other = (
+            self.ro_session.query(User).filter(User.name == name).scalar() != None
+        )
+        if is_other != valid:
+            if is_other:
+                detail = ["name already corresponds to another user"]
             else:
                 detail = [NOT_FOUND]
             raise HTTPException(
@@ -524,7 +546,7 @@ class UserService(Service):
             recaptcha = ReCAPTCHAClient(recaptcha_secret, recaptcha_id)
             recaptcha.verify_captcha(no_bot)
             # verify if the email exists  in the db
-            if not token:
+            if token is None:
                 self.email_exists(resetreq.email, True)
         elif not (
             current_user.has_role(Role.APP_ADMINISTRATOR)
