@@ -34,11 +34,10 @@ class UserValidationService(Service):
 
     def __init__(self) -> None:
         super().__init__()
-        self.email_verification = self.config.get_cnf("USER_EMAIL_VERIFICATION") == "on"
+        email_verification = self.config.get_cnf("USER_EMAIL_VERIFICATION") == "on"
         self.account_validate_email = self.config.get_cnf("ACCOUNT_VALIDATE_EMAIL")
-        self.account_active = self.config.get_cnf("ACCOUNT_ACTIVE_DEFAULT") == True
         self.secret_key = str(self.config.get_cnf("MAILSERVICE_SECRET_KEY") or "")
-        if self.secret_key == "" and self.email_verification:
+        if self.secret_key == "" and email_verification:
             HTTPException(
                 status_code=HTTP_403_FORBIDDEN,
                 detail="Can't initialize requested validation",
@@ -135,10 +134,6 @@ class UserValidationService(Service):
         token = self.generate_token(None, id=user_to_reset.id, action=temp_password)
         with MailService() as mailservice:
             mailservice.send_reset_password_mail(user_to_reset.email, token, url=url)
-
-    def keepactive(self) -> bool:
-        # check if external validation on registration or profile email modification
-        return self.account_validate_email is None and self.account_active == True
 
     @staticmethod
     def _build_serializer(secret_key: str) -> URLSafeTimedSerializer:

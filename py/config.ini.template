@@ -58,7 +58,9 @@ SENDER_ACCOUNT = senderaccountmail @testmail.com, senderpwd, senderdns, 465
 
 # EcoTaxa instance id
 INSTANCE_ID = EcoTaxa .01# email verification request before user creation
-USER_EMAIL_VERIFICATION = on# User administrator who checks and activates accounts
+USER_EMAIL_VERIFICATION = on
+
+# User administrator who checks and activates accounts
 ACCOUNT_VALIDATE_EMAIL = validatetest @testmail.com# Not checked
 if EMAIL_VALIDATE_ACCOUNT is defined
 ACCOUNT_ACTIVE_DEFAULT = False

@@ -54,13 +54,12 @@ class UserService(Service):
 
     def __init__(self) -> None:
         super().__init__()
-        try:
-            with UserValidationService() as sce:
-                self.validation_service: Optional[UserValidationService] = sce
-                self.verify_email = sce.email_verification
-        except:
-            self.validation_service = None
-            self.verify_email = False
+        self.verify_email = self.config.get_cnf("USER_EMAIL_VERIFICATION") == "on"
+        account_validate_email = self.config.get_cnf("ACCOUNT_VALIDATE_EMAIL")
+        account_active = self.config.get_cnf("ACCOUNT_ACTIVE_DEFAULT") == True
+        self.keepactive = not self.verify_email or (
+            account_validate_email is None and account_active == True
+        )
 
     # Configuration keys TODO
 
@@ -108,20 +107,21 @@ class UserService(Service):
                     status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                     detail="Item found",
                 )
-            if self.validation_service and self.verify_email:
-                waitfor = self.validation_service.request_email_verification(
-                    new_user.email,
-                    action=ACTIVATION_ACTION_CREATE,
-                    id=-1,
-                    bypass=(new_user.name != ""),
-                )
+            if self.verify_email:
+                with UserValidationService() as validation_service:
+                    waitfor = validation_service.request_email_verification(
+                        new_user.email,
+                        action=ACTIVATION_ACTION_CREATE,
+                        id=-1,
+                        bypass=(new_user.name != ""),
+                    )
                 if waitfor:
                     logger.info(
                         "User create : requested email verification '%s'"
                         % new_user.email
                     )
                     return -1
-            new_user.active = self._keep_active()
+                new_user.active = self._keep_active()
         else:
             if self.email_exists(new_user.email):
                 logger.info("User create : exists '%s'" % new_user.email)
@@ -155,10 +155,11 @@ class UserService(Service):
             actions=actions,
         )
         # if user has to be validated by external service
-        if self.validation_service is not None and self.verify_email and not usr.active:
-            self.validation_service.request_activate_user(
-                usr, action=ACTIVATION_ACTION_CREATE
-            )
+        if self.verify_email and not usr.active:
+            with UserValidationService() as validation_service:
+                validation_service.request_activate_user(
+                    usr, action=ACTIVATION_ACTION_CREATE
+                )
         logger.info("User created :  '%s'" % new_user.email)
         return usr.id
 
@@ -191,11 +192,7 @@ class UserService(Service):
                     detail="Item should not be found",
                 )
             # if mail changed and validation required -> change the user active value
-            if (
-                self.validation_service is not None
-                and self.verify_email
-                and not self._keep_active(current_user)
-            ):
+            if self.verify_email and not self._keep_active(current_user):
                 update_src.active = False
                 major_data_changed = True
 
@@ -215,21 +212,22 @@ class UserService(Service):
             )
         self._model_to_db(user_to_update, update_src, cols_for_upd, actions)
         # if the email has changed or the account has been deactivated
-        if self.validation_service is None:
+        if not self.verify_email:
             return
-        if major_data_changed:
-            self.validation_service.request_email_verification(
-                user_to_update.email,
-                action=ACTIVATION_ACTION_UPDATE,
-                id=user_to_update.id,
-            )
-            logger.info(
-                "User email modified : requested verification '%s'"
-                % user_to_update.email
-            )
-        elif activestate != update_src.active:
-            # inform the user if its account is desactivated and the validation service is active
-            self.validation_service.inform_user_activestate(user_to_update)
+        with UserValidationService() as validation_service:
+            if major_data_changed:
+                validation_service.request_email_verification(
+                    user_to_update.email,
+                    action=ACTIVATION_ACTION_UPDATE,
+                    id=user_to_update.id,
+                )
+                logger.info(
+                    "User email modified : requested verification '%s'"
+                    % user_to_update.email
+                )
+            elif activestate != update_src.active:
+                # inform the user if its account is desactivated and the validation service is active
+                validation_service.inform_user_activestate(user_to_update)
 
     def search_by_id(
         self, current_user_id: UserIDT, user_id: UserIDT
@@ -404,25 +402,21 @@ class UserService(Service):
         qry = qry.filter(User.organisation.ilike(name))
         return [r for r, in qry if r is not None]
 
-    def email_exists(self, email) -> dict:
+    def email_exists(self, email) -> bool:
         return self.ro_session.query(User).filter(User.email == email).scalar() != None
 
     def _keep_active(self, current_user: Optional[User] = None) -> bool:
-        if self.validation_service is None:
+        # check if required to change active state of user for revalidation
+        if self.keepactive or (
+            current_user is not None
+            and (
+                current_user.has_role(Role.APP_ADMINISTRATOR)
+                or current_user.has_role(Role.USERS_ADMINISTRATOR)
+            )
+        ):
             return True
         else:
-            # check if required to change active state of user for revalidation
-            keepactive = self.validation_service.keepactive()
-            if keepactive or (
-                current_user is not None
-                and (
-                    current_user.has_role(Role.APP_ADMINISTRATOR)
-                    or current_user.has_role(Role.USERS_ADMINISTRATOR)
-                )
-            ):
-                return True
-            else:
-                return keepactive
+            return self.keepactive
 
     def _get_active_user_by_email(self, email: str) -> Optional[User]:
         qry = (
@@ -455,24 +449,25 @@ class UserService(Service):
             ), str(self.config.get_cnf("RECAPTCHAID") or "")
             recaptcha = ReCAPTCHAClient(recaptcha_secret, recaptcha_id)
             recaptcha.verify_captcha(no_bot)
-            if self.validation_service is None:
+            if not self.verify_email:
                 raise HTTPException(
                     status_code=HTTP_404_NOT_FOUND, detail="Service not active"
                 )
             err = True
             if token:
-                user_id = self.validation_service.get_id_from_token(token)
-                if user_id != -1:
-                    usr: Optional[User] = self.session.query(User).get(user_id)
-                    if usr is not None:
-                        err = False
-                        self.validation_service.request_activate_user(
-                            usr, token=token, action=ACTIVATION_ACTION_UPDATE
-                        )
-            if err:
-                raise HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=NOT_AUTHORIZED
-                )
+                with UserValidationService() as validation_service:
+                    user_id = validation_service.get_id_from_token(token)
+                    if user_id != -1:
+                        usr: Optional[User] = self.session.query(User).get(user_id)
+                        if usr is not None:
+                            err = False
+                            validation_service.request_activate_user(
+                                usr, token=token, action=ACTIVATION_ACTION_UPDATE
+                            )
+                if err:
+                    raise HTTPException(
+                        status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=NOT_AUTHORIZED
+                    )
         elif user_id != -1 and (
             current_user.has_role(Role.APP_ADMINISTRATOR)
             or current_user.has_role(Role.USERS_ADMINISTRATOR)
@@ -489,8 +484,9 @@ class UserService(Service):
                 update_src = UserModelWithRights(**inactive_user.__dict__)
                 update_src.active = True
                 self._model_to_db(inactive_user, update_src, cols_for_upd, actions=None)
-                if self.validation_service is not None:
-                    self.validation_service.inform_user_activestate(inactive_user)
+                if self.verify_email:
+                    with UserValidationService() as validation_service:
+                        validation_service.inform_user_activestate(inactive_user)
         else:
             raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=NOT_AUTHORIZED)
 
@@ -508,7 +504,7 @@ class UserService(Service):
         """
 
         # active only with a validation_service
-        if self.validation_service is None:
+        if not self.verify_email:
             raise HTTPException(status_code=HTTP_403_FORBIDDEN)
         if current_user_id is not None:
             current_user: Optional[User] = self.ro_session.query(User).get(
@@ -545,20 +541,22 @@ class UserService(Service):
                 raise HTTPException(
                     status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="No password "
                 )
-            email = self.validation_service.get_email_from_token(token)
-
-            temp_password = self.validation_service.get_reset_from_token(token)
-            user_id = self.validation_service.get_id_from_token(token)
-            err = True
-            if temp_password is not None and user_id != -1:
-                user_to_reset: Optional[User] = self.ro_session.query(User).get(user_id)
-                if user_to_reset is not None:
-                    # find temporary password
-                    temp = self.ro_session.query(TempPasswordReset).get(user_id)
-                    if temp is not None:
-                        verified = self.validation_service.verify_temp_password(
-                            str(temp_password), temp
-                        )
+            with UserValidationService() as validation_service:
+                email = validation_service.get_email_from_token(token)
+                temp_password = validation_service.get_reset_from_token(token)
+                user_id = validation_service.get_id_from_token(token)
+                err = True
+                if temp_password is not None and user_id != -1:
+                    user_to_reset: Optional[User] = self.ro_session.query(User).get(
+                        user_id
+                    )
+                    if user_to_reset is not None:
+                        # find temporary password
+                        temp = self.ro_session.query(TempPasswordReset).get(user_id)
+                        if temp is not None:
+                            verified = validation_service.verify_temp_password(
+                                str(temp_password), temp
+                            )
                         if verified:
                             update_src = UserModelWithRights(**user_to_reset.__dict__)
                             update_src.password = resetreq.password
@@ -607,9 +605,10 @@ class UserService(Service):
                     else:
                         temp_rs.temp_password = hash_temp_password
                         self.session.commit()
-                        self.validation_service.request_reset_password(
-                            user_ask_reset, temp_password=temp_password
-                        )
+                        with UserValidationService() as validation_service:
+                            validation_service.request_reset_password(
+                                user_ask_reset, temp_password=temp_password
+                            )
                     err = False
             if err:
                 raise HTTPException(
