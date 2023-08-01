@@ -12,7 +12,7 @@ from API_models.crud import (
 )
 from BO.Classification import ClassifIDListT
 from BO.Preferences import Preferences
-from BO.Rights import RightsBO, NOT_AUTHORIZED
+from BO.Rights import RightsBO, NOT_AUTHORIZED, NOT_FOUND
 from BO.User import UserBO, UserIDT, UserIDListT
 from DB.Project import ProjectIDT
 from DB.User import User, Role, UserRole, TempPasswordReset
@@ -172,7 +172,7 @@ class UserService(Service):
         user_to_update: Optional[User] = self.session.query(User).get(user_id)
         if user_to_update is None:
             raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="not found"
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=NOT_FOUND
             )
 
         # if email is modified check,if it belongs to another user
@@ -399,9 +399,9 @@ class UserService(Service):
         )
         if is_other != valid:
             if is_other:
-                detail = "email already corresponds to another user"
+                detail = ["email already corresponds to another user"]
             else:
-                detail = "Not found"
+                detail = [NOT_FOUND]
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=detail,
@@ -453,7 +453,7 @@ class UserService(Service):
             recaptcha.verify_captcha(no_bot)
             if not self.verify_email:
                 raise HTTPException(
-                    status_code=HTTP_404_NOT_FOUND, detail="Service not active"
+                    status_code=HTTP_404_NOT_FOUND, detail=["Service not active"]
                 )
             err = True
             if token:
@@ -537,7 +537,7 @@ class UserService(Service):
         if token:
             if resetreq.password is None:
                 raise HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="No password "
+                    status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=["No password "]
                 )
             with UserValidationService() as validation_service:
                 email = validation_service.get_email_from_token(token)
@@ -576,7 +576,7 @@ class UserService(Service):
                             err = False
                 if err:
                     raise HTTPException(
-                        status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Not found"
+                        status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=NOT_FOUND
                     )
 
         else:
@@ -610,6 +610,6 @@ class UserService(Service):
                     err = False
             if err:
                 raise HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Not found"
+                    status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=NOT_FOUND
                 )
         return id
