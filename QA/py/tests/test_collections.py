@@ -57,6 +57,7 @@ def test_collection_lifecycle(config, database, fastapi, caplog, who):
         "Other microscope",
         "Other scanner",
         "PlanktoScope",
+        "Plankton Imager",
         "UVP5HD",
         "UVP5SD",
         "UVP5Z",
