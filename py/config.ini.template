@@ -1,66 +1,66 @@
-[
-  default
-]
+[default]
 
-[conf]# DB connectivity, the user must be able to read / write every PG object there
+[conf]
+# DB connectivity, the user must be able to read/write every PG object there
 DB_USER = postgres
 DB_PASSWORD = xxxxxxxx
 DB_HOST = localhost
 DB_PORT = 5435
-DB_DATABASE = ecotaxa4# Optional: Read - only user, to same or other DB, the user must be able to read tables there
+DB_DATABASE = ecotaxa4
+# Optional: Read-only user, to same or other DB, the user must be able to read tables there
 RO_DB_USER = readerole
 RO_DB_PASSWORD = xxxxxxxx
 RO_DB_HOST = localhost
 RO_DB_PORT = 5435
 RO_DB_DATABASE = ecotaxa4
 
-# Application manager is named in some pages(e.g.Import help) and is available at / api / constants
-APPMANAGER_EMAIL = EnterYourEmail @Domain.com
+# Application manager is named in some pages (e.g. Import help) and is available at /api/constants
+APPMANAGER_EMAIL = EnterYourEmail@Domain.com
 APPMANAGER_NAME = YourName
 
-# During
-import, images with any dimension larger than below will be stored reduced
+# During import, images with any dimension larger than below will be stored reduced
 THUMBSIZELIMIT = 400
 
-# Where all images are stored.r / w by the back - end.
-VAULT_DIR = /eco_data/vault#
-One subdirectory here per job.r / w by the back - end.
-JOBS_DIR = /eco_data/temptask#
-The directory where files can be read by everyone.ro by the back - end.
-SERVERLOADAREA = /home/SrvFics#
-Sub - directory of previous(or not),
-  for exports.r / w by the back - end.
-FTPEXPORTAREA = /home/SrvFics / ftp_plankton / Export# CNN models.ro by the back - end.
-MODELSAREA = /home/ecotaxa / models
+# Where all images are stored. r/w by the back-end.
+VAULT_DIR = /eco_data/vault
+# One subdirectory here per job. r/w by the back-end.
+JOBS_DIR = /eco_data/temptask
+# The directory where files can be read by everyone. ro by the back-end.
+SERVERLOADAREA = /home/SrvFics
+# Sub-directory of previous (or not), for exports. r/w by the back-end.
+FTPEXPORTAREA = /home/SrvFics/ftp_plankton/Export
+# CNN models. ro by the back-end.
+MODELSAREA = /home/ecotaxa/models
 
 # Communication settings with the taxonomy server
-TAXOSERVER_URL = http: //ecotaxoserver.obs-vlfr.fr
-  TAXOSERVER_INSTANCE_ID = 9
+TAXOSERVER_URL = http://ecotaxoserver.obs-vlfr.fr
+TAXOSERVER_INSTANCE_ID = 9
 TAXOSERVER_SHARED_SECRET = ZiAgKGDHiQ4WAj6Gi1RN41WHrMkPut8B3AzgXqLWZ
 
-# If you want to enable reCaptcha
-for user creation# Note: Below values are
-for testing, #see https: //developers.google.com/recaptcha/docs/faq#id-like-to-run-automated-tests-with-recaptcha.-what-should-i-do
-  RECAPTCHAID = 6 LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
-RECAPTCHASECRET = 6 LeIxAcTAAAAAGG - vFI1TnRWxMZNFuojJ4WifJWe
+# If you want to enable reCaptcha for user creation
+# Note: Below values are for testing,
+# see https://developers.google.com/recaptcha/docs/faq#id-like-to-run-automated-tests-with-recaptcha.-what-should-i-do
+RECAPTCHAID = 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
+RECAPTCHASECRET = 6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
 
 # Password encryption parameters
-SECRET_KEY = THIS KEY MUST BE CHANGED# The below is kind of hardcoded, left here
-for reference as it 's in Flask config, @see helpers/login.py.
+SECRET_KEY = THIS KEY MUST BE CHANGED
+# The below is kind of hardcoded, left here for reference as it's in Flask config, @see helpers/login.py.
 SECURITY_PASSWORD_HASH = sha512_crypt
 SECURITY_PASSWORD_SALT = YYfDY3FID
 
 # key can be shared with the front
-MAILSERVICE_SECRET_KEY = THIS KEY MUST BE CHANGED ANS IS ONLY FOR TOKENS SENT BY MAIL
+MAILSERVICE_SECRET_KEY = THIS KEY MUST BE CHANGED AND IS ONLY FOR TOKENS SENT BY MAIL
 MAILSERVICE_SALT = "saltservicemail_salt"
 
-SENDER_ACCOUNT = senderaccountmail @testmail.com, senderpwd, senderdns, 465
+SENDER_ACCOUNT = senderaccountmail@testmail.com, senderpwd, senderdns, 465
 
 # EcoTaxa instance id
-INSTANCE_ID = EcoTaxa .01# email verification request before user creation
+INSTANCE_ID = EcoTaxa.01
+# email verification request before user creation
 USER_EMAIL_VERIFICATION = on
 
 # User administrator who checks and activates accounts
-ACCOUNT_VALIDATE_EMAIL = validatetest @testmail.com# Not checked
-if EMAIL_VALIDATE_ACCOUNT is defined
+ACCOUNT_VALIDATE_EMAIL = validatetest@testmail.com
+# Not checked if EMAIL_VALIDATE_ACCOUNT is defined
 ACCOUNT_ACTIVE_DEFAULT = False
