@@ -153,3 +153,4 @@ class TempPasswordReset(Model):
     __tablename__ = "user_password_reset"
     user_id = Column(Integer(), ForeignKey("users.id"), primary_key=True)
     temp_password = Column(String(255), nullable=False)
+    creation_date = Column(TIMESTAMP, default=func.now())

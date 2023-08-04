@@ -163,6 +163,44 @@ class UserModelWithRights(_UserModelFromDB):
     )
 
 
+# User profile information to share with external user admin
+class _UserModelProfile(_MinUserModel):
+    organisation = Field(
+        title="Organisation",
+        description="User's organisation name, as text.",
+        example="Oceanographic Laboratory of Villefranche sur Mer - LOV",
+    )
+    active = Field(
+        title="Account status",
+        description="Whether the user is still active.",
+        example=True,
+    )
+    mail_status: str = Field(
+        title="Mail status",
+        description="Whether the user email is verified. V or W",
+        default=" ",
+        example="V",
+    )
+    country = Field(
+        title="Country",
+        description="The country name, as text (but chosen in a consistent list).",
+        example="France",
+    )
+    usercreationdate = Field(
+        title="User creation date",
+        description="The date of creation of the user, as text formatted according to the ISO 8601 standard.",
+        example="2020-11-05T12:31:48.299713",
+    )
+    usercreationreason = Field(
+        title="User creation reason",
+        description="Paragraph describing the usage of EcoTaxa made by the user.",
+        example="Analysis of size and shapes of plastic particles",
+    )
+
+
+UserModelProfile = combine_models(User, _UserModelProfile)
+
+
 # TODO JCE - description example
 # We exclude free columns from base model, they will be mapped in a dedicated sub-entity
 class _Sample2Model(DescriptiveModel):

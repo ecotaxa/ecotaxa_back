@@ -50,17 +50,19 @@ SECURITY_PASSWORD_HASH = sha512_crypt
 SECURITY_PASSWORD_SALT = YYfDY3FID
 
 # key can be shared with the front
-MAILSERVICE_SECRET_KEY = THIS KEY MUST BE CHANGED AND IS ONLY FOR TOKENS SENT BY MAIL
+MAILSERVICE_SECRET_KEY = THIS KEY MUST BE CHANGED ANS IS ONLY FOR TOKENS SENT BY MAIL
 MAILSERVICE_SALT = "saltservicemail_salt"
 
 SENDER_ACCOUNT = senderaccountmail@testmail.com, senderpwd, senderdns, 465
 
 # EcoTaxa instance id
-INSTANCE_ID = EcoTaxa.01
+INSTANCE_ID = EcoTaxa .01
 # email verification request before user creation
-USER_EMAIL_VERIFICATION = on
+USER_EMAIL_VERIFICATION = off
 
-# User administrator who checks and activates accounts
-ACCOUNT_VALIDATE_EMAIL = validatetest@testmail.com
-# Not checked if EMAIL_VALIDATE_ACCOUNT is defined
-ACCOUNT_ACTIVE_DEFAULT = False
+# User administrator who checks and activates accounts : only one - remove this line if activation is auto or done by normal user admin
+ACCOUNT_ACTIVATE_EMAIL = validatetest@testmail.com
+
+# set active field to False
+#if on and a mail change is done by anyone except the external validator if exists
+ACCOUNT_ACTIVE_UNSET = off

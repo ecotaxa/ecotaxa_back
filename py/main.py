@@ -481,22 +481,32 @@ def activate_user(
     token: Optional[str] = Query(
         default=None, title="token", description="token to validate request"
     ),
+    reason: Optional[str] = Query(
+        default=None,
+        title="Reason",
+        description="reason code . if provided will bypass the activation of the user account ",
+    ),
     current_user: int = Depends(get_current_user),
 ) -> None:
     """
     Activate a new user if external validation is on., return **NULL upon success.**
 
     🔒 Depending on logged user, different authorizations apply:
-    - An administrator or user administrator can activate a user.
+    - An administrator or user administrator can activate a user or bypass the activation and inform the user when a modification request value/reason is provided.
     - An unlogged user can ask for activation with a token. But must eventually provide a no-robot proof.
     - An ordinary logged user cannot activate another account.
 
     If back-end configuration for self-creation check is Google reCAPTCHA,
     then no_bot is a pair [remote IP, reCAPTCHA response].
     """
+
     with UserService() as sce:
-        sce.activate_user(
-            current_user_id=current_user, user_id=user_id, no_bot=no_bot, token=token
+        sce.set_activestate_user(
+            user_id=user_id,
+            current_user_id=current_user,
+            no_bot=no_bot,
+            token=token,
+            reason=reason,
         )
 
 
@@ -534,7 +544,7 @@ def reset_user_password(
     """
     with UserService() as sce:
         with ValidityThrower(), RightsThrower():
-            user_id = sce.reset_user_password(current_user, resetreq, no_bot, token)
+            user_id = sce.reset_password(current_user, resetreq, no_bot, token)
             if token and user_id != -1:
                 with DBSyncService(User, User.id, user_id) as ssce:
                     ssce.wait()

@@ -5,75 +5,78 @@
 # User Validation Service .
 #
 from typing import Optional, Any
-from API_operations.helpers.Service import Service
 from BO.Rights import NOT_AUTHORIZED
-from DB.User import User, TempPasswordReset
+from BO.User import UserIDT
+from API_models.crud import UserModelProfile
 from helpers.login import LoginService
-from providers.MailService import MailService, ReplaceInMail
+from helpers.AppConfig import Config
+from providers.MailProvider import MailProvider, ReplaceInMail
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 from helpers.DynamicLogs import get_logger, LogsSwitcher
-from API_operations.CRUD.Users import TempPasswordReset
+
 from fastapi import HTTPException
 from starlette.status import (
     HTTP_403_FORBIDDEN,
     HTTP_401_UNAUTHORIZED,
+    HTTP_422_UNPROCESSABLE_ENTITY,
 )
 
 logger = get_logger(__name__)
+
 ACTIVATION_ACTION_CREATE = "create"
 ACTIVATION_ACTION_UPDATE = "update"
 ACTIVATION_ACTION_ACTIVE = "active"
 ACTIVATION_ACTION_DESACTIVE = "desactive"
+ACTIVATION_ACTION_HASTOMODIFY = "modify"
 
 
-class UserValidationService(Service):
+class UserValidation(object):
     """
-    A service to validate user email depending on config.ini params .
-    TODO: request from
+    Manage User validation
+    TODO: request from different clients url
     """
 
-    def __init__(self) -> None:
-        super().__init__()
-        email_verification = self.config.get_cnf("USER_EMAIL_VERIFICATION") == "on"
-        self.account_validate_email = self.config.get_cnf("ACCOUNT_VALIDATE_EMAIL")
-        self.secret_key = str(self.config.get_cnf("MAILSERVICE_SECRET_KEY") or "")
-        if self.secret_key == "" and email_verification:
-            HTTPException(
-                status_code=HTTP_403_FORBIDDEN,
-                detail="Can't initialize requested validation",
-            )
-            return
-        # for token generation
-        self.app_instance = self.config.get_cnf("INSTANCE_ID")
-        if self.app_instance is None:
-            self.app_instance = "EcoTaxa.01"
+    def __init__(self):
+        # email verification
+        config = Config()
+        self.verify_email = config.get_cnf("USER_EMAIL_VERIFICATION") == "on"
+        # external activation of account - only one user admin can activate an account and set mail_status to verified
+        self.account_activate_email = config.get_cnf("ACCOUNT_ACTIVATE_EMAIL")
 
-    # verify temp password before reset
-    def verify_temp_password(
-        self, temp_password: str, temp: Optional[TempPasswordReset]
-    ) -> bool:
-        """Returns ``True`` if the temporary password is valid for the specified user id.
-        :param temp_password: A plaintext password to verify
-        :param user id: The user id to verify against
-        """
-        if temp is None:
-            return False
-        with LoginService() as sce:
-            if sce.use_double_hash(temp.temp_password):
-                verified = sce._pwd_context.verify(
-                    sce.get_hmac(temp_password), temp.temp_password
+        # unset active field if major mod is done by anyone except the account_activate_email ( user admin with the same email) or anyone except users admin
+        self.active_unset = config.get_cnf("ACCOUNT_ACTIVE_UNSET") == True
+        # 0 email - 1 pwd - 2 - dns - 3 port
+        self.senderaccount: list = str(config.get_cnf("SENDER_ACCOUNT") or "").split(
+            ","
+        )
+        self._mailprovider = MailProvider(
+            self.senderaccount, self.account_activate_email
+        )
+        self.secret_key = str(config.get_cnf("MAILSERVICE_SECRET_KEY") or "")
+        self.app_instance_id = str(config.get_cnf("INSTANCE_ID") or "EcoTaxa.01")
+
+    def __call__(self) -> Optional[object]:
+        if self.verify_email:
+            if self._mailprovider is None:
+                HTTPException(
+                    status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=["smtp is off"]
                 )
-            else:
-                # Try with plaintext password.
-                verified = sce._pwd_context.verify(temp_password, temp.temp_password)
-        if not verified:
-            raise HTTPException(
-                status_code=HTTP_401_UNAUTHORIZED,
-                detail=NOT_AUTHORIZED,
-            )
-        return verified
+            return self
+        return None
+
+    # condition to keep user activated even if major change occured
+
+    def keep_active(self, email: Optional[str], is_admin: bool) -> bool:
+        # no current_user
+        if email is None:
+            return not (self.verify_email and not self.active_unset)
+        is_admin = is_admin and (
+            self.account_activate_email is None or self.account_activate_email == email
+        )
+        return self.verify_email == False or (is_admin and self.active_unset == False)
 
     # call to request email_verification - validation method is by sending an email with a token
+
     def request_email_verification(
         self,
         email: str,
@@ -82,58 +85,69 @@ class UserValidationService(Service):
         url: Optional[str] = None,
         bypass=False,
     ) -> bool:
-        if bypass:
+        if bypass or not self.verify_email:
             return False
         else:
-            token = self.generate_token(email, id=id, action=action)
-
-            with MailService() as mailservice:
-                mailservice.send_verification_mail(email, token, action=action, url=url)
+            token = self._generate_token(email, id=id, action=action)
+            self._mailprovider.send_verification_mail(
+                email, token, action=action, url=url
+            )
             return True
 
     def request_activate_user(
         self,
-        inactive_user: User,
+        inactive_user: UserModelProfile,
         token: Optional[str] = None,
         action: Optional[str] = None,
         url: Optional[str] = None,
     ) -> None:
-        if self.account_validate_email:
-            if token:
-                action = self.get_value_from_token(token, "action")
-                if action is None:
-                    action = ACTIVATION_ACTION_CREATE
-            with MailService() as mailservice:
-                mailservice.send_activation_mail(
-                    {
-                        "id": inactive_user.id,
-                        "name": inactive_user.name,
-                        "email": inactive_user.email,
-                        "organisation": inactive_user.organisation,
-                        "creationreason": inactive_user.usercreationreason,
-                    },
-                    action=action,
-                    url=url,
-                )
+        if token:
+            action = self._get_value_from_token(token, "action")
+            if action is None:
+                action = ACTIVATION_ACTION_CREATE
+        self._mailprovider.send_activation_mail(
+            self.account_activate_email,
+            {
+                "id": inactive_user.id,
+                "name": inactive_user.name,
+                "email": inactive_user.email,
+                "organisation": inactive_user.organisation,
+                "creationreason": inactive_user.usercreationreason,
+            },
+            action=action,
+            url=url,
+        )
 
-    def inform_user_activestate(self, user: User, url: Optional[str] = None) -> None:
+    def inform_user_activestate(
+        self, user: UserModelProfile, url: Optional[str] = None
+    ) -> None:
         active = user.active
         action = ACTIVATION_ACTION_ACTIVE
         token = None
         if not active:
             action = ACTIVATION_ACTION_DESACTIVE
-            token = self.generate_token(user.email, id=user.id, action=action)
-        with MailService() as mailservice:
-            mailservice.send_activated_mail(
-                user.email, active=active, action=action, token=token, url=url
-            )
+            token = self._generate_token(user.email, id=user.id, action=action)
+        self._mailprovider.send_activated_mail(
+            user.email, active=active, action=action, token=token, url=url
+        )
+
+    def request_user_to_modify_profile(
+        self, user: UserModelProfile, reason: str, url: Optional[str] = None
+    ) -> None:
+        action = ACTIVATION_ACTION_HASTOMODIFY
+        token = self._generate_token(id=user.id, action=action)
+        self._mailprovider.send_hastomodify_mail(
+            user.email, reason=reason, action=action, token=token, url=url
+        )
 
     def request_reset_password(
-        self, user_to_reset: User, temp_password: str, url=None
+        self,
+        user_to_reset: UserModelProfile,
+        temp_password: str,
+        url: Optional[str] = None,
     ) -> None:
-        token = self.generate_token(None, id=user_to_reset.id, action=temp_password)
-        with MailService() as mailservice:
-            mailservice.send_reset_password_mail(user_to_reset.email, token, url=url)
+        token = self._generate_token(id=user_to_reset.id, action=temp_password)
+        self._mailprovider.send_reset_password_mail(user_to_reset.email, token, url=url)
 
     @staticmethod
     def _build_serializer(secret_key: str) -> URLSafeTimedSerializer:
@@ -149,7 +163,7 @@ class UserValidationService(Service):
         )
         return _mailserializer
 
-    def generate_token(
+    def _generate_token(
         self,
         email: Optional[str] = None,
         id: int = -1,
@@ -157,7 +171,7 @@ class UserValidationService(Service):
         action: Optional[str] = None,
     ) -> str:
         tokenreq = dict({})
-        tokenreq["instance"] = self.app_instance
+        tokenreq["instance"] = self.app_instance_id
         tokenreq["ip"] = ip
         tokenreq["email"] = email
         if id != -1:
@@ -166,7 +180,7 @@ class UserValidationService(Service):
             tokenreq["action"] = action
         return str(self._build_serializer(self.secret_key).dumps(tokenreq) or "")
 
-    def get_value_from_token(
+    def _get_value_from_token(
         self,
         token: str,
         name: str,
@@ -179,6 +193,7 @@ class UserValidationService(Service):
         else:
             age = 24
         try:
+
             payload = self._build_serializer(self.secret_key).loads(
                 token, max_age=age * 3600
             )
@@ -188,7 +203,7 @@ class UserValidationService(Service):
                 detail="Bad signature or expired",
             )
             return
-        if self.app_instance != payload.get("instance"):
+        if self.app_instance_id != payload.get("instance"):
             raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Bad instance")
         value = payload.get(name)
         if (
@@ -207,7 +222,7 @@ class UserValidationService(Service):
         ip: Optional[str] = None,
         action: Optional[str] = None,
     ) -> Optional[str]:
-        return self.get_value_from_token(token, "email", email, ip, action)
+        return self._get_value_from_token(token, "email", email, ip, action)
 
     def get_id_from_token(
         self,
@@ -216,7 +231,7 @@ class UserValidationService(Service):
         ip: Optional[str] = None,
         action: Optional[str] = None,
     ) -> int:
-        return int(self.get_value_from_token(token, "id", email, ip, action) or -1)
+        return int(self._get_value_from_token(token, "id", email, ip, action) or -1)
 
     def get_reset_from_token(
         self,
@@ -226,26 +241,12 @@ class UserValidationService(Service):
         action: Optional[str] = None,
     ) -> Optional[str]:
         # the temp_password is stored into action field of the token
-        return self.get_value_from_token(token, "action", email, ip, action)
-
-    def check_id_from_token(self, token: str, email: str, id: int) -> None:
-        try:
-            payload = self._build_serializer(self.secret_key).loads(
-                token, max_age=1 * 3600
-            )
-        except:
-            raise HTTPException(
-                status_code=HTTP_403_FORBIDDEN,
-                detail="Bad signature - token for creation has expired",
-            )
-
-        if (
-            payload.get("instance") != self.app_instance
-            or payload.get("email") != email
-            or payload.get("id") != id
-        ):
-            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Invalid token")
+        return self._get_value_from_token(token, "action", email, ip, action)
 
 
 class ValidationException(Exception):
+    """
+    TODO - manage HTTPExceptions
+    """
+
     pass
