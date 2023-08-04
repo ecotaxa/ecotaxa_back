@@ -6,7 +6,6 @@
 #
 import datetime
 from typing import Optional, Any
-from API_operations.helpers.Service import Service
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 from helpers.pydantic import BaseModel, Field
 from email.mime.multipart import MIMEMultipart
@@ -54,7 +53,10 @@ class ReplaceInMail(BaseModel):
     )
 
 
-class MailService(Service):
+DEFAULT_LANGUAGE = "en_EN"
+
+
+class MailProvider(object):
     """
     Tools to validate user registration and activation - send validation mails to external validation service - and change password service
     """
@@ -74,23 +76,16 @@ class MailService(Service):
     ACTIVATION_ACTION_UPDATE = "update"
     ACTIVATION_ACTION_ACTIVE = "active"
     ACTIVATION_ACTION_DESACTIVE = "desactive"
-    DEFAULT_LANGUAGE = "en_EN"
 
-    def __init__(self) -> None:
-        super().__init__()
-        # 0 email - 1 pwd - 2 - dns - 3 port
-        senderaccount: list = str(self.config.get_cnf("SENDER_ACCOUNT") or "").split(
-            ","
-        )
-        if len(senderaccount) != 4 or not self.is_email(senderaccount[0]):
-            raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="No sender account",
-            )
-        self.account_validate_email = str(
-            self.config.get_cnf("ACCOUNT_VALIDATE_EMAIL") or ""
-        )
+    def __init__(self, senderaccount: list, account_activate_email: str):
+        self.on = len(senderaccount) == 4 and self.is_email(senderaccount[0])
+        self.account_activate_email = account_activate_email
         self.senderaccount = senderaccount
+
+    def __call__(self) -> Optional[object]:
+        if self.on:
+            return self
+        return None
 
     @staticmethod
     def is_email(email: str) -> bool:
@@ -109,7 +104,8 @@ class MailService(Service):
         """
         if not self.is_email(email):
             HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="No valid sender mail"
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=["Not an email address"],
             )
         import smtplib, ssl
 
@@ -124,14 +120,21 @@ class MailService(Service):
         if replyto != None:
             msg.add_header("reply-to", str(replyto))
         context = ssl.create_default_context()
-        with smtplib.SMTP_SSL(senderdns, senderport, context=context) as smtp:
-            smtp.login(senderemail, senderpwd)
-            res = smtp.sendmail(senderemail, recipients, msg.as_string())
-            smtp.quit()
-        if res == {}:
-            logger.info("Email not sent  to '%s'" % email)
-        else:
-            logger.info("Email sent to '%s'" % email)
+        try:
+            with smtplib.SMTP_SSL(senderdns, senderport, context=context) as smtp:
+                smtp.login(senderemail, senderpwd)
+                try:
+                    res = smtp.sendmail(senderemail, recipients, msg.as_string())
+                except smtplib.SMTPRecipientsRefused:
+                    raise HTTPException(
+                        status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=["invalid email"],
+                    )
+                smtp.quit()
+                if res == {}:
+                    logger.info("Email sent  to '%s'" % email)
+        except:
+            logger.info("Email not sent to '%s'" % email)
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Mail not sent",
@@ -193,12 +196,12 @@ class MailService(Service):
 
     def send_activation_mail(
         self,
+        recipient: str,
         data: dict,
         token: Optional[str] = None,
         action: Optional[str] = None,
         url: Optional[str] = None,
     ) -> None:
-        recipient = self.account_validate_email
         if recipient == None:
             return
         if action is None:
@@ -257,6 +260,23 @@ class MailService(Service):
         )
         self.send_mail(recipient, mailmsg, replyto=assistance_email)
 
+    def send_hastomodify_mail(
+        self,
+        recipient: str,
+        reason: str,
+        action: Optional[str] = None,
+        token: Optional[str] = None,
+        url: Optional[str] = None,
+    ) -> None:
+        assistance_email = self.get_assistance_mail()
+        data = ReplaceInMail(
+            email=assistance_email, data={"reason": reason}, token=token, url=url
+        )
+        mailmsg = self.mail_message(
+            self.MODEL_ACTIVATED, [recipient], data.__dict__, action=action
+        )
+        self.send_mail(recipient, mailmsg, replyto=assistance_email)
+
     def get_mail_message(
         self, model_name: str, language, action: Optional[str] = None
     ) -> dict:
@@ -269,14 +289,14 @@ class MailService(Service):
         if language in model.keys():
             model = dict(model[language])
         else:
-            model = dict(model[self.DEFAULT_LANGUAGE])
+            model = dict(model[DEFAULT_LANGUAGE])
         if action != None and action in model.keys():
             return model[action]
         else:
             return model
 
     def get_assistance_mail(self) -> Optional[str]:
-        assistance_email: Optional[str] = self.account_validate_email
+        assistance_email: Optional[str] = self.account_activate_email
         if assistance_email == None:
             from API_operations.CRUD.Users import UserService
 

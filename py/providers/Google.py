@@ -40,17 +40,17 @@ class ReCAPTCHAClient(object):
         get captcha as a list and format to call validate
         :return: None if OK, otherwise HTTPException.
         """
-        detail = ""
+        detail = []
         no_bot = list(no_bot or ["", ""])
         if no_bot == ["", ""]:
-            detail = "reCaptcha verif needs data"
+            detail = ["reCaptcha verif needs data"]
         elif len(no_bot) != 2:
-            detail = "invalid no_bot reason 1"
+            detail = ["invalid no_bot reason 1"]
         else:
             for a_str in no_bot:
-                if len(a_str) == 0 or len(a_str) >= 1024:
-                    detail = "invalid no_bot reason 2"
-        if detail != "":
+                if len(a_str) >= 1024:
+                    detail = ["invalid no_bot reason 2"]
+        if detail != []:
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=detail,
