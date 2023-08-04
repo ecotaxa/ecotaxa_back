@@ -12,6 +12,14 @@
       "email": "<a href=\"mailto:{email}\">{email}</a>",
       "body": "<p>Your account has been desactivated.<br>You cannot login to EcoTaxa anymore.<br>If you have any questions about your data or need additional support,  email: {email}</p>"
 
+    },
+    "modify": {
+      "url": "/gui/register/",
+      "subject": "EcoTaxa account modification request.",
+      "link": "<a href=\"{url}{token}\" style=\"color: rgb(52, 167, 173)\">{url}{token}</a>",
+      "email": "<a href=\"mailto:{email}\">{email}</a>",
+      "body": "<p>Your account is not yet desactivated.<br>{reason}<br>Please click the following link to modify your registration information: {link}<br>If you have any questions about your data or need additional support,  email: {email}</p>"
+
     }
   }
 }
