@@ -18,8 +18,12 @@
       "subject": "EcoTaxa account modification request.",
       "link": "<a href=\"{url}{token}\" style=\"color: rgb(52, 167, 173)\">{url}{token}</a>",
       "email": "<a href=\"mailto:{email}\">{email}</a>",
-      "body": "<p>Your account is not yet desactivated.<br>{reason}<br>Please click the following link to modify your registration information: {link}<br>If you have any questions about your data or need additional support,  email: {email}</p>"
-
+      "reason": {
+        "email": "Please provide a professional or academic email. providers like gmail, hotmail and similar are not accepted to activate your account.",
+        "organisation": "Please provide a verified organisation name.",
+        "creation": "Please give some more details about the reason of your registration and EcoTaxa usage.",
+      },
+      "body": "<p>Some of the information provided in your profile need to be modified :<br>{reason}<br>Please click the following link to modify your registration information: {link}<br>If you have any questions about your data or need additional support,  email: {email}</p>"
     }
   }
 }

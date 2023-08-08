@@ -76,6 +76,15 @@ class _FullUserModel(_MinUserModel):
         description="Encrypted (or not) password.",
         example="$foobar45$",
     )
+    mail_status = Field(
+        title="Mail status",
+        description="V for verified, W for waiting for verification, whitespace for no action.",
+        example="W",
+    )
+    mail_status_date = Field(
+        title="Mail status date",
+        description="Timestamp",
+    )
 
 
 _UserModelFromDB = combine_models(User, _FullUserModel)
@@ -177,7 +186,7 @@ class _UserModelProfile(_MinUserModel):
     )
     mail_status: str = Field(
         title="Mail status",
-        description="Whether the user email is verified. V or W",
+        description="Whether the user email is verified. whitespace ,V or W",
         default=" ",
         example="V",
     )

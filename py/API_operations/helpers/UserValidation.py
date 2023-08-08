@@ -107,7 +107,7 @@ class UserValidation(object):
                 action = ACTIVATION_ACTION_CREATE
         self._mailprovider.send_activation_mail(
             self.account_activate_email,
-            {
+            data={
                 "id": inactive_user.id,
                 "name": inactive_user.name,
                 "email": inactive_user.email,
@@ -135,9 +135,16 @@ class UserValidation(object):
         self, user: UserModelProfile, reason: str, url: Optional[str] = None
     ) -> None:
         action = ACTIVATION_ACTION_HASTOMODIFY
-        token = self._generate_token(id=user.id, action=action)
+        # exception user email and id in the same token - for mod after creation and active is False
+        token = self._generate_token(
+            id=user.id, email=user.email, action=action, reason=reason
+        )
         self._mailprovider.send_hastomodify_mail(
-            user.email, reason=reason, action=action, token=token, url=url
+            user.email,
+            reason=reason,
+            action=action,
+            token=token,
+            url=url,
         )
 
     def request_reset_password(
@@ -169,6 +176,7 @@ class UserValidation(object):
         id: int = -1,
         ip: Optional[str] = None,
         action: Optional[str] = None,
+        reason: Optional[str] = None,
     ) -> str:
         tokenreq = dict({})
         tokenreq["instance"] = self.app_instance_id
@@ -178,6 +186,8 @@ class UserValidation(object):
             tokenreq["id"] = str(id)
         if action != None:
             tokenreq["action"] = action
+        if reason != None:
+            tokenreq["reason"] = reason
         return str(self._build_serializer(self.secret_key).dumps(tokenreq) or "")
 
     def _get_value_from_token(

@@ -57,6 +57,7 @@ def test_plain_API_login(config, database, caplog):
     me_as_user = rsp.json()
     del me_as_user["last_used_projects"]
     del me_as_user["password"]
+    del me_as_user["mail_status_date"]
     assert me_as_user == {
         "active": True,
         "country": None,
@@ -67,4 +68,5 @@ def test_plain_API_login(config, database, caplog):
         "usercreationdate": "2020-05-13T08:59:48.701060",
         "usercreationreason": None,
         "can_do": [1, 4],
+        "mail_status": " ",
     }

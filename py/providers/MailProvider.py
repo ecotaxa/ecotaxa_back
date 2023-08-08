@@ -40,7 +40,11 @@ class ReplaceInMail(BaseModel):
     action: Optional[str] = Field(
         title="Action", description="Create or Update", default=None
     )
-
+    reason: Optional[str] = Field(
+        title="Reason",
+        description="reason to request to modify information from user",
+        default=None,
+    )
     token: Optional[str] = Field(
         title="Token",
         description="token added to the link to verify the action - max_age :24h",
@@ -65,11 +69,7 @@ class MailProvider(object):
     MODEL_ACTIVATE = "activate"
     MODEL_VERIFY = "verify"
     MODEL_ACTIVATED = "active"
-    MODEL_KEYS = [
-        "email",
-        "link",
-        "action",
-    ]
+    MODEL_KEYS = ["email", "link", "action", "reason"]
     REPLACE_KEYS = ["id", "token", "data", "url"]
     MODEL_PASSWORD_RESET = "passwordreset"
     ACTIVATION_ACTION_CREATE = "create"
@@ -164,8 +164,15 @@ class MailProvider(object):
                     and "url" in model.keys()
                 ):
                     values["url"] = model["url"]
-                if key in values.keys() and key == "action":
-                    replace[key] = model[key][values[key]]
+                if (
+                    (key == "action" or key == "reason")
+                    and key in values.keys()
+                    and values[key] is not None
+                ):
+                    if values["key"] == "all":
+                        replace["key"] = ". ".join(model[key].values())
+                    else:
+                        replace[key] = model[key][values[key]]
                 else:
                     replace[key] = model[key].format(**values)
         for key in self.REPLACE_KEYS:
@@ -269,11 +276,14 @@ class MailProvider(object):
         url: Optional[str] = None,
     ) -> None:
         assistance_email = self.get_assistance_mail()
-        data = ReplaceInMail(
-            email=assistance_email, data={"reason": reason}, token=token, url=url
+        values = ReplaceInMail(
+            email=assistance_email,
+            reason=reason,
+            token=token,
+            url=url,
         )
         mailmsg = self.mail_message(
-            self.MODEL_ACTIVATED, [recipient], data.__dict__, action=action
+            self.MODEL_ACTIVATED, [recipient], values.__dict__, action=action
         )
         self.send_mail(recipient, mailmsg, replyto=assistance_email)
 

@@ -43,7 +43,7 @@ def test_prefs_set_get(config, database, fastapi, caplog):
             )
 
 
-# test with verif email new user
+# test with verif email off  new user
 def test_user_create_ordinary(config, database, fastapi, caplog):
     caplog.set_level(logging.FATAL)
     import urllib.parse
@@ -62,7 +62,6 @@ def test_user_create_ordinary(config, database, fastapi, caplog):
     strbot = ""
     for i in range(1, 400):
         strbot += str(i)
-    print(len(strbot))
     params = {"no_bot": ["", strbot]}
     urlparams = url + "?" + urllib.parse.urlencode(params, doseq=True)
     rsp = fastapi.post(urlparams, json=usr_json)
@@ -73,7 +72,6 @@ def test_user_create_ordinary(config, database, fastapi, caplog):
     rsp = fastapi.post(urlparams, json=usr_json)
     assert rsp.status_code == 422
     assert rsp.json() == {"detail": ["email already corresponds to another user"]}
-    url = USER_CREATE_URL
     usr_json = {
         "id": None,
         "email": "ddduser5",
