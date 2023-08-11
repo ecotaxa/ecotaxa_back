@@ -6,7 +6,6 @@ from typing import Optional, List, Any
 
 from API_models.crud import (
     UserModelWithRights,
-    MinUserModel,
     ProjectSummaryModel,
     UserModelProfile,
     ResetPasswordReq,
@@ -35,7 +34,7 @@ from ..helpers.UserValidation import (
     ACTIVATION_ACTION_UPDATE,
     ACTIVATION_ACTION_HASTOMODIFY,
 )
-import datetime
+from helpers import DateTime
 
 logger = get_logger(__name__)
 
@@ -56,7 +55,10 @@ class UserService(Service):
 
     def __init__(self) -> None:
         super().__init__()
-        self._uservalidation = UserValidation()
+        self._uservalidation: Optional[UserValidation] = None
+        verify_email = self.config.get_user_email_verification() == "on"
+        if verify_email:
+            self._uservalidation = UserValidation()
 
     # Configuration keys TODO
 
@@ -97,44 +99,38 @@ class UserService(Service):
             self._verify_captcha(no_bot)
             # No right at all
             actions = None
-            # verify if the email already in the db
-            if token and self._uservalidation:
-                user_id = self._uservalidation.get_id_from_token(token)
-                if user_id > 0:
-                    return self._modify_new_user(new_user, token)
-            self._has_ident_user(
-                dict({"email": new_user.email, "name": new_user.name}),
-                False,
-            )
-            bypass = new_user.name != ""
+
             # request email verification if  validation is on
-            if not token and self._uservalidation:
-                waitfor = self._uservalidation.request_email_verification(
-                    new_user.email,
-                    action=ACTIVATION_ACTION_CREATE,
-                    id=-1,
-                    bypass=bypass,
-                )
-                if waitfor:
-                    logger.info(
-                        "User create : requested email verification '%s'"
-                        % new_user.email
+
+            if self._uservalidation:
+
+                if token:
+                    user_id = self._uservalidation.get_id_from_token(token)
+                    if user_id > 0:
+                        return self._modify_new_user(new_user, token, user_id)
+
+                else:
+                    # check email is valid
+                    bypass = new_user.name != ""
+                    waitfor = self._uservalidation.request_email_verification(
+                        new_user.email,
+                        action=ACTIVATION_ACTION_CREATE,
+                        id=-1,
+                        bypass=bypass,
                     )
-                    return -1
+                    if waitfor:
+                        logger.info(
+                            "User create : requested email verification '%s'"
+                            % new_user.email
+                        )
+                        return -1
 
                 new_user.active = self._keep_active()
         else:
-            self._has_ident_user(
-                dict({"email": new_user.email, "name": new_user.name}), False
-            )
             # Must be admin to create an account
             current_user: Optional[User] = self.ro_session.query(User).get(
                 current_user_id
             )
-            if current_user is None:
-                raise HTTPException(
-                    status_code=HTTP_403_FORBIDDEN, detail=NOT_AUTHORIZED
-                )
             if self._current_is_admin(current_user):
                 actions = new_user.can_do
                 # validation only by external user admin - other admins can add but not activate
@@ -143,6 +139,8 @@ class UserService(Service):
                 raise HTTPException(
                     status_code=HTTP_401_UNAUTHORIZED, detail=NOT_AUTHORIZED
                 )
+
+        self._is_valid_user(new_user, -1)
         usr = User()
         self.session.add(usr)
         self._model_to_db(
@@ -152,7 +150,8 @@ class UserService(Service):
             actions=actions,
         )
         # if user has to be validated by external service
-        if self._uservalidation and not usr.active:
+
+        if self._uservalidation and not new_user.active:
             user_profile = UserModelProfile.from_orm(usr)
             self._uservalidation.request_activate_user(
                 user_profile, action=ACTIVATION_ACTION_CREATE
@@ -162,99 +161,102 @@ class UserService(Service):
         return usr.id
 
     def _modify_new_user(
-        self,
-        new_user: UserModelWithRights,
-        token: Optional[str],
+        self, new_user: UserModelWithRights, token: str, user_id: int
     ) -> UserIDT:
         """
         user can modify major information before activation
         """
+        if not token:
+            raise HTTPException(
+                status_code=HTTP_401_UNAUTHORIZED,
+                detail=[NOT_AUTHORIZED],
+            )
         detail = None
         if not self._uservalidation:
-            detail = ["validationotactive"]
-
-        if token:
-            user_id = self._uservalidation.get_id_from_token(token)
-            if user_id > 0:
-                usr: Optional[User] = self.session.query(User).get(user_id)
-                if usr is None:
-                    detail = [NOT_FOUND]
-                else:
+            raise HTTPException(
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=["validationotactive"],
+            )
+        current_email = self._uservalidation.get_email_from_token(token)
+        if user_id > 0:
+            self._is_valid_user(new_user, user_id)
+            verified = False
+            usr: Optional[User] = self.session.query(User).get(user_id)
+            if usr is not None:
+                if current_email == usr.email:
                     with LoginService() as sce:
                         verified = sce.verify_and_update_password(
                             new_user.password, usr
                         )
-                    if not verified:
-                        raise HTTPException(
-                            status_code=HTTP_403_FORBIDDEN,
-                            detail=[NOT_AUTHORIZED],
-                        )
-                    if usr.mail_status != self.WAIT_MAIL_STATUS or usr.active:
-                        detail = [
-                            "an active or valid or not checked profile cannot be replaced"
-                        ]
-            else:
-                detail = [NOT_FOUND]
-            if detail:
+            if not verified:
                 raise HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=detail,
+                    status_code=HTTP_403_FORBIDDEN,
+                    detail=[NOT_AUTHORIZED],
                 )
 
-            self._has_ident_user(
-                dict({"email": new_user.email, "name": new_user.name}),
-                False,
-                user_id,
+            if usr is not None and (
+                usr.mail_status != self.WAIT_MAIL_STATUS or usr.active
+            ):
+                detail = [
+                    "an active or valid or not checked profile cannot be replaced"
+                ]
+        else:
+            detail = [NOT_FOUND]
+        if detail:
+            raise HTTPException(
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=detail,
             )
-            # update a profile with informations requested by the main user admin - active is False and mail_status is "W"
-            cols_to_upd = []
-            modify_src = UserModelWithRights.from_orm(usr)
-            reasons = self._uservalidation._get_value_from_token(token, "reason")
-            if reasons is None:
-                raise HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=["no reason to modify"],
+        # user found and access verified by email and password
+        self._is_valid_user(new_user, user_id)
+        # update a profile with informations requested by the main user admin - active is False and mail_status is "W"
+        cols_to_upd = []
+        modify_src = UserModelWithRights.from_orm(usr)
+        reason = self._uservalidation._get_value_from_token(token, "reason")
+        if reason is None:
+            raise HTTPException(
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=["no reason to modify"],
+            )
+        else:
+            major_data_changed = False
+            if reason == "email" or reason == "all":
+                if modify_src.email != new_user.email:
+                    cols_to_upd.append(User.email)
+                    modify_src.email = new_user.email
+                    major_data_changed = True
+            if reason == "organisation" or reason == "all":
+                if modify_src.organisation != new_user.organisation:
+                    cols_to_upd.append(User.organisation)
+                    modify_src.organisation = new_user.organisation
+            if reason == "creationreason" or reason == "all":
+                if modify_src.usercreationreason != new_user.usercreationreason:
+                    cols_to_upd.append(User.usercreationreason)
+                    modify_src.usercreationreason = new_user.usercreationreason
+            # not sure it has to be requested to modify
+            if reason == "name" or reason == "all":
+                if modify_src.name != new_user.name:
+                    cols_to_upd.append(User.name)
+                    modify_src.name = new_user.name
+        if usr is not None:
+            if len(cols_to_upd):
+                self._model_to_db(
+                    usr,
+                    modify_src,
+                    cols_to_upd,
+                    actions=None,
                 )
-            else:
-                major_data_changed = False
-                for reason in reasons.split(","):
-                    if reason == "email":
-                        if modify_src.email != new_user.email:
-                            cols_to_upd.append(User.email)
-                            modify_src.email = new_user.email
-                            major_data_changed = True
-                    if reason == "organisation":
-                        if modify_src.organisation != new_user.organisation:
-                            cols_to_upd.append(User.organisation)
-                            modify_src.organisation = new_user.organisation
-                    if reason == "creationreason":
-                        if modify_src.usercreationreason != new_user.usercreationreason:
-                            cols_to_upd.append(User.usercreationreason)
-                            modify_src.usercreationreason = new_user.usercreationreason
-                    # not sure it has to be requested to modify
-                    if reason == "name":
-                        if modify_src.name != new_user.name:
-                            cols_to_upd.append(User.name)
-                            modify_src.name = new_user.name
-            if usr is not None:
-                if len(cols_to_upd):
-                    self._model_to_db(
-                        usr,
-                        modify_src,
-                        cols_to_upd,
-                        actions=None,
-                    )
-                # if mail changed resend mail_validation like in the update_user function
-                if major_data_changed:
-                    self._uservalidation.request_email_verification(
-                        usr.email,
-                        action=ACTIVATION_ACTION_UPDATE,
-                        id=usr.id,
-                    )
-                    logger.info(
-                        "User email modified : requested verification '%s'" % usr.email
-                    )
-                return usr.id
+            # if mail changed restart the email validation process like in the update_user function
+            if major_data_changed:
+                self._uservalidation.request_email_verification(
+                    usr.email,
+                    action=ACTIVATION_ACTION_UPDATE,
+                    id=usr.id,
+                )
+                logger.info(
+                    "User email modified : requested verification '%s'" % usr.email
+                )
+            return usr.id
         return -1
 
     def update_user(
@@ -282,22 +284,14 @@ class UserService(Service):
             update_src.email != user_to_update.email
             or update_src.name != user_to_update.name
         ):
-            self._has_ident_user(
-                dict(
-                    {
-                        "email": update_src.email,
-                        "name": update_src.name,
-                    }
-                ),
-                False,
-                user_to_update.id,
-            )
+            self._is_valid_user(update_src, user_to_update.id)
+
             if self._uservalidation and not self._keep_active(current_user):
                 major_data_changed = True
                 update_src.active = False
                 # reset the mail_status
                 update_src.mail_status = self.EMPTY_MAIL_STATUS
-                update_src.mail_status_date = datetime.datetime.utcnow()
+                update_src.mail_status_date = DateTime.now_time()
 
         if self._current_is_admin(current_user):
             cols_to_upd = self.ADMIN_UPDATABLE_COLS
@@ -314,20 +308,21 @@ class UserService(Service):
         # if the email has changed or the account has been deactivated
         # if not self._uservalidation:
         #    return
-        if self._uservalidation and major_data_changed:
-            self._uservalidation.request_email_verification(
-                user_to_update.email,
-                action=ACTIVATION_ACTION_UPDATE,
-                id=user_to_update.id,
-            )
-            logger.info(
-                "User email modified : requested verification '%s'"
-                % user_to_update.email
-            )
-        elif activestate != update_src.active:
-            # inform the user if its account is desactivated and the validation service is active
-            user_profile = UserModelProfile.from_orm(user_to_update)
-            self._uservalidation.inform_user_activestate(user_profile)
+        if self._uservalidation:
+            if major_data_changed:
+                self._uservalidation.request_email_verification(
+                    user_to_update.email,
+                    action=ACTIVATION_ACTION_UPDATE,
+                    id=user_to_update.id,
+                )
+                logger.info(
+                    "User email modified : requested verification '%s'"
+                    % user_to_update.email
+                )
+            elif activestate != update_src.active:
+                # inform the user if its account is desactivated and the validation service is active
+                user_profile = UserModelProfile.from_orm(user_to_update)
+                self._uservalidation.inform_user_activestate(user_profile)
 
     def search_by_id(
         self, current_user_id: UserIDT, user_id: UserIDT
@@ -511,6 +506,27 @@ class UserService(Service):
                 detail=detail,
             )
 
+    def _is_valid_user(self, mod_src: UserModelWithRights, user_id: int) -> None:
+        # check if another user exists with the same new name or new email
+
+        self._has_ident_user(
+            dict({"email": mod_src.email, "name": mod_src.name}),
+            False,
+            user_id,
+        )
+        # check if it's a valid email - check should be done before exists but has to be compatible with data history
+        if self._uservalidation is None:
+            if mod_src.name == "":
+                raise HTTPException(
+                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=["Cannot check validity"],
+                )
+        elif not self._uservalidation.is_valid_email(mod_src.email):
+            raise HTTPException(
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=["Email is invalid"],
+            )
+
     def _keep_active(self, current_user: Optional[User] = None) -> bool:
         # check if required to change active state of user for revalidation
         if self._uservalidation is None:
@@ -605,7 +621,7 @@ class UserService(Service):
                         current_user, True
                     ):
                         update_src.mail_status = self.VALID_MAIL_STATUS
-                        update_src.mail_status_date = datetime.datetime.utcnow()
+                        update_src.mail_status_date = DateTime.now_time()
                         cols_to_upd.append(User.mail_status)
                         cols_to_upd.append(User.mail_status_date)
                 self._model_to_db(
@@ -626,9 +642,7 @@ class UserService(Service):
         reason: str,
         current_user_id: UserIDT,
     ) -> None:
-        print("disacrd set W ----------------")
         current_user: Optional[User] = self.ro_session.query(User).get(current_user_id)
-
         # only external user admin if external validation is on else user or app admin
         if current_user is None or not self._current_is_admin(
             current_user, is_main_admin=True
@@ -640,18 +654,20 @@ class UserService(Service):
         user: Optional[User] = self.session.query(User).get(user_id)
         # set mail status to wait
         if user is not None:
-            print("disacrd set W ----------------")
             update_src = UserModelWithRights.from_orm(user)
             update_src.mail_status = "W"
-            update_src.mail_status_date = datetime.datetime.utcnow()
+            update_src.mail_status_date = DateTime.now_time()
             self._model_to_db(
                 user,
                 update_src,
                 [User.mail_status, User.mail_status_date],
                 actions=None,
             )
-            user_profile = UserModelProfile.from_orm(user)
-            self._uservalidation.request_user_to_modify_profile(user_profile, reason)
+            if self._uservalidation:
+                user_profile = UserModelProfile.from_orm(user)
+                self._uservalidation.request_user_to_modify_profile(
+                    user_profile, reason
+                )
         else:
             HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
@@ -711,22 +727,6 @@ class UserService(Service):
         recaptcha = ReCAPTCHAClient(recaptcha_secret, recaptcha_id)
         recaptcha.verify_captcha(no_bot)
 
-    @staticmethod
-    def _is_strong_password(password: str) -> bool:
-        import re
-
-        special_chars = "[_@$]"
-        if len(password) >= 8:
-            if (
-                re.search("[a-z]", password)
-                and re.search("[A-Z]", password)
-                and re.search("[0-9]", password)
-                and re.search(special_chars, password)
-                # and not re.search("\s", password)
-            ):
-                return True
-        return False
-
     def reset_password(
         self,
         current_user_id: Optional[UserIDT],
@@ -745,6 +745,8 @@ class UserService(Service):
             current_user: Optional[User] = self.ro_session.query(User).get(
                 current_user_id
             )
+        else:
+            current_user = None
         if current_user is None:
             # Unauthenticated user asks to reset his password
             # Verify not a robot
@@ -759,9 +761,13 @@ class UserService(Service):
             )
         id = -1
         if token:
-            if resetreq.password is None:
+            if (
+                resetreq.password is None
+                or not self._uservalidation.is_strong_password(resetreq.password)
+            ):
                 raise HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=["No password "]
+                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=["No good password"],
                 )
 
             email = self._uservalidation.get_email_from_token(token)
@@ -819,14 +825,13 @@ class UserService(Service):
                             user_id=user_ask_reset.id, temp_password=hash_temp_password
                         )
                         self.session.add(temp_rs)
-                        self.session.commit()
                     else:
                         temp_rs.temp_password = hash_temp_password
-                        self.session.commit()
-                        user_profile = UserModelProfile.from_orm(user_ask_reset)
-                        self._uservalidation.request_reset_password(
-                            user_profile, temp_password=temp_password
-                        )
+                    self.session.commit()
+                    user_profile = UserModelProfile.from_orm(user_ask_reset)
+                    self._uservalidation.request_reset_password(
+                        user_profile, temp_password=temp_password
+                    )
                     err = False
             if err:
                 raise HTTPException(

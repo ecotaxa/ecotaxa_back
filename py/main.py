@@ -486,7 +486,7 @@ def activate_user(
         title="Reason",
         description="reason code . if provided will bypass the activation of the user account ",
     ),
-    current_user: int = Depends(get_current_user),
+    current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> None:
     """
     Activate a new user if external validation is on., return **NULL upon success.**
@@ -499,7 +499,6 @@ def activate_user(
     If back-end configuration for self-creation check is Google reCAPTCHA,
     then no_bot is a pair [remote IP, reCAPTCHA response].
     """
-
     with UserService() as sce:
         sce.set_activestate_user(
             user_id=user_id,

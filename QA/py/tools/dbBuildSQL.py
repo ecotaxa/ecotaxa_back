@@ -41,28 +41,33 @@ def is_port_opened(host: str, port: int):
 
 class EcoTaxaExistingDB(object):
     """
-        For running tests onto an existing instance.
+    For running tests onto an existing instance.
     """
 
     @staticmethod
-    def write_config(conf_file: Path, host: str, port: int,
-                     vault: str = "/tmp", jobs: str = "/tmp",
-                     shared: str = "/tmp", ftp: str = "/tmp",
-                     models: str = "/tmp"):
+    def write_config(
+        conf_file: Path,
+        host: str,
+        port: int,
+        vault: str = "/tmp",
+        jobs: str = "/tmp",
+        shared: str = "/tmp",
+        ftp: str = "/tmp",
+        models: str = "/tmp",
+    ):
         with open(str(conf_file), "w") as f:
-            f.write(EcoTaxaDBFrom0.CONF % (host, port, host, port,
-                                           vault, jobs,
-                                           shared, ftp,
-                                           models))
+            f.write(
+                EcoTaxaDBFrom0.CONF
+                % (host, port, host, port, vault, jobs, shared, ftp, models)
+            )
         os.environ["APP_CONFIG"] = conf_file.absolute().as_posix()
 
 
-DB_NAME = 'ecotaxa4'
+DB_NAME = "ecotaxa4"
 DB_PASSWORD = "postgres12"
 
 
 class EcoTaxaDBFrom0(object):
-
     def __init__(self, dbdir: Path, conffile: Path):
         self.db_dir = dbdir.resolve()
         self.data_dir = self.db_dir / "Data"
@@ -80,22 +85,35 @@ class EcoTaxaDBFrom0(object):
 
     def get_env(self):
         # Return the environment for postgres subprocesses
-        ret = {"PGDATA": self.data_dir,
-               "PGDATABASE": DB_NAME,
-               "PGLOG": self.db_dir / "log.txt"
-               }
+        ret = {
+            "PGDATA": self.data_dir,
+            "PGDATABASE": DB_NAME,
+            "PGLOG": self.db_dir / "log.txt",
+        }
         return ret
 
     def init(self):
         # Create data files
-        pg_opts = ['-U', 'postgres', '-A', 'trust', '-E', 'Latin1', '--locale=C', '--pwfile=%s' % self.pwd_file]
+        pg_opts = [
+            "-U",
+            "postgres",
+            "-A",
+            "trust",
+            "-E",
+            "Latin1",
+            "--locale=C",
+            "--pwfile=%s" % self.pwd_file,
+        ]
         cmd = [initdb_bin] + pg_opts
         SyncSubProcess(cmd, env=self.get_env())
 
     def launch(self):
         # Produce connection sockets in a user-writable directory (linux)
-        pg_opts = ['-o', '-c unix_socket_directories="' + str(self.db_dir / "run") + '"']
-        pg_opts += ['-o', '"-p %d"' % PG_PORT]
+        pg_opts = [
+            "-o",
+            '-c unix_socket_directories="' + str(self.db_dir / "run") + '"',
+        ]
+        pg_opts += ["-o", '"-p %d"' % PG_PORT]
         cmd = [pgctl_bin, "start", "-W"] + pg_opts
         # Cook an environment for the subprocess
         # we do NOT use os.environ in order not to pollute current process
@@ -127,7 +145,7 @@ class EcoTaxaDBFrom0(object):
 
     def build(self, password):
         """
-            Build the DB using manage CLI option.
+        Build the DB using manage CLI option.
         """
         import cmds.manage
 
@@ -137,10 +155,10 @@ class EcoTaxaDBFrom0(object):
 
     def direct_SQL(self, password):
         # -h localhost force use of TCP/IP socket, otherwise psql tries local pipes in /var/run
-        env = {'PGPASSWORD': password}
-        pg_opts = ['-U', 'postgres', '-h', self.host, '-p', "%d" % PG_PORT]
+        env = {"PGPASSWORD": password}
+        pg_opts = ["-U", "postgres", "-h", self.host, "-p", "%d" % PG_PORT]
         # Data load
-        schem_opts = ['-d', DB_NAME, '-f', self.data_load_file]
+        schem_opts = ["-d", DB_NAME, "-f", self.data_load_file]
         cmd = [psql_bin] + pg_opts + schem_opts
         SyncSubProcess(cmd, env=env, out_file="data_load.log")
         # TODO: Upgrade testing
@@ -154,7 +172,7 @@ class EcoTaxaDBFrom0(object):
 
     def create(self):
         if not (PG_HOST and PG_PORT):
-            self.host = 'localhost'
+            self.host = "localhost"
             if not is_port_opened(self.host, PG_PORT):
                 # Accept to reuse a server if it did not die last time
                 self.init()
@@ -168,7 +186,7 @@ class EcoTaxaDBFrom0(object):
 
     CONF = f"""
 [default]
-[conf]    
+[conf]
 DB_USER=postgres
 DB_PASSWORD={DB_PASSWORD}
 DB_HOST=%s
@@ -189,26 +207,45 @@ MODELSAREA = %s
 SECURITY_PASSWORD_HASH=sha512_crypt
 SECURITY_PASSWORD_SALT=PePPER
 APPMANAGER_MAIL=someone@somewhere.org
-    """
+MAILSERVICE_SECRET_KEY = THIS KEY MUST BE CHANGED ANS IS ONLY FOR TOKENS SENT BY MAIL
+MAILSERVICE_SALT = "mailservice_salt"
+SENDER_ACCOUNT = senderemail@testsendermailtest.com,senderpwd,senderdns,465
+INSTANCE_ID = EcoTaxa.01
+USER_EMAIL_VERIFICATION = off
+ACCOUNT_ACTIVE_UNSET = off
+ACCOUNT_ACTIVATE_EMAIL = None
+
+
+"""
 
     def write_config(self):
         with open(str(self.conf_file), "w") as f:
-            f.write(self.CONF % (self.host, PG_PORT, self.host, PG_PORT,
-                                 self.vault_dir, self.jobs_dir,
-                                 self.shared_dir, self.ftp_dir,
-                                 self.models_dir))
+            f.write(
+                self.CONF
+                % (
+                    self.host,
+                    PG_PORT,
+                    self.host,
+                    PG_PORT,
+                    self.vault_dir,
+                    self.jobs_dir,
+                    self.shared_dir,
+                    self.ftp_dir,
+                    self.models_dir,
+                )
+            )
 
     def cleanup(self):
         # Remove data files
         if not (PG_HOST and PG_PORT):
-            self.shutdown('localhost')
+            self.shutdown("localhost")
             shutil.rmtree(self.data_dir, ignore_errors=True)
         else:
             # Server should do the cleanup, e.g. exit docker
             pass
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     HERE = Path(dirname(realpath(__file__)))
     PG_DIR = HERE / ".." / "pg_files"
     db = EcoTaxaDBFrom0(PG_DIR, Path("fakeconf"))

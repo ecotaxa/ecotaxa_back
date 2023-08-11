@@ -8,11 +8,10 @@ from typing import Optional, Any
 from BO.Rights import NOT_AUTHORIZED
 from BO.User import UserIDT
 from API_models.crud import UserModelProfile
-from helpers.login import LoginService
 from helpers.AppConfig import Config
-from providers.MailProvider import MailProvider, ReplaceInMail
+from providers.MailProvider import MailProvider
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
-from helpers.DynamicLogs import get_logger, LogsSwitcher
+from helpers.DynamicLogs import get_logger
 
 from fastapi import HTTPException
 from starlette.status import (
@@ -39,12 +38,11 @@ class UserValidation(object):
     def __init__(self):
         # email verification
         config = Config()
-        self.verify_email = config.get_cnf("USER_EMAIL_VERIFICATION") == "on"
         # external activation of account - only one user admin can activate an account and set mail_status to verified
-        self.account_activate_email = config.get_cnf("ACCOUNT_ACTIVATE_EMAIL")
+        self.account_activate_email = config.get_account_activate_email()
 
         # unset active field if major mod is done by anyone except the account_activate_email ( user admin with the same email) or anyone except users admin
-        self.active_unset = config.get_cnf("ACCOUNT_ACTIVE_UNSET") == True
+        self.active_unset = config.get_account_active_unset() == "on"
         # 0 email - 1 pwd - 2 - dns - 3 port
         self.senderaccount: list = str(config.get_cnf("SENDER_ACCOUNT") or "").split(
             ","
@@ -55,25 +53,16 @@ class UserValidation(object):
         self.secret_key = str(config.get_cnf("MAILSERVICE_SECRET_KEY") or "")
         self.app_instance_id = str(config.get_cnf("INSTANCE_ID") or "EcoTaxa.01")
 
-    def __call__(self) -> Optional[object]:
-        if self.verify_email:
-            if self._mailprovider is None:
-                HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=["smtp is off"]
-                )
-            return self
-        return None
-
     # condition to keep user activated even if major change occured
 
     def keep_active(self, email: Optional[str], is_admin: bool) -> bool:
         # no current_user
         if email is None:
-            return not (self.verify_email and not self.active_unset)
+            return not self.active_unset
         is_admin = is_admin and (
             self.account_activate_email is None or self.account_activate_email == email
         )
-        return self.verify_email == False or (is_admin and self.active_unset == False)
+        return is_admin and self.active_unset == False
 
     # call to request email_verification - validation method is by sending an email with a token
 
@@ -85,7 +74,7 @@ class UserValidation(object):
         url: Optional[str] = None,
         bypass=False,
     ) -> bool:
-        if bypass or not self.verify_email:
+        if bypass:
             return False
         else:
             token = self._generate_token(email, id=id, action=action)
@@ -155,6 +144,24 @@ class UserValidation(object):
     ) -> None:
         token = self._generate_token(id=user_to_reset.id, action=temp_password)
         self._mailprovider.send_reset_password_mail(user_to_reset.email, token, url=url)
+
+    def is_valid_email(self, email: str) -> bool:
+        return self._mailprovider.is_email(email)
+
+    @staticmethod
+    def is_strong_password(password: str) -> bool:
+        import re
+
+        if len(password) >= 8:
+            if (
+                re.search("[a-z]*+[A-Z]*+[0-9]*+[_@#?]", password)
+                # and re.search("[A-Z]", password)
+                # and re.search("[0-9]", password)
+                # and re.search("[_@#?]", password)
+                # and not re.search("\s", password)
+            ):
+                return True
+        return False
 
     @staticmethod
     def _build_serializer(secret_key: str) -> URLSafeTimedSerializer:

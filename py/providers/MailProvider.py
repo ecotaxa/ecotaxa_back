@@ -5,16 +5,14 @@
 # Maintenance operations on the DB.
 #
 import datetime
-from typing import Optional, Any
-from helpers.DynamicLogs import get_logger, LogsSwitcher
+from typing import Optional
+from helpers.DynamicLogs import get_logger
 from helpers.pydantic import BaseModel, Field
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from providers.Google import ReCAPTCHAClient
 from starlette.status import (
     HTTP_422_UNPROCESSABLE_ENTITY,
 )
-from API_models.crud import MinUserModel
 from fastapi import HTTPException
 
 
@@ -65,12 +63,11 @@ class MailProvider(object):
     Tools to validate user registration and activation - send validation mails to external validation service - and change password service
     """
 
-    PATH_MAIL_TEMPLATE = "templates/mails/{name}.json"
     MODEL_ACTIVATE = "activate"
     MODEL_VERIFY = "verify"
     MODEL_ACTIVATED = "active"
     MODEL_KEYS = ["email", "link", "action", "reason"]
-    REPLACE_KEYS = ["id", "token", "data", "url"]
+    REPLACE_KEYS = ["token", "data", "url"]
     MODEL_PASSWORD_RESET = "passwordreset"
     ACTIVATION_ACTION_CREATE = "create"
     ACTIVATION_ACTION_UPDATE = "update"
@@ -78,14 +75,11 @@ class MailProvider(object):
     ACTIVATION_ACTION_DESACTIVE = "desactive"
 
     def __init__(self, senderaccount: list, account_activate_email: str):
-        self.on = len(senderaccount) == 4 and self.is_email(senderaccount[0])
-        self.account_activate_email = account_activate_email
-        self.senderaccount = senderaccount
+        on = len(senderaccount) == 4 and self.is_email(senderaccount[0])
+        if on:
+            self.senderaccount = senderaccount
 
-    def __call__(self) -> Optional[object]:
-        if self.on:
-            return self
-        return None
+        self.account_activate_email = account_activate_email
 
     @staticmethod
     def is_email(email: str) -> bool:
@@ -102,6 +96,9 @@ class MailProvider(object):
         """
         Sendmail .
         """
+        if self.senderaccount is None:
+            # make a response explaining why  the mail was not sent
+            return
         if not self.is_email(email):
             HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
@@ -131,8 +128,7 @@ class MailProvider(object):
                         detail=["invalid email"],
                     )
                 smtp.quit()
-                if res == {}:
-                    logger.info("Email sent  to '%s'" % email)
+                logger.info("Email sent  to '%s'" % email)
         except:
             logger.info("Email not sent to '%s'" % email)
             raise HTTPException(
@@ -148,7 +144,12 @@ class MailProvider(object):
         language: str = DEFAULT_LANGUAGE,
         action: Optional[str] = None,
     ) -> MIMEMultipart:
-        model = self.get_mail_message(model_name, language, action)
+        model: Optional[dict] = self.get_mail_message(model_name, language, action)
+        if model is None:
+            raise HTTPException(
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=["type of email not found"],
+            )
         values = dict(values)
         replace = dict({})
         for key in self.MODEL_KEYS:
@@ -169,8 +170,8 @@ class MailProvider(object):
                     and key in values.keys()
                     and values[key] is not None
                 ):
-                    if values["key"] == "all":
-                        replace["key"] = ". ".join(model[key].values())
+                    if values[key] == "all":
+                        replace[key] = ". ".join(model[key].values())
                     else:
                         replace[key] = model[key][values[key]]
                 else:
@@ -179,11 +180,19 @@ class MailProvider(object):
             if key in values.keys():
                 if key == "data" and type(values["data"]) == "dict":
                     data = []
-                    for k, v in values["data"].items():
-                        data.append(model["data"].format(key=k, value=v))
-                replace[key] = values[key]
+                    if key in model.keys():
+                        for k, v in values["data"].items():
+                            data.append(model["data"].format(key=k, value=v))
+
+                    else:
+                        for k, v in values["data"].items():
+                            data.append(str(k) + " : " + str(v))
+                    replace[key] = "<br>".join(data)
+                else:
+                    replace[key] = values[key]
             elif key not in replace.keys():
                 replace[key] = ""
+
         model["body"] = model["body"].format(**replace)
         mailmsg = MIMEMultipart("alternative")
         mailmsg["Subject"] = model["subject"].format(action=replace["action"])
@@ -213,8 +222,9 @@ class MailProvider(object):
             return
         if action is None:
             action = self.ACTIVATION_ACTION_CREATE
+        id = data["id"]
         replace = ReplaceInMail(
-            id=data["id"],
+            id=id,
             email=data["email"],
             token=token,
             data=data,
@@ -289,21 +299,20 @@ class MailProvider(object):
 
     def get_mail_message(
         self, model_name: str, language, action: Optional[str] = None
-    ) -> dict:
-        import json
+    ) -> Optional[dict]:
+        from providers.usermails import MAIL_MODELS
 
-        filename = self.PATH_MAIL_TEMPLATE.format(name=model_name)
-        with open(filename, "r") as f:
-            model = json.load(f)
-        f.close()
-        if language in model.keys():
-            model = dict(model[language])
-        else:
-            model = dict(model[DEFAULT_LANGUAGE])
-        if action != None and action in model.keys():
-            return model[action]
-        else:
-            return model
+        if model_name in MAIL_MODELS.keys():
+            model = MAIL_MODELS[model_name]
+            if language in model.keys():
+                model = model[language]
+            else:
+                model = model[DEFAULT_LANGUAGE]
+            if model is not None and action != None and action in model.keys():
+                return model[action]
+            else:
+                return model
+        return None
 
     def get_assistance_mail(self) -> Optional[str]:
         assistance_email: Optional[str] = self.account_activate_email

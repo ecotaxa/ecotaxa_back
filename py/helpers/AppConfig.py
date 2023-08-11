@@ -65,6 +65,25 @@ class Config(object):
     def get_app_manager(self) -> Tuple[Optional[str], Optional[str]]:
         return self.parser.get("APPMANAGER_NAME"), self.parser.get("APPMANAGER_EMAIL")
 
+    def get_account_activate_email(self) -> Optional[str]:
+        return self.parser.get("ACCOUNT_ACTIVATE_EMAIL")
+
+    def get_user_email_verification(self) -> Optional[str]:
+        return self.parser.get("USER_EMAIL_VERIFICATION")
+
+    def get_account_active_unset(self) -> Optional[str]:
+        return self.parser.get("ACCOUNT_ACTIVE_UNSET")
+
+    def get_mailservice_secret_key(self) -> Optional[str]:
+        return self.parser.get("MAILSERVICE_SECRET_KEY")
+
+    def get_mailservice_salt(self) -> Optional[str]:
+        return self.parser.get("MAILSERVICE_SALT")
+
+    def get_sender_account(self) -> Optional[str]:
+        # email address used in account management - 0 email - 1 pwd - 2 - dns - 3 port
+        return self.parser.get("SENDER_ACCOUNT")
+
     def get_cnf(self, key: str, default: Optional[str] = None) -> Optional[str]:
         # TODO: stop using so we can enumerate the keys
         return self.parser.get(key, default)
