@@ -15,6 +15,7 @@ MAIL_MODELS: dict = dict(
                 "subject": "EcoTaxa account [{action}]",
                 "link": '<a href="{url}{id}" style="color: rgb(52, 167, 173)">{url}{id}</a>',
                 "email": '<a href="mailto:{email}">{email}</a>',
+                "data": "<div><span>{key}</span><span>{value}</span></div>",
                 "reason": '<ul><li><a href="{url}{id}?reason=email" style="color: rgb(52, 167, 173)">Invalid email</a></li><li><a href="{url}{id}?reason=organisation" style="color: rgb(52, 167, 173)">More info or incorrect organisation</a></li><li><a href="{url}{id}?reason=creation" style="color: rgb(52, 167, 173)">More info about the creation reason</a></li><li><a href="{url}{id}?reason=all" style="color: rgb(52, 167, 173)">email, organisation, creation reason</a></li></ul>',
                 "body": "<p>Account [{action}]<br>{data}<br>Please click on the following link to validate the account  :<br>{link}<br>Or click the following link to ask the user to modify the information provided : {reason}</p><br>",
             }

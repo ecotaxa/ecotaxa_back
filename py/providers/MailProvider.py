@@ -123,24 +123,28 @@ class MailProvider(object):
                 try:
                     res = smtp.sendmail(senderemail, recipients, msg.as_string())
                 except smtplib.SMTPRecipientsRefused:
+
                     raise HTTPException(
                         status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                        detail=["invalid email"],
+                        detail=["Email invalid"],
                     )
                 smtp.quit()
                 logger.info("Email sent  to '%s'" % email)
         except:
             logger.info("Email not sent to '%s'" % email)
+            detail = "mail not sent from:{f} to:{t} message:{m}".format(
+                f=senderemail, t=recipients[0], m=msg.as_string()
+            )
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Mail not sent",
+                detail=[detail],
             )
 
     def mail_message(
         self,
         model_name: str,
         recipients: list,
-        values: dict,
+        values: ReplaceInMail,
         language: str = DEFAULT_LANGUAGE,
         action: Optional[str] = None,
     ) -> MIMEMultipart:
@@ -150,47 +154,50 @@ class MailProvider(object):
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=["type of email not found"],
             )
-        values = dict(values)
         replace = dict({})
         for key in self.MODEL_KEYS:
             replace[key] = ""
-            if key in model.keys():
+            if key in model:
                 if (
                     key == "link"
                     and (
-                        "url" not in values.keys()
-                        or values["url"] is None
-                        or values["url"].strip() == ""
+                        not hasattr(values, "url")
+                        or values.url is None
+                        or values.url.strip() == ""
                     )
-                    and "url" in model.keys()
+                    and "url" in model
                 ):
-                    values["url"] = model["url"]
+                    values.url = model["url"]
                 if (
                     (key == "action" or key == "reason")
-                    and key in values.keys()
-                    and values[key] is not None
+                    and hasattr(values, key)
+                    and getattr(values, key) is not None
                 ):
-                    if values[key] == "all":
+                    if getattr(values, key) == "all":
                         replace[key] = ". ".join(model[key].values())
                     else:
-                        replace[key] = model[key][values[key]]
+                        replace[key] = model[key][getattr(values, key)]
                 else:
-                    replace[key] = model[key].format(**values)
+                    replace[key] = model[key].format(**vars(values))
         for key in self.REPLACE_KEYS:
-            if key in values.keys():
-                if key == "data" and type(values["data"]) == "dict":
+            if hasattr(values, key):
+                if (
+                    key == "data"
+                    and values.data is not None
+                    and type(values.data) is dict
+                ):
                     data = []
-                    if key in model.keys():
-                        for k, v in values["data"].items():
+                    if key in model:
+                        for k, v in values.data.items():
                             data.append(model["data"].format(key=k, value=v))
 
                     else:
-                        for k, v in values["data"].items():
+                        for k, v in values.data.items():
                             data.append(str(k) + " : " + str(v))
-                    replace[key] = "<br>".join(data)
+                    replace[key] = ",  ".join(data)
                 else:
-                    replace[key] = values[key]
-            elif key not in replace.keys():
+                    replace[key] = getattr(values, key)
+            elif key not in replace:
                 replace[key] = ""
 
         model["body"] = model["body"].format(**replace)
@@ -232,7 +239,7 @@ class MailProvider(object):
             url=url,
         )
 
-        mailmsg = self.mail_message(self.MODEL_ACTIVATE, [recipient], replace.__dict__)
+        mailmsg = self.mail_message(self.MODEL_ACTIVATE, [recipient], replace)
         self.send_mail(recipient, mailmsg)
 
     def send_verification_mail(
@@ -244,9 +251,7 @@ class MailProvider(object):
     ) -> None:
         reply_to = self.get_assistance_mail()
         data = ReplaceInMail(email=reply_to, token=token, action=action, url=url)
-        mailmsg = self.mail_message(
-            self.MODEL_VERIFY, [recipient], data.__dict__, action=action
-        )
+        mailmsg = self.mail_message(self.MODEL_VERIFY, [recipient], data, action=action)
         self.send_mail(recipient, mailmsg, replyto=reply_to)
 
     def send_reset_password_mail(
@@ -254,9 +259,7 @@ class MailProvider(object):
     ) -> None:
         assistance_email = self.get_assistance_mail()
         data = ReplaceInMail(token=token, email=assistance_email, url=url)
-        mailmsg = self.mail_message(
-            self.MODEL_PASSWORD_RESET, [recipient], data.__dict__
-        )
+        mailmsg = self.mail_message(self.MODEL_PASSWORD_RESET, [recipient], data)
         self.send_mail(recipient, mailmsg)
 
     def send_desactivated_mail(self, recipient: str) -> None:
@@ -273,7 +276,7 @@ class MailProvider(object):
         assistance_email = self.get_assistance_mail()
         data = ReplaceInMail(email=assistance_email, token=token)
         mailmsg = self.mail_message(
-            self.MODEL_ACTIVATED, [recipient], data.__dict__, action=action
+            self.MODEL_ACTIVATED, [recipient], data, action=action
         )
         self.send_mail(recipient, mailmsg, replyto=assistance_email)
 
@@ -293,7 +296,7 @@ class MailProvider(object):
             url=url,
         )
         mailmsg = self.mail_message(
-            self.MODEL_ACTIVATED, [recipient], values.__dict__, action=action
+            self.MODEL_ACTIVATED, [recipient], values, action=action
         )
         self.send_mail(recipient, mailmsg, replyto=assistance_email)
 

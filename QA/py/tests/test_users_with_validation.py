@@ -91,8 +91,9 @@ def test_user_create_ordinary_with_validation(
         "name": "send verifmail",
     }
     rsp = fastapi.post(urlparams, json=usr_json)
-    assert rsp.status_code == 202
+
     assert rsp.json() == {"detail": ["sentmail"]}
+    assert rsp.status_code == 202
     # admin find a user and modify his email
     url = USER_GET_URL.format(user_id=ORDINARY_USER_USER_ID)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
@@ -112,23 +113,23 @@ def test_user_create_ordinary_with_validation(
     # mail sent to user - request verify email by click on link
     assert rsp.json() == {"detail": ["sentmail"]}
     assert rsp.status_code == 202
-    # ref_json = {
-    #    "email": email,
-    #    "id": None,
-    #    "name": "test create with validation",
-    #    "organisation": " test my university",
-    #    "password": "zzzza123",
-    # }
+    ref_json = {
+        "email": email,
+        "id": None,
+        "name": "test create with validation",
+        "organisation": " test my university",
+        "password": "zzzza123",
+    }
     # fake token - received in mail  - user cand post a create request
-    # token = UserValidation()._generate_token(
-    #    email=email, id=-1, action=ACTIVATION_ACTION_CREATE
-    # )
-    # params = {"no_bot": ["193.4.123.4", "sdfgdqsg"], "token": token}
-    # urlparams = url + "?" + urllib.parse.urlencode(params, doseq=True)
-    # rsp = fastapi.post(urlparams, json=ref_json)
+    token = UserValidation()._generate_token(
+        email=email, id=-1, action=ACTIVATION_ACTION_CREATE
+    )
+    params = {"no_bot": ["193.4.123.4", "sdfgdqsg"], "token": token}
+    urlparams = url + "?" + urllib.parse.urlencode(params, doseq=True)
+    rsp = fastapi.post(urlparams, json=ref_json)
     # mail sent to user admin - request_activation
-    # assert rsp.status_code == 202
-    # assert rsp.json() == {"detail": ["sentmail"]}
+    assert rsp.status_code == 202
+    assert rsp.json() == {"detail": ["sentmail"]}
     # TODO -verify if the user has been created and active is 0
     # TODO users admin activate the user
     # TODO users admin discard the user and ask to modify data - user_has_to_modify
