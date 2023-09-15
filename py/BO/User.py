@@ -5,13 +5,14 @@
 
 import json
 from dataclasses import dataclass
+from collections import namedtuple
 from typing import Any, Final, List
-
 from BO.Classification import ClassifIDListT
 from DB import Session
 from DB.User import User
 from DB.UserPreferences import UserPreferences
 from helpers.DynamicLogs import get_logger
+
 
 # Typings, to be clear that these are not e.g. object IDs
 UserIDT = int
@@ -20,6 +21,14 @@ UserIDListT = List[int]
 logger = get_logger(__name__)
 
 MISSING_USER = {"id": -1, "name": "", "email": ""}
+
+USER_PWD_REGEXP: Final = (
+    "^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$"
+)
+
+
+UserStatus = namedtuple("UserStatus", "blocked inactive active pending")
+USER_STATUS: Final = UserStatus(-1, 0, 1, 2)
 
 
 class UserBO(object):

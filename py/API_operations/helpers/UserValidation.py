@@ -4,15 +4,15 @@
 #
 # User Validation Service .
 #
-from typing import Optional, Any
+from typing import Optional, Any, Final
+from collections import namedtuple
 from BO.Rights import NOT_AUTHORIZED
-from BO.User import UserIDT
+from BO.User import UserIDT, USER_PWD_REGEXP
 from API_models.crud import UserModelProfile
 from helpers.AppConfig import Config
 from providers.MailProvider import MailProvider
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 from helpers.DynamicLogs import get_logger
-
 from fastapi import HTTPException
 from starlette.status import (
     HTTP_403_FORBIDDEN,
@@ -20,13 +20,29 @@ from starlette.status import (
     HTTP_422_UNPROCESSABLE_ENTITY,
 )
 
-logger = get_logger(__name__)
 
-ACTIVATION_ACTION_CREATE = "create"
-ACTIVATION_ACTION_UPDATE = "update"
-ACTIVATION_ACTION_ACTIVE = "active"
-ACTIVATION_ACTION_DESACTIVE = "desactive"
-ACTIVATION_ACTION_HASTOMODIFY = "modify"
+logger = get_logger(__name__)
+SHORT_TOKEN_AGE = 1
+PROFILE_TOKEN_AGE = 24
+
+ActivationType = namedtuple(
+    "ActivationType", ["create", "update", "status", "inform", "passwordreset"]
+)
+ACTIVATION_TYPE: Final = ActivationType(
+    "create", "update", "status", "inform", "passwordreset"
+)
+
+
+def _get_validation_emails() -> list:
+    return ["beatrice.caraveo@imev-mer.fr"]
+    from API_operations.CRUD.Users import UserService
+
+    adminlist = []
+    with UserService() as sce:
+        users_admins = sce.get_users_admins()
+    if len(users_admins) > 0:
+        adminlist = [u.email for u in users_admins]
+    return adminlist
 
 
 class UserValidation(object):
@@ -38,31 +54,22 @@ class UserValidation(object):
     def __init__(self):
         # email verification
         config = Config()
-        # external activation of account - only one user admin can activate an account and set mail_status to verified
-        self.account_activate_email = config.get_account_activate_email()
-
-        # unset active field if major mod is done by anyone except the account_activate_email ( user admin with the same email) or anyone except users admin
-        self.active_unset = config.get_account_active_unset() == "on"
+        # unset status field "active" value if major modification is done by anyone except users admin
+        self.account_validation = config.get_account_validation() == "on"
         # 0 email - 1 pwd - 2 - dns - 3 port
-        self.senderaccount: list = str(config.get_cnf("SENDER_ACCOUNT") or "").split(
-            ","
-        )
+        self.senderaccount: list = str(config.get_sender_account() or "").split(",")
         self._mailprovider = MailProvider(
-            self.senderaccount, self.account_activate_email
+            self.senderaccount, config.get_dir_mail_templates()
         )
         self.secret_key = str(config.get_cnf("MAILSERVICE_SECRET_KEY") or "")
         self.app_instance_id = str(config.get_cnf("INSTANCE_ID") or "EcoTaxa.01")
 
     # condition to keep user activated even if major change occured
-
-    def keep_active(self, email: Optional[str], is_admin: bool) -> bool:
+    def keep_active(self, current_user_email: Optional[str], is_admin: bool) -> bool:
         # no current_user
-        if email is None:
-            return not self.active_unset
-        is_admin = is_admin and (
-            self.account_activate_email is None or self.account_activate_email == email
-        )
-        return is_admin and self.active_unset == False
+        if current_user_email is None:
+            return not self.account_validation
+        return is_admin or not self.account_validation
 
     # call to request email_verification - validation method is by sending an email with a token
 
@@ -93,9 +100,9 @@ class UserValidation(object):
         if token:
             action = self._get_value_from_token(token, "action")
             if action is None:
-                action = ACTIVATION_ACTION_CREATE
-        self._mailprovider.send_activation_mail(
-            self.account_activate_email,
+                action = ACTIVATION_TYPE.create
+        self._mailprovider.send_activation_request_mail(
+            _get_validation_emails(),
             data={
                 "id": inactive_user.id,
                 "name": inactive_user.name,
@@ -107,23 +114,32 @@ class UserValidation(object):
             url=url,
         )
 
-    def inform_user_activestate(
-        self, user: UserModelProfile, url: Optional[str] = None
+    def inform_user_status(
+        self, user: UserModelProfile, status: Optional[str], url: Optional[str] = None
     ) -> None:
-        active = user.active
-        action = ACTIVATION_ACTION_ACTIVE
-        token = None
-        if not active:
-            action = ACTIVATION_ACTION_DESACTIVE
-            token = self._generate_token(user.email, id=user.id, action=action)
-        self._mailprovider.send_activated_mail(
-            user.email, active=active, action=action, token=token, url=url
+
+        if status is not None:
+            token = self._generate_token(
+                user.email, id=user.id, action=ACTIVATION_TYPE.status
+            )
+        else:
+            token = None
+        self._mailprovider.send_status_mail(
+            user.email,
+            status=status,
+            action=ACTIVATION_TYPE.status,
+            token=token,
+            url=url,
         )
 
     def request_user_to_modify_profile(
-        self, user: UserModelProfile, reason: str, url: Optional[str] = None
+        self,
+        user: UserModelProfile,
+        reason: str,
+        action: Optional[str] = ACTIVATION_TYPE.create,
+        url: Optional[str] = None,
     ) -> None:
-        action = ACTIVATION_ACTION_HASTOMODIFY
+
         # exception user email and id in the same token - for mod after creation and active is False
         token = self._generate_token(
             id=user.id, email=user.email, action=action, reason=reason
@@ -150,17 +166,10 @@ class UserValidation(object):
 
     @staticmethod
     def is_strong_password(password: str) -> bool:
-        import re
+        from re import match
 
-        if len(password) >= 8:
-            if (
-                re.search("[a-z]*+[A-Z]*+[0-9]*+[_@#?]", password)
-                # and re.search("[A-Z]", password)
-                # and re.search("[0-9]", password)
-                # and re.search("[_@#?]", password)
-                # and not re.search("\s", password)
-            ):
-                return True
+        if match(USER_PWD_REGEXP, password):
+            return True
         return False
 
     @staticmethod
@@ -204,15 +213,13 @@ class UserValidation(object):
         email: Optional[str] = None,
         ip: Optional[str] = None,
         action: Optional[str] = None,
+        age: Optional[int] = None,
     ) -> Optional[str]:
-        if name == "id":
-            age = 4
-        else:
-            age = 24
         try:
-
+            if age is None:
+                age = SHORT_TOKEN_AGE
             payload = self._build_serializer(self.secret_key).loads(
-                token, max_age=age * 3600
+                token, max_age=int(age) * 3600
             )
         except (SignatureExpired, BadSignature):
             raise HTTPException(
@@ -238,8 +245,9 @@ class UserValidation(object):
         email: Optional[str] = None,
         ip: Optional[str] = None,
         action: Optional[str] = None,
+        age: Optional[int] = SHORT_TOKEN_AGE,
     ) -> Optional[str]:
-        return self._get_value_from_token(token, "email", email, ip, action)
+        return self._get_value_from_token(token, "email", email, ip, action, age)
 
     def get_id_from_token(
         self,
@@ -247,8 +255,11 @@ class UserValidation(object):
         email: Optional[str] = None,
         ip: Optional[str] = None,
         action: Optional[str] = None,
+        age: Optional[int] = SHORT_TOKEN_AGE,
     ) -> int:
-        return int(self._get_value_from_token(token, "id", email, ip, action) or -1)
+        return int(
+            self._get_value_from_token(token, "id", email, ip, action, age) or -1
+        )
 
     def get_reset_from_token(
         self,

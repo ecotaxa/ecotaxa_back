@@ -4,9 +4,10 @@
 #
 # Exported constants, to avoid data duplication b/w back-end and front-end
 #
-from typing import Dict, List
+from typing import Dict, List, NamedTuple
 
 from BO.DataLicense import DataLicense
+from BO.User import USER_STATUS, UserStatus, USER_PWD_REGEXP
 from helpers.pydantic import BaseModel, Field
 
 
@@ -39,4 +40,15 @@ class Constants(BaseModel):
         default=[],
         min_items=1,
         example=["France"],
+    )
+    user_status: Dict[str, int] = Field(
+        title="User status",
+        description="Application User status values",
+        default={field: value for field, value in USER_STATUS._asdict().items()},
+        example={"blocked": -1, "inactive": 0, "active": 1, "pending": 2},
+    )
+    password_regexp: str = Field(
+        title="Password regexp",
+        description="password with a minium length of 8, with a mininum 1 uppercase, a minimum 1 lowercase, a minimum 1 number and a minimum 1 special char",
+        default=USER_PWD_REGEXP,
     )

@@ -7,6 +7,7 @@
 import base64
 import hashlib
 import hmac
+
 # TODO: if it exists, find the stubs somewhere
 from typing import Union
 
@@ -16,6 +17,8 @@ from API_operations.helpers.Service import Service
 from BO.Rights import NOT_AUTHORIZED
 from DB.User import User
 from helpers.fastApiUtils import build_serializer
+
+NOT_AUTHORIZED_MAIL = "##id###" + NOT_AUTHORIZED
 
 
 class LoginService(Service):
@@ -40,15 +43,42 @@ class LoginService(Service):
 
     def validate_login(self, username: str, password: str) -> Union[str, bytes]:
         # Fetch the one and only user
-        user_qry = (
-            self.session.query(User).filter(User.email == username).filter(User.active)
-        )
+        from BO.User import USER_STATUS
+
+        account_validation = self.config.get_account_validation() == "on"
+        # if account validation is "on" and account is pending
+        if account_validation:
+            user_qry = self.session.query(User).filter(User.email == username)
+        else:
+            user_qry = self.session.query(User).filter(
+                User.email == username, User.status == USER_STATUS.active
+            )
         db_users = user_qry.all()
         assert len(db_users) == 1, NOT_AUTHORIZED
         the_user: User = db_users[0]
-        #
+        if account_validation and the_user.status != USER_STATUS.active:
+            verif_ok = self.verify_and_update_password(password, the_user)
+            assert verif_ok, NOT_AUTHORIZED
+
+            from fastapi import HTTPException
+            from starlette.status import HTTP_401_UNAUTHORIZED
+
+            raise HTTPException(
+                status_code=HTTP_401_UNAUTHORIZED,
+                detail=[
+                    str(the_user.status)
+                    + "#"
+                    + str(the_user.mail_status)
+                    + " #"
+                    + NOT_AUTHORIZED_MAIL.replace("##id##", str(the_user.id))
+                ],
+            )
+
+        assert the_user.status == USER_STATUS.active, NOT_AUTHORIZED
+        # verif even user is not active , in order to let modify email only if mail_status is False
         verif_ok = self.verify_and_update_password(password, the_user)
         assert verif_ok, NOT_AUTHORIZED
+
         # Sign with the verifying serializer, the salt is Flask's one
         token = build_serializer().dumps({"user_id": the_user.id})
         return token

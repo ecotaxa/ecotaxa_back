@@ -941,6 +941,7 @@ ALTER TABLE collection ADD COLUMN external_id_system VARCHAR NOT NULL;
 
 UPDATE alembic_version SET version_num='910b679215ca' WHERE alembic_version.version_num = '21bb404620d5';
 
+
 COMMIT;
 
 -- Running upgrade 21bb404620d5 -> dae002b5d15a, Job table & collection permalink
@@ -1187,6 +1188,37 @@ UPDATE alembic_version SET version_num='34d91185174c' WHERE alembic_version.vers
 
 COMMIT;
 
+
+-- Running upgrade  34d91185174c -> 1b1beb672279 , users validation
+CREATE TABLE user_password_reset (
+    user_id INTEGER NOT NULL,
+    temp_password VARCHAR,
+    creation_date TIMESTAMP DEFAULT current_timestamp,
+    PRIMARY KEY (user_id),
+    FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+ALTER TABLE users ADD COLUMN status_admin_comment VARCHAR(255);
+ALTER TABLE users ADD COLUMN status_date TIMESTAMP WITHOUT TIME ZONE;
+ALTER TABLE users ALTER active DROP DEFAULT;
+ALTER TABLE users ALTER active TYPE SMALLINT
+    USING
+    CASE
+    WHEN status =false THEN 0 ELSE 1
+    END;
+ALTER TABLE users ALTER active SET DEFAULT 1;
+ALTER TABLE users RENAME COLUMN active TO status ;
+ALTER TABLE users ALTER mail_status DROP DEFAULT;
+ALTER TABLE users ALTER mail_status TYPE BOOLEAN
+USING
+CASE
+WHEN mail_status ='V' THEN true
+WHEN mail_status = 'W' then false
+ELSE NULL
+END;
+ALTER TABLE users ALTER mail_status SET DEFAULT NULL;
+UPDATE alembic_version SET version_num='1b1beb672279' WHERE alembic_version.version_num = '34d91185174c';
+
+COMMIT;
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;
@@ -1194,4 +1226,3 @@ ALTER TABLE alembic_version REPLICA IDENTITY FULL;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO readerole;
 
 ALTER SUBSCRIPTION mysub13 REFRESH PUBLICATION;
-

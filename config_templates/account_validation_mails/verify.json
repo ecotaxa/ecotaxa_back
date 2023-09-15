@@ -1,0 +1,20 @@
+{
+  "en_EN": {
+    "create": {
+      "url": "/gui/register/",
+      "subject": "EcoTaxa account creation request - email verify ",
+      "link": "<a href=\"{url}{token}\" style=\"color: rgb(52, 167, 173)\">{url}{token}</a>",
+      "email": "<a href=\"mailto:{email}\">{email}</a>",
+      "assistance": "If you have any question or need additional support,  email: {email}",
+      "body": "<p>Welcome to the EcoTaxa registration process.<br>Please click on the following link to validate your email address and continue your account creation process: {link}.<br>{assistance}.***If you have not initiated this request, please ignore it.</p>"
+    },
+    "update": {
+      "url": "/gui/me/activate/",
+      "subject": "EcoTaxa account modification request - email verify ",
+      "link": "<a href=\"{url}{token}\" style=\"color: rgb(52, 167, 173)\">{url}{token}</a>",
+      "email": "<a href=\"mailto:{email}\">{email}</a>",
+      "assistance": "If you have any question about your data or need additional support,  email: {email}",
+      "body": "<p>Your account information have to be verified.  <br>Please click on the following link to validate your email address and continue your account modification process: {link}<br>{assistance}.***If you have not initiated this request, please ignore it.</p>"
+    }
+  }
+}

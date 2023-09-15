@@ -525,14 +525,36 @@ def test_import_too_many_custom_columns(config, database, caplog):
     job = wait_for_stable(rsp.job_id)
     check_job_errors(job)
     errors = get_job_errors(job)
-    assert errors == [
-        "Field acq_cus29, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too "
-        "many custom fields, or bad type.",
-        "Field acq_cus30, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too "
-        "many custom fields, or bad type.",
-        "Field acq_cus31, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too "
-        "many custom fields, or bad type.",
-    ]
+    from DB.Sample import SAMPLE_FREE_COLUMNS
+    from DB.Acquisition import ACQUISITION_FREE_COLUMNS
+    from DB.Process import PROCESS_FREE_COLUMNS
+
+    compare_errors = []
+    for n in range(SAMPLE_FREE_COLUMNS - 2, SAMPLE_FREE_COLUMNS + 1):
+        compare_errors.append(
+            "Field sample_cus{n}, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too "
+            "many custom fields, or bad type.".format(n=str(n))
+        )
+    for n in range(PROCESS_FREE_COLUMNS - 2, PROCESS_FREE_COLUMNS + 1):
+        compare_errors.append(
+            "Field process_cus{n}, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too "
+            "many custom fields, or bad type.".format(n=str(n))
+        )
+    for n in range(ACQUISITION_FREE_COLUMNS - 2, ACQUISITION_FREE_COLUMNS + 1):
+        compare_errors.append(
+            "Field acq_cus{n}, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too "
+            "many custom fields, or bad type.".format(n=str(n))
+        )
+
+    # assert errors == [
+    #    "Field acq_cus29, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too "
+    #    "many custom fields, or bad type.",
+    #    "Field acq_cus30, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too "
+    #    "many custom fields, or bad type.",
+    #    "Field acq_cus31, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too "
+    #    "many custom fields, or bad type.",
+    # ]
+    assert errors == compare_errors
 
 
 # @pytest.mark.skip()

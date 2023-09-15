@@ -5,57 +5,77 @@
 # Maintenance operations on the DB.
 #
 import datetime
-from typing import Optional
+from typing import Optional, Final
+from collections import namedtuple
 from helpers.DynamicLogs import get_logger
 from helpers.pydantic import BaseModel, Field
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from starlette.status import (
     HTTP_422_UNPROCESSABLE_ENTITY,
+    HTTP_500_INTERNAL_SERVER_ERROR,
+    HTTP_404_NOT_FOUND,
 )
 from fastapi import HTTPException
-
 
 logger = get_logger(__name__)
 # special token - only for mail - separate from auth token
 
 
-class ReplaceInMail(BaseModel):
-    id: Optional[int] = Field(
-        title="User Id", description="User unique identifier.", example=1, default=None
-    )
-    email: Optional[str] = Field(
-        title="email to reply",
-        description="Email added at the end of the message",
-        default=None,
-    )
-    data: Optional[dict] = Field(
-        title="Data",
-        description="Data to be included in the message",
-        example={"name": "name", "email": "test@mail.com"},
-        default=None,
-    )
-    action: Optional[str] = Field(
-        title="Action", description="Create or Update", default=None
-    )
-    reason: Optional[str] = Field(
-        title="Reason",
-        description="reason to request to modify information from user",
-        default=None,
-    )
-    token: Optional[str] = Field(
-        title="Token",
-        description="token added to the link to verify the action - max_age :24h",
-        default=None,
-    )
-    url: Optional[str] = Field(
-        title="URL",
-        description="url of the requesting app - will be replaced in the mail message template",
-        default=None,
-    )
+AccountMailType = namedtuple(
+    "AccountMailType",
+    ["activate", "verify", "status", "modify", "passwordreset", "emailmodified"],
+)
+ACCOUNT_MAIL_TYPE = AccountMailType(
+    "activate", "verify", "status", "modify", "passwordreset", "emailmodified"
+)
+
+# replace in mail templates
+class ReplaceInMail:
+    # user id  - {id}
+    url: Optional[str] = None
+    # url of the requesting app - will be replaced in the mail message template
+    id: Optional[int] = None
+    email: Optional[str] = None
+    # "Email added in the template message body with the tag {email}
+    data: Optional[dict] = None
+    # Data to be included in the template message body with the tag {data} - if key data exists in the template it is replaced before
+    action: Optional[str] = None
+    reason: Optional[str] = None
+    # reason to request to modify information from user tag {reason}
+    token: Optional[str] = None
+    # token added to the link to verify the action - max_age :24h" - tag {token}
+    def __init__(
+        self,
+        url: Optional[str] = None,
+        id: Optional[int] = None,
+        email: Optional[str] = None,
+        data: Optional[dict] = None,
+        action: Optional[str] = None,
+        reason: Optional[str] = None,
+        token: Optional[str] = None,
+    ):
+        self.url = url
+        self.email = email
+        self.id = id
+        self.data = data
+        self.action = action
+        self.reason = reason
+        self.token = token
 
 
 DEFAULT_LANGUAGE = "en_EN"
+
+
+def _get_assistance_email() -> Optional[str]:
+    return "assistance_email@testassistanceemailvdfhshhgjdfimev.fr"
+    from API_operations.CRUD.Users import UserService
+
+    with UserService() as sce:
+        users_admins = sce.get_users_admins()
+    if len(users_admins):
+        return users_admins[0].email
+    return None
 
 
 class MailProvider(object):
@@ -63,23 +83,17 @@ class MailProvider(object):
     Tools to validate user registration and activation - send validation mails to external validation service - and change password service
     """
 
-    MODEL_ACTIVATE = "activate"
-    MODEL_VERIFY = "verify"
-    MODEL_ACTIVATED = "active"
-    MODEL_KEYS = ["email", "link", "action", "reason"]
-    REPLACE_KEYS = ["token", "data", "url"]
-    MODEL_PASSWORD_RESET = "passwordreset"
-    ACTIVATION_ACTION_CREATE = "create"
-    ACTIVATION_ACTION_UPDATE = "update"
-    ACTIVATION_ACTION_ACTIVE = "active"
-    ACTIVATION_ACTION_DESACTIVE = "desactive"
+    MODEL_KEYS = ("email", "link", "action", "assistance")
+    REPLACE_KEYS = ("token", "data", "url", "reason")
 
-    def __init__(self, senderaccount: list, account_activate_email: str):
+    def __init__(self, senderaccount: list, dir_mail_templates: str):
         on = len(senderaccount) == 4 and self.is_email(senderaccount[0])
         if on:
-            self.senderaccount = senderaccount
+            from API_operations.CRUD import Users
 
-        self.account_activate_email = account_activate_email
+            self.SENDER_ACCOUNT = senderaccount
+            self.DIR_MAIL_TEMPLATES = dir_mail_templates
+            self.assistance_email = _get_assistance_email()
 
     @staticmethod
     def is_email(email: str) -> bool:
@@ -91,54 +105,63 @@ class MailProvider(object):
         return re.fullmatch(regex, email) is not None
 
     def send_mail(
-        self, email: str, msg: MIMEMultipart, replyto: Optional[str] = None
+        self, recipients: list, msg: MIMEMultipart, replyto: Optional[str] = None
     ) -> None:
         """
         Sendmail .
         """
-        if self.senderaccount is None:
+        if self.SENDER_ACCOUNT is None:
             # make a response explaining why  the mail was not sent
             return
-        if not self.is_email(email):
-            HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=["Not an email address"],
-            )
+        for recipient in recipients:
+            if not self.is_email(recipient):
+                HTTPException(
+                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=["Not an email address"],
+                )
         import smtplib, ssl
 
         # starttls and 587  - avec ssl 465
-        senderaccount = self.senderaccount
+        senderaccount = self.SENDER_ACCOUNT
         senderemail = senderaccount[0].strip()
         senderpwd = senderaccount[1].strip()
         senderdns = senderaccount[2].strip()
         senderport = int(senderaccount[3].strip())
         msg["From"] = senderemail
-        recipients = [email]
         if replyto != None:
             msg.add_header("reply-to", str(replyto))
+        code = 0
         context = ssl.create_default_context()
-        try:
-            with smtplib.SMTP_SSL(senderdns, senderport, context=context) as smtp:
+        with smtplib.SMTP_SSL(senderdns, senderport, context=context) as smtp:
+            try:
                 smtp.login(senderemail, senderpwd)
-                try:
-                    res = smtp.sendmail(senderemail, recipients, msg.as_string())
-                except smtplib.SMTPRecipientsRefused:
+                res = smtp.sendmail(senderemail, recipients, msg.as_string())
+                # res = smtp.send_message(msg)
+                logger.info("Email sent  to '%s'" % ", ".join(recipients))
+            except smtplib.SMTPException as e:
+                if isinstance(e, smtplib.SMTPRecipientsRefused):
+                    code = HTTP_422_UNPROCESSABLE_ENTITY
+                    detail = "Recipient refused"
+                elif isinstance(e, smtplib.SMTPDataError):
+                    code = HTTP_422_UNPROCESSABLE_ENTITY
+                    detail = "Data error"
+                else:
+                    code = HTTP_500_INTERNAL_SERVER_ERROR
+                    detail = str(e.args)
+                logger.error(e)
+            except:
+                code = HTTP_500_INTERNAL_SERVER_ERROR
+                import sys
 
+                detail = "Unknown error: '%s'" % sys.exc_info()[0]
+                logger.error(code, detail)
+            finally:
+                if code != 0:
                     raise HTTPException(
-                        status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                        detail=["Email invalid"],
+                        status_code=code,
+                        detail=[detail],
                     )
                 smtp.quit()
-                logger.info("Email sent  to '%s'" % email)
-        except:
-            logger.info("Email not sent to '%s'" % email)
-            detail = "mail not sent from:{f} to:{t} message:{m}".format(
-                f=senderemail, t=recipients[0], m=msg.as_string()
-            )
-            raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=[detail],
-            )
 
     def mail_message(
         self,
@@ -149,6 +172,7 @@ class MailProvider(object):
         action: Optional[str] = None,
     ) -> MIMEMultipart:
         model: Optional[dict] = self.get_mail_message(model_name, language, action)
+
         if model is None:
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
@@ -169,14 +193,11 @@ class MailProvider(object):
                 ):
                     values.url = model["url"]
                 if (
-                    (key == "action" or key == "reason")
+                    (key == "action")
                     and hasattr(values, key)
                     and getattr(values, key) is not None
                 ):
-                    if getattr(values, key) == "all":
-                        replace[key] = ". ".join(model[key].values())
-                    else:
-                        replace[key] = model[key][getattr(values, key)]
+                    replace[key] = model[key][getattr(values, key)]
                 else:
                     replace[key] = model[key].format(**vars(values))
         for key in self.REPLACE_KEYS:
@@ -217,18 +238,18 @@ class MailProvider(object):
         pattrns = re.compile("<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});")
         return re.sub(pattrns, "", html)
 
-    def send_activation_mail(
+    def send_activation_request_mail(
         self,
-        recipient: str,
+        recipients: list,
         data: dict,
+        action: str,
         token: Optional[str] = None,
-        action: Optional[str] = None,
         url: Optional[str] = None,
     ) -> None:
-        if recipient == None:
-            return
-        if action is None:
-            action = self.ACTIVATION_ACTION_CREATE
+        if len(recipients) == 0:
+            raise HTTPException(
+                status_code=HTTP_404_NOT_FOUND, detail=["Users admin not found"]
+            )
         id = data["id"]
         replace = ReplaceInMail(
             id=id,
@@ -238,9 +259,8 @@ class MailProvider(object):
             action=action,
             url=url,
         )
-
-        mailmsg = self.mail_message(self.MODEL_ACTIVATE, [recipient], replace)
-        self.send_mail(recipient, mailmsg)
+        mailmsg = self.mail_message(ACCOUNT_MAIL_TYPE.activate, recipients, replace)
+        self.send_mail(recipients, mailmsg)
 
     def send_verification_mail(
         self,
@@ -249,36 +269,34 @@ class MailProvider(object):
         action: Optional[str] = None,
         url: Optional[str] = None,
     ) -> None:
-        reply_to = self.get_assistance_mail()
+        reply_to = self.assistance_email
         data = ReplaceInMail(email=reply_to, token=token, action=action, url=url)
-        mailmsg = self.mail_message(self.MODEL_VERIFY, [recipient], data, action=action)
-        self.send_mail(recipient, mailmsg, replyto=reply_to)
+        mailmsg = self.mail_message(
+            ACCOUNT_MAIL_TYPE.verify, [recipient], data, action=action
+        )
+        self.send_mail([recipient], mailmsg, replyto=reply_to)
 
     def send_reset_password_mail(
         self, recipient: str, token: str, url: Optional[str] = None
     ) -> None:
-        assistance_email = self.get_assistance_mail()
-        data = ReplaceInMail(token=token, email=assistance_email, url=url)
-        mailmsg = self.mail_message(self.MODEL_PASSWORD_RESET, [recipient], data)
-        self.send_mail(recipient, mailmsg)
+        data = ReplaceInMail(token=token, email=self.assistance_email, url=url)
+        mailmsg = self.mail_message(ACCOUNT_MAIL_TYPE.passwordreset, [recipient], data)
+        self.send_mail([recipient], mailmsg)
 
-    def send_desactivated_mail(self, recipient: str) -> None:
-        self.send_activated_mail(recipient, False)
-
-    def send_activated_mail(
+    def send_status_mail(
         self,
         recipient: str,
-        active: bool = True,
-        action: Optional[str] = None,
+        status: str,
+        action: str,
         token: Optional[str] = None,
         url: Optional[str] = None,
     ) -> None:
-        assistance_email = self.get_assistance_mail()
-        data = ReplaceInMail(email=assistance_email, token=token)
+        data = ReplaceInMail(email=self.assistance_email, token=token)
         mailmsg = self.mail_message(
-            self.MODEL_ACTIVATED, [recipient], data, action=action
+            ACCOUNT_MAIL_TYPE.status, [recipient], data, action=status
         )
-        self.send_mail(recipient, mailmsg, replyto=assistance_email)
+
+        self.send_mail([recipient], mailmsg, replyto=self.assistance_email)
 
     def send_hastomodify_mail(
         self,
@@ -288,42 +306,40 @@ class MailProvider(object):
         token: Optional[str] = None,
         url: Optional[str] = None,
     ) -> None:
-        assistance_email = self.get_assistance_mail()
         values = ReplaceInMail(
-            email=assistance_email,
+            email=self.assistance_email,
             reason=reason,
             token=token,
             url=url,
         )
+
         mailmsg = self.mail_message(
-            self.MODEL_ACTIVATED, [recipient], values, action=action
+            ACCOUNT_MAIL_TYPE.modify, [recipient], values, action=action
         )
-        self.send_mail(recipient, mailmsg, replyto=assistance_email)
+        self.send_mail([recipient], mailmsg, replyto=self.assistance_email)
 
     def get_mail_message(
         self, model_name: str, language, action: Optional[str] = None
     ) -> Optional[dict]:
-        from providers.usermails import MAIL_MODELS
+        import json
+        from pathlib import Path
 
-        if model_name in MAIL_MODELS.keys():
-            model = MAIL_MODELS[model_name]
-            if language in model.keys():
-                model = model[language]
-            else:
-                model = model[DEFAULT_LANGUAGE]
-            if model is not None and action != None and action in model.keys():
-                return model[action]
-            else:
-                return model
+        name = model_name + ".json"
+        filename = Path(self.DIR_MAIL_TEMPLATES + "/" + name)
+        if not filename.exists():
+            raise HTTPException(
+                status_code=HTTP_404_NOT_FOUND,
+                detail=["model of email response not found " + name],
+            )
+        with open(filename, "r") as f:
+            model = json.load(f)
+            f.close()
+        if language in model.keys():
+            model = dict(model[language])
+        else:
+            model = dict(model[DEFAULT_LANGUAGE])
+        if action != None and action in model.keys():
+            return model[action]
+        else:
+            return model
         return None
-
-    def get_assistance_mail(self) -> Optional[str]:
-        assistance_email: Optional[str] = self.account_activate_email
-        if assistance_email == None:
-            from API_operations.CRUD.Users import UserService
-
-            with UserService() as sce:
-                users_admins = sce.get_users_admins()
-            if len(users_admins):
-                return users_admins[0].email
-        return assistance_email

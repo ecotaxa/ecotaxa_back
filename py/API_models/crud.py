@@ -51,10 +51,20 @@ class _FullUserModel(_MinUserModel):
         description="User's organisation name, as text.",
         example="Oceanographic Laboratory of Villefranche sur Mer - LOV",
     )
-    active = Field(
+    status = Field(
         title="Account status",
-        description="Whether the user is still active.",
-        example=True,
+        description="Status of the user : 1 for active, 0 for inactive ,2 for pending, -1 for blocked",
+        example=1,
+    )
+    status_date = Field(
+        title="status date",
+        description="Timestamp status modification date",
+        example="2020-11-05T12:31:48.299713",
+    )
+    status_admin_comment = Field(
+        title="Comment",
+        description="Optional Users admininistrator comment about the account status.",
+        example="",
     )
     country = Field(
         title="Country",
@@ -75,20 +85,22 @@ class _FullUserModel(_MinUserModel):
         title="User's password'",
         description="Encrypted (or not) password.",
         example="$foobar45$",
+        private=True,
     )
     mail_status = Field(
         title="Mail status",
-        description="V for verified, W for waiting for verification, whitespace for no action.",
-        example="W",
+        description="True for verified, False for waiting for verification, None for no action.",
+        example=True,
     )
     mail_status_date = Field(
         title="Mail status date",
-        description="Timestamp",
+        description="Timestamp mail status modification date",
+        example="2020-11-05T12:31:48.299713",
     )
 
 
 _UserModelFromDB = combine_models(User, _FullUserModel)
-
+UserModelProfile = combine_models(User, _FullUserModel)
 
 # TODO JCE - description example
 class _Project2Model(DescriptiveModel):
@@ -170,44 +182,6 @@ class UserModelWithRights(_UserModelFromDB):
             {"projid": 1, "title": "Zooscan Tara Med"},
         ],
     )
-
-
-# User profile information to share with external user admin
-class _UserModelProfile(_MinUserModel):
-    organisation = Field(
-        title="Organisation",
-        description="User's organisation name, as text.",
-        example="Oceanographic Laboratory of Villefranche sur Mer - LOV",
-    )
-    active = Field(
-        title="Account status",
-        description="Whether the user is still active.",
-        example=True,
-    )
-    mail_status: str = Field(
-        title="Mail status",
-        description="Whether the user email is verified. whitespace ,V or W",
-        default=" ",
-        example="V",
-    )
-    country = Field(
-        title="Country",
-        description="The country name, as text (but chosen in a consistent list).",
-        example="France",
-    )
-    usercreationdate = Field(
-        title="User creation date",
-        description="The date of creation of the user, as text formatted according to the ISO 8601 standard.",
-        example="2020-11-05T12:31:48.299713",
-    )
-    usercreationreason = Field(
-        title="User creation reason",
-        description="Paragraph describing the usage of EcoTaxa made by the user.",
-        example="Analysis of size and shapes of plastic particles",
-    )
-
-
-UserModelProfile = combine_models(User, _UserModelProfile)
 
 
 # TODO JCE - description example

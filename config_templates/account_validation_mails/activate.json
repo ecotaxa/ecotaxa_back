@@ -1,0 +1,16 @@
+{
+  "en_EN": {
+    "action": {
+      "create": "created",
+      "update": "updated",
+      "modify": "modified on request"
+    },
+    "url": "/gui/admin/users/activate/",
+    "subject": "EcoTaxa account [{action}]",
+    "email": "<a href=\"mailto:{email}\">{email}</a>",
+    "data": "<div><span>{key}</span><span>{value}</span></div>",
+    "link": "<a href=\"{url}{id}/1\" style=\"color: rgb(52, 167, 173)\">Activate</a>",
+    "reason": "<ul><li><span>This user has to modify his profile</span><a href=\"{url}{id}/2\" style=\"color: rgb(52,167, 22)\">Pending status</a></li><li><span>Deny access to this user</span><a href=\"{url}{id}/-1\" style=\"color: rgb(173, 0,0)\">Blocked status</a></li>/a></li></ul>",
+    "body": "<p>Account [{action}]<br>{data}<br>Please click on the following link to activate this user account :<br>{link}<br>Or click the following link to set the user account status to \"pending\" while you ask more information by email: {reason}</p><br>"
+  }
+}

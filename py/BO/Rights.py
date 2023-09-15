@@ -136,8 +136,7 @@ class RightsBO(object):
                 ]
             )
         else:
-            # Remove Project Creator - any user can create a project
-            # if user.has_role(Role.PROJECT_CREATOR):
+            # Any user can create a project
             ret.append(Action.CREATE_PROJECT)
             if user.has_role(Role.USERS_ADMINISTRATOR):
                 ret.append(Action.ADMINISTRATE_USERS)
@@ -157,8 +156,6 @@ class RightsBO(object):
             if an_action == Action.CREATE_TAXON:
                 pass
             elif an_action == Action.CREATE_PROJECT:
-                # Remove Project Creator Role - role not needed to action 'create project'
-                # roles.add(all_roles[Role.PROJECT_CREATOR])
                 pass
             elif an_action == Action.ADMINISTRATE_USERS:
                 roles.add(all_roles[Role.USERS_ADMINISTRATOR])

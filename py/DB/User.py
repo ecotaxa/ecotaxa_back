@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import List, Iterable
 from typing import TYPE_CHECKING
 
-from sqlalchemy import event
+from sqlalchemy import event, SmallInteger
 
 from BO.helpers.TSVHelpers import none_to_empty
 from data.Countries import countries_by_name
@@ -28,16 +28,17 @@ class User(Model):
     password: str = Column(String(255))
     name: str = Column(String(255), nullable=False)
     organisation: str = Column(String(255))
-    active: bool = Column(Boolean(), default=True)
-
+    status: int = Column(SmallInteger(), default=1)
+    status_date = Column(TIMESTAMP)
+    status_admin_comment: str = Column(String(255))
     preferences: str = Column(String(40000))
     country: str = Column(String(50))
 
     usercreationdate = Column(TIMESTAMP, default=func.now())
     usercreationreason = Column(String(1000))
 
-    # Mail status: 'V' for verified, 'W' for wrong
-    mail_status = Column(CHAR, server_default=" ")
+    # Mail status: True for verified, default NULL
+    mail_status: bool = Column(Boolean(), nullable=True)
     # Date the mail status was set
     mail_status_date = Column(TIMESTAMP)
 
@@ -96,10 +97,9 @@ class Role(Model):
 
     APP_ADMINISTRATOR = "Application Administrator"
     USERS_ADMINISTRATOR = "Users Administrator"
-    PROJECT_CREATOR = "Project creator"
 
     # Existing data references them by id, so changing the order here will scramble rights completely!
-    ALL_ROLES = [APP_ADMINISTRATOR, USERS_ADMINISTRATOR, PROJECT_CREATOR]
+    ALL_ROLES = [APP_ADMINISTRATOR, USERS_ADMINISTRATOR]
 
     #    description = Column(String(255))
     def __str__(self):

@@ -463,7 +463,7 @@ def get_user(
 
 #  activate a new user if external validation is on
 @app.post(
-    "/users/activate/{user_id}",
+    "/users/activate/{user_id}/{status}",
     operation_id="activate_user",
     tags=["users"],
     responses={200: {"content": {"application/json": {"example": null}}}},
@@ -472,19 +472,22 @@ def activate_user(
     user_id: int = Path(
         ..., description="Internal, the unique numeric id of this user.", example=1
     ),
+    status: Optional[int] = Path(
+        ...,
+        description="Internal, the status to assign to this user.",
+        example="active",
+    ),
     no_bot: Optional[List[str]] = Query(
         default=None,
-        title="NoBot token",
+        title="NoBot",
         description="not-a-robot proof",
         example="['127.0.0.1', 'ffqsdfsdf']",
-    ),
-    token: Optional[str] = Query(
-        default=None, title="token", description="token to validate request"
     ),
     reason: Optional[str] = Query(
         default=None,
         title="Reason",
-        description="reason code . if provided will bypass the activation of the user account ",
+        description="status,optional users administrator comment related to the status. ",
+        example="Email is not accepted....",
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> None:
@@ -493,18 +496,16 @@ def activate_user(
 
     🔒 Depending on logged user, different authorizations apply:
     - An administrator or user administrator can activate a user or bypass the activation and inform the user when a modification request value/reason is provided.
-    - An unlogged user can ask for activation with a token. But must eventually provide a no-robot proof.
     - An ordinary logged user cannot activate another account.
-
     If back-end configuration for self-creation check is Google reCAPTCHA,
     then no_bot is a pair [remote IP, reCAPTCHA response].
     """
     with UserService() as sce:
-        sce.set_activestate_user(
+        sce.set_statusstate_user(
             user_id=user_id,
+            status=status,
             current_user_id=current_user,
             no_bot=no_bot,
-            token=token,
             reason=reason,
         )
 
