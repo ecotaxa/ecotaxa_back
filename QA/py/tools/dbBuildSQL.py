@@ -184,6 +184,13 @@ class EcoTaxaDBFrom0(object):
         self.build(DB_PASSWORD)
         self.direct_SQL(DB_PASSWORD)
 
+    DIR_TEMPLATES = (
+        Path(dirname(realpath(__file__)))
+        / ".."
+        / ".."
+        / ".."
+        / "config_templates/account_validation_mails"
+    ).resolve()
     CONF = f"""
 [default]
 [conf]
@@ -213,7 +220,7 @@ SENDER_ACCOUNT = senderemail@testsendermailtest.com,senderpwd,senderdns,465
 INSTANCE_ID = EcoTaxa.01
 USER_EMAIL_VERIFICATION = off
 ACCOUNT_VALIDATION = off
-DIR_MAIL_TEMPLATES = /home/imev/ecotaxa/ecotaxa_dev_current/ecotaxa_back/config_templates/account_validation_mails
+DIR_MAIL_TEMPLATES = {DIR_TEMPLATES}
 
 """
 
