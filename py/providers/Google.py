@@ -60,4 +60,4 @@ class ReCAPTCHAClient(object):
             response = no_bot[1]
             error = self.validate(remote_ip, response)
             if error is None:
-                raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=error)
+                raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=[error])

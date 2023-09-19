@@ -212,9 +212,8 @@ MAILSERVICE_SALT = "mailservice_salt"
 SENDER_ACCOUNT = senderemail@testsendermailtest.com,senderpwd,senderdns,465
 INSTANCE_ID = EcoTaxa.01
 USER_EMAIL_VERIFICATION = off
-ACCOUNT_ACTIVE_UNSET = off
-ACCOUNT_ACTIVATE_EMAIL = None
-
+ACCOUNT_VALIDATION = off
+DIR_MAIL_TEMPLATES = /home/imev/ecotaxa/ecotaxa_dev_current/ecotaxa_back/config_templates/account_validation_mails
 
 """
 

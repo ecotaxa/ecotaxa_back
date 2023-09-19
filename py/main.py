@@ -118,7 +118,7 @@ from BO.Project import ProjectBO, ProjectUserStats
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleBO, SampleTaxoStats
 from BO.Taxonomy import TaxonBO
-from BO.User import UserIDT
+from BO.User import UserIDT, UserStatus
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.User import User
@@ -462,6 +462,8 @@ def get_user(
 
 
 #  activate a new user if external validation is on
+
+
 @app.post(
     "/users/activate/{user_id}/{status}",
     operation_id="activate_user",
@@ -472,10 +474,10 @@ def activate_user(
     user_id: int = Path(
         ..., description="Internal, the unique numeric id of this user.", example=1
     ),
-    status: Optional[int] = Path(
+    status: str = Path(
         ...,
-        description="Internal, the status to assign to this user.",
-        example="active",
+        description="Internal, the status name assign to this user.",
+        example=1,
     ),
     no_bot: Optional[List[str]] = Query(
         default=None,
@@ -483,11 +485,21 @@ def activate_user(
         description="not-a-robot proof",
         example="['127.0.0.1', 'ffqsdfsdf']",
     ),
-    reason: Optional[str] = Query(
+    token: Optional[str] = Query(
+        default=None,
+        title="token",
+        description="token when the user is not an admin and must confirm the email. ",
+    ),
+    reason: Optional[str] = Body(
         default=None,
         title="Reason",
         description="status,optional users administrator comment related to the status. ",
         example="Email is not accepted....",
+    ),
+    password: Optional[str] = Body(
+        default=None,
+        title="Password",
+        description="Existing user can modify own email and must confirm it with this url token and password when email confirmation is on. ",
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> None:
@@ -500,12 +512,15 @@ def activate_user(
     If back-end configuration for self-creation check is Google reCAPTCHA,
     then no_bot is a pair [remote IP, reCAPTCHA response].
     """
+    print("activate status_______________________________")
+    print(status)
     with UserService() as sce:
         sce.set_statusstate_user(
             user_id=user_id,
-            status=status,
+            status_name=status,
             current_user_id=current_user,
             no_bot=no_bot,
+            token=token,
             reason=reason,
         )
 

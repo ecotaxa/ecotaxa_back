@@ -43,7 +43,7 @@ class LoginService(Service):
 
     def validate_login(self, username: str, password: str) -> Union[str, bytes]:
         # Fetch the one and only user
-        from BO.User import USER_STATUS
+        from BO.User import UserStatus
 
         account_validation = self.config.get_account_validation() == "on"
         # if account validation is "on" and account is pending
@@ -51,15 +51,15 @@ class LoginService(Service):
             user_qry = self.session.query(User).filter(User.email == username)
         else:
             user_qry = self.session.query(User).filter(
-                User.email == username, User.status == USER_STATUS.active
+                User.email == username, User.status == UserStatus.active.value
             )
         db_users = user_qry.all()
         assert len(db_users) == 1, NOT_AUTHORIZED
         the_user: User = db_users[0]
-        if account_validation and the_user.status != USER_STATUS.active:
-            verif_ok = self.verify_and_update_password(password, the_user)
-            assert verif_ok, NOT_AUTHORIZED
-
+        # verif even user is not active , in order to let modify email only if mail_status is False
+        verif_ok = self.verify_and_update_password(password, the_user)
+        assert verif_ok, NOT_AUTHORIZED
+        if account_validation and the_user.status != UserStatus.active.value:
             from fastapi import HTTPException
             from starlette.status import HTTP_401_UNAUTHORIZED
 
@@ -69,16 +69,11 @@ class LoginService(Service):
                     str(the_user.status)
                     + "#"
                     + str(the_user.mail_status)
-                    + " #"
+                    + "#"
                     + NOT_AUTHORIZED_MAIL.replace("##id##", str(the_user.id))
                 ],
             )
-
-        assert the_user.status == USER_STATUS.active, NOT_AUTHORIZED
-        # verif even user is not active , in order to let modify email only if mail_status is False
-        verif_ok = self.verify_and_update_password(password, the_user)
-        assert verif_ok, NOT_AUTHORIZED
-
+        assert the_user.status == UserStatus.active.value, NOT_AUTHORIZED
         # Sign with the verifying serializer, the salt is Flask's one
         token = build_serializer().dumps({"user_id": the_user.id})
         return token

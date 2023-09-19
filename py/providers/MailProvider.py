@@ -6,7 +6,7 @@
 #
 import datetime
 from typing import Optional, Final
-from collections import namedtuple
+from enum import Enum
 from helpers.DynamicLogs import get_logger
 from helpers.pydantic import BaseModel, Field
 from email.mime.multipart import MIMEMultipart
@@ -22,60 +22,44 @@ logger = get_logger(__name__)
 # special token - only for mail - separate from auth token
 
 
-AccountMailType = namedtuple(
-    "AccountMailType",
-    ["activate", "verify", "status", "modify", "passwordreset", "emailmodified"],
-)
-ACCOUNT_MAIL_TYPE = AccountMailType(
-    "activate", "verify", "status", "modify", "passwordreset", "emailmodified"
-)
+class AccountMailType(str, Enum):
+    activate: Final = "activate"
+    verify: Final = "verify"
+    status: Final = "status"
+    modify: Final = "modify"
+    passwordreset: Final = "passwordreset"
+    emailmodified: Final = "emailmodified"
+
 
 # replace in mail templates
 class ReplaceInMail:
-    # user id  - {id}
-    url: Optional[str] = None
-    # url of the requesting app - will be replaced in the mail message template
-    id: Optional[int] = None
-    email: Optional[str] = None
-    # "Email added in the template message body with the tag {email}
-    data: Optional[dict] = None
-    # Data to be included in the template message body with the tag {data} - if key data exists in the template it is replaced before
-    action: Optional[str] = None
-    reason: Optional[str] = None
-    # reason to request to modify information from user tag {reason}
-    token: Optional[str] = None
-    # token added to the link to verify the action - max_age :24h" - tag {token}
     def __init__(
         self,
-        url: Optional[str] = None,
-        id: Optional[int] = None,
         email: Optional[str] = None,
-        data: Optional[dict] = None,
+        id: Optional[int] = None,
         action: Optional[str] = None,
-        reason: Optional[str] = None,
+        data: Optional[dict] = None,
         token: Optional[str] = None,
+        reason: Optional[str] = None,
+        url: Optional[str] = None,
     ):
-        self.url = url
-        self.email = email
         self.id = id
+        # user id  - {id}
+        self.email = email
+        # "Email added in the template message body with the tag {email}
         self.data = data
-        self.action = action
-        self.reason = reason
+        # Data to be included in the template message body with the tag {data} - if key data exists in the template it is replaced before
         self.token = token
+        # token added to the link to verify the action - max_age :24h" - tag {token}
+        self.action = action
+        # update / verify / create - can indicate the status in some mails
+        self.reason = reason
+        # reason to request to modify information from user tag {reason}
+        self.url = url
+        # url of the requesting app - will be replaced in the mail message template
 
 
 DEFAULT_LANGUAGE = "en_EN"
-
-
-def _get_assistance_email() -> Optional[str]:
-    return "assistance_email@testassistanceemailvdfhshhgjdfimev.fr"
-    from API_operations.CRUD.Users import UserService
-
-    with UserService() as sce:
-        users_admins = sce.get_users_admins()
-    if len(users_admins):
-        return users_admins[0].email
-    return None
 
 
 class MailProvider(object):
@@ -86,14 +70,17 @@ class MailProvider(object):
     MODEL_KEYS = ("email", "link", "action", "assistance")
     REPLACE_KEYS = ("token", "data", "url", "reason")
 
-    def __init__(self, senderaccount: list, dir_mail_templates: str):
+    def __init__(
+        self,
+        senderaccount: list,
+        dir_mail_templates: str,
+    ):
         on = len(senderaccount) == 4 and self.is_email(senderaccount[0])
         if on:
             from API_operations.CRUD import Users
 
             self.SENDER_ACCOUNT = senderaccount
             self.DIR_MAIL_TEMPLATES = dir_mail_templates
-            self.assistance_email = _get_assistance_email()
 
     @staticmethod
     def is_email(email: str) -> bool:
@@ -137,7 +124,10 @@ class MailProvider(object):
                 smtp.login(senderemail, senderpwd)
                 res = smtp.sendmail(senderemail, recipients, msg.as_string())
                 # res = smtp.send_message(msg)
-                logger.info("Email sent  to '%s'" % ", ".join(recipients))
+                logger.info(
+                    "Email subject %s sent  to '%s'"
+                    % (msg["Subject"], ", ".join(recipients))
+                )
             except smtplib.SMTPException as e:
                 if isinstance(e, smtplib.SMTPRecipientsRefused):
                     code = HTTP_422_UNPROCESSABLE_ENTITY
@@ -165,14 +155,13 @@ class MailProvider(object):
 
     def mail_message(
         self,
-        model_name: str,
+        model_name: AccountMailType,
         recipients: list,
         values: ReplaceInMail,
         language: str = DEFAULT_LANGUAGE,
         action: Optional[str] = None,
     ) -> MIMEMultipart:
         model: Optional[dict] = self.get_mail_message(model_name, language, action)
-
         if model is None:
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
@@ -259,77 +248,94 @@ class MailProvider(object):
             action=action,
             url=url,
         )
-        mailmsg = self.mail_message(ACCOUNT_MAIL_TYPE.activate, recipients, replace)
+        mailmsg = self.mail_message(AccountMailType.activate, recipients, replace)
         self.send_mail(recipients, mailmsg)
 
     def send_verification_mail(
         self,
         recipient: str,
+        assistance_email: str,
         token: str,
         action: Optional[str] = None,
+        previous_email: Optional[str] = None,
         url: Optional[str] = None,
     ) -> None:
-        reply_to = self.assistance_email
-        data = ReplaceInMail(email=reply_to, token=token, action=action, url=url)
-        mailmsg = self.mail_message(
-            ACCOUNT_MAIL_TYPE.verify, [recipient], data, action=action
+        data = ReplaceInMail(
+            email=assistance_email, token=token, action=action, url=url
         )
-        self.send_mail([recipient], mailmsg, replyto=reply_to)
+        mailmsg = self.mail_message(
+            AccountMailType.verify, [recipient], data, action=action
+        )
+        self.send_mail([recipient], mailmsg, replyto=assistance_email)
+        # inform previous email (typo prevent)
+        if previous_email is not None:
+            data = ReplaceInMail(email=assistance_email, reason=recipient, url=url)
+            mailmsg = self.mail_message(
+                AccountMailType.emailmodified, [previous_email], data
+            )
+            self.send_mail([previous_email], mailmsg, replyto=assistance_email)
 
     def send_reset_password_mail(
-        self, recipient: str, token: str, url: Optional[str] = None
+        self,
+        recipient: str,
+        assistance_email: str,
+        token: str,
+        url: Optional[str] = None,
     ) -> None:
-        data = ReplaceInMail(token=token, email=self.assistance_email, url=url)
-        mailmsg = self.mail_message(ACCOUNT_MAIL_TYPE.passwordreset, [recipient], data)
+        data = ReplaceInMail(token=token, email=assistance_email, url=url)
+        mailmsg = self.mail_message(AccountMailType.passwordreset, [recipient], data)
         self.send_mail([recipient], mailmsg)
 
     def send_status_mail(
         self,
         recipient: str,
-        status: str,
+        assistance_email: str,
+        status_name: str,
         action: str,
         token: Optional[str] = None,
         url: Optional[str] = None,
     ) -> None:
-        data = ReplaceInMail(email=self.assistance_email, token=token)
+        data = ReplaceInMail(email=assistance_email, token=token)
         mailmsg = self.mail_message(
-            ACCOUNT_MAIL_TYPE.status, [recipient], data, action=status
+            AccountMailType.status, [recipient], data, action=status_name
         )
 
-        self.send_mail([recipient], mailmsg, replyto=self.assistance_email)
+        self.send_mail([recipient], mailmsg, replyto=assistance_email)
 
     def send_hastomodify_mail(
         self,
         recipient: str,
+        assistance_email: str,
         reason: str,
         action: Optional[str] = None,
         token: Optional[str] = None,
         url: Optional[str] = None,
     ) -> None:
         values = ReplaceInMail(
-            email=self.assistance_email,
+            email=assistance_email,
             reason=reason,
             token=token,
             url=url,
         )
 
         mailmsg = self.mail_message(
-            ACCOUNT_MAIL_TYPE.modify, [recipient], values, action=action
+            AccountMailType.modify, [recipient], values, action=action
         )
-        self.send_mail([recipient], mailmsg, replyto=self.assistance_email)
+        self.send_mail([recipient], mailmsg, replyto=assistance_email)
 
     def get_mail_message(
-        self, model_name: str, language, action: Optional[str] = None
+        self, model_name: AccountMailType, language, action: Optional[str] = None
     ) -> Optional[dict]:
         import json
         from pathlib import Path
 
-        name = model_name + ".json"
+        name = model_name.value + ".json"
+
         filename = Path(self.DIR_MAIL_TEMPLATES + "/" + name)
         if not filename.exists():
             raise HTTPException(
                 status_code=HTTP_404_NOT_FOUND,
-                detail=["model of email response not found " + name],
+                detail=["model of email response not found"],
             )
         with open(filename, "r") as f:
             model = json.load(f)

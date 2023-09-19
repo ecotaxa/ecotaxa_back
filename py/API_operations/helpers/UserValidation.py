@@ -4,8 +4,8 @@
 #
 # User Validation Service .
 #
-from typing import Optional, Any, Final
-from collections import namedtuple
+from typing import Optional, Any, Final, List
+from enum import Enum
 from BO.Rights import NOT_AUTHORIZED
 from BO.User import UserIDT, USER_PWD_REGEXP
 from API_models.crud import UserModelProfile
@@ -16,7 +16,6 @@ from helpers.DynamicLogs import get_logger
 from fastapi import HTTPException
 from starlette.status import (
     HTTP_403_FORBIDDEN,
-    HTTP_401_UNAUTHORIZED,
     HTTP_422_UNPROCESSABLE_ENTITY,
 )
 
@@ -25,24 +24,13 @@ logger = get_logger(__name__)
 SHORT_TOKEN_AGE = 1
 PROFILE_TOKEN_AGE = 24
 
-ActivationType = namedtuple(
-    "ActivationType", ["create", "update", "status", "inform", "passwordreset"]
-)
-ACTIVATION_TYPE: Final = ActivationType(
-    "create", "update", "status", "inform", "passwordreset"
-)
 
-
-def _get_validation_emails() -> list:
-    return ["beatrice.caraveo@imev-mer.fr"]
-    from API_operations.CRUD.Users import UserService
-
-    adminlist = []
-    with UserService() as sce:
-        users_admins = sce.get_users_admins()
-    if len(users_admins) > 0:
-        adminlist = [u.email for u in users_admins]
-    return adminlist
+class ActivationType(str, Enum):
+    create: Final = "create"
+    update: Final = "update"
+    status: Final = "status "
+    inform: Final = "inform"
+    passwordreset: Final = "passwordreset"
 
 
 class UserValidation(object):
@@ -57,9 +45,10 @@ class UserValidation(object):
         # unset status field "active" value if major modification is done by anyone except users admin
         self.account_validation = config.get_account_validation() == "on"
         # 0 email - 1 pwd - 2 - dns - 3 port
-        self.senderaccount: list = str(config.get_sender_account() or "").split(",")
+        self.senderaccount = str(config.get_sender_account() or "").split(",")
         self._mailprovider = MailProvider(
-            self.senderaccount, config.get_dir_mail_templates()
+            self.senderaccount,
+            config.get_dir_mail_templates(),
         )
         self.secret_key = str(config.get_cnf("MAILSERVICE_SECRET_KEY") or "")
         self.app_instance_id = str(config.get_cnf("INSTANCE_ID") or "EcoTaxa.01")
@@ -76,33 +65,43 @@ class UserValidation(object):
     def request_email_verification(
         self,
         email: str,
-        action: str,
+        assistance_email: str,
+        action: ActivationType,
         id: int,
+        previous_email: Optional[str],
         url: Optional[str] = None,
         bypass=False,
     ) -> bool:
         if bypass:
             return False
         else:
-            token = self._generate_token(email, id=id, action=action)
+            token = self._generate_token(email, id=id, action=action.value)
+            if previous_email == email:
+                previous_email = None
             self._mailprovider.send_verification_mail(
-                email, token, action=action, url=url
+                email,
+                assistance_email,
+                token,
+                action=action.value,
+                previous_email=previous_email,
+                url=url,
             )
             return True
 
     def request_activate_user(
         self,
         inactive_user: UserModelProfile,
+        validation_emails: List[str],
         token: Optional[str] = None,
         action: Optional[str] = None,
         url: Optional[str] = None,
     ) -> None:
         if token:
             action = self._get_value_from_token(token, "action")
-            if action is None:
-                action = ACTIVATION_TYPE.create
+        if action is None:
+            action = ActivationType.create.value
         self._mailprovider.send_activation_request_mail(
-            _get_validation_emails(),
+            validation_emails,
             data={
                 "id": inactive_user.id,
                 "name": inactive_user.name,
@@ -115,19 +114,25 @@ class UserValidation(object):
         )
 
     def inform_user_status(
-        self, user: UserModelProfile, status: Optional[str], url: Optional[str] = None
+        self,
+        user: UserModelProfile,
+        assistance_email: str,
+        status_name: str,
+        url: Optional[str] = None,
     ) -> None:
+        from BO.User import UserStatus
 
-        if status is not None:
+        if status_name == UserStatus.pending.name:
             token = self._generate_token(
-                user.email, id=user.id, action=ACTIVATION_TYPE.status
+                user.email, id=user.id, action=ActivationType.status.value
             )
         else:
             token = None
         self._mailprovider.send_status_mail(
             user.email,
-            status=status,
-            action=ACTIVATION_TYPE.status,
+            assistance_email,
+            status_name=status_name,
+            action=ActivationType.status.value,
             token=token,
             url=url,
         )
@@ -135,19 +140,21 @@ class UserValidation(object):
     def request_user_to_modify_profile(
         self,
         user: UserModelProfile,
+        assistance_email: str,
         reason: str,
-        action: Optional[str] = ACTIVATION_TYPE.create,
+        action: ActivationType = ActivationType.create,
         url: Optional[str] = None,
     ) -> None:
 
         # exception user email and id in the same token - for mod after creation and active is False
         token = self._generate_token(
-            id=user.id, email=user.email, action=action, reason=reason
+            id=user.id, email=user.email, action=action.value, reason=reason
         )
         self._mailprovider.send_hastomodify_mail(
             user.email,
+            assistance_email,
             reason=reason,
-            action=action,
+            action=action.value,
             token=token,
             url=url,
         )
@@ -155,11 +162,14 @@ class UserValidation(object):
     def request_reset_password(
         self,
         user_to_reset: UserModelProfile,
+        assistance_email: str,
         temp_password: str,
         url: Optional[str] = None,
     ) -> None:
         token = self._generate_token(id=user_to_reset.id, action=temp_password)
-        self._mailprovider.send_reset_password_mail(user_to_reset.email, token, url=url)
+        self._mailprovider.send_reset_password_mail(
+            user_to_reset.email, assistance_email, token, url=url
+        )
 
     def is_valid_email(self, email: str) -> bool:
         return self._mailprovider.is_email(email)
@@ -196,13 +206,15 @@ class UserValidation(object):
     ) -> str:
         tokenreq = dict({})
         tokenreq["instance"] = self.app_instance_id
-        tokenreq["ip"] = ip
-        tokenreq["email"] = email
+        if email is not None:
+            tokenreq["email"] = email
+        if ip is not None:
+            tokenreq["ip"] = ip
         if id != -1:
             tokenreq["id"] = str(id)
-        if action != None:
+        if action is not None:
             tokenreq["action"] = action
-        if reason != None:
+        if reason is not None:
             tokenreq["reason"] = reason
         return str(self._build_serializer(self.secret_key).dumps(tokenreq) or "")
 

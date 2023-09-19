@@ -30,7 +30,7 @@ from BO.User import (
     UserIDT,
     MinimalUserBOListT,
     UserActivityListT,
-    USER_STATUS,
+    UserStatus,
 )
 from DB.Acquisition import Acquisition
 from DB.Object import (
@@ -178,7 +178,7 @@ class ProjectBO(object):
             priv_user = a_priv.user
             if priv_user is None:  # TODO: There is a line with NULL somewhere in DB
                 continue
-            if priv_user.status != USER_STATUS.active:
+            if priv_user.status != UserStatus.active.value:
                 continue
             assert a_priv.privilege is not None
             by_right_fct[a_priv.privilege](priv_user)

@@ -18,14 +18,14 @@ COPY public.users (id, email, password, name, organisation, status, preferences,
 4	user2	$6$	Ordinary User 2	\N	1	{}	\N	2020-09-27 06:39:48.70106	\N
 5	old_admin	nimda_dlo	Application Administrator Now Retired	\N	0	{"1": {"sortby": "", "ts": 1589266843.5535243, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}, "2": {"sortby": "", "ts": 1589267270.5538993, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}}	\N	2020-05-12 08:59:48.70106	\N
 6	real@users.com	fake_pwd	Real User	Institut de la Mer de Villefranche - IMEV	0	{"1": {"sortby": "", "ts": 1589266843.5535243, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}}	France	2020-10-26 08:59:48.70106	\N
-7	ucrank4@gov.uk	fake_pwd	Udale Crank	Institut de la Mer de Villefranche - IMEV	0	{"1": {"sortby": "", "ts": 1589266843.5535243, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}}	UK	2020-10-26 08:59:48.70106	\N
+7	ucrank4@gllmmlgdfggloupgov.uk	fake_pwd	Udale Crank	Institut de la Mer de Villefranche - IMEV	1	{"1": {"sortby": "", "ts": 1589266843.5535243, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}}	UK	2020-10-26 08:59:48.70106	\N
 8	real2@users.com	fake_pwd	Real User 3	Double Dash - Institute - DDORG	0	{}	Chile	2023-01-01 08:59:48.70106	\N
 \.
 
 SELECT setval('seq_users', (SELECT max(id) FROM public.users), true);
 
 COPY public.users_roles (user_id, role_id) FROM stdin;
-6	2
+7	2
 \.
 
 -- The used ones are in first

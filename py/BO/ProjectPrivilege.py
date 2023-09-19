@@ -6,7 +6,7 @@ from typing import Final
 
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Session
-from BO.User import USER_STATUS
+from BO.User import UserStatus
 
 
 class ProjectPrivilegeBO(object):
@@ -32,7 +32,7 @@ class ProjectPrivilegeBO(object):
                             WHERE pp.privilege = '"""
             + cls.MANAGE
             + """'  AND u.status = """
-            + str(USER_STATUS.active)
+            + str(UserStatus.active.value)
         )
 
     @classmethod

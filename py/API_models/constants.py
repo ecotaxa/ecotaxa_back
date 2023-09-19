@@ -7,7 +7,7 @@
 from typing import Dict, List, NamedTuple
 
 from BO.DataLicense import DataLicense
-from BO.User import USER_STATUS, UserStatus, USER_PWD_REGEXP
+from BO.User import UserStatus, UserStatus, USER_PWD_REGEXP
 from helpers.pydantic import BaseModel, Field
 
 
@@ -44,7 +44,7 @@ class Constants(BaseModel):
     user_status: Dict[str, int] = Field(
         title="User status",
         description="Application User status values",
-        default={field: value for field, value in USER_STATUS._asdict().items()},
+        default={st.name: st.value for st in UserStatus},
         example={"blocked": -1, "inactive": 0, "active": 1, "pending": 2},
     )
     password_regexp: str = Field(

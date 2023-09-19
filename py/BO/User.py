@@ -5,7 +5,7 @@
 
 import json
 from dataclasses import dataclass
-from collections import namedtuple
+from enum import Enum
 from typing import Any, Final, List
 from BO.Classification import ClassifIDListT
 from DB import Session
@@ -27,8 +27,11 @@ USER_PWD_REGEXP: Final = (
 )
 
 
-UserStatus = namedtuple("UserStatus", "blocked inactive active pending")
-USER_STATUS: Final = UserStatus(-1, 0, 1, 2)
+class UserStatus(int, Enum):
+    blocked: Final = -1
+    inactive: Final = 0
+    active: Final = 1
+    pending: Final = 2
 
 
 class UserBO(object):
