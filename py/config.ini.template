@@ -1,6 +1,4 @@
-[
-  default
-]
+[default]
 
 [conf]# DB connectivity, the user must be able to read / write every PG object there
 DB_USER = postgres
