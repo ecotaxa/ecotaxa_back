@@ -19,6 +19,7 @@ from starlette.status import (
     HTTP_422_UNPROCESSABLE_ENTITY,
 )
 
+from helpers.httpexception import DETAIL_BAD_INSTANCE, DETAIL_BAD_SIGN_OR_EXP
 
 logger = get_logger(__name__)
 SHORT_TOKEN_AGE = 1
@@ -52,6 +53,7 @@ class UserValidation(object):
         )
         self.secret_key = str(config.get_cnf("MAILSERVICE_SECRET_KEY") or "")
         self.app_instance_id = str(config.get_cnf("INSTANCE_ID") or "EcoTaxa.01")
+        self._request_url = str(config.get_account_request_url())
 
     # condition to keep user activated even if major change occured
     def keep_active(self, current_user_email: Optional[str], is_admin: bool) -> bool:
@@ -84,7 +86,7 @@ class UserValidation(object):
                 token,
                 action=action.value,
                 previous_email=previous_email,
-                url=url,
+                url=self.get_request_url(url),
             )
             return True
 
@@ -110,7 +112,7 @@ class UserValidation(object):
                 "creationreason": inactive_user.usercreationreason,
             },
             action=action,
-            url=url,
+            url=self.get_request_url(url),
         )
 
     def inform_user_status(
@@ -134,7 +136,7 @@ class UserValidation(object):
             status_name=status_name,
             action=ActivationType.status.value,
             token=token,
-            url=url,
+            url=self.get_request_url(url),
         )
 
     def request_user_to_modify_profile(
@@ -156,7 +158,7 @@ class UserValidation(object):
             reason=reason,
             action=action.value,
             token=token,
-            url=url,
+            url=self.get_request_url(url),
         )
 
     def request_reset_password(
@@ -168,8 +170,13 @@ class UserValidation(object):
     ) -> None:
         token = self._generate_token(id=user_to_reset.id, action=temp_password)
         self._mailprovider.send_reset_password_mail(
-            user_to_reset.email, assistance_email, token, url=url
+            user_to_reset.email, assistance_email, token, url=self.get_request_url(url)
         )
+
+    def get_request_url(self, url: Optional[str]) -> str:
+        if url is None:
+            return self._request_url
+        return url
 
     def is_valid_email(self, email: str) -> bool:
         return self._mailprovider.is_email(email)
@@ -236,11 +243,13 @@ class UserValidation(object):
         except (SignatureExpired, BadSignature):
             raise HTTPException(
                 status_code=HTTP_403_FORBIDDEN,
-                detail="Bad signature or expired",
+                detail=[DETAIL_BAD_SIGN_OR_EXP],
             )
             return
         if self.app_instance_id != payload.get("instance"):
-            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Bad instance")
+            raise HTTPException(
+                status_code=HTTP_403_FORBIDDEN, detail=[DETAIL_BAD_INSTANCE]
+            )
         value = payload.get(name)
         if (
             value

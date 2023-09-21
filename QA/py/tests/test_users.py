@@ -6,6 +6,7 @@ import logging
 
 import pytest
 from API_operations.CRUD.Users import UserService
+from helpers.httpexception import DETAIL_EMAIL_OWNED_BY_OTHER
 
 from tests.test_import import ADMIN_USER_ID, create_project
 
@@ -71,7 +72,7 @@ def test_user_create_ordinary(config, database, fastapi, caplog):
     urlparams = url + "?" + urllib.parse.urlencode(params, doseq=True)
     rsp = fastapi.post(urlparams, json=usr_json)
     assert rsp.status_code == 422
-    assert rsp.json() == {"detail": ["email already corresponds to another user"]}
+    assert rsp.json() == {"detail": [DETAIL_EMAIL_OWNED_BY_OTHER]}
     usr_json = {
         "id": None,
         "email": "ddduser5",

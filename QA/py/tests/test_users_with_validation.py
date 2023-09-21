@@ -6,6 +6,12 @@ import logging
 
 import pytest
 from API_operations.CRUD.Users import UserService
+from helpers.httpexception import (
+    DETAIL_PASSWORD_STRENGTH_ERROR,
+    DETAIL_INVALID_EMAIL,
+    DETAIL_EMAIL_OWNED_BY_OTHER,
+    DETAIL_NAME_OWNED_BY_OTHER,
+)
 from BO.User import UserStatus
 from BO.Rights import NOT_FOUND, NOT_AUTHORIZED
 from tests.test_user_admin import USER_UPDATE_URL, USER_CREATE_URL, USER_GET_URL
@@ -95,7 +101,7 @@ def test_user_create_with_confirmation(monkeypatch, config, database, fastapi, c
     caplog.set_level(logging.FATAL)
     # modify config to have user validation "on"v
     set_config_on(monkeypatch, "off")
-    email = "myemail_confirm777@mailtestprovider.net"
+    email = "myemail_confirm777@mailtest.provider.net"
     # name is not  "" to bypass ( old version)
     usr_json = {
         "id": None,
@@ -218,7 +224,7 @@ def test_user_create_with_validation(monkeypatch, config, database, fastapi, cap
     urlparams = url + "?" + urllib.parse.urlencode(params, doseq=True)
     rsp = fastapi.post(urlparams, json=usr_json)
     assert rsp.status_code == 422
-    assert rsp.json() == {"detail": ["name already corresponds to another user"]}
+    assert rsp.json() == {"detail": [DETAIL_NAME_OWNED_BY_OTHER]}
     usr_json = {
         "id": None,
         "email": "ddduser56w_validation",
@@ -226,7 +232,7 @@ def test_user_create_with_validation(monkeypatch, config, database, fastapi, cap
     }
     # note should check password
     rsp = fastapi.post(urlparams, json=usr_json)
-    assert rsp.json() == {"detail": ["Email is invalid"]}
+    assert rsp.json() == {"detail": [DETAIL_INVALID_EMAIL]}
     assert rsp.status_code == 422
 
     email = "myemail777@mailtestprovider.net"
@@ -265,7 +271,7 @@ def test_user_create_with_validation(monkeypatch, config, database, fastapi, cap
         password=None,
         id=-1,
         action=ActivationType.create,
-        resp_detail={"detail": ["password strength error"]},
+        resp_detail={"detail": [DETAIL_PASSWORD_STRENGTH_ERROR]},
         resp_code=422,
         login_code=None,
     )
@@ -332,7 +338,7 @@ def test_user_create_with_validation(monkeypatch, config, database, fastapi, cap
     url = USER_UPDATE_URL.format(user_id=ORDINARY_USER_USER_ID)
     rsp = fastapi.put(url, headers=USER_AUTH, json=ref_json)
     assert rsp.status_code == 422
-    assert rsp.json() == {"detail": ["email already corresponds to another user"]}
+    assert rsp.json() == {"detail": [DETAIL_EMAIL_OWNED_BY_OTHER]}
     # retry with good email and user mod - must send confirmation email
     ref_json["email"] = "myemail1249@mailtestprovider1good.net"
     rsp = fastapi.put(url, headers=USER_AUTH, json=ref_json)

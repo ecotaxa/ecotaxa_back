@@ -35,6 +35,17 @@ from ..helpers.UserValidation import (
     PROFILE_TOKEN_AGE,
 )
 from helpers import DateTime
+from helpers.httpexception import (
+    DETAIL_VALIDATION_NOT_ACTIVE,
+    DETAIL_INVALID_PARAMETER,
+    DETAIL_PASSWORD_STRENGTH_ERROR,
+    DETAIL_CANT_CHECK_VALIDITY,
+    DETAIL_INVALID_EMAIL,
+    DETAIL_INVALID_STATUS,
+    DETAIL_NO_USERS_ADMIN,
+    DETAIL_EMAIL_OWNED_BY_OTHER,
+    DETAIL_NAME_OWNED_BY_OTHER,
+)
 
 logger = get_logger(__name__)
 
@@ -60,7 +71,8 @@ class UserService(Service):
         super().__init__()
         self._uservalidation: Optional[UserValidation] = None
         verify_email = self.config.get_user_email_verification() == "on"
-        if verify_email:
+        account_validation = self.config.get_account_validation() == "on"
+        if verify_email or account_validation:
             self._uservalidation = UserValidation()
 
     # Configuration keys TODO
@@ -97,13 +109,13 @@ class UserService(Service):
     ) -> UserIDT:
         now = DateTime.now_time()
         cols_to_upd = self.ADMIN_UPDATABLE_COLS
+
         if current_user_id is None:
             # Unauthenticated user tries to create an account
             # Verify not a robot
             self._verify_captcha(no_bot)
             # No right at all
             actions = None
-
             # request email verification if  validation is on
             if self._uservalidation:
                 if token:
@@ -113,7 +125,8 @@ class UserService(Service):
                     cols_to_upd.append(User.mail_status)
                     cols_to_upd.append(User.mail_status_date)
                 else:
-                    # check email is valid
+                    # check valid user
+                    self._is_valid_user(new_user, -1)
                     bypass = new_user.name != ""
                     if not bypass:
                         new_user = self._set_mail_status(new_user, False, confirm=True)
@@ -144,7 +157,6 @@ class UserService(Service):
         )
         # if user has to be validated by external service
         if self._uservalidation and not new_user.status:
-
             user_profile = UserModelProfile.from_orm(usr)
             self._uservalidation.request_activate_user(
                 user_profile,
@@ -159,13 +171,14 @@ class UserService(Service):
         if not self._uservalidation:
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=["validationotactive"],
+                detail=[DETAIL_VALIDATION_NOT_ACTIVE],
             )
         email = self._uservalidation.get_email_from_token(token)
         user_id = self._uservalidation.get_id_from_token(token)
         if email != new_user.email or user_id != new_user.id:
             raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=["invalidtoken"]
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=[DETAIL_INVALID_PARAMETER],
             )
         return new_user.id
 
@@ -176,12 +189,12 @@ class UserService(Service):
         if not self._uservalidation:
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=["validationotactive"],
+                detail=[DETAIL_VALIDATION_NOT_ACTIVE],
             )
         if not token:
             raise HTTPException(
                 status_code=HTTP_401_UNAUTHORIZED,
-                detail=[NOT_AUTHORIZED + " --------------not token"],
+                detail=[NOT_AUTHORIZED],
             )
         user_id = self._verify_token(new_user, token)
         detail = None
@@ -295,6 +308,12 @@ class UserService(Service):
         ret.password = "?"
         return ret
 
+    def _get_user_with_rights(self, db_usr: User) -> UserModelWithRights:
+        ret = UserModelWithRights.from_orm(db_usr)
+        ret.can_do = [act.value for act in RightsBO.get_allowed_actions(db_usr)]
+        ret.password = "?"
+        return ret
+
     def search(self, current_user_id: UserIDT, by_name: Optional[str]) -> List[User]:
         qry = self.ro_session.query(User).filter(User.status == UserStatus.active.value)
         if by_name is not None:
@@ -337,13 +356,16 @@ class UserService(Service):
             raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=[NOT_AUTHORIZED])
         ret = []
         if self._current_is_admin(current_user):
+            # for faster display in test
+            # get_user_details = self._get_user_with_rights
+            get_user_details = self._get_full_user
             qry = self.ro_session.query(User)
             if len(user_ids) > 0:
+                # get_user_details = self._get_full_user
                 qry = qry.filter(User.id.in_(user_ids))
-
             for db_usr in qry:
-                ret.append(UserModelWithRights.from_orm(db_usr))
-                # ret.append(self._get_full_user(db_usr))
+
+                ret.append(get_user_details(db_usr))
         return ret
 
     def get_preferences_per_project(
@@ -405,7 +427,7 @@ class UserService(Service):
                     if not UserValidation.is_strong_password(new_val):
                         raise HTTPException(
                             status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                            detail=["password strength error"],
+                            detail=[DETAIL_PASSWORD_STRENGTH_ERROR],
                         )
                     with LoginService() as sce:
                         new_val = sce.hash_password(new_val)
@@ -432,7 +454,7 @@ class UserService(Service):
         Exception if the mail and/or name exists and valid is False or the mail and/or name does not exists and valid is True
         """
         qry = self.ro_session.query(User)
-        if "id" in userdata.keys() and id == -1:
+        if "id" in userdata.keys() and id != userdata["id"]:
             id == userdata["id"]
         if id != -1:
             qry = qry.filter(User.id != id)
@@ -440,11 +462,11 @@ class UserService(Service):
         if "email" in userdata.keys():
             is_other = qry.filter(User.email == userdata["email"]).scalar() != None
         if is_other and not valid:
-            detail = ["email already corresponds to another user"]
+            detail = [DETAIL_EMAIL_OWNED_BY_OTHER]
         elif "name" in userdata.keys():
             is_other = qry.filter(User.name == userdata["name"]).scalar() != None
             if is_other and not valid:
-                detail = ["name already corresponds to another user"]
+                detail = [DETAIL_NAME_OWNED_BY_OTHER]
             else:
                 detail = [NOT_FOUND]
         elif is_other != valid:
@@ -534,12 +556,12 @@ class UserService(Service):
             if mod_src.name == "":
                 raise HTTPException(
                     status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=["Cannot check validity"],
+                    detail=[DETAIL_CANT_CHECK_VALIDITY],
                 )
         elif not self._uservalidation.is_valid_email(mod_src.email):
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=["Email is invalid"],
+                detail=[DETAIL_INVALID_EMAIL],
             )
 
     def _keep_active(self, current_user: Optional[User] = None) -> bool:
@@ -585,7 +607,7 @@ class UserService(Service):
             if status is None:
                 raise HTTPException(
                     status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=["Status is not valid"],
+                    detail=[DETAIL_INVALID_STATUS],
                 )
             current_user: Optional[User] = self.ro_session.query(User).get(
                 current_user_id
@@ -657,7 +679,8 @@ class UserService(Service):
         """
         if UserStatus(status) is None:
             raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=["status not valid"]
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=[DETAIL_INVALID_STATUS],
             )
         if self._current_is_admin(current_user, True):
             inactive_user: Optional[User] = self.session.query(User).get(user_id)
@@ -704,7 +727,7 @@ class UserService(Service):
         if not self._uservalidation:
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=["validationotactive"],
+                detail=[DETAIL_VALIDATION_NOT_ACTIVE],
             )
         err = True
         if user_id != -1:
@@ -850,7 +873,7 @@ class UserService(Service):
         if not self._uservalidation:
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=["validationotactive"],
+                detail=[DETAIL_VALIDATION_NOT_ACTIVE],
             )
         if current_user_id is not None:
             current_user: Optional[User] = self.ro_session.query(User).get(
@@ -877,7 +900,7 @@ class UserService(Service):
             ):
                 raise HTTPException(
                     status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=["No strong password"],
+                    detail=[DETAIL_PASSWORD_STRENGTH_ERROR],
                 )
 
             email = self._uservalidation.get_email_from_token(token)
@@ -972,6 +995,6 @@ class UserService(Service):
             else:
                 raise HTTPException(
                     status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=["no users administrator"],
+                    detail=[DETAIL_NO_USERS_ADMIN],
                 )
         return self._validation_emails
