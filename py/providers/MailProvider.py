@@ -17,6 +17,12 @@ from starlette.status import (
     HTTP_404_NOT_FOUND,
 )
 from fastapi import HTTPException
+from helpers.httpexception import (
+    DETAIL_INVALID_EMAIL,
+    DETAIL_NO_RECIPIENT,
+    DETAIL_TEMPLATE_NOT_FOUND,
+    DETAIL_INVALID_PARAMETER,
+)
 
 logger = get_logger(__name__)
 # special token - only for mail - separate from auth token
@@ -87,7 +93,7 @@ class MailProvider(object):
         import re
 
         regex = re.compile(
-            r"([A-Za-z0-9]+[.-_])*[A-Za-z0-9]+@[A-Za-z0-9-]+(\.[A-Z|a-z]{2,})+"
+            "(?:[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*|\"(?:[\\x01-\\x08\\x0b\\x0c\\x0e-\\x1f\\x21\\x23-\\x5b\\x5d-\\x7f]|\\\\[\\x01-\\x09\\x0b\\x0c\\x0e-\\x7f])*\")@(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|\\[(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|[a-z0-9-]*[a-z0-9]:(?:[\\x01-\\x08\\x0b\\x0c\\x0e-\\x1f\\x21-\\x5a\\x53-\\x7f]|\\\\[\\x01-\\x09\\x0b\\x0c\\x0e-\\x7f])+)\\])"
         )
         return re.fullmatch(regex, email) is not None
 
@@ -104,7 +110,7 @@ class MailProvider(object):
             if not self.is_email(recipient):
                 HTTPException(
                     status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=["Not an email address"],
+                    detail=[DETAIL_INVALID_EMAIL],
                 )
         import smtplib, ssl
 
@@ -118,7 +124,8 @@ class MailProvider(object):
         if replyto != None:
             msg.add_header("reply-to", str(replyto))
         code = 0
-        context = ssl.create_default_context()
+        # context = ssl.create_default_context(ca_file=PATH_TO_CAFILE)
+        context = ssl._create_unverified_context()
         with smtplib.SMTP_SSL(senderdns, senderport, context=context) as smtp:
             try:
                 smtp.login(senderemail, senderpwd)
@@ -165,22 +172,19 @@ class MailProvider(object):
         if model is None:
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=["type of email not found"],
+                detail=[DETAIL_INVALID_PARAMETER],
             )
         replace = dict({})
+        if "url" in model.keys():
+            modelurl = str(model["url"][1:] if model["url"][0] == "/" else model["url"])
+            if values.url is not None:
+                values.url += modelurl
+            else:
+                values.url = modelurl
+
         for key in self.MODEL_KEYS:
             replace[key] = ""
             if key in model:
-                if (
-                    key == "link"
-                    and (
-                        not hasattr(values, "url")
-                        or values.url is None
-                        or values.url.strip() == ""
-                    )
-                    and "url" in model
-                ):
-                    values.url = model["url"]
                 if (
                     (key == "action")
                     and hasattr(values, key)
@@ -237,7 +241,7 @@ class MailProvider(object):
     ) -> None:
         if len(recipients) == 0:
             raise HTTPException(
-                status_code=HTTP_404_NOT_FOUND, detail=["Users admin not found"]
+                status_code=HTTP_404_NOT_FOUND, detail=[DETAIL_NO_RECIPIENT]
             )
         id = data["id"]
         replace = ReplaceInMail(
@@ -335,7 +339,7 @@ class MailProvider(object):
         if not filename.exists():
             raise HTTPException(
                 status_code=HTTP_404_NOT_FOUND,
-                detail=["model of email response not found"],
+                detail=[DETAIL_TEMPLATE_NOT_FOUND],
             )
         with open(filename, "r") as f:
             model = json.load(f)
