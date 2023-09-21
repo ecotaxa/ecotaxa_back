@@ -18,6 +18,7 @@ psql_bin = "psql"
 # If we already have a server don't create one, e.g. in GitHub action
 PG_HOST = environ.get("POSTGRES_HOST")
 PG_PORT = environ.get("POSTGRES_PORT")
+
 if PG_HOST and PG_PORT:
     PG_PORT = int(PG_PORT)
 else:
@@ -221,7 +222,7 @@ INSTANCE_ID = EcoTaxa.01
 USER_EMAIL_VERIFICATION = off
 ACCOUNT_VALIDATION = off
 DIR_MAIL_TEMPLATES = {DIR_TEMPLATES}
-
+SERVERURL= http://localhost:8000
 """
 
     def write_config(self):
