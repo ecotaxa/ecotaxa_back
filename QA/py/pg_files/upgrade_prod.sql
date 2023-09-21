@@ -1203,7 +1203,7 @@ ALTER TABLE users ALTER active DROP DEFAULT;
 ALTER TABLE users ALTER active TYPE SMALLINT
     USING
     CASE
-    WHEN status =false THEN 0 ELSE 1
+    WHEN active =false THEN 0 ELSE 1
     END;
 ALTER TABLE users ALTER active SET DEFAULT 1;
 ALTER TABLE users RENAME COLUMN active TO status ;
