@@ -42,7 +42,7 @@ def upgrade():
         """ALTER TABLE users ALTER active TYPE SMALLINT
         USING
         CASE
-        WHEN status=false THEN 0 ELSE 1
+        WHEN active=false THEN 0 ELSE 1
         END;"""
     )
     op.execute("""ALTER TABLE users ALTER active SET DEFAULT 1;""")
@@ -88,5 +88,5 @@ def downgrade():
         ELSE ' '
         END;"""
     )
-    op.execute("""ALTER TABLE users ALTER mail_status SET DEFAULT " ";""")
+    op.execute("""ALTER TABLE users ALTER mail_status SET DEFAULT ' ';""")
     # ### end Alembic commands ###
