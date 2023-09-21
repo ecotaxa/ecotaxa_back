@@ -84,6 +84,11 @@ class Config(object):
         # email address used in account management - 0 email - 1 pwd - 2 - dns - 3 port
         return self.parser.get("SENDER_ACCOUNT")
 
+    def get_account_request_url(self) -> Optional[str]:
+        # TODO find a way to have multi request url ( list of identified url ???)
+        url = self.parser.get("SERVERURL").strip()
+        return url + ("/" if url[-1] != "/" else "")
+
     def get_cnf(self, key: str, default: Optional[str] = None) -> Optional[str]:
         # TODO: stop using so we can enumerate the keys
         return self.parser.get(key, default)
