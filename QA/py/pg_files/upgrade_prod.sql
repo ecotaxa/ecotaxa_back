@@ -1216,6 +1216,18 @@ WHEN mail_status = 'W' then false
 ELSE NULL
 END;
 ALTER TABLE users ALTER mail_status SET DEFAULT NULL;
+-------------add 30 free cols to samples
+DO
+$$
+BEGIN
+    FOR  colnames
+    in 31..60
+    LOOP
+     EXECUTE 'ALTER TABLE samples ADD COLUMN t' || colnames || ' VARCHAR(250);';
+    END LOOP;
+END
+$$;
+
 UPDATE alembic_version SET version_num='1b1beb672279' WHERE alembic_version.version_num = '34d91185174c';
 
 COMMIT;

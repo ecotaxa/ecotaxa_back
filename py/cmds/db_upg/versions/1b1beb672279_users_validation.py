@@ -59,6 +59,20 @@ def upgrade():
         END;"""
     )
     op.execute("""ALTER TABLE users ALTER mail_status SET DEFAULT NULL;""")
+    #### samples free_cols
+    op.execute(
+        """DO
+    $$
+    BEGIN
+        FOR  colnames
+        in 31..60
+        LOOP
+         EXECUTE 'ALTER TABLE samples ADD COLUMN t' || colnames || ' VARCHAR(250);';
+        END LOOP;
+    END
+    $$;"""
+    )
+
     # ### end Alembic commands ###
 
 
@@ -89,4 +103,17 @@ def downgrade():
         END;"""
     )
     op.execute("""ALTER TABLE users ALTER mail_status SET DEFAULT ' ';""")
+    #### samples free_cols
+    op.execute(
+        """DO
+        $$
+        BEGIN
+            FOR  colnames
+            in 31..60
+            LOOP
+             EXECUTE 'ALTER TABLE samples DROP COLUMN t' || colnames || '';
+            END LOOP;
+        END
+        $$;"""
+    )
     # ### end Alembic commands ###
