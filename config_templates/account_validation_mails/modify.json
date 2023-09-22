@@ -14,12 +14,13 @@
       "link": "<a href=\"{url}{token}\" style=\"color: rgb(52, 167, 173)\">{url}{token}</a>",
       "email": "<a href=\"mailto:{email}\">{email}</a>",
       "assistance": "If you have any question about your data or need additional support,  email: {email}",
-      "body": "<p>Some of the information provided in your profile need to be modified :<br> {reason}.<br>Please click the following link to modify the email in your profile: {link}<br>{assistance}</p>"
+      "body": "<p>Some of the information provided in your profile need to be modified :<br> {data}.<br>Please click the following link to modify the email in your profile: {link}<br>{assistance}</p>"
     },
     "inform": {
       "subject": "EcoTaxa account information.",
       "email": "<a href=\"mailto:{email}\">{email}</a>",
       "assistance": "If you are not at the origin of this modification or need additional support,  email: : {email}",
+      "data": "<span>{key}</span>: </span>{value}</span>",
       "body": "<p>Your email has been modified in your profile to {data} <br>.<br>{assistance}</p>"
     }
   }

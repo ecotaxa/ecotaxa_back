@@ -73,8 +73,8 @@ class MailProvider(object):
     Tools to validate user registration and activation - send validation mails to external validation service - and change password service
     """
 
-    MODEL_KEYS = ("email", "link", "action", "assistance")
-    REPLACE_KEYS = ("token", "data", "url", "reason")
+    MODEL_KEYS = ("email", "link", "action", "assistance", "reason")
+    REPLACE_KEYS = ("token", "data", "url")
 
     def __init__(
         self,
@@ -273,7 +273,9 @@ class MailProvider(object):
         self.send_mail([recipient], mailmsg, replyto=assistance_email)
         # inform previous email (typo prevent)
         if previous_email is not None:
-            data = ReplaceInMail(email=assistance_email, reason=recipient, url=url)
+            data = ReplaceInMail(
+                email=assistance_email, data={"email": recipient}, url=url
+            )
             mailmsg = self.mail_message(
                 AccountMailType.emailmodified, [previous_email], data
             )
