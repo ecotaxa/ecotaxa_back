@@ -11,7 +11,7 @@ from .helpers.Direct import text
 from .helpers.ORM import Model, relationship, Session
 from .helpers.Postgres import VARCHAR, DOUBLE_PRECISION, INTEGER
 
-SAMPLE_FREE_COLUMNS = 62
+SAMPLE_FREE_COLUMNS = 61
 
 
 class Sample(Model):
