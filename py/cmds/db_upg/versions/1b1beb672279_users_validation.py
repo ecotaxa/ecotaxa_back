@@ -13,6 +13,7 @@ down_revision = "34d91185174c"
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+from sqlalchemy import text
 
 
 def upgrade():
@@ -24,7 +25,7 @@ def upgrade():
         sa.Column(
             "creation_date",
             postgresql.TIMESTAMP(),
-            default=postgresql.current_timestamp,
+            server_default=text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
