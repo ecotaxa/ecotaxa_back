@@ -13,7 +13,6 @@ from DB.User import User
 from DB.UserPreferences import UserPreferences
 from helpers.DynamicLogs import get_logger
 
-
 # Typings, to be clear that these are not e.g. object IDs
 UserIDT = int
 UserIDListT = List[int]
@@ -22,9 +21,7 @@ logger = get_logger(__name__)
 
 MISSING_USER = {"id": -1, "name": "", "email": ""}
 
-USER_PWD_REGEXP: Final = (
-    "^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$"
-)
+USER_PWD_REGEXP = r"^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#?%^&*-+])).{8,20}$"
 
 
 class UserStatus(int, Enum):
@@ -140,7 +137,9 @@ class UserBO(object):
         )
 
     @classmethod
-    def validate_usr(cls, session: Session, user_model: Any) -> None:
+    def validate_usr(
+        cls, session: Session, user_model: Any, verify_password: bool = False
+    ) -> None:
         """
         Validate basic rules on a user model before setting it into DB.
         TODO: Not done in pydantic, as there are non-complying values in the DB and that would prevent reading them.
@@ -155,7 +154,25 @@ class UserBO(object):
             val = val.strip()
             if len(val) <= 3:
                 errors.append("%s is too short, 3 chars minimum" % field_name)
+        # can check is password is strong  if password not None
+        if verify_password == True:
+            from helpers.httpexception import DETAIL_PASSWORD_STRENGTH_ERROR
+            from API_operations.helpers import UserValidation
+
+            new_password = getattr(user_model, User.password.name)
+            if new_password not in ("", None) and not cls.is_strong_password(
+                new_password
+            ):
+                errors.append(DETAIL_PASSWORD_STRENGTH_ERROR)
+
         assert not errors, errors
+
+    @staticmethod
+    def is_strong_password(password: str) -> bool:
+        import re
+
+        match = re.match(USER_PWD_REGEXP, password)
+        return bool(match)
 
 
 @dataclass()
