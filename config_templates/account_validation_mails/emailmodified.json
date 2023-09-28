@@ -1,8 +1,0 @@
-{
-  "en_EN": {
-    "subject": "EcoTaxa account modification information.",
-    "email": "<a href=\"mailto:{email}\">{email}</a>",
-    "assistance": "If it is an error or need additional support,  email: {email}",
-    "body": "<p>Your email was replaced in your profile by : {reason} <br>{assistance}</p><p style=\"font-size:0.85rem\">***If you have not initiated this request, please ignore it.</p>"
-  }
-}
