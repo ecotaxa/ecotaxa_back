@@ -7,7 +7,7 @@
 from typing import Optional, Any, Final, List
 from enum import Enum
 from BO.Rights import NOT_AUTHORIZED
-from BO.User import UserIDT, USER_PWD_REGEXP
+from BO.User import UserIDT
 from API_models.crud import UserModelProfile
 from helpers.AppConfig import Config
 from providers.MailProvider import MailProvider
@@ -44,7 +44,6 @@ class UserValidation(object):
         # email verification
         config = Config()
         # unset status field "active" value if major modification is done by anyone except users admin
-        self.account_validation = config.get_account_validation() == "on"
         # 0 email - 1 pwd - 2 - dns - 3 port
         self.senderaccount = str(config.get_sender_account() or "").split(",")
         self._mailprovider = MailProvider(
@@ -54,13 +53,6 @@ class UserValidation(object):
         self.secret_key = str(config.get_cnf("MAILSERVICE_SECRET_KEY") or "")
         self.app_instance_id = str(config.get_cnf("INSTANCE_ID") or "EcoTaxa.01")
         self._request_url = str(config.get_account_request_url())
-
-    # condition to keep user activated even if major change occured
-    def keep_active(self, current_user_email: Optional[str], is_admin: bool) -> bool:
-        # no current_user
-        if current_user_email is None:
-            return not self.account_validation
-        return is_admin or not self.account_validation
 
     # call to request email_verification - validation method is by sending an email with a token
 
@@ -72,23 +64,19 @@ class UserValidation(object):
         id: int,
         previous_email: Optional[str],
         url: Optional[str] = None,
-        bypass=False,
     ) -> bool:
-        if bypass:
-            return False
-        else:
-            token = self._generate_token(email, id=id, action=action.value)
-            if previous_email == email:
-                previous_email = None
-            self._mailprovider.send_verification_mail(
-                email,
-                assistance_email,
-                token,
-                action=action.value,
-                previous_email=previous_email,
-                url=self.get_request_url(url),
-            )
-            return True
+        token = self._generate_token(email, id=id, action=action.value)
+        if previous_email == email:
+            previous_email = None
+        self._mailprovider.send_verification_mail(
+            email,
+            assistance_email,
+            token,
+            action=action.value,
+            previous_email=previous_email,
+            url=self.get_request_url(url),
+        )
+        return True
 
     def request_activate_user(
         self,
@@ -180,14 +168,6 @@ class UserValidation(object):
 
     def is_valid_email(self, email: str) -> bool:
         return self._mailprovider.is_email(email)
-
-    @staticmethod
-    def is_strong_password(password: str) -> bool:
-        from re import match
-
-        if match(USER_PWD_REGEXP, password):
-            return True
-        return False
 
     @staticmethod
     def _build_serializer(secret_key: str) -> URLSafeTimedSerializer:
