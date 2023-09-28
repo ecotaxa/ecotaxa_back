@@ -46,6 +46,7 @@ from API_models.crud import (
     ProjectSetColumnStatsModel,
     SampleTaxoStatsModel,
     ResetPasswordReq,
+    UserActivateReq,
 )
 from API_models.exports import ExportReq, ExportRsp, TaxonomyRecast, DarwinCoreExportReq
 from API_models.filesystem import DirectoryModel
@@ -479,27 +480,15 @@ def activate_user(
         description="Internal, the status name assign to this user.",
         example=1,
     ),
+    activatereq: UserActivateReq = Body(
+        ...,
+        description="activation parameters : reason if the request comes from an Administrator, password if the request comes from the user as it serves as email confirmation request.",
+    ),
     no_bot: Optional[List[str]] = Query(
         default=None,
         title="NoBot",
         description="not-a-robot proof",
         example="['127.0.0.1', 'ffqsdfsdf']",
-    ),
-    token: Optional[str] = Query(
-        default=None,
-        title="token",
-        description="token when the user is not an admin and must confirm the email. ",
-    ),
-    reason: Optional[str] = Body(
-        default=None,
-        title="Reason",
-        description="status,optional users administrator comment related to the status. ",
-        example="Email is not accepted....",
-    ),
-    password: Optional[str] = Body(
-        default=None,
-        title="Password",
-        description="Existing user can modify own email and must confirm it with this url token and password when email confirmation is on. ",
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> None:
@@ -512,16 +501,13 @@ def activate_user(
     If back-end configuration for self-creation check is Google reCAPTCHA,
     then no_bot is a pair [remote IP, reCAPTCHA response].
     """
-    print("activate status_______________________________")
-    print(status)
     with UserService() as sce:
         sce.set_statusstate_user(
             user_id=user_id,
             status_name=status,
             current_user_id=current_user,
             no_bot=no_bot,
-            token=token,
-            reason=reason,
+            activatereq=activatereq,
         )
 
 
