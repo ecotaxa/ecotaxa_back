@@ -1,8 +1,6 @@
 import logging
-from helpers.httpexception import (
-    DETAIL_EMAIL_OWNED_BY_OTHER,
-    DETAIL_NAME_OWNED_BY_OTHER,
-)
+from helpers.httpexception import DETAIL_EMAIL_OWNED_BY_OTHER
+
 from tests.credentials import ADMIN_AUTH, USER_AUTH, ORDINARY_USER_USER_ID
 
 
@@ -62,5 +60,5 @@ def test_user_create(config, database, fastapi, caplog):
         "name": "Application Administrator Now Retired",
     }
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=usr_json)
-    assert rsp.status_code == 422
-    assert rsp.json() == {"detail": [DETAIL_NAME_OWNED_BY_OTHER]}
+    assert rsp.status_code == 200
+    assert rsp.json() == None

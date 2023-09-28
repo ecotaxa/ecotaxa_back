@@ -6,7 +6,7 @@ import logging
 
 import pytest
 from API_operations.CRUD.Users import UserService
-from helpers.httpexception import DETAIL_EMAIL_OWNED_BY_OTHER
+from helpers.httpexception import DETAIL_EMAIL_OWNED_BY_OTHER, DETAIL_INVALID_EMAIL
 
 from tests.test_import import ADMIN_USER_ID, create_project
 
@@ -75,9 +75,11 @@ def test_user_create_ordinary(config, database, fastapi, caplog):
     assert rsp.json() == {"detail": [DETAIL_EMAIL_OWNED_BY_OTHER]}
     usr_json = {
         "id": None,
-        "email": "ddduser5",
+        "email": "ddduser56",
         "name": "not good email",
     }
-    # note should check password
     rsp = fastapi.post(urlparams, json=usr_json)
+    assert rsp.json() == None
     assert rsp.status_code == 200
+
+    # note should check password
