@@ -52,6 +52,7 @@ class _FullUserModel(_MinUserModel):
         example="Oceanographic Laboratory of Villefranche sur Mer - LOV",
     )
     status = Field(
+        default=1,
         title="Account status",
         description="Status of the user : 1 for active, 0 for inactive ,2 for pending, -1 for blocked",
         example=1,
@@ -730,3 +731,26 @@ class ResetPasswordReq(BaseModel):
     )
     email: Optional[str] = Field(title="Email", default=None)
     password: Optional[str] = Field(title="Password", default=None)
+
+
+class UserActivateReq(BaseModel):
+    """
+    Request to modify status of a user by a Users Administrator or confirm email_status, or resend emails (when token is expired) to confirm email or modify pending profile by a user.
+    """
+
+    token: Optional[str] = Field(
+        default=None,
+        title="token",
+        description="token when the user is not an admin and must confirm the email. ",
+    )
+    reason: Optional[str] = Field(
+        default=None,
+        title="Reason",
+        description="status,optional users administrator comment related to the status. ",
+        example="Email is not accepted....",
+    )
+    password: Optional[str] = Field(
+        default=None,
+        title="Password",
+        description="Existing user can modify own email and must confirm it with token and password when email confirmation is on. ",
+    )

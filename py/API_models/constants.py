@@ -49,6 +49,16 @@ class Constants(BaseModel):
     )
     password_regexp: str = Field(
         title="Password regexp",
-        description="password with a minium length of 8, with a mininum 1 uppercase, a minimum 1 lowercase, a minimum 1 number and a minimum 1 special char",
+        description="8 char. minimum, at least one uppercase, one lowercase, one number and one special char in '#?!@$%^&*-' ",
         default=USER_PWD_REGEXP,
+    )
+    email_verification: bool = Field(
+        title="Account email verification",
+        description="Require verification before activation.",
+        default=True,
+    )
+    account_validation: bool = Field(
+        title="Account validation",
+        description="Require validation by a Users Administrator before activation.",
+        default=False,
     )
