@@ -9,7 +9,7 @@ from typing import Optional, Final
 from enum import Enum
 from helpers.DynamicLogs import get_logger
 from helpers.pydantic import BaseModel, Field
-from email.mime.multipart import MIMEMultipart
+from email.message import EmailMessage
 from email.mime.text import MIMEText
 from starlette.status import (
     HTTP_422_UNPROCESSABLE_ENTITY,
@@ -22,6 +22,9 @@ from helpers.httpexception import (
     DETAIL_NO_RECIPIENT,
     DETAIL_TEMPLATE_NOT_FOUND,
     DETAIL_INVALID_PARAMETER,
+    DETAIL_SMTP_RECIPIENT_REFUSED,
+    DETAIL_SMTP_DATA_ERROR,
+    DETAIL_UNKNOWN_ERROR,
 )
 
 logger = get_logger(__name__)
@@ -34,7 +37,6 @@ class AccountMailType(str, Enum):
     status: Final = "status"
     modify: Final = "modify"
     passwordreset: Final = "passwordreset"
-    emailmodified: Final = "emailmodified"
 
 
 # replace in mail templates
@@ -98,7 +100,7 @@ class MailProvider(object):
         return re.fullmatch(regex, email) is not None
 
     def send_mail(
-        self, recipients: list, msg: MIMEMultipart, replyto: Optional[str] = None
+        self, recipients: list, msg: EmailMessage, replyto: Optional[str] = None
     ) -> None:
         """
         Sendmail .
@@ -121,16 +123,19 @@ class MailProvider(object):
         senderdns = senderaccount[2].strip()
         senderport = int(senderaccount[3].strip())
         msg["From"] = senderemail
-        if replyto != None:
-            msg.add_header("reply-to", str(replyto))
+        msg["To"] = ", ".join(recipients)
+        if replyto == None:
+            msg["Reply-To"] = "No-Reply"
+        else:
+            msg["Reply-To"] = str(replyto)
         code = 0
-        # context = ssl.create_default_context(ca_file=PATH_TO_CAFILE)
-        context = ssl._create_unverified_context()
+        context = ssl.create_default_context()
+        # context = ssl._create_unverified_context()
         with smtplib.SMTP_SSL(senderdns, senderport, context=context) as smtp:
             try:
                 smtp.login(senderemail, senderpwd)
-                res = smtp.sendmail(senderemail, recipients, msg.as_string())
-                # res = smtp.send_message(msg)
+                # message as plain text
+                smtp.sendmail(senderemail, recipients, msg.as_string())
                 logger.info(
                     "Email subject %s sent  to '%s'"
                     % (msg["Subject"], ", ".join(recipients))
@@ -138,10 +143,10 @@ class MailProvider(object):
             except smtplib.SMTPException as e:
                 if isinstance(e, smtplib.SMTPRecipientsRefused):
                     code = HTTP_422_UNPROCESSABLE_ENTITY
-                    detail = "Recipient refused"
+                    detail = DETAIL_SMTP_RECIPIENT_REFUSED
                 elif isinstance(e, smtplib.SMTPDataError):
                     code = HTTP_422_UNPROCESSABLE_ENTITY
-                    detail = "Data error"
+                    detail = DETAIL_SMTP_DATA_ERROR
                 else:
                     code = HTTP_500_INTERNAL_SERVER_ERROR
                     detail = str(e.args)
@@ -150,7 +155,7 @@ class MailProvider(object):
                 code = HTTP_500_INTERNAL_SERVER_ERROR
                 import sys
 
-                detail = "Unknown error: '%s'" % sys.exc_info()[0]
+                detail = DETAIL_UNKNOWN_ERROR + ": '%s'" % sys.exc_info()[0]
                 logger.error(code, detail)
             finally:
                 if code != 0:
@@ -163,11 +168,10 @@ class MailProvider(object):
     def mail_message(
         self,
         model_name: AccountMailType,
-        recipients: list,
         values: ReplaceInMail,
         language: str = DEFAULT_LANGUAGE,
         action: Optional[str] = None,
-    ) -> MIMEMultipart:
+    ) -> EmailMessage:
         model: Optional[dict] = self.get_mail_message(model_name, language, action)
         if model is None:
             raise HTTPException(
@@ -215,19 +219,20 @@ class MailProvider(object):
                 replace[key] = ""
 
         model["body"] = model["body"].format(**replace)
-        mailmsg = MIMEMultipart("alternative")
+        mailmsg = EmailMessage()
         mailmsg["Subject"] = model["subject"].format(action=replace["action"])
-        mailmsg["To"] = ", ".join(recipients)
         html = model["body"]
         text = self.html_to_text(html)
-        mailmsg.attach(MIMEText(text, "plain"))
-        mailmsg.attach(MIMEText(html, "html"))
+        mailmsg.set_content(MIMEText(text, "plain"), subtype="plain")
+        # only plain text mail
+        # mailmsg.set_content(html, subtype="html")
         return mailmsg
 
     @staticmethod
     def html_to_text(html: str) -> str:
         import re
 
+        html = re.sub("<br>", "\n", html)
         pattrns = re.compile("<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});")
         return re.sub(pattrns, "", html)
 
@@ -252,7 +257,7 @@ class MailProvider(object):
             action=action,
             url=url,
         )
-        mailmsg = self.mail_message(AccountMailType.activate, recipients, replace)
+        mailmsg = self.mail_message(AccountMailType.activate, replace)
         self.send_mail(recipients, mailmsg)
 
     def send_verification_mail(
@@ -267,19 +272,15 @@ class MailProvider(object):
         data = ReplaceInMail(
             email=assistance_email, token=token, action=action, url=url
         )
-        mailmsg = self.mail_message(
-            AccountMailType.verify, [recipient], data, action=action
-        )
+        mailmsg = self.mail_message(AccountMailType.verify, data, action=action)
         self.send_mail([recipient], mailmsg, replyto=assistance_email)
         # inform previous email (typo prevent)
         if previous_email is not None:
             data = ReplaceInMail(
-                email=assistance_email, data={"email": recipient}, url=url
+                email=assistance_email, data={"new email": recipient}, url=url
             )
-            mailmsg = self.mail_message(
-                AccountMailType.emailmodified, [previous_email], data
-            )
-            self.send_mail([previous_email], mailmsg, replyto=assistance_email)
+            mailmsg = self.mail_message(AccountMailType.modify, data, action="inform")
+            self.send_mail([previous_email], mailmsg)
 
     def send_reset_password_mail(
         self,
@@ -289,7 +290,7 @@ class MailProvider(object):
         url: Optional[str] = None,
     ) -> None:
         data = ReplaceInMail(token=token, email=assistance_email, url=url)
-        mailmsg = self.mail_message(AccountMailType.passwordreset, [recipient], data)
+        mailmsg = self.mail_message(AccountMailType.passwordreset, data)
         self.send_mail([recipient], mailmsg)
 
     def send_status_mail(
@@ -302,9 +303,7 @@ class MailProvider(object):
         url: Optional[str] = None,
     ) -> None:
         data = ReplaceInMail(email=assistance_email, token=token)
-        mailmsg = self.mail_message(
-            AccountMailType.status, [recipient], data, action=status_name
-        )
+        mailmsg = self.mail_message(AccountMailType.status, data, action=status_name)
 
         self.send_mail([recipient], mailmsg, replyto=assistance_email)
 
@@ -324,9 +323,8 @@ class MailProvider(object):
             url=url,
         )
 
-        mailmsg = self.mail_message(
-            AccountMailType.modify, [recipient], values, action=action
-        )
+        mailmsg = self.mail_message(AccountMailType.modify, values, action=action)
+
         self.send_mail([recipient], mailmsg, replyto=assistance_email)
 
     def get_mail_message(
