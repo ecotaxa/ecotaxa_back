@@ -7,7 +7,7 @@
 from typing import Optional, Any, Final, List
 from enum import Enum
 from BO.Rights import NOT_AUTHORIZED
-from BO.User import UserIDT
+from BO.User import UserIDT, SHORT_TOKEN_AGE, PROFILE_TOKEN_AGE
 from API_models.crud import UserModelProfile
 from helpers.AppConfig import Config
 from providers.MailProvider import MailProvider
@@ -22,8 +22,6 @@ from starlette.status import (
 from helpers.httpexception import DETAIL_BAD_INSTANCE, DETAIL_BAD_SIGN_OR_EXP
 
 logger = get_logger(__name__)
-SHORT_TOKEN_AGE = 1
-PROFILE_TOKEN_AGE = 24
 
 
 class ActivationType(str, Enum):
@@ -49,6 +47,8 @@ class UserValidation(object):
         self._mailprovider = MailProvider(
             self.senderaccount,
             config.get_dir_mail_templates(),
+            SHORT_TOKEN_AGE,
+            PROFILE_TOKEN_AGE,
         )
         self.secret_key = str(config.get_cnf("MAILSERVICE_SECRET_KEY") or "")
         self.app_instance_id = str(config.get_cnf("INSTANCE_ID") or "EcoTaxa.01")
@@ -82,12 +82,9 @@ class UserValidation(object):
         self,
         inactive_user: UserModelProfile,
         validation_emails: List[str],
-        token: Optional[str] = None,
         action: Optional[str] = None,
         url: Optional[str] = None,
     ) -> None:
-        if token:
-            action = self._get_value_from_token(token, "action")
         if action is None:
             action = ActivationType.create.value
         self._mailprovider.send_activation_request_mail(
@@ -209,14 +206,16 @@ class UserValidation(object):
         self,
         token: str,
         name: str,
+        short: Optional[bool] = True,
         email: Optional[str] = None,
         ip: Optional[str] = None,
         action: Optional[str] = None,
-        age: Optional[int] = None,
     ) -> Optional[str]:
         try:
-            if age is None:
+            if short == True:
                 age = SHORT_TOKEN_AGE
+            else:
+                age = PROFILE_TOKEN_AGE
             payload = self._build_serializer(self.secret_key).loads(
                 token, max_age=int(age) * 3600
             )
@@ -243,23 +242,23 @@ class UserValidation(object):
     def get_email_from_token(
         self,
         token: str,
+        short: Optional[bool] = True,
         email: Optional[str] = None,
         ip: Optional[str] = None,
         action: Optional[str] = None,
-        age: Optional[int] = SHORT_TOKEN_AGE,
     ) -> Optional[str]:
-        return self._get_value_from_token(token, "email", email, ip, action, age)
+        return self._get_value_from_token(token, "email", short, email, ip, action)
 
     def get_id_from_token(
         self,
         token: str,
+        short: Optional[bool] = True,
         email: Optional[str] = None,
         ip: Optional[str] = None,
         action: Optional[str] = None,
-        age: Optional[int] = SHORT_TOKEN_AGE,
     ) -> int:
         return int(
-            self._get_value_from_token(token, "id", email, ip, action, age) or -1
+            self._get_value_from_token(token, "id", short, email, ip, action) or -1
         )
 
     def get_reset_from_token(
@@ -270,7 +269,7 @@ class UserValidation(object):
         action: Optional[str] = None,
     ) -> Optional[str]:
         # the temp_password is stored into action field of the token
-        return self._get_value_from_token(token, "action", email, ip, action)
+        return self._get_value_from_token(token, "action", True, email, ip, action)
 
 
 class ValidationException(Exception):
