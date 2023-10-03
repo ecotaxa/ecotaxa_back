@@ -14,7 +14,14 @@ from API_models.crud import (
 from BO.Classification import ClassifIDListT
 from BO.Preferences import Preferences
 from BO.Rights import RightsBO, NOT_AUTHORIZED, NOT_FOUND
-from BO.User import UserBO, UserIDT, UserIDListT, UserStatus, UserStatus
+from BO.User import (
+    UserBO,
+    UserIDT,
+    UserIDListT,
+    UserStatus,
+    SHORT_TOKEN_AGE,
+    PROFILE_TOKEN_AGE,
+)
 from DB.Project import ProjectIDT
 from DB.User import User, Role, UserRole, TempPasswordReset
 from helpers.DynamicLogs import get_logger
@@ -30,12 +37,7 @@ from starlette.status import (
     HTTP_404_NOT_FOUND,
     HTTP_400_BAD_REQUEST,
 )
-from ..helpers.UserValidation import (
-    UserValidation,
-    ActivationType,
-    SHORT_TOKEN_AGE,
-    PROFILE_TOKEN_AGE,
-)
+from ..helpers.UserValidation import UserValidation, ActivationType
 from helpers import DateTime
 from helpers.httpexception import (
     DETAIL_VALIDATION_NOT_ACTIVE,
@@ -174,14 +176,16 @@ class UserService(Service):
 
         return usr.id
 
-    def _verify_token(self, new_user: UserModelWithRights, token: str) -> int:
+    def _verify_token(
+        self, new_user: UserModelWithRights, token: str, short: bool = True
+    ) -> int:
         if not self._uservalidation:
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=[DETAIL_VALIDATION_NOT_ACTIVE],
             )
-        email = self._uservalidation.get_email_from_token(token)
-        user_id = self._uservalidation.get_id_from_token(token)
+        email = self._uservalidation.get_email_from_token(token, short)
+        user_id = self._uservalidation.get_id_from_token(token, short)
         if email != new_user.email or user_id != new_user.id:
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
@@ -203,7 +207,7 @@ class UserService(Service):
                 status_code=HTTP_401_UNAUTHORIZED,
                 detail=[NOT_AUTHORIZED],
             )
-        user_id = self._verify_token(new_user, token)
+        user_id = self._verify_token(new_user, token, short=False)
         detail = None
 
         verified = False
@@ -982,7 +986,7 @@ class UserService(Service):
             user_id = self._uservalidation.get_id_from_token(token)
             err = True
             if temp_password is not None and user_id != -1:
-                user_to_reset: Optional[User] = self.ro_session.query(User).get(user_id)
+                user_to_reset: Optional[User] = self.session.query(User).get(user_id)
                 if user_to_reset is not None:
                     # find temporary password
                     temp = self.ro_session.query(TempPasswordReset).get(user_id)
@@ -998,11 +1002,9 @@ class UserService(Service):
                                 actions=None,
                             )
                             # remove temp_user_reset row
-                            temp_pw: Optional[
+                            temp_pw: Optional[TempPasswordReset] = self.session.query(
                                 TempPasswordReset
-                            ] = self.ro_session.query(TempPasswordReset).get(
-                                user_to_reset.id
-                            )
+                            ).get(user_to_reset.id)
                             self.session.delete(temp_pw)
                             self.session.commit()
                             id = user_to_reset.id
@@ -1051,13 +1053,20 @@ class UserService(Service):
 
     def _get_assistance_email(self) -> str:
         if self._assistance_email == "":
-            users_admins = self.get_users_admins()
-            if len(users_admins):
-                u_lst = [u.email for u in users_admins if u.name.find(" - assistance")]
-                if len(u_lst):
-                    self._assistance_email = u_lst[0]
-                else:
-                    self._assistance_email = users_admins[0].email
+            from_config = self.config.get_app_manager()
+            if from_config[1] != None:
+                self._assistance_email = str(from_config[1] or None)
+            if self._assistance_email == None:
+                users_admins = self.get_users_admins()
+                if len(users_admins):
+                    u_lst = [
+                        u.email for u in users_admins if u.name.find(" - assistance")
+                    ]
+                    if len(u_lst):
+                        self._assistance_email = u_lst[0]
+                    else:
+                        self._assistance_email = users_admins[0].email
+        print(self._assistance_email)
 
         return self._assistance_email
 
