@@ -4,7 +4,7 @@
 #
 # Maintenance operations on the DB.
 #
-import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Final
 from enum import Enum
 from helpers.DynamicLogs import get_logger
@@ -50,6 +50,7 @@ class ReplaceInMail:
         token: Optional[str] = None,
         reason: Optional[str] = None,
         url: Optional[str] = None,
+        tokenage: Optional[int] = None,
     ):
         self.id = id
         # user id  - {id}
@@ -65,6 +66,8 @@ class ReplaceInMail:
         # reason to request to modify information from user tag {reason}
         self.url = url
         # url of the requesting app - will be replaced in the mail message template
+        self.tokenage = tokenage
+        # token lifespan
 
 
 DEFAULT_LANGUAGE = "en_EN"
@@ -82,6 +85,8 @@ class MailProvider(object):
         self,
         senderaccount: list,
         dir_mail_templates: str,
+        short_token_age: Optional[int] = 1,
+        profile_token_age: Optional[int] = 24,
     ):
         on = len(senderaccount) == 4 and self.is_email(senderaccount[0])
         if on:
@@ -89,6 +94,8 @@ class MailProvider(object):
 
             self.SENDER_ACCOUNT = senderaccount
             self.DIR_MAIL_TEMPLATES = dir_mail_templates
+            self.SHORT_TOKEN_AGE = short_token_age
+            self.PROFILE_TOKEN_AGE = profile_token_age
 
     @staticmethod
     def is_email(email: str) -> bool:
@@ -131,7 +138,7 @@ class MailProvider(object):
         code = 0
         context = ssl.create_default_context()
         # context = ssl._create_unverified_context()
-        with smtplib.SMTP_SSL(senderdns, senderport, context=context) as smtp:
+        with smtplib.SMTP_SSL(senderdns, senderport) as smtp:
             try:
                 smtp.login(senderemail, senderpwd)
                 # message as plain text
@@ -185,18 +192,42 @@ class MailProvider(object):
                 values.url += modelurl
             else:
                 values.url = modelurl
-
         for key in self.MODEL_KEYS:
             replace[key] = ""
             if key in model:
                 if (
-                    (key == "action")
+                    key == "action"
                     and hasattr(values, key)
                     and getattr(values, key) is not None
                 ):
                     replace[key] = model[key][getattr(values, key)]
                 else:
                     replace[key] = model[key].format(**vars(values))
+                    # add info about max_age of the token
+                    if (
+                        key == "link"
+                        and hasattr(values, "token")
+                        and getattr(values, "token") is not None
+                    ):
+                        if (
+                            hasattr(values, "tokenage")
+                            and getattr(values, "tokenage") is not None
+                        ):
+                            tokenage = getattr(values, "tokenage")
+                        else:
+                            tokenage = self.SHORT_TOKEN_AGE
+                        age = datetime.now() + timedelta(hours=int(tokenage))
+                        replace[key] += str(
+                            " (valid until %s-%s-%s, %s:%s)"
+                            % (
+                                age.year,
+                                age.month,
+                                age.day,
+                                age.hour,
+                                age.minute,
+                            )
+                        )
+
         for key in self.REPLACE_KEYS:
             if hasattr(values, key):
                 if (
@@ -224,8 +255,6 @@ class MailProvider(object):
         html = model["body"]
         text = self.html_to_text(html)
         mailmsg.set_content(MIMEText(text, "plain"), subtype="plain")
-        # only plain text mail
-        # mailmsg.set_content(html, subtype="html")
         return mailmsg
 
     @staticmethod
@@ -302,9 +331,10 @@ class MailProvider(object):
         token: Optional[str] = None,
         url: Optional[str] = None,
     ) -> None:
-        data = ReplaceInMail(email=assistance_email, token=token)
+        data = ReplaceInMail(
+            email=assistance_email, token=token, tokenage=self.PROFILE_TOKEN_AGE
+        )
         mailmsg = self.mail_message(AccountMailType.status, data, action=status_name)
-
         self.send_mail([recipient], mailmsg, replyto=assistance_email)
 
     def send_hastomodify_mail(
@@ -321,6 +351,7 @@ class MailProvider(object):
             reason=reason,
             token=token,
             url=url,
+            tokenage=self.PROFILE_TOKEN_AGE,
         )
 
         mailmsg = self.mail_message(AccountMailType.modify, values, action=action)
