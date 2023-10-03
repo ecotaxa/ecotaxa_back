@@ -7,7 +7,14 @@
 from typing import Dict, List, NamedTuple
 
 from BO.DataLicense import DataLicense
-from BO.User import UserStatus, UserStatus, USER_PWD_REGEXP
+from BO.User import (
+    UserStatus,
+    UserStatus,
+    USER_PWD_REGEXP,
+    USER_PWD_REGEXP_DESCRIPTION,
+    SHORT_TOKEN_AGE,
+    PROFILE_TOKEN_AGE,
+)
 from helpers.pydantic import BaseModel, Field
 
 
@@ -49,7 +56,7 @@ class Constants(BaseModel):
     )
     password_regexp: str = Field(
         title="Password regexp",
-        description="8 char. minimum, at least one uppercase, one lowercase, one number and one special char in '#?!@$%^&*-' ",
+        description=USER_PWD_REGEXP_DESCRIPTION,
         default=USER_PWD_REGEXP,
     )
     email_verification: bool = Field(
@@ -61,4 +68,14 @@ class Constants(BaseModel):
         title="Account validation",
         description="Require validation by a Users Administrator before activation.",
         default=False,
+    )
+    short_token_age: int = Field(
+        title="Short token lifespan",
+        description="Email confirmation, password reset token lifespan.",
+        default=SHORT_TOKEN_AGE,
+    )
+    profile_token_age: int = Field(
+        title="Profile token lifespan",
+        description="Profile modification token lifespan.",
+        default=PROFILE_TOKEN_AGE,
     )
