@@ -9,10 +9,10 @@
       "body": "Your account is active.<br>You can now login to the EcoTaxa application and start creating a  project.<br>{link}.<br>{assistance}"
     },
     "pending": {
-      "url": "/gui/me/profile",
+      "url": "/gui/register",
       "subject": "EcoTaxa account activation pending.",
       "email": "<a href=\"mailto:{email}\">{email}</a>",
-      "link": "<a href=\"{url}\" style=\"color: rgb(52, 167, 173)\">{url}</a>",
+      "link": "<a href=\"{url}{token}\" style=\"color: rgb(52, 167, 173)\">{url}{token}</a>",
       "assistance": "If you have any question about your data or need additional support,  email {email}",
       "body": "Your account is temporary desactivated.<br>You cannot login to EcoTaxa for the moment, as you have to modify some information in your profile.<br>{link}<br>{assistance}"
     },
@@ -27,22 +27,6 @@
       "email": "<a href=\"mailto:{email}\">{email}</a>",
       "assistance": "If you have any question about this action,  email {email}",
       "body": "Your account has been blocked.<br>You cannot login to EcoTaxa anymore.<br>{assistance}"
-    },
-    "create": {
-      "url": "/gui/register/",
-      "subject": "EcoTaxa account modification request.",
-      "link": "<a href=\"{url}{token}\" style=\"color: rgb(52, 167, 173)\">{url}{token}</a>",
-      "email": "<a href=\"mailto:{email}\">{email}</a>",
-      "assistance": "If you have any question about this action,  email {email}",
-      "body": "Some of the informations provided in your profile need to be modified :<br>{data}<br>Please click the following link to modify your registration information: {link}<br>{assistance}"
-    },
-    "update": {
-      "url": "/gui/register/",
-      "subject": "EcoTaxa account email modification request.",
-      "link": "<a href=\"{url}{token}\" style=\"color: rgb(52, 167, 173)\">{url}{token}</a>",
-      "email": "<a href=\"mailto:{email}\">{email}</a>",
-      "assistance": "If you have any question about this action,  email {email}",
-      "body": "Some of the information provided in your profile need to be modified :<br>{data}.<br>Please click the following link to modify your profile: {link}<br>{assistance}"
     }
   }
 }
