@@ -8,6 +8,7 @@ from typing import Optional, Tuple, List, Dict
 from DB.Project import Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.User import User, Role
+from BO.User import UserStatus
 from DB.helpers.ORM import Session
 from .Preferences import Preferences
 from .ProjectPrivilege import ProjectPrivilegeBO
@@ -45,7 +46,9 @@ class RightsBO(object):
         """
         # Load ORM entities
         user: Optional[User] = session.query(User).get(user_id)
-        assert user is not None
+        assert (
+            user is not None and user.status == UserStatus.active.value
+        ), NOT_AUTHORIZED
         project: Optional[Project] = session.query(Project).get(prj_id)
         assert project is not None, NOT_FOUND
         # Check
