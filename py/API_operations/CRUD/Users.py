@@ -558,7 +558,7 @@ class UserService(Service):
                 action=ActivationType.update,
             )
             if addcols == True:
-                cols_to_upd.append(User.mail_status)
+                cols_to_upd.append(User.status)
                 cols_to_upd.append(User.mail_status)
                 cols_to_upd.append(User.mail_status_date)
                 inform_about_status = False
@@ -567,10 +567,14 @@ class UserService(Service):
         ):
             if not self._keep_active(current_user):
                 update_src.status = UserStatus.inactive.value
+                cols_to_upd.append(User.status)
                 ask_activate = True
-        if update_src.status != status:
+        if (
+            User.status in cols_to_upd
+            and UserStatus(update_src.status) != None
+            and update_src.status != status
+        ):
             update_src.status_date = DateTime.now_time()
-            cols_to_upd.append(User.status)
             cols_to_upd.append(User.status_date)
             if is_admin and inform_about_status is None:
                 inform_about_status = True
@@ -898,9 +902,11 @@ class UserService(Service):
         check if current_user can admin users
         """
         if current_user is not None:
-            is_admin = current_user.has_role(
-                Role.APP_ADMINISTRATOR
-            ) or current_user.has_role(Role.USERS_ADMINISTRATOR)
+            is_admin = (
+                current_user.status == UserStatus.active.value
+                and current_user.has_role(Role.APP_ADMINISTRATOR)
+                or current_user.has_role(Role.USERS_ADMINISTRATOR)
+            )
 
             if not is_admin:
                 return False
@@ -1066,8 +1072,6 @@ class UserService(Service):
                         self._assistance_email = u_lst[0]
                     else:
                         self._assistance_email = users_admins[0].email
-        print(self._assistance_email)
-
         return self._assistance_email
 
     def _get_validation_emails(self) -> List[str]:
