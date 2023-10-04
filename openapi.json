@@ -271,8 +271,19 @@
               },
               "description":"not-a-robot proof"
             },
-            "example":"['127.0.0.1', 'ffqsdfsdf'",
+            "example":"['127.0.0.1', 'ffqsdfsdf']",
             "name":"no_bot",
+            "in":"query"
+          },
+          {
+            "description":"token in the url to validate request",
+            "required":false,
+            "schema":{
+              "title":"Token",
+              "type":"string",
+              "description":"token in the url to validate request"
+            },
+            "name":"token",
             "in":"query"
           }
         ],
@@ -551,6 +562,173 @@
                   "items":{
                     "$ref":"#/components/schemas/MinUserModel"
                   }
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/users/activate/{user_id}/{status}":{
+      "post":{
+        "tags":[
+          "users"
+        ],
+        "summary":"Activate User",
+        "description":"Activate a new user if external validation is on., return **NULL upon success.**\n\n🔒 Depending on logged user, different authorizations apply:\n- An administrator or user administrator can activate a user or bypass the activation and inform the user when a modification request value/reason is provided.\n- An ordinary logged user cannot activate another account.\nIf back-end configuration for self-creation check is Google reCAPTCHA,\nthen no_bot is a pair [remote IP, reCAPTCHA response].",
+        "operationId":"activate_user",
+        "parameters":[
+          {
+            "description":"Internal, the unique numeric id of this user.",
+            "required":true,
+            "schema":{
+              "title":"User Id",
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this user."
+            },
+            "example":1,
+            "name":"user_id",
+            "in":"path"
+          },
+          {
+            "description":"Internal, the status name assign to this user.",
+            "required":true,
+            "schema":{
+              "title":"Status",
+              "type":"string",
+              "description":"Internal, the status name assign to this user."
+            },
+            "example":1,
+            "name":"status",
+            "in":"path"
+          },
+          {
+            "description":"not-a-robot proof",
+            "required":false,
+            "schema":{
+              "title":"NoBot",
+              "type":"array",
+              "items":{
+                "type":"string"
+              },
+              "description":"not-a-robot proof"
+            },
+            "example":"['127.0.0.1', 'ffqsdfsdf']",
+            "name":"no_bot",
+            "in":"query"
+          }
+        ],
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "title":"Activatereq",
+                "allOf":[
+                  {
+                    "$ref":"#/components/schemas/UserActivateReq"
+                  }
+                ],
+                "description":"activation parameters : reason if the request comes from an Administrator, password if the request comes from the user as it serves as email confirmation request."
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{},
+                "example":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/users/reset_user_password":{
+      "post":{
+        "tags":[
+          "users"
+        ],
+        "summary":"Reset User Password",
+        "description":"reset user password **return NULL on success**\n\n🔒 Depending on logged user, different authorizations apply:\n- An administrator or user administrator can reset a user password.\n- An unlogged user can ask for a reset  in two steps. and receive a mail with a token. But must eventually provide a no-robot proof.\n\nIf back-end configuration for self-creation check is Google reCAPTCHA,\nthen no_bot is a pair [remote IP, reCAPTCHA response].",
+        "operationId":"reset_user_password",
+        "parameters":[
+          {
+            "description":"not-a-robot proof",
+            "required":false,
+            "schema":{
+              "title":"NoBot token",
+              "type":"array",
+              "items":{
+                "type":"string"
+              },
+              "description":"not-a-robot proof"
+            },
+            "example":"['127.0.0.1', 'ffqsdfsdf']",
+            "name":"no_bot",
+            "in":"query"
+          },
+          {
+            "description":"token in the url to validate request",
+            "required":false,
+            "schema":{
+              "title":"Token",
+              "type":"string",
+              "description":"token in the url to validate request"
+            },
+            "name":"token",
+            "in":"query"
+          }
+        ],
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/ResetPasswordReq"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{},
+                "example":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -2893,12 +3071,12 @@
             "in":"path"
           },
           {
-            "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n                   \nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.      \n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, orig, objid, file_name thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
+            "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, orig, objid, file_name thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
             "required":false,
             "schema":{
               "title":"Fields",
               "type":"string",
-              "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n                   \nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.      \n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, orig, objid, file_name thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
+              "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, orig, objid, file_name thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
             },
             "example":"obj.longitude,fre.feret",
             "name":"fields",
@@ -5427,7 +5605,7 @@
                 "$ref":"#/components/schemas/MinUserModel"
               }
             ],
-            "description":"Is the person who \n        is responsible for the content of this metadata record. Writer of the title and abstract."
+            "description":"Is the person who\n        is responsible for the content of this metadata record. Writer of the title and abstract."
           },
           "contact_user":{
             "title":"Contact user",
@@ -5436,7 +5614,7 @@
                 "$ref":"#/components/schemas/MinUserModel"
               }
             ],
-            "description":"Is the person who \n        should be contacted in cases of questions regarding the content of the dataset or any data restrictions. \n        This is also the person who is most likely to stay involved in the dataset the longest."
+            "description":"Is the person who\n        should be contacted in cases of questions regarding the content of the dataset or any data restrictions.\n        This is also the person who is most likely to stay involved in the dataset the longest."
           },
           "creator_users":{
             "title":"Creator users",
@@ -5444,7 +5622,7 @@
             "items":{
               "$ref":"#/components/schemas/MinUserModel"
             },
-            "description":"All people who \n        are responsible for the creation of the collection. Data creators should receive credit \n        for their work and should therefore be included in the citation.",
+            "description":"All people who\n        are responsible for the creation of the collection. Data creators should receive credit\n        for their work and should therefore be included in the citation.",
             "default":[]
           },
           "creator_organisations":{
@@ -5453,7 +5631,7 @@
             "items":{
               "type":"string"
             },
-            "description":"All \n        organisations who are responsible for the creation of the collection. Data creators should \n        receive credit for their work and should therefore be included in the citation.",
+            "description":"All\n        organisations who are responsible for the creation of the collection. Data creators should\n        receive credit for their work and should therefore be included in the citation.",
             "default":[]
           },
           "associate_users":{
@@ -5462,7 +5640,7 @@
             "items":{
               "$ref":"#/components/schemas/MinUserModel"
             },
-            "description":"Other person(s) \n        associated with the collection.",
+            "description":"Other person(s)\n        associated with the collection.",
             "default":[]
           },
           "associate_organisations":{
@@ -5471,7 +5649,7 @@
             "items":{
               "type":"string"
             },
-            "description":"Other \n        organisation(s) associated with the collection.",
+            "description":"Other\n        organisation(s) associated with the collection.",
             "default":[]
           },
           "id":{
@@ -5587,6 +5765,56 @@
             "example":[
               "France"
             ]
+          },
+          "user_status":{
+            "title":"User status",
+            "type":"object",
+            "additionalProperties":{
+              "type":"integer"
+            },
+            "description":"Application User status values",
+            "default":{
+              "blocked":-1,
+              "inactive":0,
+              "active":1,
+              "pending":2
+            },
+            "example":{
+              "blocked":-1,
+              "inactive":0,
+              "active":1,
+              "pending":2
+            }
+          },
+          "password_regexp":{
+            "title":"Password regexp",
+            "type":"string",
+            "description":"8 char. minimum, at least one uppercase, one lowercase, one number and one special char in '#?!@%^&*-' ",
+            "default":"^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#?%^&*-+])).{8,20}$"
+          },
+          "email_verification":{
+            "title":"Account email verification",
+            "type":"boolean",
+            "description":"Require verification before activation.",
+            "default":true
+          },
+          "account_validation":{
+            "title":"Account validation",
+            "type":"boolean",
+            "description":"Require validation by a Users Administrator before activation.",
+            "default":false
+          },
+          "short_token_age":{
+            "title":"Short token lifespan",
+            "type":"integer",
+            "description":"Email confirmation, password reset token lifespan.",
+            "default":1
+          },
+          "profile_token_age":{
+            "title":"Profile token lifespan",
+            "type":"integer",
+            "description":"Profile modification token lifespan.",
+            "default":24
           }
         },
         "description":"Values which can be considered identical over the lifetime of the back-end."
@@ -7807,6 +8035,28 @@
           }
         }
       },
+      "ResetPasswordReq":{
+        "title":"ResetPasswordReq",
+        "type":"object",
+        "properties":{
+          "id":{
+            "title":"User Id",
+            "type":"integer",
+            "description":"User unique identifier.",
+            "default":-1,
+            "example":1
+          },
+          "email":{
+            "title":"Email",
+            "type":"string"
+          },
+          "password":{
+            "title":"Password",
+            "type":"string"
+          }
+        },
+        "description":"Minimal user information need to reset the password"
+      },
       "SampleModel":{
         "title":"SampleModel",
         "required":[
@@ -8400,6 +8650,29 @@
           }
         }
       },
+      "UserActivateReq":{
+        "title":"UserActivateReq",
+        "type":"object",
+        "properties":{
+          "token":{
+            "title":"token",
+            "type":"string",
+            "description":"token when the user is not an admin and must confirm the email. "
+          },
+          "reason":{
+            "title":"Reason",
+            "type":"string",
+            "description":"status,optional users administrator comment related to the status. ",
+            "example":"Email is not accepted...."
+          },
+          "password":{
+            "title":"Password",
+            "type":"string",
+            "description":"Existing user can modify own email and must confirm it with token and password when email confirmation is on. "
+          }
+        },
+        "description":"Request to modify status of a user by a Users Administrator or confirm email_status, or resend emails (when token is expired) to confirm email or modify pending profile by a user."
+      },
       "UserActivity":{
         "title":"UserActivity",
         "type":"object",
@@ -8443,7 +8716,8 @@
             "title":"User's password'",
             "type":"string",
             "description":"Encrypted (or not) password.",
-            "example":"$foobar45$"
+            "example":"$foobar45$",
+            "private":true
           },
           "name":{
             "title":"Name",
@@ -8457,11 +8731,24 @@
             "description":"User's organisation name, as text.",
             "example":"Oceanographic Laboratory of Villefranche sur Mer - LOV"
           },
-          "active":{
+          "status":{
             "title":"Account status",
-            "type":"boolean",
-            "description":"Whether the user is still active.",
-            "example":true
+            "type":"integer",
+            "description":"Status of the user : 1 for active, 0 for inactive ,2 for pending, -1 for blocked",
+            "example":1
+          },
+          "status_date":{
+            "title":"status date",
+            "type":"string",
+            "description":"Timestamp status modification date",
+            "format":"date-time",
+            "example":"2020-11-05T12:31:48.299713"
+          },
+          "status_admin_comment":{
+            "title":"Comment",
+            "type":"string",
+            "description":"Optional Users admininistrator comment about the account status.",
+            "example":""
           },
           "country":{
             "title":"Country",
@@ -8481,6 +8768,19 @@
             "type":"string",
             "description":"Paragraph describing the usage of EcoTaxa made by the user.",
             "example":"Analysis of size and shapes of plastic particles"
+          },
+          "mail_status":{
+            "title":"Mail status",
+            "type":"boolean",
+            "description":"True for verified, False for waiting for verification, None for no action.",
+            "example":true
+          },
+          "mail_status_date":{
+            "title":"Mail status date",
+            "type":"string",
+            "description":"Timestamp mail status modification date",
+            "format":"date-time",
+            "example":"2020-11-05T12:31:48.299713"
           },
           "can_do":{
             "title":"User's permissions",
