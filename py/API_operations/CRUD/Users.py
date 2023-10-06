@@ -270,8 +270,14 @@ class UserService(Service):
         self._is_valid_user(update_src, user_to_update.id)
 
         if self._current_is_admin(current_user):
-            cols_to_upd = self.ADMIN_UPDATABLE_COLS
-
+            if (
+                user_to_update is not None
+                and current_user.id == user_to_update.id
+                and update_src.status == None
+            ):
+                cols_to_upd = self.COMMON_UPDATABLE_COLS
+            else:
+                cols_to_upd = self.ADMIN_UPDATABLE_COLS
         elif (
             current_user.id == user_id
             and current_user.status == UserStatus.active.value
