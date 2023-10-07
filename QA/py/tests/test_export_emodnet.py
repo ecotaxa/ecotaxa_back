@@ -250,7 +250,7 @@ This series is part of the long term planktonic monitoring of
             "collection_id": coll_id,
             "include_predicted": False,
             "with_computations": ["ABO", "CNC", "BIV"],
-            "pre_mapping": {
+            "computations_pre_mapping": {
                 45072: 56693,  # Cyclopoida -> Actinopterygii
                 78418: None,  # Oncaeidae -> remove
                 25928: 25828,  # Gnathostomata-> Copepoda, not in dataset but to ensure it doesn't hurt
@@ -323,7 +323,7 @@ def test_emodnet_endpoint(config, database, fastapi, caplog):
     req.update(
         {
             "collection_id": 0,
-            "pre_mapping": {  # Loop in mapping, not allowed
+            "computations_pre_mapping": {  # Loop in mapping, not allowed
                 45072: 78418,
                 78418: 45072,
             },

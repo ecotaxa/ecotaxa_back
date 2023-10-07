@@ -30,6 +30,7 @@ from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Sample import SampleBO, SampleAggregForTaxon
 from BO.TaxonomySwitch import TaxonomyMapper
 from BO.Vocabulary import Vocabulary, Units
+from BO.WoRMSification import WoRMSifier
 from DB.Collection import Collection
 from DB.Project import ProjectTaxoStat, ProjectIDT, ProjectIDListT, Project
 from DB.Sample import Sample
@@ -92,6 +93,8 @@ class DarwinCoreExport(JobServiceBase):
     """
 
     JOB_TYPE = "DarwinCoreExport"
+    # Old param now constant
+    AUTO_MORPHO = True
 
     def init_args(self, args: ArgsDict) -> ArgsDict:
         # A bit unusual to find a method before init(), but here we can visually ensure
@@ -100,7 +103,7 @@ class DarwinCoreExport(JobServiceBase):
             {
                 "collection_id": self.collection.id,
                 "dry_run": self.dry_run,
-                "taxo_recast": self.taxo_recast,
+                "taxo_recast": self.computations_taxo_recast,
                 "include_predicted": self.include_predicted,
                 "with_absent": self.with_absent,
                 "with_computations": self.with_computations,
@@ -120,8 +123,6 @@ class DarwinCoreExport(JobServiceBase):
         formulae: Dict[str, str],
     ):
         super().__init__()
-        # Old param now constant
-        self.auto_morpho = True
         # Input params
         collection = self.ro_session.query(Collection).get(collection_id)
         assert collection is not None, "Invalid collection ID"
@@ -129,7 +130,9 @@ class DarwinCoreExport(JobServiceBase):
         self.dry_run: bool = dry_run
         self.include_predicted: bool = include_predicted
         # Args are serialized in JSON -> keys have become str
-        self.taxo_recast: TaxoRemappingT = {int(k): v for k, v in taxo_recast.items()}
+        self.computations_taxo_recast: TaxoRemappingT = {
+            int(k): v for k, v in taxo_recast.items()
+        }
         # Output params
         self.with_absent: bool = with_absent
         self.with_computations: List[SciExportTypeEnum] = with_computations
@@ -140,11 +143,9 @@ class DarwinCoreExport(JobServiceBase):
         #
         # During processing
         #
-        # The Phylo taxa to their WoRMS counterpart
-        self.phylo2worms: Dict[ClassifIDT, WoRMS] = {}
-        # The Morpho taxa to their nearest Phylo parent
-        # Is computed always for taxonomic coverage
-        self.morpho2phylo: TaxoRemappingT = {}
+        # The taxa to their WoRMS counterpart
+        self.worms_ifier: WoRMSifier = WoRMSifier()
+        # Per_sample taxa
         self.taxa_per_sample: Dict[str, Set[ClassifIDT]] = {}
         # Output
         self.errors: List[str] = []
@@ -238,7 +239,7 @@ class DarwinCoreExport(JobServiceBase):
                 occurrence_id = an_event_id + "_" + str(a_missing_id)
                 # No need to catch any exception here, the lookup worked during the
                 # "present" records generation.
-                worms = self.phylo2worms[a_missing_id]
+                worms = self.worms_ifier.phylo2worms[a_missing_id]
                 occ = DwC_Occurrence(
                     eventID=an_event_id,
                     occurrenceID=occurrence_id,
@@ -542,23 +543,22 @@ class DarwinCoreExport(JobServiceBase):
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.id > 0)  # Exclude unclassified
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid.in_(project_ids))
         used_taxa = {an_id for an_id, in taxo_qry}
-        # The recast destination taxa might appear in coverage
+        # All used taxa will appear in occurrences, recast does not impact them
+        # OTOH, the recast destination taxa will (likely) appear in coverage
         recast_taxa = used_taxa.copy()
-        for from_, to_ in self.taxo_recast.items():
-            if from_ in used_taxa:
-                recast_taxa.discard(from_)
-                if to_ is not None:
-                    recast_taxa.add(to_)
+        for from_, to_ in self.computations_taxo_recast.items():
+            if from_ in used_taxa and to_ is not None:
+                recast_taxa.add(to_)
         # Map them to WoRMS
-        self.phylo2worms, self.morpho2phylo = TaxonomyMapper(
-            self.ro_session, list(recast_taxa)
-        ).do_match()
-        # Sanity check that no mapped P taxon is present anymore in the transformation to WoRMS
-        assert set(self.phylo2worms.keys()).isdisjoint(set(self.morpho2phylo.keys()))
+        self.worms_ifier = TaxonomyMapper(self.ro_session, list(recast_taxa)).do_match()
+        # Sanity check: no mapped P taxon is present anymore in the transformation to WoRMS
+        assert set(self.worms_ifier.phylo2worms.keys()).isdisjoint(
+            set(self.worms_ifier.morpho2phylo.keys())
+        )
         # Update recast to apply during calculations
         full_recast: TaxoRemappingT = {}
-        provided_recast = self.taxo_recast.copy()
-        for from_, to_ in self.morpho2phylo.items():
+        provided_recast = self.computations_taxo_recast.copy()
+        for from_, to_ in self.worms_ifier.morpho2phylo.items():
             if to_ in provided_recast:
                 # The target phylo is a recast source
                 recast_to = provided_recast[to_]
@@ -580,7 +580,7 @@ class DarwinCoreExport(JobServiceBase):
         self.morpho2phylo = full_recast
         # Warnings for non-matches
         for an_id in recast_taxa:
-            if an_id not in self.phylo2worms:
+            if an_id not in self.worms_ifier.phylo2worms:
                 if an_id not in self.morpho2phylo:
                     txon = self.session.get(Taxonomy, an_id)
                     assert txon is not None
@@ -588,14 +588,14 @@ class DarwinCoreExport(JobServiceBase):
                     self.ignored_count[an_id] = 0
         # TODO: Temporary until the whole system has a WoRMS taxo tree
         # Error out if nothing at all
-        if len(self.phylo2worms) == 0:
+        if len(self.worms_ifier.phylo2worms) == 0:
             self.errors.append(
                 "Could not match in WoRMS _any_ classification in this project"
             )
             return ret
         # Produce the coverage
         produced = set()
-        for _an_id, a_worms_entry in self.phylo2worms.items():
+        for _an_id, a_worms_entry in self.worms_ifier.phylo2worms.items():
             assert a_worms_entry is not None, "None for %d" % _an_id
             rank = a_worms_entry.rank
             value = a_worms_entry.scientificname
@@ -936,7 +936,7 @@ class DarwinCoreExport(JobServiceBase):
         """
         aggregs = self._aggregate_for_sample(
             sample=sample,
-            morpho2phylo=self.morpho2phylo if self.auto_morpho else {},
+            morpho2phylo=self.morpho2phylo if self.AUTO_MORPHO else {},
             with_computations=self.with_computations,
             predicted=predicted,
         )
@@ -945,7 +945,7 @@ class DarwinCoreExport(JobServiceBase):
         by_lsid: Dict[LsidT, Tuple[str, SampleAggregForTaxon, WoRMS]] = {}
         for an_id, an_aggreg in aggregs.items():
             try:
-                worms = self.phylo2worms[an_id]
+                worms = self.worms_ifier.phylo2worms[an_id]
             except KeyError:
                 # Mapping failed, count how many of them
                 if an_id in self.ignored_count:

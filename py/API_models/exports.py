@@ -164,15 +164,7 @@ class DarwinCoreExportReq(BaseModel):
         example=False,
         default=False,
     )
-    # TODO: Is same as TaxonomyRecast below, should get type TaxoRemappingT (or define it here)
-    pre_mapping: Dict[int, Optional[int]] = Field(
-        title="Categories mapping",
-        description="Mapping from present taxon (key) to output replacement one (value)."
-        " Use a null replacement to _discard_ the present taxon."
-        " Note: These are EcoTaxa categories, WoRMS mapping happens after, whatever.",
-        example={456: 956, 2456: 213},
-        default={},
-    )
+
     include_predicted: bool = Field(
         title="Include predicted",
         description="If set, then predicted objects, as well as validated ones, will be exported. "
@@ -194,6 +186,15 @@ class DarwinCoreExportReq(BaseModel):
         example=["ABO"],
         default=[],
     )
+    # TODO: Is same as TaxonomyRecast below, should get type TaxoRemappingT (or define it here)
+    computations_pre_mapping: Dict[int, Optional[int]] = Field(
+        title="Computation mapping",
+        description="Mapping from present taxon (key) to output replacement one (value), during computations."
+        " Use a null replacement to _discard_ the objects with present taxon."
+        " Note: These are EcoTaxa categories, WoRMS mapping happens after, whatever.",
+        example={456: 956, 2456: 213, 93672: None},
+        default={},
+    )
     formulae: Dict[str, str] = Field(
         title="Computation formulas",
         description="Transitory: How to get values from DB free columns. "
@@ -208,7 +209,7 @@ class DarwinCoreExportReq(BaseModel):
     )
 
     # noinspection PyMethodParameters
-    @validator("pre_mapping")
+    @validator("computations_pre_mapping")
     def username_alphanumeric(cls, v):
         assert set(v.keys()).isdisjoint(
             set(v.values())
