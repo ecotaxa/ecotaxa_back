@@ -19,7 +19,7 @@ from data.ToWorms import ToWorms
 class TaxonomyMapper(object):
     """
     Take a set of present classification IDs and find the best possible set
-    of corresponding aphia_ids.
+    of corresponding aphia_ids, i.e. WoRMS records.
     """
 
     def __init__(self, session: Session, taxon_ids: ClassifIDListT):

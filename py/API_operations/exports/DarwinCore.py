@@ -70,7 +70,6 @@ from formats.DarwinCore.models import (
 )
 from helpers.DateTime import now_time
 from helpers.DynamicLogs import get_logger, LogsSwitcher
-
 # TODO: Move somewhere else
 from ..helpers.JobService import JobServiceBase, ArgsDict
 
@@ -543,63 +542,45 @@ class DarwinCoreExport(JobServiceBase):
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.id > 0)  # Exclude unclassified
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid.in_(project_ids))
         used_taxa = {an_id for an_id, in taxo_qry}
-        # All used taxa will appear in occurrences, recast does not impact them
-        # OTOH, the recast destination taxa will (likely) appear in coverage
-        recast_taxa = used_taxa.copy()
+
+        # _All_ used taxa will appear in occurrences, recast does not impact this output.
+        # OTOH, the recast target taxa will (likely) appear in coverage as it comes
+        # from computed quantities.
+        used_and_recasted_taxa = used_taxa.copy()
         for from_, to_ in self.computations_taxo_recast.items():
             if from_ in used_taxa and to_ is not None:
-                recast_taxa.add(to_)
-        # Map them to WoRMS
-        self.worms_ifier = TaxonomyMapper(self.ro_session, list(recast_taxa)).do_match()
-        # Sanity check: no mapped P taxon is present anymore in the transformation to WoRMS
-        assert set(self.worms_ifier.phylo2worms.keys()).isdisjoint(
-            set(self.worms_ifier.morpho2phylo.keys())
-        )
+                used_and_recasted_taxa.add(to_)
+
+        # Map all to WoRMS, the ones from projects and the recast target ones
+        self.worms_ifier = TaxonomyMapper(
+            self.ro_session, list(used_and_recasted_taxa)
+        ).do_match()
+        self.worms_ifier.taxotype_sanity_check()
+
         # Update recast to apply during calculations
-        full_recast: TaxoRemappingT = {}
-        provided_recast = self.computations_taxo_recast.copy()
-        for from_, to_ in self.worms_ifier.morpho2phylo.items():
-            if to_ in provided_recast:
-                # The target phylo is a recast source
-                recast_to = provided_recast[to_]
-                if recast_to is not None:
-                    full_recast[from_] = recast_to
-                else:
-                    full_recast[from_] = None  # Drop entry
-                del provided_recast[from_]
-            elif from_ in provided_recast:
-                # The source morpho is a recast source
-                # Override with provided recast, if None then drop it's OK
-                full_recast[from_] = provided_recast[from_]
-                del provided_recast[from_]
-            else:
-                # No impact on this entry from provided recast
-                full_recast[from_] = to_
-        # Re-inject what's left
-        full_recast.update(provided_recast)
-        self.morpho2phylo = full_recast
-        # Warnings for non-matches
-        for an_id in recast_taxa:
-            if an_id not in self.worms_ifier.phylo2worms:
-                if an_id not in self.morpho2phylo:
-                    txon = self.session.get(Taxonomy, an_id)
-                    assert txon is not None
-                    self.ignored_taxa[an_id] = (an_id, txon.name)
-                    self.ignored_count[an_id] = 0
+        self.worms_ifier.apply_recast(self.computations_taxo_recast)
+
+        # Prepare warnings for non-matches
+        for an_id in self.worms_ifier.unreferenced_ids(used_and_recasted_taxa):
+            taxon = self.session.get(Taxonomy, an_id)
+            assert taxon is not None
+            self.ignored_taxa[an_id] = (an_id, taxon.name)
+            self.ignored_count[an_id] = 0
+
         # TODO: Temporary until the whole system has a WoRMS taxo tree
+        worms_targets = self.worms_ifier.get_worms_targets()
         # Error out if nothing at all
-        if len(self.worms_ifier.phylo2worms) == 0:
+        if len(worms_targets) == 0:
             self.errors.append(
                 "Could not match in WoRMS _any_ classification in this project"
             )
             return ret
         # Produce the coverage
         produced = set()
-        for _an_id, a_worms_entry in self.worms_ifier.phylo2worms.items():
-            assert a_worms_entry is not None, "None for %d" % _an_id
+        for a_worms_entry in worms_targets:
             rank = a_worms_entry.rank
             value = a_worms_entry.scientificname
-            assert rank is not None, "No name for %d" % _an_id
+            assert rank is not None, "No name for %s" % str(a_worms_entry)
             tracked = (rank, value)
             if tracked not in produced:
                 ret.append(
@@ -935,9 +916,7 @@ class DarwinCoreExport(JobServiceBase):
         Otherwise, use human-validated objects.
         """
         aggregs = self._aggregate_for_sample(
-            sample=sample,
-            morpho2phylo=self.morpho2phylo if self.AUTO_MORPHO else {},
-            with_computations=self.with_computations,
+            sample=sample,            morpho2phylo = (self.worms_ifier.morpho2phylo if self.AUTO_MORPHO else {},)with_computations=self.with_computations,
             predicted=predicted,
         )
 

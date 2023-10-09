@@ -127,6 +127,7 @@ class ObjectSetQueryPlus(object):
     def remap_categories(self, taxo_mappings: TaxoRemappingT) -> "ObjectSetQueryPlus":
         """
         The result will not contain any category in keys, only the ones in values.
+        If a value is None then it's discarded.
         """
         self.taxo_mapping = taxo_mappings
         return self
