@@ -26,7 +26,7 @@ from typing_extensions import ParamSpec
 
 from API_operations.TaxonomyService import TaxonomyService
 from BO.Classification import ClassifIDT, ClassifIDListT
-from BO.Taxonomy import TaxonBO, WoRMSSetFromTaxaSet
+from BO.Taxonomy import TaxonBO, StrictWoRMSSetFromTaxaSet
 from data.structs.TaxaTree import TaxaTree
 
 P = ParamSpec("P")
@@ -297,6 +297,18 @@ class ToWorms(object):
             self.unieuk_tree.find_node(an_info.id).add_to_node(an_info.nb_objects)
             # print("E: %d -> %s %s" % (an_info.id, an_info.lineage, len(an_info.children) == 0))
 
+    def add_to_unieuk_with_lineage(
+        self, eco_ids: ClassifIDListT, taxo_sce: TaxonomyService
+    ) -> None:
+        """Add taxo from IDs, if not there, with their lineage"""
+        self.add_to_unieuk(eco_ids, taxo_sce)
+        needed_parents = []
+        for an_id in eco_ids:
+            for a_parent_id in self.unieuk[an_id].id_lineage:
+                if a_parent_id not in self.unieuk:
+                    needed_parents.append(a_parent_id)
+        self.add_to_unieuk(needed_parents, taxo_sce)
+
     def validate_with_trees(self) -> None:
         # It's dubious if a terminal (leaf) maps to a non-terminal
         for an_id, an_action in self.actions.items():
@@ -359,7 +371,7 @@ class ToWorms(object):
     def apply(self) -> None:
         """
         Apply the actions onto present tree.
-        We go thru the tree top-down, i.e. highest-level taxa first.
+        We go through the tree top-down, i.e. highest-level taxa first.
         """
         for a_node in self.unieuk_tree.top_to_bottom_ite():
             try:
@@ -702,7 +714,7 @@ class ToWorms(object):
                 # Juste copy the number of objects, no cumulate
                 eco_tree.find_node(an_info.id).nb_objects = an_info.nb_objects
 
-            mapping = WoRMSSetFromTaxaSet(taxo_sce.session, all_eco_ids).res
+            mapping = StrictWoRMSSetFromTaxaSet(taxo_sce.session, all_eco_ids).res
 
         worms_tree: TaxaTree = TaxaTree(0, "worms")
         all_worms_ids = [a_worms_info.aphia_id for a_worms_info in mapping.values()]

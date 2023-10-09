@@ -572,9 +572,10 @@ class TaxonBOSetFromWoRMS(object):
         return self.taxa
 
 
-class WoRMSSetFromTaxaSet(object):
+class StrictWoRMSSetFromTaxaSet(object):
     """
-    Many taxa from WoRMS table, with lineage.
+    Many taxa from WoRMS table, with lineage, fetched using the
+    strict method.
     """
 
     def __init__(self, session: Session, taxon_ids: ClassifIDListT):

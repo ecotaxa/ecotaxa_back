@@ -146,7 +146,7 @@ fastapi_logger.setLevel(INFO)
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.34",
+    version="0.0.35",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -833,7 +833,7 @@ def read_collection_taxo_recast(
     tags=["collections"],
     response_model=ExportRsp,
 )
-def emodnet_format_export(
+def darwin_core_format_export(
     request: DarwinCoreExportReq = Body(...),
     current_user: int = Depends(get_current_user),
 ) -> ExportRsp:
@@ -849,7 +849,7 @@ def emodnet_format_export(
     with DarwinCoreExport(
         request.collection_id,
         request.dry_run,
-        request.pre_mapping,
+        request.computations_pre_mapping,
         request.include_predicted,
         request.with_absent,
         request.with_computations,
