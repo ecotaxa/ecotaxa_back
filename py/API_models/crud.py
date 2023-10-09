@@ -86,7 +86,6 @@ class _FullUserModel(_MinUserModel):
         title="User's password'",
         description="Encrypted (or not) password.",
         example="$foobar45$",
-        private=True,
     )
     mail_status = Field(
         title="Mail status",
