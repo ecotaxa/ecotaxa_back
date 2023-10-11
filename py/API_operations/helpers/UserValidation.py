@@ -76,6 +76,7 @@ class UserValidation(object):
             previous_email=previous_email,
             url=self.get_request_url(url),
         )
+        logger.info("Verification email sent  :  '%s'" % email)
         return True
 
     def request_activate_user(
@@ -99,6 +100,10 @@ class UserValidation(object):
             action=action,
             url=self.get_request_url(url),
         )
+        logger.info(
+            "Request activation user %s  mail sent :  '%s'"
+            % (str(inactive_user.id), inactive_user.email)
+        )
 
     def inform_user_status(
         self,
@@ -107,7 +112,7 @@ class UserValidation(object):
         status_name: str,
         url: Optional[str] = None,
     ) -> None:
-        from BO.User import UserStatus
+        from DB.User import UserStatus
 
         if status_name == UserStatus.pending.name:
             token = self._generate_token(
@@ -122,6 +127,9 @@ class UserValidation(object):
             action=ActivationType.status.value,
             token=token,
             url=self.get_request_url(url),
+        )
+        logger.info(
+            " inform user status  %s mail sent :  '%s'" % (status_name, user.email)
         )
 
     def request_user_to_modify_profile(
@@ -145,6 +153,7 @@ class UserValidation(object):
             token=token,
             url=self.get_request_url(url),
         )
+        logger.info(" request user to modify profile email sent :  '%s'" % user.email)
 
     def request_reset_password(
         self,
@@ -157,6 +166,7 @@ class UserValidation(object):
         self._mailprovider.send_reset_password_mail(
             user_to_reset.email, assistance_email, token, url=self.get_request_url(url)
         )
+        logger.info("reset password email sent :  '%s'" % user_to_reset.email)
 
     def get_request_url(self, url: Optional[str]) -> str:
         if url is None:
@@ -202,7 +212,7 @@ class UserValidation(object):
             tokenreq["reason"] = reason
         return str(self._build_serializer(self.secret_key).dumps(tokenreq) or "")
 
-    def _get_value_from_token(
+    def _get_value_from_token_throw(
         self,
         token: str,
         name: str,
@@ -247,7 +257,9 @@ class UserValidation(object):
         ip: Optional[str] = None,
         action: Optional[str] = None,
     ) -> Optional[str]:
-        return self._get_value_from_token(token, "email", short, email, ip, action)
+        return self._get_value_from_token_throw(
+            token, "email", short, email, ip, action
+        )
 
     def get_id_from_token(
         self,
@@ -258,7 +270,8 @@ class UserValidation(object):
         action: Optional[str] = None,
     ) -> int:
         return int(
-            self._get_value_from_token(token, "id", short, email, ip, action) or -1
+            self._get_value_from_token_throw(token, "id", short, email, ip, action)
+            or -1
         )
 
     def get_reset_from_token(
@@ -269,7 +282,9 @@ class UserValidation(object):
         action: Optional[str] = None,
     ) -> Optional[str]:
         # the temp_password is stored into action field of the token
-        return self._get_value_from_token(token, "action", True, email, ip, action)
+        return self._get_value_from_token_throw(
+            token, "action", True, email, ip, action
+        )
 
 
 class ValidationException(Exception):
