@@ -32,7 +32,7 @@ from BO.TaxonomySwitch import TaxonomyMapper
 from BO.Vocabulary import Vocabulary, Units
 from BO.WoRMSification import WoRMSifier
 from DB.Collection import Collection
-from DB.Project import ProjectTaxoStat, ProjectIDT, ProjectIDListT, Project
+from DB.Project import ProjectTaxoStat, ProjectIDT, Project
 from DB.Sample import Sample
 from DB.Taxonomy import Taxonomy
 from DB.User import User
@@ -70,6 +70,7 @@ from formats.DarwinCore.models import (
 )
 from helpers.DateTime import now_time
 from helpers.DynamicLogs import get_logger, LogsSwitcher
+
 # TODO: Move somewhere else
 from ..helpers.JobService import JobServiceBase, ArgsDict
 
@@ -142,8 +143,9 @@ class DarwinCoreExport(JobServiceBase):
         #
         # During processing
         #
-        # The taxa to their WoRMS counterpart
-        self.worms_ifier: WoRMSifier = WoRMSifier()
+        # The taxa to their WoRMS counterpart...
+        self.worms_ifier: WoRMSifier = WoRMSifier()  # ...straight from project data...
+        self.recast_worms_ifier: WoRMSifier = WoRMSifier()  # ...with applied recast
         # Per_sample taxa
         self.taxa_per_sample: Dict[str, Set[ClassifIDT]] = {}
         # Output
@@ -188,8 +190,10 @@ class DarwinCoreExport(JobServiceBase):
         # Security check
         # Do the job
         logger.info("------------ starting --------------")
-        # Update DB statistics
+        # Update DB statistics to ensure correctness of geo in produced output
         self.update_db_stats()
+        # 2 taxonomic mappings/spaces need to be used
+        self.compute_taxo_spaces()
         # Build metadata with what comes from the collection
         meta, institution_code = self.build_meta()
         if meta is None:
@@ -210,7 +214,7 @@ class DarwinCoreExport(JobServiceBase):
         if self.with_absent:
             self.add_absent_occurrences(arch)
         # OK we issue warning in case of individual issue, but if there is no content at all
-        # then it's an error
+        # then it's an _error_.
         if (
             arch.events.count() == 0
             and arch.occurences.count() == 0
@@ -488,7 +492,7 @@ class DarwinCoreExport(JobServiceBase):
             "http://rs.gbif.org/vocabulary/gbif/dataset_type.xml",
         )
 
-        taxo_cov = self.get_taxo_coverage(the_collection.project_ids)
+        taxo_cov = self.get_taxo_coverage()
 
         now = now_time().replace(microsecond=0)
         meta_plus = EMLAdditionalMeta(dateStamp=now.isoformat())
@@ -528,47 +532,14 @@ class DarwinCoreExport(JobServiceBase):
             )
         return ret, the_collection.get_institution_code()
 
-    def get_taxo_coverage(
-        self, project_ids: ProjectIDListT
-    ) -> List[EMLTaxonomicClassification]:
+    def get_taxo_coverage(self) -> List[EMLTaxonomicClassification]:
         """
         Taxonomic coverage is the list of taxa which can be found in the projects, regardless
         of their validation state.
         """
         ret: List[EMLTaxonomicClassification] = []
-        # Fetch the used taxa in the projects
-        taxo_qry = self.session.query(ProjectTaxoStat.id).distinct()
-        taxo_qry = taxo_qry.filter(ProjectTaxoStat.nbr > 0)
-        taxo_qry = taxo_qry.filter(ProjectTaxoStat.id > 0)  # Exclude unclassified
-        taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid.in_(project_ids))
-        used_taxa = {an_id for an_id, in taxo_qry}
 
-        # _All_ used taxa will appear in occurrences, recast does not impact this output.
-        # OTOH, the recast target taxa will (likely) appear in coverage as it comes
-        # from computed quantities.
-        used_and_recasted_taxa = used_taxa.copy()
-        for from_, to_ in self.computations_taxo_recast.items():
-            if from_ in used_taxa and to_ is not None:
-                used_and_recasted_taxa.add(to_)
-
-        # Map all to WoRMS, the ones from projects and the recast target ones
-        self.worms_ifier = TaxonomyMapper(
-            self.ro_session, list(used_and_recasted_taxa)
-        ).do_match()
-        self.worms_ifier.taxotype_sanity_check()
-
-        # Update recast to apply during calculations
-        self.worms_ifier.apply_recast(self.computations_taxo_recast)
-
-        # Prepare warnings for non-matches
-        for an_id in self.worms_ifier.unreferenced_ids(used_and_recasted_taxa):
-            taxon = self.session.get(Taxonomy, an_id)
-            assert taxon is not None
-            self.ignored_taxa[an_id] = (an_id, taxon.name)
-            self.ignored_count[an_id] = 0
-
-        # TODO: Temporary until the whole system has a WoRMS taxo tree
-        worms_targets = self.worms_ifier.get_worms_targets()
+        worms_targets = self.recast_worms_ifier.get_worms_targets()
         # Error out if nothing at all
         if len(worms_targets) == 0:
             self.errors.append(
@@ -580,7 +551,7 @@ class DarwinCoreExport(JobServiceBase):
         for a_worms_entry in worms_targets:
             rank = a_worms_entry.rank
             value = a_worms_entry.scientificname
-            assert rank is not None, "No name for %s" % str(a_worms_entry)
+            assert rank is not None, "No rank for %s" % str(a_worms_entry)
             tracked = (rank, value)
             if tracked not in produced:
                 ret.append(
@@ -645,6 +616,15 @@ class DarwinCoreExport(JobServiceBase):
                         "No occurrence added for sample '%s' in project #%d"
                         % (a_sample.orig_id, a_prj_id)
                     )
+                # Taxa-level eMoFs
+                self.add_occurence_eMoFs_for_sample(
+                    sample=a_sample, arch=arch, event_id=event_id, predicted=False
+                )
+                if self.include_predicted:
+                    by_ml = self.add_occurence_eMoFs_for_sample(
+                        sample=a_sample, arch=arch, event_id=event_id, predicted=True
+                    )
+                # Sample-level eMoFs
                 self.add_instrument_eMoFs_for_sample(
                     sample=a_sample, arch=arch, event_id=event_id
                 )
@@ -916,7 +896,11 @@ class DarwinCoreExport(JobServiceBase):
         Otherwise, use human-validated objects.
         """
         aggregs = self._aggregate_for_sample(
-            sample=sample,            morpho2phylo = (self.worms_ifier.morpho2phylo if self.AUTO_MORPHO else {},)with_computations=self.with_computations,
+            sample=sample,
+            morpho2phylo=self.worms_ifier.morpho2phylo if self.AUTO_MORPHO else {},
+            with_computations=[
+                SciExportTypeEnum.abundances
+            ],  # Needed for production per aphia_id. The output abundances take the recast into account and are computed in the recast taxo space.
             predicted=predicted,
         )
 
@@ -992,6 +976,99 @@ class DarwinCoreExport(JobServiceBase):
                 occ.identificationVerificationStatus = verif_status
             arch.occurences.add(occ)
             nb_added_occurences += 1
+            # TODO
+            # if self.with_zeroes:
+            #     # Record the production of a 'present' occurence for this taxon
+            #     self.taxa_per_sample[event_id].add(an_id)
+        return nb_added_occurences
+
+    def add_occurence_eMoFs_for_sample(
+        self, sample: Sample, arch: DwC_Archive, event_id: str, predicted: bool
+    ) -> int:
+        """
+        Add DwC occurrence eMoFs, for given sample, into the archive. A single line per WoRMS taxon.
+        """
+        aggregs = self._aggregate_for_sample(
+            sample=sample,
+            morpho2phylo=self.recast_worms_ifier.morpho2phylo
+            if self.AUTO_MORPHO
+            else {},
+            with_computations=self.with_computations,
+            predicted=predicted,
+        )
+
+        # Group by lsid, in order to have a single occurrence
+        by_lsid: Dict[LsidT, Tuple[str, SampleAggregForTaxon, WoRMS]] = {}
+        for an_id, an_aggreg in aggregs.items():
+            try:
+                worms = self.worms_ifier.phylo2worms[an_id]
+            except KeyError:
+                # Mapping failed, count how many of them
+                # if an_id in self.ignored_count:
+                #     self.ignored_count[an_id] += an_aggreg.abundance
+                # else:
+                #     # Sanity check, there should be no morpho left
+                #     # TODO: Not relevant anymore, find another sanity check (e.g. no dest is a source?)
+                #     # if self.auto_morpho:
+                #     #     assert an_id not in self.morpho2phylo
+                #     self.ignored_morpho += an_aggreg.abundance
+                continue
+            worms_lsid = worms.lsid
+            assert worms_lsid is not None
+            if worms_lsid in by_lsid:
+                # Manage here the mapping of _several_ EcoTaxa taxa to a _single_ Worms entry.
+                # e.g. jb20140319_72396_92230
+                # is because both 72396 (Diphyidae) and 92230 (Diphyidae>bract)
+                #    become Diphyidae 135338 (https://www.marinespecies.org/aphia.php?p=taxdetails&id=135338)
+                occurrence_id, aggreg_for_lsid, _worms = by_lsid[worms_lsid]
+                # Accumulate abundance
+                aggreg_for_lsid.abundance += an_aggreg.abundance
+                # Add the new taxon ID to complete the occurrence ID
+                occurrence_id += "_" + str(an_id)
+                by_lsid[worms_lsid] = (occurrence_id, aggreg_for_lsid, worms)
+            else:
+                # Take the original taxo ID to build an occurrence
+                # It's unique because it's based on the sample ID, and we append the taxon EcoTaxa ID
+                occurrence_id = (
+                    event_id + ("_P" if predicted else "") + "_" + str(an_id)
+                )
+                by_lsid[worms_lsid] = (occurrence_id, an_aggreg, worms)
+
+        # Sort per abundance desc
+        # noinspection PyTypeChecker
+        by_lsid_desc = OrderedDict(
+            sorted(by_lsid.items(), key=lambda itm: itm[1][1].abundance, reverse=True)
+        )
+        # Record production for this sample i.e. event
+        self.taxa_per_sample[event_id] = set()
+        # Loop over WoRMS taxa
+        nb_added_occurences = 0
+        for a_lsid, for_lsid in by_lsid_desc.items():
+            occurrence_id, aggreg_for_lsid, worms = for_lsid
+            # self.produced_count += aggreg_for_lsid.abundance
+            # occ = DwC_Occurrence(
+            #     eventID=event_id,
+            #     occurrenceID=occurrence_id,
+            #     # Below is better as an EMOF @see CountOfBiologicalEntity
+            #     # individualCount=individual_count,
+            #     scientificName=worms.scientificname,
+            #     scientificNameID=worms.lsid,
+            #     kingdom=worms.kingdom,
+            #     occurrenceStatus=OccurrenceStatusEnum.present,
+            #     basisOfRecord=BasisOfRecordEnum.machineObservation,
+            # )
+            # if self.include_predicted:
+            #     # TODO: More in record depends on the status (validated or just predicted),
+            #     #  not just identificationVerificationStatus
+            #     # @see https://github.com/ecotaxa/ecotaxa_front/issues/764#issuecomment-1420324532
+            #     verif_status = (
+            #         IdentificationVerificationEnum.predictedByMachine
+            #         if predicted
+            #         else IdentificationVerificationEnum.validatedByHuman
+            #     )
+            #     occ.identificationVerificationStatus = verif_status
+            # arch.occurences.add(occ)
+            # nb_added_occurences += 1
             # Add eMoFs if possible and required, but the decision is made inside the def
             self.add_eMoFs_for_occurence(
                 arch=arch,
@@ -1120,3 +1197,43 @@ class DarwinCoreExport(JobServiceBase):
         for a_stat in ProjectBO.read_taxo_stats(self.session, project_ids, []):
             self.validated_count += a_stat.nb_validated
             self.predicted_count += a_stat.nb_predicted
+
+    def compute_taxo_spaces(self):
+        """
+        We have taxo->worms and taxo->recast->worms "spaces"
+        """
+        # TODO: This could be expressed directly in a join in below query
+        project_ids = [a_project.projid for a_project in self.collection.projects]
+        # Fetch the used taxa in the projects
+        taxo_qry = self.session.query(ProjectTaxoStat.id).distinct()
+        taxo_qry = taxo_qry.filter(ProjectTaxoStat.nbr > 0)
+        taxo_qry = taxo_qry.filter(ProjectTaxoStat.id > 0)  # Exclude unclassified
+        taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid.in_(project_ids))
+        used_taxa = {an_id for an_id, in taxo_qry}
+
+        # _All_ used taxa will appear in occurrences, recast does not impact this output.
+        # OTOH, the recast target taxa will (likely) appear in coverage as it comes
+        # from computed quantities.
+        used_and_recasted_taxa = used_taxa.copy()
+        for from_, to_ in self.computations_taxo_recast.items():
+            if from_ in used_taxa and to_ is not None:
+                used_and_recasted_taxa.add(to_)
+
+        # Map all to WoRMS, the ones from projects and the recast target ones
+        self.recast_worms_ifier = TaxonomyMapper(
+            self.ro_session, list(used_and_recasted_taxa)
+        ).do_match()
+        self.recast_worms_ifier.taxotype_sanity_check()
+
+        # Update recast to apply during calculations
+        self.recast_worms_ifier.apply_recast(self.computations_taxo_recast)
+
+        # Also prepare the recast-free version
+        self.worms_ifier = TaxonomyMapper(self.ro_session, list(used_taxa)).do_match()
+
+        # Prepare warnings for non-matches
+        for an_id in self.recast_worms_ifier.unreferenced_ids(used_and_recasted_taxa):
+            taxon = self.session.get(Taxonomy, an_id)
+            assert taxon is not None
+            self.ignored_taxa[an_id] = (an_id, taxon.name)
+            self.ignored_count[an_id] = 0

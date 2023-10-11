@@ -20,6 +20,7 @@ from tests.emodnet_ref import (
     ref_zip,
     with_absent_zip,
     no_computations_zip,
+    with_recast_zip,
 )
 from tests.export_shared import JOB_DOWNLOAD_URL
 from tests.formulae import uvp_formulae
@@ -267,8 +268,7 @@ This series is part of the long term planktonic monitoring of
     api_check_job_ok(fastapi, job_id)
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=who)
-    # TODO, looks OK manually
-    #  unzip_and_check(rsp.content, no_predicted_zip)
+    unzip_and_check(rsp.content, with_recast_zip, who)
 
     url_query_back = COLLECTION_QUERY_BY_TITLE_URL.format(title=coll_title)
     rsp = fastapi.get(url_query_back)
@@ -346,6 +346,7 @@ def unzip_and_check(zip_content, ref_content, who):
             if who != ADMIN_AUTH:
                 # The unique name is present in the produced text
                 file_content = file_content.replace("exp3", "exp")
+            print("Dump of", name)
             print(file_content)
             print()
             # Add CRs before and after for readability of the py version
