@@ -7,9 +7,8 @@
 from typing import Dict, List, NamedTuple
 
 from BO.DataLicense import DataLicense
+from DB.User import UserStatus
 from BO.User import (
-    UserStatus,
-    UserStatus,
     USER_PWD_REGEXP,
     USER_PWD_REGEXP_DESCRIPTION,
     SHORT_TOKEN_AGE,

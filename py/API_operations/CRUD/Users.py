@@ -18,12 +18,11 @@ from BO.User import (
     UserBO,
     UserIDT,
     UserIDListT,
-    UserStatus,
     SHORT_TOKEN_AGE,
     PROFILE_TOKEN_AGE,
 )
 from DB.Project import ProjectIDT
-from DB.User import User, Role, UserRole, TempPasswordReset
+from DB.User import User, Role, UserRole, TempPasswordReset, UserStatus
 from helpers.DynamicLogs import get_logger
 from helpers.pydantic import BaseModel, Field
 from helpers.login import LoginService
@@ -87,7 +86,6 @@ class UserService(Service):
         User.password,
         User.name,
         User.status,
-        User.status_date,
         User.organisation,
         User.country,
         User.usercreationreason,
@@ -126,54 +124,41 @@ class UserService(Service):
                 if token:
                     if new_user.id is not None and new_user.id > 0:
                         return self._modify_new_user(new_user, token)
-                    UserBO.validate_usr(self.session, new_user, True)
-                    new_user, addcols = self._set_mail_status(new_user, True)
-
                 else:
                     # check valid user
-                    self._is_valid_user(new_user, -1)
+                    self._is_valid_user_throw(new_user, -1)
                     if self.verify_email == True:
                         new_user, addcols = self._set_mail_status(new_user, False)
                         return -1
-                new_user.status = int(self._keep_active())
+            new_user.status = int(self._keep_active())
         else:
             # Must be admin to create an account
-            current_user: Optional[User] = self.ro_session.query(User).get(
-                current_user_id
+            # current_user: Optional[User] = self.ro_session.query(User).get(current_user_id)
+            current_user: User = RightsBO.get_user_throw(
+                self.ro_session, current_user_id
             )
             if self._current_is_admin(current_user):
-                actions = new_user.can_do
-                # validation only by external user admin - other admins can add but not activate if set in config
                 new_user.status = int(self._keep_active(current_user))
             else:
                 raise HTTPException(
-                    status_code=HTTP_401_UNAUTHORIZED, detail=[NOT_AUTHORIZED]
+                    status_code=HTTP_403_FORBIDDEN, detail=[NOT_AUTHORIZED]
                 )
-        self._is_valid_user(new_user, -1)
-        new_user.status_date = now
+        if new_user.id is None:
+            new_user.id = -1
+        self._is_valid_user_throw(new_user, -1)
         usr = User()
         self.session.add(usr)
-        self._model_to_db(
-            usr,
+        if current_user_id is None:
+            admin_user = None
+        else:
+            admin_user = current_user
+        self._set_user_row(
             new_user,
+            usr,
+            actiontype=ActivationType.create,
             cols_to_upd=cols_to_upd,
-            actions=actions,
+            current_user=admin_user,
         )
-        # if user has to be validated by external service
-        if (
-            self._uservalidation is not None
-            and self.account_validation == True
-            and not new_user.status
-        ):
-            user_profile = UserModelProfile.from_orm(usr)
-            self._uservalidation.request_activate_user(
-                user_profile,
-                validation_emails=self._get_validation_emails(),
-                action=ActivationType.create.value,
-            )
-            logger.info("Request activate user :  '%s'" % new_user.email)
-        logger.info("User created :  '%s'" % new_user.email)
-
         return usr.id
 
     def _verify_token(
@@ -236,14 +221,14 @@ class UserService(Service):
                 detail=detail,
             )
         # token verified,  user found and access verified by email and password - now check compatibility with other users in DB
-        self._is_valid_user(new_user, user_id)
+        self._is_valid_user_throw(new_user, user_id)
         # update a profile with informations requested by the main user admin - status to 0
         cols_to_upd = self.COMMON_UPDATABLE_COLS
         del cols_to_upd[User.password]
-        self._update_user_row(
+        self._set_user_row(
             new_user,
             usr,
-            action=ActivationType.update,
+            actiontype=ActivationType.update,
             cols_to_upd=cols_to_upd,
             current_user=None,
         )
@@ -259,15 +244,14 @@ class UserService(Service):
         """
         Update a user, who can be myself or anybody if I'm an app admin.
         """
-        current_user: Optional[User] = self.ro_session.query(User).get(current_user_id)
-        if current_user is None:
-            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=[NOT_AUTHORIZED])
+        # current_user: Optional[User] = self.ro_session.query(User).get(current_user_id)
+        current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         user_to_update: Optional[User] = self.session.query(User).get(user_id)
         if user_to_update is None:
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=[NOT_FOUND]
             )
-        self._is_valid_user(update_src, user_to_update.id)
+        self._is_valid_user_throw(update_src, user_to_update.id)
 
         if self._current_is_admin(current_user):
             if (
@@ -285,13 +269,13 @@ class UserService(Service):
             cols_to_upd = self.COMMON_UPDATABLE_COLS
         else:
             raise HTTPException(
-                status_code=HTTP_401_UNAUTHORIZED,
+                status_code=HTTP_403_FORBIDDEN,
                 detail=[NOT_AUTHORIZED],
             )
-        self._update_user_row(
+        self._set_user_row(
             update_src,
             user_to_update,
-            action=ActivationType.update,
+            actiontype=ActivationType.update,
             cols_to_upd=cols_to_upd,
             current_user=current_user,
         )
@@ -327,13 +311,10 @@ class UserService(Service):
                     status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                     detail=[DETAIL_INVALID_STATUS],
                 )
-            current_user: Optional[User] = self.ro_session.query(User).get(
-                current_user_id
+            # current_user: Optional[User] = self.ro_session.query(User).get(current_user_id )
+            current_user: User = RightsBO.get_user_throw(
+                self.ro_session, current_user_id
             )
-            if current_user is None:
-                raise HTTPException(
-                    status_code=HTTP_403_FORBIDDEN, detail=[NOT_AUTHORIZED]
-                )
             if activatereq is not None:
                 comment = activatereq.reason
             else:
@@ -415,10 +396,8 @@ class UserService(Service):
         """
         List all users, or some of them by their ids, if requester is admin.
         """
-        current_user: Optional[User] = self.ro_session.query(User).get(current_user_id)
-
-        if current_user is None:
-            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=[NOT_AUTHORIZED])
+        # current_user: Optional[User] = self.ro_session.query(User).get(current_user_id)
+        current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         ret = []
         if self._current_is_admin(current_user):
             # for faster display in test
@@ -484,7 +463,16 @@ class UserService(Service):
         )
 
         UserBO.validate_usr(self.session, update_src, verify_password)
+        # change status_date and mail_status_date if values were modified
+        now = DateTime.now_time()
+        if update_src.status != user_to_update.status:
+            update_src.status_date = now
+            cols_to_upd.append(User.status_date)
+        if update_src.mail_status != user_to_update.mail_status:
+            update_src.mail_status_date = now
+            cols_to_upd.append(User.mail_status_date)
         # Do the in-memory update
+        cols_to_upd = set(cols_to_upd)
         for a_col in cols_to_upd:
             col_name = a_col.name
             new_val = getattr(update_src, col_name)
@@ -538,37 +526,40 @@ class UserService(Service):
                 detail=detail,
             )
 
-    def _update_user_row(
+    def _set_user_row(
         self,
         update_src: UserModelWithRights,
         user_to_update: User,
-        action: ActivationType,
+        actiontype: ActivationType,
         cols_to_upd: List,
         current_user: Optional[User],
     ):
-
+        """
+        common to add or update a user
+        """
         ask_activate = False
         inform_about_status = None
-        status = user_to_update.status
-        is_admin = self._current_is_admin(current_user)
+        is_admin = current_user is not None and self._current_is_admin(current_user)
         if update_src.email != user_to_update.email:
             # validate before sending mail status
             verify_password = self._uservalidation is not None and (
                 update_src.password != user_to_update.password
             )
             UserBO.validate_usr(self.session, update_src, verify_password)
+            if update_src.id == -1:
+                mail_status = True
+            else:
+                mail_status = False
             update_src, addcols = self._set_mail_status(
                 update_src,
-                False,
+                mail_status,
                 user=user_to_update,
-                action=ActivationType.update,
+                action=actiontype,
             )
-            if addcols == True:
-                cols_to_upd.append(User.status)
-                cols_to_upd.append(User.mail_status)
-                cols_to_upd.append(User.mail_status_date)
+            if len(addcols):
+                cols_to_upd.extend(addcols)
                 inform_about_status = False
-        elif self.account_validation and self._is_major_data_change(
+        elif self.account_validation == True and self._is_major_data_change(
             update_src, user_to_update
         ):
             if not self._keep_active(current_user):
@@ -578,13 +569,17 @@ class UserService(Service):
         if (
             User.status in cols_to_upd
             and UserStatus(update_src.status) != None
-            and update_src.status != status
+            and update_src.status != user_to_update.status
+            and update_src.id != -1
         ):
-            update_src.status_date = DateTime.now_time()
-            cols_to_upd.append(User.status_date)
             if is_admin and inform_about_status is None:
                 inform_about_status = True
-        if is_admin:
+        # only update actions from admin - not from profile
+        if (
+            isinstance(current_user, User)
+            and is_admin
+            and (current_user.id != user_to_update.id or len(update_src.can_do) > 0)
+        ):
             actions = update_src.can_do
         else:
             actions = None
@@ -594,14 +589,15 @@ class UserService(Service):
             cols_to_upd=cols_to_upd,
             actions=actions,
         )
+
+        logger.info("User %s :  '%s'" % (actiontype.name, user_to_update.email))
         if self._uservalidation:
             if ask_activate:
                 self._uservalidation.request_activate_user(
                     UserModelProfile.from_orm(user_to_update),
                     validation_emails=self._get_validation_emails(),
-                    action=ActivationType.update.value,
+                    action=actiontype.value,
                 )
-                logger.info("Request activate user :  '%s'" % user_to_update.email)
             elif is_admin and inform_about_status == True:
                 status_name = UserStatus(user_to_update.status).name
                 self._uservalidation.inform_user_status(
@@ -609,10 +605,6 @@ class UserService(Service):
                     self._get_assistance_email(),
                     status_name=status_name,
                 )
-            logger.info(
-                "email modification by admin - inform user  :  '%s'"
-                % user_to_update.email
-            )
 
     def _is_major_data_change(
         self,
@@ -631,7 +623,7 @@ class UserService(Service):
                 return True
         return False
 
-    def _is_valid_user(self, mod_src: UserModelWithRights, user_id: int) -> None:
+    def _is_valid_user_throw(self, mod_src: UserModelWithRights, user_id: int) -> None:
         # check if another user exists with the same new name or new email
 
         self._has_ident_user(
@@ -654,13 +646,13 @@ class UserService(Service):
 
     def _keep_active(self, current_user: Optional[User] = None) -> bool:
         # check if required to change active state of user for revalidation
-        if not self.account_validation:
+        if self.account_validation != True:
             return True
         if current_user is None:
             return not self.account_validation
         else:
             is_admin = self._current_is_admin(current_user)
-            return is_admin or not self.account_validation
+            return is_admin or self.account_validation != True
 
     def _get_active_user_by_email(self, email: str) -> Optional[User]:
         qry = (
@@ -686,15 +678,19 @@ class UserService(Service):
         mail_status: bool,
         user: Optional[User] = None,
         action: Optional[ActivationType] = None,
-    ) -> Tuple[UserModelWithRights, bool]:
+    ) -> Tuple[UserModelWithRights, List[Any]]:
         """
         modify user mail_status and mail_status_date
         """
+        status_cols: List[Any] = []
         if user is not None and user.email == update_src.email:
-            return update_src, False
+            return update_src, status_cols
         if action is None:
             action = ActivationType.create
-        if self._uservalidation and self.verify_email == True and mail_status == False:
+        if self.verify_email != True:
+            return update_src, status_cols
+        status = update_src.status
+        if self._uservalidation and mail_status == False:
             if user is None:
                 previous_email = None
             else:
@@ -713,10 +709,18 @@ class UserService(Service):
             )
 
             update_src.status = UserStatus.inactive.value
+
+        elif (
+            self.account_validation == False
+            and update_src.status == UserStatus.inactive.value
+        ):
+            update_src.status = UserStatus.active.value
+        if update_src.status != status:
+            status_cols.append(User.status)
         update_src.mail_status = mail_status
-        update_src.mail_status_date = DateTime.now_time()
-        addcols = True
-        return update_src, True
+        status_cols.append(User.mail_status)
+
+        return update_src, status_cols
 
     @staticmethod
     def _get_key_name(objdict: dict, value) -> Optional[str]:
@@ -764,7 +768,7 @@ class UserService(Service):
                 )
                 if self._uservalidation:
                     user_profile = UserModelProfile.from_orm(inactive_user)
-                    if self.account_validation and status == UserStatus.pending:
+                    if self.account_validation == True and status == UserStatus.pending:
                         # reason can be empty when all validation dialog is made via email -
                         # if requested : add an admin_comment field to the user account and send it to explain what needs to be modified in the reminder to the user.
                         self._uservalidation.request_user_to_modify_profile(
@@ -809,7 +813,7 @@ class UserService(Service):
                     verified = sce.verify_and_update_password(password, user)
                 if not verified:
                     raise HTTPException(
-                        status_code=HTTP_401_UNAUTHORIZED,
+                        status_code=HTTP_403_FORBIDDEN,
                         detail=[NOT_AUTHORIZED],
                     )
         now = DateTime.now_time()
@@ -838,15 +842,8 @@ class UserService(Service):
                     update_src = UserModelWithRights.from_orm(user)
                     update_src, addcols = self._set_mail_status(update_src, True)
                     err = False
-                    if addcols == True:
-                        cols_to_upd.append(User.mail_status)
-                        cols_to_upd.append(User.mail_status_date)
-                        if self.account_validation == False:
-                            update_src.status = UserStatus.active.value
-                            update_src.status_date = now
-                            cols_to_upd.append(User.status)
-                            cols_to_upd.append(User.status_date)
-
+                    if len(addcols):
+                        cols_to_upd.extend(addcols)
             elif self.account_validation == True:
                 # mailstatus is True and account_vaidation is True
                 if user.status == UserStatus.pending.value and (
@@ -855,14 +852,18 @@ class UserService(Service):
                 ):
                     # resend request for account validation if it was sent more than PROFILE_TOKEN_AGE h ago
                     update_src = UserModelWithRights.from_orm(user)
+                    if update_src.id == -1:
+                        actiontype = ActivationType.create
+                    else:
+                        actiontype = ActivationType.update
                     self._uservalidation.request_user_to_modify_profile(
                         UserModelProfile.from_orm(user),
                         self._get_assistance_email(),
                         reason=user.status_admin_comment,
-                        action=ActivationType.update,
+                        action=actiontype,
                     )
                     update_src.status_date = now
-                    cols_to_upd = [User.status_date]
+                    cols_to_upd.append(User.status_date)
                     err = False
             if err:
                 if user.mail_status == True and user.status == UserStatus.active.value:
@@ -902,24 +903,23 @@ class UserService(Service):
                     )
 
     def _current_is_admin(
-        self, current_user: Optional[User], is_main_admin: bool = False
+        self, current_user: User, is_main_admin: bool = False
     ) -> bool:
         """
         check if current_user can admin users
         """
-        if current_user is not None:
-            is_admin = (
-                current_user.status == UserStatus.active.value
-                and current_user.has_role(Role.APP_ADMINISTRATOR)
-                or current_user.has_role(Role.USERS_ADMINISTRATOR)
-            )
+        is_admin = (
+            current_user.status == UserStatus.active.value
+            and current_user.has_role(Role.APP_ADMINISTRATOR)
+            or current_user.has_role(Role.USERS_ADMINISTRATOR)
+        )
 
-            if not is_admin:
-                return False
-            if is_main_admin:
-                if self._uservalidation is not None:
-                    return current_user.has_role(Role.USERS_ADMINISTRATOR)
-            return is_admin
+        if not is_admin:
+            return False
+        if is_main_admin:
+            if self._uservalidation is not None:
+                return current_user.has_role(Role.USERS_ADMINISTRATOR)
+        return is_admin
         return False
 
     @staticmethod
@@ -965,13 +965,10 @@ class UserService(Service):
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=[DETAIL_VALIDATION_NOT_ACTIVE],
             )
+        current_user = None
         if current_user_id is not None:
-            current_user: Optional[User] = self.ro_session.query(User).get(
-                current_user_id
-            )
-        else:
-            current_user = None
-        if current_user is None:
+            current_user = RightsBO.get_user_throw(self.ro_session, current_user_id)
+        if current_user_id is None:
             # Unauthenticated user asks to reset his password
             # Verify not a robot
             self._verify_captcha(no_bot)
@@ -979,10 +976,8 @@ class UserService(Service):
             if token is None:
                 self._has_ident_user(dict({"email": resetreq.email}), True)
         # if authenticated must be admin to request the reset
-        elif not self._current_is_admin(current_user):
-            raise HTTPException(
-                status_code=HTTP_401_UNAUTHORIZED, detail=[NOT_AUTHORIZED]
-            )
+        elif current_user is not None and self._current_is_admin(current_user):
+            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=[NOT_AUTHORIZED])
         id = -1
         if token:
             if resetreq.password is None or not UserBO.is_strong_password(

@@ -8,7 +8,7 @@ from typing import List, Iterable
 from typing import TYPE_CHECKING
 
 from sqlalchemy import event, SmallInteger
-
+from enum import Enum
 from BO.helpers.TSVHelpers import none_to_empty
 from data.Countries import countries_by_name
 from .helpers import Session, Result
@@ -19,6 +19,13 @@ from .helpers.Postgres import TIMESTAMP, CHAR
 
 if TYPE_CHECKING:
     from .ProjectPrivilege import ProjectPrivilege
+
+
+class UserStatus(int, Enum):
+    blocked: Final = -1
+    inactive: Final = 0
+    active: Final = 1
+    pending: Final = 2
 
 
 class User(Model):

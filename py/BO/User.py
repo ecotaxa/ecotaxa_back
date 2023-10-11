@@ -5,11 +5,11 @@
 
 import json
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any, Final, List
 from BO.Classification import ClassifIDListT
 from DB import Session
-from DB.User import User
+from DB.User import User, UserStatus
+from BO.Rights import RightsBO
 from DB.UserPreferences import UserPreferences
 from helpers.DynamicLogs import get_logger
 
@@ -27,13 +27,6 @@ SHORT_TOKEN_AGE = 1
 PROFILE_TOKEN_AGE = 24
 
 
-class UserStatus(int, Enum):
-    blocked: Final = -1
-    inactive: Final = 0
-    active: Final = 1
-    pending: Final = 2
-
-
 class UserBO(object):
     """
     Holder for user-related functions.
@@ -46,8 +39,11 @@ class UserBO(object):
         """
         Get a preference, for given project and user. Keys are not standardized (for now).
         """
-        current_user = session.query(User).get(user_id)
-        assert current_user is not None
+        # current_user = session.query(User).get(user_id)
+        # assert (
+        #    current_user is not None and current_user.status == UserStatus.active.value
+        # )
+        current_user: User = RightsBO.get_user_throw(session, user_id)
         prefs_for_proj: UserPreferences = (
             current_user.preferences_for_projects.filter_by(
                 project_id=project_id
@@ -66,8 +62,11 @@ class UserBO(object):
         """
         Set preference for a key, for given project and user. The key disappears if set to empty string.
         """
-        current_user = session.query(User).get(user_id)
-        assert current_user is not None
+        # current_user = session.query(User).get(user_id)
+        # assert (
+        #    current_user is not None and current_user.status == UserStatus.active.value
+        # )
+        current_user: User = RightsBO.get_user_throw(session, user_id)
         prefs_for_proj: UserPreferences = (
             current_user.preferences_for_projects.filter_by(
                 project_id=project_id

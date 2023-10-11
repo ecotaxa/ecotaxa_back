@@ -6,7 +6,7 @@ from typing import Final
 
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Session
-from BO.User import UserStatus
+from DB.User import UserStatus
 
 
 class ProjectPrivilegeBO(object):

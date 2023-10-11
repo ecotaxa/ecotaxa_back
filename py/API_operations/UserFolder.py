@@ -11,6 +11,7 @@ from fastapi import UploadFile
 
 from API_models.filesystem import DirectoryEntryModel, DirectoryModel
 from BO.User import UserIDT
+from BO.Rights import RightsBO
 from DB.User import User
 from FS.CommonDir import CommonFolder
 from FS.UserDir import UserDirectory
@@ -43,8 +44,9 @@ class UserFolderService(Service):
         """
         file_name = file.filename
         assert ".." not in file_name, "Forbidden"
-        current_user = self.ro_session.query(User).get(current_user_id)
-        assert current_user is not None
+        # current_user = self.ro_session.query(User).get(current_user_id)
+        current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
+        # assert current_user is not None
         logger.info(
             "Adding '%s' ('%s'/'%s') for '%s'", tag, path, file_name, current_user.name
         )
@@ -57,8 +59,9 @@ class UserFolderService(Service):
         """
         # Leading / implies root directory
         sub_path = sub_path.lstrip("/")
-        current_user = self.ro_session.query(User).get(current_user_id)
-        assert current_user is not None, "Not authorized"
+        # current_user = self.ro_session.query(User).get(current_user_id)
+        current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
+        # assert current_user is not None, "Not authorized"
         folder = UserDirectory(current_user_id, None)
         return self.list_and_format(folder, sub_path)
 
@@ -94,8 +97,9 @@ class CommonFolderService(Service):
         """
         List the files in given subpath of the common folder.
         """
-        current_user = self.ro_session.query(User).get(current_user_id)
-        assert current_user is not None, "Not authorized"
+        # current_user = self.ro_session.query(User).get(current_user_id)
+        current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
+        # assert current_user is not None, "Not authorized"
         # Leading / implies root of user directory
         sub_path = sub_path.lstrip("/")
         folder = CommonFolder(self.config.common_folder())

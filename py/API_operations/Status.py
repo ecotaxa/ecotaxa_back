@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from BO.User import UserIDT
+from BO.Rights import RightsBO
 from DB.User import User, Role
 from .helpers.Service import Service
 
@@ -28,7 +29,10 @@ class StatusService(Service):
         """
         if current_user_id is None:
             return "UP!"
-        current_user = self.ro_session.query(User).get(current_user_id)
+        # current_user = self.ro_session.query(User).get(current_user_id)
+        current_user: Optional[User] = RightsBO.get_optional_user(
+            self.ro_session, current_user_id
+        )
         if current_user is None:
             return "Who?"
         is_admin = current_user.has_role(Role.APP_ADMINISTRATOR)

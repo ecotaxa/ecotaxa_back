@@ -43,7 +43,7 @@ class LoginService(Service):
 
     def validate_login(self, username: str, password: str) -> Union[str, bytes]:
         # Fetch the one and only user
-        from BO.User import UserStatus
+        from DB.User import UserStatus
 
         account_validation = self.config.get_account_validation() == "on"
         # if account validation is "on" and account is pending
