@@ -136,8 +136,6 @@ class MailProvider(object):
         else:
             msg["Reply-To"] = str(replyto)
         code = 0
-        context = ssl.create_default_context()
-        # context = ssl._create_unverified_context()
         with smtplib.SMTP_SSL(senderdns, senderport) as smtp:
             try:
                 smtp.login(senderemail, senderpwd)
@@ -353,9 +351,7 @@ class MailProvider(object):
             url=url,
             tokenage=self.PROFILE_TOKEN_AGE,
         )
-
         mailmsg = self.mail_message(AccountMailType.modify, values, action=action)
-
         self.send_mail([recipient], mailmsg, replyto=assistance_email)
 
     def get_mail_message(
