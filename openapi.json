@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.34"
+    "version":"0.0.35"
   },
   "servers":[
     {
@@ -1265,7 +1265,7 @@
         "tags":[
           "collections"
         ],
-        "summary":"Emodnet Format Export",
+        "summary":"Darwin Core Format Export",
         "description":"**Export the collection in Darwin Core format, e.g. for EMODnet portal**, @see https://www.emodnet-ingestion.eu\n\nProduces a DwC-A (https://dwc.tdwg.org/) archive into a temporary directory, ready for download.\n\nMaybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html\n\nNote: Only manageable collections can be exported.",
         "operationId":"darwin_core_format_export",
         "requestBody":{
@@ -5902,19 +5902,6 @@
             "default":false,
             "example":false
           },
-          "pre_mapping":{
-            "title":"Categories mapping",
-            "type":"object",
-            "additionalProperties":{
-              "type":"integer"
-            },
-            "description":"Mapping from present taxon (key) to output replacement one (value). Use a null replacement to _discard_ the present taxon. Note: These are EcoTaxa categories, WoRMS mapping happens after, whatever.",
-            "default":{},
-            "example":{
-              "456":956,
-              "2456":213
-            }
-          },
           "include_predicted":{
             "title":"Include predicted",
             "type":"boolean",
@@ -5940,6 +5927,19 @@
             "example":[
               "ABO"
             ]
+          },
+          "computations_pre_mapping":{
+            "title":"Computation mapping",
+            "type":"object",
+            "additionalProperties":{
+              "type":"integer"
+            },
+            "description":"Mapping from present taxon (key) to output replacement one (value), during computations. Use a null replacement to _discard_ the objects with present taxon. Note: These are EcoTaxa categories, WoRMS mapping happens after, whatever.",
+            "default":{},
+            "example":{
+              "456":956,
+              "2456":213
+            }
           },
           "formulae":{
             "title":"Computation formulas",
@@ -8716,8 +8716,7 @@
             "title":"User's password'",
             "type":"string",
             "description":"Encrypted (or not) password.",
-            "example":"$foobar45$",
-            "private":true
+            "example":"$foobar45$"
           },
           "name":{
             "title":"Name",
