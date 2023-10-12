@@ -599,7 +599,11 @@ class DarwinCoreExport(JobServiceBase):
                     minimumDepthInMeters=str(summ[2]),
                     maximumDepthInMeters=str(summ[3]),
                 )
-                events.add(evt)                self.add_eMoFs_about_sample(sample=a_sample, arch=arch, event_id=event_id)# Humans first :)
+                events.add(evt)
+                self.add_eMoFs_about_sample(
+                    sample=a_sample, arch=arch, event_id=event_id
+                )
+                # Humans first :)
                 nb_added = self.add_occurrences_for_sample(
                     sample=a_sample, arch=arch, event_id=event_id, predicted=False
                 )
@@ -779,7 +783,9 @@ class DarwinCoreExport(JobServiceBase):
             object_set = CommonObjectSets.validatedInSample(ro_session, sample)
 
         # Abundances, 'simple' count but eventually with remapping
-        counts = cls.abundances_for_sample(ro_session, object_set, morpho2phylo, warnings)
+        counts = cls.abundances_for_sample(
+            ro_session, object_set, morpho2phylo, warnings
+        )
         for a_count in counts:
             ret[a_count["txo_id"]] = SampleAggregForTaxon(a_count["count"], None, None)
 
@@ -901,11 +907,13 @@ class DarwinCoreExport(JobServiceBase):
         If 'predicted' is set, do the counts on predicted (but not validated) objects.
         Otherwise, use human-validated objects.
         """
-        aggregs = self._aggregate_for_sample(            ro_session = (self.ro_session,)sample=sample,
-            morpho2phylo = (self.worms_ifier.morpho2phylo,)
-            with_computations = ([SciExportTypeEnum.abundances],)
+        aggregs = self._aggregate_for_sample(
+            ro_session=self.ro_session,
+            sample=sample,
+            morpho2phylo=self.worms_ifier.morpho2phylo,
+            with_computations=[SciExportTypeEnum.abundances],
             # SciExportTypeEnum.abundances is needed for production of per aphia_id in present def.
-            formulae = (self.formulae,)
+            formulae=self.formulae,
             predicted=predicted,
             warnings=self.warnings,
         )
