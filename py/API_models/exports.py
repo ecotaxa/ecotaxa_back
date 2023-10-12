@@ -187,13 +187,11 @@ class DarwinCoreExportReq(BaseModel):
         default=[],
     )
     # TODO: Is same as TaxonomyRecast below, should get type TaxoRemappingT (or define it here)
-    computations_pre_mapping: Dict[int, Optional[int]] = Field(
+    computations_pre_mapping: Dict[int, int] = Field(
         title="Computation mapping",
         description="Mapping from present taxon (key) to output replacement one (value), during computations."
-        " Use a null replacement to _discard_ the objects with present taxon."
-        " Note: These are EcoTaxa categories, WoRMS mapping happens after, whatever.",
-        example={456: 956, 2456: 213, 93672: None},
-        default={},
+                    " Use a 0 replacement to _discard_ the objects with present taxon."
+        " Note: These are EcoTaxa categories, WoRMS mapping happens after, whatever.",        example = ({456: 956, 2456: 213, 93672: 0},)default={},
     )
     formulae: Dict[str, str] = Field(
         title="Computation formulas",
@@ -211,9 +209,14 @@ class DarwinCoreExportReq(BaseModel):
     # noinspection PyMethodParameters
     @validator("computations_pre_mapping")
     def username_alphanumeric(cls, v):
+        vals_but_0 = set(v.values()).difference({0})
         assert set(v.keys()).isdisjoint(
+            vals_but_0
+        ), "inconsistent pre_mapping, can't do remap chains or loops: common part is %s" % set(
+            v.keys()
+        ).intersection(
             set(v.values())
-        ), "inconsistent pre_mapping, can't do remap chains or loops"
+        )
         return v
 
     class Config:

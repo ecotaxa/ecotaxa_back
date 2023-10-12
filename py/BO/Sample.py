@@ -70,6 +70,7 @@ class SampleAggregForTaxon:
             self.biovolume += other.biovolume
         else:
             assert other.biovolume is None
+        return self
 
 
 def _get_proj(sam: Sample) -> Project:

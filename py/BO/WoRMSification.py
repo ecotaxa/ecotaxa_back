@@ -72,7 +72,7 @@ class WoRMSifier(object):
                 new_to = recast[to_]
                 if new_to is None:
                     pass  # Just to signal that it might be None, meaning "to drop"
-                del recast[from_]
+                del recast[to_]
             elif from_ in recast:
                 # The source morpho is a recast source
                 # Override with provided recast, if None then drop it's OK

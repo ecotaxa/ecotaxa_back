@@ -24,7 +24,12 @@ from BO.Collection import CollectionIDT, CollectionBO
 from BO.CommonObjectSets import CommonObjectSets
 from BO.DataLicense import LicenseEnum, DataLicense
 from BO.ObjectSet import DescribedObjectSet
-from BO.ObjectSetQueryPlus import ResultGrouping, TaxoRemappingT, ObjectSetQueryPlus
+from BO.ObjectSetQueryPlus import (
+    ResultGrouping,
+    TaxoRemappingT,
+    ObjectSetQueryPlus,
+    TaxoRemappingWith0AsNoneT,
+)
 from BO.Project import ProjectBO, ProjectTaxoStats
 from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Sample import SampleBO, SampleAggregForTaxon
@@ -114,7 +119,7 @@ class DarwinCoreExport(JobServiceBase):
         self,
         collection_id: CollectionIDT,
         dry_run: bool,
-        taxo_recast: TaxoRemappingT,
+        taxo_recast: TaxoRemappingWith0AsNoneT,
         include_predicted: bool,
         with_absent: bool,
         with_computations: List[SciExportTypeEnum],
@@ -127,9 +132,9 @@ class DarwinCoreExport(JobServiceBase):
         self.collection: Collection = collection
         self.dry_run: bool = dry_run
         self.include_predicted: bool = include_predicted
-        # Args are serialized in JSON -> keys have become str
+        # Args are serialized in JSON -> keys have become str and 0 val becomes None
         self.computations_taxo_recast: TaxoRemappingT = {
-            int(k): v for k, v in taxo_recast.items()
+            int(k): v if v != 0 else None for k, v in taxo_recast.items()
         }
         # Output params
         self.with_absent: bool = with_absent
@@ -978,6 +983,7 @@ class DarwinCoreExport(JobServiceBase):
         by_lsid: Dict[LsidT, Tuple[str, SampleAggregForTaxon, WoRMS]] = {}
         not_found: ClassifIDSetT = set()
         for an_id, an_aggreg in aggregs.items():
+            assert an_aggreg is not None, "Unexpected None aggreg' in %s" % str(aggregs)
             worms = phylo2worms.get(an_id)
             if worms is None:
                 not_found.add(an_id)
@@ -999,7 +1005,7 @@ class DarwinCoreExport(JobServiceBase):
                 occurrence_id, aggreg_for_lsid, _worms = by_lsid[worms_lsid]
                 # Accumulate aggregation
                 try:
-                    aggreg_for_lsid += an_aggreg
+                    aggreg_for_lsid = aggreg_for_lsid + an_aggreg
                 except AssertionError:
                     warnings.append(
                         "Cannot accumulate %s into %s for lsid %s"

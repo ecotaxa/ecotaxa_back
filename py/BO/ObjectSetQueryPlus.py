@@ -42,6 +42,7 @@ RowSourceT = Generator[Dict[str, Any], None, None]
 IterableRowsT = Iterable[Dict[str, Any]]
 # From:To and remove if no "To", i.e. if "To" is None
 TaxoRemappingT = Dict[ClassifIDT, Optional[ClassifIDT]]
+TaxoRemappingWith0AsNoneT = Dict[ClassifIDT, ClassifIDT]
 
 
 class ResultGrouping(enum.IntEnum):

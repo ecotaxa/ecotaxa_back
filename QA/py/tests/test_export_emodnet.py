@@ -254,7 +254,7 @@ This series is part of the long term planktonic monitoring of
             "with_computations": ["ABO", "CNC", "BIV"],
             "computations_pre_mapping": {
                 45072: 56693,  # Cyclopoida -> Actinopterygii
-                78418: None,  # Oncaeidae -> remove
+                78418: 0,  # Oncaeidae -> remove
                 25928: 25828,  # Gnathostomata-> Copepoda, not in dataset but to ensure it doesn't hurt
             },
         }
