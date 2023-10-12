@@ -58,6 +58,19 @@ class SampleAggregForTaxon:
     concentration: Optional[float]
     biovolume: Optional[float]
 
+    def __add__(self, other: "SampleAggregForTaxon"):
+        self.abundance += other.abundance
+        if self.concentration is not None:
+            assert other.concentration is not None
+            self.concentration += other.concentration
+        else:
+            assert other.concentration is None
+        if self.biovolume is not None:
+            assert other.biovolume is not None
+            self.biovolume += other.biovolume
+        else:
+            assert other.biovolume is None
+
 
 def _get_proj(sam: Sample) -> Project:
     return sam.project

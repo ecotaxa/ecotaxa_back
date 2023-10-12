@@ -272,6 +272,24 @@ m106_mn04_n6_sml	m106_mn04_n6_sml_45072	1	Count (in assayed sample) of biologica
 m106_mn04_n6_sml	m106_mn04_n6_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
 m106_mn04_n6_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
 """
+_emofs_78418_becomes_45072 = r"""
+id	occurrenceID	measurementValue	measurementType	measurementUnit	measurementTypeID	measurementUnitID
+m106_mn01_n1_sml	m106_mn01_n1_sml_45072	3	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn01_n1_sml	m106_mn01_n1_sml_45072	0.06	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
+m106_mn01_n1_sml	m106_mn01_n1_sml_45072	2347725.977286	Biovolume of biological entity specified elsewhere per unit volume of the water body	Cubic millimetres per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/	http://vocab.nerc.ac.uk/collection/P06/current/CMCM/
+m106_mn01_n1_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
+m106_mn01_n2_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
+m106_mn01_n3_sml	m106_mn01_n3_sml_56693	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn01_n3_sml	m106_mn01_n3_sml_56693	0.02	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
+m106_mn01_n3_sml	m106_mn01_n3_sml_56693	200279.314771	Biovolume of biological entity specified elsewhere per unit volume of the water body	Cubic millimetres per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/	http://vocab.nerc.ac.uk/collection/P06/current/CMCM/
+m106_mn01_n3_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
+m106_mn04_n4_sml	m106_mn04_n4_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn04_n4_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
+m106_mn04_n5_sml	m106_mn04_n5_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn04_n5_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
+m106_mn04_n6_sml	m106_mn04_n6_sml_45072	2	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn04_n6_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
+"""
 _emofs_no_computations = r"""
 id	occurrenceID	measurementValue	measurementType	measurementTypeID
 m106_mn01_n1_sml	m106_mn01_n1_sml_78418	2	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
@@ -341,6 +359,19 @@ with_recast_zip = {
     "event.txt": _event,
     "eml.xml": _eml,
     "extendedmeasurementorfact.txt": _emofs_recasted,
+    "meta.xml": _meta
+    + _occurences_meta_no_verif_status
+    + _meta_emofs_with_computations,
+    "occurrence.txt": grep_dash_v(
+        _occurence_no_ident_status,  # Recast does not affect occurrences
+        "m106_mn01_n3_sml_P_56693",  # Remove Predicted output
+    ),
+}
+
+with_recast_zip2 = {
+    "event.txt": _event,
+    "eml.xml": _eml,
+    "extendedmeasurementorfact.txt": _emofs_78418_becomes_45072,
     "meta.xml": _meta
     + _occurences_meta_no_verif_status
     + _meta_emofs_with_computations,

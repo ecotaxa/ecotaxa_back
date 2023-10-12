@@ -7,13 +7,13 @@ from formats.DarwinCore.models import DwC_Occurrence
 from formats.TxtFromModels import TxtFileWithModel
 
 
-class Occurences(TxtFileWithModel):
+class Occurrences(TxtFileWithModel):
     """
-    The DwC Occurences to export.
+    The DwC Occurrences to export.
     """
 
     def __init__(self) -> None:
         super().__init__(DwC_Occurrence, "occurrence.txt")
 
-    def add(self, an_occurence: DwC_Occurrence) -> None:
-        self.add_entity(an_occurence)
+    def add(self, an_occurrence: DwC_Occurrence) -> None:
+        self.add_entity(an_occurrence)

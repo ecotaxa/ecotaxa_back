@@ -21,6 +21,7 @@ from tests.emodnet_ref import (
     with_absent_zip,
     no_computations_zip,
     with_recast_zip,
+    with_recast_zip2,
 )
 from tests.export_shared import JOB_DOWNLOAD_URL
 from tests.formulae import uvp_formulae
@@ -269,6 +270,31 @@ This series is part of the long term planktonic monitoring of
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=who)
     unzip_and_check(rsp.content, with_recast_zip, who)
+
+    # Options for June 2023-like exports with intra-sample aggregation
+    req = _req_tmpl.copy()
+    req.update(
+        {
+            "collection_id": coll_id,
+            "include_predicted": False,
+            "with_computations": ["ABO", "CNC", "BIV"],
+            "computations_pre_mapping": {
+                78418: 45072,  # Oncaeidae -> Cyclopoida, inside sample 1 there are both
+                25928: 25828,  # Gnathostomata-> Copepoda, not in dataset but to ensure it doesn't hurt
+            },
+        }
+    )
+    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=who, json=req)
+    assert rsp.status_code == status.HTTP_200_OK
+    job_id = rsp.json()["job_id"]
+    wait_for_stable(job_id)
+    job_status = api_check_job_ok(fastapi, job_id)
+    warns = job_status["result"]["wrns"]
+    assert "Not produced due to non-match" not in str(warns)
+    api_check_job_ok(fastapi, job_id)
+    dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
+    rsp = fastapi.get(dl_url, headers=who)
+    unzip_and_check(rsp.content, with_recast_zip2, who)
 
     url_query_back = COLLECTION_QUERY_BY_TITLE_URL.format(title=coll_title)
     rsp = fastapi.get(url_query_back)

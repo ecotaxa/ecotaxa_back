@@ -37,6 +37,7 @@ from DB.Sample import Sample
 from DB.Taxonomy import Taxonomy
 from DB.User import User
 from DB.WoRMs import WoRMS
+from DB.helpers import Session
 from DB.helpers.Postgres import timestamp_to_str
 from data.Countries import countries_by_name
 from formats.DarwinCore.Archive import DwC_Archive, DwcArchive
@@ -70,7 +71,6 @@ from formats.DarwinCore.models import (
 )
 from helpers.DateTime import now_time
 from helpers.DynamicLogs import get_logger, LogsSwitcher
-
 # TODO: Move somewhere else
 from ..helpers.JobService import JobServiceBase, ArgsDict
 
@@ -93,8 +93,6 @@ class DarwinCoreExport(JobServiceBase):
     """
 
     JOB_TYPE = "DarwinCoreExport"
-    # Old param now constant
-    AUTO_MORPHO = True
 
     def init_args(self, args: ArgsDict) -> ArgsDict:
         # A bit unusual to find a method before init(), but here we can visually ensure
@@ -146,7 +144,7 @@ class DarwinCoreExport(JobServiceBase):
         # The taxa to their WoRMS counterpart...
         self.worms_ifier: WoRMSifier = WoRMSifier()  # ...straight from project data...
         self.recast_worms_ifier: WoRMSifier = WoRMSifier()  # ...with applied recast
-        # Per_sample taxa
+        # Per_sample taxa, in plain taxo "space"
         self.taxa_per_sample: Dict[str, Set[ClassifIDT]] = {}
         # Output
         self.errors: List[str] = []
@@ -217,7 +215,7 @@ class DarwinCoreExport(JobServiceBase):
         # then it's an _error_.
         if (
             arch.events.count() == 0
-            and arch.occurences.count() == 0
+            and arch.occurrences.count() == 0
             and arch.emofs.count() == 0
         ):
             self.errors.append(
@@ -253,7 +251,7 @@ class DarwinCoreExport(JobServiceBase):
                     occurrenceStatus=OccurrenceStatusEnum.absent,
                     basisOfRecord=BasisOfRecordEnum.machineObservation,
                 )
-                arch.occurences.add(occ)
+                arch.occurrences.add(occ)
 
     def compute_all_seen_taxa(self) -> ClassifIDSetT:
         # Cumulate all categories
@@ -539,6 +537,7 @@ class DarwinCoreExport(JobServiceBase):
         """
         ret: List[EMLTaxonomicClassification] = []
 
+        # Coverage is from recast "space", the biggest one
         worms_targets = self.recast_worms_ifier.get_worms_targets()
         # Error out if nothing at all
         if len(worms_targets) == 0:
@@ -600,14 +599,12 @@ class DarwinCoreExport(JobServiceBase):
                     minimumDepthInMeters=str(summ[2]),
                     maximumDepthInMeters=str(summ[3]),
                 )
-                events.add(evt)
-                self.add_eMoFs_for_sample(sample=a_sample, arch=arch, event_id=event_id)
-                # Humans first :)
-                nb_added = self.add_occurences(
+                events.add(evt)                self.add_eMoFs_about_sample(sample=a_sample, arch=arch, event_id=event_id)# Humans first :)
+                nb_added = self.add_occurrences_for_sample(
                     sample=a_sample, arch=arch, event_id=event_id, predicted=False
                 )
                 if self.include_predicted:
-                    by_ml = self.add_occurences(
+                    by_ml = self.add_occurrences_for_sample(
                         sample=a_sample, arch=arch, event_id=event_id, predicted=True
                     )
                     nb_added += by_ml
@@ -617,15 +614,15 @@ class DarwinCoreExport(JobServiceBase):
                         % (a_sample.orig_id, a_prj_id)
                     )
                 # Taxa-level eMoFs
-                self.add_occurence_eMoFs_for_sample(
+                self.add_occurrence_eMoFs_for_sample(
                     sample=a_sample, arch=arch, event_id=event_id, predicted=False
                 )
                 if self.include_predicted:
-                    by_ml = self.add_occurence_eMoFs_for_sample(
+                    self.add_occurrence_eMoFs_for_sample(
                         sample=a_sample, arch=arch, event_id=event_id, predicted=True
                     )
                 # Sample-level eMoFs
-                self.add_instrument_eMoFs_for_sample(
+                self.add_instrument_eMoFs_about_sample(
                     sample=a_sample, arch=arch, event_id=event_id
                 )
 
@@ -639,7 +636,7 @@ class DarwinCoreExport(JobServiceBase):
     }
 
     # noinspection PyPep8Naming
-    def add_eMoFs_for_sample(
+    def add_eMoFs_about_sample(
         self, sample: Sample, arch: DwC_Archive, event_id: str
     ) -> None:
         """
@@ -734,7 +731,7 @@ class DarwinCoreExport(JobServiceBase):
             )
         return ret
 
-    def add_instrument_eMoFs_for_sample(
+    def add_instrument_eMoFs_about_sample(
         self, sample: Sample, arch: DwC_Archive, event_id: str
     ) -> None:
         """
@@ -745,18 +742,21 @@ class DarwinCoreExport(JobServiceBase):
             ins = ImagingInstrumentName(event_id=event_id, value=instrument_url)
             arch.emofs.add(ins)
 
+    @classmethod
     def _aggregate_for_sample(
-        self,
+        cls,
+        ro_session: Session,
         sample: Sample,
         morpho2phylo: TaxoRemappingT,
         with_computations: List[SciExportTypeEnum],
+        formulae: Dict[str, str],
         predicted: bool,
+        warnings: List[str],
     ) -> Dict[ClassifIDT, SampleAggregForTaxon]:
         """
         :param sample: The Sample for which computations needs to be done.
         :param with_computations: Computations to do.
-        :param morpho2phylo: The Morpho taxa to their nearest Phylo parent. If not provided
-            then _no_ up-the-taxa-tree consolidation will be done, i.e. there _will be_ Morpho taxa in 'ret' keys.
+        :param morpho2phylo: The Morpho taxa to their nearest Phylo parent.
 
         Do the aggregations for the given sample for each taxon and return them.
         They will become emofs if used from DWC:
@@ -774,41 +774,36 @@ class DarwinCoreExport(JobServiceBase):
 
         # The source data. Note: I know it could be simplified by passing the 'P' or 'V' filter.
         if predicted:
-            object_set = CommonObjectSets.predictedInSample(self.ro_session, sample)
+            object_set = CommonObjectSets.predictedInSample(ro_session, sample)
         else:
-            object_set = CommonObjectSets.validatedInSample(self.ro_session, sample)
+            object_set = CommonObjectSets.validatedInSample(ro_session, sample)
 
-        # TODO but the tests assume that: anything here -> go for abundances
-        #  if SciExportTypeEnum.abundances in with_computations:
-        if True:
-            # Abundances, 'simple' count but eventually with remapping
-            counts = self.abundances_for_sample(object_set, morpho2phylo)
-            for a_count in counts:
-                ret[a_count["txo_id"]] = SampleAggregForTaxon(
-                    a_count["count"], None, None
-                )
+        # Abundances, 'simple' count but eventually with remapping
+        counts = cls.abundances_for_sample(ro_session, object_set, morpho2phylo, warnings)
+        for a_count in counts:
+            ret[a_count["txo_id"]] = SampleAggregForTaxon(a_count["count"], None, None)
 
         if SciExportTypeEnum.concentrations in with_computations:
             # Enrich with concentrations
-            concentrations = self.concentrations_for_sample(
-                self.formulae, object_set, morpho2phylo
+            concentrations = cls.concentrations_for_sample(
+                ro_session, formulae, object_set, morpho2phylo, warnings
             )
             conc_wrn_txos = []
             for a_conc in concentrations:
                 txo_id, conc = a_conc["txo_id"], a_conc["conc"]
-                if conc == conc:  # NaN test
+                if conc == conc:  # not-a-NaN test
                     ret[txo_id].concentration = conc
                 else:
                     conc_wrn_txos.append(txo_id)
             if len(conc_wrn_txos) > 0:
                 wrn = "Sample '{}' taxo(s) #{}: Computed concentration is NaN, input data is missing or incorrect"
                 wrn = wrn.format(sample.orig_id, conc_wrn_txos)
-                self.warnings.append(wrn)
+                warnings.append(wrn)
 
         if SciExportTypeEnum.biovols in with_computations:
             # Enrich with biovolumes, note that we need previous formulae for scaling
-            biovolumes = self.biovolumes_for_sample(
-                self.formulae, object_set, morpho2phylo
+            biovolumes = cls.biovolumes_for_sample(
+                ro_session, formulae, object_set, morpho2phylo, warnings
             )
             biovol_wrn_txos = []
             for a_biovol in biovolumes:
@@ -820,12 +815,17 @@ class DarwinCoreExport(JobServiceBase):
             if len(biovol_wrn_txos) > 0:
                 wrn = "Sample '{}' taxo(s) #{}: Computed biovolume is NaN, input data is missing or incorrect"
                 wrn = wrn.format(sample.orig_id, biovol_wrn_txos)
-                self.warnings.append(wrn)
+                warnings.append(wrn)
 
         return ret
 
+    @classmethod
     def abundances_for_sample(
-        self, obj_set: DescribedObjectSet, morpho2phylo: TaxoRemappingT
+        cls,
+        ro_session: Session,
+        obj_set: DescribedObjectSet,
+        morpho2phylo: TaxoRemappingT,
+        warnings: List[str],
     ) -> List[Dict[str, Any]]:
         """
         Compute abundances (count) for given sample.
@@ -836,13 +836,16 @@ class DarwinCoreExport(JobServiceBase):
         aug_qry.set_aliases(
             {"txo.id": "txo_id", aug_qry.COUNT_STAR: "count"}
         ).set_grouping(ResultGrouping.BY_TAXO)
-        return aug_qry.get_result(self.ro_session, lambda e: self.warnings.append(e))
+        return aug_qry.get_result(ro_session, lambda e: warnings.append(e))
 
+    @classmethod
     def concentrations_for_sample(
-        self,
+        cls,
+        ro_session: Session,
         formulae: Dict[str, str],
         obj_set: DescribedObjectSet,
         morpho2phylo: TaxoRemappingT,
+        warnings: List[str],
     ) -> List[Dict[str, Any]]:
         """
         Compute concentration of each taxon for given sample.
@@ -865,13 +868,16 @@ class DarwinCoreExport(JobServiceBase):
         aug_qry.aggregate_with_computed_sum(
             sum_formula, Vocabulary.concentrations, Units.number_per_cubic_metre
         )
-        return aug_qry.get_result(self.ro_session, lambda e: self.warnings.append(e))
+        return aug_qry.get_result(ro_session, lambda e: warnings.append(e))
 
+    @classmethod
     def biovolumes_for_sample(
-        self,
+        cls,
+        ro_session: Session,
         formulae: Dict[str, str],
         obj_set: DescribedObjectSet,
         morpho2phylo: TaxoRemappingT,
+        warnings: List[str],
     ) -> List[Dict[str, Any]]:
         """
         Compute biovolume of each taxon for given sample.
@@ -885,9 +891,9 @@ class DarwinCoreExport(JobServiceBase):
             sum_formula, Vocabulary.biovolume, Units.cubic_millimetres_per_cubic_metre
         )
         aug_qry.set_grouping(ResultGrouping.BY_TAXO)
-        return aug_qry.get_result(self.ro_session, lambda e: self.warnings.append(e))
+        return aug_qry.get_result(ro_session, lambda e: warnings.append(e))
 
-    def add_occurences(
+    def add_occurrences_for_sample(
         self, sample: Sample, arch: DwC_Archive, event_id: str, predicted: bool
     ) -> int:
         """
@@ -895,61 +901,33 @@ class DarwinCoreExport(JobServiceBase):
         If 'predicted' is set, do the counts on predicted (but not validated) objects.
         Otherwise, use human-validated objects.
         """
-        aggregs = self._aggregate_for_sample(
-            sample=sample,
-            morpho2phylo=self.worms_ifier.morpho2phylo if self.AUTO_MORPHO else {},
-            with_computations=[
-                SciExportTypeEnum.abundances
-            ],  # Needed for production per aphia_id. The output abundances take the recast into account and are computed in the recast taxo space.
+        aggregs = self._aggregate_for_sample(            ro_session = (self.ro_session,)sample=sample,
+            morpho2phylo = (self.worms_ifier.morpho2phylo,)
+            with_computations = ([SciExportTypeEnum.abundances],)
+            # SciExportTypeEnum.abundances is needed for production of per aphia_id in present def.
+            formulae = (self.formulae,)
             predicted=predicted,
+            warnings=self.warnings,
         )
 
-        # Group by lsid, in order to have a single occurrence
-        by_lsid: Dict[LsidT, Tuple[str, SampleAggregForTaxon, WoRMS]] = {}
-        for an_id, an_aggreg in aggregs.items():
-            try:
-                worms = self.worms_ifier.phylo2worms[an_id]
-            except KeyError:
-                # Mapping failed, count how many of them
-                if an_id in self.ignored_count:
-                    self.ignored_count[an_id] += an_aggreg.abundance
-                else:
-                    # Sanity check, there should be no morpho left
-                    # TODO: Not relevant anymore, find another sanity check (e.g. no dest is a source?)
-                    # if self.auto_morpho:
-                    #     assert an_id not in self.morpho2phylo
-                    self.ignored_morpho += an_aggreg.abundance
-                continue
-            worms_lsid = worms.lsid
-            assert worms_lsid is not None
-            if worms_lsid in by_lsid:
-                # Manage here the mapping of _several_ EcoTaxa taxa to a _single_ Worms entry.
-                # e.g. jb20140319_72396_92230
-                # is because both 72396 (Diphyidae) and 92230 (Diphyidae>bract)
-                #    become Diphyidae 135338 (https://www.marinespecies.org/aphia.php?p=taxdetails&id=135338)
-                occurrence_id, aggreg_for_lsid, _worms = by_lsid[worms_lsid]
-                # Accumulate abundance
-                aggreg_for_lsid.abundance += an_aggreg.abundance
-                # Add the new taxon ID to complete the occurrence ID
-                occurrence_id += "_" + str(an_id)
-                by_lsid[worms_lsid] = (occurrence_id, aggreg_for_lsid, worms)
+        by_lsid_desc, not_found = self._occurrences_from_aggregations(
+            aggregs, self.worms_ifier.phylo2worms, event_id, predicted, self.warnings
+        )
+        for an_id in not_found:
+            # Mapping failed, count how many of them
+            if an_id in self.ignored_count:
+                self.ignored_count[an_id] += aggregs[an_id].abundance
             else:
-                # Take the original taxo ID to build an occurrence
-                # It's unique because it's based on the sample ID, and we append the taxon EcoTaxa ID
-                occurrence_id = (
-                    event_id + ("_P" if predicted else "") + "_" + str(an_id)
-                )
-                by_lsid[worms_lsid] = (occurrence_id, an_aggreg, worms)
+                # Sanity check, there should be no morpho left
+                # TODO: Not relevant anymore, find another sanity check (e.g. no dest is a source?)
+                # if self.auto_morpho:
+                #     assert an_id not in self.morpho2phylo
+                self.ignored_morpho += aggregs[an_id].abundance
 
-        # Sort per abundance desc
-        # noinspection PyTypeChecker
-        by_lsid_desc = OrderedDict(
-            sorted(by_lsid.items(), key=lambda itm: itm[1][1].abundance, reverse=True)
-        )
         # Record production for this sample i.e. event
         self.taxa_per_sample[event_id] = set()
         # Loop over WoRMS taxa
-        nb_added_occurences = 0
+        nb_added_occurrences = 0
         for a_lsid, for_lsid in by_lsid_desc.items():
             occurrence_id, aggreg_for_lsid, worms = for_lsid
             self.produced_count += aggreg_for_lsid.abundance
@@ -974,125 +952,108 @@ class DarwinCoreExport(JobServiceBase):
                     else IdentificationVerificationEnum.validatedByHuman
                 )
                 occ.identificationVerificationStatus = verif_status
-            arch.occurences.add(occ)
-            nb_added_occurences += 1
-            # TODO
-            # if self.with_zeroes:
-            #     # Record the production of a 'present' occurence for this taxon
-            #     self.taxa_per_sample[event_id].add(an_id)
-        return nb_added_occurences
+            arch.occurrences.add(occ)
+            nb_added_occurrences += 1
+        return nb_added_occurrences
 
-    def add_occurence_eMoFs_for_sample(
-        self, sample: Sample, arch: DwC_Archive, event_id: str, predicted: bool
-    ) -> int:
-        """
-        Add DwC occurrence eMoFs, for given sample, into the archive. A single line per WoRMS taxon.
-        """
-        aggregs = self._aggregate_for_sample(
-            sample=sample,
-            morpho2phylo=self.recast_worms_ifier.morpho2phylo
-            if self.AUTO_MORPHO
-            else {},
-            with_computations=self.with_computations,
-            predicted=predicted,
-        )
-
-        # Group by lsid, in order to have a single occurrence
+    @staticmethod
+    def _occurrences_from_aggregations(
+        aggregs: Dict[ClassifIDT, SampleAggregForTaxon],
+        phylo2worms: Dict[ClassifIDT, WoRMS],
+        event_id: str,
+        predicted: bool,
+        warnings: List[str],
+    ) -> Tuple[Dict[LsidT, Tuple[str, SampleAggregForTaxon, WoRMS]], ClassifIDSetT]:
+        """Mix aggregations from a set of EcoTaxa taxa and produce data for the equivalent DwCA record."""
+        # Group by lsid, which is mostly an aphia_id, in order to have a single occurrence line even if several taxa
+        # map to same WoRMS.
         by_lsid: Dict[LsidT, Tuple[str, SampleAggregForTaxon, WoRMS]] = {}
+        not_found: ClassifIDSetT = set()
         for an_id, an_aggreg in aggregs.items():
-            try:
-                worms = self.worms_ifier.phylo2worms[an_id]
-            except KeyError:
-                # Mapping failed, count how many of them
-                # if an_id in self.ignored_count:
-                #     self.ignored_count[an_id] += an_aggreg.abundance
-                # else:
-                #     # Sanity check, there should be no morpho left
-                #     # TODO: Not relevant anymore, find another sanity check (e.g. no dest is a source?)
-                #     # if self.auto_morpho:
-                #     #     assert an_id not in self.morpho2phylo
-                #     self.ignored_morpho += an_aggreg.abundance
+            worms = phylo2worms.get(an_id)
+            if worms is None:
+                not_found.add(an_id)
                 continue
             worms_lsid = worms.lsid
             assert worms_lsid is not None
-            if worms_lsid in by_lsid:
-                # Manage here the mapping of _several_ EcoTaxa taxa to a _single_ Worms entry.
-                # e.g. jb20140319_72396_92230
-                # is because both 72396 (Diphyidae) and 92230 (Diphyidae>bract)
-                #    become Diphyidae 135338 (https://www.marinespecies.org/aphia.php?p=taxdetails&id=135338)
-                occurrence_id, aggreg_for_lsid, _worms = by_lsid[worms_lsid]
-                # Accumulate abundance
-                aggreg_for_lsid.abundance += an_aggreg.abundance
-                # Add the new taxon ID to complete the occurrence ID
-                occurrence_id += "_" + str(an_id)
-                by_lsid[worms_lsid] = (occurrence_id, aggreg_for_lsid, worms)
-            else:
-                # Take the original taxo ID to build an occurrence
+            if worms_lsid not in by_lsid:
+                # Take the original taxo ID to build an occurrence ID
                 # It's unique because it's based on the sample ID, and we append the taxon EcoTaxa ID
                 occurrence_id = (
                     event_id + ("_P" if predicted else "") + "_" + str(an_id)
                 )
                 by_lsid[worms_lsid] = (occurrence_id, an_aggreg, worms)
+            else:
+                # Manage here the grouping, i.e. the mapping of _several_ EcoTaxa taxa to a _single_ Worms entry.
+                # e.g. in jb20140319_72396_92230
+                #      both 72396 (Diphyidae) and 92230 (Diphyidae>bract)
+                #      become Diphyidae 135338 (https://www.marinespecies.org/aphia.php?p=taxdetails&id=135338)
+                occurrence_id, aggreg_for_lsid, _worms = by_lsid[worms_lsid]
+                # Accumulate aggregation
+                try:
+                    aggreg_for_lsid += an_aggreg
+                except AssertionError:
+                    warnings.append(
+                        "Cannot accumulate %s into %s for lsid %s"
+                        % (str(an_aggreg), str(aggreg_for_lsid), worms_lsid)
+                    )
+                # Add the new taxon ID to complete the occurrence ID
+                occurrence_id += "_" + str(an_id)
+                by_lsid[worms_lsid] = (occurrence_id, aggreg_for_lsid, worms)
 
         # Sort per abundance desc
         # noinspection PyTypeChecker
         by_lsid_desc = OrderedDict(
             sorted(by_lsid.items(), key=lambda itm: itm[1][1].abundance, reverse=True)
         )
-        # Record production for this sample i.e. event
-        self.taxa_per_sample[event_id] = set()
+        return by_lsid_desc, not_found
+
+    def add_occurrence_eMoFs_for_sample(
+        self, sample: Sample, arch: DwC_Archive, event_id: str, predicted: bool
+    ) -> None:
+        """
+        Add DwC occurrence eMoFs, for given sample, into the archive. A single line per WoRMS taxon.
+        Note: We're in recast-ed taxo "space".
+        If 'predicted' is set, do the computations on predicted (but not validated) objects.
+        Otherwise, use human-validated objects.
+        """
+        aggregs = self._aggregate_for_sample(
+            ro_session=self.ro_session,
+            sample=sample,
+            morpho2phylo=self.recast_worms_ifier.morpho2phylo,
+            with_computations=self.with_computations,
+            formulae=self.formulae,
+            predicted=predicted,
+            warnings=self.warnings,
+        )
+
+        by_lsid_desc, not_found = self._occurrences_from_aggregations(
+            aggregs,
+            self.recast_worms_ifier.phylo2worms,
+            event_id,
+            predicted,
+            self.warnings,
+        )
+
         # Loop over WoRMS taxa
-        nb_added_occurences = 0
         for a_lsid, for_lsid in by_lsid_desc.items():
             occurrence_id, aggreg_for_lsid, worms = for_lsid
-            # self.produced_count += aggreg_for_lsid.abundance
-            # occ = DwC_Occurrence(
-            #     eventID=event_id,
-            #     occurrenceID=occurrence_id,
-            #     # Below is better as an EMOF @see CountOfBiologicalEntity
-            #     # individualCount=individual_count,
-            #     scientificName=worms.scientificname,
-            #     scientificNameID=worms.lsid,
-            #     kingdom=worms.kingdom,
-            #     occurrenceStatus=OccurrenceStatusEnum.present,
-            #     basisOfRecord=BasisOfRecordEnum.machineObservation,
-            # )
-            # if self.include_predicted:
-            #     # TODO: More in record depends on the status (validated or just predicted),
-            #     #  not just identificationVerificationStatus
-            #     # @see https://github.com/ecotaxa/ecotaxa_front/issues/764#issuecomment-1420324532
-            #     verif_status = (
-            #         IdentificationVerificationEnum.predictedByMachine
-            #         if predicted
-            #         else IdentificationVerificationEnum.validatedByHuman
-            #     )
-            #     occ.identificationVerificationStatus = verif_status
-            # arch.occurences.add(occ)
-            # nb_added_occurences += 1
-            # Add eMoFs if possible and required, but the decision is made inside the def
-            self.add_eMoFs_for_occurence(
+            self.add_eMoFs_for_occurrence(
                 arch=arch,
                 event_id=event_id,
                 occurrence_id=occurrence_id,
                 values=aggreg_for_lsid,
             )
-            # TODO
-            # if self.with_zeroes:
-            #     # Record the production of a 'present' occurence for this taxon
-            #     self.taxa_per_sample[event_id].add(an_id)
-        return nb_added_occurences
 
     @staticmethod
-    def add_eMoFs_for_occurence(
+    def add_eMoFs_for_occurrence(
         arch: DwC_Archive,
         event_id: str,
         occurrence_id: str,
         values: SampleAggregForTaxon,
     ) -> None:
         """
-        Add eMoF instances, for given occurrence, into the archive.
-        Conditions are: - the value exists
-                        - the value was required by the call
+        Add eMoF instances, for given occurrence and existing values, into the archive.
         """
         cnt_emof = CountOfBiologicalEntity(
             event_id, occurrence_id, str(values.abundance)
