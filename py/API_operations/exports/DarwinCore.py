@@ -210,7 +210,7 @@ class DarwinCoreExport(JobServiceBase):
             self.temp_for_jobs.base_dir_for(self.job_id) / self.DWC_ZIP_NAME,
         )
         # Add data from DB
-        self.add_events(arch, institution_code)
+        self.fill_archive(arch, institution_code)
         # Loop over _absent_ data
         # For https://github.com/ecotaxa/ecotaxa_dev/issues/603
         # Loop over taxa which are in the collection but not in present sample
@@ -569,9 +569,9 @@ class DarwinCoreExport(JobServiceBase):
         # Round coordinates to ~ 110mm
         return "%.6f" % lat_or_lon
 
-    def add_events(self, arch: DwC_Archive, institution_code: str) -> None:
+    def fill_archive(self, arch: DwC_Archive, institution_code: str) -> None:
         """
-        Add DwC events into the archive.
+        Add DwC files into the archive: events, occurrences, eMoFs
             We produce sample-type events.
         """
         # TODO: Dup code
@@ -792,7 +792,8 @@ class DarwinCoreExport(JobServiceBase):
             ro_session, object_set, morpho2phylo, warnings
         )
         for a_count in counts:
-            ret[a_count["txo_id"]] = SampleAggregForTaxon(a_count["count"], None, None)
+            txo_id, count = a_count["txo_id"], a_count["count"]
+            ret[txo_id] = SampleAggregForTaxon(count, None, None)
 
         if SciExportTypeEnum.concentrations in with_computations:
             # Enrich with concentrations
@@ -923,7 +924,7 @@ class DarwinCoreExport(JobServiceBase):
             warnings=self.warnings,
         )
 
-        by_lsid_desc, not_found = self._occurrences_from_aggregations(
+        by_abundance_desc, not_found = self._occurrences_from_aggregations(
             aggregs, self.worms_ifier.phylo2worms, event_id, predicted, self.warnings
         )
         for an_id in not_found:
@@ -941,7 +942,7 @@ class DarwinCoreExport(JobServiceBase):
         self.taxa_per_sample[event_id] = set()
         # Loop over WoRMS taxa
         nb_added_occurrences = 0
-        for a_lsid, for_lsid in by_lsid_desc.items():
+        for a_lsid, for_lsid in by_abundance_desc.items():
             occurrence_id, aggreg_for_lsid, worms = for_lsid
             self.produced_count += aggreg_for_lsid.abundance
             occ = DwC_Occurrence(
@@ -982,7 +983,9 @@ class DarwinCoreExport(JobServiceBase):
         # map to same WoRMS.
         by_lsid: Dict[LsidT, Tuple[str, SampleAggregForTaxon, WoRMS]] = {}
         not_found: ClassifIDSetT = set()
-        for an_id, an_aggreg in aggregs.items():
+        for an_id, an_aggreg in sorted(
+            aggregs.items(), reverse=True
+        ):  # The order influences composition output
             assert an_aggreg is not None, "Unexpected None aggreg' in %s" % str(aggregs)
             worms = phylo2worms.get(an_id)
             if worms is None:
@@ -1015,12 +1018,18 @@ class DarwinCoreExport(JobServiceBase):
                 occurrence_id += "_" + str(an_id)
                 by_lsid[worms_lsid] = (occurrence_id, aggreg_for_lsid, worms)
 
-        # Sort per abundance desc
-        # noinspection PyTypeChecker
-        by_lsid_desc = OrderedDict(
-            sorted(by_lsid.items(), key=lambda itm: itm[1][1].abundance, reverse=True)
+        # Sort for stability
+        by_lsid_sorted = sorted(
+            by_lsid.items(),
+            key=lambda itm: (
+                -itm[1][1].abundance,  # Aggreg abundance, desc
+                itm[1][2].lsid,  # To disambiguate
+            ),
         )
-        return by_lsid_desc, not_found
+        ret = OrderedDict(by_lsid_sorted)
+        if "urn:lsid:marinespecies.org:taxname:104081" in ret:
+            logger.info("ret:", ret)
+        return ret, not_found
 
     def add_occurrence_eMoFs_for_sample(
         self, sample: Sample, arch: DwC_Archive, event_id: str, predicted: bool
@@ -1041,7 +1050,7 @@ class DarwinCoreExport(JobServiceBase):
             warnings=self.warnings,
         )
 
-        by_lsid_desc, not_found = self._occurrences_from_aggregations(
+        by_abundance_desc, not_found = self._occurrences_from_aggregations(
             aggregs,
             self.recast_worms_ifier.phylo2worms,
             event_id,
@@ -1050,7 +1059,7 @@ class DarwinCoreExport(JobServiceBase):
         )
 
         # Loop over WoRMS taxa
-        for a_lsid, for_lsid in by_lsid_desc.items():
+        for a_lsid, for_lsid in by_abundance_desc.items():
             occurrence_id, aggreg_for_lsid, worms = for_lsid
             self.add_eMoFs_for_occurrence(
                 arch=arch,
