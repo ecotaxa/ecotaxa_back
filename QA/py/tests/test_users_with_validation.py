@@ -13,7 +13,11 @@ from helpers.httpexception import (
 )
 from DB.User import UserStatus
 from BO.Rights import NOT_FOUND, NOT_AUTHORIZED
-from tests.test_user_admin import USER_UPDATE_URL, USER_CREATE_URL, USER_GET_URL
+from tests.test_user_admin import (
+    USER_UPDATE_URL,
+    USER_CREATE_URL,
+    USER_GET_URL,
+)
 from helpers.AppConfig import Config
 from fastapi import HTTPException
 from tests.credentials import (
@@ -27,6 +31,7 @@ from tests.credentials import (
 from API_operations.helpers.UserValidation import UserValidation, ActivationType
 from helpers.login import NOT_AUTHORIZED_MAIL
 import urllib.parse
+from tests.test_users import config_captcha
 
 NEW_USER_WITH_CONFIRMATION_ID = 11
 NEW_USER_WITH_VALIDATION_ID = 12
@@ -62,6 +67,7 @@ def set_config_on(monkeypatch, validation="on"):
     from providers.MailProvider import MailProvider
 
     monkeypatch.setattr(MailProvider, "send_mail", mock_send_mail)
+    config_captcha(monkeypatch)
 
 
 def user_confirm_email(
