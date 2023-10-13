@@ -116,7 +116,7 @@ class UserService(Service):
         if current_user_id is None:
             # Unauthenticated user tries to create an account
             # Verify not a robot
-            self._verify_captcha(no_bot)
+            self._verify_captcha_thow(no_bot)
             # No right at all
             actions = None
             # request email verification if  validation is on
@@ -293,7 +293,7 @@ class UserService(Service):
         Either change the status of the user if current_user is not None and is admin or confirm mail_status and start validation process if account_validation is True.
         """
         if current_user_id is None:
-            self._verify_captcha(no_bot)
+            self._verify_captcha_thow(no_bot)
             if activatereq is not None:
 
                 self._refresh_any_status(
@@ -533,6 +533,7 @@ class UserService(Service):
         actiontype: ActivationType,
         cols_to_upd: List,
         current_user: Optional[User],
+        set_mail_status: bool = False,
     ):
         """
         common to add or update a user
@@ -546,7 +547,7 @@ class UserService(Service):
                 update_src.password != user_to_update.password
             )
             UserBO.validate_usr(self.session, update_src, verify_password)
-            if update_src.id == -1:
+            if update_src.id == -1 and current_user is None:
                 mail_status = True
             else:
                 mail_status = False
@@ -665,11 +666,12 @@ class UserService(Service):
             return users[0]
         return None
 
-    def _verify_captcha(self, no_bot: Optional[List[str]]) -> None:
+    def _verify_captcha_thow(self, no_bot: Optional[List[str]]) -> None:
         recaptcha_secret, recaptcha_id = str(
             self.config.get_cnf("RECAPTCHASECRET") or ""
         ), str(self.config.get_cnf("RECAPTCHAID") or "")
-        recaptcha = ReCAPTCHAClient(recaptcha_secret, recaptcha_id)
+        recaptcha = ReCAPTCHAClient(recaptcha_id, recaptcha_secret)
+        # verify_captcha throws exception
         recaptcha.verify_captcha(no_bot)
 
     def _set_mail_status(
@@ -971,7 +973,7 @@ class UserService(Service):
         if current_user_id is None:
             # Unauthenticated user asks to reset his password
             # Verify not a robot
-            self._verify_captcha(no_bot)
+            self._verify_captcha_thow(no_bot)
             # verify if the email exists  in the db
             if token is None:
                 self._has_ident_user(dict({"email": resetreq.email}), True)
