@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import re
-from typing import List, Any, Optional, Set, cast, Dict
+from typing import List, Any, Optional, Set, cast
 
 from BO.DataLicense import DataLicense, LicenseEnum
 from DB import Session
@@ -101,28 +101,11 @@ class CollectionBO(object):
         assert len(db_projects) == len(project_ids)
         # Loop on projects, adding them and collecting aggregated data
         prj_licenses: Set[LicenseEnum] = set()
-        samples_per_project: Dict[str, Project] = {}
         problems: List[str] = []
         a_db_project: Project
         for a_db_project in db_projects:
             self._collection.projects.append(a_db_project)
             prj_licenses.add(cast(LicenseEnum, a_db_project.license))
-            for a_sample in a_db_project.all_samples:
-                sample_id = a_sample.orig_id
-                # Sanity check: sample orig_id must be unique in the collection
-                if sample_id in samples_per_project:
-                    problems.append(
-                        "Sample with orig_id %s is in both '%s'(#%d) and '%s'(#%d)"
-                        % (
-                            sample_id,
-                            samples_per_project[sample_id].title,
-                            samples_per_project[sample_id].projid,
-                            a_db_project.title,
-                            a_db_project.projid,
-                        )
-                    )
-                else:
-                    samples_per_project[sample_id] = a_db_project
         # Set self to most restrictive of all licenses
         max_restrict = max(
             [DataLicense.RESTRICTION[a_prj_lic] for a_prj_lic in prj_licenses]

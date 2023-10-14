@@ -193,6 +193,10 @@ class DarwinCoreExport(JobServiceBase):
         # Security check
         # Do the job
         logger.info("------------ starting --------------")
+        # Samples names collision check
+        if self.check_sample_collisions():
+            self.set_job_result(self.errors, {"wrns": self.warnings})
+            return
         # Update DB statistics to ensure correctness of geo in produced output
         self.update_db_stats()
         # 2 taxonomic mappings/spaces need to be used
@@ -1166,6 +1170,29 @@ class DarwinCoreExport(JobServiceBase):
             logger.info(
                 "rank '%s' stats %s", str(a_rank), self.stats_per_rank.get(a_rank)
             )
+
+    def check_sample_collisions(self) -> bool:
+        ret: bool = False
+        samples_per_project: Dict[str, Project] = {}
+        for a_project in self.collection.projects:
+            for a_sample in a_project.all_samples:
+                sample_id = a_sample.orig_id
+                # Sanity check: sample orig_id must be unique in the collection
+                if sample_id in samples_per_project:
+                    self.errors.append(
+                        "Sample with orig_id %s is in both '%s'(#%d) and '%s'(#%d)"
+                        % (
+                            sample_id,
+                            samples_per_project[sample_id].title,
+                            samples_per_project[sample_id].projid,
+                            a_project.title,
+                            a_project.projid,
+                        )
+                    )
+                    ret = True
+                else:
+                    samples_per_project[sample_id] = a_project
+        return ret
 
     def update_db_stats(self) -> None:
         """
