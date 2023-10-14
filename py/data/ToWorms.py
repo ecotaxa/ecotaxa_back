@@ -223,10 +223,10 @@ class ToWorms(object):
         for a_tab in TABS:
             self.analyze(workbook[a_tab])
         # The source (present) taxa
-        self.unieuk: Dict[int, TaxonBO] = {}
+        self.unieuk: Dict[int, TaxonBO] = {}  # TODO: Should be in the TaxaTree
         self.unieuk_tree: TaxaTree = TaxaTree(0, "root")
         # The target worms taxa
-        self.worms: Dict[int, TaxonBO] = {}
+        self.worms: Dict[int, TaxonBO] = {}  # TODO: Should be in the TaxaTree
         self.worms_tree: TaxaTree = TaxaTree(0, "worms")
         # The link b/w the two trees
         self.done_remaps: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
@@ -716,7 +716,7 @@ class ToWorms(object):
 
             mapping = StrictWoRMSSetFromTaxaSet(taxo_sce.session, all_eco_ids).res
 
-        worms_tree: TaxaTree = TaxaTree(0, "worms")
+        worms_tree = TaxaTree(0, "worms")
         all_worms_ids = [a_worms_info.aphia_id for a_worms_info in mapping.values()]
         worms_taxo_infos: List[TaxonBO] = taxo_sce.query_worms_set(all_worms_ids)
         for an_info in worms_taxo_infos:
@@ -729,18 +729,3 @@ class ToWorms(object):
 
         worms_sum = worms_tree.nb_objects
         print("Old-way comparison: %d" % worms_sum)
-
-
-if __name__ == "__main__":
-    to_worms = ToWorms()
-    to_worms.pre_validate()
-    to_worms.prepare()
-    to_worms.validate_with_trees()
-    to_worms.show_stats()
-    to_worms.apply()
-    to_worms.check_ancestors()
-    to_worms.check_closure()
-    to_worms.check_sums()
-    # to_worms.old_way(sce)
-    # to_worms.print_trees()
-    # print(to_worms.worms_tree.newick())

@@ -14,6 +14,7 @@ from DB.WoRMs import WoRMS
 from DB.helpers import Result
 from DB.helpers.ORM import Session, any_, case, func, text, select, Label
 from helpers.DynamicLogs import get_logger
+from helpers.Timer import CodeTimer
 
 ClassifSetInfoT = Dict[ClassifIDT, Tuple[str, str]]
 
@@ -22,7 +23,7 @@ logger = get_logger(__name__)
 
 class TaxonBO(object):
     """
-    Holder of a node of the taxonomy tree.
+    Holder of a node of a taxonomy tree. Used for Unieuk tree and for WoRMS one.
     """
 
     __slots__ = [
@@ -447,8 +448,9 @@ class TaxonBOSet(object):
         _dumm, qry = TaxonomyBO._add_recursive_query(qry, tf, do_concat=False)
         qry = qry.where(tf.c.id == any_(taxon_ids))
         # Add another join for getting children
-        logger.info("Taxo query: %s with IDs %s", qry, taxon_ids)
-        res: Result = session.execute(qry)
+        logger.info("TaxonBOSet query: %s with IDs %s", qry, taxon_ids)
+        with CodeTimer("TaxonBOSet query for %d IDs: " % len(taxon_ids), logger):
+            res: Result = session.execute(qry)
         self.taxa: List[TaxonBO] = []
         for a_rec in res.fetchall():
             lst_rec = list(a_rec)
@@ -543,8 +545,11 @@ class TaxonBOSetFromWoRMS(object):
             prev_alias = lev_alias
         qry = qry.select_from(chained_joins)
         qry = qry.where(tf.c.aphia_id == any_(taxon_ids))
-        logger.info("Taxo query: %s with IDs %s", qry, taxon_ids)
-        res: Result = session.execute(qry)
+        logger.info("TaxonBOSetFromWoRMS query: %s with IDs %s", qry, taxon_ids)
+        with CodeTimer(
+            "TaxonBOSetFromWoRMS query for %d IDs: " % len(taxon_ids), logger
+        ):
+            res: Result = session.execute(qry)
         self.taxa = []
         for a_rec in res.fetchall():
             lst_rec = list(a_rec)

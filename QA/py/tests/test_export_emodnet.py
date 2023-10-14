@@ -3,7 +3,6 @@ import logging
 
 # noinspection PyPackageRequirements
 from io import BytesIO
-from unittest import mock
 from zipfile import ZipFile
 
 import pytest
@@ -55,18 +54,29 @@ PROJECT_SEARCH_SAMPLES_URL = "/api/samples/search?project_ids={project_id}&id_pa
 PROJECT_SEARCH_ACQUIS_URL = "/acquisitions/search?project_id={project_id}"
 
 
-@pytest.mark.parametrize("who", [ADMIN_AUTH, CREATOR_AUTH])
-def test_emodnet_export(config, database, fastapi, caplog, who):
+@pytest.fixture()
+def fixed_date(monkeypatch):
     fixed_date = datetime.datetime(2021, 7, 10, 11, 22, 33)
-    with mock.patch("helpers.DateTime._now_time", return_value=fixed_date):
-        do_test_emodnet_export(config, database, fastapi, caplog, who)
+    monkeypatch.setattr("helpers.DateTime._now_time", lambda: fixed_date)
 
 
-def do_test_emodnet_export(config, database, fastapi, caplog, who):
+@pytest.fixture(params=[ADMIN_AUTH, CREATOR_AUTH])
+def admin_or_creator(request):
+    yield request.param
+
+
+all_colls = {}
+
+
+@pytest.fixture
+def exportable_collection(config, database, fastapi, caplog, admin_or_creator):
+    if str(admin_or_creator) in all_colls:
+        yield all_colls[str(admin_or_creator)]
+        return
     caplog.set_level(logging.FATAL)
 
     coll_id, coll_title, prj_id, prj_json = create_test_collection(
-        caplog, config, database, fastapi, "exp", who
+        caplog, config, database, fastapi, "exp", admin_or_creator
     )
 
     caplog.set_level(logging.DEBUG)
@@ -81,7 +91,9 @@ def do_test_emodnet_export(config, database, fastapi, caplog, who):
             "with_computations": ["ABO", "CNC", "BIV"],
         }
     )
-    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=who, json=req)
+    rsp = fastapi.post(
+        COLLECTION_EXPORT_EMODNET_URL, headers=admin_or_creator, json=req
+    )
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
     wait_for_stable(job_id)
@@ -110,7 +122,7 @@ def do_test_emodnet_export(config, database, fastapi, caplog, who):
     classifications = [-1 for _obj in obj_ids]  # Keep current
     rsp = fastapi.post(
         url,
-        headers=who,
+        headers=admin_or_creator,
         json={
             "target_ids": obj_ids,
             "classifications": classifications,
@@ -124,14 +136,14 @@ def do_test_emodnet_export(config, database, fastapi, caplog, who):
     prj_json["license"] = "CC BY 4.0"
     # And give a contact who is now mandatory
     prj_json["contact"] = prj_json["managers"][0]
-    rsp = fastapi.put(url, headers=who, json=prj_json)
+    rsp = fastapi.put(url, headers=admin_or_creator, json=prj_json)
     assert rsp.status_code == status.HTTP_200_OK
 
     add_concentration_data(fastapi, prj_id)
 
     # Update the collection to fill in missing data
     url = COLLECTION_QUERY_URL.format(collection_id=coll_id)
-    rsp = fastapi.get(url, headers=who)
+    rsp = fastapi.get(url, headers=admin_or_creator)
     assert rsp.status_code == status.HTTP_200_OK
     the_coll = rsp.json()
     url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
@@ -162,12 +174,20 @@ This series is part of the long term planktonic monitoring of
         "name": ".",
     }
     the_coll["provider_user"] = user_doing_all
-    rsp = fastapi.put(url, headers=who, json=the_coll)
+    rsp = fastapi.put(url, headers=admin_or_creator, json=the_coll)
     assert rsp.status_code == status.HTTP_200_OK
+    all_colls[str(admin_or_creator)] = the_coll
+    yield the_coll
 
+
+def test_emodnet_export(fastapi, exportable_collection, admin_or_creator, fixed_date):
+    coll_id = exportable_collection["id"]
+    prj_id = exportable_collection["project_ids"][0]
     req = _req_tmpl.copy()
     req.update({"collection_id": coll_id, "with_computations": ["ABO", "CNC", "BIV"]})
-    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=who, json=req)
+    rsp = fastapi.post(
+        COLLECTION_EXPORT_EMODNET_URL, headers=admin_or_creator, json=req
+    )
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
     wait_for_stable(job_id)
@@ -213,10 +233,15 @@ This series is part of the long term planktonic monitoring of
     # assert rsp.status_code == status.HTTP_200_OK
 
     # Admin/owner can get it
-    rsp = fastapi.get(url, headers=who)
+    rsp = fastapi.get(url, headers=admin_or_creator)
     assert rsp.status_code == status.HTTP_200_OK
-    unzip_and_check(rsp.content, ref_zip, who)
+    unzip_and_check(rsp.content, ref_zip, admin_or_creator)
 
+
+def test_emodnet_export_with_absent(
+    fastapi, exportable_collection, admin_or_creator, fixed_date
+):
+    coll_id = exportable_collection["id"]
     req = _req_tmpl.copy()
     req.update(
         {
@@ -225,26 +250,36 @@ This series is part of the long term planktonic monitoring of
             "with_computations": ["ABO", "CNC", "BIV"],
         }
     )
-    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=who, json=req)
+    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
-    job = wait_for_stable(job_id)
+    wait_for_stable(job_id)
     api_check_job_ok(fastapi, job_id)
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
-    rsp = fastapi.get(dl_url, headers=who)
-    unzip_and_check(rsp.content, with_absent_zip, who)
+    rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
+    unzip_and_check(rsp.content, with_absent_zip, admin_or_creator)
 
+
+def test_emodnet_export_no_comp(
+    fastapi, exportable_collection, admin_or_creator, fixed_date
+):
+    coll_id = exportable_collection["id"]
     req = _req_tmpl.copy()
     req.update({"collection_id": coll_id})
-    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=who, json=req)
+    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
-    job = wait_for_stable(job_id)
+    wait_for_stable(job_id)
     api_check_job_ok(fastapi, job_id)
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
-    rsp = fastapi.get(dl_url, headers=who)
-    unzip_and_check(rsp.content, no_computations_zip, who)
+    rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
+    unzip_and_check(rsp.content, no_computations_zip, admin_or_creator)
 
+
+def test_emodnet_export_recast1(
+    fastapi, exportable_collection, admin_or_creator, fixed_date
+):
+    coll_id = exportable_collection["id"]
     # Foreseen options for June 2023-like exports
     req = _req_tmpl.copy()
     req.update(
@@ -259,7 +294,7 @@ This series is part of the long term planktonic monitoring of
             },
         }
     )
-    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=who, json=req)
+    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
     wait_for_stable(job_id)
@@ -268,9 +303,14 @@ This series is part of the long term planktonic monitoring of
     assert "Not produced due to non-match" not in str(warns)
     api_check_job_ok(fastapi, job_id)
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
-    rsp = fastapi.get(dl_url, headers=who)
-    unzip_and_check(rsp.content, with_recast_zip, who)
+    rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
+    unzip_and_check(rsp.content, with_recast_zip, admin_or_creator)
 
+
+def test_emodnet_export_recast2(
+    fastapi, exportable_collection, admin_or_creator, fixed_date
+):
+    coll_id = exportable_collection["id"]
     # Options for June 2023-like exports with intra-sample aggregation
     req = _req_tmpl.copy()
     req.update(
@@ -284,7 +324,7 @@ This series is part of the long term planktonic monitoring of
             },
         }
     )
-    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=who, json=req)
+    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
     wait_for_stable(job_id)
@@ -293,9 +333,12 @@ This series is part of the long term planktonic monitoring of
     assert "Not produced due to non-match" not in str(warns)
     api_check_job_ok(fastapi, job_id)
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
-    rsp = fastapi.get(dl_url, headers=who)
-    unzip_and_check(rsp.content, with_recast_zip2, who)
+    rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
+    unzip_and_check(rsp.content, with_recast_zip2, admin_or_creator)
 
+
+def test_permalink_query(fastapi, exportable_collection):
+    coll_title = exportable_collection["title"]
     url_query_back = COLLECTION_QUERY_BY_TITLE_URL.format(title=coll_title)
     rsp = fastapi.get(url_query_back)
     assert rsp.status_code == status.HTTP_200_OK
@@ -344,7 +387,7 @@ def create_test_collection(caplog, config, database, fastapi, suffix, who=ADMIN_
     return coll_id, coll_title, prj_id, prj_json
 
 
-def test_emodnet_endpoint(config, database, fastapi, caplog):
+def test_emodnet_invalid_req(fastapi):
     req = _req_tmpl.copy()
     req.update(
         {

@@ -14,6 +14,10 @@ from BO.WoRMSification import WoRMSifier
 from DB.WoRMs import WoRMS
 from DB.helpers.ORM import Session
 from data.ToWorms import ToWorms
+from helpers.DynamicLogs import get_logger
+from helpers.Timer import CodeTimer
+
+logger = get_logger(__name__)
 
 
 class TaxonomyMapper(object):
@@ -33,16 +37,21 @@ class TaxonomyMapper(object):
 
         # Do the manual (i.e. XLSX-driven) matching of what can be.
         # In this part, both Morpho and Phylo taxa are matched to WoRMS.
-        to_worms: ToWorms = ToWorms()
-        # Load & QC data
-        pbs = to_worms.pre_validate()
-        # TODO
-        # assert pbs == []
-        to_worms.prepare()
-        to_worms.validate_with_trees()
-        to_worms.show_stats()
-        # Apply
-        to_worms.apply()
+        with CodeTimer("Building ToWorms: ", logger):
+            to_worms: ToWorms = ToWorms()
+            # Load & QC data
+            pbs = to_worms.pre_validate()  # TODO use pbs
+            # assert pbs == []
+            to_worms.prepare()
+            to_worms.validate_with_trees()
+            to_worms.show_stats()
+            # Apply
+            to_worms.apply()
+            # Sanity check. TODO: Does print()s !
+            to_worms.check_ancestors()
+            to_worms.check_closure()
+            to_worms.check_sums()
+
         # Some taxa have a directly declared (in ToWoRMs, i.e. in golden XLSX) correspondance
         # ⚠ These might be Morpho ones? Or not... TODO: Check
         direct_ids = set(to_worms.done_remaps.keys()).intersection(self.taxa_ids)
@@ -87,9 +96,5 @@ class TaxonomyMapper(object):
         ret.add_phylos(strict_matches)
 
         ret.sanity_check(unieuk_per_id)
-
-        to_worms.check_ancestors()
-        to_worms.check_closure()
-        to_worms.check_sums()
 
         return ret
