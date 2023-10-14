@@ -194,29 +194,41 @@ def test_emodnet_export(fastapi, exportable_collection, admin_or_creator, fixed_
     job_status = api_check_job_ok(fastapi, job_id)
     warns = job_status["result"]["wrns"]
     ref_warns = [
-        "Could not extract sampling net name and features from sample m106_mn01_n1_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
-        "Could not extract sampling net name and features from sample m106_mn01_n2_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
-        "No occurrence added for sample 'm106_mn01_n2_sml' in project #%d" % prj_id,
-        "Could not extract sampling net name and features from sample m106_mn01_n3_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
-        "Could not extract sampling net name and features from sample m106_mn04_n4_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
-        "Sample 'm106_mn04_n4_sml' taxo(s) #[1, 78418]: Computed concentration is NaN, input data is missing or incorrect",
-        "Sample 'm106_mn04_n4_sml' taxo(s) #[1, 78418]: Computed biovolume is NaN, input data is missing or incorrect",
-        "Could not extract sampling net name and features from sample m106_mn04_n5_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
+        "Could not extract sampling net name and features from sample 'm106_mn01_n1_sml' (in #%d): at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent."
+        % prj_id,
+        "Could not extract sampling net name and features from sample 'm106_mn01_n2_sml' (in #%d): at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent."
+        % prj_id,
+        "No occurrence added for sample 'm106_mn01_n2_sml' (in #%d)" % prj_id,
+        "Could not extract sampling net name and features from sample 'm106_mn01_n3_sml' (in #%d): at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent."
+        % prj_id,
+        "Could not extract sampling net name and features from sample 'm106_mn04_n4_sml' (in #%d): at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent."
+        % prj_id,
+        "Sample 'm106_mn04_n4_sml' (in #%d) taxo(s) #[1, 78418]: Computed concentration is NaN, input data is missing or incorrect"
+        % prj_id,
+        "Sample 'm106_mn04_n4_sml' (in #%d) taxo(s) #[1, 78418]: Computed biovolume is NaN, input data is missing or incorrect"
+        % prj_id,
+        "Could not extract sampling net name and features from sample 'm106_mn04_n5_sml' (in #%d): at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent."
+        % prj_id,
         "Some values could not be converted to float in {'sql_count': 1, 'sam_tot_vol': 'foo', 'ssm_sub_part': '8'}",
         "Some values could not be converted to float in {'sql_count': 1, 'sam_tot_vol': 'foo', 'ssm_sub_part': '8'}",
-        "Sample 'm106_mn04_n5_sml' taxo(s) #[1, 78418]: Computed concentration is NaN, input data is missing or incorrect",
+        "Sample 'm106_mn04_n5_sml' (in #%d) taxo(s) #[1, 78418]: Computed concentration is NaN, input data is missing or incorrect"
+        % prj_id,
         "Some values could not be converted to float in {'obj_area': 1511.0, 'sam_tot_vol': 'foo', 'ssm_pixel': '10.6', 'ssm_sub_part': '8'}",
         "Some values could not be converted to float in {'obj_area': 1583.0, 'sam_tot_vol': 'foo', 'ssm_pixel': '10.6', 'ssm_sub_part': '8'}",
-        "Sample 'm106_mn04_n5_sml' taxo(s) #[1, 78418]: Computed biovolume is NaN, input data is missing or incorrect",
-        "Could not extract sampling net name and features from sample m106_mn04_n6_sml (at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent).",
+        "Sample 'm106_mn04_n5_sml' (in #%d) taxo(s) #[1, 78418]: Computed biovolume is NaN, input data is missing or incorrect"
+        % prj_id,
+        "Could not extract sampling net name and features from sample 'm106_mn04_n6_sml' (in #%d): at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent."
+        % prj_id,
         "Some values could not be converted to float in {'sql_count': 1, 'sam_tot_vol': '2000', 'ssm_sub_part': 'hi'}",
         "Some values could not be converted to float in {'sql_count': 1, 'sam_tot_vol': '2000', 'ssm_sub_part': 'hi'}",
         "Some values could not be converted to float in {'sql_count': 1, 'sam_tot_vol': '2000', 'ssm_sub_part': 'hi'}",
-        "Sample 'm106_mn04_n6_sml' taxo(s) #[1, 45072, 78418]: Computed concentration is NaN, input data is missing or incorrect",
+        "Sample 'm106_mn04_n6_sml' (in #%d) taxo(s) #[1, 45072, 78418]: Computed concentration is NaN, input data is missing or incorrect"
+        % prj_id,
         "Some values could not be converted to float in {'obj_area': 1583.0, 'sam_tot_vol': '2000', 'ssm_pixel': '10.6', 'ssm_sub_part': 'hi'}",
         "Some values could not be converted to float in {'obj_area': 1583.0, 'sam_tot_vol': '2000', 'ssm_pixel': '10.6', 'ssm_sub_part': 'hi'}",
         "Some values could not be converted to float in {'obj_area': 1583.0, 'sam_tot_vol': '2000', 'ssm_pixel': '10.6', 'ssm_sub_part': 'hi'}",
-        "Sample 'm106_mn04_n6_sml' taxo(s) #[1, 45072, 78418]: Computed biovolume is NaN, input data is missing or incorrect",
+        "Sample 'm106_mn04_n6_sml' (in #%d) taxo(s) #[1, 45072, 78418]: Computed biovolume is NaN, input data is missing or incorrect"
+        % prj_id,
         "Stats: predicted:1 validated:19 produced to zip:9 not produced (M):11 not produced (P):0",
     ]
     assert warns == ref_warns

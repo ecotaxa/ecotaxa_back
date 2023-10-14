@@ -37,7 +37,7 @@ from BO.TaxonomySwitch import TaxonomyMapper
 from BO.Vocabulary import Vocabulary, Units
 from BO.WoRMSification import WoRMSifier
 from DB.Collection import Collection
-from DB.Project import ProjectTaxoStat, ProjectIDT, Project
+from DB.Project import ProjectTaxoStat, Project
 from DB.Sample import Sample
 from DB.Taxonomy import Taxonomy
 from DB.User import User
@@ -162,7 +162,7 @@ class DarwinCoreExport(JobServiceBase):
         self.ignored_morpho: int = 0
         self.ignored_taxa: Dict[ClassifIDT, Tuple[ClassifIDT, str]] = {}
         self.unknown_nets: Dict[str, List[str]] = {}
-        self.empty_samples: List[Tuple[ProjectIDT, str]] = []
+        self.empty_samples: List[str] = []
         self.stats_per_rank: Dict[str, Dict[str, Any]] = {}
         self.suspicious_vals: Dict[str, List[str]] = {}
 
@@ -573,6 +573,11 @@ class DarwinCoreExport(JobServiceBase):
         # Round coordinates to ~ 110mm
         return "%.6f" % lat_or_lon
 
+    @classmethod
+    def _sample_ref_for_message(cls, sample: Sample) -> str:
+        """Always include project number for humans, it will allow location of sample"""
+        return "'%s' (in #%d)" % (sample.orig_id, sample.projid)
+
     def fill_archive(self, arch: DwC_Archive, institution_code: str) -> None:
         """
         Add DwC files into the archive: events, occurrences, eMoFs
@@ -586,13 +591,13 @@ class DarwinCoreExport(JobServiceBase):
             samples = Sample.get_orig_id_and_model(self.ro_session, prj_id=a_prj_id)
             a_sample: Sample
             events = arch.events
-            for orig_id, a_sample in samples.items():
+            for _unused, a_sample in samples.items():
                 assert a_sample.latitude is not None and a_sample.longitude is not None
-                event_id = orig_id
+                event_id = a_sample.orig_id
                 evt_type = RecordTypeEnum.sample
                 summ = Sample.get_sample_summary(self.session, a_sample.sampleid)
                 if summ[0] is None or summ[1] is None:
-                    self.empty_samples.append((a_prj_id, a_sample.orig_id))
+                    self.empty_samples.append(self._sample_ref_for_message(a_sample))
                     continue
                 evt_date = self.event_date(summ[0], summ[1])
                 latitude = self.geo_to_txt(float(a_sample.latitude))
@@ -623,8 +628,8 @@ class DarwinCoreExport(JobServiceBase):
                     nb_added += by_ml
                 if nb_added == 0:
                     self.warnings.append(
-                        "No occurrence added for sample '%s' in project #%d"
-                        % (a_sample.orig_id, a_prj_id)
+                        "No occurrence added for sample %s"
+                        % self._sample_ref_for_message(a_sample)
                     )
                 # Taxa-level eMoFs
                 self.add_occurrence_eMoFs_for_sample(
@@ -666,7 +671,9 @@ class DarwinCoreExport(JobServiceBase):
         else:
             if self.nine_nine_re.match(str(total_water_volume)):
                 self.suspicious_vals.setdefault("total_water_volume", []).append(
-                    str(total_water_volume) + " in " + sample.orig_id
+                    str(total_water_volume)
+                    + " in "
+                    + self._sample_ref_for_message(sample)
                 )
             # Add sampled water volume
             # 13/04/2021: Removed as it might give the impression that the individual count is
@@ -684,8 +691,8 @@ class DarwinCoreExport(JobServiceBase):
             )
         except TypeError as e:
             self.warnings.append(
-                "Could not extract sampling net name and features from sample %s (%s)."
-                % (sample.orig_id, str(e))
+                "Could not extract sampling net name and features from sample %s: %s."
+                % (self._sample_ref_for_message(sample), str(e))
             )
         else:
             ins = None
@@ -724,7 +731,9 @@ class DarwinCoreExport(JobServiceBase):
                 value = self.bodc_unknown_nets[net_type]
                 ins = SamplingInstrumentName(event_id, value, "")
             else:
-                self.unknown_nets.setdefault(net_type, []).append(sample.orig_id)
+                self.unknown_nets.setdefault(net_type, []).append(
+                    self._sample_ref_for_message(sample)
+                )
             if ins is not None:
                 arch.emofs.add(ins)
             # Produce net traits even if no net
@@ -812,8 +821,8 @@ class DarwinCoreExport(JobServiceBase):
                 else:
                     conc_wrn_txos.append(txo_id)
             if len(conc_wrn_txos) > 0:
-                wrn = "Sample '{}' taxo(s) #{}: Computed concentration is NaN, input data is missing or incorrect"
-                wrn = wrn.format(sample.orig_id, conc_wrn_txos)
+                wrn = "Sample {} taxo(s) #{}: Computed concentration is NaN, input data is missing or incorrect"
+                wrn = wrn.format(cls._sample_ref_for_message(sample), conc_wrn_txos)
                 warnings.append(wrn)
 
         if SciExportTypeEnum.biovols in with_computations:
@@ -829,8 +838,8 @@ class DarwinCoreExport(JobServiceBase):
                 else:
                     biovol_wrn_txos.append(txo_id)
             if len(biovol_wrn_txos) > 0:
-                wrn = "Sample '{}' taxo(s) #{}: Computed biovolume is NaN, input data is missing or incorrect"
-                wrn = wrn.format(sample.orig_id, biovol_wrn_txos)
+                wrn = "Sample {} taxo(s) #{}: Computed biovolume is NaN, input data is missing or incorrect"
+                wrn = wrn.format(cls._sample_ref_for_message(sample), biovol_wrn_txos)
                 warnings.append(wrn)
 
         return ret
@@ -1156,10 +1165,7 @@ class DarwinCoreExport(JobServiceBase):
                     % (a_net, str(sample_ids))
                 )
         if len(self.empty_samples) > 0:
-            self.warnings.append(
-                "Empty samples found, format is (project ID, sample ID): %s"
-                % str(self.empty_samples)
-            )
+            self.warnings.append("Empty samples found: %s" % str(self.empty_samples))
         if len(self.suspicious_vals) > 0:
             self.warnings.append(
                 "Suspicious values found, format is (variable, values): %s"
