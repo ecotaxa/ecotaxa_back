@@ -10,6 +10,7 @@ from helpers.httpexception import (
     DETAIL_PASSWORD_STRENGTH_ERROR,
     DETAIL_INVALID_EMAIL,
     DETAIL_EMAIL_OWNED_BY_OTHER,
+    DETAIL_INVALID_STATUS,
 )
 from DB.User import UserStatus
 from BO.Rights import NOT_FOUND, NOT_AUTHORIZED
@@ -153,12 +154,18 @@ def test_user_create_with_confirmation(monkeypatch, config, database, fastapi, c
     assert read_json == ref_json
     email = "myemail123@mailtestprovider1.net"
     ref_json["email"] = email
-
-    #   confirmation email even as the update is made by admin when email_verification is "on" - keep in that order as the status must be 1 for a normal user and is None in db test data
+    #  no  confirmation email as the update is made by admineven  when email_verification is "on" - keep in that order as the status must be 1 for a normal user and is None in db test data
     url = USER_UPDATE_URL.format(user_id=ORDINARY_USER_USER_ID)
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=ref_json)
-    assert rsp.json() == None
+    # user status  is None - not possible
+    assert rsp.json() == {"detail": [DETAIL_INVALID_STATUS]}
+    assert rsp.status_code == 422
+    # so change the user status to inactive to continue the tests
+    ref_json["status"] = UserStatus.inactive.value
+    url = USER_UPDATE_URL.format(user_id=ORDINARY_USER_USER_ID)
+    rsp = fastapi.put(url, headers=ADMIN_AUTH, json=ref_json)
     assert rsp.status_code == 200
+    assert rsp.json() == None
     res_user = {"email": email}
     err = verify_user(fastapi, ORDINARY_USER_USER_ID, ADMIN_AUTH, res_user)
     assert err == []
@@ -194,9 +201,13 @@ def test_user_create_with_confirmation(monkeypatch, config, database, fastapi, c
     res_user = {"email": email, "mail_status": True, "status": UserStatus.active.value}
     err = verify_user(fastapi, ORDINARY_USER_USER_ID, ADMIN_AUTH, res_user)
     assert err == []
+
     # user can modify email
     email = "myemail1249@mailtestprovider1.net"
     ref_json["email"] = email
+    # set as in db
+    ref_json["status"] = res_user["status"]
+    ref_json["mail_status"] = res_user["mail_status"]
     url = USER_UPDATE_URL.format(user_id=ORDINARY_USER_USER_ID)
     rsp = fastapi.put(url, headers=USER_AUTH, json=ref_json)
     assert rsp.status_code == 200

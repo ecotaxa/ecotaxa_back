@@ -127,9 +127,8 @@ class UserService(Service):
                 else:
                     # check valid user
                     self._is_valid_user_throw(new_user, -1)
-                    if self.verify_email == True:
-                        new_user, addcols = self._set_mail_status(new_user, False)
-                        return -1
+                    new_user, addcols = self._set_mail_status(new_user, False)
+                    return -1
             new_user.status = int(self._keep_active())
         else:
             # Must be admin to create an account
@@ -533,7 +532,6 @@ class UserService(Service):
         actiontype: ActivationType,
         cols_to_upd: List,
         current_user: Optional[User],
-        set_mail_status: bool = False,
     ):
         """
         common to add or update a user
@@ -541,25 +539,25 @@ class UserService(Service):
         ask_activate = False
         inform_about_status = None
         is_admin = current_user is not None and self._current_is_admin(current_user)
+        # check if must send confirmation email before any update
         if update_src.email != user_to_update.email:
             # validate before sending mail status
             verify_password = self._uservalidation is not None and (
                 update_src.password != user_to_update.password
             )
             UserBO.validate_usr(self.session, update_src, verify_password)
-            if update_src.id == -1 and current_user is None:
-                mail_status = True
-            else:
-                mail_status = False
-            update_src, addcols = self._set_mail_status(
-                update_src,
-                mail_status,
-                user=user_to_update,
-                action=actiontype,
-            )
-            if len(addcols):
-                cols_to_upd.extend(addcols)
-                inform_about_status = False
+            if self.verify_email == True and not is_admin:
+                mail_status = update_src.id == -1
+                update_src, addcols = self._set_mail_status(
+                    update_src,
+                    mail_status,
+                    user=user_to_update,
+                    action=actiontype,
+                )
+                if len(addcols):
+                    cols_to_upd.extend(addcols)
+                    inform_about_status = False
+        # check if the account needs validation or re-validation
         elif self.account_validation == True and self._is_major_data_change(
             update_src, user_to_update
         ):
@@ -567,17 +565,17 @@ class UserService(Service):
                 update_src.status = UserStatus.inactive.value
                 cols_to_upd.append(User.status)
                 ask_activate = True
-        if (
-            User.status in cols_to_upd
-            and UserStatus(update_src.status) != None
-            and update_src.status != user_to_update.status
-            and update_src.id != -1
-        ):
-            if is_admin and inform_about_status is None:
+        # check if the status has changed and the user must be informed and no other email has been sent
+        if update_src.id != -1 and inform_about_status is None:
+            if (
+                is_admin
+                and User.status in cols_to_upd
+                and update_src.status != user_to_update.status
+            ):
                 inform_about_status = True
         # only update actions from admin - not from profile
         if (
-            isinstance(current_user, User)
+            current_user is not None
             and is_admin
             and (current_user.id != user_to_update.id or len(update_src.can_do) > 0)
         ):
@@ -600,6 +598,11 @@ class UserService(Service):
                     action=actiontype.value,
                 )
             elif is_admin and inform_about_status == True:
+                if user_to_update.status is None:
+                    raise HTTPException(
+                        status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=[DETAIL_INVALID_STATUS],
+                    )
                 status_name = UserStatus(user_to_update.status).name
                 self._uservalidation.inform_user_status(
                     UserModelProfile.from_orm(user_to_update),
@@ -692,31 +695,34 @@ class UserService(Service):
         if self.verify_email != True:
             return update_src, status_cols
         status = update_src.status
-        if self._uservalidation and mail_status == False:
-            if user is None:
-                previous_email = None
-            else:
-                previous_email = user.email
+        if mail_status == False:
+            if self._uservalidation is not None:
+                if user is None:
+                    previous_email = None
+                else:
+                    previous_email = user.email
 
-            self._uservalidation.request_email_verification(
-                update_src.email,
-                self._get_assistance_email(),
-                action=action,
-                id=update_src.id,
-                previous_email=previous_email,
-            )
-            logger.info(
-                "User email ['%s'] '%s' : requested verification '%s'"
-                % (str(update_src.id), action, update_src.email)
-            )
-
+                self._uservalidation.request_email_verification(
+                    update_src.email,
+                    self._get_assistance_email(),
+                    action=action,
+                    id=update_src.id,
+                    previous_email=previous_email,
+                )
+                logger.info(
+                    "User email [%s] '%s' : requested verification '%s'"
+                    % (str(update_src.id), action, update_src.email)
+                )
             update_src.status = UserStatus.inactive.value
 
-        elif (
-            self.account_validation == False
-            and update_src.status == UserStatus.inactive.value
+        elif self.account_validation == False and update_src.status not in (
+            UserStatus.active.value,
+            UserStatus.blocked.value,
         ):
             update_src.status = UserStatus.active.value
+        logger.info(
+            "User %s status modified '%s'" % (str(update_src.id), update_src.status)
+        )
         if update_src.status != status:
             status_cols.append(User.status)
         update_src.mail_status = mail_status
