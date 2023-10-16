@@ -10,7 +10,6 @@ from enum import Enum
 from helpers.DynamicLogs import get_logger
 from helpers.pydantic import BaseModel, Field
 from email.message import EmailMessage
-from email.mime.text import MIMEText
 from starlette.status import (
     HTTP_422_UNPROCESSABLE_ENTITY,
     HTTP_500_INTERNAL_SERVER_ERROR,
@@ -246,13 +245,11 @@ class MailProvider(object):
                     replace[key] = getattr(values, key)
             elif key not in replace:
                 replace[key] = ""
-
         model["body"] = model["body"].format(**replace)
         mailmsg = EmailMessage()
         mailmsg["Subject"] = model["subject"].format(action=replace["action"])
-        html = model["body"]
-        text = self.html_to_text(html)
-        mailmsg.set_content(MIMEText(text, "plain"), subtype="plain")
+        text = self.html_to_text(model["body"])
+        mailmsg.set_content(text, subtype="plain", charset="utf-8")
         return mailmsg
 
     @staticmethod
