@@ -13,7 +13,7 @@ COLLECTION_TAXO_RECAST_URL = "/collections/{collection_id}/taxo_recast"
 
 
 def test_collection_taxo_recast(config, database, fastapi, caplog):
-    coll_id, coll_title, prj_id, prj_json = create_test_collection(
+    coll_id, coll_title, prj_id = create_test_collection(
         caplog, config, database, fastapi, "api_ok"
     )
     url = COLLECTION_TAXO_RECAST_URL.format(collection_id=coll_id)
@@ -28,7 +28,7 @@ def test_collection_taxo_recast(config, database, fastapi, caplog):
 
 
 def test_collection_taxo_recast_endpoint(config, database, fastapi, caplog):
-    coll_id, coll_title, prj_id, prj_json = create_test_collection(
+    coll_id, coll_title, prj_id = create_test_collection(
         caplog, config, database, fastapi, "api_ko"
     )
     url = COLLECTION_TAXO_RECAST_URL.format(collection_id=coll_id)

@@ -6,6 +6,7 @@ import re
 from typing import List, Any, Optional, Set, cast
 
 from BO.DataLicense import DataLicense, LicenseEnum
+from BO.Sample import SampleOrigIDT
 from DB import Session
 from DB.Collection import (
     COLLECTION_ROLE_DATA_CREATOR,
@@ -19,7 +20,7 @@ from DB.Collection import (
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
 from DB.User import User
-from DB.helpers.ORM import contains_eager
+from DB.helpers.ORM import contains_eager, func, any_
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -283,3 +284,13 @@ class CollectionBO(object):
             return found[0]
         else:
             return "?"
+
+    def homonym_samples(self, ro_session: Session) -> Set[SampleOrigIDT]:
+        """
+        Return the samples with exact same orig_id name, but in different projects.
+        """
+        qry = ro_session.query(Sample.orig_id)
+        qry = qry.filter(Sample.projid == any_(self.project_ids))
+        qry = qry.group_by(Sample.orig_id)
+        qry = qry.having(func.count(Sample.orig_id) > 1)
+        return set([an_id for an_id, in qry])

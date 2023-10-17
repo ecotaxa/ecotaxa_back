@@ -154,9 +154,9 @@ class DarwinCoreExport(JobServiceBase):
         # Output
         self.errors: List[str] = []
         self.warnings: List[str] = []
-        # Summary for logging issues
-        self.validated_count = 0
-        self.predicted_count = 0
+        # Summary, for human sanity checks and logging issues
+        self.validated_count = 0  # Validated objects in projects
+        self.predicted_count = 0  # Predicted objects in projects
         self.produced_count = 0
         self.ignored_count: Dict[ClassifIDT, int] = {}
         self.ignored_morpho: int = 0
@@ -193,10 +193,6 @@ class DarwinCoreExport(JobServiceBase):
         # Security check
         # Do the job
         logger.info("------------ starting --------------")
-        # Samples names collision check
-        if self.check_sample_collisions():
-            self.set_job_result(self.errors, {"wrns": self.warnings})
-            return
         # Update DB statistics to ensure correctness of geo in produced output
         self.update_db_stats()
         # 2 taxonomic mappings/spaces need to be used
@@ -397,6 +393,7 @@ class DarwinCoreExport(JobServiceBase):
         contact, errs = self.user_to_eml_person(the_collection.contact_user, "contact")
         if contact is None:
             self.errors.append("No valid contact user found for EML metadata.")
+            self.warnings.extend(errs)
 
         provider, errs = self.user_to_eml_person(
             the_collection.provider_user, "provider"
@@ -405,6 +402,7 @@ class DarwinCoreExport(JobServiceBase):
             self.errors.append(
                 "No valid metadata provider user found for EML metadata."
             )
+            self.warnings.extend(errs)
 
         associates: List[EMLAssociatedPerson] = []
         for a_user in the_collection.associate_users:
@@ -429,25 +427,6 @@ class DarwinCoreExport(JobServiceBase):
 
         # TODO if needed
         # EMLAssociatedPerson = EMLPerson + specific role
-
-        # TODO: a marine regions substitute
-        (min_lat, max_lat, min_lon, max_lon) = ProjectBO.get_bounding_geo(
-            self.session, the_collection.project_ids
-        )
-        geo_cov = EMLGeoCoverage(
-            geographicDescription="See coordinates",
-            westBoundingCoordinate=self.geo_to_txt(min_lon),
-            eastBoundingCoordinate=self.geo_to_txt(max_lon),
-            northBoundingCoordinate=self.geo_to_txt(min_lat),
-            southBoundingCoordinate=self.geo_to_txt(max_lat),
-        )
-
-        (min_date, max_date) = ProjectBO.get_date_range(
-            self.session, the_collection.project_ids
-        )
-        time_cov = EMLTemporalCoverage(
-            beginDate=timestamp_to_str(min_date), endDate=timestamp_to_str(max_date)
-        )
 
         publication_date = now_time().date().isoformat()
 
@@ -499,8 +478,6 @@ class DarwinCoreExport(JobServiceBase):
             "http://rs.gbif.org/vocabulary/gbif/dataset_type.xml",
         )
 
-        taxo_cov = self.get_taxo_coverage()
-
         now = now_time().replace(microsecond=0)
         meta_plus = EMLAdditionalMeta(dateStamp=now.isoformat())
 
@@ -510,33 +487,59 @@ class DarwinCoreExport(JobServiceBase):
             % quote_plus(coll_title)
         )
 
-        if len(self.errors) == 0:
-            # The research project
-            # noinspection PyUnboundLocalVariable
-            # project = EMLProject(title=the_collection.title,
-            #                      personnel=[])  # TODO: Unsure about duplicated information with metadata
-            # noinspection PyUnboundLocalVariable
-            ret = EMLMeta(
-                identifier=identifier,
-                titles=[title],
-                creators=creators,
-                contacts=[contact],
-                metadataProviders=[provider],
-                associatedParties=associates,
-                pubDate=publication_date,
-                abstract=[abstract],
-                keywordSet=keywords,
-                additionalInfo=additional_info,
-                geographicCoverage=geo_cov,
-                temporalCoverage=time_cov,
-                taxonomicCoverage=taxo_cov,
-                intellectualRights=licence,
-                # project=project,
-                maintenance="periodic review of origin data",
-                maintenanceUpdateFrequency="unknown",  # From XSD
-                additionalMetadata=meta_plus,
-                informationUrl=info_url,
-            )
+        if len(self.errors) != 0:
+            # Exit early, in case of problem, before moving to long operations
+            return None, "?"
+
+        # TODO: a marine regions substitute
+        # Note: below can be very long for big projects
+        (min_lat, max_lat, min_lon, max_lon) = ProjectBO.get_bounding_geo(
+            self.session, the_collection.project_ids
+        )
+        geo_cov = EMLGeoCoverage(
+            geographicDescription="See coordinates",
+            westBoundingCoordinate=self.geo_to_txt(min_lon),
+            eastBoundingCoordinate=self.geo_to_txt(max_lon),
+            northBoundingCoordinate=self.geo_to_txt(min_lat),
+            southBoundingCoordinate=self.geo_to_txt(max_lat),
+        )
+
+        # Note: below can be very long for big projects
+        (min_date, max_date) = ProjectBO.get_date_range(
+            self.session, the_collection.project_ids
+        )
+        time_cov = EMLTemporalCoverage(
+            beginDate=timestamp_to_str(min_date), endDate=timestamp_to_str(max_date)
+        )
+
+        taxo_cov = self.get_taxo_coverage()
+
+        # The research project
+        # noinspection PyUnboundLocalVariable
+        # project = EMLProject(title=the_collection.title,
+        #                      personnel=[])  # TODO: Unsure about duplicated information with metadata
+        # noinspection PyUnboundLocalVariable
+        ret = EMLMeta(
+            identifier=identifier,
+            titles=[title],
+            creators=creators,
+            contacts=[contact],
+            metadataProviders=[provider],
+            associatedParties=associates,
+            pubDate=publication_date,
+            abstract=[abstract],
+            keywordSet=keywords,
+            additionalInfo=additional_info,
+            geographicCoverage=geo_cov,
+            temporalCoverage=time_cov,
+            taxonomicCoverage=taxo_cov,
+            intellectualRights=licence,
+            # project=project,
+            maintenance="periodic review of origin data",
+            maintenanceUpdateFrequency="unknown",  # From XSD
+            additionalMetadata=meta_plus,
+            informationUrl=info_url,
+        )
         return ret, the_collection.get_institution_code()
 
     def get_taxo_coverage(self) -> List[EMLTaxonomicClassification]:
@@ -583,17 +586,24 @@ class DarwinCoreExport(JobServiceBase):
         Add DwC files into the archive: events, occurrences, eMoFs
             We produce sample-type events.
         """
-        # TODO: Dup code
         the_collection: CollectionBO = CollectionBO(self.collection).enrich()
 
-        ds_name = self.sanitize_title(self.collection.title)
+        dataset_name = self.sanitize_title(self.collection.title)
+        samples_in_several_prjs = the_collection.homonym_samples(self.ro_session)
+        if len(samples_in_several_prjs) > 0:
+            logger.info("Homonym samples: %s", samples_in_several_prjs)
         for a_prj_id in the_collection.project_ids:
             samples = Sample.get_orig_id_and_model(self.ro_session, prj_id=a_prj_id)
             a_sample: Sample
             events = arch.events
             for _unused, a_sample in samples.items():
                 assert a_sample.latitude is not None and a_sample.longitude is not None
-                event_id = a_sample.orig_id
+                prfx = (
+                    str(a_prj_id) + "_"
+                    if a_sample.orig_id in samples_in_several_prjs
+                    else ""
+                )
+                event_id = prfx + a_sample.orig_id
                 evt_type = RecordTypeEnum.sample
                 summ = Sample.get_sample_summary(self.session, a_sample.sampleid)
                 if summ[0] is None or summ[1] is None:
@@ -606,7 +616,7 @@ class DarwinCoreExport(JobServiceBase):
                     eventID=event_id,
                     type=evt_type,
                     institutionCode=institution_code,
-                    datasetName=ds_name,
+                    datasetName=dataset_name,
                     eventDate=evt_date,
                     decimalLatitude=latitude,
                     decimalLongitude=longitude,
@@ -1031,7 +1041,7 @@ class DarwinCoreExport(JobServiceBase):
                 occurrence_id += "_" + str(an_id)
                 by_lsid[worms_lsid] = (occurrence_id, aggreg_for_lsid, worms)
 
-        # Sort for stability
+        # Sort for order predictability
         by_lsid_sorted = sorted(
             by_lsid.items(),
             key=lambda itm: (
@@ -1040,8 +1050,8 @@ class DarwinCoreExport(JobServiceBase):
             ),
         )
         ret = OrderedDict(by_lsid_sorted)
-        if "urn:lsid:marinespecies.org:taxname:104081" in ret:
-            logger.info("ret:", ret)
+        # if "urn:lsid:marinespecies.org:taxname:104081" in ret:
+        #     logger.info("ret:", ret)
         return ret, not_found
 
     def add_occurrence_eMoFs_for_sample(
@@ -1176,29 +1186,6 @@ class DarwinCoreExport(JobServiceBase):
             logger.info(
                 "rank '%s' stats %s", str(a_rank), self.stats_per_rank.get(a_rank)
             )
-
-    def check_sample_collisions(self) -> bool:
-        ret: bool = False
-        samples_per_project: Dict[str, Project] = {}
-        for a_project in self.collection.projects:
-            for a_sample in a_project.all_samples:
-                sample_id = a_sample.orig_id
-                # Sanity check: sample orig_id must be unique in the collection
-                if sample_id in samples_per_project:
-                    self.errors.append(
-                        "Sample with orig_id %s is in both '%s'(#%d) and '%s'(#%d)"
-                        % (
-                            sample_id,
-                            samples_per_project[sample_id].title,
-                            samples_per_project[sample_id].projid,
-                            a_project.title,
-                            a_project.projid,
-                        )
-                    )
-                    ret = True
-                else:
-                    samples_per_project[sample_id] = a_project
-        return ret
 
     def update_db_stats(self) -> None:
         """

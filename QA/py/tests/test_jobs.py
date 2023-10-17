@@ -70,11 +70,14 @@ def api_check_job_ok(fastapi, job_id):
     url = JOB_QUERY_URL.format(job_id=job_id)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     job_dict = rsp.json()
-    assert (job_dict["state"], job_dict["progress_pct"], job_dict["progress_msg"]) == (
+    if (job_dict["state"], job_dict["progress_pct"], job_dict["progress_msg"]) == (
         "F",
         100,
         "Done",
-    )
+    ):
+        pass
+    else:
+        assert "Job failed", str(job_dict)
     return job_dict
 
 

@@ -32,7 +32,6 @@ from tests.test_collections import (
     regrant_if_needed,
 )
 from tests.test_fastapi import PROJECT_QUERY_URL
-from tests.test_import import PLAIN_FILE, MIX_OF_STATES
 from tests.test_jobs import wait_for_stable, api_check_job_ok, api_check_job_failed
 from tests.test_update import ACQUISITION_SET_UPDATE_URL, SAMPLE_SET_UPDATE_URL
 from tests.test_update_prj import PROJECT_UPDATE_URL
@@ -75,7 +74,7 @@ def exportable_collection(config, database, fastapi, caplog, admin_or_creator):
         return
     caplog.set_level(logging.FATAL)
 
-    coll_id, coll_title, prj_id, prj_json = create_test_collection(
+    coll_id, coll_title, prj_id = create_test_collection(
         caplog, config, database, fastapi, "exp", admin_or_creator
     )
 
@@ -131,15 +130,9 @@ def exportable_collection(config, database, fastapi, caplog, admin_or_creator):
     )
     assert rsp.status_code == status.HTTP_200_OK
 
-    # Update underlying project license
-    url = PROJECT_UPDATE_URL.format(project_id=prj_id)
-    prj_json["license"] = "CC BY 4.0"
-    # And give a contact who is now mandatory
-    prj_json["contact"] = prj_json["managers"][0]
-    rsp = fastapi.put(url, headers=admin_or_creator, json=prj_json)
-    assert rsp.status_code == status.HTTP_200_OK
+    make_project_exportable(prj_id, fastapi, admin_or_creator)
 
-    add_concentration_data(fastapi, prj_id)
+    add_concentration_data(fastapi, prj_id, "mn04")
 
     # Update the collection to fill in missing data
     url = COLLECTION_QUERY_URL.format(collection_id=coll_id)
@@ -180,9 +173,22 @@ This series is part of the long term planktonic monitoring of
     yield the_coll
 
 
+def make_project_exportable(prj_id, fastapi, who):
+    # Update underlying project license
+    url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
+    rsp = fastapi.get(url, headers=who)
+    prj_json = rsp.json()
+    url = PROJECT_UPDATE_URL.format(project_id=prj_id)
+    prj_json["license"] = "CC BY 4.0"
+    # And give a contact who is now mandatory
+    prj_json["contact"] = prj_json["managers"][0]
+    rsp = fastapi.put(url, headers=who, json=prj_json)
+    assert rsp.status_code == status.HTTP_200_OK
+
+
 def test_emodnet_export(fastapi, exportable_collection, admin_or_creator, fixed_date):
     coll_id = exportable_collection["id"]
-    prj_id = exportable_collection["project_ids"][0]
+    prj_id, prj_id2 = sorted(exportable_collection["project_ids"])
     req = _req_tmpl.copy()
     req.update({"collection_id": coll_id, "with_computations": ["ABO", "CNC", "BIV"]})
     rsp = fastapi.post(
@@ -229,7 +235,10 @@ def test_emodnet_export(fastapi, exportable_collection, admin_or_creator, fixed_
         "Some values could not be converted to float in {'obj_area': 1583.0, 'sam_tot_vol': '2000', 'ssm_pixel': '10.6', 'ssm_sub_part': 'hi'}",
         "Sample 'm106_mn04_n6_sml' (in #%d) taxo(s) #[1, 45072, 78418]: Computed biovolume is NaN, input data is missing or incorrect"
         % prj_id,
-        "Stats: predicted:1 validated:19 produced to zip:9 not produced (M):11 not produced (P):0",
+        "Could not extract sampling net name and features from sample 'm106_mn04_n4_sml' (in #%d): at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent."
+        % prj_id2,
+        "No occurrence added for sample 'm106_mn04_n4_sml' (in #%d)" % prj_id2,
+        "Stats: predicted:2 validated:19 produced to zip:9 not produced (M):12 not produced (P):0",
     ]
     assert warns == ref_warns
     assert rsp.json()["errors"] == []
@@ -247,13 +256,14 @@ def test_emodnet_export(fastapi, exportable_collection, admin_or_creator, fixed_
     # Admin/owner can get it
     rsp = fastapi.get(url, headers=admin_or_creator)
     assert rsp.status_code == status.HTTP_200_OK
-    unzip_and_check(rsp.content, ref_zip, admin_or_creator)
+    unzip_and_check(rsp.content, ref_zip(prj_id, prj_id2), admin_or_creator)
 
 
 def test_emodnet_export_with_absent(
     fastapi, exportable_collection, admin_or_creator, fixed_date
 ):
     coll_id = exportable_collection["id"]
+    prj_id, prj_id2 = sorted(exportable_collection["project_ids"])
     req = _req_tmpl.copy()
     req.update(
         {
@@ -269,13 +279,14 @@ def test_emodnet_export_with_absent(
     api_check_job_ok(fastapi, job_id)
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
-    unzip_and_check(rsp.content, with_absent_zip, admin_or_creator)
+    unzip_and_check(rsp.content, with_absent_zip(prj_id, prj_id2), admin_or_creator)
 
 
 def test_emodnet_export_no_comp(
     fastapi, exportable_collection, admin_or_creator, fixed_date
 ):
     coll_id = exportable_collection["id"]
+    prj_id, prj_id2 = sorted(exportable_collection["project_ids"])
     req = _req_tmpl.copy()
     req.update({"collection_id": coll_id})
     rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
@@ -285,13 +296,14 @@ def test_emodnet_export_no_comp(
     api_check_job_ok(fastapi, job_id)
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
-    unzip_and_check(rsp.content, no_computations_zip, admin_or_creator)
+    unzip_and_check(rsp.content, no_computations_zip(prj_id, prj_id2), admin_or_creator)
 
 
 def test_emodnet_export_recast1(
     fastapi, exportable_collection, admin_or_creator, fixed_date
 ):
     coll_id = exportable_collection["id"]
+    prj_id, prj_id2 = sorted(exportable_collection["project_ids"])
     # Foreseen options for June 2023-like exports
     req = _req_tmpl.copy()
     req.update(
@@ -316,13 +328,14 @@ def test_emodnet_export_recast1(
     api_check_job_ok(fastapi, job_id)
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
-    unzip_and_check(rsp.content, with_recast_zip, admin_or_creator)
+    unzip_and_check(rsp.content, with_recast_zip(prj_id, prj_id2), admin_or_creator)
 
 
 def test_emodnet_export_recast2(
     fastapi, exportable_collection, admin_or_creator, fixed_date
 ):
     coll_id = exportable_collection["id"]
+    prj_id, prj_id2 = sorted(exportable_collection["project_ids"])
     # Options for June 2023-like exports with intra-sample aggregation
     req = _req_tmpl.copy()
     req.update(
@@ -346,10 +359,10 @@ def test_emodnet_export_recast2(
     api_check_job_ok(fastapi, job_id)
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
-    unzip_and_check(rsp.content, with_recast_zip2, admin_or_creator)
+    unzip_and_check(rsp.content, with_recast_zip2(prj_id, prj_id2), admin_or_creator)
 
 
-def test_permalink_query(fastapi, exportable_collection):
+def test_permalink_query(fastapi, exportable_collection, admin_or_creator):
     coll_title = exportable_collection["title"]
     url_query_back = COLLECTION_QUERY_BY_TITLE_URL.format(title=coll_title)
     rsp = fastapi.get(url_query_back)
@@ -363,6 +376,9 @@ def create_test_collection(caplog, config, database, fastapi, suffix, who=ADMIN_
     # Admin imports the project
     from tests.test_import import (
         BAD_FREE_DIR,
+        JUST_PREDICTED_DIR,
+        MIX_OF_STATES,
+        PLAIN_FILE,
         test_import,
         do_import,
         test_import_a_bit_more_skipping,
@@ -370,33 +386,44 @@ def create_test_collection(caplog, config, database, fastapi, suffix, who=ADMIN_
 
     suffix += "" if who == ADMIN_AUTH else who["Authorization"][-1:]
 
-    project = "EMODNET project " + suffix
-    prj_id = test_import(config, database, caplog, project, str(PLAIN_FILE), "UVP6")
+    prj_title = "EMODNET project " + suffix
+    prj_id = test_import(config, database, caplog, prj_title, str(PLAIN_FILE), "UVP6")
     # Add a sample spanning 2 days (m106_mn01_n3_sml) for testing date ranges in event.txt
     # this sample contains 2 'detritus' at load time and 1 small<egg (92731) which resolves to nearest Phylo Actinopterygii (56693)
-    test_import_a_bit_more_skipping(config, database, caplog, project)
+    test_import_a_bit_more_skipping(config, database, caplog, prj_title)
     # Add a similar but predicted object into same sample m106_mn01_n3_sml
     test_import_a_bit_more_skipping(
-        config, database, caplog, project, str(MIX_OF_STATES)
+        config, database, caplog, prj_title, str(MIX_OF_STATES)
     )
     # Add a sample with corrupted or absent needed free columns, for provoking calculation warnings
     do_import(prj_id, BAD_FREE_DIR, ADMIN_USER_ID)
 
     regrant_if_needed(fastapi, prj_id, who)
 
-    # Get the project for update
-    url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
-    rsp = fastapi.get(url, headers=who)
-    prj_json = rsp.json()
+    # Add another project with same data, only a "temporary" object there.
+    prj_title2 = "EMODNET project2 " + suffix
+    prj_id2 = test_import(
+        config, database, caplog, prj_title2, str(JUST_PREDICTED_DIR), "UVP6"
+    )
+    make_project_exportable(prj_id2, fastapi, ADMIN_AUTH)
+    add_concentration_data(fastapi, prj_id2)
+
+    regrant_if_needed(fastapi, prj_id2, who)
+
     coll_title = "EMODNET test collection " + suffix
-    # Create a minimal collection with only this project
+    # Create a small collection with these projects
     url = COLLECTION_CREATE_URL
     rsp = fastapi.post(
-        url, headers=who, json={"title": coll_title, "project_ids": [prj_id]}
+        url,
+        headers=who,
+        json={
+            "title": coll_title,
+            "project_ids": [prj_id, prj_id2],
+        },
     )
     assert rsp.status_code == status.HTTP_200_OK
     coll_id = rsp.json()
-    return coll_id, coll_title, prj_id, prj_json
+    return coll_id, coll_title, prj_id
 
 
 def test_emodnet_invalid_req(fastapi):
@@ -435,22 +462,24 @@ def unzip_and_check(zip_content, ref_content, who):
     assert all_in_one == ref_content
 
 
-def add_concentration_data(fastapi, prj_id):
+def add_concentration_data(fastapi, prj_id, but_not="XXXXXX"):
     # Update Acquisitions & Samples so that there can be a concentration,
     # only some of them so that on-purpose erroneous data survives
     url = PROJECT_SEARCH_SAMPLES_URL.format(project_id=prj_id)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
-    sample_ids = [r["sampleid"] for r in rsp.json() if "mn04" not in r["orig_id"]]
+    sample_ids = [r["sampleid"] for r in rsp.json() if but_not not in r["orig_id"]]
     url = SAMPLE_SET_UPDATE_URL.format(project_id=prj_id)
     req = {"target_ids": sample_ids, "updates": [{"ucol": "tot_vol", "uval": "100"}]}
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json() == len(sample_ids)
+    assert rsp.json() == len(
+        sample_ids
+    ), "Sample update failed, could be that there is no tot_vol column to update"
     url = PROJECT_SEARCH_ACQUIS_URL.format(project_id=prj_id)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
-    acquis_ids = [r["acquisid"] for r in rsp.json() if "mn04" not in r["orig_id"]]
+    acquis_ids = [r["acquisid"] for r in rsp.json() if but_not not in r["orig_id"]]
     url = ACQUISITION_SET_UPDATE_URL.format(project_id=prj_id)
     req = {"target_ids": acquis_ids, "updates": [{"ucol": "sub_part", "uval": "2"}]}
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
