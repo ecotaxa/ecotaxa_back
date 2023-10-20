@@ -9,7 +9,7 @@
       "body": "Your account is active.<br>You can now login to the EcoTaxa application and start creating a  project.<br>{link}.<br>{assistance}"
     },
     "pending": {
-      "url": "/gui/register",
+      "url": "/gui/register/",
       "subject": "EcoTaxa account activation pending.",
       "email": "<a href=\"mailto:{email}\">{email}</a>",
       "link": "<a href=\"{url}{token}\" style=\"color: rgb(52, 167, 173)\">{url}{token}</a>",
