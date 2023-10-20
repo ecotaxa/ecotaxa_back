@@ -45,6 +45,9 @@ _req_tmpl = {
     "with_absent": False,
     "with_computations": [],
     "formulae": uvp_formulae,
+    "extra_xml": [
+        """<creator><organizationName>My extra creator org (EXTR)</organizationName><address/></creator>"""
+    ],
 }
 
 COLLECTION_QUERY_BY_TITLE_URL = "/collections/by_title/?q={title}"

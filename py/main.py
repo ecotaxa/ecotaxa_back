@@ -122,7 +122,7 @@ from BO.Taxonomy import TaxonBO
 from BO.User import UserIDT
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
-from DB.User import User, UserStatus
+from DB.User import User
 from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import (
@@ -854,6 +854,7 @@ def darwin_core_format_export(
         request.with_absent,
         request.with_computations,
         request.formulae,
+        request.extra_xml,
     ) as sce:
         with RightsThrower():
             return sce.run(current_user)

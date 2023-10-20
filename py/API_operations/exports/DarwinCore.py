@@ -111,6 +111,7 @@ class DarwinCoreExport(JobServiceBase):
                 "with_absent": self.with_absent,
                 "with_computations": self.with_computations,
                 "formulae": self.formulae,
+                "extra_xml": self.extra_xml,
             }
         )
         return args
@@ -124,6 +125,7 @@ class DarwinCoreExport(JobServiceBase):
         with_absent: bool,
         with_computations: List[SciExportTypeEnum],
         formulae: Dict[str, str],
+        extra_xml: List[str],
     ):
         super().__init__()
         # Input params
@@ -143,6 +145,8 @@ class DarwinCoreExport(JobServiceBase):
             assert False, "Need formulae for " + str(with_computations)
         # TODO: We have all this at project level now, but how to mix with API?
         self.formulae: Dict[str, str] = formulae
+        # TODO: Some sanity check on XML
+        self.extra_xml: List[str] = extra_xml
         #
         # During processing
         #
@@ -206,7 +210,7 @@ class DarwinCoreExport(JobServiceBase):
             return
         # Create a container
         arch = DwC_Archive(
-            DatasetMetadata(meta),
+            DatasetMetadata(meta, self.extra_xml),
             self.temp_for_jobs.base_dir_for(self.job_id) / self.DWC_ZIP_NAME,
         )
         # Add data from DB

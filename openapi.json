@@ -5934,11 +5934,12 @@
             "additionalProperties":{
               "type":"integer"
             },
-            "description":"Mapping from present taxon (key) to output replacement one (value), during computations. Use a null replacement to _discard_ the objects with present taxon. Note: These are EcoTaxa categories, WoRMS mapping happens after, whatever.",
+            "description":"Mapping from present taxon (key) to output replacement one (value), during computations. Use a 0 replacement to _discard_ the objects with present taxon. Note: These are EcoTaxa categories, WoRMS mapping happens after, whatever.",
             "default":{},
             "example":{
               "456":956,
-              "2456":213
+              "2456":213,
+              "93672":0
             }
           },
           "formulae":{
@@ -5954,6 +5955,18 @@
               "total_water_volume":"sam.tot_vol/1000",
               "individual_volume":"4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3"
             }
+          },
+          "extra_xml":{
+            "title":"Extra XML",
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "description":"XML blocks which will be output, reformatted, inside the <dataset> tag of produced EML. Formal schema is in dataset section of: https://eml.ecoinformatics.org/schema/eml_xsd ",
+            "default":[],
+            "example":[
+              "<associatedParty>\n    <individualName><givenName>Coco</givenName><surName>Rico</surName>\n    </individualName>\n    <organizationName>CHICK</organizationName>\n  </associatedParty>"
+            ]
           }
         },
         "additionalProperties":false,

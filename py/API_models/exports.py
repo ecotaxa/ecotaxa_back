@@ -207,6 +207,19 @@ class DarwinCoreExportReq(BaseModel):
         },
         default={},
     )
+    extra_xml: List[str] = Field(
+        title="Extra XML",
+        description="XML blocks which will be output, reformatted, inside the <dataset> tag of produced EML. "
+        "Formal schema is in dataset section of: https://eml.ecoinformatics.org/schema/eml_xsd ",
+        example={
+            """<associatedParty>
+    <individualName><givenName>Coco</givenName><surName>Rico</surName>
+    </individualName>
+    <organizationName>CHICK</organizationName>
+      </associatedParty>""",
+        },
+        default=[],
+    )
 
     # noinspection PyMethodParameters
     @validator("computations_pre_mapping")

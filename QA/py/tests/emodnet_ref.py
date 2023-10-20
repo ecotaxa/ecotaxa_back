@@ -112,6 +112,10 @@ This series is part of the long term planktonic monitoring of
     </address>
     <electronicMailAddress>real2@users.com</electronicMailAddress>
   </contact>
+  <creator>
+    <organizationName>My extra creator org (EXTR)</organizationName>
+    <address/>
+  </creator>
 </dataset>
 <additionalMetadata>
   <metadata>
