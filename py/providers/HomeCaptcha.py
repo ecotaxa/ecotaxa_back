@@ -27,9 +27,10 @@ class HomeCaptcha(object):
         }
         # @see https://developers.google.com/recaptcha/docs/verify
         url_captcha = str(Config().get_account_request_url() or "") + str(
-            "/gui/checkcaptcha"
+            "gui/checkcaptcha"
         )
         rsp = requests.request("GET", url=url_captcha, params=params)
+
         if rsp.status_code != 200 or not rsp.json()["success"]:
             return rsp.text.replace("\n", "")
         return None
