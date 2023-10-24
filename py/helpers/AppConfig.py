@@ -78,7 +78,7 @@ class Config(object):
         return self.parser.get("MAILSERVICE_SECRET_KEY")
 
     def get_mailservice_salt(self) -> Optional[bytes]:
-        return self.parser.get("MAILSERVICE_SALT").encode("UTF-8")
+        return self.parser.get("MAILSERVICE_SALT")
 
     def get_sender_account(self) -> Optional[str]:
         # email address used in account management - 0 email - 1 pwd - 2 - dns - 3 port

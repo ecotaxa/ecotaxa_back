@@ -182,10 +182,9 @@ class UserValidation(object):
 
         from itsdangerous import TimestampSigner
 
-        salt = salt
         _mailserializer = URLSafeTimedSerializer(
             secret_key=secret_key,
-            salt=salt,
+            salt=salt.encode("UTF-8"),
             signer=TimestampSigner,
             # signer_kwargs={"key_derivation": "hmac"},
         )
