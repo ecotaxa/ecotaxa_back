@@ -215,14 +215,8 @@ class MailProvider(object):
                             tokenage = self.SHORT_TOKEN_AGE
                         age = datetime.now() + timedelta(hours=int(tokenage))
                         replace[key] += str(
-                            " (valid until %s-%s-%s, %s:%s)"
-                            % (
-                                age.year,
-                                age.month,
-                                age.day,
-                                age.hour,
-                                age.minute,
-                            )
+                            " (valid until %s (UTC))"
+                            % age.strftime("%Y-%m-%d %H:%M:%S")
                         )
 
         for key in self.REPLACE_KEYS:
