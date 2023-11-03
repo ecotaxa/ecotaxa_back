@@ -215,14 +215,8 @@ class MailProvider(object):
                             tokenage = self.SHORT_TOKEN_AGE
                         age = datetime.now() + timedelta(hours=int(tokenage))
                         replace[key] += str(
-                            " (valid until %s-%s-%s, %s:%s)"
-                            % (
-                                age.year,
-                                age.month,
-                                age.day,
-                                age.hour,
-                                age.minute,
-                            )
+                            " (valid until %s (UTC))"
+                            % age.strftime("%Y-%m-%d %H:%M:%S")
                         )
 
         for key in self.REPLACE_KEYS:
@@ -249,7 +243,7 @@ class MailProvider(object):
         mailmsg = EmailMessage()
         mailmsg["Subject"] = model["subject"].format(action=replace["action"])
         text = self.html_to_text(model["body"])
-        mailmsg.set_content(text, subtype="plain", charset="utf-8")
+        mailmsg.set_content(text, subtype="plain", charset="utf-8", cte="8bit")
         return mailmsg
 
     @staticmethod
@@ -327,7 +321,10 @@ class MailProvider(object):
         url: Optional[str] = None,
     ) -> None:
         data = ReplaceInMail(
-            email=assistance_email, token=token, tokenage=self.PROFILE_TOKEN_AGE
+            email=assistance_email,
+            token=token,
+            tokenage=self.PROFILE_TOKEN_AGE,
+            url=url,
         )
         mailmsg = self.mail_message(AccountMailType.status, data, action=status_name)
         self.send_mail([recipient], mailmsg, replyto=assistance_email)

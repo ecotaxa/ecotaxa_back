@@ -15,10 +15,10 @@ from passlib.context import CryptContext  # type: ignore
 
 from API_operations.helpers.Service import Service
 from BO.Rights import NOT_AUTHORIZED
-from DB.User import User
+from DB.User import User, UserStatus
 from helpers.fastApiUtils import build_serializer
 
-NOT_AUTHORIZED_MAIL = "##id###" + NOT_AUTHORIZED
+NOT_AUTHORIZED_MAIL = "__id____" + NOT_AUTHORIZED
 
 
 class LoginService(Service):
@@ -43,37 +43,29 @@ class LoginService(Service):
 
     def validate_login(self, username: str, password: str) -> Union[str, bytes]:
         # Fetch the one and only user
-        from DB.User import UserStatus
-
+        # username is an email - check before
+        assert username is not None, NOT_AUTHORIZED
         account_validation = self.config.get_account_validation() == "on"
         # if account validation is "on" and account is pending
-        if account_validation:
-            user_qry = self.session.query(User).filter(User.email == username)
+        from sqlalchemy import func
+
+        if account_validation == True:
+            user_qry = self.session.query(User).filter(
+                func.lower(User.email) == func.lower(username)
+            )
         else:
             user_qry = self.session.query(User).filter(
-                User.email == username, User.status == UserStatus.active.value
+                func.lower(User.email) == func.lower(username),
+                User.status == UserStatus.active.value,
             )
         db_users = user_qry.all()
         assert len(db_users) == 1, NOT_AUTHORIZED
         the_user: User = db_users[0]
         # verif even user is not active , in order to let modify email only if mail_status is False
         verif_ok = self.verify_and_update_password(password, the_user)
-        assert verif_ok, NOT_AUTHORIZED
-        if account_validation and the_user.status != UserStatus.active.value:
-            from fastapi import HTTPException
-            from starlette.status import HTTP_401_UNAUTHORIZED
-
-            raise HTTPException(
-                status_code=HTTP_401_UNAUTHORIZED,
-                detail=[
-                    str(the_user.status)
-                    + "#"
-                    + str(the_user.mail_status)
-                    + "#"
-                    + NOT_AUTHORIZED_MAIL.replace("##id##", str(the_user.id))
-                ],
-            )
-        assert the_user.status == UserStatus.active.value, NOT_AUTHORIZED
+        assert verif_ok == True, NOT_AUTHORIZED
+        # throw exception if the user is not active
+        self.verify_status_throw(the_user, account_validation)
         # Sign with the verifying serializer, the salt is Flask's one
         token = build_serializer().dumps({"user_id": the_user.id})
         return token
@@ -166,3 +158,39 @@ class LoginService(Service):
             is_plaintext = self._pwd_context.identify(password_hash) == "plaintext"
 
         return not (is_plaintext or single_hash)
+
+    def verify_status_throw(self, the_user: User, account_validation: bool):
+        """
+        If account validation is on "on" returns only the necessary data to modify a profile or request new confirmation mails
+        """
+        if account_validation == True and the_user.status != UserStatus.active.value:
+            from fastapi import HTTPException
+            from starlette.status import HTTP_401_UNAUTHORIZED
+
+            if the_user.status == UserStatus.pending.value:
+                # remove sensible infos
+                userdata = the_user.__dict__
+                for key in [
+                    "password",
+                    "_sa_instance_state",
+                    "mail_status",
+                    "status_date",
+                    "mail_status_date",
+                    "usercreationdate",
+                    "preferences",
+                ]:
+                    del userdata[key]
+            else:
+                userdata = {
+                    "id": the_user.id,
+                    "status": the_user.status,
+                    "mail_status": the_user.mail_status,
+                }
+            import json
+
+            detail = userdata
+            raise HTTPException(
+                status_code=HTTP_401_UNAUTHORIZED,
+                detail=[detail],
+            )
+        assert the_user.status == UserStatus.active.value, NOT_AUTHORIZED

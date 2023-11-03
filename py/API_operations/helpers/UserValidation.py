@@ -44,6 +44,7 @@ class UserValidation(object):
         # unset status field "active" value if major modification is done by anyone except users admin
         # 0 email - 1 pwd - 2 - dns - 3 port
         self.senderaccount = str(config.get_sender_account() or "").split(",")
+        self._mailservice_salt = config.get_mailservice_salt()
         self._mailprovider = MailProvider(
             self.senderaccount,
             config.get_dir_mail_templates(),
@@ -177,14 +178,13 @@ class UserValidation(object):
         return self._mailprovider.is_email(email)
 
     @staticmethod
-    def _build_serializer(secret_key: str) -> URLSafeTimedSerializer:
+    def _build_serializer(secret_key: str, salt: str) -> URLSafeTimedSerializer:
 
         from itsdangerous import TimestampSigner
 
-        salt = b"mailservice_salt"
         _mailserializer = URLSafeTimedSerializer(
             secret_key=secret_key,
-            salt=salt,
+            salt=salt.encode("UTF-8"),
             signer=TimestampSigner,
             # signer_kwargs={"key_derivation": "hmac"},
         )
@@ -210,7 +210,12 @@ class UserValidation(object):
             tokenreq["action"] = action
         if reason is not None:
             tokenreq["reason"] = reason
-        return str(self._build_serializer(self.secret_key).dumps(tokenreq) or "")
+        return str(
+            self._build_serializer(self.secret_key, self._mailservice_salt).dumps(
+                tokenreq
+            )
+            or ""
+        )
 
     def _get_value_from_token_throw(
         self,
@@ -226,9 +231,9 @@ class UserValidation(object):
                 age = SHORT_TOKEN_AGE
             else:
                 age = PROFILE_TOKEN_AGE
-            payload = self._build_serializer(self.secret_key).loads(
-                token, max_age=int(age) * 3600
-            )
+            payload = self._build_serializer(
+                self.secret_key, self._mailservice_salt
+            ).loads(token, max_age=int(age) * 3600)
         except (SignatureExpired, BadSignature):
             raise HTTPException(
                 status_code=HTTP_403_FORBIDDEN,
