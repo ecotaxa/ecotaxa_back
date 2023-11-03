@@ -347,6 +347,7 @@ def test_emodnet_export_recast2(
             "include_predicted": False,
             "with_computations": ["ABO", "CNC", "BIV"],
             "computations_pre_mapping": {
+                # vs previous test, 56693 is not anymore a recast target
                 78418: 45072,  # Oncaeidae -> Cyclopoida, inside sample 1 there are both
                 25928: 25828,  # Gnathostomata-> Copepoda, not in dataset but to ensure it doesn't hurt
             },

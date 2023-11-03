@@ -239,12 +239,16 @@ _occurence_no_ident_status = r"""
 id	eventID	occurrenceID	basisOfRecord	scientificName	scientificNameID	kingdom	occurrenceStatus
 m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_78418	MachineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	Animalia	present
 m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_45072	MachineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	Animalia	present
+m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_56693	MachineObservation	Actinopterygii	urn:lsid:marinespecies.org:taxname:10194	Animalia	present
 m106_mn01_n3_sml	m106_mn01_n3_sml	m106_mn01_n3_sml_56693	MachineObservation	Actinopterygii	urn:lsid:marinespecies.org:taxname:10194	Animalia	present
 m106_mn01_n3_sml	m106_mn01_n3_sml	m106_mn01_n3_sml_P_56693	MachineObservation	Actinopterygii	urn:lsid:marinespecies.org:taxname:10194	Animalia	present
 {p1}_m106_mn04_n4_sml	{p1}_m106_mn04_n4_sml	{p1}_m106_mn04_n4_sml_78418	MachineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	Animalia	present
+{p1}_m106_mn04_n4_sml	{p1}_m106_mn04_n4_sml	{p1}_m106_mn04_n4_sml_45072	MachineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	Animalia	present
 m106_mn04_n5_sml	m106_mn04_n5_sml	m106_mn04_n5_sml_78418	MachineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	Animalia	present
+m106_mn04_n5_sml	m106_mn04_n5_sml	m106_mn04_n5_sml_45072	MachineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	Animalia	present
 m106_mn04_n6_sml	m106_mn04_n6_sml	m106_mn04_n6_sml_45072	MachineObservation	Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	Animalia	present
 m106_mn04_n6_sml	m106_mn04_n6_sml	m106_mn04_n6_sml_78418	MachineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	Animalia	present
+m106_mn04_n6_sml	m106_mn04_n6_sml	m106_mn04_n6_sml_56693	MachineObservation	Actinopterygii	urn:lsid:marinespecies.org:taxname:10194	Animalia	present
 """
 _occurence_with_absent = ""
 _emofs = r"""
@@ -384,8 +388,12 @@ def with_recast_zip(prj1, prj2):
         "meta.xml": _meta
         + _occurences_meta_no_verif_status
         + _meta_emofs_with_computations,
+        # Recast affects occurrences, the recast targets must be present there, when used
         "occurrence.txt": grep_dash_v(
-            _occurence_no_ident_status,  # Recast does not affect occurrences
+            grep_dash_v(
+                grep_dash_v(_occurence_no_ident_status, "m106_mn04_n5_sml_45072"),
+                "{p1}_m106_mn04_n4_sml_45072",
+            ),
             "m106_mn01_n3_sml_P_56693",  # Remove Predicted output
         ).format(p1=prj1, p2=prj2),
     }
@@ -402,7 +410,10 @@ def with_recast_zip2(prj1, prj2):
         + _occurences_meta_no_verif_status
         + _meta_emofs_with_computations,
         "occurrence.txt": grep_dash_v(
-            _occurence_no_ident_status,  # Recast does not affect occurrences
+            grep_dash_v(
+                grep_dash_v(_occurence_no_ident_status, "m106_mn04_n6_sml_56693"),
+                "m106_mn01_n1_sml_56693",
+            ),
             "m106_mn01_n3_sml_P_56693",  # Remove Predicted output
         ).format(p1=prj1, p2=prj2),
     }
