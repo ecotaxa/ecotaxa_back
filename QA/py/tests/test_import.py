@@ -2,7 +2,6 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-import json
 import logging
 from os.path import dirname, realpath
 from pathlib import Path
@@ -23,10 +22,10 @@ from API_operations.CRUD.Jobs import JobCRUDService
 # noinspection PyPackageRequirements
 from API_operations.CRUD.Projects import ProjectsService
 from API_operations.Consistency import ProjectConsistencyChecker
+from API_operations.JsonDumper import JsonDumper
 
 # noinspection PyPackageRequirements
 from API_operations.imports.Import import FileImport
-from API_operations.JsonDumper import JsonDumper
 from DB.Job import DBJobStateEnum
 
 # # noinspection PyUnresolvedReferences
@@ -43,7 +42,6 @@ from tests.test_jobs import (
     check_job_errors,
     api_wait_for_stable_job,
     FILE_IMPORT_URL,
-    api_check_job_errors,
     api_check_job_questions,
 )
 
@@ -66,6 +64,7 @@ WEIRD_DIR = DATA_DIR / "import_test_weird"
 ISSUES_DIR = DATA_DIR / "import_issues" / "tsv_issues"
 ISSUES_DIR2 = DATA_DIR / "import_issues" / "no_classif_id"
 ISSUES_DIR3 = DATA_DIR / "import_issues" / "tsv_too_many_cols"
+ISSUES_DIR4 = DATA_DIR / "import_issues" / "duplicate_in_tsv"
 MIX_OF_STATES = DATA_DIR / "import_mixed_states"
 EMPTY_DIR = DATA_DIR / "import_issues" / "no_relevant_file"
 EMPTY_TSV_DIR = DATA_DIR / "import_issues" / "empty_tsv"
@@ -556,6 +555,34 @@ def test_import_too_many_custom_columns(config, database, caplog):
     #    "many custom fields, or bad type.",
     # ]
     assert errors == compare_errors
+
+
+def test_import_dups_in_tsv(config, database, caplog):
+    """The TSV contains duplicated lines.
+    Either without _or without_ 'skip_existing_objects' option, it must not pass preliminary validation,
+    as such duplicate is against referential integrity."""
+    caplog.set_level(logging.DEBUG)
+    prj_id = create_project(ADMIN_USER_ID, "Test LS 9")
+
+    expected_errors = [
+        "In file m106_mn01_n3_sml/ecotaxa_m106_mn01_n3_sml_pls.tsv, line 4: (Object 'm106_mn01_n3_sml_1120', Image 'm106_mn01_n3_sml_1111.jpg') was seen before."
+    ]
+    # No skip, should fail
+    params = ImportReq(source_path=str(ISSUES_DIR4), skip_existing_objects=False)
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    check_job_errors(job)
+    errors = get_job_errors(job)
+    assert errors == expected_errors
+    # Skip existing, should fail as well
+    params = ImportReq(source_path=str(ISSUES_DIR4), skip_existing_objects=True)
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    check_job_errors(job)
+    errors = get_job_errors(job)
+    assert errors == expected_errors
 
 
 # @pytest.mark.skip()

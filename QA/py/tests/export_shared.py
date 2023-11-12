@@ -44,7 +44,7 @@ def unzip_and_check(zip_content, ref_dir: str, only_hdr: bool):
             content_bin = myfile.read()
         if name.endswith(".tsv"):
             one_tsv_check(content_bin, name, only_hdr, ref_dir_path)
-    assert len(ref_dir_content) == 0
+    assert len(ref_dir_content) == 0, "unreferenced %s" % ref_dir_content
 
 
 def one_tsv_check(content_bin, name, only_hdr, ref_dir_path):

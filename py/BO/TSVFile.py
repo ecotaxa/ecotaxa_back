@@ -872,7 +872,9 @@ class TSVFile(object):
     def validate_content(self, how: ImportHow, diag: ImportDiagnostic):
         row_count_for_csv = 0
         vals_cache: Dict = {}
+        local_keys: Set[str] = set()
         logged_parents: Set[Tuple[Any, Any]] = set()
+        lig: Dict
         for lig in self.rdr:
             row_count_for_csv += 1
 
@@ -913,14 +915,24 @@ class TSVFile(object):
 
             # Verify duplicate images
             key_exist_obj = "%s*%s" % (object_id, img_file_name)
-            if not how.skip_object_duplicates:
+            if key_exist_obj in local_keys:
+                diag.error(
+                    "In file %s, line %d: (Object '%s', Image '%s') was seen before."
+                    % (
+                        self.relative_name,
+                        row_count_for_csv + 2,
+                        object_id,
+                        img_file_name,
+                    )
+                )
+            elif not how.skip_object_duplicates:
                 # Ban the duplicates, except if we can skip them.
                 if key_exist_obj in diag.existing_objects_and_image:
                     diag.error(
                         "Duplicate object '%s' Image '%s' in file %s. "
                         % (object_id, img_file_name, self.relative_name)
                     )
-            diag.existing_objects_and_image.add(key_exist_obj)
+            local_keys.add(key_exist_obj)
 
             # Verify that we do not make the topology worse...
             if not how.can_update_only:
@@ -938,6 +950,9 @@ class TSVFile(object):
                         diag.error(maybe_err)
                 # Add the association anyway, it will reduce the repetition of errors
                 diag.topology.add_association(sample_id, acquis_id)
+
+        # For next TSV analysis
+        diag.existing_objects_and_image.update(local_keys)
 
         return row_count_for_csv
 
