@@ -4,6 +4,7 @@
 #
 import abc
 import logging
+from logging import Logger
 from abc import ABC
 from threading import get_ident
 
@@ -50,6 +51,22 @@ class PerThreadHandler(logging.Handler):
 # Singleton handler per process
 _the_handler = PerThreadHandler(logging.FileHandler(LOG_FILE))
 _the_handler.handler.setFormatter(logging.Formatter(LOGGING_FORMAT))
+
+
+def logger_nullify_after_fork():
+    """ Remove log handlers after a fork.
+    We could replace them with more fresh handler but this is enough
+    to prevent artificial sync b/w forked processes """
+    Logger.manager.root.handlers.clear()
+    for _name, a_logger in Logger.manager.loggerDict.items():
+        if isinstance(a_logger, Logger):
+            if len(a_logger.handlers) > 0:
+                a_logger.handlers.clear()
+        elif isinstance(a_logger, logging.PlaceHolder):
+            a_logger.loggerMap.clear()
+    global _the_handler
+    _the_handler = PerThreadHandler(logging.FileHandler(LOG_FILE))
+    _the_handler.handler.setFormatter(logging.Formatter(LOGGING_FORMAT))
 
 
 def get_logger(name) -> logging.Logger:

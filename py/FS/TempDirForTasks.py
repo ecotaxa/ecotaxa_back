@@ -62,8 +62,10 @@ class TempDirForTasks(object):
     @staticmethod
     def ensure_exists(path: Path, cache: Optional[Set] = None) -> None:
         if cache is None:
-            cache = set()
-        if path in cache:
+            cache = (
+                set()
+            )  # No cache required, so create a set for the duration of the call
+        elif path in cache:
             return
         if path.exists():
             cache.add(path)

@@ -4,7 +4,7 @@
 #
 import json
 import threading
-from threading import Thread
+from threading import Thread, Event
 from typing import Any, Optional, List, ClassVar
 
 from API_operations.helpers.JobService import JobServiceBase
@@ -65,6 +65,8 @@ class JobScheduler(Service):
     # A single runner per process
     the_runner: Optional[JobRunner] = None
     the_timer: Optional[threading.Timer] = None
+    do_run: Event = Event()
+    do_run.set()
 
     def __init__(self) -> None:
         super().__init__()
@@ -150,10 +152,15 @@ class JobScheduler(Service):
                 logger.exception("Job run() exception: %s", e)
             cls.launch_at_interval(interval)
 
+        if not cls.do_run.is_set():
+            cls.the_timer = None
+            cls.do_run.set()
+            return
         cls.the_timer = threading.Timer(interval=interval, function=launch)
+        cls.the_timer.setName("JobTimer")
         cls.the_timer.start()
 
     @classmethod
     def shutdown(cls) -> None:
-        assert cls.the_timer
-        cls.the_timer.cancel()
+        # Prevent self-reload in a multi-threading compatible way
+        cls.do_run.clear()
