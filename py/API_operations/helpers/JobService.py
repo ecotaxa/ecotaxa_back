@@ -28,7 +28,7 @@ class JobServiceBase(Service, LogEmitter, ABC):
     For long-lived objects, i.e. processes/threads @see JobScheduler class.
     """
 
-    JOB_TYPE: str
+    JOB_TYPE: str  # To override in subclasses
     JOB_LOG_FILE_NAME = "TaskLogBack.txt"
 
     def __init__(self) -> None:
@@ -117,9 +117,18 @@ class JobServiceBase(Service, LogEmitter, ABC):
 
     def create_job(self, job_type: str, user_id: UserIDT):
         args = self.init_args({})
-        new_job = JobBO.create_job(self.session, user_id, job_type, args)
+        # Add a pending job, to pick by runner thread, @see JobScheduler.py
+        new_job = JobBO.create_job(user_id, job_type, args)
+        self.session.add(new_job)
+        # self.session.commit() # Uncomment to see the race condition in def test_log_file_exists_if_job_exists
+        self.session.flush(
+            [new_job]
+        )  # Flush sends the SQL to PG, so we can get the id from sequence
         self.job_id = new_job.id
         self.temp_for_jobs.erase_for(new_job.id)
+        with LogsSwitcher(self):
+            logger.info("Creating job %d", self.job_id)
+        self.session.commit()
 
     def _get_job(self) -> Job:
         job: Optional[Job] = self.session.query(Job).get(self.job_id)

@@ -132,9 +132,7 @@ class JobBO(object):
         self._session = None
 
     @classmethod
-    def create_job(
-        cls, session: Session, user_id: UserIDT, job_type: str, args: Dict
-    ) -> Job:
+    def create_job(cls, user_id: UserIDT, job_type: str, args: Dict) -> Job:
         """
         Create a job, as pending, to add into the DB. The job will not start until a scheduler takes it.
         """
@@ -147,6 +145,4 @@ class JobBO(object):
         job.params = json_dumps(args)
         job.inside = job.reply = json_dumps({})
         job.messages = json_dumps([])
-        session.add(job)
-        session.commit()
         return job
