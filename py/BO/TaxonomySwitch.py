@@ -7,7 +7,6 @@
 #
 from typing import Dict
 
-from API_operations.TaxonomyService import TaxonomyService
 from BO.Classification import ClassifIDListT, ClassifIDT
 from BO.Taxonomy import StrictWoRMSSetFromTaxaSet, TaxonomyBO
 from BO.WoRMSification import WoRMSifier
@@ -26,8 +25,8 @@ class TaxonomyMapper(object):
     of corresponding aphia_ids, i.e. WoRMS records.
     """
 
-    def __init__(self, session: Session, taxon_ids: ClassifIDListT):
-        self.session = session
+    def __init__(self, ro_session: Session, taxon_ids: ClassifIDListT):
+        self.session = ro_session
         self.taxa_ids = set(taxon_ids)
 
     def do_match(
@@ -38,7 +37,7 @@ class TaxonomyMapper(object):
         # Do the manual (i.e. XLSX-driven) matching of what can be.
         # In this part, both Morpho and Phylo taxa are matched to WoRMS.
         with CodeTimer("Building ToWorms: ", logger):
-            to_worms: ToWorms = ToWorms()
+            to_worms: ToWorms = ToWorms(self.session)
             # Load & QC data
             pbs = to_worms.pre_validate()  # TODO use pbs
             # assert pbs == []
@@ -75,9 +74,8 @@ class TaxonomyMapper(object):
         morpho_auto_ids = list(ids_for_auto_match.difference(phylo_auto_ids))
 
         # Update then borrow taxo tree from ToWorms which has nearly all we need, but is partial
-        with TaxonomyService() as taxo_sce:
-            to_worms.add_to_unieuk_with_lineage(morpho_auto_ids, taxo_sce)
-            unieuk_per_id = to_worms.unieuk
+        to_worms.add_to_unieuk_with_lineage(morpho_auto_ids)
+        unieuk_per_id = to_worms.unieuk
 
         # Store morpho -> nearest phylo mapping
         for a_morpho_id in morpho_auto_ids:
