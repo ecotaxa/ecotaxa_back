@@ -9,11 +9,11 @@ from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID
 from tests.export_shared import download_and_unzip_and_check, download_and_check
 from tests.test_fastapi import PROJECT_QUERY_URL
 from tests.test_import import create_project, do_import, DATA_DIR, dump_project
-from tests.test_jobs import (
-    get_job_and_wait_until_ok,
+from tests.jobs import (
+    JOB_QUERY_URL,
     wait_for_stable,
     api_check_job_ok,
-    JOB_QUERY_URL,
+    get_job_and_wait_until_ok,
 )
 
 OBJECT_SET_EXPORT_URL = "/object_set/export"

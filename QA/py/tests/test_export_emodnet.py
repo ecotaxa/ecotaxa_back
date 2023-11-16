@@ -32,7 +32,7 @@ from tests.test_collections import (
     regrant_if_needed,
 )
 from tests.test_fastapi import PROJECT_QUERY_URL
-from tests.test_jobs import wait_for_stable, api_check_job_ok, api_check_job_failed
+from tests.jobs import wait_for_stable, api_check_job_ok, api_check_job_failed
 from tests.test_update import ACQUISITION_SET_UPDATE_URL, SAMPLE_SET_UPDATE_URL
 from tests.test_update_prj import PROJECT_UPDATE_URL
 

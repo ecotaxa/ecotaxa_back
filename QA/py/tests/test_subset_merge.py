@@ -45,7 +45,7 @@ from tests.test_import import (
     create_project,
     dump_project,
 )
-from tests.test_jobs import (
+from tests.jobs import (
     wait_for_stable,
     check_job_ok,
     check_job_errors,

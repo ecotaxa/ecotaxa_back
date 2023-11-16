@@ -24,7 +24,7 @@ from starlette import status
 
 from tests.credentials import ADMIN_USER_ID, CREATOR_AUTH, CREATOR_USER_ID
 from tests.test_import import PLAIN_DIR, PLAIN_FILE, create_project, PLAIN_FILE_PATH
-from tests.test_jobs import wait_for_stable, api_wait_for_stable_job
+from tests.jobs import wait_for_stable, api_wait_for_stable_job
 
 IMPORT_IMAGES_URL = "/simple_import/{project_id}?dry_run={dry_run}"
 UPLOAD_FILE_URL = "/my_files/"

@@ -6,7 +6,7 @@ import numpy as np
 from starlette import status
 
 from tests.credentials import ADMIN_AUTH, CREATOR_AUTH
-from tests.test_jobs import get_job_and_wait_until_ok
+from tests.jobs import get_job_and_wait_until_ok
 from tests.test_classification import _prj_query
 
 from BO.Prediction import DeepFeatures

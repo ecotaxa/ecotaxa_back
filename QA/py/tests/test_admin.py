@@ -3,7 +3,7 @@ import logging
 from starlette import status
 
 from tests.credentials import ADMIN_AUTH, USER_AUTH
-from tests.test_jobs import wait_for_stable, check_job_ok
+from tests.jobs import wait_for_stable, check_job_ok
 
 PROJECT_DIGEST_URL = "/admin/images/{project_id}/digest?max_digests=100"
 NIGHTLY_URL = "/admin/nightly"

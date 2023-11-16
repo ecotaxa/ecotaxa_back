@@ -13,15 +13,15 @@ from starlette import status
 
 from tests.credentials import ADMIN_USER_ID, CREATOR_AUTH, CREATOR_USER_ID
 from tests.test_import import (
-    FILE_IMPORT_URL,
     SHARED_DIR,
     PLAIN_DIR,
     PLAIN_FILE,
     V6_FILE,
     create_project,
     PLAIN_FILE_PATH,
+    FILE_IMPORT_URL,
 )
-from tests.test_jobs import (
+from tests.jobs import (
     wait_for_stable,
     api_wait_for_stable_job,
     api_check_job_ok,

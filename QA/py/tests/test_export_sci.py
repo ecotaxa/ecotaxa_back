@@ -11,7 +11,7 @@ from tests.test_export import _req_tmpl, OBJECT_SET_EXPORT_URL
 from tests.test_export_emodnet import add_concentration_data, PROJECT_SEARCH_SAMPLES_URL
 from tests.test_fastapi import PROJECT_QUERY_URL
 from tests.test_import import DATA_DIR, do_import
-from tests.test_jobs import get_job_and_wait_until_ok
+from tests.jobs import get_job_and_wait_until_ok
 from tests.test_objectset_query import _prj_query
 from tests.test_update_prj import PROJECT_UPDATE_URL
 

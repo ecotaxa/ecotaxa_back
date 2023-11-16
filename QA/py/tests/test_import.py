@@ -35,13 +35,12 @@ from DB.Job import DBJobStateEnum
 from starlette import status
 
 from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID
-from tests.test_jobs import (
+from tests.jobs import (
     wait_for_stable,
     check_job_ok,
-    get_job_errors,
     check_job_errors,
+    get_job_errors,
     api_wait_for_stable_job,
-    FILE_IMPORT_URL,
     api_check_job_questions,
 )
 
@@ -72,6 +71,8 @@ EMPTY_TSV_DIR2 = DATA_DIR / "import_issues" / "empty_tsv2"
 BREAKING_HIERARCHY_DIR = DATA_DIR / "import_issues" / "breaking_hierarchy"
 EMPTY_TSV_IN_UPD_DIR = DATA_DIR / "import_test_upd_empty"
 AMBIG_DIR = DATA_DIR / "import de categories ambigues"
+
+FILE_IMPORT_URL = "/file_import/{project_id}"
 
 
 def create_project(owner, title, instrument=None):
