@@ -73,12 +73,13 @@ class Connection(object):
             echo_pool=False,
             # echo=True, echo_pool="debug",
             executemany_mode="batch",
-            # Reminder: QueuePool is default implementation
-            # Avoid too many stale sessions, we need at max:
+            # Reminders: QueuePool is default implementation
+            # and this code executes for _both_ ro and rw connections.
+            # So for each Connection (ro and rw), singletons per process:
             # - 1 session for serving requests
-            # - 1 session for knowing which jobs to run,
+            # - 1 session for knowing which jobs to run, ~every sec,
             #   _or running the job_ as we don't look for other jobs if one is running
-            pool_size=2,
+            pool_size=1,
             max_overflow=1,
             # This way we can restart the DB and sessions will re-establish themselves
             # the cost is 1 (simple) query per connection pool recycle.
