@@ -50,8 +50,8 @@ def launchSchedulerSubProcess():
     # assert JobScheduler.is_sane_on_shutdown()
 
 
-# It's quite long to run so remove below to execute
-# @pytest.mark.skip
+# It's quite long to run so comment out or remove below line to execute
+@pytest.mark.skip
 def test_log_file_exists_if_job_exists(config, database, fastapi, caplog):
     # Hammer job execution subsystem until a race condition eventually appears
     # What was randomly seen is the message in https://github.com/ecotaxa/ecotaxa_front/issues/688:
