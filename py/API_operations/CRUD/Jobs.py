@@ -5,7 +5,7 @@
 from io import BytesIO
 from os import fstat
 from pathlib import Path
-from typing import Tuple, List, Any, Dict, TextIO, BinaryIO, Optional
+from typing import Tuple, List, Any, Dict, TextIO, BinaryIO
 
 from BG_operations.JobScheduler import JobScheduler
 from BO.Job import JobBO
@@ -154,6 +154,6 @@ class JobCRUDService(Service):
                 job_bo.delete()
             elif job_bo.state == DBJobStateEnum.Running:
                 # Set the job to Killed
-                # TODO: No _real_ kill just presentation
+                # TODO: It's not a _real_ kill, bg thread keeps running. It's just presentation
                 job_bo.state = DBJobStateEnum.Error
                 job_bo.progress_msg = JobBO.KILLED_MESSAGE

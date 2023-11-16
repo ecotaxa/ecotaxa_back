@@ -95,7 +95,7 @@ class JobScheduler(Service):
         the_job.state = DBJobStateEnum.Running
         self.session.commit()
         # Detach the job DB line from session, as JobRunner is in another thread
-        # and objects are linked to sessions, and sessions cannot be shared b/w threads
+        # and SQLAlchemy objects are linked to sessions, and sessions cannot be shared b/w threads.
         job_clone = clone_of(the_job)
         job_clone.id = the_job.id
         # Run the service background

@@ -43,7 +43,7 @@ class NightlyJobService(JobServiceBase):
         _user = RightsBO.user_has_role(
             self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
         )
-        # Put the job in the queue i.e. pending
+        # Security OK, create pending job
         self.create_job(self.JOB_TYPE, current_user_id)
         return self.job_id
 

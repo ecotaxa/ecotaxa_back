@@ -81,7 +81,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         RightsBO.user_wants(
             self.session, current_user_id, Action.ADMINISTRATE, self.dest_prj.projid
         )
-        # OK, go background straight away
+        # Security OK, create pending job
         self.create_job(self.JOB_TYPE, current_user_id)
         ret = SubsetRsp(job_id=self.job_id)
         return ret

@@ -19,7 +19,6 @@ from BO.User import UserIDT
 from FS.MachineLearningModels import SavedModels
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger, LogsSwitcher
-
 # TODO: Move somewhere else
 from .helpers.JobService import JobServiceBase, ArgsDict
 from .helpers.Service import Service
@@ -48,7 +47,7 @@ class PredictForProject(JobServiceBase):
             self.session, current_user_id, Action.ANNOTATE, self.req.project_id
         )
         # TODO: more checks, e.g. deep features models consistency
-        # OK, go background
+        # Security OK, create pending job
         self.create_job(self.JOB_TYPE, current_user_id)
         ret = PredictionRsp(job_id=self.job_id)
         return ret

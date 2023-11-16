@@ -76,7 +76,6 @@ from formats.DarwinCore.models import (
 )
 from helpers.DateTime import now_time
 from helpers.DynamicLogs import get_logger, LogsSwitcher
-# TODO: Move somewhere else
 from ..helpers.JobService import JobServiceBase, ArgsDict
 
 logger = get_logger(__name__)
@@ -181,7 +180,7 @@ class DarwinCoreExport(JobServiceBase):
         PermissionConsistentProjectSet(
             self.session, project_ids
         ).can_be_administered_by(current_user_id)
-        # OK, go background straight away
+        # Security OK, create pending job
         self.create_job(self.JOB_TYPE, current_user_id)
         ret = ExportRsp(job_id=self.job_id)
         return ret

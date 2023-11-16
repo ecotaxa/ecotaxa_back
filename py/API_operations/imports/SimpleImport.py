@@ -50,6 +50,7 @@ class SimpleImport(ImportServiceBase):
         if len(ret.errors) > 0:
             return ret
         if not self.dry_run:
+            # Security OK, create pending job
             self.create_job(self.JOB_TYPE, current_user_id)
             ret.job_id = self.job_id
         return ret

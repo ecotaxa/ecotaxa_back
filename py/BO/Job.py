@@ -136,7 +136,7 @@ class JobBO(object):
         cls, session: Session, user_id: UserIDT, job_type: str, args: Dict
     ) -> Job:
         """
-        Add a job, as pending, into the DB. The job does not start until a scheduler takes it.
+        Create a job, as pending, to add into the DB. The job will not start until a scheduler takes it.
         """
         job = Job()
         job.state = DBJobStateEnum.Pending

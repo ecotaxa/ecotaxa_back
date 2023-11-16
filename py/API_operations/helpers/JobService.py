@@ -148,7 +148,7 @@ class JobServiceBase(Service, LogEmitter, ABC):
 
     def set_job_result(self, errors: List[str], infos: Dict[str, Any]):
         """
-        Set job detailed result and final status.
+        Set job detailed result and final status, then does a DB commit on session.
         """
         with JobBO.get_for_update(self.session, self.job_id) as job_bo:
             job_bo.set_result(infos)
