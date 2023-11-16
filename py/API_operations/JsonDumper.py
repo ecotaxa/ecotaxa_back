@@ -40,7 +40,7 @@ class JsonDumper(Service):
         super().__init__()
         self.requester_id = current_user
         self.filters = filters
-        prj = self.session.query(Project).get(prj_id)
+        prj = self.get_session().query(Project).get(prj_id)
         # We don't check for existence, so self.prj is Optional[]
         self.prj = prj
         # Work vars

@@ -53,12 +53,12 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
     def __init__(self, prj_id: int, req: SubsetReq):
         super().__init__(prj_id)
         # Load the destination project
-        dest_prj = self.session.query(Project).get(req.dest_prj_id)
+        dest_prj = self.get_session().query(Project).get(req.dest_prj_id)
         assert dest_prj is not None
         self.dest_prj: Project = dest_prj
         self.req = req
         # Work vars
-        self.to_clone: EnumeratedObjectSet = EnumeratedObjectSet(self.session, [])
+        self.to_clone: EnumeratedObjectSet = EnumeratedObjectSet(self.get_session(), [])
         self.vault = Vault(self.config.vault_dir())
         self.first_query = True
         self.images_per_orig_id: Dict[str, Set[int]] = {}
