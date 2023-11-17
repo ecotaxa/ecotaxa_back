@@ -20,42 +20,12 @@ class HomeCaptcha(object):
         self.iplist = config.get_captcha_iplist()
 
     def _daily_get_iplist(self):
+        # no usage now
         return
-        url = "https://raw.githubusercontent.com/stamparm/ipsum/master/ipsum.txt"
-        from os import system
-
-        def curl_request(url) -> None:
-            from subprocess import Popen, PIPE
-
-            # Define the command to execute using curl
-            cmd = (
-                'curl --compressed "'
-                + url
-                + '" | grep -v "#" | grep -v -E "\s[1-2]$" | cut -f 1'
-            )
-            # Execute the curl command and capture the output
-            p1 = Popen(
-                ["curl", "--compressed", url],
-                stdout=PIPE,
-                universal_newlines=True,
-            )
-            p2 = Popen(["grep", "-v", "#"], stdin=p1.stdout, stdout=PIPE)
-            if p1.stdout != None:
-                p1.stdout.close()
-            p3 = Popen(["grep", "-v", "-E", "\s[1-2]$"], stdin=p2.stdout, stdout=PIPE)
-            if p2.stdout != None:
-                p2.stdout.close()
-            with open(self.iplist, "w") as f:
-                p4 = Popen(["cut", "-f", "1"], stdin=p3.stdout, stdout=f)
-                if p3.stdout != None:
-                    p3.stdout.close()
-                f.close()
-            # Return the stdout of the curl command
-
-        curl_request(url)
 
     def _is_spam_ip(self, ip: str) -> bool:
         spamip = False
+        # no usage now
         return False
         with open(self.iplist, "r") as file:
             for line in file:
