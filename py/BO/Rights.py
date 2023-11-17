@@ -11,8 +11,6 @@ from DB.User import User, Role, UserStatus
 from DB.helpers.ORM import Session
 from .Preferences import Preferences
 from .ProjectPrivilege import ProjectPrivilegeBO
-from fastapi import HTTPException
-from starlette.status import HTTP_403_FORBIDDEN
 
 
 class Action(IntEnum):
@@ -45,10 +43,10 @@ class RightsBO(object):
         """
         user = session.query(User).get(user_id)
         # not indicating not found -
-        if user is None or user.status != UserStatus.active.value:
-            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=[NOT_AUTHORIZED])
-        else:
-            return user
+        assert (
+            user is not None and user.status == UserStatus.active.value
+        ), NOT_AUTHORIZED
+        return user
 
     @staticmethod
     def get_optional_user(session: Session, user_id: int) -> Optional[User]:

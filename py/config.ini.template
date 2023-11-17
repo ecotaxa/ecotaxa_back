@@ -60,3 +60,4 @@ USER_EMAIL_VERIFICATION = off
 
 #if "on" - account validation is needed for registration and account major data modification
 ACCOUNT_VALIDATION = off
+CAPTCHA_IPLIST = /utils/iplist.txt

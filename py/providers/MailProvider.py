@@ -10,11 +10,6 @@ from enum import Enum
 from helpers.DynamicLogs import get_logger
 from helpers.pydantic import BaseModel, Field
 from email.message import EmailMessage
-from starlette.status import (
-    HTTP_422_UNPROCESSABLE_ENTITY,
-    HTTP_500_INTERNAL_SERVER_ERROR,
-    HTTP_404_NOT_FOUND,
-)
 from fastapi import HTTPException
 from helpers.httpexception import (
     DETAIL_INVALID_EMAIL,
@@ -116,8 +111,8 @@ class MailProvider(object):
             return
         for recipient in recipients:
             if not self.is_email(recipient):
-                HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                raise HTTPException(
+                    status_code=422,
                     detail=[DETAIL_INVALID_EMAIL],
                 )
         import smtplib, ssl
@@ -146,17 +141,17 @@ class MailProvider(object):
                 )
             except smtplib.SMTPException as e:
                 if isinstance(e, smtplib.SMTPRecipientsRefused):
-                    code = HTTP_422_UNPROCESSABLE_ENTITY
+                    code = 422
                     detail = DETAIL_SMTP_RECIPIENT_REFUSED
                 elif isinstance(e, smtplib.SMTPDataError):
-                    code = HTTP_422_UNPROCESSABLE_ENTITY
+                    code = 422
                     detail = DETAIL_SMTP_DATA_ERROR
                 else:
-                    code = HTTP_500_INTERNAL_SERVER_ERROR
+                    code = 500
                     detail = str(e.args)
                 logger.error(e)
             except:
-                code = HTTP_500_INTERNAL_SERVER_ERROR
+                code = 500
                 import sys
 
                 detail = DETAIL_UNKNOWN_ERROR + ": '%s'" % sys.exc_info()[0]
@@ -179,7 +174,7 @@ class MailProvider(object):
         model: Optional[dict] = self.get_mail_message(model_name, language, action)
         if model is None:
             raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=422,
                 detail=[DETAIL_INVALID_PARAMETER],
             )
         replace = dict({})
@@ -263,9 +258,7 @@ class MailProvider(object):
         url: Optional[str] = None,
     ) -> None:
         if len(recipients) == 0:
-            raise HTTPException(
-                status_code=HTTP_404_NOT_FOUND, detail=[DETAIL_NO_RECIPIENT]
-            )
+            raise HTTPException(status_code=404, detail=[DETAIL_NO_RECIPIENT])
         id = data["id"]
         replace = ReplaceInMail(
             id=id,
@@ -276,7 +269,7 @@ class MailProvider(object):
             url=url,
         )
         mailmsg = self.mail_message(AccountMailType.activate, replace)
-        self.send_mail(recipients, mailmsg)
+        self.send_mail(recipients, mailmsg, replyto=data["email"])
 
     def send_verification_mail(
         self,
@@ -291,7 +284,7 @@ class MailProvider(object):
             email=assistance_email, token=token, action=action, url=url
         )
         mailmsg = self.mail_message(AccountMailType.verify, data, action=action)
-        self.send_mail([recipient], mailmsg, replyto=assistance_email)
+        self.send_mail([recipient], mailmsg)
         # inform previous email (typo prevent)
         if previous_email is not None:
             data = ReplaceInMail(
@@ -359,7 +352,7 @@ class MailProvider(object):
         filename = Path(self.DIR_MAIL_TEMPLATES + "/" + name)
         if not filename.exists():
             raise HTTPException(
-                status_code=HTTP_404_NOT_FOUND,
+                status_code=404,
                 detail=[DETAIL_TEMPLATE_NOT_FOUND],
             )
         with open(filename, "r") as f:

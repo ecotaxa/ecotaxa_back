@@ -186,7 +186,7 @@ def test_user_create_with_confirmation(monkeypatch, config, database, fastapi, c
     rsp = fastapi.put(url, headers=USER_AUTH, json=ref_json)
     # RightsBO for current_user check
     assert rsp.status_code == 403
-    assert rsp.json() == {"detail": [NOT_AUTHORIZED]}
+    assert rsp.json() == {"detail": "You can't do this."}
     urlactivate = URL_ACTIVATE_USER.format(user_id=ORDINARY_USER_USER_ID, status="n")
     # fake token - received in mail  - user should confirm email
     user_confirm_email(
@@ -500,7 +500,7 @@ def test_user_create_with_validation(monkeypatch, config, database, fastapi, cap
     ref_json["email"] = "itisagoodmail@tesmailfortest3.com"
     rsp = fastapi.put(url, headers=USER_AUTH, json=ref_json)
     assert rsp.status_code == 403
-    assert rsp.json() == {"detail": [NOT_AUTHORIZED]}
+    assert rsp.json() == {"detail": "You can't do this."}
 
     # admin activate useragain
     rsp = fastapi.post(

@@ -14,11 +14,6 @@ from providers.MailProvider import MailProvider
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 from helpers.DynamicLogs import get_logger
 from fastapi import HTTPException
-from starlette.status import (
-    HTTP_403_FORBIDDEN,
-    HTTP_422_UNPROCESSABLE_ENTITY,
-)
-
 from helpers.httpexception import DETAIL_BAD_INSTANCE, DETAIL_BAD_SIGN_OR_EXP
 
 logger = get_logger(__name__)
@@ -236,14 +231,12 @@ class UserValidation(object):
             ).loads(token, max_age=int(age) * 3600)
         except (SignatureExpired, BadSignature):
             raise HTTPException(
-                status_code=HTTP_403_FORBIDDEN,
+                status_code=403,
                 detail=[DETAIL_BAD_SIGN_OR_EXP],
             )
             return
         if self.app_instance_id != payload.get("instance"):
-            raise HTTPException(
-                status_code=HTTP_403_FORBIDDEN, detail=[DETAIL_BAD_INSTANCE]
-            )
+            raise HTTPException(status_code=403, detail=[DETAIL_BAD_INSTANCE])
         value = payload.get(name)
         if (
             value

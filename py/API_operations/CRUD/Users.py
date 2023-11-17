@@ -29,13 +29,6 @@ from helpers.login import LoginService
 from providers.HomeCaptcha import HomeCaptcha
 from ..helpers.Service import Service
 from fastapi import HTTPException
-from starlette.status import (
-    HTTP_422_UNPROCESSABLE_ENTITY,
-    HTTP_403_FORBIDDEN,
-    HTTP_401_UNAUTHORIZED,
-    HTTP_404_NOT_FOUND,
-    HTTP_400_BAD_REQUEST,
-)
 from ..helpers.UserValidation import UserValidation, ActivationType
 from helpers import DateTime
 from helpers.httpexception import (
@@ -136,9 +129,7 @@ class UserService(Service):
                 self.ro_session, current_user_id
             )
             if not self._current_is_admin(current_user):
-                raise HTTPException(
-                    status_code=HTTP_403_FORBIDDEN, detail=[NOT_AUTHORIZED]
-                )
+                raise HTTPException(status_code=403, detail=[NOT_AUTHORIZED])
         if new_user.id is None:
             new_user.id = -1
         self._is_valid_user_throw(new_user, -1)
@@ -162,14 +153,14 @@ class UserService(Service):
     ) -> int:
         if not self._uservalidation:
             raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=422,
                 detail=[DETAIL_VALIDATION_NOT_ACTIVE],
             )
         email = self._uservalidation.get_email_from_token(token, short)
         user_id = self._uservalidation.get_id_from_token(token, short)
         if email is None or user_id != new_user.id:
             raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=422,
                 detail=[DETAIL_INVALID_PARAMETER],
             )
         return new_user.id
@@ -180,12 +171,12 @@ class UserService(Service):
         """
         if not self._uservalidation:
             raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=422,
                 detail=[DETAIL_VALIDATION_NOT_ACTIVE],
             )
         if not token:
             raise HTTPException(
-                status_code=HTTP_401_UNAUTHORIZED,
+                status_code=401,
                 detail=[NOT_AUTHORIZED],
             )
         user_id = self._verify_token_throw(new_user, token, short=False)
@@ -196,7 +187,7 @@ class UserService(Service):
 
         if usr is None:
             raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=422,
                 detail=[NOT_FOUND],
             )
 
@@ -207,13 +198,13 @@ class UserService(Service):
                 verified = sce.verify_and_update_password(new_user.password, usr)
         if not verified:
             raise HTTPException(
-                status_code=HTTP_403_FORBIDDEN,
+                status_code=403,
                 detail=[NOT_AUTHORIZED],
             )
 
         if detail:
             raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=422,
                 detail=detail,
             )
         # token verified,  user found and access verified by email and password - now check compatibility with other users in DB
@@ -243,9 +234,7 @@ class UserService(Service):
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         user_to_update: Optional[User] = self.session.query(User).get(user_id)
         if user_to_update is None:
-            raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=[NOT_FOUND]
-            )
+            raise HTTPException(status_code=422, detail=[NOT_FOUND])
         self._is_valid_user_throw(update_src, user_to_update.id)
 
         if self._current_is_admin(current_user):
@@ -264,7 +253,7 @@ class UserService(Service):
             cols_to_upd = self.COMMON_UPDATABLE_COLS
         else:
             raise HTTPException(
-                status_code=HTTP_403_FORBIDDEN,
+                status_code=403,
                 detail=[NOT_AUTHORIZED],
             )
         self._set_user_row(
@@ -296,14 +285,14 @@ class UserService(Service):
                 )
             else:
                 raise HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=422,
                     detail=[DETAIL_INVALID_PARAMETER],
                 )
         elif status_name is not None:
             status = UserStatus[status_name]
             if status is None:
                 raise HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=422,
                     detail=[DETAIL_INVALID_STATUS],
                 )
             # current_user: Optional[User] = self.ro_session.query(User).get(current_user_id )
@@ -333,7 +322,7 @@ class UserService(Service):
     ) -> UserModelWithRights:
         db_usr = self.ro_session.query(User).get(user_id)
         if db_usr is None:
-            raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Item not found")
+            raise HTTPException(status_code=404, detail="Item not found")
         else:
             ret = self._get_full_user(db_usr)
         return ret
@@ -524,7 +513,7 @@ class UserService(Service):
                 detail = [NOT_FOUND]
         if len(detail):
             raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=422,
                 detail=detail,
             )
 
@@ -625,7 +614,7 @@ class UserService(Service):
             elif is_admin and inform_about_status == True:
                 if user_to_update.status is None:
                     raise HTTPException(
-                        status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                        status_code=422,
                         detail=[DETAIL_INVALID_STATUS],
                     )
                 status_name = UserStatus(user_to_update.status).name
@@ -664,12 +653,12 @@ class UserService(Service):
         if self._uservalidation is None:
             if mod_src.name == "":
                 raise HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=422,
                     detail=[DETAIL_CANT_CHECK_VALIDITY],
                 )
         elif not self._uservalidation.is_valid_email(mod_src.email):
             raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=422,
                 detail=[DETAIL_INVALID_EMAIL],
             )
 
@@ -761,15 +750,13 @@ class UserService(Service):
         """
         if UserStatus(status) is None:
             raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=422,
                 detail=[DETAIL_INVALID_STATUS],
             )
         if self._current_is_admin(current_user, True):
             inactive_user: Optional[User] = self.session.query(User).get(user_id)
             if inactive_user is None:
-                raise HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=[NOT_FOUND]
-                )
+                raise HTTPException(status_code=422, detail=[NOT_FOUND])
             cols_to_upd = []
             if (
                 inactive_user.status != status.value
@@ -781,7 +768,7 @@ class UserService(Service):
                     update_src.status_date = DateTime.now_time()
                     cols_to_upd = [User.status, User.status_date]
                 if comment != inactive_user.status_admin_comment:
-                    update_src.status_admin_comment = str(comment)
+                    update_src.status_admin_comment = str(comment or "")
                     cols_to_upd.append(User.status_admin_comment)
                 if len(cols_to_upd):
                     self._model_to_db(
@@ -798,7 +785,7 @@ class UserService(Service):
                         self._uservalidation.request_user_to_modify_profile(
                             user_profile,
                             self._get_assistance_email(),
-                            reason=str(comment),
+                            reason=str(comment or ""),
                             action=ActivationType.update,
                         )
                     else:
@@ -809,7 +796,7 @@ class UserService(Service):
                             status_name=status_name,
                         )
         else:
-            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=[NOT_AUTHORIZED])
+            raise HTTPException(status_code=403, detail=[NOT_AUTHORIZED])
 
     def _refresh_any_status(
         self,
@@ -819,7 +806,7 @@ class UserService(Service):
     ) -> None:
         if not self._uservalidation:
             raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=422,
                 detail=[DETAIL_VALIDATION_NOT_ACTIVE],
             )
         err = True
@@ -828,7 +815,7 @@ class UserService(Service):
             user = self.session.query(User).get(user_id)
         if user is None or user.status == UserStatus.blocked.value:
             # no action if wrong id or user is blocked
-            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=[NOT_AUTHORIZED])
+            raise HTTPException(status_code=403, detail=[NOT_AUTHORIZED])
         if token is not None:
             email = self._uservalidation.get_email_from_token(token)
             id = self._uservalidation.get_id_from_token(token)
@@ -841,7 +828,7 @@ class UserService(Service):
                     verified = sce.verify_and_update_password(password, user)
                 if not verified:
                     raise HTTPException(
-                        status_code=HTTP_403_FORBIDDEN,
+                        status_code=403,
                         detail=[NOT_AUTHORIZED],
                     )
         now = DateTime.now_time()
@@ -903,17 +890,17 @@ class UserService(Service):
             if err:
                 if user.mail_status == True and user.status == UserStatus.active.value:
                     raise HTTPException(
-                        status_code=HTTP_400_BAD_REQUEST,
+                        status_code=400,
                         detail=[DETAIL_NOTHING_DONE],
                     )
                 elif token:
                     raise HTTPException(
-                        status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                        status_code=422,
                         detail=[DETAIL_NOTHING_DONE],
                     )
                 else:
                     raise HTTPException(
-                        status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                        status_code=422,
                         detail=[NOT_AUTHORIZED],
                     )
 
@@ -978,7 +965,7 @@ class UserService(Service):
                 verified = sce._pwd_context.verify(temp_password, temp.temp_password)
         if not verified:
             raise HTTPException(
-                status_code=HTTP_401_UNAUTHORIZED,
+                status_code=401,
                 detail=[NOT_AUTHORIZED],
             )
         return verified
@@ -997,7 +984,7 @@ class UserService(Service):
         # active only when validation is on
         if not self._uservalidation:
             raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=422,
                 detail=[DETAIL_VALIDATION_NOT_ACTIVE],
             )
         current_user = None
@@ -1012,14 +999,14 @@ class UserService(Service):
                 self._has_ident_user(dict({"email": resetreq.email}), True)
         # if authenticated must be admin to request the reset
         elif current_user is not None and self._current_is_admin(current_user):
-            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=[NOT_AUTHORIZED])
+            raise HTTPException(status_code=403, detail=[NOT_AUTHORIZED])
         id = -1
         if token:
             if resetreq.password is None or not UserBO.is_strong_password(
                 resetreq.password
             ):
                 raise HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=422,
                     detail=[DETAIL_PASSWORD_STRENGTH_ERROR],
                 )
 
@@ -1052,9 +1039,7 @@ class UserService(Service):
                             id = user_to_reset.id
                             err = False
             if err:
-                raise HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=[NOT_FOUND]
-                )
+                raise HTTPException(status_code=422, detail=[NOT_FOUND])
 
         else:
             # store a temporary unique password in the db for the user_id
@@ -1068,7 +1053,7 @@ class UserService(Service):
                     temp_password = uuid.uuid4().hex
                     with LoginService() as sce:
                         hash_temp_password = sce.hash_password(temp_password)
-                        temp_rs: Optional[TempPasswordReset] = self.ro_session.query(
+                        temp_rs: Optional[TempPasswordReset] = self.session.query(
                             TempPasswordReset
                         ).get(user_ask_reset.id)
                     if temp_rs is None:
@@ -1088,9 +1073,7 @@ class UserService(Service):
                     err = False
 
             if err:
-                raise HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=[NOT_FOUND]
-                )
+                raise HTTPException(status_code=422, detail=[NOT_FOUND])
         return id
 
     def _get_assistance_email(self) -> str:
@@ -1117,7 +1100,7 @@ class UserService(Service):
                 self._validation_emails = [u.email for u in users_admins]
             else:
                 raise HTTPException(
-                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=422,
                     detail=[DETAIL_NO_USERS_ADMIN],
                 )
         return self._validation_emails
