@@ -74,6 +74,9 @@ class Config(object):
     def get_dir_mail_templates(self) -> Optional[str]:
         return self.parser.get("DIR_MAIL_TEMPLATES")
 
+    def get_captcha_iplist(self) -> Optional[str]:
+        return self.parser.get("CAPTCHA_IPLIST")
+
     def get_mailservice_secret_key(self) -> Optional[str]:
         return self.parser.get("MAILSERVICE_SECRET_KEY")
 

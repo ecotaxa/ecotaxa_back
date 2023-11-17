@@ -192,6 +192,9 @@ class EcoTaxaDBFrom0(object):
         / ".."
         / "config_templates/account_validation_mails"
     ).resolve()
+    CAPTCHA_LIST = (
+        Path(dirname(realpath(__file__))) / ".." / ".." / ".." / "utils"
+    ).resolve()
     CONF = f"""
 [default]
 [conf]
@@ -222,6 +225,7 @@ INSTANCE_ID = EcoTaxa.01
 USER_EMAIL_VERIFICATION = off
 ACCOUNT_VALIDATION = off
 DIR_MAIL_TEMPLATES = {DIR_TEMPLATES}
+CAPTCHA_IPLIST = {CAPTCHA_LIST}/iplist.txt
 SERVERURL= http://localhost:8000
 """
 
