@@ -7,8 +7,8 @@
 from typing import Optional, List
 from fastapi import HTTPException
 from helpers.AppConfig import Config
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY, HTTP_401_UNAUTHORIZED
 import requests
+from BO.Rights import NOT_AUTHORIZED
 
 
 class HomeCaptcha(object):
@@ -16,6 +16,39 @@ class HomeCaptcha(object):
 
     def __init__(self, captcha_secret: str):
         self.secret = captcha_secret
+        config = Config()
+        self.iplist = config.get_captcha_iplist()
+
+    def _daily_get_iplist(self):
+        # no usage now
+        return
+
+    def _is_spam_ip(self, ip: str) -> bool:
+        spamip = False
+        # no usage now
+        return False
+        with open(self.iplist, "r") as file:
+            for line in file:
+                if ip in line:
+                    spamip = True
+                    break
+        return spamip
+
+    def _check_ip(self, ip: str) -> bool:
+        return False
+        from os import path
+        import time
+
+        if path.exists(self.iplist):
+            oneday = time.mktime(time.localtime()) - path.getmtime(self.iplist)
+            if oneday > 24 * 60 * 60:
+                self._daily_get_iplist()
+                return self._is_spam_ip(ip)
+            else:
+                return self._is_spam_ip(ip)
+        else:
+            self._daily_get_iplist()
+            return self._is_spam_ip(ip)
 
     def validate(self, remote_ip: str, response: str) -> Optional[str]:
         """
@@ -29,9 +62,14 @@ class HomeCaptcha(object):
         url_captcha = str(Config().get_account_request_url() or "") + str(
             "gui/checkcaptcha"
         )
-        rsp = requests.request("GET", url=url_captcha, params=params)
-
-        if rsp.status_code != 200 or not rsp.json()["success"]:
+        # verfiy = False for tests and self signed
+        rsp = requests.request("GET", url=url_captcha, params=params, verify=False)
+        rspjson = rsp.json()
+        if (
+            int(rsp.status_code) != 200
+            or "success" not in rspjson
+            or not rspjson["success"]
+        ):
             return rsp.text.replace("\n", "")
         return None
 
@@ -52,11 +90,15 @@ class HomeCaptcha(object):
                     detail = ["invalid no_bot reason 2"]
         if detail != []:
             raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=422,
                 detail=detail,
             )
         remote_ip = no_bot[0]
         response = no_bot[1]
-        error = self.validate(remote_ip, response)
+
+        if self._check_ip(remote_ip) == False:
+            error = self.validate(remote_ip, response)
+        else:
+            error = NOT_AUTHORIZED
         if error is not None:
-            raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=[error])
+            raise HTTPException(status_code=401, detail=[error])

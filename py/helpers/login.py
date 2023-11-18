@@ -165,7 +165,6 @@ class LoginService(Service):
         """
         if account_validation == True and the_user.status != UserStatus.active.value:
             from fastapi import HTTPException
-            from starlette.status import HTTP_401_UNAUTHORIZED
 
             if the_user.status == UserStatus.pending.value:
                 # remove sensible infos
@@ -190,7 +189,7 @@ class LoginService(Service):
 
             detail = userdata
             raise HTTPException(
-                status_code=HTTP_401_UNAUTHORIZED,
+                status_code=401,
                 detail=[detail],
             )
         assert the_user.status == UserStatus.active.value, NOT_AUTHORIZED
