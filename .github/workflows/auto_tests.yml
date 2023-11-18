@@ -50,6 +50,6 @@ jobs:
         POSTGRES_PORT: 5432
     - uses: codecov/codecov-action@v3
       with:
-        directory: QA/py
+        working-directory: ./QA/py
         token: ${{ secrets.CODECOV_TOKEN }}
         verbose: true # optional (default = false)
