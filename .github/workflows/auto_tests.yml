@@ -12,8 +12,8 @@ on:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  
   test:
+    environment: Env_for_Actions
     # The type of runner that the job will run on
     runs-on: [ubuntu-latest]
     # Container with libs (no src)
@@ -48,10 +48,8 @@ jobs:
         POSTGRES_HOST: postgres
         # The default PostgreSQL port
         POSTGRES_PORT: 5432
-    - name: codecov.io
-      working-directory: ./QA/py
-      run : |
-        curl -s https://codecov.io/bash > .codecov
-        chmod +x .codecov
-        ./.codecov -t 47ba06e8-dd1e-4aa7-b2b9-d492555233fa
-        
+    - uses: codecov/codecov-action@v3
+      with:
+        working-directory: ./QA/py
+        token: ${{ secrets.CODECOV_TOKEN }}
+        verbose: true # optional (default = false)
