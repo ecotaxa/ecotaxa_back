@@ -67,7 +67,7 @@ class Vault(object):
 
     BASE_URL = "https://ecotaxa.obs-vlfr.fr/vault/%s"
 
-    def ensure_there(self, img_maybe: Path, sub_path: str) -> bool:
+    def ensure_there(self, img_maybe: Path, sub_path: str) -> bool:  # pragma:nocover
         """
         For devs, to ensure an image exists. If it doesn't, get it from main site.
         """

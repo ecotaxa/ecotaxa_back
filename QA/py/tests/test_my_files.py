@@ -7,25 +7,22 @@
 
 import logging
 import shutil
+from typing import Dict
 
 import pytest
 from starlette import status
 
-from tests.credentials import ADMIN_USER_ID, CREATOR_AUTH, CREATOR_USER_ID
-from tests.test_import import (
-    SHARED_DIR,
-    PLAIN_DIR,
-    PLAIN_FILE,
-    V6_FILE,
-    create_project,
-    PLAIN_FILE_PATH,
-    FILE_IMPORT_URL,
-)
+from tests.credentials import CREATOR_AUTH, CREATOR_USER_ID
 from tests.jobs import (
-    wait_for_stable,
     api_wait_for_stable_job,
     api_check_job_ok,
     api_check_job_errors,
+)
+from tests.test_import import (
+    SHARED_DIR,
+    V6_FILE,
+    create_project,
+    FILE_IMPORT_URL,
 )
 from tests.test_import_simple import UPLOAD_FILE_URL
 
@@ -39,22 +36,19 @@ def test_my_files(fastapi, caplog, title):
     prj_id = create_project(CREATOR_USER_ID, title)
 
     TAG = "XXX"
-    DEST_FILE_NAME = "LOKI_46-24hours_01.zip"
 
+    DEST_FILE_NAME = "LOKI_46-24hours_01.zip"
     # Copy an existing test file into current dir, simulating client side
     shutil.copyfile(SHARED_DIR / V6_FILE, DEST_FILE_NAME)
-
     # Upload this file
-    with open(DEST_FILE_NAME, "rb") as fin:
-        upload_rsp = fastapi.post(
-            UPLOAD_FILE_URL,
-            headers=CREATOR_AUTH,
-            data={"tag": TAG},  # /!\ If no tag -> random use-once directory!
-            files={"file": fin},
-        )
-        assert upload_rsp.status_code == 200
-        srv_file_path = upload_rsp.json()
-        assert TAG in srv_file_path
+    upload_file(fastapi, DEST_FILE_NAME, TAG)
+
+    # And another
+    DEST_FILE_NAME2 = "readme.txt"
+    # Copy an existing test file into current dir, simulating client side
+    shutil.copyfile(SHARED_DIR / "HOWTO.txt", DEST_FILE_NAME2)
+    # Upload this file
+    upload_file(fastapi, DEST_FILE_NAME2, TAG)
 
     # The tag becomes a top-level directory
     list_rsp = fastapi.get(UPLOAD_FILE_URL, headers=CREATOR_AUTH)
@@ -69,13 +63,15 @@ def test_my_files(fastapi, caplog, title):
         "type": "D",
     }
 
-    # The file is stored in the subdirectory
+    # The files are stored in the subdirectory
     list_rsp = fastapi.get(UPLOAD_FILE_URL + TAG, headers=CREATOR_AUTH)
     assert list_rsp.status_code == 200
     my_files_subdir: Dict = list_rsp.json()
     assert my_files_subdir["path"] == TAG
-    assert len(my_files_subdir["entries"]) == 1
-    the_file = my_files_subdir["entries"][0]
+    assert (
+        len(my_files_subdir["entries"]) == 2
+    )  # The second file being .txt will have 0 size on re-read
+    the_file = [fil for fil in my_files_subdir["entries"] if fil["size"] == 22654][0]
     del the_file["mtime"]  # Unpredictable
     assert the_file == {"name": DEST_FILE_NAME, "size": 22654, "type": "F"}
 
@@ -102,3 +98,16 @@ def test_my_files(fastapi, caplog, title):
     job_id = rsp.json()["job_id"]
     api_wait_for_stable_job(fastapi, job_id)
     api_check_job_ok(fastapi, job_id)
+
+
+def upload_file(fastapi, dest_file_name, tag):
+    with open(dest_file_name, "rb") as fin:
+        upload_rsp = fastapi.post(
+            UPLOAD_FILE_URL,
+            headers=CREATOR_AUTH,
+            data={"tag": tag},  # /!\ If no tag -> random use-once directory!
+            files={"file": fin},
+        )
+        assert upload_rsp.status_code == 200
+        srv_file_path = upload_rsp.json()
+        assert tag in srv_file_path
