@@ -10,17 +10,30 @@ from tests.credentials import ADMIN_USER_ID, ADMIN_AUTH
 
 JOB_QUERY_URL = "/jobs/{job_id}/"
 
+JOB_STABLE_STATES = (
+    DBJobStateEnum.Finished,
+    DBJobStateEnum.Asking,
+    DBJobStateEnum.Error,
+)
+
 
 def wait_for_stable(job_id: int):
     """Wait for the job to be in a stable state, i.e. not running"""
+    sched = False
+    if not JobScheduler.do_run.is_set():
+        # If we have _only_ a dependency on database, launch a scheduler, as the default one from fastapi is not present
+        sched = True
+        JobScheduler.launch_at_interval(0.01)
     with JobCRUDService() as sce:
-        assert sce.query(ADMIN_USER_ID, job_id).state == DBJobStateEnum.Pending
-        # TODO for testing prediction: JobScheduler.FILTER.clear()
-        # Manually create a scheduler, so there is no dependency on the way it's used in main.py (launched at interval)
-        with JobScheduler() as jsce:
-            jsce.run_one()
-            jsce.wait_for_stable()
-        return sce.query(ADMIN_USER_ID, job_id)
+        job = sce.query(ADMIN_USER_ID, job_id)
+        while job.state not in JOB_STABLE_STATES:
+            # This is ORM query so you need a fresh session for cross-session read
+            sce.ro_session.expire_all()
+            job = sce.query(ADMIN_USER_ID, job_id)
+            time.sleep(0.1)
+    if sched:
+        JobScheduler.shutdown()
+    return job
 
 
 def check_job_ok(job):
@@ -33,7 +46,7 @@ def check_job_ok(job):
         DBJobStateEnum.Finished,
         100,
         "Done",
-    )
+    ), "Actual:" + str((job.state, job.progress_pct, job.progress_msg))
 
 
 def check_job_errors(job) -> List[str]:
@@ -57,7 +70,7 @@ def api_wait_for_stable_job(fastapi, job_id, max_wait=20):
     while True:
         rsp = fastapi.get(url, headers=ADMIN_AUTH)
         job_dict = rsp.json()
-        if job_dict["state"] in ("F", "A", "E"):
+        if job_dict["state"] in JOB_STABLE_STATES:
             return job_dict
         time.sleep(0.1)
         waited += 1

@@ -4,7 +4,7 @@ import pytest
 from API_operations.helpers.Service import Service
 
 
-def test_worms_xlsx(config, database):
+def test_worms_xlsx(database):
     from data.ToWorms import ToWorms
 
     with Service() as sce:

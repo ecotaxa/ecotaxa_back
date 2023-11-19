@@ -125,7 +125,7 @@ def verify_user(fastapi, id, auth, res_user):
         return None
 
 
-def test_user_create_with_confirmation(monkeypatch, config, database, fastapi, caplog):
+def test_user_create_with_confirmation(monkeypatch, fastapi, caplog):
     caplog.set_level(logging.FATAL)
     # modify config to have user validation "on"v
     set_config_on(monkeypatch, "off")
@@ -331,7 +331,7 @@ def test_user_create_with_confirmation(monkeypatch, config, database, fastapi, c
     )
 
 
-def test_user_create_with_validation(monkeypatch, config, database, fastapi, caplog):
+def test_user_create_with_validation(monkeypatch, fastapi, caplog):
     caplog.set_level(logging.FATAL)
     # modify config to have user validation "on"v
     set_config_on(monkeypatch)

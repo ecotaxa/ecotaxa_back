@@ -31,7 +31,7 @@ from tests.test_import_simple import UPLOAD_FILE_URL
 
 
 @pytest.mark.parametrize("title", ["Try my files"])
-def test_my_files(config, database, fastapi, caplog, title):
+def test_my_files(fastapi, caplog, title):
     """
     Simple import with no fixed values at all, but using the upload directory.
     """

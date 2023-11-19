@@ -7,7 +7,7 @@ import logging
 MODELS_LIST_URL = "/ml_models"
 
 
-def test_ml_models_list(config, database, fastapi, caplog):
+def test_ml_models_list(fastapi, caplog):
     """Ensure that only relevant directories are seen as models"""
     caplog.set_level(logging.ERROR)
 

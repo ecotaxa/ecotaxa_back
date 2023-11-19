@@ -9,11 +9,11 @@ PROJECT_DIGEST_URL = "/admin/images/{project_id}/digest?max_digests=100"
 NIGHTLY_URL = "/admin/nightly"
 
 
-def test_admin_images(config, database, fastapi, caplog):
+def test_admin_images(database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
     from tests.test_import import test_import_uvp6
 
-    prj_id = test_import_uvp6(config, database, caplog, "Test Project Admin")
+    prj_id = test_import_uvp6(database, caplog, "Test Project Admin")
 
     url = PROJECT_DIGEST_URL.format(project_id=prj_id)
 
@@ -34,7 +34,7 @@ def test_admin_images(config, database, fastapi, caplog):
     assert rsp.json() == "Digest for 0 images done."
 
 
-def test_nightly_job(config, database, fastapi, caplog):
+def test_nightly_job(fastapi, caplog):
     # TODO: Not a real test, as we can't know in advance when the test runs, so the output
     # can't be verified against a reference.
 

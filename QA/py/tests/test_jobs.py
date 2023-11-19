@@ -52,7 +52,7 @@ def launchSchedulerSubProcess():
 
 # It's quite long to run so comment out or remove below line to execute
 @pytest.mark.skip
-def test_log_file_exists_if_job_exists(config, database, fastapi, caplog):
+def test_log_file_exists_if_job_exists(fastapi):
     # Hammer job execution subsystem until a race condition eventually appears
     # What was randomly seen is the message in https://github.com/ecotaxa/ecotaxa_front/issues/688:
     #     File "/usr/lib/python3.8/threading.py", line 890, in _bootstrap self._bootstrap_inner()

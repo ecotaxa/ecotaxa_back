@@ -18,7 +18,7 @@ def main():
     # the 'exit' will wait for the thread, i.e. job, to finish.
     while JobScheduler.the_runner is None:
         with JobScheduler() as sce:
-            sce.run_one()
+            sce._run_one()
         time.sleep(10)
 
 

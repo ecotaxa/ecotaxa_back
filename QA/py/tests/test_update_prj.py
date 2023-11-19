@@ -20,13 +20,13 @@ PROJECT_SETTINGS_UPDATE_URL = (
 )
 
 
-def test_update_prj(config, database, fastapi, caplog):
+def test_update_prj(database, fastapi, caplog):
     from tests.test_project_vars import BODC_VARS_KEY
 
     caplog.set_level(logging.ERROR)
     from tests.test_import import test_import_uvp6
 
-    prj_id = test_import_uvp6(config, database, caplog, "Test Project Updates")
+    prj_id = test_import_uvp6(database, caplog, "Test Project Updates")
     # Do like in legacy app, i.e. fetch/modify/resend
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
@@ -227,11 +227,11 @@ def test_update_prj(config, database, fastapi, caplog):
     )
 
 
-def test_update_prj_pred_settings(config, database, fastapi, caplog):
+def test_update_prj_pred_settings(database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
     from tests.test_import import test_import_uvp6
 
-    prj_id = test_import_uvp6(config, database, caplog, "Test Project Settings Updates")
+    prj_id = test_import_uvp6(database, caplog, "Test Project Settings Updates")
     # Do like in legacy app, i.e. fetch/modify/resend
     qry_url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
     rsp = fastapi.get(qry_url, headers=ADMIN_AUTH)
@@ -266,15 +266,13 @@ def test_update_prj_pred_settings(config, database, fastapi, caplog):
     assert read_json["classifsettings"] == new_settings
 
 
-def test_update_prj_bodc_vars(config, database, fastapi, caplog):
+def test_update_prj_bodc_vars(database, fastapi, caplog):
     from tests.test_project_vars import BODC_VARS_KEY
 
     caplog.set_level(logging.ERROR)
     from tests.test_import import test_import_uvp6
 
-    prj_id = test_import_uvp6(
-        config, database, caplog, "Test Project Variables Updates"
-    )
+    prj_id = test_import_uvp6(database, caplog, "Test Project Variables Updates")
 
     # Do like in legacy app, i.e. fetch/modify/resend
     qry_url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)

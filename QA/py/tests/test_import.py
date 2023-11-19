@@ -28,10 +28,6 @@ from API_operations.JsonDumper import JsonDumper
 from API_operations.imports.Import import FileImport
 from DB.Job import DBJobStateEnum
 
-# # noinspection PyUnresolvedReferences
-# from tests.config_fixture import config
-# # noinspection PyUnresolvedReferences
-# from tests.db_fixture import database
 from starlette import status
 
 from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID
@@ -146,7 +142,7 @@ def fill_in_if_missing(job):
 
 
 @pytest.mark.parametrize("title", ["Test Create Update"])
-def test_import(config, database, caplog, title, path=str(PLAIN_FILE), instrument=None):
+def test_import(database, caplog, title, path=str(PLAIN_FILE), instrument=None):
     caplog.set_level(logging.DEBUG)
     # Create a dest project
     prj_id = create_project(ADMIN_USER_ID, title, instrument)
@@ -162,7 +158,7 @@ def test_import(config, database, caplog, title, path=str(PLAIN_FILE), instrumen
 
 
 # @pytest.mark.skip()
-def test_import_again_skipping(config, database, caplog):
+def test_import_again_skipping(database, caplog):
     """Re-import similar files into same project
     CANNOT RUN BY ITSELF"""
     caplog.set_level(logging.DEBUG)
@@ -186,7 +182,7 @@ def test_import_again_skipping(config, database, caplog):
 
 
 # @pytest.mark.skip()
-def test_import_again_irrelevant_skipping(config, database, caplog):
+def test_import_again_irrelevant_skipping(database, caplog):
     """Re-import similar files into same project
     CANNOT RUN BY ITSELF"""
     caplog.set_level(logging.DEBUG)
@@ -212,9 +208,7 @@ def test_import_again_irrelevant_skipping(config, database, caplog):
 
 # @pytest.mark.skip()
 @pytest.mark.parametrize("title", ["Test Create Update"])
-def test_import_a_bit_more_skipping(
-    config, database, caplog, title, path=str(PLUS_DIR)
-):
+def test_import_a_bit_more_skipping(database, caplog, title, path=str(PLUS_DIR)):
     """Re-import similar files into same project, with an extra one.
     The extra one has missing values in the TSV.
     CANNOT RUN BY ITSELF"""
@@ -247,7 +241,7 @@ def test_import_a_bit_more_skipping(
     # TODO: Assert the extra "object_extra" in TSV in data/import_test_plus/m106_mn01_n3_sml
 
 
-def test_import_again_not_skipping_tsv_skipping_imgs(config, database, caplog):
+def test_import_again_not_skipping_tsv_skipping_imgs(database, caplog):
     """Re-import into same project, not skipping TSVs
     CANNOT RUN BY ITSELF"""
     caplog.set_level(logging.DEBUG)
@@ -285,7 +279,7 @@ def import_plain(prj_id):
 
 
 # @pytest.mark.skip()
-def test_import_again_not_skipping_nor_imgs(config, database, caplog):
+def test_import_again_not_skipping_nor_imgs(database, caplog):
     """Re-import into same project, not skipping TSVs or images
     CANNOT RUN BY ITSELF"""
     caplog.set_level(logging.DEBUG)
@@ -303,7 +297,7 @@ def test_import_again_not_skipping_nor_imgs(config, database, caplog):
 
 
 # @pytest.mark.skip()
-def test_equal_dump_prj1(config, database, caplog):
+def test_equal_dump_prj1(database, caplog):
     caplog.set_level(logging.DEBUG)
     out_dump = "prj1.txt"
     with AsciiDumper() as sce:
@@ -311,7 +305,7 @@ def test_equal_dump_prj1(config, database, caplog):
 
 
 # @pytest.mark.skip()
-def test_import_update(config, database, caplog):
+def test_import_update(database, caplog):
     """Update TSVs"""
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test Import update")
@@ -402,7 +396,7 @@ def do_import_update(prj_id, caplog, classif, source=None):
 # @pytest.mark.skip()
 # noinspection DuplicatedCode
 @pytest.mark.parametrize("title", ["Test LS 2"])
-def test_import_uvp6(config, database, caplog, title):
+def test_import_uvp6(database, caplog, title):
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, title, "UVP6")
     params = ImportReq(source_path=str(V6_FILE))
@@ -417,7 +411,7 @@ def test_import_uvp6(config, database, caplog, title):
 
 
 # @pytest.mark.skip()
-def test_equal_dump_prj2(config, database, caplog):
+def test_equal_dump_prj2(database, caplog):
     caplog.set_level(logging.DEBUG)
     out_dump = "prj2.txt"
     with AsciiDumper() as sce:
@@ -425,7 +419,7 @@ def test_equal_dump_prj2(config, database, caplog):
 
 
 # @pytest.mark.skip()
-def test_import_empty(config, database, caplog):
+def test_import_empty(database, caplog):
     """Nothing relevant to import"""
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 3")
@@ -439,7 +433,7 @@ def test_import_empty(config, database, caplog):
 
 
 # @pytest.mark.skip()
-def test_import_empty_tsv(config, database, caplog):
+def test_import_empty_tsv(database, caplog):
     """a TSV with header but no data"""
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 3")
@@ -452,7 +446,7 @@ def test_import_empty_tsv(config, database, caplog):
     assert len(get_job_errors(job)) == 1
 
 
-def test_import_empty_tsv2(config, database, caplog):
+def test_import_empty_tsv2(database, caplog):
     """a TSV with nothing at all"""
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 2.6.3")
@@ -466,7 +460,7 @@ def test_import_empty_tsv2(config, database, caplog):
 
 
 # @pytest.mark.skip()
-def test_import_issues(config, database, caplog):
+def test_import_issues(database, caplog):
     """The TSV contains loads of problems"""
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 4")
@@ -496,7 +490,7 @@ def test_import_issues(config, database, caplog):
 
     # @pytest.mark.skip()
 
-    def test_import_classif_issue(config, database, caplog):
+    def test_import_classif_issue(database, caplog):
         """The TSV contains an unknown classification id"""
         caplog.set_level(logging.DEBUG)
         prj_id = create_project(ADMIN_USER_ID, "Test LS 5")
@@ -513,7 +507,7 @@ def test_import_issues(config, database, caplog):
 
 
 # @pytest.mark.skip()
-def test_import_too_many_custom_columns(config, database, caplog):
+def test_import_too_many_custom_columns(database, caplog):
     """The TSV contains too many custom columns.
     Not a realistic case, but it simulates what happens if importing into a project with
      mappings"""
@@ -558,7 +552,7 @@ def test_import_too_many_custom_columns(config, database, caplog):
     assert errors == compare_errors
 
 
-def test_import_dups_in_tsv(config, database, caplog):
+def test_import_dups_in_tsv(database, caplog):
     """The TSV contains duplicated lines.
     Either without _or without_ 'skip_existing_objects' option, it must not pass preliminary validation,
     as such duplicate is against referential integrity."""
@@ -587,7 +581,7 @@ def test_import_dups_in_tsv(config, database, caplog):
 
 
 # @pytest.mark.skip()
-def test_import_ambiguous_classification(config, database, fastapi, caplog):
+def test_import_ambiguous_classification(fastapi, caplog):
     """See https://github.com/oceanomics/ecotaxa_dev/issues/87
     Do it via API"""
     caplog.set_level(logging.DEBUG)
@@ -607,7 +601,7 @@ def test_import_ambiguous_classification(config, database, fastapi, caplog):
 
 
 # @pytest.mark.skip()
-def test_import_uvp6_zip_in_dir(config, database, caplog):
+def test_import_uvp6_zip_in_dir(database, caplog):
     """
     An *Images.zip inside a directory.
     """
@@ -625,7 +619,7 @@ def test_import_uvp6_zip_in_dir(config, database, caplog):
 
 
 # @pytest.mark.skip()
-def test_import_sparse(config, database, caplog):
+def test_import_sparse(database, caplog):
     """
     Import a sparse file, some columns are missing.
     """
@@ -646,7 +640,7 @@ def test_import_sparse(config, database, caplog):
         sce.run(projid=prj_id, out="chk.dmp")
 
 
-def test_import_broken_TSV(config, database, caplog):
+def test_import_broken_TSV(database, caplog):
     """
     Import a TSV with 0 byte.
     """
@@ -668,7 +662,7 @@ def test_import_broken_TSV(config, database, caplog):
 
 
 # @pytest.mark.skip()
-def test_import_breaking_unicity(config, database, caplog):
+def test_import_breaking_unicity(database, caplog):
     """
     Sample orig_id is unique per project
     Acquisition orig_id is unique per project and belongs to a single Sample
@@ -697,7 +691,7 @@ def test_import_breaking_unicity(config, database, caplog):
 
 
 # @pytest.mark.skip()
-def test_issue_483(config, database, caplog):
+def test_issue_483(database, caplog):
     """
     Too large image.
     """
@@ -709,7 +703,7 @@ def test_issue_483(config, database, caplog):
     Image.MAX_IMAGE_PIXELS = 512
     try:
         # This should show as a nice error
-        test_import(config, database, caplog, title="Too large import")
+        test_import(database, caplog, title="Too large import")
     finally:
         # Restore the lib
         Image.MAX_IMAGE_PIXELS = sav

@@ -29,11 +29,11 @@ def reclassify(fastapi, prj_id, from_id, to_id):
     assert rsp.status_code == status.HTTP_200_OK
 
 
-def test_reclassif(config, database, fastapi, caplog):
+def test_reclassif(database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
     from tests.test_import import test_import
 
-    prj_id = test_import(config, database, caplog, "Test Reclassify/Validate")
+    prj_id = test_import(database, caplog, "Test Reclassify/Validate")
 
     obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
     assert len(obj_ids) == 8

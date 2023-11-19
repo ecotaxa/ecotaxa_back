@@ -71,14 +71,14 @@ all_colls = {}
 
 
 @pytest.fixture
-def exportable_collection(config, database, fastapi, caplog, admin_or_creator):
+def exportable_collection(database, fastapi, caplog, admin_or_creator):
     if str(admin_or_creator) in all_colls:
         yield all_colls[str(admin_or_creator)]
         return
     caplog.set_level(logging.FATAL)
 
     coll_id, coll_title, prj_id = create_test_collection(
-        caplog, config, database, fastapi, "exp", admin_or_creator
+        database, fastapi, caplog, "exp", admin_or_creator
     )
 
     caplog.set_level(logging.DEBUG)
@@ -375,7 +375,7 @@ def test_permalink_query(fastapi, exportable_collection, admin_or_creator):
     assert coll_desc["title"] == coll_title
 
 
-def create_test_collection(caplog, config, database, fastapi, suffix, who=ADMIN_AUTH):
+def create_test_collection(database, fastapi, caplog, suffix, who=ADMIN_AUTH):
     # In these TSVs, we have: object_major, object_minor, object_area, process_pixel
     # Admin imports the project
     from tests.test_import import (
@@ -391,14 +391,12 @@ def create_test_collection(caplog, config, database, fastapi, suffix, who=ADMIN_
     suffix += "" if who == ADMIN_AUTH else who["Authorization"][-1:]
 
     prj_title = "EMODNET project " + suffix
-    prj_id = test_import(config, database, caplog, prj_title, str(PLAIN_FILE), "UVP6")
+    prj_id = test_import(database, caplog, prj_title, str(PLAIN_FILE), "UVP6")
     # Add a sample spanning 2 days (m106_mn01_n3_sml) for testing date ranges in event.txt
     # this sample contains 2 'detritus' at load time and 1 small<egg (92731) which resolves to nearest Phylo Actinopterygii (56693)
-    test_import_a_bit_more_skipping(config, database, caplog, prj_title)
+    test_import_a_bit_more_skipping(database, caplog, prj_title)
     # Add a similar but predicted object into same sample m106_mn01_n3_sml
-    test_import_a_bit_more_skipping(
-        config, database, caplog, prj_title, str(MIX_OF_STATES)
-    )
+    test_import_a_bit_more_skipping(database, caplog, prj_title, str(MIX_OF_STATES))
     # Add a sample with corrupted or absent needed free columns, for provoking calculation warnings
     do_import(prj_id, BAD_FREE_DIR, ADMIN_USER_ID)
 
@@ -406,9 +404,7 @@ def create_test_collection(caplog, config, database, fastapi, suffix, who=ADMIN_
 
     # Add another project with same data, only a "temporary" object there.
     prj_title2 = "EMODNET project2 " + suffix
-    prj_id2 = test_import(
-        config, database, caplog, prj_title2, str(JUST_PREDICTED_DIR), "UVP6"
-    )
+    prj_id2 = test_import(database, caplog, prj_title2, str(JUST_PREDICTED_DIR), "UVP6")
     make_project_exportable(prj_id2, fastapi, ADMIN_AUTH)
     add_concentration_data(fastapi, prj_id2)
 

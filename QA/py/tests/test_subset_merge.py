@@ -83,9 +83,9 @@ def test_check_project_via_api(prj_id: int, fastapi):
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
 # BUT DON'T COMMIT THE CHANGE
-def test_subset_merge_uvp6(config, database, fastapi, caplog):
+def test_subset_merge_uvp6(database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
-    prj_id = test_import_uvp6(config, database, caplog, "Test Subset Merge")
+    prj_id = test_import_uvp6(database, caplog, "Test Subset Merge")
     check_project(prj_id)
     # Dump the project
     caplog.set_level(logging.DEBUG)
@@ -1349,7 +1349,7 @@ MERGE_DIR_3 = DATA_DIR / "merge_test" / "even_more_cols"
 MERGE_DIR_4 = DATA_DIR / "merge_test" / "second_merge"
 
 
-def test_merge_remap(config, database, fastapi, caplog):
+def test_merge_remap(fastapi, caplog):
     # Project 1, usual columns
     prj_id = create_project(CREATOR_USER_ID, "Merge Dest project")
     do_import(prj_id, MERGE_DIR_1, CREATOR_USER_ID)
@@ -1408,9 +1408,9 @@ def test_merge_remap(config, database, fastapi, caplog):
     assert response.json()["errors"] == []
 
 
-def test_empty_subset_uvp6(config, database, fastapi, caplog):
+def test_empty_subset_uvp6(database, fastapi, caplog):
     with caplog.at_level(logging.ERROR):
-        prj_id = test_import_uvp6(config, database, caplog, "Test empty Subset")
+        prj_id = test_import_uvp6(database, caplog, "Test empty Subset")
 
     subset_prj_id = create_project(ADMIN_USER_ID, "Empty subset")
     # OK this test is just for covering the code in filters
@@ -1462,9 +1462,9 @@ def test_empty_subset_uvp6(config, database, fastapi, caplog):
     assert response.status_code == status.HTTP_200_OK
 
 
-def test_empty_subset_uvp6_other(config, database, fastapi, caplog):
+def test_empty_subset_uvp6_other(database, fastapi, caplog):
     with caplog.at_level(logging.ERROR):
-        prj_id = test_import_uvp6(config, database, caplog, "Test empty Subset")
+        prj_id = test_import_uvp6(database, caplog, "Test empty Subset")
 
     subset_prj_id = create_project(ADMIN_USER_ID, "Empty subset")
     # OK this test is just for covering (more) the code in filters
@@ -1519,7 +1519,7 @@ def test_empty_subset_uvp6_other(config, database, fastapi, caplog):
 SUBSET_URL = "/projects/{project_id}/subset"
 
 
-def test_api_subset(config, database, fastapi, caplog):
+def test_api_subset(fastapi, caplog):
     # Subset a fresh project, why not?
     # Create an empty project
     url1 = PRJ_CREATE_URL
@@ -1545,7 +1545,7 @@ def test_api_subset(config, database, fastapi, caplog):
     test_check_project_via_api(tgt_prj_id, fastapi)
 
 
-def test_subset_of_no_visible_issue_484(config, database, fastapi, caplog):
+def test_subset_of_no_visible_issue_484(fastapi, caplog):
     # https://github.com/oceanomics/ecotaxa_dev/issues/484
     # First found as a subset of subset failed
     url1 = PRJ_CREATE_URL
@@ -1579,7 +1579,7 @@ def test_subset_of_no_visible_issue_484(config, database, fastapi, caplog):
     test_check_project_via_api(tgt_prj_id, fastapi)
 
 
-def test_subset_consistency(config, database, fastapi, caplog):
+def test_subset_consistency(database, caplog):
     caplog.set_level(logging.ERROR)
     from tests.test_import import import_plain
 

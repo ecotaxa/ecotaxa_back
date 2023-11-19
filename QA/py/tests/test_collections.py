@@ -21,14 +21,14 @@ INSTRUMENT_QUERY_URL = "/instruments/?project_ids={project_id}"
 
 
 @pytest.mark.parametrize("who", [ADMIN_AUTH, CREATOR_AUTH])
-def test_collection_lifecycle(config, database, fastapi, caplog, who):
+def test_collection_lifecycle(database, fastapi, caplog, who):
     caplog.set_level(logging.FATAL)
 
     # Admin (always) imports the project
     from tests.test_import import test_import
 
     prj_id = test_import(
-        config, database, caplog, "Collection project 1", instrument="Other scanner"
+        database, caplog, "Collection project 1", instrument="Other scanner"
     )
 
     # Small instrument 'list' test

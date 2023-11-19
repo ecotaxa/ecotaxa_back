@@ -32,15 +32,15 @@ _req_tmpl = {
 }
 
 
-def test_export_tsv(config, database, fastapi, caplog):
+def test_export_tsv(database, fastapi, caplog):
     caplog.set_level(logging.FATAL)
 
     # Admin imports the project
     from tests.test_import import test_import, test_import_a_bit_more_skipping
 
-    prj_id = test_import(config, database, caplog, "TSV export project")
+    prj_id = test_import(database, caplog, "TSV export project")
     # Add a sample spanning 2 days
-    test_import_a_bit_more_skipping(config, database, caplog, "TSV export project")
+    test_import_a_bit_more_skipping(database, caplog, "TSV export project")
 
     # Get the project for update
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
@@ -128,7 +128,7 @@ def test_export_tsv(config, database, fastapi, caplog):
     download_and_check(fastapi, job_id, "summary_whole", only_hdr=True)
 
 
-def test_export_roundtrip(config, database, fastapi, caplog):
+def test_export_roundtrip(database, fastapi, caplog):
     """roundtrip export/import/compare"""
     caplog.set_level(logging.FATAL)
 
@@ -136,7 +136,7 @@ def test_export_roundtrip(config, database, fastapi, caplog):
     from tests.test_import import test_import_uvp6
 
     prj_id = test_import_uvp6(
-        config, database, caplog, "TSV UVP6 roundtrip export source project"
+        database, caplog, "TSV UVP6 roundtrip export source project"
     )
 
     # Get the project for update

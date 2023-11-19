@@ -38,10 +38,10 @@ def test_vignette1():
     """
     Just a check that the code does not error out.
     """
-    config = configparser.ConfigParser()
-    config.read_string(CONFIG)
+    conf = configparser.ConfigParser()
+    conf.read_string(CONFIG)
     vignette = "0128_vig.png"
-    maker = VignetteMaker(config, VIGNETTE_DIR, vignette)
+    maker = VignetteMaker(conf, VIGNETTE_DIR, vignette)
     assert maker.must_keep_original()
     original = "0128.png"
     maker.make_vignette(original)

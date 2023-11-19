@@ -12,9 +12,9 @@ COLLECTION_CREATE_URL = "/collections/create"
 COLLECTION_TAXO_RECAST_URL = "/collections/{collection_id}/taxo_recast"
 
 
-def test_collection_taxo_recast(config, database, fastapi, caplog):
+def test_collection_taxo_recast(database, fastapi, caplog):
     coll_id, coll_title, prj_id = create_test_collection(
-        caplog, config, database, fastapi, "api_ok"
+        database, fastapi, caplog, "api_ok"
     )
     url = COLLECTION_TAXO_RECAST_URL.format(collection_id=coll_id)
     # Example write
@@ -27,9 +27,9 @@ def test_collection_taxo_recast(config, database, fastapi, caplog):
     assert rsp2.json() == json.loads(json.dumps(recast))
 
 
-def test_collection_taxo_recast_endpoint(config, database, fastapi, caplog):
+def test_collection_taxo_recast_endpoint(database, fastapi, caplog):
     coll_id, coll_title, prj_id = create_test_collection(
-        caplog, config, database, fastapi, "api_ko"
+        database, fastapi, caplog, "api_ko"
     )
     url = COLLECTION_TAXO_RECAST_URL.format(collection_id=coll_id)
     # Example wrong write

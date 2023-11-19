@@ -3444,12 +3444,14 @@ app.add_exception_handler(
 
 dump_openapi(app, __file__)
 
+JOB_INTERVAL = 2  # Can be overwritten for testing
+
 
 @app.on_event("startup")
 def startup_event() -> None:
     # Don't run predictions, they are left to a specialized runner
     JobScheduler.FILTER = [PredictForProject.JOB_TYPE]
-    JobScheduler.launch_at_interval(2)
+    JobScheduler.launch_at_interval(JOB_INTERVAL)
 
 
 @app.on_event("shutdown")

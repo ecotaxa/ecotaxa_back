@@ -12,13 +12,14 @@ from tests.test_import import create_project
 
 LOGIN_URL = "/login"
 
+# Note we cannot use fastapi fixture here, as it skips auth for all other tests
 from main import app
 
 client = TestClient(app)
 
 
 # Don't use fastapi fixture as it tweaks security
-def test_plain_API_login(config, database, caplog):
+def test_plain_API_login(database):
     url = LOGIN_URL
     # Wrong params
     rsp = client.post(url, data={"usernazme": "foo", "password": "bar"})

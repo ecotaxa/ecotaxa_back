@@ -136,11 +136,11 @@ def classify_auto_incorrect(fastapi, obj_ids):
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
 # BUT DON'T COMMIT THE CHANGE
-def test_classif(config, database, fastapi, caplog):
+def test_classif(database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
     from tests.test_import import test_import
 
-    prj_id = test_import(config, database, caplog, "Test Classify/Validate")
+    prj_id = test_import(database, caplog, "Test Classify/Validate")
 
     obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
     assert len(obj_ids) == 8

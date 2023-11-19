@@ -63,17 +63,20 @@ class JobScheduler(Service):
     # Include only these job types
     INCLUDE: ClassVar[List[str]] = []
     # A single runner per process
-    the_runner: Optional[JobRunner] = None
-    the_timer: Optional[threading.Timer] = None
-    do_run: Event = Event()
-    do_run.set()
+    the_runner: Optional[JobRunner] = None  # Only written by JobTimer_s_
+    the_timer: Optional[
+        threading.Timer
+    ] = None  # First creation by Main, replacements by JobTimer_s_
+    do_run: Event = Event()  # R/W by Main & JobTimer
 
     def __init__(self) -> None:
         super().__init__()
 
-    def run_one(self) -> None:
+    def _run_one(self) -> None:
         """
         Pick first pending job and run it, except if already running.
+        This is an instance method, so there is DB session to work with, released straight away.
+        Current thread: JobTimer
         """
         cls = JobScheduler
         if cls.the_runner is not None:
@@ -104,11 +107,6 @@ class JobScheduler(Service):
         cls.the_runner = JobRunner(JobBO(job_clone))
         cls.the_runner.start()
 
-    def wait_for_stable(self) -> None:
-        # Not to use outside tests
-        assert self.the_runner
-        self.the_runner.join()
-
     @staticmethod
     def instantiate(a_job: JobBO):
         sce_class = JobServiceBase.find_jobservice_class_by_type(
@@ -130,37 +128,46 @@ class JobScheduler(Service):
         return sce
 
     @classmethod
-    def is_sane_on_shutdown(cls) -> bool:
-        """Ensure that nothing runs before shutdown"""
-        if cls.the_runner is None:
-            return True
-        if cls.the_runner.is_alive():
-            return False
-        return True
-
-    @classmethod
     def launch_at_interval(cls, interval: int) -> None:
         """
         Launch a job if possible, then wait a bit before accessing next one.
+        Current thread: Main for first launch, JobTimer (_different ones_) for others
         """
+        cls.do_run.set()
+        cls._create_and_launch_timer(interval)
 
-        def launch() -> None:
-            try:
-                with cls() as sce:
-                    sce.run_one()
-            except Exception as e:
-                logger.exception("Job run() exception: %s", e)
-            cls.launch_at_interval(interval)
-
-        if not cls.do_run.is_set():
-            cls.the_timer = None
-            cls.do_run.set()
-            return
-        cls.the_timer = threading.Timer(interval=interval, function=launch)
+    @classmethod
+    def _create_and_launch_timer(cls, interval: int) -> None:
+        cls.the_timer = threading.Timer(
+            interval=interval, function=cls.launch, args=[interval]
+        )
         cls.the_timer.setName("JobTimer")
         cls.the_timer.start()
 
     @classmethod
+    def launch(cls, interval: int) -> None:
+        # Current thread: JobTimer_s_
+        try:
+            with cls() as sce:
+                # noinspection PyProtectedMember
+                sce._run_one()
+        except Exception as e:
+            logger.exception("Job run() exception: %s", e)
+        if not cls.do_run.is_set():
+            if cls.the_runner is not None:
+                cls.the_runner.join()
+                cls.the_runner = None
+            cls.the_timer = None
+        else:
+            cls._create_and_launch_timer(interval)
+
+    @classmethod
     def shutdown(cls) -> None:
-        # Prevent self-reload in a multi-threading compatible way
-        cls.do_run.clear()
+        """
+        Clean close of multi-threading resources: Runner, Timer and Event
+        Restore class-loading time state.
+        Current thread: Main
+        """
+        if cls.do_run.is_set():
+            # Signal the timer to stop & cancel itself
+            cls.do_run.clear()

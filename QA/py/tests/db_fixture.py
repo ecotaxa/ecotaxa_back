@@ -12,7 +12,7 @@ CONF_FILE = HERE / "config.ini"
 
 
 @pytest.fixture(scope="session")
-def database() -> EcoTaxaDBFrom0:
+def database(config) -> EcoTaxaDBFrom0:
     # Setup
     db = EcoTaxaDBFrom0(PG_DIR, CONF_FILE)
     db.create()
@@ -22,7 +22,7 @@ def database() -> EcoTaxaDBFrom0:
 
 
 @pytest.fixture(scope="session")
-def filled_database() -> EcoTaxaDBFrom0:
+def filled_database(config) -> EcoTaxaDBFrom0:
     # Setup
     db = EcoTaxaExistingDB()
     db.write_config(CONF_FILE, "localhost", 5434)

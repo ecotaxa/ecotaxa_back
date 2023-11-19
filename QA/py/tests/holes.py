@@ -28,11 +28,11 @@ def _get_object_set_stats(fastapi, prj_id, extra, exp_status, exp_text):
     assert str(stats_rsp.text) == exp_text
 
 
-def test_status(config, database, fastapi, caplog):
+def test_status(database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
     from tests.test_import import test_import
 
-    prj_id = test_import(config, database, caplog, "Hole 003")
+    prj_id = test_import(database, caplog, "Hole 003")
     _get_object_set_stats(
         fastapi,
         prj_id,
@@ -70,7 +70,7 @@ def put_path(fastapi, path1="file", path2=None, tag=None, should_fail=False):
             assert should_fail
 
 
-def test_path(config, database, fastapi, caplog):
+def test_path(fastapi):
     put_path(fastapi)
     put_path(fastapi, "import_test.zip", "subdir/import_test.zip")
     put_path(fastapi, "../../home/laurent/import_test.zip", should_fail=True)
@@ -95,7 +95,7 @@ def get_userdir_path(fastapi, path: str, should_fail=False):
         assert should_fail
 
 
-def testGetMyFiles(config, database, fastapi):
+def testGetMyFiles(fastapi):
     get_userdir_path(fastapi, "", False)
     get_userdir_path(fastapi, "/", False)
     get_userdir_path(fastapi, "mydir/../../tmp", True)
@@ -116,7 +116,7 @@ def get_commondir_path(fastapi, path: str, should_fail=False):
         assert should_fail
 
 
-def testGetCommonFiles(config, database, fastapi):
+def testGetCommonFiles(fastapi):
     get_commondir_path(fastapi, "", False)
     get_commondir_path(fastapi, "/", False)
     get_commondir_path(fastapi, "mydir/../../tmp", True)

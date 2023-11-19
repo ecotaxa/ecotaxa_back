@@ -30,9 +30,9 @@ def upd(col, val) -> ColUpdate:
     return ret
 
 
-def test_updates(config, database, caplog):
+def test_updates(database, caplog):
     caplog.set_level(logging.ERROR)
-    prj_id = test_import_uvp6(config, database, caplog, "Test Updates")
+    prj_id = test_import_uvp6(database, caplog, "Test Updates")
     check_project(prj_id)
 
     acquis_id, process_id, sample_id = _get_ids(prj_id)
@@ -280,8 +280,8 @@ PROCESS_SET_UPDATE_URL = "/process_set/update"
 OBJECT_SET_UPDATE_URL = "/object_set/update"
 
 
-def test_api_updates(config, database, fastapi, caplog):
-    prj_id = test_import_images_only(config, database, caplog, title="API updates test")
+def test_api_updates(database, fastapi, caplog):
+    prj_id = test_import_images_only(database, caplog, title="API updates test")
 
     # Recompute geo, which is a kind of update
     url = RECOMPUTE_GEO_URL.format(project_id=prj_id)
