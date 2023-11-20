@@ -1,15 +1,11 @@
 # Fixture for monkey-patching fastapi
 # So that no token validation occurs, user ID is in security token
-from os.path import dirname, realpath
-from pathlib import Path
 
 import main
 import pytest
 from fastapi.testclient import TestClient
 
 from BG_operations.JobScheduler import JobScheduler
-
-HERE = Path(dirname(realpath(__file__)))
 
 client = TestClient(main.app)
 
@@ -18,7 +14,7 @@ client = TestClient(main.app)
 # Note: We need this fixture in 99% of the tests, so it could be "session" scoped,
 # but the remaining 1% AKA test_login.py fails due to below security patch
 @pytest.fixture(scope="module")
-def fastapi(config, database) -> TestClient:
+def fastapi(config, database, tstlogs) -> TestClient:
     # Overwrite a method in URLSafeTimedSerializer
     from helpers import fastApiUtils
 

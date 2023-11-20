@@ -128,7 +128,7 @@ def test_export_tsv(database, fastapi, caplog):
     download_and_check(fastapi, job_id, "summary_whole", only_hdr=True)
 
 
-def test_export_roundtrip(database, fastapi, caplog):
+def test_export_roundtrip(database, fastapi, caplog, tstlogs):
     """roundtrip export/import/compare"""
     caplog.set_level(logging.FATAL)
 
@@ -183,7 +183,7 @@ def test_export_roundtrip(database, fastapi, caplog):
     )
 
     # TODO: Automate diff
-    with open("exp_source.json", "w") as fd:
+    with open(tstlogs / "exp_source.json", "w") as fd:
         dump_project(ADMIN_USER_ID, prj_id, fd)
-    with open("exp_clone.json", "w") as fd:
+    with open(tstlogs / "exp_clone.json", "w") as fd:
         dump_project(ADMIN_USER_ID, clone_prj_id, fd)

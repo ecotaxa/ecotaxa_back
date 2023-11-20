@@ -29,7 +29,7 @@ def test_purge_plain(database, caplog):
             sce.delete(current_user_id=ADMIN_USER_ID, prj_id=prj_id, only_objects=False)
 
 
-def test_purge_partial(database, caplog):
+def test_purge_partial(database, caplog, tstlogs):
     caplog.set_level(logging.ERROR)
     from tests.test_import import test_import
 
@@ -39,4 +39,4 @@ def test_purge_partial(database, caplog):
     with ObjectManager() as sce:
         r = sce.delete(current_user_id=ADMIN_USER_ID, object_ids=obj_ids)
     assert r == (0, 0, 0, 0)
-    check_project(prj_id)
+    check_project(tstlogs, prj_id)

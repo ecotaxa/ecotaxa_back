@@ -21,7 +21,6 @@ from API_operations.CRUD.Jobs import JobCRUDService
 # Import services
 # noinspection PyPackageRequirements
 from API_operations.CRUD.Projects import ProjectsService
-from API_operations.Consistency import ProjectConsistencyChecker
 from API_operations.JsonDumper import JsonDumper
 
 # noinspection PyPackageRequirements
@@ -89,12 +88,6 @@ def search_unique_project(asker, title):
             logging.error(msg="No unique project named '" + title + "'")
         assert len(srch) == 1
         return srch[0]
-
-
-def check_project(prj_id: int):
-    with ProjectConsistencyChecker(prj_id) as sce:
-        problems = sce.run(ADMIN_USER_ID)
-    assert problems == []
 
 
 def dump_project(asker: int, prj_id: int, fd: Any):
@@ -297,15 +290,15 @@ def test_import_again_not_skipping_nor_imgs(database, caplog):
 
 
 # @pytest.mark.skip()
-def test_equal_dump_prj1(database, caplog):
+def test_equal_dump_prj1(database, caplog, tstlogs):
     caplog.set_level(logging.DEBUG)
     out_dump = "prj1.txt"
     with AsciiDumper() as sce:
-        sce.run(projid=1, out=out_dump)
+        sce.run(projid=1, out=tstlogs / out_dump)
 
 
 # @pytest.mark.skip()
-def test_import_update(database, caplog):
+def test_import_update(database, caplog, tstlogs):
     """Update TSVs"""
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test Import update")
@@ -313,7 +306,7 @@ def test_import_update(database, caplog):
     # Plain import first
     import_plain(prj_id)
     with AsciiDumper() as dump_sce:
-        dump_sce.run(projid=prj_id, out="before_upd.txt")
+        dump_sce.run(projid=prj_id, out=tstlogs / "before_upd.txt")
 
     # Update using initial import data, should do nothing
     do_import_update(prj_id, caplog, "Yes", str(PLAIN_DIR))
@@ -341,7 +334,7 @@ def test_import_update(database, caplog):
     )
     assert nb_notfound == 2
     with AsciiDumper() as dump_sce:
-        dump_sce.run(projid=prj_id, out="after_upd.txt")
+        dump_sce.run(projid=prj_id, out=tstlogs / "after_upd.txt")
     # Check that all went fine
     for a_msg in caplog.records:
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
@@ -355,7 +348,7 @@ def test_import_update(database, caplog):
     upds = [msg for msg in caplog.messages if msg.startswith("Updating")]
     assert upds == []
     with AsciiDumper() as dump_sce:
-        dump_sce.run(projid=prj_id, out="after_upd_3.txt")
+        dump_sce.run(projid=prj_id, out=tstlogs / "after_upd_3.txt")
 
 
 # Ensure that re-updating updates nothing. This is tricky due to floats storage on DB.
@@ -411,11 +404,11 @@ def test_import_uvp6(database, caplog, title):
 
 
 # @pytest.mark.skip()
-def test_equal_dump_prj2(database, caplog):
+def test_equal_dump_prj2(database, caplog, tstlogs):
     caplog.set_level(logging.DEBUG)
     out_dump = "prj2.txt"
     with AsciiDumper() as sce:
-        sce.run(projid=2, out=out_dump)
+        sce.run(projid=2, out=tstlogs / out_dump)
 
 
 # @pytest.mark.skip()
@@ -619,7 +612,7 @@ def test_import_uvp6_zip_in_dir(database, caplog):
 
 
 # @pytest.mark.skip()
-def test_import_sparse(database, caplog):
+def test_import_sparse(database, caplog, tstlogs):
     """
     Import a sparse file, some columns are missing.
     """
@@ -637,10 +630,10 @@ def test_import_sparse(database, caplog):
     ]
     print("\n".join(caplog.messages))
     with AsciiDumper() as sce:
-        sce.run(projid=prj_id, out="chk.dmp")
+        sce.run(projid=prj_id, out=tstlogs / "chk.dmp")
 
 
-def test_import_broken_TSV(database, caplog):
+def test_import_broken_TSV(database, caplog, tstlogs):
     """
     Import a TSV with 0 byte.
     """
@@ -658,7 +651,7 @@ def test_import_broken_TSV(database, caplog):
     ]
     print("\n".join(caplog.messages))
     with AsciiDumper() as sce:
-        sce.run(projid=prj_id, out="chk.dmp")
+        sce.run(projid=prj_id, out=tstlogs / "chk.dmp")
 
 
 # @pytest.mark.skip()

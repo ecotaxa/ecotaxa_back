@@ -5,25 +5,12 @@
 import logging
 
 import pytest
-from API_operations.Consistency import ProjectConsistencyChecker
 from API_operations.ObjectManager import ObjectManager
 from starlette import status
 
 from tests.test_fastapi import ADMIN_AUTH
 from tests.test_import import ADMIN_USER_ID
-
-OUT_JSON = "out.json"
-ORIGIN_AFTER_MERGE_JSON = "out_after_merge.json"
-SUBS_AFTER_MERGE_JSON = "out_subs_after_merge.json"
-OUT_SUBS_JSON = "out_subs.json"
-OUT_MERGE_REMAP_JSON = "out_merge_remap.json"
-
-
-def check_project(prj_id: int):
-    with ProjectConsistencyChecker(prj_id) as sce:
-        problems = sce.run(ADMIN_USER_ID)
-    assert problems == []
-
+from tests.test_subset_merge import check_project
 
 PROJECT_CHECK_URL = "/projects/{project_id}/check"
 
@@ -47,12 +34,12 @@ def test_check_project_via_api(prj_id: int, fastapi):
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
 # BUT DON'T COMMIT THE CHANGE
-def test_subentities(database, fastapi, caplog):
+def test_subentities(database, fastapi, caplog, tstlogs):
     caplog.set_level(logging.ERROR)
     from tests.test_import import test_import_uvp6
 
     prj_id = test_import_uvp6(database, caplog, "Test Subset Merge")
-    check_project(prj_id)
+    check_project(tstlogs, prj_id)
 
     # Pick the first object
     with ObjectManager() as sce:

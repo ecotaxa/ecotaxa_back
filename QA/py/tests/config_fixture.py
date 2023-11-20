@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 # Import services under test as a library
+# TODO: Not here
 sys.path.extend([join("", "..", "..", "py")])
 
 HERE = Path(dirname(realpath(__file__)))

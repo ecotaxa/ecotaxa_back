@@ -28,7 +28,7 @@ from tests.test_import_simple import UPLOAD_FILE_URL
 
 
 @pytest.mark.parametrize("title", ["Try my files"])
-def test_my_files(fastapi, caplog, title):
+def test_my_files(fastapi, caplog, tstlogs, title):
     """
     Simple import with no fixed values at all, but using the upload directory.
     """
@@ -39,16 +39,16 @@ def test_my_files(fastapi, caplog, title):
 
     DEST_FILE_NAME = "LOKI_46-24hours_01.zip"
     # Copy an existing test file into current dir, simulating client side
-    shutil.copyfile(SHARED_DIR / V6_FILE, DEST_FILE_NAME)
+    shutil.copyfile(SHARED_DIR / V6_FILE, tstlogs / DEST_FILE_NAME)
     # Upload this file
-    upload_file(fastapi, DEST_FILE_NAME, TAG)
+    upload_file(fastapi, tstlogs / DEST_FILE_NAME, TAG)
 
     # And another
     DEST_FILE_NAME2 = "readme.txt"
     # Copy an existing test file into current dir, simulating client side
-    shutil.copyfile(SHARED_DIR / "HOWTO.txt", DEST_FILE_NAME2)
+    shutil.copyfile(SHARED_DIR / "HOWTO.txt", tstlogs / DEST_FILE_NAME2)
     # Upload this file
-    upload_file(fastapi, DEST_FILE_NAME2, TAG)
+    upload_file(fastapi, tstlogs / DEST_FILE_NAME2, TAG)
 
     # The tag becomes a top-level directory
     list_rsp = fastapi.get(UPLOAD_FILE_URL, headers=CREATOR_AUTH)

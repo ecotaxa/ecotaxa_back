@@ -3,6 +3,7 @@ Build the DB from scratch in EcoTaxa.
 """
 import os
 import shutil
+import socket
 import sys
 import time
 from os import environ
@@ -10,9 +11,7 @@ from os.path import join, dirname, realpath
 from pathlib import Path
 
 from lib.processes import SyncSubProcess
-import socket
-
-from tests.test_import import DATA_DIR, SHARED_DIR, FTP_DIR, TEST_DIR
+from tests.test_import import SHARED_DIR, FTP_DIR, TEST_DIR
 
 psql_bin = "psql"
 # If we already have a server don't create one, e.g. in GitHub action
@@ -119,7 +118,11 @@ class EcoTaxaDBFrom0(object):
         # Cook an environment for the subprocess
         # we do NOT use os.environ in order not to pollute current process
         # Note: the process dies right away as pgctl launches a daemon
-        SyncSubProcess(cmd, env=self.get_env(), out_file="postgres_start.log")
+        SyncSubProcess(
+            cmd,
+            env=self.get_env(),
+            out_file=self.db_dir / "logs" / "postgres_start.log",
+        )
         # Wait until the server port is opened
         start_time = time.time()
         while not is_port_opened(self.host, PG_PORT):
@@ -131,7 +134,9 @@ class EcoTaxaDBFrom0(object):
         # Stop command
         cmd = [pgctl_bin, "stop", "-D", self.data_dir]
         # Cook an environment for the subprocess
-        SyncSubProcess(cmd, env=self.get_env(), out_file="postgres_stop.log")
+        SyncSubProcess(
+            cmd, env=self.get_env(), out_file=self.db_dir / "logs" / "postgres_stop.log"
+        )
         # Wait until the server port is closed
         start_time = time.time()
         while is_port_opened(host, PG_PORT):
@@ -161,7 +166,7 @@ class EcoTaxaDBFrom0(object):
         # Data load
         schem_opts = ["-d", DB_NAME, "-f", self.data_load_file]
         cmd = [psql_bin] + pg_opts + schem_opts
-        SyncSubProcess(cmd, env=env, out_file="data_load.log")
+        SyncSubProcess(cmd, env=env, out_file=self.db_dir / "logs" / "data_load.log")
         # TODO: Upgrade testing
         # schem_opts = ['-d', DB_NAME, '-f', self.v22_schema_creation_file]
         # cmd = [psql_bin] + pg_opts + schem_opts
