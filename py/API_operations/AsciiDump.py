@@ -18,7 +18,7 @@ from .helpers.Service import Service
 class AsciiDumper(Service):
     """
     A utility service for having a predictable and diff-able dump of the DB.
-    Reason: Postgres does not do "order by" on ascii dumps so it's a bit tricky to intepret
+    Reason: Postgres does not do "order by" on ascii dumps so it's a bit tricky to interpret
     differences.
     """
 

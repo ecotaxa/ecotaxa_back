@@ -39,7 +39,6 @@ from DB.helpers import Result
 from DB.helpers.Direct import text
 from DB.helpers.Postgres import db_server_now
 from DB.helpers.SQL import OrderClause
-
 # noinspection PyUnresolvedReferences
 from FS.ObjectCache import ObjectCache, ObjectCacheWriter
 from FS.VaultRemover import VaultRemover
@@ -296,6 +295,9 @@ class ObjectManager(Service):
         if only_total:
             sql += """, NULL nbr_v, NULL nbr_d, NULL nbr_p"""
         else:
+            # TODO, cleaner: SELECT COUNT(*) nbr,
+            #            COUNT(*) FILTER (WHERE obh.classif_qual = 'V') nbr_v,
+            # ...
             sql += (
                 """, 
            COUNT(CASE WHEN obh.classif_qual = '"""
