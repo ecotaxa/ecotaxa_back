@@ -2,6 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2023  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import numpy as np
 from API_operations.helpers.Service import Service
 from BO.ProjectSet import FeatureConsistentProjectSet, LimitedInCategoriesProjectSet
 from starlette import status
@@ -9,8 +10,8 @@ from starlette import status
 from test_export_emodnet import create_test_collection
 from tests.credentials import ADMIN_AUTH
 from tests.test_classification import OBJECT_SET_CLASSIFY_URL
-from tests.test_objectset_query import _prj_query
 from tests.test_collections import COLLECTION_QUERY_URL
+from tests.test_objectset_query import _prj_query
 
 
 def test_project_set(database, fastapi, caplog):
@@ -57,12 +58,19 @@ def test_project_set(database, fastapi, caplog):
         np_learning_set, obj_ids, classif_ids = prj_set.np_read_all()
         # Unpredictable ids
         assert len(obj_ids) == len(classif_ids) == 21
+        np_medians_per_feat, np_variances_per_feat = prj_set.np_stats(np_learning_set)
+        assert np_medians_per_feat == {
+            "fre.esd": np.float32(1.935),
+            "fre.feret": np.float32(53.1),
+            "fre.major": np.float32(48.9),
+            "fre.minor": np.float32(25.4),
+        }
     with Service() as sce:
         prj_set2 = LimitedInCategoriesProjectSet(
             session=sce.ro_session,
             prj_ids=ids,
             column_names=features,
-            random_limit=4,  # More objects present than random, so output is predictable
+            random_limit=4,  # More random objects than actually present, so output is predictable
             categories=[92731],
         )
         stats = prj_set2.read_columns_stats()
@@ -76,3 +84,13 @@ def test_project_set(database, fastapi, caplog):
         }
         np_learning_set, obj_ids, classif_ids = prj_set2.np_read_all()
         assert len(obj_ids) == len(classif_ids) == 2
+    with Service() as sce:
+        prj_set2 = LimitedInCategoriesProjectSet(
+            session=sce.ro_session,
+            prj_ids=ids,
+            column_names=features,
+            random_limit=None,
+            categories=[92731],
+        )
+        stats = prj_set2.read_columns_stats()
+        assert stats.counts == (2, 2, 2, 2)
