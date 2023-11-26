@@ -173,6 +173,17 @@ MappedTableTypeT = Type[MappedTableT]  # one of the 4 classes themselves
 MAPPED_TABLES: List[MappedTableTypeT] = [ObjectFields, Sample, Acquisition, Process]
 MAPPED_TABLES_SET = set(MAPPED_TABLES)
 
+FREE_COLS_ARE_ELSEWHERE = True  # Production, there is object_field table
+PHY_COL_TO_EXPERIMENT_COL = lambda col: col  # Production: n01 is in object_field.n01
+
+if False:  # !!! NO COMMIT if True !!!
+    # Switch free columns to another storage and/or naming method.
+    # DO NOT SET for prod', lol
+    # LS: My playground, a single table grouping obj_head and obj_field, accessed e.g. using obj3.free_n[xx]
+    ObjectHeader.__tablename__ = "obj3"
+    FREE_COLS_ARE_ELSEWHERE = False
+    PHY_COL_TO_EXPERIMENT_COL = lambda col: "free_n[" + col[1:] + "]"
+
 
 class ProjectMapping(object):
     """
@@ -198,9 +209,7 @@ class ProjectMapping(object):
         "was_empty",
     ]
 
-    def __init__(self) -> None:
-        self.object_mappings: TableMapping = TableMapping(ObjectFields, True)
-        self.sample_mappings: TableMapping = TableMapping(Sample)
+    def __init__(self) -> None:        self.object_mappings: TableMapping = TableMapping(ObjectFields, FREE_COLS_ARE_ELSEWHERE)self.sample_mappings: TableMapping = TableMapping(Sample)
         self.acquisition_mappings: TableMapping = TableMapping(Acquisition)
         self.process_mappings: TableMapping = TableMapping(Process)
         # store for iteration
@@ -492,6 +501,7 @@ class TableMapping(object):
     def phy_lookup(self, criteria_col: str) -> Tuple[bool, str]:
         """Return real DB column for index-based convention, and where to find it
         e.g. for Objects, n01 -> (True, "n01") as there is obj_fields"""
+        criteria_col = PHY_COL_TO_EXPERIMENT_COL(criteria_col)
         if self.free_cols_separated:
             return True, criteria_col
         else:
