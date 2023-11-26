@@ -65,7 +65,14 @@ class FeatureConsistentProjectSet(object):
         """
         qry = self.session.query(Project)
         qry = qry.filter(Project.projid == any_(self.prj_ids))
-        for a_proj in qry:            obj_set = DescribedObjectSet(self.session, a_proj, None, ProjectFiltersDict())            mapped = ObjectBO.resolve_fields(self.column_names, obj_set.mapping.object_mappings)assert len(mapped) == len(
+        for a_proj in qry:
+            obj_set = DescribedObjectSet(
+                self.session, a_proj, None, ProjectFiltersDict()
+            )
+            mapped = ObjectBO.resolve_fields(
+                self.column_names, obj_set.mapping.object_mappings
+            )
+            assert len(mapped) == len(
                 self.column_names
             ), "Project %d does not contain all columns (%s)" % (
                 a_proj.projid,
@@ -73,154 +80,161 @@ class FeatureConsistentProjectSet(object):
             )
             yield obj_set, mapped
 
-    OBJ_COLS: Final = ["objid", "classif_id"]  # We always select these
 
-    def _build_flat_union(self) -> Tuple[List[str], str]:
-        """
-        Build a UNION with all common columns + object_id and classif_id
-        """
-        sels_for_prjs = []
-        # We have to alias the column in order to have a consistent naming of the CTE
-        col_aliases = ["c%d" % num for num in range(len(self.column_names))]
-        obj_cols = ",".join(["obh." + a_col for a_col in self.OBJ_COLS])
-        # Compose a CTE for each project with its mapped columns
-        for an_obj_set, mapped in self._projects_with_mappings():
-            mapped_with_aliases = [
-                "%s AS %s" % (col, als) for col, als in zip(mapped, col_aliases)
-            ]
-            selected_cols = obj_cols + "," + ",".join(mapped_with_aliases)
-            from_, where, params = an_obj_set.get_sql(None, selected_cols)
-            assert len(where.ands) == 0  # The condition is inside the JOIN
-            assert len(params) == 1  # :projid
-            prj_sql = (
-                "( SELECT "
-                + selected_cols
-                + " FROM "
-                + from_.get_sql().replace(":projid", str(params["projid"]))
-                + ")"
-            )
-            sels_for_prjs.append(prj_sql)
-        # Final SQL
-        sql = "SET LOCAL enable_seqscan=FALSE;"
-        sql += "WITH flat AS (" + " UNION ALL ".join(sels_for_prjs) + " ) "
-        return col_aliases, sql
+OBJ_COLS: Final = ["objid", "classif_id"]  # We always select these
 
-    def read_columns_stats(self) -> ProjectSetColumnStats:
-        """
-        Do some basic stats on the given columns, for validated lines in all given projects.
-        """
-        col_aliases, sql = self._build_flat_union()
-        exprs = ",".join(
-            ["COUNT(%s), VARIANCE(%s)" % (als, als) for als in col_aliases]
+
+def _build_flat_union(self) -> Tuple[List[str], str]:
+    """
+    Build a UNION with all common columns + object_id and classif_id
+    """
+    sels_for_prjs = []
+    # We have to alias the column in order to have a consistent naming of the CTE
+    col_aliases = ["c%d" % num for num in range(len(self.column_names))]
+    obj_cols = ",".join(["obh." + a_col for a_col in self.OBJ_COLS])
+    # Compose a CTE for each project with its mapped columns
+    for an_obj_set, mapped in self._projects_with_mappings():
+        mapped_with_aliases = [
+            "%s AS %s" % (col, als) for col, als in zip(mapped, col_aliases)
+        ]
+        selected_cols = obj_cols + "," + ",".join(mapped_with_aliases)
+        from_, where, params = an_obj_set.get_sql(None, selected_cols)
+        assert len(where.ands) == 0  # The condition is inside the JOIN
+        assert len(params) == 1  # :projid
+        prj_sql = (
+            "( SELECT "
+            + selected_cols
+            + " FROM "
+            + from_.get_sql().replace(":projid", str(params["projid"]))
+            + ")"
         )
-        sql += "SELECT COUNT(1), " + exprs + " FROM flat "
-        sql = self.amend_sql(sql)
-        res: Result = self.session.execute(text(sql))
-        vals = res.one()
-        total = vals[0]  # first in result line is the count
-        counts = vals[1::2]  # then count() every second column
-        variances = vals[2::2]  # and variance() the other one
-        ret = ProjectSetColumnStats(
-            self.prj_ids, total, self.column_names, counts, variances
-        )
-        # cls.read_median_values(session, prj_ids, column_names, 5000)
-        return ret
+        sels_for_prjs.append(prj_sql)
+    # Final SQL
+    sql = "SET LOCAL enable_seqscan=FALSE;"
+    sql += "WITH flat AS (" + " UNION ALL ".join(sels_for_prjs) + " ) "
+    return col_aliases, sql
 
-    def read_median_values(self) -> Dict[str, Optional[float]]:
-        """
-        Compute median value of columns, for all given projects.
-         Return a dict with key=column name, value=median for column
-        """
-        col_aliases, sql = self._build_flat_union()
-        exprs = ",".join(
-            [
-                "PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY %s) AS med%s" % (als, als)
-                for als in col_aliases
-            ]
-        )
-        # Final SQL
-        sql += "SELECT " + exprs + " FROM flat "
-        sql = self.amend_sql(sql)
-        # Format output
-        logger.debug("median SQL: %s", sql)
-        res: Result = self.session.execute(text(sql))
-        ret = {col_name: a_val for col_name, a_val in zip(self.column_names, res.one())}
-        return ret
 
-    def read_all(self) -> Result:
-        """
-        Read the whole dataset, returning the cursor to avoid expensive memoization.
-        """
-        col_aliases, sql = self._build_flat_union()
-        exprs = ",".join(self.OBJ_COLS + col_aliases)
-        # Final SQL
-        sql += "SELECT " + exprs + " FROM flat "
-        sql = self.amend_sql(sql)
-        # Format output
-        logger.debug("read_all SQL: %s", sql)
-        res: Result = self.session.execute(text(sql))
-        return res
+def read_columns_stats(self) -> ProjectSetColumnStats:
+    """
+    Do some basic stats on the given columns, for validated lines in all given projects.
+    """
+    col_aliases, sql = self._build_flat_union()
+    exprs = ",".join(["COUNT(%s), VARIANCE(%s)" % (als, als) for als in col_aliases])
+    sql += "SELECT COUNT(1), " + exprs + " FROM flat "
+    sql = self.amend_sql(sql)
+    res: Result = self.session.execute(text(sql))
+    vals = res.one()
+    total = vals[0]  # first in result line is the count
+    counts = vals[1::2]  # then count() every second column
+    variances = vals[2::2]  # and variance() the other one
+    ret = ProjectSetColumnStats(
+        self.prj_ids, total, self.column_names, counts, variances
+    )
+    # cls.read_median_values(session, prj_ids, column_names, 5000)
+    return ret
 
-    def np_read_all(
-        self,
-    ) -> Tuple[ndarray, List[int], ClassifIDListT]:  # TODO: ObjectIDListT
-        """
-        Read the dataset as a numpy array. NULL and infinities become an np NaN.
-        """
-        res = self.read_all()
-        obj_ids: List[int] = []
-        classif_ids: ClassifIDListT = []
-        rc = res.rowcount  # type:ignore  # case1
-        np_table = self.np_read(res, rc, self.column_names, obj_ids, classif_ids, {})
-        return np_table, obj_ids, classif_ids
 
-    @staticmethod
-    def np_read(
-        res: Result,
-        nb_lines: int,
-        columns: List[str],
-        obj_ids: ObjectIDListT,
-        classif_ids: ClassifIDListT,
-        replacements: Dict[str, float],
-    ) -> np.ndarray:
-        # Allocate memory in one go
-        # TODO: float32 is a shameless attempt to save memory
-        np_table = np.ndarray(shape=(nb_lines, len(columns)), dtype=np.float32)
-        nan = float("nan")
-        not_known = {float("inf"), float("-inf"), nan, None}
-        repl_get = replacements.get
-        for ndx in range(nb_lines):
-            try:
-                objid, classif_id, *vals = next(res)
-            except StopIteration:
-                # crop the resulting NP
-                np_table.resize((ndx, len(columns)), refcheck=False)
-                break
-            vals = [
-                repl_get(a_col, nan) if a_val in not_known else a_val
-                for a_val, a_col in zip(vals, columns)
-            ]  # Map all absent values
-            obj_ids.append(objid)
-            classif_ids.append(classif_id)
-            np_table[ndx] = vals
-        return np_table
+def read_median_values(self) -> Dict[str, Optional[float]]:
+    """
+    Compute median value of columns, for all given projects.
+     Return a dict with key=column name, value=median for column
+    """
+    col_aliases, sql = self._build_flat_union()
+    exprs = ",".join(
+        [
+            "PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY %s) AS med%s" % (als, als)
+            for als in col_aliases
+        ]
+    )
+    # Final SQL
+    sql += "SELECT " + exprs + " FROM flat "
+    sql = self.amend_sql(sql)
+    # Format output
+    logger.debug("median SQL: %s", sql)
+    res: Result = self.session.execute(text(sql))
+    ret = {col_name: a_val for col_name, a_val in zip(self.column_names, res.one())}
+    return ret
 
-    def np_stats(self, nb_table: ndarray) -> Tuple[Dict[str, float], Dict[str, float]]:
-        # Compute medians & variance per _present_ feature
-        np_medians_per_col = {}
-        np_variances_per_col = {}
-        for ndx, a_col in enumerate(self.column_names):
-            feat_col = nb_table[:, ndx]
-            # Clean from NaNs
-            clean_col_col = feat_col[~np.isnan(feat_col)]
-            np_median = np.median(clean_col_col)
-            np_variance = np.var(clean_col_col)
-            np_medians_per_col[a_col] = np_median
-            np_variances_per_col[a_col] = np_variance
-        return np_medians_per_col, np_variances_per_col
 
-    def amend_sql(self, sql: str) -> str:
-        return sql
+def read_all(self) -> Result:
+    """
+    Read the whole dataset, returning the cursor to avoid expensive memoization.
+    """
+    col_aliases, sql = self._build_flat_union()
+    exprs = ",".join(self.OBJ_COLS + col_aliases)
+    # Final SQL
+    sql += "SELECT " + exprs + " FROM flat "
+    sql = self.amend_sql(sql)
+    # Format output
+    logger.debug("read_all SQL: %s", sql)
+    res: Result = self.session.execute(text(sql))
+    return res
+
+
+def np_read_all(
+    self,
+) -> Tuple[ndarray, List[int], ClassifIDListT]:  # TODO: ObjectIDListT
+    """
+    Read the dataset as a numpy array. NULL and infinities become an np NaN.
+    """
+    res = self.read_all()
+    obj_ids: List[int] = []
+    classif_ids: ClassifIDListT = []
+    rc = res.rowcount  # type:ignore  # case1
+    np_table = self.np_read(res, rc, self.column_names, obj_ids, classif_ids, {})
+    return np_table, obj_ids, classif_ids
+
+
+@staticmethod
+def np_read(
+    res: Result,
+    nb_lines: int,
+    columns: List[str],
+    obj_ids: ObjectIDListT,
+    classif_ids: ClassifIDListT,
+    replacements: Dict[str, float],
+) -> np.ndarray:
+    # Allocate memory in one go
+    # TODO: float32 is a shameless attempt to save memory
+    np_table = np.ndarray(shape=(nb_lines, len(columns)), dtype=np.float32)
+    nan = float("nan")
+    not_known = {float("inf"), float("-inf"), nan, None}
+    repl_get = replacements.get
+    for ndx in range(nb_lines):
+        try:
+            objid, classif_id, *vals = next(res)
+        except StopIteration:
+            # crop the resulting NP
+            np_table.resize((ndx, len(columns)), refcheck=False)
+            break
+        vals = [
+            repl_get(a_col, nan) if a_val in not_known else a_val
+            for a_val, a_col in zip(vals, columns)
+        ]  # Map all absent values
+        obj_ids.append(objid)
+        classif_ids.append(classif_id)
+        np_table[ndx] = vals
+    return np_table
+
+
+def np_stats(self, nb_table: ndarray) -> Tuple[Dict[str, float], Dict[str, float]]:
+    # Compute medians & variance per _present_ feature
+    np_medians_per_col = {}
+    np_variances_per_col = {}
+    for ndx, a_col in enumerate(self.column_names):
+        feat_col = nb_table[:, ndx]
+        # Clean from NaNs
+        clean_col_col = feat_col[~np.isnan(feat_col)]
+        np_median = np.median(clean_col_col)
+        np_variance = np.var(clean_col_col)
+        np_medians_per_col[a_col] = np_median
+        np_variances_per_col[a_col] = np_variance
+    return np_medians_per_col, np_variances_per_col
+
+
+def amend_sql(self, sql: str) -> str:
+    return sql
 
 
 class LimitedInCategoriesProjectSet(FeatureConsistentProjectSet):
