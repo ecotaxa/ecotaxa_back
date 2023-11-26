@@ -209,7 +209,11 @@ class ProjectMapping(object):
         "was_empty",
     ]
 
-    def __init__(self) -> None:        self.object_mappings: TableMapping = TableMapping(ObjectFields, FREE_COLS_ARE_ELSEWHERE)self.sample_mappings: TableMapping = TableMapping(Sample)
+    def __init__(self) -> None:
+        self.object_mappings: TableMapping = TableMapping(
+            ObjectFields, FREE_COLS_ARE_ELSEWHERE
+        )
+        self.sample_mappings: TableMapping = TableMapping(Sample)
         self.acquisition_mappings: TableMapping = TableMapping(Acquisition)
         self.process_mappings: TableMapping = TableMapping(Process)
         # store for iteration
