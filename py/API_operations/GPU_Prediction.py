@@ -13,13 +13,11 @@ import numpy as np
 
 from API_models.prediction import PredictionReq
 from BO.Classification import ClassifIDListT
-from BO.Mappings import TableMapping
 from BO.ObjectSet import DescribedObjectSet, EnumeratedObjectSet, ObjectIDListT
 from BO.Prediction import DeepFeatures
 from BO.Project import ProjectBO
 from BO.ProjectSet import LimitedInCategoriesProjectSet, FeatureConsistentProjectSet
 from BO.Rights import RightsBO, Action
-from DB.Object import ObjectFields
 from DB.Project import ProjectIDT, Project
 from DB.helpers import Result
 from DB.helpers.Direct import text
@@ -198,11 +196,9 @@ class GPUPredictForProject(PredictForProject):
         filters = self.filters
         filters["statusfilter"] = "UP"  # TODO: It overrides other filters
         object_set: DescribedObjectSet = DescribedObjectSet(
-            self.ro_session, tgt_project.projid, user_id, filters
+            self.ro_session, tgt_project, user_id, filters
         )
-        free_columns_mappings = TableMapping(ObjectFields).load_from_equal_list(
-            tgt_project.mappingobj
-        )
+        free_columns_mappings = object_set.mapping.object_mappings
         sel_cols = ObjectManager.add_return_fields(features, free_columns_mappings)
         from_, where_clause, params = object_set.get_sql(
             order_clause=None, select_list=sel_cols

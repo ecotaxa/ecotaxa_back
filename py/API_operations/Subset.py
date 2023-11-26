@@ -127,7 +127,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         # Create a DB writer
         writer = DBWriter(self.session)
         # Narrow the writes in ObjectFields thanks to mappings of original project
-        writer.generators({"obj_field": used_columns})
+        writer.generators({ObjectFields.__tablename__: used_columns})
         # Use import helpers
         dest_prj_id = self.dest_prj.projid
         import_how = ImportHow(
@@ -350,7 +350,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(
-            self.session, self.prj_id, self._get_owner_id(), self.req.filters
+            self.session, self.prj, self._get_owner_id(), self.req.filters
         )
         from_, where, params = object_set.get_sql()
 

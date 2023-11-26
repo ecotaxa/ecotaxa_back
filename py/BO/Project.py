@@ -346,10 +346,11 @@ class ProjectBO(object):
                COUNT(CASE WHEN obh.classif_qual = '"""
             + PREDICTED_CLASSIF_QUAL
             + """' THEN 1 END) nbr_p
-          FROM obj_head obh
+          FROM %s obh
           JOIN acquisitions acq ON acq.acquisid = obh.acquisid
           JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prjid
         GROUP BY sam.projid, obh.classif_id;"""
+            % ObjectHeader.__tablename__
         )
         session.execute(sql, {"prjid": projid})
 
@@ -784,12 +785,13 @@ class ProjectBO(object):
         sql = text(
             """
     SELECT obh.objid, img.file_name
-      FROM obj_head obh
+      FROM %s obh
       JOIN images img ON obh.objid = img.objid
                      AND img.imgrank = (SELECT MIN(img3.imgrank) FROM images img3 WHERE img3.objid = obh.objid)
       JOIN acquisitions acq ON acq.acquisid = obh.acquisid
       JOIN samples sam ON sam.sampleid = acq.acq_sample_id
      WHERE sam.projid = :prj"""
+            % ObjectHeader.__tablename__
         )
         res: Result = session.execute(sql, {"prj": prj_id})
         return {objid: file_name for (objid, file_name) in res.fetchall()}
@@ -835,11 +837,12 @@ class ProjectBO(object):
                                 COUNT(CASE WHEN obh.classif_qual = '"""
                 + PREDICTED_CLASSIF_QUAL
                 + """' THEN 1 END) nbr_p
-                           FROM obj_head obh
+                           FROM %s obh
                            JOIN acquisitions acq ON acq.acquisid = obh.acquisid
                            JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prj
                           WHERE COALESCE(obh.classif_id, -1) = ANY(:ids)
                        GROUP BY obh.classif_id"""
+                % ObjectHeader.__tablename__
             )
             session.execute(text(pts_ins), {"prj": prj_id, "ids": list(ids_not_in_db)})
         # Apply delta

@@ -32,7 +32,7 @@ from DB.Object import (
     PREDICTED_CLASSIF_QUAL,
     DUBIOUS_CLASSIF_QUAL,
     CLASSIF_QUALS,
-    ObjectFields,
+    ObjectHeader,
 )
 from DB.Project import ProjectIDT, Project
 from DB.helpers import Result
@@ -88,17 +88,14 @@ class ObjectManager(Service):
             )
             user_id = user.id
 
-        free_columns_mappings = TableMapping(ObjectFields).load_from_equal_list(
-            prj.mappingobj
+        # Prepare a where clause and parameters from filter
+        object_set: DescribedObjectSet = DescribedObjectSet(
+            self.ro_session, prj, user_id, filters
         )
+        free_columns_mappings = object_set.mapping.object_mappings
 
         # The order field has an impact on the query
         order_clause = self.cook_order_clause(order_field, free_columns_mappings)
-
-        # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(
-            self.ro_session, proj_id, user_id, filters
-        )
 
         extra_cols = self.add_return_fields(return_fields, free_columns_mappings)
 
@@ -112,7 +109,7 @@ class ObjectManager(Service):
 
         if oid_lst is not None:
             total_col = "%d AS total" % cnt
-        elif "obf." in where_clause.get_sql():
+        elif "obf." in where_clause.get_sql():  # TODO: Drop when unused in mapping
             # If the filter needs obj_field data it's more efficient to count with a window function
             # than issuing a second query.
             total_col = "COUNT(obh.objid) OVER() AS total"
@@ -219,14 +216,15 @@ class ObjectManager(Service):
 
     @classmethod
     def add_return_fields(
-        cls, return_fields: Optional[List[str]], mappings: TableMapping
+        cls, return_fields: Optional[List[str]], mapping: TableMapping
     ) -> str:
         """
             From an API-named list of columns, return the real text for the SELECT to return them
-        :param return_fields:
+        :param return_fields: The filefs in prefix+name convention
+        :param mapping: Mapping to use
         :return:
         """
-        vals = ObjectBO.resolve_fields(return_fields, mappings)
+        vals = ObjectBO.resolve_fields(return_fields, mapping)
         if len(vals) == 0:
             return ""
         return ",\n" + ", ".join(vals)
@@ -244,12 +242,15 @@ class ObjectManager(Service):
         for a_prj_id in prj_ids:
             RightsBO.user_wants(self.session, current_user_id, Action.READ, a_prj_id)
 
-        sql = """
+        sql = (
+            """
     SELECT obh.objid, acq.acquisid, sam.sampleid, sam.projid
-      FROM obj_head obh
+      FROM %s obh
       JOIN acquisitions acq on acq.acquisid = obh.acquisid 
       JOIN samples sam on sam.sampleid = acq.acq_sample_id 
      WHERE obh.objid = any (:ids) """
+            % ObjectHeader.__tablename__
+        )
         params = {"ids": object_ids}
 
         res: Result = self.ro_session.execute(text(sql), params)
@@ -271,22 +272,23 @@ class ObjectManager(Service):
         only_total is set.
         """
         # Security check
+        prj: Project
         if current_user_id is None:
-            RightsBO.anonymous_wants(self.session, Action.READ, proj_id)
+            prj = RightsBO.anonymous_wants(self.session, Action.READ, proj_id)
             # Anonymous can only see validated objects
             # TODO: Dup code
             # noinspection PyTypeHints
             filters["statusfilter"] = "V"
             user_id = -1
         else:
-            user, _project = RightsBO.user_wants(
+            user, prj = RightsBO.user_wants(
                 self.session, current_user_id, Action.READ, proj_id
             )
             user_id = user.id
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(
-            self.ro_session, proj_id, user_id, filters
+            self.ro_session, prj, user_id, filters
         )
         from_, where, params = object_set.get_sql()
         sql = """

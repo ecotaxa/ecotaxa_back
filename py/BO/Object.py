@@ -96,19 +96,27 @@ class ObjectBO(MappedEntity):
         return ret
 
     @staticmethod
-    def _field_to_db_col(a_field: str, mappings: TableMapping) -> Optional[str]:
+    def _field_to_db_col(a_field: str, mapping: TableMapping) -> Optional[str]:
+        """Translate API field ref to DB column/expression one"""
         try:
             prfx, name = a_field.split(".", 1)
         except ValueError:
             return None
         if prfx == "obj":
+            if (
+                name == "complement_info" and name not in ObjectHeader.__dict__
+            ):  # Prepare removal of this column
+                return "NULL::text"
             if name in ObjectHeader.__dict__:
                 return "obh." + name
             elif name == "imgcount":
                 return "(SELECT COUNT(img2.imgrank) FROM images img2 WHERE img2.objid = obh.objid) AS imgcount"
         elif prfx == "fre":
-            if name in mappings.tsv_cols_to_real:
-                return "obf." + mappings.tsv_cols_to_real[name]
+            if name in mapping.tsv_cols_to_real:
+                mpg = mapping.tsv_cols_to_real[name]
+                is_split, real_col = mapping.phy_lookup(mpg)
+                col_ref = ("obf" if is_split else "obh") + "." + real_col
+                return col_ref
         elif prfx == "img":
             if name in Image.__dict__:
                 return a_field
@@ -130,6 +138,7 @@ class ObjectBO(MappedEntity):
     def resolve_fields(
         cls, fields_list: Optional[List[str]], mappings: TableMapping
     ) -> List[str]:
+        """Translate a list of API field references to DB column/expression one"""
         if fields_list is None or len(fields_list) == 0:
             return []
         ret = []

@@ -128,7 +128,7 @@ class JsonDumper(Service):
         assert self.prj is not None
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(
-            self.session, self.prj.projid, self.requester_id, self.filters
+            self.session, self.prj, self.requester_id, self.filters
         )
         from_, where, params = object_set.get_sql()
 

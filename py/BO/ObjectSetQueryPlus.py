@@ -25,7 +25,6 @@ from typing import (
 
 from BO.Classification import ClassifIDT
 from BO.ComputedVar import ComputedVar
-from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet
 from BO.Vocabulary import Term
 from DB.helpers.Direct import text
@@ -157,8 +156,7 @@ class ObjectSetQueryPlus(object):
         """
         assert self.sum_exp
         ret: Dict[Tuple[str, str], Tuple[str, str]] = {}
-        obj_set_project = self.obj_set.getProject()
-        mapping = ProjectMapping().load_from_project(obj_set_project)
+        mapping = self.obj_set.mapping
         for a_var in self.sum_exp.references.keys():
             if a_var in aliases:
                 continue

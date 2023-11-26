@@ -14,6 +14,7 @@ from DB.Object import (
     VALIDATED_CLASSIF_QUAL,
     DUBIOUS_CLASSIF_QUAL,
     PREDICTED_CLASSIF_QUAL,
+    ObjectHeader,
 )
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
@@ -169,11 +170,12 @@ class EnumeratedSampleSet(MappedTable):
                COUNT(CASE WHEN obh.classif_qual = '"""
             + PREDICTED_CLASSIF_QUAL
             + """' THEN 1 END) nb_predicted
-          FROM obj_head obh
+          FROM %s obh
           JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
           JOIN samples sam ON sam.sampleid = acq.acq_sample_id
          WHERE sam.sampleid = ANY(:ids)
          GROUP BY sam.sampleid;"""
+            % ObjectHeader.__tablename__
         )
         with CodeTimer("Stats for %d samples: " % len(self.ids), logger):
             res: Result = self.session.execute(sql, {"ids": self.ids})

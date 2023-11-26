@@ -172,8 +172,12 @@ class TSVFile(object):
                 )
 
                 # Create SQLAlchemy mappers of the object itself and slaves (1<->1)
-                object_head_to_write = ObjectGen(**dicts_to_write["obj_head"])
-                object_fields_to_write = ObjectFieldsGen(**dicts_to_write["obj_field"])
+                object_head_to_write = ObjectGen(
+                    **dicts_to_write[ObjectHeader.__tablename__]
+                )
+                object_fields_to_write = ObjectFieldsGen(
+                    **dicts_to_write[ObjectFields.__tablename__]
+                )
                 image_to_write = ImageGen(**dicts_to_write["images"])
                 # Parents are created the same way, _when needed_ (i.e. nearly never),
                 #  in @see add_parent_objects
@@ -819,7 +823,10 @@ class TSVFile(object):
                     % (a_field, self.relative_name)
                 )
                 continue
-            if target_table not in ("obj_head", "obj_field"):
+            if target_table not in (
+                ObjectHeader.__tablename__,
+                ObjectFields.__tablename__,
+            ):
                 # In other tables, all types are forced to text
                 sel_type = "t"
                 # TODO: Tell the user that an eventual type is just ignored

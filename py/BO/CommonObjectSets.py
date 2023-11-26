@@ -17,7 +17,7 @@ class CommonObjectSets(object):
     def validatedInSample(session: Session, sample: Sample) -> DescribedObjectSet:
         obj_filter = ProjectFiltersDict(statusfilter="V", samples=str(sample.sampleid))
         obj_set: DescribedObjectSet = DescribedObjectSet(
-            session, sample.projid, None, obj_filter
+            session, sample.project, None, obj_filter
         )
         return obj_set
 
@@ -25,6 +25,6 @@ class CommonObjectSets(object):
     def predictedInSample(session: Session, sample: Sample) -> DescribedObjectSet:
         obj_filter = ProjectFiltersDict(statusfilter="P", samples=str(sample.sampleid))
         obj_set: DescribedObjectSet = DescribedObjectSet(
-            session, sample.projid, None, obj_filter
+            session, sample.project, None, obj_filter
         )
         return obj_set

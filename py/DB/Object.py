@@ -55,10 +55,6 @@ for k, v in classif_qual.items():
     classif_qual_revert[v] = k
 
 
-# TODO: SQLAlchemy uses nextval(seq) in the generated SQL
-#  It's probably possible that the seq is used server-side and not needed in client SQL
-#   Python side: Sequence('seq_objects', optional=True)
-#   Server-side: SERIAL/IDENTITY/Trigger?
 class ObjectHeader(Model):
     __tablename__ = "obj_head"
     # Self

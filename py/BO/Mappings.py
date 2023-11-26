@@ -199,7 +199,7 @@ class ProjectMapping(object):
     ]
 
     def __init__(self) -> None:
-        self.object_mappings: TableMapping = TableMapping(ObjectFields)
+        self.object_mappings: TableMapping = TableMapping(ObjectFields, True)
         self.sample_mappings: TableMapping = TableMapping(Sample)
         self.acquisition_mappings: TableMapping = TableMapping(Acquisition)
         self.process_mappings: TableMapping = TableMapping(Process)
@@ -311,15 +311,23 @@ class TableMapping(object):
     The mapping for a given DB table, i.e. from TSV columns to DB ones.
     """
 
-    __slots__ = ["table", "table_name", "real_cols_to_tsv", "tsv_cols_to_real"]
+    __slots__ = [
+        "table",
+        "table_name",
+        "real_cols_to_tsv",
+        "tsv_cols_to_real",
+        "free_cols_separated",
+    ]
 
-    def __init__(self, table: MappedTableTypeT):
+    def __init__(self, table: MappedTableTypeT, free_ones_are_elsewhere: bool = False):
         self.table: MappedTableTypeT = table
         self.table_name = table.__tablename__
         # key = DB column, val = TSV field name WITHOUT table prefix
         self.real_cols_to_tsv: Dict[str, str] = OrderedDict()
         # key = TSV field name WITHOUT table prefix, val = DB column
         self.tsv_cols_to_real: Dict[str, str] = OrderedDict()
+        # indicate if the free columns are in another DB table
+        self.free_cols_separated = free_ones_are_elsewhere
 
     def load_from_equal_list(self, str_mapping: Optional[str]) -> "TableMapping":
         """
@@ -480,6 +488,14 @@ class TableMapping(object):
 
     def tsv_cols_prefixed(self, prfx: str) -> List[str]:
         return [prfx + "_" + tsv_col for tsv_col in self.real_cols_to_tsv.values()]
+
+    def phy_lookup(self, criteria_col: str) -> Tuple[bool, str]:
+        """Return real DB column for index-based convention, and where to find it
+        e.g. for Objects, n01 -> (True, "n01") as there is obj_fields"""
+        if self.free_cols_separated:
+            return True, criteria_col
+        else:
+            return False, criteria_col
 
 
 def encode_equal_list(a_mapping: Dict[str, Any], sep: str) -> str:

@@ -41,19 +41,28 @@ def test_project_set(database, fastapi, caplog):
         )
         assert rsp.status_code == status.HTTP_200_OK
     # Build dataset
-    features = ["fre.major", "fre.minor", "fre.feret", "fre.esd"]
+    features = [
+        "obj.depth_min",
+        "obj.depth_max",
+        "fre.major",
+        "fre.minor",
+        "fre.feret",
+        "fre.esd",
+    ]
     with Service() as sce:
         prj_set = FeatureConsistentProjectSet(
             session=sce.ro_session, prj_ids=ids, column_names=features
         )
         stats = prj_set.read_columns_stats()
-        assert stats.counts == (21, 21, 21, 2)
+        assert stats.counts == (21, 21, 21, 21, 21, 2)
         median = prj_set.read_median_values()
         assert median == {
             "fre.esd": 1.935,
             "fre.feret": 53.0999984741211,
             "fre.major": 48.9000015258789,
             "fre.minor": 25.3999996185303,
+            "obj.depth_max": 1000.0,
+            "obj.depth_min": 600.0,
         }
         np_learning_set, obj_ids, classif_ids = prj_set.np_read_all()
         # Unpredictable ids
@@ -64,6 +73,8 @@ def test_project_set(database, fastapi, caplog):
             "fre.feret": np.float32(53.1),
             "fre.major": np.float32(48.9),
             "fre.minor": np.float32(25.4),
+            "obj.depth_max": np.float32(1000.0),
+            "obj.depth_min": np.float32(600.0),
         }
     with Service() as sce:
         prj_set2 = LimitedInCategoriesProjectSet(
@@ -74,13 +85,15 @@ def test_project_set(database, fastapi, caplog):
             categories=[92731],
         )
         stats = prj_set2.read_columns_stats()
-        assert stats.counts == (2, 2, 2, 2)
+        assert stats.counts == (2, 2, 2, 2, 2, 2)
         median = prj_set2.read_median_values()
         assert median == {
             "fre.esd": 1.935,
             "fre.feret": 29.100000381469748,
             "fre.major": 27.5,
             "fre.minor": 22.05000019073485,
+            "obj.depth_max": 600.0,
+            "obj.depth_min": 300.0,
         }
         np_learning_set, obj_ids, classif_ids = prj_set2.np_read_all()
         assert len(obj_ids) == len(classif_ids) == 2
@@ -93,4 +106,4 @@ def test_project_set(database, fastapi, caplog):
             categories=[92731],
         )
         stats = prj_set2.read_columns_stats()
-        assert stats.counts == (2, 2, 2, 2)
+        assert stats.counts == (2, 2, 2, 2, 2, 2)
