@@ -781,7 +781,7 @@ class UserService(Service):
                     user_profile = UserModelProfile.from_orm(inactive_user)
                     if self.account_validation == True and status == UserStatus.pending:
                         # reason can be empty when all validation dialog is made via email -
-                        # if requested : add an admin_comment field to the user account and send it to explain what needs to be modified in the reminder to the user.
+                        # if requested : add an admin_comment field to the user account and send it to explain what needs to be modified in the reminder to the user. ticket number can be included
                         self._uservalidation.request_user_to_modify_profile(
                             user_profile,
                             self._get_assistance_email(),
