@@ -45,6 +45,7 @@ class UserValidation(object):
             config.get_dir_mail_templates(),
             SHORT_TOKEN_AGE,
             PROFILE_TOKEN_AGE,
+            config.get_add_ticket(),
         )
         self.secret_key = str(config.get_cnf("MAILSERVICE_SECRET_KEY") or "")
         self.app_instance_id = str(config.get_cnf("INSTANCE_ID") or "EcoTaxa.01")
@@ -106,6 +107,7 @@ class UserValidation(object):
         user: UserModelProfile,
         assistance_email: str,
         status_name: str,
+        reason: Optional[str] = None,
         url: Optional[str] = None,
     ) -> None:
         from DB.User import UserStatus
@@ -122,6 +124,7 @@ class UserValidation(object):
             status_name=status_name,
             action=ActivationType.status.value,
             token=token,
+            reason=reason,
             url=self.get_request_url(url),
         )
         logger.info(

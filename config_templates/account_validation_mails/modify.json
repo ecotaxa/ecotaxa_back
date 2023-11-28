@@ -2,7 +2,7 @@
   "en_EN": {
     "create": {
       "url": "/gui/register/",
-      "subject": "EcoTaxa account modification request.",
+      "subject": " {ticket} EcoTaxa account modification request.",
       "link": "<a href=\"{url}{token}\" style=\"color: rgb(52, 167, 173)\">{url}{token}</a>",
       "email": "<a href=\"mailto:{email}\">{email}</a>",
       "assistance": "If you have any question about your data or need additional support,  email {email}",
@@ -10,7 +10,7 @@
     },
     "update": {
       "url": "/gui/register/",
-      "subject": "EcoTaxa profile modification request.",
+      "subject": "{ticket} EcoTaxa profile modification request.",
       "link": "<a href=\"{url}{token}\" style=\"color: rgb(52, 167, 173)\">{url}{token}</a>",
       "email": "<a href=\"mailto:{email}\">{email}</a>",
       "assistance": "If you have any question about your data or need additional support,  email {email}",

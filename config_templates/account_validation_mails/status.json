@@ -2,7 +2,7 @@
   "en_EN": {
     "active": {
       "url": "/gui/login",
-      "subject": "EcoTaxa account  active.",
+      "subject": "{ticket} EcoTaxa account  active.",
       "link": "<a href=\"{url}\" style=\"color: rgb(52, 167, 173)\">{url}</a>",
       "email": "<a href=\"mailto:{email}\">{email}</a>",
       "assistance": "If you have any question about your data or need additional support,  email {email}",
@@ -10,20 +10,20 @@
     },
     "pending": {
       "url": "/gui/register/",
-      "subject": "EcoTaxa account activation pending.",
+      "subject": "{ticket} EcoTaxa account activation pending.",
       "email": "<a href=\"mailto:{email}\">{email}</a>",
       "link": "<a href=\"{url}{token}\" style=\"color: rgb(52, 167, 173)\">{url}{token}</a>",
       "assistance": "If you have any question about your data or need additional support,  email {email}",
       "body": "Your account is temporary desactivated.<br>You cannot login to EcoTaxa for the moment, as you have to modify some information in your profile.<br>{link}<br>{assistance}"
     },
     "inactive": {
-      "subject": "EcoTaxa account desactivated.",
+      "subject": "{ticket} EcoTaxa account desactivated.",
       "email": "<a href=\"mailto:{email}\">{email}</a>",
       "assistance": "If you have any question about your data or need additional support,  email {email}",
       "body": "Your account is temporary desactivated.<br>You cannot login to EcoTaxa for the moment.<br>{link}<br>{assistance}"
     },
     "blocked": {
-      "subject": "EcoTaxa account blocked.",
+      "subject": "{ticket} EcoTaxa account blocked.",
       "email": "<a href=\"mailto:{email}\">{email}</a>",
       "assistance": "If you have any question about this action,  email {email}",
       "body": "Your account has been blocked.<br>You cannot login to EcoTaxa anymore.<br>{assistance}"

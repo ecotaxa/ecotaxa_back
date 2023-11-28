@@ -87,6 +87,10 @@ class Config(object):
         # email address used in account management - 0 email - 1 pwd - 2 - dns - 3 port
         return self.parser.get("SENDER_ACCOUNT")
 
+    def get_add_ticket(self) -> str:
+        # string separator - separate  ticket number if ticket software is used and admin comment to user
+        return str(self.parser.get("ADD_TICKET") or "").strip()
+
     def get_account_request_url(self) -> Optional[str]:
         # TODO find a way to have multi request url ( list of identified url ???)
         url = self.parser.get("SERVERURL").strip()

@@ -78,3 +78,8 @@ class Constants(BaseModel):
         description="Profile modification token lifespan.",
         default=PROFILE_TOKEN_AGE,
     )
+    add_ticket: str = Field(
+        title="ticket separator",
+        description="string separator, permits to add ticket number when asking more information before user validation",
+        default="",
+    )

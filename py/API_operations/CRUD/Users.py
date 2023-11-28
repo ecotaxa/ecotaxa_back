@@ -794,6 +794,7 @@ class UserService(Service):
                             user_profile,
                             self._get_assistance_email(),
                             status_name=status_name,
+                            reason=str(comment or ""),
                         )
         else:
             raise HTTPException(status_code=403, detail=[NOT_AUTHORIZED])

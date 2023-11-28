@@ -45,6 +45,7 @@ class ReplaceInMail:
         reason: Optional[str] = None,
         url: Optional[str] = None,
         tokenage: Optional[int] = None,
+        ticket: Optional[str] = "",
     ):
         self.id = id
         # user id  - {id}
@@ -62,6 +63,8 @@ class ReplaceInMail:
         # url of the requesting app - will be replaced in the mail message template
         self.tokenage = tokenage
         # token lifespan
+        self.ticket = ticket
+        # ticket number if provided
 
 
 DEFAULT_LANGUAGE = "en_EN"
@@ -73,7 +76,7 @@ class MailProvider(object):
     """
 
     MODEL_KEYS = ("email", "link", "action", "assistance", "reason")
-    REPLACE_KEYS = ("token", "data", "url")
+    REPLACE_KEYS = ("token", "data", "url", "ticket")
 
     def __init__(
         self,
@@ -81,6 +84,7 @@ class MailProvider(object):
         dir_mail_templates: str,
         short_token_age: Optional[int] = 1,
         profile_token_age: Optional[int] = 24,
+        add_ticket: str = "",
     ):
         on = len(senderaccount) == 4 and self.is_email(senderaccount[0])
         if on:
@@ -90,6 +94,7 @@ class MailProvider(object):
             self.DIR_MAIL_TEMPLATES = dir_mail_templates
             self.SHORT_TOKEN_AGE = short_token_age
             self.PROFILE_TOKEN_AGE = profile_token_age
+            self.ADD_TICKET = add_ticket
 
     @staticmethod
     def is_email(email: str) -> bool:
@@ -236,7 +241,9 @@ class MailProvider(object):
                 replace[key] = ""
         model["body"] = model["body"].format(**replace)
         mailmsg = EmailMessage()
-        mailmsg["Subject"] = model["subject"].format(action=replace["action"])
+        mailmsg["Subject"] = model["subject"].format(
+            action=replace["action"], ticket=replace["ticket"]
+        )
         text = self.html_to_text(model["body"])
         mailmsg.set_content(text, subtype="plain", charset="utf-8", cte="8bit")
         return mailmsg
@@ -311,12 +318,20 @@ class MailProvider(object):
         status_name: str,
         action: str,
         token: Optional[str] = None,
+        reason: Optional[str] = None,
         url: Optional[str] = None,
     ) -> None:
+        ticket = ""
+        if reason is not None and self.ADD_TICKET != "":
+            reasons = reason.split(self.ADD_TICKET)
+            if len(reasons) > 1 and reasons[0].strip() != "":
+                ticket = "[" + reasons[0] + "]"
+                reason = self.ADD_TICKET.join(reasons[1:])
         data = ReplaceInMail(
             email=assistance_email,
             token=token,
             tokenage=self.PROFILE_TOKEN_AGE,
+            ticket=ticket,
             url=url,
         )
         mailmsg = self.mail_message(AccountMailType.status, data, action=status_name)
@@ -331,12 +346,22 @@ class MailProvider(object):
         token: Optional[str] = None,
         url: Optional[str] = None,
     ) -> None:
+        """
+        when there is a ticket software - ticket number can be found at the beginning of the comment/reason and sent back in the email subject
+        """
+        ticket = ""
+        if self.ADD_TICKET != "":
+            reasons = reason.split(self.ADD_TICKET)
+            if len(reasons) > 1 and reasons[0].strip() != "":
+                ticket = "[" + reasons[0] + "]"
+                reason = self.ADD_TICKET.join(reasons[1:])
         values = ReplaceInMail(
             email=assistance_email,
             reason=reason,
             token=token,
             url=url,
             tokenage=self.PROFILE_TOKEN_AGE,
+            ticket=ticket,
         )
         mailmsg = self.mail_message(AccountMailType.modify, values, action=action)
         self.send_mail([recipient], mailmsg, replyto=assistance_email)
