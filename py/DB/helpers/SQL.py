@@ -44,6 +44,7 @@ class FromClause(object):
     def __init__(self, first: str):
         self.joins = [first]
         self.left_joins: Set[str] = set()
+        self.lateral_joins: Set[str] = set()
 
     def __add__(self, other) -> "FromClause":
         self.joins.append(other)
@@ -52,10 +53,11 @@ class FromClause(object):
     def get_sql(self) -> str:
         sqls = [self.joins[0]]
         for a_join in self.joins[1:]:
+            lateral = "LATERAL " if a_join in self.lateral_joins else ""
             if a_join in self.left_joins:
-                sqls.append("LEFT JOIN " + a_join)
+                sqls.append("LEFT JOIN " + lateral + a_join)
             else:
-                sqls.append("JOIN " + a_join)
+                sqls.append("JOIN " + lateral + a_join)
         return "\n ".join(sqls)
 
     def replace_table(self, before: str, after: str) -> None:
@@ -74,9 +76,16 @@ class FromClause(object):
 
     def set_outer(self, join_start: str) -> None:
         """Signal that the clause starting with join_start should be a LEFT one"""
+        self._add_if_starts(self.left_joins, join_start)
+
+    def set_lateral(self, join_start: str) -> None:
+        """Signal that the clause starting with join_start should be a LATERAL one"""
+        self._add_if_starts(self.lateral_joins, join_start)
+
+    def _add_if_starts(self, target_set: Set[str], join_start: str):
         for a_join in self.joins:
             if a_join.startswith(join_start):
-                self.left_joins.add(a_join)
+                target_set.add(a_join)
 
     def find_join(self, join_start: str) -> Tuple[str, int]:
         """Find a clause starting with join_start"""

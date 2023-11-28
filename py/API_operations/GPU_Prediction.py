@@ -24,7 +24,6 @@ from DB.helpers.Direct import text
 from ML.Deep_features_extractor import DeepFeaturesExtractor
 from ML.Random_forest_classifier import OurRandomForestClassifier
 from helpers.DynamicLogs import get_logger
-
 # TODO: Move somewhere else
 from helpers.Timer import CodeTimer
 from .ObjectManager import ObjectManager
@@ -205,7 +204,7 @@ class GPUPredictForProject(PredictForProject):
             order_clause=None, select_list=sel_cols
         )
         sql = (
-            "SET LOCAL enable_seqscan=FALSE; SELECT obh.objid, NULL "
+            "SELECT obh.objid, NULL "
             + sel_cols
             + " FROM "
             + from_.get_sql()

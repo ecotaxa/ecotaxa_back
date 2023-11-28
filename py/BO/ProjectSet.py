@@ -108,8 +108,7 @@ class FeatureConsistentProjectSet(object):
             )
             sels_for_prjs.append(prj_sql)
         # Final SQL
-        sql = "SET LOCAL enable_seqscan=FALSE;"
-        sql += "WITH flat AS (" + " UNION ALL ".join(sels_for_prjs) + " ) "
+        sql = "WITH flat AS (" + " UNION ALL ".join(sels_for_prjs) + " ) "
         return col_aliases, sql
 
     def read_columns_stats(self) -> ProjectSetColumnStats:
