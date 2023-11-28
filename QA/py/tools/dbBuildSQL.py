@@ -229,8 +229,8 @@ SENDER_ACCOUNT = senderemail@testsendermailtest.com,senderpwd,senderdns,465
 INSTANCE_ID = EcoTaxa.01
 USER_EMAIL_VERIFICATION = off
 ACCOUNT_VALIDATION = off
+ADD_TICKET = ***
 DIR_MAIL_TEMPLATES = {DIR_TEMPLATES}
-CAPTCHA_IPLIST = {CAPTCHA_LIST}/iplist.txt
 SERVERURL= http://localhost:8000
 """
 
