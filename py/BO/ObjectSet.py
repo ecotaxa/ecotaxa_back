@@ -134,6 +134,14 @@ class DescribedObjectSet(object):
             selected_tables += (
                 ObjectFields.__tablename__ + " obf ON obf.objfid = obh.objid"
             )  # TODO: Drop when unused in mapping
+        if "ohu." in column_referencing_sql:  # Inline query for annotators in history
+            selected_tables += (
+                "(select 1 as in_annots WHERE EXISTS (select * from "
+                + ObjectsClassifHisto.__tablename__
+                + " och WHERE och.objid = obh.objid AND och.classif_who = ANY (:filt_annot) ) ) ohu ON True"
+            )
+            selected_tables.set_outer("(select 1 as in_annots ")
+            selected_tables.set_lateral("(select 1 as in_annots ")
         if "txo." in column_referencing_sql or "txp." in column_referencing_sql:
             selected_tables += "taxonomy txo ON txo.id = obh.classif_id"
             if self.filters.status_filter not in MEANS_CLASSIF_ID_EXIST:
@@ -1052,13 +1060,7 @@ class ObjectSetFilter(object):
 
         if self.annotators:
             where_clause *= (
-                "(obh.classif_who = ANY (:filt_annot) "
-                " OR exists (SELECT och.classif_who "
-                "              FROM "
-                + ObjectsClassifHisto.__tablename__
-                + " och "
-                + "             WHERE och.objid = obh.objid "
-                "               AND och.classif_who = ANY (:filt_annot) ) )"
+                "(obh.classif_who = ANY (:filt_annot) OR ohu.in_annots IS NOT NULL)"
             )
             params["filt_annot"] = [int(x) for x in self.annotators.split(",")]
         elif self.last_annotators:

@@ -117,9 +117,7 @@ class ObjectManager(Service):
             # Otherwise, no need for obj_field in count, less DB buffers
             total_col = "0 AS total"
 
-        # The following hint is needed until we sort out why, time to time, there is a FTS on obj_head
-        sql = """
-    SET LOCAL enable_seqscan=FALSE;"""
+        sql = ""
         if oid_lst is not None:
             if (
                 len(oid_lst) == 0
@@ -292,7 +290,6 @@ class ObjectManager(Service):
         )
         from_, where, params = object_set.get_sql()
         sql = """
-    SET LOCAL enable_seqscan=FALSE;
     SELECT COUNT(*) nbr"""
         if only_total:
             sql += """, NULL nbr_v, NULL nbr_d, NULL nbr_p"""
