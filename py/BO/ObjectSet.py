@@ -153,7 +153,7 @@ class DescribedObjectSet(object):
                 if not all_images
                 else ""
             )
-            selected_tables.set_outer("images img ")
+            #  selected_tables.set_outer("images img ")
         if "usr." in column_referencing_sql:
             selected_tables += "users usr ON obh.classif_who = usr.id"
             selected_tables.set_outer("users usr ")
