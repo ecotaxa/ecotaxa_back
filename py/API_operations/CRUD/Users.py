@@ -279,7 +279,6 @@ class UserService(Service):
         if current_user_id is None:
             self._verify_captcha_thow(no_bot)
             if activatereq is not None:
-
                 self._refresh_any_status(
                     user_id, token=activatereq.token, password=activatereq.password
                 )
@@ -579,15 +578,15 @@ class UserService(Service):
             else:
                 # ordinary user cannot change his status
                 update_src.status = user_to_update.status
-        if (
-            is_admin == False
-            and update_src.status != user_to_update.status
-            and (
-                update_src.status == UserStatus.inactive.value
-                and self.account_validation == True
-            )
-        ):
-            ask_activate = True
+            if (
+                is_admin == False
+                and update_src.status != user_to_update.status
+                and (
+                    update_src.status == UserStatus.inactive.value
+                    and self.account_validation == True
+                )
+            ):
+                ask_activate = True
         # only update actions from admin - not from profile
         if (
             current_user is not None
