@@ -86,7 +86,7 @@ class ObjectHeader(Model):
 
     # The following 3 are set if the object was ever predicted, then they remain
     # forever with these values. They reflect the "last state" only if classif_qual is 'P'.
-    pred_id = Column(BIGINT, ForeignKey('predictions.pred_id', ondelete="SET NULL"))
+    pred_id = Column(INTEGER, ForeignKey("predictions.pred_id", ondelete="SET NULL"))
     # TODO: is NULL on prod' DB even if classif_qual='P' and other classif_auto_* are set
     classif_auto_when = Column(TIMESTAMP)
 
@@ -264,8 +264,8 @@ class ObjectsClassifHisto(Model):
     classif_type = Column(CHAR(1))  # A : Automatic, M : Manual
     classif_id = Column(INTEGER)
     classif_qual = Column(CHAR(1))
-    classif_who = Column(Integer, ForeignKey('users.id'))
-    pred_id = Column(BIGINT)
+    classif_who = Column(Integer, ForeignKey("users.id"))
+    pred_id = Column(INTEGER)
 
     # The relationships are created in Relations.py but the typing here helps the IDE
     object: relationship
