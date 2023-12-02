@@ -13,11 +13,13 @@ from typing import List, Dict, Optional, Generator, Tuple, Final
 import numpy as np
 from numpy import ndarray
 
+from API_models.filters import ProjectFiltersDict
 from BO.Classification import ClassifIDT, ClassifIDListT
-from BO.Mappings import TableMapping
 from BO.Object import ObjectBO
-from BO.ObjectSet import ObjectIDListT
-from DB.Object import ObjectFields
+from BO.ObjectSet import ObjectIDListT, DescribedObjectSet
+from BO.Rights import RightsBO, Action
+from BO.User import UserIDT
+from DB import ObjectHeader
 from DB.Project import ProjectIDListT, Project
 from DB.helpers import Session, Result
 from DB.helpers.Direct import text
@@ -50,65 +52,63 @@ class FeatureConsistentProjectSet(object):
     def __init__(
         self, session: Session, prj_ids: ProjectIDListT, column_names: List[str]
     ):
+        """Note: The column names are in API convention: obj.* fre.*"""
         self.session = session
         self.prj_ids = prj_ids
         self.column_names = column_names
 
     def _projects_with_mappings(
         self,
-    ) -> Generator[Tuple[Project, List[str]], None, None]:
+    ) -> Generator[Tuple[DescribedObjectSet, List[str]], None, None]:
         """
         Iterator self list of project, returning them + mapped free columns.
         """
         qry = self.session.query(Project)
         qry = qry.filter(Project.projid == any_(self.prj_ids))
         for a_proj in qry:
-            free_columns_mappings = TableMapping(ObjectFields).load_from_equal_list(
-                a_proj.mappingobj
+            obj_set = DescribedObjectSet(
+                self.session, a_proj, None, ProjectFiltersDict()
             )
-            mapped = ObjectBO.resolve_fields(self.column_names, free_columns_mappings)
+            mapped = ObjectBO.resolve_fields(
+                self.column_names, obj_set.mapping.object_mappings
+            )
             assert len(mapped) == len(
                 self.column_names
             ), "Project %d does not contain all columns (%s)" % (
                 a_proj.projid,
                 self.column_names,
             )
-            yield a_proj, mapped
+            yield obj_set, mapped
 
-    # TODO: dup code with DescribedObjectSet.get_sql
-    PRJ_SQL = (
-        "SELECT {0} "
-        "  FROM obj_head obh"
-        "  JOIN obj_field obf ON obf.objfid = obh.objid"
-        "  JOIN acquisitions acq ON acq.acquisid = obh.acquisid"
-        "  JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = {1}"
-        " WHERE obh.classif_qual = 'V' "
-    )
-
-    OBJ_COLS: Final = ["objid", "classif_id"]
+    OBJ_COLS: Final = ["objid", "classif_id"]  # We always select these
 
     def _build_flat_union(self) -> Tuple[List[str], str]:
         """
         Build a UNION with all common columns + object_id and classif_id
         """
-        prj_sql = "(" + self.PRJ_SQL + ")"
         sels_for_prjs = []
         # We have to alias the column in order to have a consistent naming of the CTE
         col_aliases = ["c%d" % num for num in range(len(self.column_names))]
         obj_cols = ",".join(["obh." + a_col for a_col in self.OBJ_COLS])
         # Compose a CTE for each project with its mapped columns
-        for a_proj, mapped in self._projects_with_mappings():
+        for an_obj_set, mapped in self._projects_with_mappings():
             mapped_with_aliases = [
                 "%s AS %s" % (col, als) for col, als in zip(mapped, col_aliases)
             ]
-            sels_for_prjs.append(
-                prj_sql.format(
-                    obj_cols + "," + ",".join(mapped_with_aliases), a_proj.projid
-                )
+            selected_cols = obj_cols + "," + ",".join(mapped_with_aliases)
+            from_, where, params = an_obj_set.get_sql(None, selected_cols)
+            assert len(where.ands) == 0  # The condition is inside the JOIN
+            assert len(params) == 1  # :projid
+            prj_sql = (
+                "( SELECT "
+                + selected_cols
+                + " FROM "
+                + from_.get_sql().replace(":projid", str(params["projid"]))
+                + ")"
             )
+            sels_for_prjs.append(prj_sql)
         # Final SQL
-        sql = "SET LOCAL enable_seqscan=FALSE;"
-        sql += "WITH flat AS (" + " UNION ALL ".join(sels_for_prjs) + " ) "
+        sql = "WITH flat AS (" + " UNION ALL ".join(sels_for_prjs) + " ) "
         return col_aliases, sql
 
     def read_columns_stats(self) -> ProjectSetColumnStats:
@@ -263,12 +263,12 @@ class LimitedInCategoriesProjectSet(FeatureConsistentProjectSet):
             " WHERE flat.objid IN "
             " ( SELECT q.objid FROM "
             " ( SELECT obh2.objid, ROW_NUMBER() OVER (PARTITION BY obh2.classif_id "
-            "                                         ORDER BY obh2.random_value) rank "
-            "     FROM obj_head obh2"
+            "                                         ORDER BY obh2.classif_id) rank "  # TODO obh2.random_value
+            "     FROM %s obh2"
             "     JOIN acquisitions acq2 ON acq2.acquisid = obh2.acquisid"
             "     JOIN samples sam2 ON sam2.sampleid = acq2.acq_sample_id AND sam2.projid IN ({0})"
             "    WHERE obh2.classif_qual = 'V' AND obh2.classif_id IN ({2})) q"
-            "   WHERE rank <= {1} )"
+            "   WHERE rank <= {1} )" % ObjectHeader.__tablename__
         ).format(prj_in_list, self.random_limit, categ_in_list)
         return sql
 
@@ -283,3 +283,19 @@ class LimitedInCategoriesProjectSet(FeatureConsistentProjectSet):
         elif len(self.categories) > 0:
             return self._add_category_filter(sql)
         return sql
+
+
+class PermissionConsistentProjectSet(object):
+    """
+    A list of projects which can be tested, permission-speaking, against a user.
+    """
+
+    def __init__(self, session: Session, prj_ids: ProjectIDListT):
+        assert len(prj_ids) > 0, "Empty project set"
+        self.session = session
+        self.prj_ids = prj_ids
+
+    def can_be_administered_by(self, user_id: UserIDT):
+        """We just expect an Exception thrown (or not)"""
+        for a_prj_id in self.prj_ids:
+            RightsBO.user_wants(self.session, user_id, Action.ADMINISTRATE, a_prj_id)

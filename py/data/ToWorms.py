@@ -24,9 +24,9 @@ from openpyxl.cell import Cell
 from openpyxl.worksheet.worksheet import Worksheet
 from typing_extensions import ParamSpec
 
-from API_operations.TaxonomyService import TaxonomyService
 from BO.Classification import ClassifIDT, ClassifIDListT
-from BO.Taxonomy import TaxonBO, WoRMSSetFromTaxaSet
+from BO.Taxonomy import TaxonBO, StrictWoRMSSetFromTaxaSet, TaxonBOSetFromWoRMS, TaxonBOSet
+from DB.helpers.ORM import Session
 from data.structs.TaxaTree import TaxaTree
 
 P = ParamSpec("P")
@@ -213,7 +213,8 @@ class ToWorms(object):
     Read the XLSX data source and map IDs.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, ro_session: Session):
+        self.session = ro_session
         # Taxo data source
         self.ignored_cells: List[str] = []
         # The actions, per eco_id
@@ -223,10 +224,10 @@ class ToWorms(object):
         for a_tab in TABS:
             self.analyze(workbook[a_tab])
         # The source (present) taxa
-        self.unieuk: Dict[int, TaxonBO] = {}
+        self.unieuk: Dict[int, TaxonBO] = {}  # TODO: Should be in the TaxaTree
         self.unieuk_tree: TaxaTree = TaxaTree(0, "root")
         # The target worms taxa
-        self.worms: Dict[int, TaxonBO] = {}
+        self.worms: Dict[int, TaxonBO] = {}  # TODO: Should be in the TaxaTree
         self.worms_tree: TaxaTree = TaxaTree(0, "worms")
         # The link b/w the two trees
         self.done_remaps: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
@@ -250,52 +251,61 @@ class ToWorms(object):
         """
         Scan the actions and prepare the application. Build in-memory trees (origin, destination).
         """
-        with TaxonomyService() as taxo_sce:
-            all_eco_ids = list(self.actions.keys())
-            # for an_eco_id in all_eco_ids:
-            #     orig = sce.query(an_eco_id)
-            #     assert orig is not None, "%d doesn't exist?" % an_eco_id
-            #     print(orig.lineage)
-            self.add_to_unieuk(all_eco_ids, taxo_sce)
-            # # Commented out for tests
-            # assert len(self.unieuk_tree.children) <= 3
+        all_eco_ids = list(self.actions.keys())
+        # for an_eco_id in all_eco_ids:
+        #     orig = sce.query(an_eco_id)
+        #     assert orig is not None, "%d doesn't exist?" % an_eco_id
+        #     print(orig.lineage)
+        self.add_to_unieuk(all_eco_ids)
+        # # Commented out for tests
+        # assert len(self.unieuk_tree.children) <= 3
 
-            # Gather all potential targets, as node aphia_id or parent aphia_id
-            target_or_parents = [
-                an_action.link_with_aphia_id
+        # Gather all potential targets, as node aphia_id or parent aphia_id
+        target_or_parents = [
+            an_action.link_with_aphia_id
+            for an_action in self.actions.values()
+            if an_action.link_with_aphia_id is not None
+        ]
+        target_or_parents.extend(
+            [
+                an_action.worms_parent_id
                 for an_action in self.actions.values()
-                if an_action.link_with_aphia_id is not None
+                if an_action.worms_parent_id is not None
             ]
-            target_or_parents.extend(
-                [
-                    an_action.worms_parent_id
-                    for an_action in self.actions.values()
-                    if an_action.worms_parent_id is not None
-                ]
-            )
-            target_or_parents = list(set(target_or_parents))
-            worms_taxo_infos: List[TaxonBO] = taxo_sce.query_worms_set(
-                target_or_parents
-            )
-            worms_aphia_ids = set([a_taxon.id for a_taxon in worms_taxo_infos])
-            # # Commented out for tests
-            # assert len(worms_taxo_infos) == len(target_or_parents), "%s missing or extra" % str(
-            #     set(target_or_parents).difference(worms_aphia_ids))
-            for an_info in worms_taxo_infos:
-                # print("W: %d -> %s %s" % (an_info.id, an_info.lineage, len(an_info.children) == 0))
-                self.worms[an_info.id] = an_info
-                self.worms_tree.add_path(list(zip(an_info.id_lineage, an_info.lineage)))
+        )
+        target_or_parents = list(set(target_or_parents))
+        worms_taxo_infos: List[TaxonBO] = TaxonBOSetFromWoRMS(self.session, target_or_parents).as_list()
+        worms_aphia_ids = set([a_taxon.id for a_taxon in worms_taxo_infos])
+        # # Commented out for tests
+        # assert len(worms_taxo_infos) == len(target_or_parents), "%s missing or extra" % str(
+        #     set(target_or_parents).difference(worms_aphia_ids))
+        for an_info in worms_taxo_infos:
+            # print("W: %d -> %s %s" % (an_info.id, an_info.lineage, len(an_info.children) == 0))
+            self.worms[an_info.id] = an_info
+            self.worms_tree.add_path(list(zip(an_info.id_lineage, an_info.lineage)))
 
-    def add_to_unieuk(self, eco_ids: ClassifIDListT, taxo_sce: TaxonomyService) -> None:
+    def add_to_unieuk(self, eco_ids: ClassifIDListT) -> None:
         # Add taxo from IDs, if they are not there already
         missing_eco_ids = [an_id for an_id in eco_ids if an_id not in self.unieuk]
-        ecotaxa_taxo_infos: List[TaxonBO] = taxo_sce.query_set(missing_eco_ids)
+        ecotaxa_taxo_infos: List[TaxonBO] = TaxonBOSet(self.session, missing_eco_ids).as_list()
         # assert len(ecotaxa_taxo_infos) == len(all_eco_ids), "Some categories don't resolve"
         for an_info in ecotaxa_taxo_infos:
             self.unieuk[an_info.id] = an_info
             self.unieuk_tree.add_path(list(zip(an_info.id_lineage, an_info.lineage)))
             self.unieuk_tree.find_node(an_info.id).add_to_node(an_info.nb_objects)
             # print("E: %d -> %s %s" % (an_info.id, an_info.lineage, len(an_info.children) == 0))
+
+    def add_to_unieuk_with_lineage(
+        self, eco_ids: ClassifIDListT
+    ) -> None:
+        """Add taxo from IDs, if not there, with their lineage"""
+        self.add_to_unieuk(eco_ids)
+        needed_parents = []
+        for an_id in eco_ids:
+            for a_parent_id in self.unieuk[an_id].id_lineage:
+                if a_parent_id not in self.unieuk:
+                    needed_parents.append(a_parent_id)
+        self.add_to_unieuk(needed_parents)
 
     def validate_with_trees(self) -> None:
         # It's dubious if a terminal (leaf) maps to a non-terminal
@@ -359,7 +369,7 @@ class ToWorms(object):
     def apply(self) -> None:
         """
         Apply the actions onto present tree.
-        We go thru the tree top-down, i.e. highest-level taxa first.
+        We go through the tree top-down, i.e. highest-level taxa first.
         """
         for a_node in self.unieuk_tree.top_to_bottom_ite():
             try:
@@ -508,138 +518,137 @@ class ToWorms(object):
         """
         Go thru the spreadsheet and scan identifiers.
         """
-        with TaxonomyService() as taxo_sce:
-            tab_name = a_tab.title
-            assert isinstance(tab_name, str)
-            tab_iter = iter(a_tab)
-            header = next(tab_iter)
-            # print(tab_name)
-            eco_id_col, aphia_id_col = self.find_in_header(
-                header, False, "eco_id", "final_aphia_id"
-            )
-            assert eco_id_col is not None and aphia_id_col is not None
-            (
-                make_morpho_id_col,
-                deprecate_col,
-                rename_col,
-                parent_aphia_id_col,
-                parent_worms_col,
-                action_col,
-            ) = self.find_in_header(
-                header,
-                True,
-                "make_morpho",
-                "deprecate",
-                "rename_as",
-                "final_parent_aphia_id",
-                "parent_aphia_name",
-                "action",
-            )
-            a_line: List[Cell]
-            for a_line in tab_iter:
-                a_line = list(a_line)  # tuples are slow in random access
-                line_length = len(a_line)
+        tab_name = a_tab.title
+        assert isinstance(tab_name, str)
+        tab_iter = iter(a_tab)
+        header = next(tab_iter)
+        # print(tab_name)
+        eco_id_col, aphia_id_col = self.find_in_header(
+            header, False, "eco_id", "final_aphia_id"
+        )
+        assert eco_id_col is not None and aphia_id_col is not None
+        (
+            make_morpho_id_col,
+            deprecate_col,
+            rename_col,
+            parent_aphia_id_col,
+            parent_worms_col,
+            action_col,
+        ) = self.find_in_header(
+            header,
+            True,
+            "make_morpho",
+            "deprecate",
+            "rename_as",
+            "final_parent_aphia_id",
+            "parent_aphia_name",
+            "action",
+        )
+        a_line: List[Cell]
+        for a_line in tab_iter:
+            a_line = list(a_line)  # tuples are slow in random access
+            line_length = len(a_line)
 
-                if eco_id_col >= line_length:
-                    continue
-                eco_id_cell = a_line[eco_id_col]
-                # If cell was strike-d out, ignore.
-                if eco_id_cell.font is not None and eco_id_cell.font.strike is not None:
-                    self.ignored_cells.append(str(eco_id_cell))
-                    continue
-                eco_str_id = eco_id_cell.value
-                if eco_str_id is None:
-                    continue
-                assert isinstance(eco_str_id, str)
-                # We have e.g. =HYPERLINK("http://ecotaxoserver.obs-vlfr.fr/browsetaxo/?id=93066","93066")
-                assert (
-                    ECOTAXOSERVER_URL in eco_str_id
-                ), "Unexpected eco_id value '%s' in tab '%r'" % (eco_str_id, tab_name)
-                eco_id = int(eco_str_id.split('"')[3])
-                cell_str = str(eco_id_cell).replace("ReadOnlyCell ", "")
+            if eco_id_col >= line_length:
+                continue
+            eco_id_cell = a_line[eco_id_col]
+            # If cell was strike-d out, ignore.
+            if eco_id_cell.font is not None and eco_id_cell.font.strike is not None:
+                self.ignored_cells.append(str(eco_id_cell))
+                continue
+            eco_str_id = eco_id_cell.value
+            if eco_str_id is None:
+                continue
+            assert isinstance(eco_str_id, str)
+            # We have e.g. =HYPERLINK("http://ecotaxoserver.obs-vlfr.fr/browsetaxo/?id=93066","93066")
+            assert (
+                ECOTAXOSERVER_URL in eco_str_id
+            ), "Unexpected eco_id value '%s' in tab '%r'" % (eco_str_id, tab_name)
+            eco_id = int(eco_str_id.split('"')[3])
+            cell_str = str(eco_id_cell).replace("ReadOnlyCell ", "")
 
-                action_for_eco_id = self.actions.get(eco_id)
-                if action_for_eco_id is None:
-                    action_for_eco_id = Action(eco_id, cell_str)
-                    self.actions[eco_id] = action_for_eco_id
-                else:
-                    action_for_eco_id.add_cell(cell_str)
+            action_for_eco_id = self.actions.get(eco_id)
+            if action_for_eco_id is None:
+                action_for_eco_id = Action(eco_id, cell_str)
+                self.actions[eco_id] = action_for_eco_id
+            else:
+                action_for_eco_id.add_cell(cell_str)
 
-                if action_col is not None:
-                    if a_line[action_col] is not None:
-                        action_cell = a_line[action_col]
-                        if action_cell is not None:
-                            if action_cell.fill.bgColor.rgb != "00000000":
-                                info = taxo_sce.query(eco_id)
-                                assert info is not None
-                                print(
-                                    "Ignored actions for '%s' in %s line due to color: '%s', %d obj %d children"
-                                    % (
-                                        info.name,
-                                        cell_str,
-                                        action_cell.value,
-                                        info.nb_objects,
-                                        info.nb_children_objects,
-                                    )
+            if action_col is not None:
+                if a_line[action_col] is not None:
+                    action_cell = a_line[action_col]
+                    if action_cell is not None:
+                        if action_cell.fill.bgColor.rgb != "00000000":
+                            info = TaxonBOSet(self.session, [eco_id]).as_list()
+                            assert len(info) > 0
+                            print(
+                                "Ignored actions for '%s' in %s line due to color: '%s', %d obj %d children"
+                                % (
+                                    info[0].name,
+                                    cell_str,
+                                    action_cell.value,
+                                    info[0].nb_objects,
+                                    info[0].nb_children_objects,
                                 )
-                                continue
-                            else:
-                                call_val = action_cell.value
-                                assert call_val is None or isinstance(call_val, str)
-                                action_for_eco_id.set_free_action(call_val)
+                            )
+                            continue
+                        else:
+                            call_val = action_cell.value
+                            assert call_val is None or isinstance(call_val, str)
+                            action_for_eco_id.set_free_action(call_val)
 
-                if make_morpho_id_col is not None:
-                    # Switch to morpho action
-                    make_morpho_opt = a_line[make_morpho_id_col]
-                    if make_morpho_opt.value:
-                        action_for_eco_id.turn_to_morpho()
+            if make_morpho_id_col is not None:
+                # Switch to morpho action
+                make_morpho_opt = a_line[make_morpho_id_col]
+                if make_morpho_opt.value:
+                    action_for_eco_id.turn_to_morpho()
 
-                if deprecate_col is not None:
-                    # Deprecate action
-                    deprecate_opt = a_line[deprecate_col]
-                    deprecate_val = deprecate_opt.value
-                    assert deprecate_val in (None, "", "x"), (
-                        "Unexpected deprecate %s" % deprecate_val
-                    )
-                    if deprecate_opt.value == "x":
-                        action_for_eco_id.deprecate()
-                    else:
-                        action_for_eco_id.dont_deprecate()
+            if deprecate_col is not None:
+                # Deprecate action
+                deprecate_opt = a_line[deprecate_col]
+                deprecate_val = deprecate_opt.value
+                assert deprecate_val in (None, "", "x"), (
+                    "Unexpected deprecate %s" % deprecate_val
+                )
+                if deprecate_opt.value == "x":
+                    action_for_eco_id.deprecate()
+                else:
+                    action_for_eco_id.dont_deprecate()
 
-                if rename_col is not None:
-                    # Rename action
-                    rename_cell = a_line[rename_col]
-                    rename_val = rename_cell.value
-                    if rename_val is not None:
-                        assert isinstance(rename_val, str)
-                        action_for_eco_id.rename_to(rename_val)
-                    else:
-                        action_for_eco_id.dont_rename()
+            if rename_col is not None:
+                # Rename action
+                rename_cell = a_line[rename_col]
+                rename_val = rename_cell.value
+                if rename_val is not None:
+                    assert isinstance(rename_val, str)
+                    action_for_eco_id.rename_to(rename_val)
+                else:
+                    action_for_eco_id.dont_rename()
 
-                if parent_aphia_id_col is not None:
-                    # Constraint to parent aphia_id
-                    parent_aphia_id_str = a_line[parent_aphia_id_col].value
-                    if parent_aphia_id_str is not None:
-                        assert isinstance(parent_aphia_id_str, (str, int))
-                        try:
-                            parent_aphia_id = int(parent_aphia_id_str)
-                            action_for_eco_id.worms_parent_is(parent_aphia_id)
-                        except ValueError:
-                            # In fact it's a parent_name
-                            print("Cannot convert %s", parent_aphia_id_str)
-                            # action_for_eco_id.exotaxa_parent_is(parent_aphia_id_str)
+            if parent_aphia_id_col is not None:
+                # Constraint to parent aphia_id
+                parent_aphia_id_str = a_line[parent_aphia_id_col].value
+                if parent_aphia_id_str is not None:
+                    assert isinstance(parent_aphia_id_str, (str, int))
+                    try:
+                        parent_aphia_id = int(parent_aphia_id_str)
+                        action_for_eco_id.worms_parent_is(parent_aphia_id)
+                    except ValueError:
+                        # In fact it's a parent_name
+                        print("Cannot convert %s", parent_aphia_id_str)
+                        # action_for_eco_id.exotaxa_parent_is(parent_aphia_id_str)
 
-                if aphia_id_col >= line_length:
-                    continue
-                aphia_str_id = a_line[aphia_id_col].value
-                if aphia_str_id is None:
-                    continue
-                assert isinstance(aphia_str_id, (str, int))
-                aphia_id = self.read_aphia_id_value(aphia_str_id, tab_name)
-                if aphia_id is None:
-                    continue
+            if aphia_id_col >= line_length:
+                continue
+            aphia_str_id = a_line[aphia_id_col].value
+            if aphia_str_id is None:
+                continue
+            assert isinstance(aphia_str_id, (str, int))
+            aphia_id = self.read_aphia_id_value(aphia_str_id, tab_name)
+            if aphia_id is None:
+                continue
 
-                action_for_eco_id.set_target_worms(aphia_id)
+            action_for_eco_id.set_target_worms(aphia_id)
 
     @staticmethod
     def read_aphia_id_value(
@@ -690,23 +699,22 @@ class ToWorms(object):
         """
         Mapping the old way, for stats.
         """
-        with TaxonomyService() as taxo_sce:
-            eco_tree = TaxaTree(0, "root")
-            all_eco_ids = list(self.unieuk.keys())
-            ecotaxa_taxo_infos: List[TaxonBO] = taxo_sce.query_set(all_eco_ids)
-            assert len(ecotaxa_taxo_infos) == len(
-                all_eco_ids
-            ), "In old_way, some categories don't resolve"
-            for an_info in ecotaxa_taxo_infos:
-                eco_tree.add_path(list(zip(an_info.id_lineage, an_info.lineage)))
-                # Juste copy the number of objects, no cumulate
-                eco_tree.find_node(an_info.id).nb_objects = an_info.nb_objects
+        eco_tree = TaxaTree(0, "root")
+        all_eco_ids = list(self.unieuk.keys())
+        ecotaxa_taxo_infos: List[TaxonBO] = TaxonBOSet(self.session, all_eco_ids).as_list()
+        assert len(ecotaxa_taxo_infos) == len(
+            all_eco_ids
+        ), "In old_way, some categories don't resolve"
+        for an_info in ecotaxa_taxo_infos:
+            eco_tree.add_path(list(zip(an_info.id_lineage, an_info.lineage)))
+            # Juste copy the number of objects, no cumulate
+            eco_tree.find_node(an_info.id).nb_objects = an_info.nb_objects
 
-            mapping = WoRMSSetFromTaxaSet(taxo_sce.session, all_eco_ids).res
+        mapping = StrictWoRMSSetFromTaxaSet(self.session, all_eco_ids).res
 
-        worms_tree: TaxaTree = TaxaTree(0, "worms")
+        worms_tree = TaxaTree(0, "worms")
         all_worms_ids = [a_worms_info.aphia_id for a_worms_info in mapping.values()]
-        worms_taxo_infos: List[TaxonBO] = taxo_sce.query_worms_set(all_worms_ids)
+        worms_taxo_infos: List[TaxonBO] = TaxonBOSetFromWoRMS(self.session, all_worms_ids).as_list()
         for an_info in worms_taxo_infos:
             worms_tree.add_path(list(zip(an_info.id_lineage, an_info.lineage)))
 
@@ -717,18 +725,3 @@ class ToWorms(object):
 
         worms_sum = worms_tree.nb_objects
         print("Old-way comparison: %d" % worms_sum)
-
-
-if __name__ == "__main__":
-    to_worms = ToWorms()
-    to_worms.pre_validate()
-    to_worms.prepare()
-    to_worms.validate_with_trees()
-    to_worms.show_stats()
-    to_worms.apply()
-    to_worms.check_ancestors()
-    to_worms.check_closure()
-    to_worms.check_sums()
-    # to_worms.old_way(sce)
-    # to_worms.print_trees()
-    # print(to_worms.worms_tree.newick())

@@ -40,10 +40,15 @@ class Acquisition(Model):
     def get_orig_id_and_model(
         cls, session: Session, prj_id
     ) -> Dict[Tuple[str, str], "Acquisition"]:
+        """
+        Read in memory all Acquisitions for given project and return them indexed by their user-visible
+        unique key, AKA parent sample orig_id + self orig_id.
+        """
         res = session.query(Acquisition, Sample.orig_id)
         res = res.join(Sample)
         res = res.join(Project)
         res = res.filter(Project.projid == prj_id)
+        res = res.order_by(Sample.orig_id, Acquisition.orig_id)
         ret = {(sample_orig_id, r.orig_id): r for r, sample_orig_id in res}
         return ret
 

@@ -5,46 +5,9 @@
 from enum import Enum
 from typing import List, Dict, Optional
 
+from pydantic import Extra, validator
+
 from helpers.pydantic import BaseModel, Field
-
-
-class DarwinCoreExportReq(BaseModel):
-    """
-    Darwin Core format export request. @see https://dwc.tdwg.org/
-    """
-
-    # meta: EMLMeta = Field(title="EML meta for the produced archive")
-    project_ids: List[int] = Field(
-        title="Project Ids", description="The projects to export.", min_items=1
-    )
-
-
-class DarwinCoreExportRsp(BaseModel):
-    """
-    Darwin Core format export response.
-    """
-
-    errors: List[str] = Field(
-        title="Errors",
-        description="Showstopper problems found preventing building the archive.",
-        example=[
-            "No content produced.",
-            " See previous warnings or check the presence of samples in the projects",
-        ],
-        default=[],
-    )
-    warnings: List[str] = Field(
-        title="Warnings",
-        description="Problems found while building the archive, which do not prevent producing it.",
-        example=["No occurrence added for sample '3456' in 1"],
-        default=[],
-    )
-    job_id: int = Field(
-        title="Job Id",
-        description="The created job, 0 if there were problems.",
-        example=12376,
-        default=0,
-    )
 
 
 class ExportTypeEnum(str, Enum):
@@ -59,6 +22,15 @@ class ExportTypeEnum(str, Enum):
         "CNC"  # Concentration summary https://github.com/ecotaxa/ecotaxa/issues/616
     )
     biovols = "BIV"  # Biovolume summary https://github.com/ecotaxa/ecotaxa/issues/617
+
+
+class SciExportTypeEnum(str, Enum):
+    """Computed export quantities"""
+
+    # TODO: Identical to just above due to openapi.json generation. Find a workaround.
+    abundances = "ABO"
+    concentrations = "CNC"
+    biovols = "BIV"
 
 
 class SummaryExportGroupingEnum(str, Enum):
@@ -162,12 +134,159 @@ class ExportReq(BaseModel):
         example=False,
     )
 
+    # noinspection PyMethodParameters
+    @validator("pre_mapping")
+    def username_alphanumeric(cls, v):
+        assert set(v.keys()).isdisjoint(
+            set(v.values())
+        ), "inconsistent pre_mapping, can't do remap chains or loops"
+        return v
+
     class Config:
         schema_extra = {"title": "Export request Model"}
 
 
-# TODO: Should inherit the other way round.
-class ExportRsp(DarwinCoreExportRsp):
+class DarwinCoreExportReq(BaseModel):
     """
-    Export response.
+    Darwin Core format export request, only allowed format for a Collection. @see https://dwc.tdwg.org/
     """
+
+    # Input
+    collection_id: int = Field(
+        title="Collection Id",
+        description="The collection to export, by its internal Id.",
+        example=1,
+    )
+    # Transform
+    dry_run: bool = Field(
+        title="Dry run",
+        description="If set, then only a diagnostic of doability will be done.",
+        example=False,
+        default=False,
+    )
+
+    include_predicted: bool = Field(
+        title="Include predicted",
+        description="If set, then predicted objects, as well as validated ones, will be exported. "
+        "A validation status will allow to distinguish between the two possible statuses.",
+        example=False,
+        default=False,
+    )
+    # Output
+    with_absent: bool = Field(
+        title="With absent",
+        description="If set, then *absent* records will be generated, in the relevant samples, "
+        "for categories present in other samples.",
+        example=False,
+        default=False,
+    )
+    with_computations: List[SciExportTypeEnum] = Field(
+        title="With computations",
+        description="Compute organisms abundances (ABO), concentrations (CNC) or biovolumes (BIV). Several possible.",
+        example=["ABO"],
+        default=[],
+    )
+    # TODO: Is same as TaxonomyRecast below, should get type TaxoRemappingT (or define it here)
+    computations_pre_mapping: Dict[int, int] = Field(
+        title="Computation mapping",
+        description="Mapping from present taxon (key) to output replacement one (value), during computations."
+        " Use a 0 replacement to _discard_ the objects with present taxon."
+        " Note: These are EcoTaxa categories, WoRMS mapping happens after, whatever.",
+        example={456: 956, 2456: 213, 93672: 0},
+        default={},
+    )
+    formulae: Dict[str, str] = Field(
+        title="Computation formulas",
+        description="Transitory: How to get values from DB free columns. "
+        "Python syntax, prefixes are 'sam', 'ssm' and 'obj'. "
+        "Variables used in computations are 'total_water_volume', 'subsample_coef' and 'individual_volume'",
+        example={
+            "subsample_coef": "1/ssm.sub_part",
+            "total_water_volume": "sam.tot_vol/1000",
+            "individual_volume": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3",
+        },
+        default={},
+    )
+    extra_xml: List[str] = Field(
+        title="Extra XML",
+        description="XML blocks which will be output, reformatted, inside the <dataset> tag of produced EML. "
+        "Formal schema is in dataset section of: https://eml.ecoinformatics.org/schema/eml_xsd ",
+        example={
+            """<associatedParty>
+    <individualName><givenName>Coco</givenName><surName>Rico</surName>
+    </individualName>
+    <organizationName>CHICK</organizationName>
+      </associatedParty>""",
+        },
+        default=[],
+    )
+
+    # noinspection PyMethodParameters
+    @validator("computations_pre_mapping")
+    def username_alphanumeric(cls, v):
+        vals_but_0 = set(v.values()).difference({0})
+        assert set(v.keys()).isdisjoint(
+            vals_but_0
+        ), "inconsistent pre_mapping, can't do remap chains or loops: common part is %s" % set(
+            v.keys()
+        ).intersection(
+            set(v.values())
+        )
+        return v
+
+    class Config:
+        extra = Extra.forbid
+
+
+class ExportRsp(BaseModel):
+    """
+    Export response, for all export jobs, either on Project or Collection
+    """
+
+    errors: List[str] = Field(
+        title="Errors",
+        description="Showstopper problems found preventing building the archive.",
+        example=[
+            "No content produced.",
+            " See previous warnings or check the presence of samples in the projects",
+        ],
+        default=[],
+    )
+    warnings: List[str] = Field(
+        title="Warnings",
+        description="Problems found while building the archive, which do not prevent producing it.",
+        example=["No occurrence added for sample '3456' in 1"],
+        default=[],
+    )
+    job_id: int = Field(
+        title="Job Id",
+        description="The created job, 0 if there were problems.",
+        example=12376,
+        default=0,
+    )
+
+
+class TaxonomyRecast(BaseModel):
+    """
+    In various contexts, a taxo recast (from taxon -> to taxon) setting.
+    """
+
+    from_to: Dict[int, Optional[int]] = Field(
+        title="Categories mapping",
+        description="Mapping from seen taxon (key) to output replacement one (value)."
+        " Use a null replacement to _discard_ the present taxon. Note: keys are strings.",
+        example={"456": 956, "2456": 213, "9134": None},
+    )
+
+    doc: Optional[Dict[int, str]] = Field(
+        title="Mapping documentation",
+        description="To keep memory of the reasons for the above mapping. Note: keys are strings.",
+        example={
+            "456": "Up to species",
+            "2456": "Up to nearest non-morpho",
+            "9134": "Detritus",
+        },
+    )
+
+    class Config:
+        extra = Extra.forbid

@@ -31,6 +31,7 @@ from sqlalchemy.sql import Alias
 from API_models.filters import ProjectFiltersDict
 from BO.Classification import HistoricalLastClassif, ClassifIDListT, ClassifIDT, ClassifScoresListT
 from BO.ColumnUpdate import ColUpdateList
+from BO.Mappings import ProjectMapping, TableMapping
 from BO.Object import ObjectIDWithParentsT
 from BO.Taxonomy import TaxonomyBO
 from BO.User import UserIDT
@@ -84,15 +85,16 @@ class DescribedObjectSet(object):
     def __init__(
         self,
         session: Session,
-        prj_id: int,
+        prj: Project,
         user_id: Optional[UserIDT],
         filters: ProjectFiltersDict,
     ):
         """
         :param user_id: The 'current' user, in case the filter refers to him/her.
         """
-        self.prj_id = prj_id
+        self.prj = prj
         self.user_id = user_id
+        self.mapping = ProjectMapping().load_from_project(prj)
         self.filters = ObjectSetFilter(session, filters)
 
     def get_sql(
@@ -103,6 +105,7 @@ class DescribedObjectSet(object):
     ) -> Tuple[FromClause, WhereClause, SQLParamDict]:
         """
         Construct SQL parts for getting the IDs of objects.
+        :param order_clause: The required order by clause.
         :param select_list: Used for hinting the builder that some specific table will be needed in join.
                 major tables obj_head, samples and acquisitions are always joined.
         :param all_images: If not set (default), only return the lowest rank, i.e. visible, image
@@ -112,9 +115,11 @@ class DescribedObjectSet(object):
             order_clause = OrderClause()
         # The filters on objects
         obj_where = WhereClause()
-        params: SQLParamDict = {"projid": self.prj_id}
-        self.filters.get_sql_filter(obj_where, params, self.user_id)
-        selected_tables = FromClause("obj_head obh")
+        params: SQLParamDict = {"projid": self.prj.projid}
+        self.filters.get_sql_filter(
+            obj_where, params, self.user_id, self.mapping.object_mappings
+        )
+        selected_tables = FromClause("%s obh" % ObjectHeader.__tablename__)
         selected_tables += "acquisitions acq ON acq.acquisid = obh.acquisid"
         selected_tables += (
             "samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :projid"
@@ -127,7 +132,17 @@ class DescribedObjectSet(object):
         if "prc." in column_referencing_sql:
             selected_tables += "process prc ON prc.processid = acq.acquisid"
         if "obf." in column_referencing_sql:
-            selected_tables += "obj_field obf ON obf.objfid = obh.objid"
+            selected_tables += (
+                ObjectFields.__tablename__ + " obf ON obf.objfid = obh.objid"
+            )  # TODO: Drop when unused in mapping
+        if "ohu." in column_referencing_sql:  # Inline query for annotators in history
+            selected_tables += (
+                "(select 1 as in_annots WHERE EXISTS (select * from "
+                + ObjectsClassifHisto.__tablename__
+                + " och WHERE och.objid = obh.objid AND och.classif_who = ANY (:filt_annot) ) ) ohu ON True"
+            )
+            selected_tables.set_outer("(select 1 as in_annots ")
+            selected_tables.set_lateral("(select 1 as in_annots ")
         if "txo." in column_referencing_sql or "txp." in column_referencing_sql:
             selected_tables += "taxonomy txo ON txo.id = obh.classif_id"
             if self.filters.status_filter not in MEANS_CLASSIF_ID_EXIST:
@@ -139,7 +154,7 @@ class DescribedObjectSet(object):
                 if not all_images
                 else ""
             )
-            selected_tables.set_outer("images img ")
+            #  selected_tables.set_outer("images img ")
         if "usr." in column_referencing_sql:
             selected_tables += "users usr ON obh.classif_who = usr.id"
             selected_tables.set_outer("users usr ")
@@ -148,18 +163,13 @@ class DescribedObjectSet(object):
             selected_tables.set_outer("taxonomy txp ")
         return selected_tables, obj_where, params
 
-    def getProject(self) -> Project:
-        ret = self.filters.session.query(Project).get(self.prj_id)
-        assert ret is not None
-        return ret
-
     def without_filtering_taxo(self):
         """
         Return a clone of self, but without any Taxonomy related filter.
         """
         filters_but_taxo = self.filters.filters_without_taxo()
         return DescribedObjectSet(
-            self.filters.session, self.prj_id, self.user_id, filters_but_taxo
+            self.filters.session, self.prj, self.user_id, filters_but_taxo
         )
 
 
@@ -412,7 +422,7 @@ class EnumeratedObjectSet(MappedTable):
         )
 
     def add_filter(self, upd: Query) -> Query:
-        if "obj_head." in str(upd):
+        if ObjectHeader.__tablename__ + "." in str(upd):
             ret = upd.filter(ObjectHeader.objid == any_(self.object_ids))
         else:
             ret = upd.filter(ObjectFields.objfid == any_(self.object_ids))
@@ -935,11 +945,12 @@ class ObjectSetFilter(object):
         where_clause: WhereClause,
         params: SQLParamDict,
         user_id: Optional[UserIDT],
+        mapping: TableMapping,
     ) -> None:
         """
             The generated SQL assumes that, in the query:
                 'obh' is the alias for object_head aka ObjectHeader
-                'obf' the alias for ObjectFields
+                'obf' the alias for ObjectFields, if relevant to mapping system
                 'acq' is the alias for Acquisition
                 'sam' is the alias for Sample
         :param user_id: For filtering validators.
@@ -1061,7 +1072,7 @@ class ObjectSetFilter(object):
 
         if self.free_num and (
             self.free_num_start or self.free_num_end
-        ):  # e.g. "on02" and 5
+        ):  # e.g. "on02" for object numeric Column #2 (1-based)
             if self.free_num_start:
                 comp_op = " >= "
                 bound = self.free_num_start
@@ -1071,7 +1082,9 @@ class ObjectSetFilter(object):
                 bound = self.free_num_end
             try:
                 criteria_col = "n%02d" % int(self.free_num[2:])
-                where_clause *= "obf." + criteria_col + comp_op + ":freenumbnd"
+                is_split, real_col = mapping.phy_lookup(criteria_col)
+                col_ref = ("obf" if is_split else "obh") + "." + real_col
+                where_clause *= col_ref + comp_op + ":freenumbnd"
             except ValueError:
                 criteria_col = self.TO_COL.get(self.free_num[1:], "?")
                 where_clause *= "obh." + criteria_col + comp_op + ":freenumbnd"
@@ -1081,7 +1094,9 @@ class ObjectSetFilter(object):
             criteria_tbl = self.free_text[0]
             criteria_col = "t%02d" % int(self.free_text[2:])
             if criteria_tbl == "o":
-                where_clause *= "obf." + criteria_col + " ILIKE :freetxtval"
+                is_split, real_col = mapping.phy_lookup(criteria_col)
+                col_ref = ("obf" if is_split else "obh") + "." + real_col
+                where_clause *= col_ref + " ILIKE :freetxtval"
             elif criteria_tbl == "a":
                 where_clause *= "acq." + criteria_col + " ILIKE :freetxtval"
             elif criteria_tbl == "s":
@@ -1098,13 +1113,7 @@ class ObjectSetFilter(object):
 
         if self.annotators:
             where_clause *= (
-                "(obh.classif_who = ANY (:filt_annot) "
-                " OR exists (SELECT och.classif_who "
-                "              FROM "
-                + ObjectsClassifHisto.__tablename__
-                + " och "
-                + "             WHERE och.objid = obh.objid "
-                "               AND och.classif_who = ANY (:filt_annot) ) )"
+                "(obh.classif_who = ANY (:filt_annot) OR ohu.in_annots IS NOT NULL)"
             )
             params["filt_annot"] = [int(x) for x in self.annotators.split(",")]
         elif self.last_annotators:

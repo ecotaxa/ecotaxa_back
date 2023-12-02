@@ -56,7 +56,7 @@ class PredictionReq(BaseModel):
             "example": {
                 "project_id": [3426],
                 "source_project_ids": [1040, 1820],
-                "features": ["area", "esd"],
+                "features": ["fre.area", "fre.esd", "obj.depth_max"],
                 "use_scn": True,
             },
         }

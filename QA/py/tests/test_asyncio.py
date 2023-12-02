@@ -6,21 +6,21 @@ from helpers.Asyncio import *
 LOG_FILE = "tst_log.log"
 
 
-async def feed_log(nb_lines: int):
-    fno = open(LOG_FILE, "w")
+async def feed_log(tstlogs, nb_lines: int):
+    fno = open(tstlogs / LOG_FILE, "w")
     for ln in range(nb_lines):
         print("line %d" % ln, file=fno)
         await async_sleep(0.001)
 
 
 @pytest.mark.asyncio
-async def test_asyncio():
+async def test_asyncio(tstlogs):
     try:
-        unlink(LOG_FILE)
+        unlink(tstlogs / LOG_FILE)
     except FileNotFoundError:
         pass
-    tsk = async_bg_run(feed_log(1000))
-    strmer = log_streamer(LOG_FILE, "line 999")
+    tsk = async_bg_run(feed_log(tstlogs, 1000))
+    strmer = log_streamer(tstlogs / LOG_FILE, "line 999")
     out = []
     while True:
         try:

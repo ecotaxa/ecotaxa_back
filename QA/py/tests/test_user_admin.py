@@ -1,6 +1,8 @@
 import logging
+from helpers.httpexception import DETAIL_EMAIL_OWNED_BY_OTHER
 
 from tests.credentials import ADMIN_AUTH, USER_AUTH, ORDINARY_USER_USER_ID
+
 
 # noinspection PyPackageRequirements
 
@@ -12,7 +14,7 @@ USER_CREATE_URL = "/users/create"
 USER_GET_URL = "/users/{user_id}"
 
 
-def test_user_update(config, database, fastapi, caplog):
+def test_user_update(fastapi, caplog):
     caplog.set_level(logging.FATAL)
 
     url = USER_GET_URL.format(user_id=ORDINARY_USER_USER_ID)
@@ -42,7 +44,7 @@ def test_user_update(config, database, fastapi, caplog):
     # assert actual == expected
 
 
-def test_user_create(config, database, fastapi, caplog):
+def test_user_create(fastapi, caplog):
     caplog.set_level(logging.FATAL)
 
     # Create as an admin
@@ -50,7 +52,7 @@ def test_user_create(config, database, fastapi, caplog):
     usr_json = {"email": "user", "id": None, "name": "Ordinary User"}
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=usr_json)
     assert rsp.status_code == 422
-    assert rsp.json() == {"detail": ["email already corresponds to another user"]}
+    assert rsp.json() == {"detail": [DETAIL_EMAIL_OWNED_BY_OTHER]}
     url = USER_CREATE_URL
     usr_json = {
         "id": None,
@@ -58,5 +60,5 @@ def test_user_create(config, database, fastapi, caplog):
         "name": "Application Administrator Now Retired",
     }
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=usr_json)
-    assert rsp.status_code == 422
-    assert rsp.json() == {"detail": ["name already corresponds to another user"]}
+    assert rsp.status_code == 200
+    assert rsp.json() == None

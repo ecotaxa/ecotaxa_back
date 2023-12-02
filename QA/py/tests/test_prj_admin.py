@@ -15,15 +15,15 @@ PROJECT_FREE_COLS_STATS_URL = "/projects/{project_id}/stats"
 PROJECT_RECOMPUTE = "/projects/{project_id}/recompute_sunpos"
 
 
-def test_project_stats(config, database, fastapi, caplog):
+def test_project_stats(database, fastapi, caplog):
     caplog.set_level(logging.FATAL)
 
     # Admin imports the project
     from tests.test_import import test_import, test_import_a_bit_more_skipping
 
-    prj_id = test_import(config, database, caplog, "Stats test project")
+    prj_id = test_import(database, caplog, "Stats test project")
     # Add a sample spanning 2 days
-    test_import_a_bit_more_skipping(config, database, caplog, "Stats test project")
+    test_import_a_bit_more_skipping(database, caplog, "Stats test project")
     # Taxa & classif statistics
     url = PROJECT_CLASSIF_STATS_URL.format(prj_ids=prj_id)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
@@ -73,15 +73,15 @@ def test_project_stats(config, database, fastapi, caplog):
     assert actual == expected
 
 
-def test_project_redo_sunpos(config, database, fastapi, caplog):
+def test_project_redo_sunpos(database, fastapi, caplog):
     caplog.set_level(logging.FATAL)
 
     # Admin imports the project
     from tests.test_import import test_import, test_import_a_bit_more_skipping
 
-    prj_id = test_import(config, database, caplog, "Sunpos test project")
+    prj_id = test_import(database, caplog, "Sunpos test project")
     # Add a sample spanning 2 days
-    test_import_a_bit_more_skipping(config, database, caplog, "Sunpos test project")
+    test_import_a_bit_more_skipping(database, caplog, "Sunpos test project")
     # Recompure sunpos, should return 0 as all was freshly loaded
     url = PROJECT_RECOMPUTE.format(project_id=prj_id)
     rsp = fastapi.post(url, headers=ADMIN_AUTH)

@@ -8,7 +8,7 @@ from typing import List, Optional, Any
 
 from API_models.crud import ProjectSummaryModel
 from API_models.helpers.DBtoModel import OrmConfig, combine_models
-from DB import Taxonomy
+from DB.Taxonomy import Taxonomy
 from helpers.pydantic import BaseModel, Field
 
 

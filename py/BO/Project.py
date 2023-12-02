@@ -31,7 +31,6 @@ from BO.User import (
     MinimalUserBOListT,
     UserActivityListT,
 )
-from DB import ProjectVariables
 from DB.Acquisition import Acquisition
 from DB.Object import (
     VALIDATED_CLASSIF_QUAL,
@@ -45,8 +44,9 @@ from DB.Process import Process
 from DB.Project import ProjectIDT, ProjectIDListT, Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.ProjectVariables import KNOWN_PROJECT_VARS
+from DB.ProjectVariables import ProjectVariables
 from DB.Sample import Sample
-from DB.User import Role, User
+from DB.User import Role, User, UserStatus
 from DB.helpers import Session, Result
 from DB.helpers.Bean import Bean
 from DB.helpers.Core import select
@@ -177,7 +177,7 @@ class ProjectBO(object):
             priv_user = a_priv.user
             if priv_user is None:  # TODO: There is a line with NULL somewhere in DB
                 continue
-            if not priv_user.active:
+            if priv_user.status != UserStatus.active.value:
                 continue
             assert a_priv.privilege is not None
             by_right_fct[a_priv.privilege](priv_user)
@@ -335,21 +335,22 @@ class ProjectBO(object):
             """
         DELETE FROM projects_taxo_stat pts
          WHERE pts.projid = :prjid;
-        INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
-        SELECT sam.projid, COALESCE(obh.classif_id, -1) id, COUNT(*) nbr, 
+        INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p)
+        SELECT sam.projid, COALESCE(obh.classif_id, -1) id, COUNT(*) nbr,
                COUNT(CASE WHEN obh.classif_qual = '"""
             + VALIDATED_CLASSIF_QUAL
             + """' THEN 1 END) nbr_v,
                COUNT(CASE WHEN obh.classif_qual = '"""
             + DUBIOUS_CLASSIF_QUAL
-            + """' THEN 1 END) nbr_d, 
+            + """' THEN 1 END) nbr_d,
                COUNT(CASE WHEN obh.classif_qual = '"""
             + PREDICTED_CLASSIF_QUAL
             + """' THEN 1 END) nbr_p
-          FROM obj_head obh
-          JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
-          JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prjid 
+          FROM %s obh
+          JOIN acquisitions acq ON acq.acquisid = obh.acquisid
+          JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prjid
         GROUP BY sam.projid, obh.classif_id;"""
+            % ObjectHeader.__tablename__
         )
         session.execute(sql, {"prjid": projid})
 
@@ -358,8 +359,8 @@ class ProjectBO(object):
         sql = text(
             """
         UPDATE projects
-           SET objcount=tsp.nbr_sum, 
-               pctclassified=100.0*nbrclassified/tsp.nbr_sum, 
+           SET objcount=tsp.nbr_sum,
+               pctclassified=100.0*nbrclassified/tsp.nbr_sum,
                pctvalidated=100.0*nbrvalidated/tsp.nbr_sum
           FROM projects prj
           LEFT JOIN
@@ -367,7 +368,7 @@ class ProjectBO(object):
                 FROM projects_taxo_stat
                WHERE projid = :prjid
               GROUP BY projid) tsp ON prj.projid = tsp.projid
-        WHERE projects.projid = :prjid 
+        WHERE projects.projid = :prjid
           AND prj.projid = :prjid"""
         )
         session.execute(sql, {"prjid": projid})
@@ -377,8 +378,8 @@ class ProjectBO(object):
         session: Session, prj_ids: ProjectIDListT, taxa_ids: Union[str, ClassifIDListT]
     ) -> List[ProjectTaxoStats]:
         sql = """
-        SELECT pts.projid, ARRAY_AGG(pts.id) as used_taxa, 
-               SUM(CASE WHEN pts.id = -1 THEN pts.nbr ELSE 0 END) as nb_unclassified, 
+        SELECT pts.projid, ARRAY_AGG(pts.id) as used_taxa,
+               SUM(CASE WHEN pts.id = -1 THEN pts.nbr ELSE 0 END) as nb_unclassified,
                SUM(pts.nbr_v) as nb_validated, SUM(pts.nbr_d) as nb_dubious, SUM(pts.nbr_p) as nb_predicted
           FROM projects_taxo_stat pts
          WHERE pts.projid = ANY(:ids)"""
@@ -564,7 +565,7 @@ class ProjectBO(object):
                        FROM projects prj
                        LEFT JOIN ( """
             + ProjectPrivilegeBO.first_manager_by_project()
-            + """ ) fpm 
+            + """ ) fpm
                       ON fpm.projid = prj.projid """
         )
         if not_granted:
@@ -572,7 +573,7 @@ class ProjectBO(object):
                 # Add the projects for which no entry is found in ProjectPrivilege
                 sql += """
                        LEFT JOIN projectspriv prp ON prj.projid = prp.projid AND prp.member = :user_id
-                      WHERE prp.member is null 
+                      WHERE prp.member is null
                         AND prj.visible """
                 if for_managing:
                     # No right so no possibility to manage
@@ -584,8 +585,8 @@ class ProjectBO(object):
             if not user.has_role(Role.APP_ADMINISTRATOR):
                 # Not an admin, so restrict to projects which current user can work on, or view
                 sql += """
-                        JOIN projectspriv prp 
-                          ON prj.projid = prp.projid 
+                        JOIN projectspriv prp
+                          ON prj.projid = prp.projid
                          AND prp.member = :user_id """
                 if for_managing:
                     sql += (
@@ -596,7 +597,7 @@ class ProjectBO(object):
             sql += " WHERE 1 = 1 "
 
         if title_filter != "":
-            sql += """ 
+            sql += """
                     AND ( prj.title ILIKE '%%'|| :title ||'%%'
                           OR TO_CHAR(prj.projid,'999999') LIKE '%%'|| :title ) """
             sql_params["title"] = title_filter
@@ -784,12 +785,13 @@ class ProjectBO(object):
         sql = text(
             """
     SELECT obh.objid, img.file_name
-      FROM obj_head obh
-      JOIN images img ON obh.objid = img.objid 
+      FROM %s obh
+      JOIN images img ON obh.objid = img.objid
                      AND img.imgrank = (SELECT MIN(img3.imgrank) FROM images img3 WHERE img3.objid = obh.objid)
-      JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
+      JOIN acquisitions acq ON acq.acquisid = obh.acquisid
       JOIN samples sam ON sam.sampleid = acq.acq_sample_id
      WHERE sam.projid = :prj"""
+            % ObjectHeader.__tablename__
         )
         res: Result = session.execute(sql, {"prj": prj_id})
         return {objid: file_name for (objid, file_name) in res.fetchall()}
@@ -813,7 +815,7 @@ class ProjectBO(object):
         session.execute(text(pts_sql), {"ids": needed_ids})
         # Lock the rows we are going to update, including -1 for unclassified
         pts_sql = """SELECT id, nbr
-                       FROM projects_taxo_stat 
+                       FROM projects_taxo_stat
                       WHERE projid = :prj
                         AND id = ANY(:ids)
                      FOR NO KEY UPDATE"""
@@ -824,8 +826,8 @@ class ProjectBO(object):
             # Insert rows for missing IDs
             # TODO: We can't lock what does not exists, so it can fail here.
             pts_ins = (
-                """INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p) 
-                                 SELECT :prj, COALESCE(obh.classif_id, -1), COUNT(*) nbr, 
+                """INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p)
+                                 SELECT :prj, COALESCE(obh.classif_id, -1), COUNT(*) nbr,
                                         COUNT(CASE WHEN obh.classif_qual = '"""
                 + VALIDATED_CLASSIF_QUAL
                 + """' THEN 1 END) nbr_v,
@@ -835,11 +837,12 @@ class ProjectBO(object):
                                 COUNT(CASE WHEN obh.classif_qual = '"""
                 + PREDICTED_CLASSIF_QUAL
                 + """' THEN 1 END) nbr_p
-                           FROM obj_head obh
-                           JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
-                           JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prj 
+                           FROM %s obh
+                           JOIN acquisitions acq ON acq.acquisid = obh.acquisid
+                           JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prj
                           WHERE COALESCE(obh.classif_id, -1) = ANY(:ids)
                        GROUP BY obh.classif_id"""
+                % ObjectHeader.__tablename__
             )
             session.execute(text(pts_ins), {"prj": prj_id, "ids": list(ids_not_in_db)})
         # Apply delta
@@ -850,7 +853,7 @@ class ProjectBO(object):
             if ids_in_db[classif_id] + chg["n"] == 0:
                 # The delta means 0 for this taxon in this project, delete the line
                 sqlparam = {"prj": prj_id, "cid": classif_id}
-                ts_sql = """DELETE FROM projects_taxo_stat 
+                ts_sql = """DELETE FROM projects_taxo_stat
                              WHERE projid = :prj AND id = :cid"""
             else:
                 # General case
@@ -862,8 +865,8 @@ class ProjectBO(object):
                     "dub": chg[DUBIOUS_CLASSIF_QUAL],
                     "prd": chg[PREDICTED_CLASSIF_QUAL],
                 }
-                ts_sql = """UPDATE projects_taxo_stat 
-                               SET nbr=nbr+:nul, nbr_v=nbr_v+:val, nbr_d=nbr_d+:dub, nbr_p=nbr_p+:prd 
+                ts_sql = """UPDATE projects_taxo_stat
+                               SET nbr=nbr+:nul, nbr_v=nbr_v+:val, nbr_d=nbr_d+:dub, nbr_p=nbr_p+:prd
                              WHERE projid = :prj AND id = :cid"""
             session.execute(text(ts_sql), sqlparam)
 

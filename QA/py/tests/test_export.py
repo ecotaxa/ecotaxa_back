@@ -9,11 +9,11 @@ from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID
 from tests.export_shared import download_and_unzip_and_check, download_and_check
 from tests.test_fastapi import PROJECT_QUERY_URL
 from tests.test_import import create_project, do_import, DATA_DIR, dump_project
-from tests.test_jobs import (
-    get_job_and_wait_until_ok,
+from tests.jobs import (
+    JOB_QUERY_URL,
     wait_for_stable,
     api_check_job_ok,
-    JOB_QUERY_URL,
+    get_job_and_wait_until_ok,
 )
 
 OBJECT_SET_EXPORT_URL = "/object_set/export"
@@ -32,15 +32,15 @@ _req_tmpl = {
 }
 
 
-def test_export_tsv(config, database, fastapi, caplog):
+def test_export_tsv(database, fastapi, caplog):
     caplog.set_level(logging.FATAL)
 
     # Admin imports the project
     from tests.test_import import test_import, test_import_a_bit_more_skipping
 
-    prj_id = test_import(config, database, caplog, "TSV export project")
+    prj_id = test_import(database, caplog, "TSV export project")
     # Add a sample spanning 2 days
-    test_import_a_bit_more_skipping(config, database, caplog, "TSV export project")
+    test_import_a_bit_more_skipping(database, caplog, "TSV export project")
 
     # Get the project for update
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
@@ -128,7 +128,7 @@ def test_export_tsv(config, database, fastapi, caplog):
     download_and_check(fastapi, job_id, "summary_whole", only_hdr=True)
 
 
-def test_export_roundtrip(config, database, fastapi, caplog):
+def test_export_roundtrip(database, fastapi, caplog, tstlogs):
     """roundtrip export/import/compare"""
     caplog.set_level(logging.FATAL)
 
@@ -136,7 +136,7 @@ def test_export_roundtrip(config, database, fastapi, caplog):
     from tests.test_import import test_import_uvp6
 
     prj_id = test_import_uvp6(
-        config, database, caplog, "TSV UVP6 roundtrip export source project"
+        database, caplog, "TSV UVP6 roundtrip export source project"
     )
 
     # Get the project for update
@@ -183,7 +183,7 @@ def test_export_roundtrip(config, database, fastapi, caplog):
     )
 
     # TODO: Automate diff
-    with open("exp_source.json", "w") as fd:
+    with open(tstlogs / "exp_source.json", "w") as fd:
         dump_project(ADMIN_USER_ID, prj_id, fd)
-    with open("exp_clone.json", "w") as fd:
+    with open(tstlogs / "exp_clone.json", "w") as fd:
         dump_project(ADMIN_USER_ID, clone_prj_id, fd)

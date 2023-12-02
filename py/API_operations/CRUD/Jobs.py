@@ -9,7 +9,7 @@ from typing import Tuple, List, Any, Dict, TextIO, BinaryIO
 
 from BG_operations.JobScheduler import JobScheduler
 from BO.Job import JobBO
-from BO.Rights import NOT_FOUND, NOT_AUTHORIZED
+from BO.Rights import RightsBO, NOT_FOUND, NOT_AUTHORIZED
 from BO.User import UserIDT
 from DB.Job import JobIDT, DBJobStateEnum, Job
 from DB.User import User, Role
@@ -29,8 +29,9 @@ class JobCRUDService(Service):
         List jobs, if administrator mode then list all of them (for monitoring) else only return the jobs
         owned by caller.
         """
-        current_user = self.ro_session.query(User).get(current_user_id)
-        assert current_user is not None
+        # current_user = self.ro_session.query(User).get(current_user_id)
+        current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
+        # assert current_user is not None
         assert not admin_mode or (
             admin_mode and current_user.has_role(Role.APP_ADMINISTRATOR)
         ), NOT_AUTHORIZED
@@ -47,8 +48,9 @@ class JobCRUDService(Service):
         # Sanity & security checks
         job = self.ro_session.query(Job).get(job_id)
         assert job is not None, NOT_FOUND
-        current_user = self.ro_session.query(User).get(current_user_id)
-        assert current_user is not None
+        # current_user = self.ro_session.query(User).get(current_user_id)
+        current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
+        # assert current_user is not None
         assert (job.owner_id == current_user_id) or (
             current_user.has_role(Role.APP_ADMINISTRATOR)
         ), NOT_AUTHORIZED
@@ -63,8 +65,9 @@ class JobCRUDService(Service):
             job = JobBO.get_for_update(self.session, job_id)
         except ValueError:
             assert False, NOT_FOUND
-        current_user = self.ro_session.query(User).get(current_user_id)
-        assert current_user is not None
+        # current_user = self.ro_session.query(User).get(current_user_id)
+        current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
+        # assert current_user is not None
         assert (job.owner_id == current_user_id) or (
             current_user.has_role(Role.APP_ADMINISTRATOR)
         ), NOT_AUTHORIZED
@@ -151,6 +154,6 @@ class JobCRUDService(Service):
                 job_bo.delete()
             elif job_bo.state == DBJobStateEnum.Running:
                 # Set the job to Killed
-                # TODO: No _real_ kill just presentation
+                # TODO: It's not a _real_ kill, bg thread keeps running. It's just presentation
                 job_bo.state = DBJobStateEnum.Error
                 job_bo.progress_msg = JobBO.KILLED_MESSAGE

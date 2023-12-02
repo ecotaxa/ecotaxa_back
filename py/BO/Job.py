@@ -10,8 +10,8 @@ from json import loads as json_loads, dumps as json_dumps, JSONDecodeError
 from typing import Dict, Optional, Any, List, Final
 
 from BO.User import UserIDT
-from DB import Job, Session
-from DB.Job import JobIDT, DBJobStateEnum
+from DB import Session
+from DB.Job import Job, JobIDT, DBJobStateEnum
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -132,11 +132,9 @@ class JobBO(object):
         self._session = None
 
     @classmethod
-    def create_job(
-        cls, session: Session, user_id: UserIDT, job_type: str, args: Dict
-    ) -> Job:
+    def create_job(cls, user_id: UserIDT, job_type: str, args: Dict) -> Job:
         """
-        Add a job, as pending, into the DB. The job does not start until a scheduler takes it.
+        Create a job, as pending, to add into the DB. The job will not start until a scheduler takes it.
         """
         job = Job()
         job.state = DBJobStateEnum.Pending
@@ -147,6 +145,4 @@ class JobBO(object):
         job.params = json_dumps(args)
         job.inside = job.reply = json_dumps({})
         job.messages = json_dumps([])
-        session.add(job)
-        session.commit()
         return job

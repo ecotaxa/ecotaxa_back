@@ -11,7 +11,7 @@ from .helpers.Direct import text
 from .helpers.ORM import Model, relationship, Session
 from .helpers.Postgres import VARCHAR, DOUBLE_PRECISION, INTEGER
 
-SAMPLE_FREE_COLUMNS = 31
+SAMPLE_FREE_COLUMNS = 61
 
 
 class Sample(Model):
@@ -38,11 +38,12 @@ class Sample(Model):
     ) -> Dict[str, "Sample"]:
         """
         Read in memory all Samples for given project and return them indexed by their user-visible
-        unique key, AKA orig_id.
+        unique key, AKA orig_id, in order.
         """
         res = session.query(Sample)
         res = res.join(Project)
         res = res.filter(Project.projid == prj_id)
+        res = res.order_by(Sample.orig_id)
         ret = {r.orig_id: r for r in res}
         return ret
 
@@ -54,17 +55,17 @@ class Sample(Model):
         """
         sql = text(
             """
-        UPDATE samples usam 
+        UPDATE samples usam
            SET latitude = sll.latitude, longitude = sll.longitude
           FROM (SELECT sam.sampleid, MIN(obh.latitude) latitude, MIN(obh.longitude) longitude
                   FROM obj_head obh
-                  JOIN acquisitions acq on acq.acquisid = obh.acquisid 
-                  JOIN samples sam on sam.sampleid = acq.acq_sample_id 
-                 WHERE sam.projid = :projid 
-                   AND obh.latitude IS NOT NULL 
+                  JOIN acquisitions acq on acq.acquisid = obh.acquisid
+                  JOIN samples sam on sam.sampleid = acq.acq_sample_id
+                 WHERE sam.projid = :projid
+                   AND obh.latitude IS NOT NULL
                    AND obh.longitude IS NOT NULL
-              GROUP BY sam.sampleid) sll               
-         WHERE usam.sampleid = sll.sampleid 
+              GROUP BY sam.sampleid) sll
+         WHERE usam.sampleid = sll.sampleid
            AND projid = :projid """
         )
         session.execute(sql, {"projid": prj_id})
@@ -75,9 +76,9 @@ class Sample(Model):
         sql = text(
             """
             SELECT MIN(obh.objdate+obh.objtime), MAX(obh.objdate+obh.objtime), MIN(obh.depth_min), MAX(obh.depth_max)
-              FROM obj_head obh 
-              JOIN acquisitions acq on acq.acquisid = obh.acquisid 
-              JOIN samples sam on sam.sampleid = acq.acq_sample_id 
+              FROM obj_head obh
+              JOIN acquisitions acq on acq.acquisid = obh.acquisid
+              JOIN samples sam on sam.sampleid = acq.acq_sample_id
              WHERE sam.sampleid = :smp """
         )
         res: Result = session.execute(sql, {"smp": sample_id})

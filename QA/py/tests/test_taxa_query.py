@@ -9,12 +9,12 @@ TAXA_SET_QUERY_URL = "/taxon_set/query?ids={taxa_ids}"
 WORMS_TAXA_QUERY_URL = "/worms/{aphia_id}"
 
 
-def test_taxotree_query(config, database, fastapi, caplog):
+def test_taxotree_query(database, fastapi, caplog):
     """This depends on the DB which has a subset of the production one"""
     caplog.set_level(logging.ERROR)
     from tests.test_import import test_import
 
-    prj_id = test_import(config, database, caplog, "Test taxo search")
+    prj_id = test_import(database, caplog, "Test taxo search")
 
     url = TAXA_SEARCH_URL.format(project_id=prj_id, query="")
     # Unauthenticated call
@@ -50,12 +50,12 @@ def test_taxotree_query(config, database, fastapi, caplog):
     ]
 
 
-def test_taxo_query(config, database, fastapi, caplog):
+def test_taxo_query(database, fastapi, caplog):
     """This depends on the DB which has a subset of the production one"""
     caplog.set_level(logging.ERROR)
     from tests.test_import import test_import
 
-    prj_id = test_import(config, database, caplog, "Test taxo query")
+    prj_id = test_import(database, caplog, "Test taxo query")
 
     url = TAXA_QUERY_URL.format(taxon_id=849)
     # Unauthenticated call
@@ -80,7 +80,7 @@ def test_taxo_query(config, database, fastapi, caplog):
     }
 
 
-def test_worms_query(config, database, fastapi, caplog):
+def test_worms_query(fastapi, caplog):
     url = WORMS_TAXA_QUERY_URL.format(aphia_id=128586)
     # Unauthenticated call
     rsp = fastapi.get(url)

@@ -24,7 +24,7 @@ from starlette import status
 
 from tests.credentials import ADMIN_USER_ID, CREATOR_AUTH, CREATOR_USER_ID
 from tests.test_import import PLAIN_DIR, PLAIN_FILE, create_project, PLAIN_FILE_PATH
-from tests.test_jobs import wait_for_stable, api_wait_for_stable_job
+from tests.jobs import wait_for_stable, api_wait_for_stable_job, check_job_ok
 
 IMPORT_IMAGES_URL = "/simple_import/{project_id}?dry_run={dry_run}"
 UPLOAD_FILE_URL = "/my_files/"
@@ -32,7 +32,7 @@ UPLOAD_FILE_URL = "/my_files/"
 
 # @pytest.mark.skip()
 @pytest.mark.parametrize("title", ["Test Import Images"])
-def test_import_images_only(config, database, caplog, title):
+def test_import_images_only(database, caplog, title):
     """
     Simple import AKA image only import, with fixed values.
     """
@@ -59,6 +59,7 @@ def test_import_images_only(config, database, caplog, title):
     assert rsp.errors == []
     job_id = rsp.job_id
     job = wait_for_stable(job_id)
+    check_job_ok(job)
     assert job.result["nb_images"] == 8
     # Check that all went fine
     for a_msg in caplog.records:
@@ -81,7 +82,7 @@ def test_import_images_only(config, database, caplog, title):
 
 # @pytest.mark.skip()
 @pytest.mark.parametrize("title", ["Simple via fastapi"])
-def test_api_import_images(config, database, fastapi, caplog, title):
+def test_api_import_images(fastapi, caplog, title):
     """
     Simple import with no fixed values at all, but using the upload directory.
     """

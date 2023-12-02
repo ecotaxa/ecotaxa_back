@@ -18,7 +18,7 @@ from .helpers.Service import Service
 class AsciiDumper(Service):
     """
     A utility service for having a predictable and diff-able dump of the DB.
-    Reason: Postgres does not do "order by" on ascii dumps so it's a bit tricky to intepret
+    Reason: Postgres does not do "order by" on ascii dumps so it's a bit tricky to interpret
     differences.
     """
 
@@ -56,16 +56,16 @@ class AsciiDumper(Service):
             self.dump_table(
                 fd,
                 ObjectFields,
-                "objfid in (select objid from obj_head "
-                "where acquisid in (select acquisid from acquisitions "
+                "objfid in (select objid from %s " % ObjectHeader.__tablename__
+                + "where acquisid in (select acquisid from acquisitions "
                 "where acq_sample_id in (select sampleid "
                 "from samples sam where sam.projid=%d)))" % projid,
             )
             self.dump_table(
                 fd,
                 Image,
-                "objid in (select objid from obj_head "
-                "where acquisid in (select acquisid from acquisitions "
+                "objid in (select objid from %s " % ObjectHeader.__tablename__
+                + "where acquisid in (select acquisid from acquisitions "
                 "where acq_sample_id in (select sampleid "
                 "from samples sam where sam.projid=%d)))" % projid,
             )

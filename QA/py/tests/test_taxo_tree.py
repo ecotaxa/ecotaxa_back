@@ -10,7 +10,7 @@ from tests.credentials import USER_AUTH
 TREE_STATUS_URL = "/taxa/status"
 
 
-def test_taxotree_status(config, database, fastapi, caplog):
+def test_taxotree_status(fastapi, caplog):
     """This depends on the DB which has a subset of the production one"""
     caplog.set_level(logging.ERROR)
 

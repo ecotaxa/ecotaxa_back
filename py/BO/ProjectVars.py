@@ -13,7 +13,12 @@ from .Vocabulary import Vocabulary, Units
 
 # LS: I don't want to store this in DB layer...
 TYPES_PER_VAR = {
+    # Stored as the fraction denominator in zooprocess projects, and 'should be' a power of 2
+    # See e.g. https://aquaticbiotechnology.com/en/plankton-examination/plankton-sample-dividers
+    # Or search the Web for 'motoda'
+    # So, generally it's "1/sub_part"
     "subsample_coef": (Vocabulary.subsampling_coefficient, Units.dimensionless),
+    # Quite often "sam.tot_vol"
     "total_water_volume": (Vocabulary.volume_sampled, Units.cubic_metres),
     "individual_volume": (Vocabulary.volume_mm3, Units.cubic_millimetres),
 }

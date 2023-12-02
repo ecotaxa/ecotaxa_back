@@ -368,7 +368,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         """
         Candidate match until a better is found.
             We match Phylo types taxa on one side.
-                using name <-> scientificname, case insensitive
+                using name <-> scientificname, case-insensitive
             And a _single_ accepted taxon on the other.
         """
         subqry = TaxonomyChangeService.strict_match_subquery(

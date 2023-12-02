@@ -6,9 +6,11 @@
 import json
 from dataclasses import dataclass
 from typing import Any, Final, List
-
 from BO.Classification import ClassifIDListT
-from DB import User, UserPreferences, Session
+from DB import Session
+from DB.User import User, UserStatus
+from BO.Rights import RightsBO
+from DB.UserPreferences import UserPreferences
 from helpers.DynamicLogs import get_logger
 
 # Typings, to be clear that these are not e.g. object IDs
@@ -18,6 +20,11 @@ UserIDListT = List[int]
 logger = get_logger(__name__)
 
 MISSING_USER = {"id": -1, "name": "", "email": ""}
+
+USER_PWD_REGEXP = r"^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#?%^&*-+])).{8,20}$"
+USER_PWD_REGEXP_DESCRIPTION = "8 char. minimum, at least one uppercase, one lowercase, one number and one special char in '#?!@%^&*-' "
+SHORT_TOKEN_AGE = 1
+PROFILE_TOKEN_AGE = 24
 
 
 class UserBO(object):
@@ -32,8 +39,11 @@ class UserBO(object):
         """
         Get a preference, for given project and user. Keys are not standardized (for now).
         """
-        current_user = session.query(User).get(user_id)
-        assert current_user is not None
+        # current_user = session.query(User).get(user_id)
+        # assert (
+        #    current_user is not None and current_user.status == UserStatus.active.value
+        # )
+        current_user: User = RightsBO.get_user_throw(session, user_id)
         prefs_for_proj: UserPreferences = (
             current_user.preferences_for_projects.filter_by(
                 project_id=project_id
@@ -52,8 +62,11 @@ class UserBO(object):
         """
         Set preference for a key, for given project and user. The key disappears if set to empty string.
         """
-        current_user = session.query(User).get(user_id)
-        assert current_user is not None
+        # current_user = session.query(User).get(user_id)
+        # assert (
+        #    current_user is not None and current_user.status == UserStatus.active.value
+        # )
+        current_user: User = RightsBO.get_user_throw(session, user_id)
         prefs_for_proj: UserPreferences = (
             current_user.preferences_for_projects.filter_by(
                 project_id=project_id
@@ -126,7 +139,9 @@ class UserBO(object):
         )
 
     @classmethod
-    def validate_usr(cls, session: Session, user_model: Any) -> None:
+    def validate_usr(
+        cls, session: Session, user_model: Any, verify_password: bool = False
+    ) -> None:
         """
         Validate basic rules on a user model before setting it into DB.
         TODO: Not done in pydantic, as there are non-complying values in the DB and that would prevent reading them.
@@ -141,7 +156,25 @@ class UserBO(object):
             val = val.strip()
             if len(val) <= 3:
                 errors.append("%s is too short, 3 chars minimum" % field_name)
+        # can check is password is strong  if password not None
+        if verify_password == True:
+            from helpers.httpexception import DETAIL_PASSWORD_STRENGTH_ERROR
+            from API_operations.helpers import UserValidation
+
+            new_password = getattr(user_model, User.password.name)
+            if new_password not in ("", None) and not cls.is_strong_password(
+                new_password
+            ):
+                errors.append(DETAIL_PASSWORD_STRENGTH_ERROR)
+
         assert not errors, errors
+
+    @staticmethod
+    def is_strong_password(password: str) -> bool:
+        import re
+
+        match = re.match(USER_PWD_REGEXP, password)
+        return bool(match)
 
 
 @dataclass()

@@ -7,7 +7,7 @@ from typing import Optional, Tuple, List, Dict
 
 from DB.Project import Project
 from DB.ProjectPrivilege import ProjectPrivilege
-from DB.User import User, Role
+from DB.User import User, Role, UserStatus
 from DB.helpers.ORM import Session
 from .Preferences import Preferences
 from .ProjectPrivilege import ProjectPrivilegeBO
@@ -37,6 +37,29 @@ class RightsBO(object):
     """
 
     @staticmethod
+    def get_user_throw(session: Session, user_id: int) -> User:
+        """
+        query user by id and active status
+        """
+        user = session.query(User).get(user_id)
+        # not indicating not found -
+        assert (
+            user is not None and user.status == UserStatus.active.value
+        ), NOT_AUTHORIZED
+        return user
+
+    @staticmethod
+    def get_optional_user(session: Session, user_id: int) -> Optional[User]:
+        """
+        query optional user by id and active status
+        """
+        user = session.query(User).get(user_id)
+        if user is None or user.status != UserStatus.active.value:
+            return None
+        else:
+            return user
+
+    @staticmethod
     def user_wants(
         session: Session, user_id: int, action: Action, prj_id: int
     ) -> Tuple[User, Project]:
@@ -44,8 +67,9 @@ class RightsBO(object):
         Check rights for the user to do this specific action onto this project.
         """
         # Load ORM entities
-        user: Optional[User] = session.query(User).get(user_id)
-        assert user is not None
+        # user: Optional[User] = session.query(User).get(user_id)
+        user: User = RightsBO.get_user_throw(session, user_id)
+        # assert user is not None, NOT_AUTHORIZED
         project: Optional[Project] = session.query(Project).get(prj_id)
         assert project is not None, NOT_FOUND
         # Check
@@ -114,8 +138,9 @@ class RightsBO(object):
         Check rights for the user to do this specific action.
         """
         # Load ORM entity
-        user: Optional[User] = session.query(User).get(user_id)
-        assert user is not None, NOT_AUTHORIZED
+        # user: Optional[User] = session.query(User).get(user_id)
+        user: User = RightsBO.get_user_throw(session, user_id)
+        # assert user is not None, NOT_AUTHORIZED
         # Check
         assert Action.CREATE_PROJECT in RightsBO.get_allowed_actions(
             user
@@ -136,8 +161,7 @@ class RightsBO(object):
                 ]
             )
         else:
-            # Remove Project Creator - any user can create a project
-            # if user.has_role(Role.PROJECT_CREATOR):
+            # Any user can create a project
             ret.append(Action.CREATE_PROJECT)
             if user.has_role(Role.USERS_ADMINISTRATOR):
                 ret.append(Action.ADMINISTRATE_USERS)
@@ -157,8 +181,6 @@ class RightsBO(object):
             if an_action == Action.CREATE_TAXON:
                 pass
             elif an_action == Action.CREATE_PROJECT:
-                # Remove Project Creator Role - role not needed to action 'create project'
-                # roles.add(all_roles[Role.PROJECT_CREATOR])
                 pass
             elif an_action == Action.ADMINISTRATE_USERS:
                 roles.add(all_roles[Role.USERS_ADMINISTRATOR])
@@ -187,8 +209,9 @@ class RightsBO(object):
         Check user role. Should be temporary until a proper action is defined, e.g. refresh taxo tree.
         """
         # Load ORM entity
-        user = session.query(User).get(user_id)
-        assert user is not None, NOT_FOUND
+        # user = session.query(User).get(user_id)
+        user: User = RightsBO.get_user_throw(session, user_id)
+        # assert user is not None, NOT_FOUND
         # Check
         assert user.has_role(role), NOT_AUTHORIZED
         return user
@@ -200,8 +223,9 @@ class RightsBO(object):
         or on any project.
         """
         # Load ORM entity
-        user = session.query(User).get(user_id)
-        assert user is not None, NOT_FOUND
+        # user = session.query(User).get(user_id)
+        user: User = RightsBO.get_user_throw(session, user_id)
+        # assert user is not None, NOT_FOUND
         # Check
         assert Action.CREATE_TAXON in RightsBO.get_allowed_actions(user), NOT_AUTHORIZED
         return user

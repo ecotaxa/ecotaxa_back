@@ -11,8 +11,8 @@ from BO.Project import ProjectBO, ProjectBOSet, ProjectTaxoStats, ProjectUserSta
 from BO.ProjectSet import ProjectSetColumnStats, LimitedInCategoriesProjectSet
 from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
-from DB import Sample
 from DB.Project import Project, ANNOTATE_STATUS, ProjectIDT, ProjectIDListT
+from DB.Sample import Sample
 from DB.User import User
 from DB.helpers.ORM import clone_of
 from FS.VaultRemover import VaultRemover
@@ -67,15 +67,18 @@ class ProjectsService(Service):
         instrument_filter: str = "",
         filter_subset: bool = False,
     ) -> List[ProjectBO]:
-        current_user: Optional[User]
+        # current_user: Optional[User]
         if current_user_id is None:
             # For public
             matching_ids = ProjectBO.list_public_projects(self.ro_session, title_filter)
             projects = ProjectBOSet(self.session, matching_ids, public=True)
         else:
             # No rights checking as basically everyone can see all projects
-            current_user = self.ro_session.query(User).get(current_user_id)
-            assert current_user is not None
+            # current_user = self.ro_session.query(User).get(current_user_id)
+            current_user: User = RightsBO.get_user_throw(
+                self.ro_session, current_user_id
+            )
+            # assert current_user is not None
             matching_ids = ProjectBO.projects_for_user(
                 self.ro_session,
                 current_user,

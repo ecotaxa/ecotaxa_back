@@ -45,8 +45,10 @@ from API_models.crud import (
     ProjectUserStatsModel,
     ProjectSetColumnStatsModel,
     SampleTaxoStatsModel,
+    ResetPasswordReq,
+    UserActivateReq,
 )
-from API_models.exports import DarwinCoreExportRsp, ExportRsp, ExportReq
+from API_models.exports import ExportReq, ExportRsp, TaxonomyRecast, DarwinCoreExportReq
 from API_models.filesystem import DirectoryModel
 from API_models.filters import ProjectFilters
 from API_models.helpers.Introspect import plain_columns
@@ -119,8 +121,9 @@ from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleBO, SampleTaxoStats
 from BO.Taxonomy import TaxonBO
 from BO.User import UserIDT
-from DB import ProjectPrivilege, User
 from DB.Project import ProjectTaxoStat, Project
+from DB.ProjectPrivilege import ProjectPrivilege
+from DB.User import User
 from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import (
@@ -144,7 +147,7 @@ fastapi_logger.setLevel(INFO)
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.31",
+    version="0.0.35",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -289,7 +292,12 @@ def create_user(
         default=None,
         title="NoBot token",
         description="not-a-robot proof",
-        example="['127.0.0.1', 'ffqsdfsdf'",
+        example="['127.0.0.1', 'ffqsdfsdf']",
+    ),
+    token: Optional[str] = Query(
+        default=None,
+        title="Token",
+        description="token in the url to validate request",
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> None:
@@ -306,8 +314,7 @@ def create_user(
     """
     with UserService() as sce:
         with ValidityThrower(), RightsThrower():
-            new_user_id: UserIDT = sce.create_user(current_user, user, no_bot)
-
+            new_user_id: UserIDT = sce.create_user(current_user, user, no_bot, token)
     with DBSyncService(User, User.id, new_user_id) as ssce:
         ssce.wait()
 
@@ -456,6 +463,95 @@ def get_user(
     return ret
 
 
+#  activate a new user if external validation is on
+
+
+@app.post(
+    "/users/activate/{user_id}/{status}",
+    operation_id="activate_user",
+    tags=["users"],
+    responses={200: {"content": {"application/json": {"example": null}}}},
+)
+def activate_user(
+    user_id: int = Path(
+        ..., description="Internal, the unique numeric id of this user.", example=1
+    ),
+    status: str = Path(
+        ...,
+        description="Internal, the status name assign to this user.",
+        example=1,
+    ),
+    activatereq: UserActivateReq = Body(
+        ...,
+        description="activation parameters : reason if the request comes from an Administrator, password if the request comes from the user as it serves as email confirmation request.",
+    ),
+    no_bot: Optional[List[str]] = Query(
+        default=None,
+        title="NoBot",
+        description="not-a-robot proof",
+        example="['127.0.0.1', 'ffqsdfsdf']",
+    ),
+    current_user: Optional[int] = Depends(get_optional_current_user),
+) -> None:
+    """
+    Activate a new user if external validation is on., return **NULL upon success.**
+
+    🔒 Depending on logged user, different authorizations apply:
+    - An administrator or user administrator can activate a user or bypass the activation and inform the user when a modification request value/reason is provided.
+    - An ordinary logged user cannot activate another account.
+    If back-end configuration for self-creation check is Google reCAPTCHA,
+    then no_bot is a pair [remote IP, reCAPTCHA response].
+    """
+    with UserService() as sce:
+        sce.set_statusstate_user(
+            user_id=user_id,
+            status_name=status,
+            current_user_id=current_user,
+            no_bot=no_bot,
+            activatereq=activatereq,
+        )
+
+
+# forgotten password - send a reset request mail
+@app.post(
+    "/users/reset_user_password",
+    operation_id="reset_user_password",
+    tags=["users"],
+    responses={200: {"content": {"application/json": {"example": null}}}},
+)
+def reset_user_password(
+    resetreq: ResetPasswordReq = Body(...),
+    no_bot: Optional[List[str]] = Query(
+        default=None,
+        title="NoBot token",
+        description="not-a-robot proof",
+        example="['127.0.0.1', 'ffqsdfsdf']",
+    ),
+    token: Optional[str] = Query(
+        default=None,
+        title="Token",
+        description="token in the url to validate request",
+    ),
+    current_user: Optional[int] = Depends(get_optional_current_user),
+) -> None:
+    """
+    reset user password **return NULL on success**
+
+    🔒 Depending on logged user, different authorizations apply:
+    - An administrator or user administrator can reset a user password.
+    - An unlogged user can ask for a reset  in two steps. and receive a mail with a token. But must eventually provide a no-robot proof.
+
+    If back-end configuration for self-creation check is Google reCAPTCHA,
+    then no_bot is a pair [remote IP, reCAPTCHA response].
+    """
+    with UserService() as sce:
+        with ValidityThrower(), RightsThrower():
+            user_id = sce.reset_password(current_user, resetreq, no_bot, token)
+            if token and user_id != -1:
+                with DBSyncService(User, User.id, user_id) as ssce:
+                    ssce.wait()
+
+
 # ######################## END OF USER
 
 
@@ -514,7 +610,7 @@ def create_collection(
 
     Returns the created collection Id.
 
-    🔒 *For admins only.*
+    Note: 'manage' right is required on all underlying projects.
     """
     with CollectionsService() as sce:
         with RightsThrower():
@@ -543,7 +639,7 @@ def search_collections(
     """
     **Search for collections.**
 
-    🔒 *For admins only.*
+    Note: Only manageable collections are returned.
     """
     with CollectionsService() as sce:
         with RightsThrower():
@@ -622,7 +718,7 @@ def get_collection(
     """
     Returns **information about the collection** corresponding to the given id.
 
-     🔒 *For admins only.*
+    Note: The collection is returned only if manageable.
     """
     with CollectionsService() as sce:
         with RightsThrower():
@@ -655,7 +751,7 @@ def update_collection(
 
      **Returns NULL upon success.**
 
-     🔒 *For admins only.*
+     Note: The collection is updated only if manageable.
     """
     with CollectionsService() as sce:
         with RightsThrower():
@@ -679,44 +775,69 @@ def update_collection(
         )
 
 
-@app.get(
-    "/collections/{collection_id}/export/darwin_core",
-    operation_id="darwin_core_format_export",
+@app.put(
+    "/collections/{collection_id}/taxo_recast",
+    operation_id="update_collection_taxonomy_recast",
     tags=["collections"],
-    response_model=DarwinCoreExportRsp,
+    responses={200: {"content": {"application/json": {"example": null}}}},
 )
-def emodnet_format_export(
+def update_collection_taxo_recast(
+    recast: TaxonomyRecast = Body(...),
     collection_id: int = Path(
         ...,
         description="Internal, the unique numeric id of this collection.",
         example=1,
     ),
-    dry_run: bool = Query(
+    current_user: int = Depends(get_current_user),
+) -> None:
+    """
+    **Create or Update the collection taxonomy recast**.
+
+     **Returns NULL upon success.**
+
+     Note: The collection is updated only if manageable.
+    """
+    with CollectionsService() as sce:
+        with RightsThrower():
+            sce.update_taxo_recast(current_user, collection_id, recast)
+
+
+@app.get(
+    "/collections/{collection_id}/taxo_recast",
+    operation_id="get_collection_taxonomy_recast",
+    tags=["collections"],
+    responses={200: {"content": {"application/json": {"example": {}}}}},
+)
+def read_collection_taxo_recast(
+    collection_id: int = Path(
         ...,
-        title="Dry run",
-        description="If set, then only a diagnostic of doability will be done.",
-        example=False,
-    ),
-    with_zeroes: bool = Query(
-        ...,
-        title="With zeroes",
-        description="If set, then *absent* records will be generated, in the relevant samples, for categories present in other samples.",
-        example=False,
-    ),
-    auto_morpho: bool = Query(
-        ...,
-        title="Auto morpho",
-        description="If set, then any object classified on a Morpho category will be added to the count of the nearest Phylo parent, upward in the tree.",
-        example=False,
-    ),
-    with_computations: bool = Query(
-        ...,
-        title="With computations",
-        description="If set, then an attempt will be made to compute organisms concentrations and biovolumes.",
-        example=False,
+        description="Internal, the unique numeric id of this collection.",
+        example=1,
     ),
     current_user: int = Depends(get_current_user),
-) -> DarwinCoreExportRsp:
+) -> TaxonomyRecast:
+    """
+    **Read the collection taxonomy recast**.
+
+     **Returns NULL upon success.**
+
+     Note: The collection data is returned only if manageable.
+    """
+    with CollectionsService() as sce:
+        with RightsThrower():
+            return sce.read_taxo_recast(current_user, collection_id)
+
+
+@app.post(
+    "/collections/export/darwin_core",
+    operation_id="darwin_core_format_export",
+    tags=["collections"],
+    response_model=ExportRsp,
+)
+def darwin_core_format_export(
+    request: DarwinCoreExportReq = Body(...),
+    current_user: int = Depends(get_current_user),
+) -> ExportRsp:
     """
     **Export the collection in Darwin Core format, e.g. for EMODnet portal**, @see https://www.emodnet-ingestion.eu
 
@@ -724,10 +845,17 @@ def emodnet_format_export(
 
     Maybe useful, a reader in Python: https://python-dwca-reader.readthedocs.io/en/latest/index.html
 
-    🔒 *For admins only.*
+    Note: Only manageable collections can be exported.
     """
     with DarwinCoreExport(
-        collection_id, dry_run, with_zeroes, with_computations, auto_morpho
+        request.collection_id,
+        request.dry_run,
+        request.computations_pre_mapping,
+        request.include_predicted,
+        request.with_absent,
+        request.with_computations,
+        request.formulae,
+        request.extra_xml,
     ) as sce:
         with RightsThrower():
             return sce.run(current_user)
@@ -753,7 +881,7 @@ def erase_collection(
 
     i.e. the precious fields, as the projects are just linked-at from the collection.
 
-    🔒 *For admins only.*
+    Note: Only manageable collections can be deleted.
     """
     with CollectionsService() as sce:
         with RightsThrower():
@@ -1753,12 +1881,12 @@ def get_object_set(
         description="""
 
 Specify the needed object (and ancillary entities) fields.
-                   
+
 It follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.
 
 The column obj.imgcount contains the total count of images for the object.
 
-Use a comma to separate fields.      
+Use a comma to separate fields.
 
 💡 More help :
 
@@ -3317,12 +3445,14 @@ app.add_exception_handler(
 
 dump_openapi(app, __file__)
 
+JOB_INTERVAL = 2  # Can be overwritten for testing
+
 
 @app.on_event("startup")
 def startup_event() -> None:
     # Don't run predictions, they are left to a specialized runner
     JobScheduler.FILTER = [PredictForProject.JOB_TYPE]
-    JobScheduler.launch_at_interval(2)
+    JobScheduler.launch_at_interval(JOB_INTERVAL)
 
 
 @app.on_event("shutdown")

@@ -2,10 +2,12 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List, Any, Optional, Set, cast, Dict
+import re
+from typing import List, Any, Optional, Set, cast
 
 from BO.DataLicense import DataLicense, LicenseEnum
-from DB import Session, User, Sample
+from BO.Sample import SampleOrigIDT
+from DB import Session
 from DB.Collection import (
     COLLECTION_ROLE_DATA_CREATOR,
     COLLECTION_ROLE_ASSOCIATED_PERSON,
@@ -13,9 +15,12 @@ from DB.Collection import (
     CollectionOrgaRole,
     Collection,
     CollectionUserRole,
+    COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER,
 )
 from DB.Project import ProjectIDListT, Project
-from DB.helpers.ORM import contains_eager
+from DB.Sample import Sample
+from DB.User import User
+from DB.helpers.ORM import contains_eager, func, any_
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -44,6 +49,7 @@ class CollectionBO(object):
         self.associate_users: List[User] = []
         self.creator_organisations: List[OrganisationIDT] = []
         self.associate_organisations: List[OrganisationIDT] = []
+        self.code_provider_org: Optional[OrganisationIDT] = None
 
     def enrich(self) -> "CollectionBO":
         """
@@ -73,12 +79,15 @@ class CollectionBO(object):
             COLLECTION_ROLE_ASSOCIATED_PERSON: self.associate_organisations,
         }
         an_org_and_role: CollectionOrgaRole
+        provider = COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER
         for an_org_and_role in self._collection.organisations_by_role:
-            by_role_org[an_org_and_role.role].append(an_org_and_role.organisation)
+            if an_org_and_role.role == provider:
+                self.code_provider_org = an_org_and_role.organisation
+            else:
+                by_role_org[an_org_and_role.role].append(an_org_and_role.organisation)
         return self
 
     def _read_composing_projects(self):
-        # noinspection PyTypeChecker
         self.project_ids = sorted([a_rec.projid for a_rec in self._collection.projects])
 
     def _add_composing_projects(self, session: Session, project_ids: ProjectIDListT):
@@ -93,28 +102,11 @@ class CollectionBO(object):
         assert len(db_projects) == len(project_ids)
         # Loop on projects, adding them and collecting aggregated data
         prj_licenses: Set[LicenseEnum] = set()
-        samples_per_project: Dict[str, Project] = {}
         problems: List[str] = []
         a_db_project: Project
         for a_db_project in db_projects:
             self._collection.projects.append(a_db_project)
             prj_licenses.add(cast(LicenseEnum, a_db_project.license))
-            for a_sample in a_db_project.all_samples:
-                sample_id = a_sample.orig_id
-                # Sanity check: sample orig_id must be unique in the collection
-                if sample_id in samples_per_project:
-                    problems.append(
-                        "Sample with orig_id %s is in both '%s'(#%d) and '%s'(#%d)"
-                        % (
-                            sample_id,
-                            samples_per_project[sample_id].title,
-                            samples_per_project[sample_id].projid,
-                            a_db_project.title,
-                            a_db_project.projid,
-                        )
-                    )
-                else:
-                    samples_per_project[sample_id] = a_db_project
         # Set self to most restrictive of all licenses
         max_restrict = max(
             [DataLicense.RESTRICTION[a_prj_lic] for a_prj_lic in prj_licenses]
@@ -143,7 +135,7 @@ class CollectionBO(object):
         project_ids.sort()
         # TODO: projects update using given list
         assert project_ids == self.project_ids, "Cannot update composing projects yet"
-        # Redo sanity check & aggregation as underlying projects might have changed
+        # Redo sanity check & aggregation as underlying projects might have changed (or not as stated just above. lol)
         self._add_composing_projects(session, project_ids)
         coll_id = self._collection.id
         # Simple fields update
@@ -194,6 +186,14 @@ class CollectionBO(object):
                         collection_id=coll_id, organisation=an_org, role=a_role
                     )
                 )
+        # First org is the institutionCode provider
+        session.add(
+            CollectionOrgaRole(
+                collection_id=coll_id,
+                organisation=creator_orgs[0],
+                role=COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER,
+            )
+        )
         session.commit()
 
     def set_composing_projects(self, session: Session, project_ids: ProjectIDListT):
@@ -269,3 +269,28 @@ class CollectionBO(object):
         # Remove collection
         session.query(Collection).filter(Collection.id == coll_id).delete()
         session.commit()
+
+    CODE_RE = re.compile(
+        "\\(([A-Z]+)\\)$"
+    )  # Quite strict, just uppercase letters at the end of the name
+
+    def get_institution_code(self) -> str:
+        """
+        Conventionally, institution code is the first (sent via API) creator org short name.
+        e.g. Institut de la Mer de Villefranche (IMEV) -> IMEV
+        """
+        found = self.CODE_RE.findall(str(self.code_provider_org))
+        if len(found) == 1:
+            return found[0]
+        else:
+            return "?"
+
+    def homonym_samples(self, ro_session: Session) -> Set[SampleOrigIDT]:
+        """
+        Return the samples with exact same orig_id name, but in different projects.
+        """
+        qry = ro_session.query(Sample.orig_id)
+        qry = qry.filter(Sample.projid == any_(self.project_ids))
+        qry = qry.group_by(Sample.orig_id)
+        qry = qry.having(func.count(Sample.orig_id) > 1)
+        return set([an_id for an_id, in qry])

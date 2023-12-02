@@ -47,7 +47,7 @@ def test_parse_expr():
 BODC_VARS_KEY = "bodc_variables"
 
 
-def test_project_vars(config, database, fastapi, caplog):
+def test_project_vars(fastapi):
     prj_id = create_project(ADMIN_USER_ID, "Stored Vars", "CPICS")
     do_import(prj_id, BAD_FREE_DIR, ADMIN_USER_ID)
     # Do like in legacy app, i.e. fetch/modify/resend

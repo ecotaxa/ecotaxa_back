@@ -6,11 +6,10 @@ import os
 import typing
 from typing import Optional, ContextManager
 
-from sqlalchemy import event
-from sqlalchemy.orm import Session
-
 from DB.helpers.Connection import Connection, check_sqlalchemy_version
 from helpers.AppConfig import Config
+from sqlalchemy import event
+from sqlalchemy.orm import Session
 
 
 class BaseService(object):
@@ -54,9 +53,6 @@ def _turn_localhost_for_docker(host: str):  # pragma: no cover
         except Exception:
             pass
     return host
-
-
-Self = typing.TypeVar("Self")
 
 
 class Service(BaseService, ContextManager):
@@ -107,13 +103,13 @@ class Service(BaseService, ContextManager):
                 event.listen(self.session, "before_commit", self.abort_ro)
         else:
             self.ro_session = self.session
+        self._in_with: int = 0  # For debugging session leaks
 
     @staticmethod
     def build_connection(config: Config, read_only: bool = False):
         """
         Read a connection from the configuration.
         """
-        prfx = "RO_" if read_only else ""
         host, port, db = config.get_db_address(read_only)
         host = _turn_localhost_for_docker(host)
         user, password = config.get_db_credentials(read_only)
@@ -195,14 +191,26 @@ class Service(BaseService, ContextManager):
                 False
             ), "%s: Please use Service-derived classes in a with() context" % str(self)
 
-    def __enter__(self: Self) -> Self:
-        # TODO: How to express that it's a subclass?
-        self.session = self.session  # type:ignore
+    def __enter__(self):
+        self._in_with += 1
         return self
+
+    def get_session(self):
+        """Getter for having a session outside a with(),
+        to use only in __init__() where there is no choice"""
+        return self.session
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Release DB session
+        self._in_with -= 1
+        # assert self.in_with == 0 # To track issues
         self.close_db_sessions()
+
+    @classmethod
+    def re_init_after_fork(cls):
+        cls.the_connection.engine.dispose()
+        cls.the_connection = None
+        cls.the_readonly_connection = None
 
 
 if __name__ == "__main__":

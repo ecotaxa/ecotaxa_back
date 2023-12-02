@@ -6,7 +6,6 @@ import json
 import logging
 
 import pytest
-from API_models.crud import *
 
 # noinspection PyPackageRequirements
 from API_models.merge import MergeRsp
@@ -18,16 +17,16 @@ from API_operations.CRUD.Projects import ProjectsService
 
 # noinspection PyPackageRequirements
 from API_operations.Consistency import ProjectConsistencyChecker
-from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
 from API_operations.Subset import SubsetServiceOnProject
 
 # noinspection PyPackageRequirements
 from BO.Mappings import ProjectMapping
+from DB.Object import ObjectFields
 
 # OK we need a bit of direct DB access
 # noinspection PyPackageRequirements
-from DB import Project, ObjectFields
+from DB.Project import Project
 
 # noinspection PyPackageRequirements
 from deepdiff import DeepDiff
@@ -37,6 +36,13 @@ from ordered_set import OrderedSet
 from starlette import status
 
 from tests.credentials import CREATOR_AUTH, CREATOR_USER_ID
+from tests.jobs import (
+    wait_for_stable,
+    check_job_ok,
+    check_job_errors,
+    api_wait_for_stable_job,
+    api_check_job_errors,
+)
 from tests.test_fastapi import PRJ_CREATE_URL, ADMIN_AUTH, PROJECT_QUERY_URL
 from tests.test_import import (
     ADMIN_USER_ID,
@@ -46,13 +52,7 @@ from tests.test_import import (
     create_project,
     dump_project,
 )
-from tests.test_jobs import (
-    wait_for_stable,
-    check_job_ok,
-    check_job_errors,
-    api_wait_for_stable_job,
-    api_check_job_errors,
-)
+from tests.tstlogs_fixture import pushd
 
 OUT_JSON = "out.json"
 ORIGIN_AFTER_MERGE_JSON = "out_after_merge.json"
@@ -63,10 +63,11 @@ OUT_MERGE_REMAP_JSON = "out_merge_remap.json"
 PROJECT_MERGE_URL = "/projects/{project_id}/merge?source_project_id={source_project_id}&dry_run={dry_run}"
 
 
-def check_project(prj_id: int):
-    with ProjectConsistencyChecker(prj_id) as sce:
-        problems = sce.run(ADMIN_USER_ID)
-    assert problems == []
+def check_project(tstlogs, prj_id: int):
+    with pushd(tstlogs):
+        with ProjectConsistencyChecker(prj_id) as sce:
+            problems = sce.run(ADMIN_USER_ID)
+        assert problems == []
 
 
 PROJECT_CHECK_URL = "/projects/{project_id}/check"
@@ -74,7 +75,7 @@ PROJECT_CHECK_URL = "/projects/{project_id}/check"
 
 @pytest.mark.parametrize("prj_id", [-1])
 def test_check_project_via_api(prj_id: int, fastapi):
-    if prj_id == -1:  # Hack to avoid the test being marked as 'skipped'
+    if prj_id == -1:  # Hack to avoid the need for the test being marked as 'skipped'
         return
     url = PROJECT_CHECK_URL.format(project_id=prj_id)
     response = fastapi.get(url, headers=ADMIN_AUTH)
@@ -84,13 +85,13 @@ def test_check_project_via_api(prj_id: int, fastapi):
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
 # BUT DON'T COMMIT THE CHANGE
-def test_subset_merge_uvp6(config, database, fastapi, caplog):
+def test_subset_merge_uvp6(database, fastapi, caplog, tstlogs):
     caplog.set_level(logging.ERROR)
-    prj_id = test_import_uvp6(config, database, caplog, "Test Subset Merge")
-    check_project(prj_id)
+    prj_id = test_import_uvp6(database, caplog, "Test Subset Merge")
+    check_project(tstlogs, prj_id)
     # Dump the project
     caplog.set_level(logging.DEBUG)
-    with open(OUT_JSON, "w") as fd:
+    with open(tstlogs / OUT_JSON, "w") as fd:
         dump_project(ADMIN_USER_ID, prj_id, fd)
     print("\n".join(caplog.messages))
 
@@ -111,13 +112,13 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
     check_job_ok(job)
 
     # Dump the subset
-    with open(OUT_SUBS_JSON, "w") as fd:
+    with open(tstlogs / OUT_SUBS_JSON, "w") as fd:
         dump_project(ADMIN_USER_ID, subset_prj_id, fd)
 
     # Json diff
-    with open(OUT_JSON) as fd1:
+    with open(tstlogs / OUT_JSON) as fd1:
         json_src = json.load(fd1)
-    with open(OUT_SUBS_JSON) as fd2:
+    with open(tstlogs / OUT_SUBS_JSON) as fd2:
         json_subset = json.load(fd2)
     diffs = DeepDiff(json_src, json_subset)
     # Validate by removing all know differences b/w source and subset
@@ -165,23 +166,26 @@ def test_subset_merge_uvp6(config, database, fastapi, caplog):
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["errors"] == []
     # Then for real
-    with MergeService(prj_id=prj_id, src_prj_id=subset_prj_id, dry_run=False) as sce:
-        does_it_work: MergeRsp = sce.run(ADMIN_USER_ID)
+    with pushd(tstlogs):
+        with MergeService(
+            prj_id=prj_id, src_prj_id=subset_prj_id, dry_run=False
+        ) as sce:
+            does_it_work: MergeRsp = sce.run(ADMIN_USER_ID)
     assert does_it_work.errors == []
 
-    check_project(prj_id)
+    check_project(tstlogs, prj_id)
 
     # Dump the subset which should be just gone
-    with open(SUBS_AFTER_MERGE_JSON, "w") as fd:
+    with open(tstlogs / SUBS_AFTER_MERGE_JSON, "w") as fd:
         dump_project(ADMIN_USER_ID, subset_prj_id, fd)
-    with open(SUBS_AFTER_MERGE_JSON) as fd:
+    with open(tstlogs / SUBS_AFTER_MERGE_JSON) as fd:
         json_subset = json.load(fd)
     assert json_subset == {}
 
     # Dump the origin project which should be 2x larger
-    with open(ORIGIN_AFTER_MERGE_JSON, "w") as fd:
+    with open(tstlogs / ORIGIN_AFTER_MERGE_JSON, "w") as fd:
         dump_project(ADMIN_USER_ID, prj_id, fd)
-    with open(ORIGIN_AFTER_MERGE_JSON) as fd:
+    with open(tstlogs / ORIGIN_AFTER_MERGE_JSON) as fd:
         origin_after_merge = json.load(fd)
 
     # Samples have the same or_ig so they got merged
@@ -1350,11 +1354,11 @@ MERGE_DIR_3 = DATA_DIR / "merge_test" / "even_more_cols"
 MERGE_DIR_4 = DATA_DIR / "merge_test" / "second_merge"
 
 
-def test_merge_remap(config, database, fastapi, caplog):
+def test_merge_remap(fastapi, caplog, tstlogs):
     # Project 1, usual columns
     prj_id = create_project(CREATOR_USER_ID, "Merge Dest project")
     do_import(prj_id, MERGE_DIR_1, CREATOR_USER_ID)
-    check_project(prj_id)
+    check_project(tstlogs, prj_id)
     # Project 2, same columns but different order
     # acq: remove acq_magnification and swap the 2 others
     # process: remove process_stop_n_images & process_gamma_value, put process_software at the end
@@ -1362,7 +1366,7 @@ def test_merge_remap(config, database, fastapi, caplog):
     # object: remove object_link object_cv and object_sr, move lat & lon near the end
     prj_id2 = create_project(CREATOR_USER_ID, "Merge Src project")
     do_import(prj_id2, MERGE_DIR_2, CREATOR_USER_ID)
-    check_project(prj_id2)
+    check_project(tstlogs, prj_id2)
     # Merge
     url = PROJECT_MERGE_URL.format(
         project_id=prj_id, source_project_id=prj_id2, dry_run=False
@@ -1371,11 +1375,11 @@ def test_merge_remap(config, database, fastapi, caplog):
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["errors"] == []
     # Dump the dest
-    with open(OUT_MERGE_REMAP_JSON, "w") as fd:
+    with open(tstlogs / OUT_MERGE_REMAP_JSON, "w") as fd:
         dump_project(ADMIN_USER_ID, prj_id, fd)
     # Grab all median_mean free col values
     all_lats = []
-    with open(OUT_MERGE_REMAP_JSON) as fd:
+    with open(tstlogs / OUT_MERGE_REMAP_JSON) as fd:
         for a_line in fd.readlines():
             if "median_mean" in a_line:
                 a_line = a_line.strip().strip(",")
@@ -1386,7 +1390,7 @@ def test_merge_remap(config, database, fastapi, caplog):
     # Project 3 mistake as it has nothing to do with the 2 first ones
     prj_id3 = create_project(CREATOR_USER_ID, "Merge Src Big project")
     do_import(prj_id3, MERGE_DIR_3, CREATOR_USER_ID)
-    check_project(prj_id3)
+    check_project(tstlogs, prj_id3)
     url = PROJECT_MERGE_URL.format(
         project_id=prj_id, source_project_id=prj_id3, dry_run=False
     )
@@ -1400,7 +1404,7 @@ def test_merge_remap(config, database, fastapi, caplog):
     # It has a new acquisition for an existing sample
     prj_id4 = create_project(CREATOR_USER_ID, "Merge Src small project")
     do_import(prj_id4, MERGE_DIR_4, CREATOR_USER_ID)
-    check_project(prj_id4)
+    check_project(tstlogs, prj_id4)
     url = PROJECT_MERGE_URL.format(
         project_id=prj_id, source_project_id=prj_id4, dry_run=False
     )
@@ -1409,9 +1413,9 @@ def test_merge_remap(config, database, fastapi, caplog):
     assert response.json()["errors"] == []
 
 
-def test_empty_subset_uvp6(config, database, fastapi, caplog):
+def test_empty_subset_uvp6(database, fastapi, caplog):
     with caplog.at_level(logging.ERROR):
-        prj_id = test_import_uvp6(config, database, caplog, "Test empty Subset")
+        prj_id = test_import_uvp6(database, caplog, "Test empty Subset")
 
     subset_prj_id = create_project(ADMIN_USER_ID, "Empty subset")
     # OK this test is just for covering the code in filters
@@ -1463,9 +1467,9 @@ def test_empty_subset_uvp6(config, database, fastapi, caplog):
     assert response.status_code == status.HTTP_200_OK
 
 
-def test_empty_subset_uvp6_other(config, database, fastapi, caplog):
+def test_empty_subset_uvp6_other(database, fastapi, caplog):
     with caplog.at_level(logging.ERROR):
-        prj_id = test_import_uvp6(config, database, caplog, "Test empty Subset")
+        prj_id = test_import_uvp6(database, caplog, "Test empty Subset")
 
     subset_prj_id = create_project(ADMIN_USER_ID, "Empty subset")
     # OK this test is just for covering (more) the code in filters
@@ -1520,7 +1524,7 @@ def test_empty_subset_uvp6_other(config, database, fastapi, caplog):
 SUBSET_URL = "/projects/{project_id}/subset"
 
 
-def test_api_subset(config, database, fastapi, caplog):
+def test_api_subset(fastapi, caplog):
     # Subset a fresh project, why not?
     # Create an empty project
     url1 = PRJ_CREATE_URL
@@ -1546,7 +1550,7 @@ def test_api_subset(config, database, fastapi, caplog):
     test_check_project_via_api(tgt_prj_id, fastapi)
 
 
-def test_subset_of_no_visible_issue_484(config, database, fastapi, caplog):
+def test_subset_of_no_visible_issue_484(fastapi, caplog):
     # https://github.com/oceanomics/ecotaxa_dev/issues/484
     # First found as a subset of subset failed
     url1 = PRJ_CREATE_URL
@@ -1580,7 +1584,7 @@ def test_subset_of_no_visible_issue_484(config, database, fastapi, caplog):
     test_check_project_via_api(tgt_prj_id, fastapi)
 
 
-def test_subset_consistency(config, database, fastapi, caplog):
+def test_subset_consistency(database, caplog, tstlogs):
     caplog.set_level(logging.ERROR)
     from tests.test_import import import_plain
 
@@ -1588,10 +1592,10 @@ def test_subset_consistency(config, database, fastapi, caplog):
     prj_id = create_project(ADMIN_USER_ID, "Test Import update")
     # Plain import first
     import_plain(prj_id)
-    check_project(prj_id)
+    check_project(tstlogs, prj_id)
     # Dump the project
     caplog.set_level(logging.DEBUG)
-    with open(OUT_JSON, "w") as fd:
+    with open(tstlogs / OUT_JSON, "w") as fd:
         dump_project(ADMIN_USER_ID, prj_id, fd)
     print("\n".join(caplog.messages))
 
@@ -1610,4 +1614,4 @@ def test_subset_consistency(config, database, fastapi, caplog):
         rsp: SubsetRsp = sce.run(ADMIN_USER_ID)
     job = wait_for_stable(rsp.job_id)
     check_job_ok(job)
-    check_project(subset_prj_id)
+    check_project(tstlogs, subset_prj_id)

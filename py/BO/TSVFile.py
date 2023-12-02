@@ -33,9 +33,11 @@ from BO.helpers.ImportHelpers import (
     ImportDiagnostic,
     ImportStats,
 )
-from DB import Sample, Process, Acquisition
+from DB.Acquisition import Acquisition
 from DB.Object import classif_qual_revert, ObjectHeader, ObjectFields
+from DB.Process import Process
 from DB.Project import ProjectIDT
+from DB.Sample import Sample
 from DB.helpers import Session
 from DB.helpers.Bean import Bean
 from DB.helpers.Direct import text
@@ -170,8 +172,12 @@ class TSVFile(object):
                 )
 
                 # Create SQLAlchemy mappers of the object itself and slaves (1<->1)
-                object_head_to_write = ObjectGen(**dicts_to_write["obj_head"])
-                object_fields_to_write = ObjectFieldsGen(**dicts_to_write["obj_field"])
+                object_head_to_write = ObjectGen(
+                    **dicts_to_write[ObjectHeader.__tablename__]
+                )
+                object_fields_to_write = ObjectFieldsGen(
+                    **dicts_to_write[ObjectFields.__tablename__]
+                )
                 image_to_write = ImageGen(**dicts_to_write["images"])
                 # Parents are created the same way, _when needed_ (i.e. nearly never),
                 #  in @see add_parent_objects
@@ -817,7 +823,10 @@ class TSVFile(object):
                     % (a_field, self.relative_name)
                 )
                 continue
-            if target_table not in ("obj_head", "obj_field"):
+            if target_table not in (
+                ObjectHeader.__tablename__,
+                ObjectFields.__tablename__,
+            ):
                 # In other tables, all types are forced to text
                 sel_type = "t"
                 # TODO: Tell the user that an eventual type is just ignored
@@ -870,7 +879,9 @@ class TSVFile(object):
     def validate_content(self, how: ImportHow, diag: ImportDiagnostic):
         row_count_for_csv = 0
         vals_cache: Dict = {}
+        local_keys: Set[str] = set()
         logged_parents: Set[Tuple[Any, Any]] = set()
+        lig: Dict
         for lig in self.rdr:
             row_count_for_csv += 1
 
@@ -911,14 +922,24 @@ class TSVFile(object):
 
             # Verify duplicate images
             key_exist_obj = "%s*%s" % (object_id, img_file_name)
-            if not how.skip_object_duplicates:
+            if key_exist_obj in local_keys:
+                diag.error(
+                    "In file %s, line %d: (Object '%s', Image '%s') was seen before."
+                    % (
+                        self.relative_name,
+                        row_count_for_csv + 2,
+                        object_id,
+                        img_file_name,
+                    )
+                )
+            elif not how.skip_object_duplicates:
                 # Ban the duplicates, except if we can skip them.
                 if key_exist_obj in diag.existing_objects_and_image:
                     diag.error(
                         "Duplicate object '%s' Image '%s' in file %s. "
                         % (object_id, img_file_name, self.relative_name)
                     )
-            diag.existing_objects_and_image.add(key_exist_obj)
+            local_keys.add(key_exist_obj)
 
             # Verify that we do not make the topology worse...
             if not how.can_update_only:
@@ -936,6 +957,9 @@ class TSVFile(object):
                         diag.error(maybe_err)
                 # Add the association anyway, it will reduce the repetition of errors
                 diag.topology.add_association(sample_id, acquis_id)
+
+        # For next TSV analysis
+        diag.existing_objects_and_image.update(local_keys)
 
         return row_count_for_csv
 

@@ -18,13 +18,11 @@ PROJECT_DELETE_URL = "/projects/{project_id}?only_objects={only_objects}"
 OBJECT_SET_DELETE_URL = "/object_set/"
 
 
-def test_api_project_delete(config, database, fastapi, caplog):
+def test_api_project_delete(fastapi, caplog):
     """
     Delete project in full or partially.
     """
-    prj_id = test_api_import_images(
-        config, database, fastapi, caplog, title="Project delete"
-    )
+    prj_id = test_api_import_images(fastapi, caplog, title="Project delete")
     url = PROJECT_DELETE_URL.format(project_id=prj_id, only_objects=True)
     rsp = fastapi.delete(url)
     assert rsp.status_code == status.HTTP_403_FORBIDDEN
@@ -37,13 +35,11 @@ def test_api_project_delete(config, database, fastapi, caplog):
     assert buff == "{}"
 
 
-def test_api_project_full_delete(config, database, fastapi, caplog):
+def test_api_project_full_delete(fastapi, caplog):
     """
     Delete project in full.
     """
-    prj_id = test_api_import_images(
-        config, database, fastapi, caplog, title="Project full delete"
-    )
+    prj_id = test_api_import_images(fastapi, caplog, title="Project full delete")
     # Bug in v2.6.8: Saving settings prevents DB deletion
     rsp = fastapi.get(
         PROJECT_QUERY_URL.format(project_id=prj_id, manage=True), headers=ADMIN_AUTH

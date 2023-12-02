@@ -30,15 +30,15 @@ def _prj_query(fastapi, auth, prj_id, order=None, start=None, size=None, **kwarg
     return obj_ids
 
 
-def test_queries(config, database, fastapi, caplog):
+def test_queries(database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
 
     # Admin imports the project
     from tests.test_import import test_import, test_import_a_bit_more_skipping
 
-    prj_id = test_import(config, database, caplog, "Queries test project")
+    prj_id = test_import(database, caplog, "Queries test project")
     # Add a sample spanning 2 days
-    test_import_a_bit_more_skipping(config, database, caplog, "Queries test project")
+    test_import_a_bit_more_skipping(database, caplog, "Queries test project")
 
     ref = [6, 7, 8, 11, 12, 13, 1, 2, 3, 4, 5]
     all = _prj_query(fastapi, CREATOR_AUTH, prj_id, order="obj.depth_min")

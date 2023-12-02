@@ -65,6 +65,37 @@ class Config(object):
     def get_app_manager(self) -> Tuple[Optional[str], Optional[str]]:
         return self.parser.get("APPMANAGER_NAME"), self.parser.get("APPMANAGER_EMAIL")
 
+    def get_user_email_verification(self) -> Optional[str]:
+        return self.parser.get("USER_EMAIL_VERIFICATION")
+
+    def get_account_validation(self) -> Optional[str]:
+        return self.parser.get("ACCOUNT_VALIDATION")
+
+    def get_dir_mail_templates(self) -> Optional[str]:
+        return self.parser.get("DIR_MAIL_TEMPLATES")
+
+    def get_captcha_iplist(self) -> Optional[str]:
+        return self.parser.get("CAPTCHA_IPLIST")
+
+    def get_mailservice_secret_key(self) -> Optional[str]:
+        return self.parser.get("MAILSERVICE_SECRET_KEY")
+
+    def get_mailservice_salt(self) -> Optional[bytes]:
+        return self.parser.get("MAILSERVICE_SALT")
+
+    def get_sender_account(self) -> Optional[str]:
+        # email address used in account management - 0 email - 1 pwd - 2 - dns - 3 port
+        return self.parser.get("SENDER_ACCOUNT")
+
+    def get_add_ticket(self) -> str:
+        # string separator - separate  ticket number if ticket software is used and admin comment to user
+        return str(self.parser.get("ADD_TICKET") or "").strip()
+
+    def get_account_request_url(self) -> Optional[str]:
+        # TODO find a way to have multi request url ( list of identified url ???)
+        url = self.parser.get("SERVERURL").strip()
+        return url + ("/" if url[-1] != "/" else "")
+
     def get_cnf(self, key: str, default: Optional[str] = None) -> Optional[str]:
         # TODO: stop using so we can enumerate the keys
         return self.parser.get(key, default)

@@ -8,7 +8,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 from formats.DarwinCore.DatasetMeta import DatasetMetadata
 from formats.DarwinCore.Events import Events
 from formats.DarwinCore.Metadata import DwC_Metadata
-from formats.DarwinCore.Occurences import Occurences
+from formats.DarwinCore.Occurences import Occurrences
 from formats.DarwinCore.eMoFs import ExtendedMeasurementOrFacts
 
 
@@ -24,8 +24,8 @@ class DwcArchive(object):
         self.meta = DwC_Metadata(self.dataset_meta.name)
         self.events = Events()
         self.meta.add(self.events)
-        self.occurences = Occurences()
-        self.meta.add(self.occurences)
+        self.occurrences = Occurrences()
+        self.meta.add(self.occurrences)
         self.emofs = ExtendedMeasurementOrFacts()
         self.meta.add(self.emofs)
 
@@ -42,7 +42,7 @@ class DwcArchive(object):
             self.dataset_meta,
             self.meta,
             self.events,
-            self.occurences,
+            self.occurrences,
             self.emofs,
         ]
         for a_file in all_files:

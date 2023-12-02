@@ -55,7 +55,7 @@ class DBWriter(object):
     # The properties used in code, not in mapping. If not listed here they are not persisted
     # TODO: Provoke a crash at runtime for tests if one is forgotten. Dropping data silently is bad.
     obj_head_prog_cols = {"sunpos", "random_value", "acquisid", "sampleid"}
-    obj_fields_prog_cols: Dict[str, str] = {}
+    obj_fields_prog_cols = {"acquis_id"}
 
     # The generated classes are objects of course, but classes as well, so the variable names
     # follow the classes naming convention.
@@ -134,6 +134,7 @@ class DBWriter(object):
             # Default value from sequences
             object_head_to_write.objid = self.obj_seq_cache.next()
             object_fields_to_write.objfid = object_head_to_write.objid
+            object_fields_to_write.acquis_id = object_head_to_write.acquisid
         if new_records >= 1 and image_to_write:
             # There is (potentially just) a new image
             image_to_write.imgid = self.img_seq_cache.next()

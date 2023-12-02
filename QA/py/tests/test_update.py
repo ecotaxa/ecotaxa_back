@@ -30,12 +30,12 @@ def upd(col, val) -> ColUpdate:
     return ret
 
 
-def test_updates(config, database, caplog):
+def test_updates(database, caplog, tstlogs):
     caplog.set_level(logging.ERROR)
-    prj_id = test_import_uvp6(config, database, caplog, "Test Updates")
-    check_project(prj_id)
+    prj_id = test_import_uvp6(database, caplog, "Test Updates")
+    check_project(tstlogs, prj_id)
 
-    acquis_id, process_id, sample_id = _get_ids(prj_id)
+    acquis_id, process_id, sample_id = _get_ids(tstlogs, prj_id)
 
     # Typo in column name
     with SamplesService() as sce:
@@ -89,10 +89,10 @@ def test_updates(config, database, caplog):
     assert nb_upd == 15
 
     # Dump the project after changes
-    with open(OUT_JSON_MODIF, "w") as fd:
+    with open(tstlogs / OUT_JSON_MODIF, "w") as fd:
         dump_project(ADMIN_USER_ID, prj_id, fd)
 
-    # Special column
+    # Special column, this one will eventually add row into classification history
     # TODO: Avoiding diff on purpose, it's just to cover code.
     with ObjectManager() as sce:
         nb_upd = sce.update_set(
@@ -101,9 +101,9 @@ def test_updates(config, database, caplog):
     assert nb_upd == 15
 
     # Json diff
-    with open(OUT_JSON_REF) as fd1:
+    with open(tstlogs / OUT_JSON_REF) as fd1:
         json_src = json.load(fd1)
-    with open(OUT_JSON_MODIF) as fd2:
+    with open(tstlogs / OUT_JSON_MODIF) as fd2:
         json_subset = json.load(fd2)
     diffs = DeepDiff(json_src, json_subset)
 
@@ -261,11 +261,11 @@ def test_updates(config, database, caplog):
     }
 
 
-def _get_ids(prj_id):
+def _get_ids(tstlogs, prj_id):
     # Dump the project before changes
-    with open(OUT_JSON_REF, "w") as fd:
+    with open(tstlogs / OUT_JSON_REF, "w") as fd:
         dump_project(ADMIN_USER_ID, prj_id, fd)
-    with open(OUT_JSON_REF) as fd:
+    with open(tstlogs / OUT_JSON_REF) as fd:
         json_prj = json.load(fd)
     sample_id = json_prj["samples"][0]["id"]
     acquis_id = json_prj["samples"][0]["acquisitions"][0]["id"]
@@ -280,15 +280,15 @@ PROCESS_SET_UPDATE_URL = "/process_set/update"
 OBJECT_SET_UPDATE_URL = "/object_set/update"
 
 
-def test_api_updates(config, database, fastapi, caplog):
-    prj_id = test_import_images_only(config, database, caplog, title="API updates test")
+def test_api_updates(database, fastapi, caplog, tstlogs):
+    prj_id = test_import_images_only(database, caplog, title="API updates test")
 
     # Recompute geo, which is a kind of update
     url = RECOMPUTE_GEO_URL.format(project_id=prj_id)
     rsp = fastapi.post(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
 
-    acquis_id, process_id, sample_id = _get_ids(prj_id)
+    acquis_id, process_id, sample_id = _get_ids(tstlogs, prj_id)
 
     url = SAMPLE_SET_UPDATE_URL.format(project_id=prj_id)
     # Typo in column name

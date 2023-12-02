@@ -11,6 +11,7 @@ from typing import List, Tuple
 
 # noinspection PyUnresolvedReferences
 from sqlalchemy import VARCHAR, INTEGER, CHAR
+
 # noinspection PyUnresolvedReferences
 from sqlalchemy.dialects.postgresql import (
     DOUBLE_PRECISION,
@@ -19,12 +20,17 @@ from sqlalchemy.dialects.postgresql import (
     TIMESTAMP,
     BIGINT,
     BYTEA,
-    BOOLEAN
+    BOOLEAN,
+    JSONB,
 )
+
 # noinspection PyUnresolvedReferences
 from sqlalchemy.dialects.postgresql import dialect as pg_dialect
+
 # noinspection PyUnresolvedReferences
 from sqlalchemy.dialects.postgresql import insert as pg_insert, Insert as PgInsert
+# noinspection PyUnresolvedReferences
+from sqlalchemy.sql import any_ as _pg_any, all_ as _pg_all
 
 from .ORM import text, Session, column, Integer
 

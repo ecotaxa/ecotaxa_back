@@ -9,3 +9,6 @@ from db_fixture import *
 
 # noinspection PyUnresolvedReferences
 from fastapi_fixture import *
+
+# noinspection PyUnresolvedReferences
+from tstlogs_fixture import *

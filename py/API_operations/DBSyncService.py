@@ -29,7 +29,7 @@ class DBSyncService(Service):
         for a_col, a_val in zip(args[::2], args[1::2]):
             qry = qry.where(a_col == a_val)
         self.qry = qry
-        self.ref_val = self._get_result(self.session)
+        self.ref_val = self._get_result(self.get_session())
 
     MAX_WAIT = 2  # 2 seconds is quite a lot
 

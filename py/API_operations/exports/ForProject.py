@@ -38,7 +38,6 @@ from helpers import (
     DateTime,
 )  # Need to keep the whole module imported, as the function is mocked
 from helpers.DynamicLogs import get_logger, LogsSwitcher
-
 # TODO: Move somewhere else
 from ..helpers.JobService import JobServiceBase, ArgsDict
 
@@ -66,7 +65,7 @@ class ProjectExport(JobServiceBase):
         _user, _project = RightsBO.user_wants(
             self.session, current_user_id, Action.READ, self.req.project_id
         )
-        # OK, go background straight away
+        # Security OK, create pending job
         self.create_job(self.JOB_TYPE, current_user_id)
         ret = ExportRsp(job_id=self.job_id)
         return ret
@@ -199,7 +198,7 @@ class ProjectExport(JobServiceBase):
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(
-            self.ro_session, proj_id, user_id, self.filters
+            self.ro_session, src_project, user_id, self.filters
         )
 
         # Backup or not, the column namings are taken from common mapping
@@ -594,14 +593,13 @@ class ProjectExport(JobServiceBase):
 
     def create_summary(self, src_project: Project) -> int:
         req = self.req
-        proj_id = src_project.projid
         self.update_progress(1, "Start Summary export")
 
         out_file = self._get_summary_file(src_project)
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(
-            self.ro_session, proj_id, self._get_owner_id(), self.filters
+            self.ro_session, src_project, self._get_owner_id(), self.filters
         )
 
         # The specialized SQL builder
@@ -790,7 +788,6 @@ class ProjectExport(JobServiceBase):
         Assuming that the historical summary is a data one, compute 'scientific' summaries.
         """
         req = self.req
-        proj_id = src_project.projid
         user_id = self._get_owner_id()
         exp_type = req.exp_type
         out_file = self._get_summary_file(src_project)
@@ -799,7 +796,7 @@ class ProjectExport(JobServiceBase):
         self.filters["statusfilter"] = "V"
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(
-            self.ro_session, proj_id, user_id, self.filters
+            self.ro_session, src_project, user_id, self.filters
         )
         # The specialized SQL builder operates from the object set
         aug_qry = ObjectSetQueryPlus(object_set)

@@ -53,12 +53,12 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
     def __init__(self, prj_id: int, req: SubsetReq):
         super().__init__(prj_id)
         # Load the destination project
-        dest_prj = self.session.query(Project).get(req.dest_prj_id)
+        dest_prj = self.get_session().query(Project).get(req.dest_prj_id)
         assert dest_prj is not None
         self.dest_prj: Project = dest_prj
         self.req = req
         # Work vars
-        self.to_clone: EnumeratedObjectSet = EnumeratedObjectSet(self.session, [])
+        self.to_clone: EnumeratedObjectSet = EnumeratedObjectSet(self.get_session(), [])
         self.vault = Vault(self.config.vault_dir())
         self.first_query = True
         self.images_per_orig_id: Dict[str, Set[int]] = {}
@@ -81,7 +81,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         RightsBO.user_wants(
             self.session, current_user_id, Action.ADMINISTRATE, self.dest_prj.projid
         )
-        # OK, go background straight away
+        # Security OK, create pending job
         self.create_job(self.JOB_TYPE, current_user_id)
         ret = SubsetRsp(job_id=self.job_id)
         return ret
@@ -127,7 +127,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         # Create a DB writer
         writer = DBWriter(self.session)
         # Narrow the writes in ObjectFields thanks to mappings of original project
-        writer.generators({"obj_field": used_columns})
+        writer.generators({ObjectFields.__tablename__: used_columns})
         # Use import helpers
         dest_prj_id = self.dest_prj.projid
         import_how = ImportHow(
@@ -350,7 +350,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(
-            self.session, self.prj_id, self._get_owner_id(), self.req.filters
+            self.session, self.prj, self._get_owner_id(), self.req.filters
         )
         from_, where, params = object_set.get_sql()
 

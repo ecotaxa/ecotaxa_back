@@ -2,17 +2,14 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from DB import (
-    Acquisition,
-    Process,
-    Project,
-    Sample,
-    Task,
-    Taxonomy,
-    User,
-    Role,
-    ProjectPrivilege,
-)
+from DB.Acquisition import Acquisition
+from DB.Process import Process
+from DB.Project import Project
+from DB.Sample import Sample
+from DB.Task import Task
+from DB.Taxonomy import Taxonomy
+from DB.User import User, Role
+from DB.ProjectPrivilege import ProjectPrivilege
 
 
 def test_to_str():

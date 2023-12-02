@@ -12,13 +12,14 @@ from tests.test_import import create_project
 
 LOGIN_URL = "/login"
 
+# Note we cannot use fastapi fixture here, as it skips auth for all other tests
 from main import app
 
 client = TestClient(app)
 
 
 # Don't use fastapi fixture as it tweaks security
-def test_plain_API_login(config, database, caplog):
+def test_plain_API_login(database):
     url = LOGIN_URL
     # Wrong params
     rsp = client.post(url, data={"usernazme": "foo", "password": "bar"})
@@ -57,8 +58,11 @@ def test_plain_API_login(config, database, caplog):
     me_as_user = rsp.json()
     del me_as_user["last_used_projects"]
     del me_as_user["password"]
+    del me_as_user["mail_status_date"]
+    del me_as_user["status_date"]
+    del me_as_user["status_admin_comment"]
     assert me_as_user == {
-        "active": True,
+        "status": 1,
         "country": None,
         "email": "creator",
         "id": 3,
@@ -67,4 +71,5 @@ def test_plain_API_login(config, database, caplog):
         "usercreationdate": "2020-05-13T08:59:48.701060",
         "usercreationreason": None,
         "can_do": [1, 4],
+        "mail_status": None,
     }

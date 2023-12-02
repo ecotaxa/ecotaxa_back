@@ -6,6 +6,7 @@
 #
 # See https://eml.ecoinformatics.org/ for background information
 #
+from typing import List
 
 from lxml import etree  # type: ignore
 
@@ -26,9 +27,10 @@ class DatasetMetadata(object):
         https://obis.org/manual/eml/
     """
 
-    def __init__(self, meta: EMLMeta):
+    def __init__(self, meta: EMLMeta, extra_xml: List[str]):
         self.name = "eml.xml"
         self.meta: EMLMeta = meta
+        self.extra_xml: List[str] = extra_xml
 
     EML_HEADER = """<?xml version="1.0" encoding="UTF-8"?>
 <eml:eml xmlns:eml="eml://ecoinformatics.org/eml-2.1.1"
@@ -122,6 +124,10 @@ class DatasetMetadata(object):
             etree_sub_element(xml_additional_meta, "metadata"), "gbif"
         )
         self.additional_meta_to_xml(metadata, meta.additionalMetadata)
+        # Add extra free XML, but properly formatted
+        for an_extra in self.extra_xml:
+            an_extra_as_xml = etree.fromstring(an_extra)
+            dataset.append(an_extra_as_xml)
         # Format for output
         etree.indent(dataset, space="  ")
         dataset_as_string = etree.tostring(

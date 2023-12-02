@@ -1,0 +1,26 @@
+{
+  "en_EN": {
+    "create": {
+      "url": "/gui/register/",
+      "subject": " {ticket} EcoTaxa account modification request.",
+      "link": "<a href=\"{url}{token}\" style=\"color: rgb(52, 167, 173)\">{url}{token}</a>",
+      "email": "<a href=\"mailto:{email}\">{email}</a>",
+      "assistance": "If you have any question about your data or need additional support,  email {email}",
+      "body": "Some of the information provided in your profile need to be modified :<br>{reason}<br>Please click the following link to modify your registration information: {link}<br>{assitance}"
+    },
+    "update": {
+      "url": "/gui/register/",
+      "subject": "{ticket} EcoTaxa profile modification request.",
+      "link": "<a href=\"{url}{token}\" style=\"color: rgb(52, 167, 173)\">{url}{token}</a>",
+      "email": "<a href=\"mailto:{email}\">{email}</a>",
+      "assistance": "If you have any question about your data or need additional support,  email {email}",
+      "body": "Some of the information provided in your profile need to be modified :<br> {data}.<br>Please click the following link to modify your profile information: {link}<br>{assistance}"
+    },
+    "inform": {
+      "subject": "EcoTaxa account information - Email modified.",
+      "email": "<a href=\"mailto:{email}\">{email}</a>",
+      "assistance": "If it is an error or you need additional support,  email {email}",
+      "body": "<p>Your email has been replaced in your profile by {data} <br>{assistance}"
+    }
+  }
+}

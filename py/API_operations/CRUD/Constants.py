@@ -22,4 +22,7 @@ class ConstantsService(Service):
             a_country
             for (a_country,) in self.session.query(text("countryname from countrylist"))
         ]
+        ret.account_validation = self.config.get_account_validation() == "on"
+        ret.email_verification = self.config.get_user_email_verification() == "on"
+        ret.add_ticket = self.config.get_add_ticket()
         return ret

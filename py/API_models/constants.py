@@ -4,9 +4,16 @@
 #
 # Exported constants, to avoid data duplication b/w back-end and front-end
 #
-from typing import Dict, List
+from typing import Dict, List, NamedTuple
 
 from BO.DataLicense import DataLicense
+from DB.User import UserStatus
+from BO.User import (
+    USER_PWD_REGEXP,
+    USER_PWD_REGEXP_DESCRIPTION,
+    SHORT_TOKEN_AGE,
+    PROFILE_TOKEN_AGE,
+)
 from helpers.pydantic import BaseModel, Field
 
 
@@ -39,4 +46,40 @@ class Constants(BaseModel):
         default=[],
         min_items=1,
         example=["France"],
+    )
+    user_status: Dict[str, int] = Field(
+        title="User status",
+        description="Application User status values",
+        default={st.name: st.value for st in UserStatus},
+        example={"blocked": -1, "inactive": 0, "active": 1, "pending": 2},
+    )
+    password_regexp: str = Field(
+        title="Password regexp",
+        description=USER_PWD_REGEXP_DESCRIPTION,
+        default=USER_PWD_REGEXP,
+    )
+    email_verification: bool = Field(
+        title="Account email verification",
+        description="Require verification before activation.",
+        default=True,
+    )
+    account_validation: bool = Field(
+        title="Account validation",
+        description="Require validation by a Users Administrator before activation.",
+        default=False,
+    )
+    short_token_age: int = Field(
+        title="Short token lifespan",
+        description="Email confirmation, password reset token lifespan.",
+        default=SHORT_TOKEN_AGE,
+    )
+    profile_token_age: int = Field(
+        title="Profile token lifespan",
+        description="Profile modification token lifespan.",
+        default=PROFILE_TOKEN_AGE,
+    )
+    add_ticket: str = Field(
+        title="ticket separator",
+        description="string separator, permits to add ticket number when asking more information before user validation",
+        default="",
     )

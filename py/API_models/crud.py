@@ -12,7 +12,6 @@ from BO.Job import DBJobStateEnum
 from BO.Project import ProjectUserStats
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
-from DB import User
 from DB.Acquisition import Acquisition
 from DB.Collection import Collection
 from DB.Instrument import UNKNOWN_INSTRUMENT
@@ -20,6 +19,7 @@ from DB.Job import Job
 from DB.Process import Process
 from DB.Project import Project
 from DB.Sample import Sample
+from DB.User import User
 from helpers.pydantic import BaseModel, Field, DescriptiveModel
 from .helpers.DBtoModel import combine_models
 from .helpers.DataclassToModel import dataclass_to_model_with_suffix
@@ -51,10 +51,21 @@ class _FullUserModel(_MinUserModel):
         description="User's organisation name, as text.",
         example="Oceanographic Laboratory of Villefranche sur Mer - LOV",
     )
-    active = Field(
+    status = Field(
+        default=1,
         title="Account status",
-        description="Whether the user is still active.",
-        example=True,
+        description="Status of the user : 1 for active, 0 for inactive ,2 for pending, -1 for blocked",
+        example=1,
+    )
+    status_date = Field(
+        title="status date",
+        description="Timestamp status modification date",
+        example="2020-11-05T12:31:48.299713",
+    )
+    status_admin_comment = Field(
+        title="Comment",
+        description="Optional Users admininistrator comment about the account status.",
+        example="",
     )
     country = Field(
         title="Country",
@@ -76,10 +87,20 @@ class _FullUserModel(_MinUserModel):
         description="Encrypted (or not) password.",
         example="$foobar45$",
     )
+    mail_status = Field(
+        title="Mail status",
+        description="True for verified, False for waiting for verification, None for no action.",
+        example=True,
+    )
+    mail_status_date = Field(
+        title="Mail status date",
+        description="Timestamp mail status modification date",
+        example="2020-11-05T12:31:48.299713",
+    )
 
 
 _UserModelFromDB = combine_models(User, _FullUserModel)
-
+UserModelProfile = combine_models(User, _FullUserModel)
 
 # TODO JCE - description example
 class _Project2Model(DescriptiveModel):
@@ -549,38 +570,38 @@ class _AddedToCollection(BaseModel):
     )
     provider_user: Optional[MinUserModel] = Field(
         title="Provider user",
-        description="""Is the person who 
+        description="""Is the person who
         is responsible for the content of this metadata record. Writer of the title and abstract.""",
     )
     contact_user: Optional[MinUserModel] = Field(
         title="Contact user",
-        description="""Is the person who 
-        should be contacted in cases of questions regarding the content of the dataset or any data restrictions. 
+        description="""Is the person who
+        should be contacted in cases of questions regarding the content of the dataset or any data restrictions.
         This is also the person who is most likely to stay involved in the dataset the longest.""",
     )
     creator_users: List[MinUserModel] = Field(
         title="Creator users",
-        description="""All people who 
-        are responsible for the creation of the collection. Data creators should receive credit 
+        description="""All people who
+        are responsible for the creation of the collection. Data creators should receive credit
         for their work and should therefore be included in the citation.""",
         default=[],
     )
     creator_organisations: List[str] = Field(
         title="Creator organisations",
-        description="""All 
-        organisations who are responsible for the creation of the collection. Data creators should 
+        description="""All
+        organisations who are responsible for the creation of the collection. Data creators should
         receive credit for their work and should therefore be included in the citation.""",
         default=[],
     )
     associate_users: List[MinUserModel] = Field(
         title="Associate users",
-        description="""Other person(s) 
+        description="""Other person(s)
         associated with the collection.""",
         default=[],
     )
     associate_organisations: List[str] = Field(
         title="Associate organisations",
-        description="""Other 
+        description="""Other
         organisation(s) associated with the collection.""",
         default=[],
     )
@@ -694,3 +715,41 @@ class JobModel(_JobModelFromDB, _AddedToJob):
     """
     All information about the Job.
     """
+
+
+class ResetPasswordReq(BaseModel):
+    """
+    Minimal user information need to reset the password
+    """
+
+    id: int = Field(
+        title="User Id",
+        description="User unique identifier.",
+        example=1,
+        default=-1,
+    )
+    email: Optional[str] = Field(title="Email", default=None)
+    password: Optional[str] = Field(title="Password", default=None)
+
+
+class UserActivateReq(BaseModel):
+    """
+    Request to modify status of a user by a Users Administrator or confirm email_status, or resend emails (when token is expired) to confirm email or modify pending profile by a user.
+    """
+
+    token: Optional[str] = Field(
+        default=None,
+        title="token",
+        description="token when the user is not an admin and must confirm the email. ",
+    )
+    reason: Optional[str] = Field(
+        default=None,
+        title="Reason",
+        description="status,optional users administrator comment related to the status. ",
+        example="Email is not accepted....",
+    )
+    password: Optional[str] = Field(
+        default=None,
+        title="Password",
+        description="Existing user can modify own email and must confirm it with token and password when email confirmation is on. ",
+    )

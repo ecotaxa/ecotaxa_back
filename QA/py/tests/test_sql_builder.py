@@ -1,7 +1,7 @@
 from DB.helpers.SQL import *
 
 
-def test_sql_wrap(config, database, fastapi, caplog):
+def test_sql_wrap():
     where = WhereClause()
     where *= "obh.classif_id = any (:taxo)"
     where *= "obh.latitude between :MapS and :MapN"
