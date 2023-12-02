@@ -86,7 +86,7 @@ class ObjectHeader(Model):
 
     # The following 3 are set if the object was ever predicted, then they remain
     # forever with these values. They reflect the "last state" only if classif_qual is 'P'.
-    pred_id = Column(INTEGER, ForeignKey("predictions.pred_id", ondelete="SET NULL"))
+    pred_id = Column(INTEGER, ForeignKey("prediction.pred_id", ondelete="SET NULL"))
     # TODO: is NULL on prod' DB even if classif_qual='P' and other classif_auto_* are set
     classif_auto_when = Column(TIMESTAMP)
 
@@ -111,6 +111,7 @@ class ObjectHeader(Model):
     all_images: Iterable[Image]
     acquisition: relationship
     history: relationship
+    prediction: relationship
 
     @classmethod
     def fetch_existing_objects(
