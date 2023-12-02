@@ -60,15 +60,15 @@ class _ObjectHeaderModel(DescriptiveModel):
         example="2021-09-21T14:59:01.007110",
     )
     # TODO: Emulate for UI
-    classif_auto_id = Field(
-        title="Classification auto Id",
-        description="Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. ",
-    )
-    classif_auto_score = Field(
-        title="Classification auto score",
-        description="Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification auto score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
-        example=0.085,
-    )
+    # classif_auto_id = Field(
+    #     title="Classification auto Id",
+    #     description="Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. ",
+    # )
+    # classif_auto_score = Field(
+    #     title="Classification auto score",
+    #     description="Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification auto score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
+    #     example=0.085,
+    # )
     pred_id = Field(
         title="Prediction Id",
         description="Set if the object was ever predicted, id of the automatic prediction.",
