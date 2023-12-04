@@ -24,5 +24,6 @@ class ConstantsService(Service):
         ]
         ret.account_validation = self.config.get_account_validation() == "on"
         ret.email_verification = self.config.get_user_email_verification() == "on"
+        ret.recaptchaid = self.config.get_recaptchaid() != None
         ret.add_ticket = self.config.get_add_ticket()
         return ret
