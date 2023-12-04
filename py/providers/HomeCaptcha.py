@@ -14,10 +14,17 @@ from BO.Rights import NOT_AUTHORIZED
 class HomeCaptcha(object):
     """ """
 
-    def __init__(self, captcha_secret: str):
-        self.secret = captcha_secret
+    def __init__(self, homecaptcha_secret: str):
+
+        self.secret = homecaptcha_secret
+
         config = Config()
-        self.iplist = config.get_captcha_iplist()
+        self.recaptchaid = str(config.get_recaptchaid() or "")
+        if self.recaptchaid != "":
+            recaptchasecret = str(config.get_recaptchasecret() or "")
+            if recaptchasecret != "":
+                self.secret = recaptchasecret
+        self.iplist = str(config.get_captcha_iplist() or "")
 
     def _daily_get_iplist(self):
         # no usage now
@@ -34,8 +41,10 @@ class HomeCaptcha(object):
                     break
         return spamip
 
-    def _check_ip(self, ip: str) -> bool:
-        return False
+    def _check_spam_ip(self, ip: str) -> bool:
+        # if no CAPTCHA_IPLIST in config cannot check if ip is spam
+        if self.recaptchaid != "" or self.iplist == None:
+            return False
         from os import path
         import time
 
@@ -55,13 +64,24 @@ class HomeCaptcha(object):
             Call the API verification endpoint
         :return: None if OK, otherwise string with error.
         """
-        params = {
-            "r": response,
-        }
-        # @see https://developers.google.com/recaptcha/docs/verify
-        url_captcha = str(Config().get_account_request_url() or "") + str(
-            "gui/checkcaptcha"
-        )
+        if self.recaptchaid != "":
+            # call google captcha
+            # @see https://developers.google.com/recaptcha/docs/verify
+            params = api_params = {
+                "response": response,
+                "secret": self.secret,
+                "remoteip": remote_ip,
+            }
+            url_captcha = "https://www.google.com/recaptcha/api/siteverify"
+
+        else:
+            params = {
+                "r": response,
+            }
+
+            url_captcha = str(Config().get_account_request_url() or "") + str(
+                "gui/checkcaptcha"
+            )
         # verfiy = False for tests and self signed
         rsp = requests.request("GET", url=url_captcha, params=params, verify=False)
         rspjson = rsp.json()
@@ -96,7 +116,7 @@ class HomeCaptcha(object):
         remote_ip = no_bot[0]
         response = no_bot[1]
 
-        if self._check_ip(remote_ip) == False:
+        if self._check_spam_ip(remote_ip) == False:
             error = self.validate(remote_ip, response)
         else:
             error = NOT_AUTHORIZED
