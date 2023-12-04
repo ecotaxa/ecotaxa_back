@@ -6,7 +6,7 @@
       "modify": "modified on request"
     },
     "url": "/gui/admin/users/activate/",
-    "subject": "EcoTaxa account [{action}]",
+    "subject": "{ticket} EcoTaxa account [{id}#{email}#{action}]",
     "email": "<a href=\"mailto:{email}\">{email}</a>",
     "data": "{key} : {value}<br>",
     "link": "<a href=\"{url}{id}/active\" style = \"color: rgb(52, 167, 173)\">{url}{id}/active Activate</a>",
