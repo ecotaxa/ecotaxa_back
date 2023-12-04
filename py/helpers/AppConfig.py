@@ -77,6 +77,12 @@ class Config(object):
     def get_captcha_iplist(self) -> Optional[str]:
         return self.parser.get("CAPTCHA_IPLIST")
 
+    def get_recaptchaid(self) -> Optional[str]:
+        return self.parser.get("RECAPTCHAID")
+
+    def get_recaptchasecret(self) -> Optional[str]:
+        return self.parser.get("RECAPTCHASECRET")
+
     def get_mailservice_secret_key(self) -> Optional[str]:
         return self.parser.get("MAILSERVICE_SECRET_KEY")
 

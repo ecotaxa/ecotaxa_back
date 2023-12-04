@@ -34,10 +34,9 @@ TAXOSERVER_URL = http: //ecotaxoserver.obs-vlfr.fr
 TAXOSERVER_INSTANCE_ID = 9
 TAXOSERVER_SHARED_SECRET = ZiAgKGDHiQ4WAj6Gi1RN41WHrMkPut8B3AzgXqLWZ
 
-# If you want to enable reCaptcha for user creation
+# If you want to enable reCaptcha for user creation  - else comment the 2 lines to enable homecaptcha 
 # Note: Below values are for testing, 
-#see https: //developers.google.com/recaptcha/docs/faq
-#id-like-to-run-automated-tests-with-recaptcha.-what-should-i-do
+#see https: //developers.google.com/recaptcha/docs/faq#id-like-to-run-automated-tests-with-recaptcha.-what-should-i-do
 RECAPTCHAID = 6 LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
 RECAPTCHASECRET = 6 LeIxAcTAAAAAGG - vFI1TnRWxMZNFuojJ4WifJWe
 
@@ -60,4 +59,7 @@ USER_EMAIL_VERIFICATION = off
 
 #if "on" - account validation is needed for registration and account major data modification
 ACCOUNT_VALIDATION = off
-CAPTCHA_IPLIST = /utils/iplist.txt
+# comment next line if no ticket software is used or account validation if off
+ADD_TICKET = ***
+#comment the next line if no ip verif in homecaptha  
+CAPTCHA_IPLIST = /somewhere/utils/iplist.txt
