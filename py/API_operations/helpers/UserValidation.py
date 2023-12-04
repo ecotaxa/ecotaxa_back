@@ -147,6 +147,7 @@ class UserValidation(object):
         self._mailprovider.send_hastomodify_mail(
             user.email,
             assistance_email,
+            user.id,
             reason=reason,
             action=action.value,
             token=token,

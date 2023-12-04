@@ -530,7 +530,6 @@ class UserService(Service):
         ask_activate = False
         inform_about_status = None
         is_admin = current_user is not None and self._current_is_admin(current_user)
-
         # check if must send confirmation email before any update
         if (
             str(update_src.email or "").lower()
@@ -557,6 +556,8 @@ class UserService(Service):
                     )
                     cols_to_upd.append(User.status)
                     inform_about_status = False
+                    if update_src.id == -1:
+                        ask_activate = True
         # check if the account needs validation or re-validation
         elif is_admin:
             if (
@@ -573,11 +574,12 @@ class UserService(Service):
                     cols_to_upd.append(User.status_admin_comment)
         elif self._is_major_data_change(update_src, user_to_update):
             if not self._keep_active(current_user):
+                # ordinary user cannot modify his status
                 update_src.status = UserStatus.inactive.value
                 cols_to_upd.append(User.status)
             else:
-                # ordinary user cannot change his status
                 update_src.status = user_to_update.status
+
             if (
                 is_admin == False
                 and update_src.status != user_to_update.status
@@ -713,7 +715,6 @@ class UserService(Service):
                     previous_email = None
                 else:
                     previous_email = user.email
-
                 self._uservalidation.request_email_verification(
                     update_src.email,
                     self._get_assistance_email(),
