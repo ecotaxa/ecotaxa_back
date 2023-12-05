@@ -86,16 +86,16 @@ class MailProvider(object):
         profile_token_age: Optional[int] = 24,
         add_ticket: str = "",
     ):
-        on = len(senderaccount) == 5 and self.is_email(senderaccount[0])
+        on = len(senderaccount) > 2 and self.is_email(senderaccount[0])
         if on:
-            from API_operations.CRUD import Users
-
             self.SENDER_ACCOUNT = senderaccount
             self.DIR_MAIL_TEMPLATES = dir_mail_templates
             self.SHORT_TOKEN_AGE = short_token_age
             self.PROFILE_TOKEN_AGE = profile_token_age
             self.ADD_TICKET = add_ticket
             self.TICKET_MATCH = r"([)*([a-zA-Z])*(#)*([0-9])*(])"
+        else:
+            raise HTTPException(status_code=422, detail=[DETAIL_SMTP_DATA_ERROR])
 
     @staticmethod
     def is_email(email: str) -> bool:
@@ -386,7 +386,6 @@ class MailProvider(object):
         from pathlib import Path
 
         name = model_name.value + ".json"
-
         filename = Path(self.DIR_MAIL_TEMPLATES + "/" + name)
         if not filename.exists():
             raise HTTPException(
@@ -408,6 +407,11 @@ class MailProvider(object):
 
     def extract_senderaccount(self) -> tuple:
         senderaccount = self.SENDER_ACCOUNT
+        # add default ports smtp and imap if not present
+        if len(senderaccount) == 3:
+            senderaccount.append("465")
+        if len(senderaccount) == 4:
+            senderaccount.append("993")
         return (
             senderaccount[0].strip(),
             senderaccount[1].strip(),

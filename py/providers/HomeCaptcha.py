@@ -61,7 +61,7 @@ class HomeCaptcha(object):
 
     def validate(self, remote_ip: str, response: str) -> Optional[str]:
         """
-            Call the API verification endpoint
+        Call the API verification endpoint
         :return: None if OK, otherwise string with error.
         """
         if self.recaptchaid != "":
@@ -83,7 +83,7 @@ class HomeCaptcha(object):
                 "gui/checkcaptcha"
             )
         # verfiy = False for tests and self signed
-        rsp = requests.request("GET", url=url_captcha, params=params, verify=False)
+        rsp = requests.request("GET", url=url_captcha, params=params, verify=True)
         rspjson = rsp.json()
         if (
             int(rsp.status_code) != 200
