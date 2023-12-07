@@ -548,6 +548,7 @@ class UserService(Service):
                     user=user_to_update,
                     action=actiontype,
                 )
+
                 if len(addcols):
                     cols_to_upd.extend(addcols)
                     # desactivate when
@@ -556,12 +557,7 @@ class UserService(Service):
                     )
                     cols_to_upd.append(User.status)
                     inform_about_status = False
-                    if (
-                        update_src.id == -1
-                        and update_src.status == UserStatus.inactive.value
-                        and self.account_validation == True
-                    ):
-                        ask_activate = True
+
         # check if the account needs validation or re-validation
         elif is_admin:
             if (
@@ -583,13 +579,14 @@ class UserService(Service):
                 cols_to_upd.append(User.status)
             else:
                 update_src.status = user_to_update.status
-                # check if must send activation request email
-            if (
-                update_src.status != user_to_update.status
-                and update_src.status == UserStatus.inactive.value
-                and self.account_validation == True
-            ):
-                ask_activate = True
+
+        # check if must send activation request email
+        if not is_admin and self.account_validation == True:
+            ask_activate = (
+                user_to_update.status == UserStatus.pending.value
+                or (update_src.id == -1 and mail_status == True)
+            ) and update_src.status == UserStatus.inactive.value
+
         # only update actions from admin - not from profile
         if (
             current_user is not None
