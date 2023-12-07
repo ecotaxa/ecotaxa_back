@@ -82,8 +82,7 @@ class HomeCaptcha(object):
             url_captcha = str(Config().get_account_request_url() or "") + str(
                 "gui/checkcaptcha"
             )
-        # verfiy = False for tests and self signed
-        rsp = requests.request("GET", url=url_captcha, params=params, verify=True)
+        rsp = requests.request("GET", url=url_captcha, params=params)
         rspjson = rsp.json()
         if (
             int(rsp.status_code) != 200
