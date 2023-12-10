@@ -289,7 +289,7 @@ class ObjectCacheWriter(LogEmitter):  # pragma: no cover
                 ObjectHeader.classif_qual.name,
                 ObjectHeader.orig_id.name,  # Sort column
                 ObjectHeader.classif_when.name,  # Sort column
-                ObjectHeader.classif_auto_when.name,  # Sort column
+                # ObjectHeader.classif_auto_when.name,  # Sort column
             ]
         ]
     )

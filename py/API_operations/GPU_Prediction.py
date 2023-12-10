@@ -18,6 +18,7 @@ from BO.Prediction import DeepFeatures
 from BO.Project import ProjectBO
 from BO.ProjectSet import LimitedInCategoriesProjectSet, FeatureConsistentProjectSet
 from BO.Rights import RightsBO, Action
+from BO.Training import TrainingBO
 from DB.Project import ProjectIDT, Project
 from DB.helpers import Result
 from DB.helpers.Direct import text
@@ -229,6 +230,7 @@ class GPUPredictForProject(PredictForProject):
         total_rows = tgt_res.rowcount  # type:ignore # case1
         done_count = 0
         nb_changes = 0
+        training = TrainingBO.create_one(self.session)  # Where we record the training
         while True:
             obj_ids: ObjectIDListT = []
             unused: ClassifIDListT = []
@@ -245,7 +247,7 @@ class GPUPredictForProject(PredictForProject):
             target_obj_set = EnumeratedObjectSet(self.session, obj_ids)
             # TODO: Remove the keep_logs flag, once sure the new algo is better
             nb_upd, all_changes = target_obj_set.classify_auto_mult(
-                list_classif_ids, list_scores, keep_logs=True
+                training.training_id, list_classif_ids, list_scores
             )
             nb_changes += nb_upd
             logger.info("Changes :%s", str(all_changes)[:1000])

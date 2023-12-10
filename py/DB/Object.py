@@ -9,7 +9,13 @@ import datetime
 from typing import Dict, Set, Iterable, TYPE_CHECKING
 
 # noinspection PyPackageRequirements
-from sqlalchemy import Index, Column, ForeignKey, Sequence, Integer
+from sqlalchemy import (
+    Index,
+    Column,
+    ForeignKey,
+    Sequence,
+    Integer,
+)
 # noinspection PyPackageRequirements
 from sqlalchemy.dialects.postgresql import (
     BIGINT,
@@ -30,6 +36,8 @@ from .Acquisition import Acquisition
 from .Image import Image
 from .Project import Project, ProjectIDT
 from .Sample import Sample
+from .Taxonomy import Taxonomy
+from .Training import Training
 from .helpers import Result
 from .helpers.Direct import text
 from .helpers.ORM import Model
@@ -41,17 +49,22 @@ if TYPE_CHECKING:
     # from .Image import Image
 
 # Classification qualification
-PREDICTED_CLASSIF_QUAL = "P"
-DUBIOUS_CLASSIF_QUAL = "D"
-VALIDATED_CLASSIF_QUAL = "V"
-classif_qual = {
+PREDICTED_CLASSIF_QUAL = (
+    "P"  # according to 'training_id' output, the object might be a 'classif_id'
+)
+DUBIOUS_CLASSIF_QUAL = "D"  # 'classif_who' said at 'classif_when' moment that the object is _probably not_ a 'classif_id'
+VALIDATED_CLASSIF_QUAL = "V"  # 'classif_who' said at 'classif_when' moment that the object _is_ a 'classif_id'
+# TODO: For below, can it ever be seen in object, or always in history?
+DISCARDED_CLASSIF_QUAL = "X"  # 'classif_who' said at 'classif_when' moment that the object _is not_ a 'classif_id'
+classif_qual_labels = {
     PREDICTED_CLASSIF_QUAL: "predicted",
     DUBIOUS_CLASSIF_QUAL: "dubious",
     VALIDATED_CLASSIF_QUAL: "validated",
+    DISCARDED_CLASSIF_QUAL: "discarded",
 }
-CLASSIF_QUALS = set(classif_qual.keys())
+CLASSIF_QUALS = set(classif_qual_labels.keys())
 classif_qual_revert = {}
-for k, v in classif_qual.items():
+for k, v in classif_qual_labels.items():
     classif_qual_revert[v] = k
 
 
@@ -75,7 +88,7 @@ class ObjectHeader(Model):
     depth_max = Column(FLOAT)
     #
     sunpos = Column(CHAR(1))  # Sun position, from date, time and coords
-    #
+    # The displayed (to users) classification
     classif_id = Column(INTEGER)
     # The following is logically out of this block of 4, because depending on its value,
     # - it's the other classif_* columns which reflecting the "last state"
@@ -86,21 +99,30 @@ class ObjectHeader(Model):
 
     # The following 3 are set if the object was ever predicted, then they remain
     # forever with these values. They reflect the "last state" only if classif_qual is 'P'.
-    pred_id = Column(INTEGER, ForeignKey("prediction.pred_id", ondelete="SET NULL"))
+    training_id = Column(INTEGER, ForeignKey(Training.training_id))
     # TODO: is NULL on prod' DB even if classif_qual='P' and other classif_auto_* are set
-    classif_auto_when = Column(TIMESTAMP)
+    # classif_auto_when = Column(TIMESTAMP)  # AKA training_when of last training
 
-    classif_crossvalidation_id = Column(INTEGER)  # Always NULL in prod'
+    classif_crossvalidation_id = Column(
+        INTEGER
+    )  # Always NULL in prod', verified 02/12/2023
 
     complement_info = Column(VARCHAR)  # e.g. "Part of ostracoda"
 
-    similarity = Column(DOUBLE_PRECISION)  # Always NULL in prod'
+    similarity = Column(DOUBLE_PRECISION)  # Always NULL in prod', verified 02/12/2023
 
     # TODO: Why random? It makes testing a bit more difficult
     random_value = Column(INTEGER)
 
-    # TODO: Can't see any value in DB
+    # 72832 unique values as of 02/12/2023
     object_link = Column(VARCHAR(255))
+
+    # Below is not true if not Predicted or Validated, left here for reference
+    # ForeignKeyConstraint(
+    #     ["training_id", "objid", "classif_id"],
+    #     ["Prediction.training_id", "Prediction.object_id", "Prediction.classif_id"],
+    #     name="obj2pred",
+    # )
 
     # The relationships are created in Relations.py but the typing here helps the IDE
     fields: ObjectFields
@@ -111,7 +133,7 @@ class ObjectHeader(Model):
     all_images: Iterable[Image]
     acquisition: relationship
     history: relationship
-    prediction: relationship
+    last_training: relationship
 
     @classmethod
     def fetch_existing_objects(
@@ -260,13 +282,15 @@ class ObjectsClassifHisto(Model):
     objid = Column(
         BIGINT, ForeignKey("obj_head.objid", ondelete="CASCADE"), primary_key=True
     )
-    # TODO: FK on taxonomy
+    # The date
     classif_date = Column(TIMESTAMP, primary_key=True)
-    classif_type = Column(CHAR(1))  # A : Automatic, M : Manual
-    classif_id = Column(INTEGER)
-    classif_qual = Column(CHAR(1))
-    classif_who = Column(Integer, ForeignKey("users.id"))
-    pred_id = Column(INTEGER)
+    # classif_type = Column(CHAR(1))  # A : Automatic, M : Manual
+    classif_id = Column(INTEGER, ForeignKey(Taxonomy.id, ondelete="CASCADE"))
+    classif_qual = Column(CHAR(1))  # 'P', 'V', 'D' + 'X' for discarded
+    classif_who = Column(Integer, ForeignKey("users.id"))  # The user who did the action
+    training_id = Column(
+        INTEGER, ForeignKey(Training.training_id, ondelete="CASCADE")
+    )  # The training causing the values
 
     # The relationships are created in Relations.py but the typing here helps the IDE
     object: relationship

@@ -10,7 +10,7 @@ from BO.Classification import (
     ClassifIDSetT,
     ClassifIDListT,
     ClassifIDT,
-    ClassifScoresListT
+    ClassifScoresListT,
 )
 from BO.ColumnUpdate import ColUpdateList
 from BO.Mappings import TableMapping
@@ -36,6 +36,7 @@ from DB.Object import (
     ObjectHeader,
 )
 from DB.Project import ProjectIDT, Project
+from DB.Training import TrainingIDT
 from DB.helpers import Result
 from DB.helpers.Direct import text
 from DB.helpers.Postgres import db_server_now
@@ -539,10 +540,10 @@ class ObjectManager(Service):
     def classify_auto_mult_set(
         self,
         current_user_id: UserIDT,
+        training_id: TrainingIDT,
         target_ids: ObjectIDListT,
         classif_ids: List[ClassifIDListT],
         scores: List[ClassifScoresListT],
-        keep_logs: bool,
     ) -> Tuple[int, int, ObjectSetClassifChangesT]:
         """
         Classify (from automatic source) a set of objects.
@@ -552,7 +553,9 @@ class ObjectManager(Service):
             current_user_id, target_ids, Action.ANNOTATE
         )
         # Do the raw classification, eventually with history.
-        nb_upd, all_changes = object_set.classify_auto_mult(classif_ids, scores, keep_logs)
+        nb_upd, all_changes = object_set.classify_auto_mult(
+            training_id, classif_ids, scores
+        )
         # Propagate changes to update projects_taxo_stat
         self.propagate_classif_changes(nb_upd, all_changes, project)
         # Return status

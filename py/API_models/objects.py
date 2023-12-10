@@ -4,6 +4,7 @@
 #
 #  Models used in Objects API operations.
 #
+from datetime import datetime
 from typing import List, Optional, Dict, Any
 
 from API_models.helpers.DBtoModel import combine_models
@@ -59,24 +60,9 @@ class _ObjectHeaderModel(DescriptiveModel):
         description="The classification date.",
         example="2021-09-21T14:59:01.007110",
     )
-    # TODO: Emulate for UI
-    # classif_auto_id = Field(
-    #     title="Classification auto Id",
-    #     description="Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. ",
-    # )
-    # classif_auto_score = Field(
-    #     title="Classification auto score",
-    #     description="Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification auto score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
-    #     example=0.085,
-    # )
-    pred_id = Field(
-        title="Prediction Id",
-        description="Set if the object was ever predicted, id of the automatic prediction.",
-    )
-    classif_auto_when = Field(
-        title="Classification auto when",
-        description="Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification date.",
-        example="2021-09-21T14:59:01.007110",
+    training_id = Field(
+        title="Training Id",
+        description="If the object was ever predicted, id of the automatic prediction operation.",
     )
     classif_crossvalidation_id = Field(
         title="Classification crossvalidation Id",
@@ -97,7 +83,30 @@ class _ObjectHeaderModel(DescriptiveModel):
     )
 
 
-ObjectHeaderModel = combine_models(ObjectHeader, _ObjectHeaderModel)
+class _ObjectHeaderComplement(BaseModel):
+    classif_auto_id: Optional[int] = Field(
+        title="Classification auto Id",
+        description="Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. ",
+    )  # Used to be directly available, now needs more calculations.
+
+    classif_auto_score: Optional[float] = Field(
+        title="Classification auto score",
+        description="Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification auto score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
+        example=0.085,
+    )
+
+    classif_auto_when: Optional[datetime] = Field(
+        title="Classification auto when",
+        description="Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification date.",
+        example="2021-09-21T14:59:01.007110",
+    )
+
+
+_ObjectHeaderModelFromDB = combine_models(ObjectHeader, _ObjectHeaderModel)
+
+
+class ObjectHeaderModel(_ObjectHeaderModelFromDB, _ObjectHeaderComplement):
+    pass
 
 
 class _Image2Model(DescriptiveModel):
@@ -142,7 +151,7 @@ class ImageModel(_ImageModelFromDB):
     pass
 
 
-class ObjectModel(ObjectHeaderModel):
+class ObjectModel(ObjectHeaderModel, _ObjectHeaderComplement):
     orig_id: str = Field(
         title="Original id",
         description="Original object ID from initial TSV load.",
@@ -377,7 +386,7 @@ class ClassifyAutoReqMult(BaseModel):
     )
     keep_log: bool = Field(
         title="Keep log",
-        description="Set if former automatic classification history is needed.",
+        description="Set if former automatic classification history is needed. Deprecated, always True.",
     )
 
     class Config:
@@ -416,10 +425,6 @@ class _DBHistoricalClassificationDescription(DescriptiveModel):
         title="Classification qualification",
         description="The classification qualification. Could be **P** for predicted, **V** for validated or **D** for Dubious.",
         example="P",
-    )
-    pred_id = Field(
-        title="Prediction Id",
-        description="The prediction Id.",
     )
     user_name = Field(
         title="User name",

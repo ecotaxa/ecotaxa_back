@@ -19,7 +19,6 @@ if True:
     from .Image import Image
     from .Job import Job
     from .Object import ObjectHeader, ObjectFields, ObjectsClassifHisto
-    from .Prediction import Prediction
     from .Process import Process
     from .Project import Project
     from .ProjectVariables import ProjectVariables
@@ -36,6 +35,11 @@ if True:
 
     # noinspection PyUnresolvedReferences
     from .WoRMs import WoRMS
+
+    from .Training import Training
+
+    from .Prediction import Prediction
+
     from .helpers.ORM import relationship
 
     # User
@@ -64,7 +68,7 @@ if True:
 
     CollectionUserRole.collection = relationship(Collection, uselist=False)
     CollectionUserRole.user = relationship(User, uselist=False)  # type:ignore # case2
-    
+
     # Ancilliary to project
     ProjectVariables.project = relationship(
         Project, viewonly=True
@@ -128,7 +132,7 @@ if True:
         primaryjoin="ObjectCNNFeature.objcnnid==ObjectHeader.objid",
         uselist=False,
     )
-    
+
     ObjectHeader.cnn_features = relationship(ObjectCNNFeature, uselist=False)
 
     ObjectHeader.all_images = relationship(Image)
@@ -138,9 +142,15 @@ if True:
 
     ObjectHeader.history = relationship(ObjectsClassifHisto, viewonly=True)
     ObjectsClassifHisto.object = relationship(ObjectHeader)
-    
-    ObjectHeader.prediction = relationship(Prediction, foreign_keys="ObjectHeader.pred_id")
-    
+
+    ObjectHeader.last_training = relationship(
+        Training,
+    )
+
+    Training.predictions = relationship(
+        Prediction,
+        # primaryjoin="Training.training_id==Prediction.training_id",
+    )
     # Task
     Task.owner = relationship(User)
 
