@@ -530,7 +530,6 @@ class UserService(Service):
         ask_activate = False
         inform_about_status = None
         is_admin = current_user is not None and self._current_is_admin(current_user)
-
         # check if must send confirmation email before any update
         if (
             str(update_src.email or "").lower()
@@ -549,6 +548,7 @@ class UserService(Service):
                     user=user_to_update,
                     action=actiontype,
                 )
+
                 if len(addcols):
                     cols_to_upd.extend(addcols)
                     # desactivate when
@@ -557,6 +557,7 @@ class UserService(Service):
                     )
                     cols_to_upd.append(User.status)
                     inform_about_status = False
+
         # check if the account needs validation or re-validation
         elif is_admin:
             if (
@@ -573,20 +574,19 @@ class UserService(Service):
                     cols_to_upd.append(User.status_admin_comment)
         elif self._is_major_data_change(update_src, user_to_update):
             if not self._keep_active(current_user):
+                # ordinary user cannot modify his status
                 update_src.status = UserStatus.inactive.value
                 cols_to_upd.append(User.status)
             else:
-                # ordinary user cannot change his status
                 update_src.status = user_to_update.status
-            if (
-                is_admin == False
-                and update_src.status != user_to_update.status
-                and (
-                    update_src.status == UserStatus.inactive.value
-                    and self.account_validation == True
-                )
-            ):
-                ask_activate = True
+
+        # check if must send activation request email
+        if not is_admin and self.account_validation == True:
+            ask_activate = (
+                user_to_update.status == UserStatus.pending.value
+                or (update_src.id == -1 and mail_status == True)
+            ) and update_src.status == UserStatus.inactive.value
+
         # only update actions from admin - not from profile
         if (
             current_user is not None
@@ -604,7 +604,7 @@ class UserService(Service):
         )
         logger.info("User %s :  '%s'" % (actiontype.name, user_to_update.email))
         if self._uservalidation:
-            if ask_activate:
+            if ask_activate == True and self.account_validation == True:
                 self._uservalidation.request_activate_user(
                     UserModelProfile.from_orm(user_to_update),
                     validation_emails=self._get_validation_emails(),
@@ -713,7 +713,6 @@ class UserService(Service):
                     previous_email = None
                 else:
                     previous_email = user.email
-
                 self._uservalidation.request_email_verification(
                     update_src.email,
                     self._get_assistance_email(),

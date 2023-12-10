@@ -38,9 +38,6 @@ def config_captcha(monkeypatch):
                 detail=detail,
             )
 
-    from providers.Google import ReCAPTCHAClient
-
-    monkeypatch.setattr(ReCAPTCHAClient, "verify_captcha", mock_verify_captcha)
     from providers.HomeCaptcha import HomeCaptcha
 
     monkeypatch.setattr(HomeCaptcha, "verify_captcha", mock_verify_captcha)

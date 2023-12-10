@@ -86,15 +86,16 @@ class MailProvider(object):
         profile_token_age: Optional[int] = 24,
         add_ticket: str = "",
     ):
-        on = len(senderaccount) == 4 and self.is_email(senderaccount[0])
+        on = len(senderaccount) > 2 and self.is_email(senderaccount[0])
         if on:
-            from API_operations.CRUD import Users
-
             self.SENDER_ACCOUNT = senderaccount
             self.DIR_MAIL_TEMPLATES = dir_mail_templates
             self.SHORT_TOKEN_AGE = short_token_age
             self.PROFILE_TOKEN_AGE = profile_token_age
             self.ADD_TICKET = add_ticket
+            self.TICKET_MATCH = r"([)*([a-zA-Z])*(#)*([0-9])*(])"
+        else:
+            raise HTTPException(status_code=422, detail=[DETAIL_SMTP_DATA_ERROR])
 
     @staticmethod
     def is_email(email: str) -> bool:
@@ -121,15 +122,26 @@ class MailProvider(object):
                     detail=[DETAIL_INVALID_EMAIL],
                 )
         import smtplib, ssl
+        import email.utils as utils
 
         # starttls and 587  - avec ssl 465
-        senderaccount = self.SENDER_ACCOUNT
-        senderemail = senderaccount[0].strip()
-        senderpwd = senderaccount[1].strip()
-        senderdns = senderaccount[2].strip()
-        senderport = int(senderaccount[3].strip())
+        # senderaccount = self.SENDER_ACCOUNT
+        # senderemail = senderaccount[0].strip()
+        # senderpwd = senderaccount[1].strip()
+        # senderdns = senderaccount[2].strip()
+        # senderport = int(senderaccount[3].strip())
+        (
+            senderemail,
+            senderpwd,
+            senderdns,
+            senderport,
+            imapport,
+        ) = self.extract_senderaccount()
         msg["From"] = senderemail
         msg["To"] = ", ".join(recipients)
+        domain = senderemail.split("@")
+        msg["message-id"] = utils.make_msgid(domain=domain[1])
+        msg["Date"] = utils.formatdate()
         if replyto == None:
             msg["Reply-To"] = "No-Reply"
         else:
@@ -242,7 +254,10 @@ class MailProvider(object):
         model["body"] = model["body"].format(**replace)
         mailmsg = EmailMessage()
         mailmsg["Subject"] = model["subject"].format(
-            action=replace["action"], ticket=replace["ticket"]
+            action=replace["action"],
+            id=values.id,
+            email=values.email,
+            ticket=replace["ticket"],
         )
         text = self.html_to_text(model["body"])
         mailmsg.set_content(text, subtype="plain", charset="utf-8", cte="8bit")
@@ -267,12 +282,14 @@ class MailProvider(object):
         if len(recipients) == 0:
             raise HTTPException(status_code=404, detail=[DETAIL_NO_RECIPIENT])
         id = data["id"]
+        ticket = self.get_ticket(data["email"], id)
         replace = ReplaceInMail(
             id=id,
             email=data["email"],
             token=token,
             data=data,
             action=action,
+            ticket=str(ticket or ""),
             url=url,
         )
         mailmsg = self.mail_message(AccountMailType.activate, replace)
@@ -341,6 +358,7 @@ class MailProvider(object):
         self,
         recipient: str,
         assistance_email: str,
+        user_id: int,
         reason: str,
         action: Optional[str] = None,
         token: Optional[str] = None,
@@ -349,19 +367,14 @@ class MailProvider(object):
         """
         when there is a ticket software - ticket number can be found at the beginning of the comment/reason and sent back in the email subject
         """
-        ticket = ""
-        if self.ADD_TICKET != "":
-            reasons = reason.split(self.ADD_TICKET)
-            if len(reasons) > 1 and reasons[0].strip() != "":
-                ticket = "[" + reasons[0] + "]"
-                reason = self.ADD_TICKET.join(reasons[1:])
+        ticket = self.get_ticket(recipient, user_id, reason, token)
         values = ReplaceInMail(
             email=assistance_email,
             reason=reason,
             token=token,
             url=url,
             tokenage=self.PROFILE_TOKEN_AGE,
-            ticket=ticket,
+            ticket=str(ticket or ""),
         )
         mailmsg = self.mail_message(AccountMailType.modify, values, action=action)
         self.send_mail([recipient], mailmsg, replyto=assistance_email)
@@ -373,7 +386,6 @@ class MailProvider(object):
         from pathlib import Path
 
         name = model_name.value + ".json"
-
         filename = Path(self.DIR_MAIL_TEMPLATES + "/" + name)
         if not filename.exists():
             raise HTTPException(
@@ -392,3 +404,75 @@ class MailProvider(object):
         else:
             return model
         return None
+
+    def extract_senderaccount(self) -> tuple:
+        senderaccount = self.SENDER_ACCOUNT
+        # add default ports smtp and imap if not present
+        if len(senderaccount) == 3:
+            senderaccount.append("465")
+        if len(senderaccount) == 4:
+            senderaccount.append("993")
+        return (
+            senderaccount[0].strip(),
+            senderaccount[1].strip(),
+            senderaccount[2].strip(),
+            int(senderaccount[3].strip()),
+            int(senderaccount[4].strip()),
+        )
+
+    def get_ticket(
+        self,
+        user_email: str,
+        user_id: int,
+        token: Optional[str] = None,
+        comment: Optional[str] = None,
+    ) -> Optional[str]:
+        """Get ticket number from mailbox or status_admin_comment or token"""
+        if self.ADD_TICKET == "":
+            return None
+        from itertools import chain
+        import email
+        import imaplib
+
+        (
+            senderemail,
+            senderpwd,
+            senderdns,
+            senderport,
+            imapport,
+        ) = self.extract_senderaccount()
+        ticket = None
+        try:
+            # set connection
+            mail = imaplib.IMAP4_SSL(senderdns, imapport)
+            # login
+            mail.login(senderemail, senderpwd)
+            # select inbox
+            mail.select("INBOX")
+            criteria = {
+                "FROM": "Ecotaxa",
+                "SUBJECT": str(user_id) + "#" + user_email + "#",
+            }
+
+            def search_string(criteria):
+                c = list(map(lambda t: (t[0], '"' + str(t[1]) + '"'), criteria.items()))
+                s = "(%s)" % " ".join(chain(*c))
+                return s
+
+            (_, data) = mail.uid("search", search_string(criteria))
+            if data != None and isinstance(data, list):
+                inbox_item_list = data[0].split()
+                most_recent = inbox_item_list[-1]
+                _, email_data = mail.uid("fetch", most_recent, "(RFC822)")
+                raw_email = email_data[0][1].decode("UTF-8")
+                email_message = email.message_from_string(raw_email)
+                if "Subject" in email_message:
+                    import re
+
+                    match = re.match(self.TICKET_MATCH, email_message["Subject"])
+                    if match:
+                        ticket = match.group(0)
+            mail.logout()
+        except:
+            pass
+        return ticket
