@@ -37,7 +37,7 @@ from BO.Classification import (
 )
 from BO.ColumnUpdate import ColUpdateList
 from BO.Mappings import ProjectMapping, TableMapping
-from BO.Object import ObjectIDWithParentsT, MANUAL_STATES_TEXT, PREDICTED_STATE_TEXT
+from BO.Object import ObjectIDWithParentsT, MANUAL_STATES_TEXT
 from BO.Taxonomy import TaxonomyBO
 from BO.User import UserIDT
 from BO.helpers.MappedTable import MappedTable
@@ -55,10 +55,9 @@ from DB.Object import (
     ObjectIDT,
 )
 from DB.Prediction import Prediction
-# from DB.Prediction import Prediction
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
-from DB.Training import TrainingIDT
+from DB.Training import Training, TrainingIDT
 from DB.helpers import Result
 from DB.helpers.Core import select
 from DB.helpers.Direct import text, func
@@ -146,9 +145,13 @@ class DescribedObjectSet(object):
             preds_ref = Prediction.__tablename__ + " prd"
             selected_tables += (
                 preds_ref
-                + " ON prd.training_id = obh.training_id AND prd.classif_id = :obh.classif_id"
+                + " ON prd.training_id = obh.training_id AND prd.classif_id = obh.classif_id"
             )
             selected_tables.set_outer(preds_ref)
+        if "trn." in column_referencing_sql:
+            trainings_ref = Training.__tablename__ + " trn"
+            selected_tables += trainings_ref + " ON trn.training_id = obh.training_id"
+            selected_tables.set_outer(trainings_ref)
         if "ohu." in column_referencing_sql:  # Inline query for annotators in history
             selected_tables += (
                 "(select 1 as in_annots WHERE EXISTS (select * from "
@@ -334,7 +337,7 @@ class EnumeratedObjectSet(MappedTable):
         :param only_qual: If set, only historize for current rows with this classification.
         """
         # Light up a bit the SQLA expressions
-        oh = ObjectHeader
+        obh = ObjectHeader
         och = ObjectsClassifHisto
         #
         # No classif_qual AKA state: Assume there is nothing to log.
@@ -362,50 +365,43 @@ class EnumeratedObjectSet(MappedTable):
             och.training_id,  # <- obh.training_id
         ]
         # Conventional defaults for nulls
+        # TODO: when should this field be NULL?
         classif_when_exp = func.coalesce(
-            oh.classif_when, text(DEFAULT_CLASSIF_HISTORY_DATE)
+            obh.classif_when, text(DEFAULT_CLASSIF_HISTORY_DATE)
         )
-        classif_auto_when_exp = func.coalesce(
-            oh.classif_auto_when, text(DEFAULT_CLASSIF_HISTORY_DATE)
-        )
+        # classif_auto_when_exp = func.coalesce(
+        #     obh.classif_auto_when, text(DEFAULT_CLASSIF_HISTORY_DATE)
+        # )
         # What we want to historize, as a subquery - The current state
         sel_subqry = select(
             [
-                oh.objid,
-                case(
-                    [
-                        (oh.classif_qual.in_(MANUAL_STATES_TEXT), classif_when_exp),
-                        (
-                            oh.classif_qual == PREDICTED_STATE_TEXT,
-                            classif_auto_when_exp,
-                        ),
-                    ]
-                ),
+                obh.objid,
+                classif_when_exp,
                 # case(
                 #     [  # TODO: This seems quite redundant. To see in prod' if by chance it's consistent
                 #         (oh.classif_qual.in_(manual_states_text), text("'M'")),
                 #         (oh.classif_qual == predicted_state, text("'A'")),
                 #     ]
                 # ),
-                oh.classif_id,
-                oh.classif_qual,
+                obh.classif_id,
+                obh.classif_qual,
                 case(
                     [
-                        (oh.classif_qual.in_(MANUAL_STATES_TEXT), oh.classif_who),
-                        # No 'who' for Predicted state
+                        (obh.classif_qual.in_(MANUAL_STATES_TEXT), obh.classif_who),
+                        # No 'who' for Predicted state, but a training_id
                     ]
                 ),
-                oh.training_id,
+                obh.training_id,
             ]
         )
         if only_qual is not None:
             # Pick only the required states
-            qual_cond = oh.classif_qual.in_(only_qual)
+            qual_cond = obh.classif_qual.in_(only_qual)
         else:
             # Pick any present state
-            qual_cond = oh.classif_qual.isnot(None)
+            qual_cond = obh.classif_qual.isnot(None)
         sel_subqry = sel_subqry.where(
-            and_(oh.objid == any_(self.object_ids), qual_cond)
+            and_(obh.objid == any_(self.object_ids), qual_cond)
         )
         # Insert into the log table
         ins_qry: PgInsert = pg_insert(och.__table__)
@@ -478,7 +474,7 @@ class EnumeratedObjectSet(MappedTable):
             ObjectHeader.objid,
             ObjectHeader.classif_id,
             func.coalesce(
-                subq_alias.c.classif_date, ObjectHeader.classif_auto_when
+                subq_alias.c.classif_date  # TODO, ObjectHeader.classif_auto_when
             ).label("histo_classif_date"),
             subq_alias.c.classif_type.label("histo_classif_type"),
             func.coalesce(subq_alias.c.classif_id).label("histo_classif_id"),
@@ -567,7 +563,6 @@ class EnumeratedObjectSet(MappedTable):
         classif_qual_col = ObjectHeader.classif_qual.name
         classif_who_col = ObjectHeader.classif_who.name
         classif_when_col = ObjectHeader.classif_when.name
-        classif_auto_when_col = ObjectHeader.classif_auto_when.name
         for obj_id, v in zip(self.object_ids, classif_ids):
             prev_obj = present[obj_id]
             # Classification change
@@ -619,25 +614,22 @@ class EnumeratedObjectSet(MappedTable):
         # Update of obj_head, grouped by similar operations.
         nb_updated = 0
         for (new_classif_id, new_wanted_qualif), an_obj_set in updates.items():
+            # Sanity check, the hard way
+            assert new_wanted_qualif in (
+                VALIDATED_CLASSIF_QUAL,
+                DUBIOUS_CLASSIF_QUAL,
+            ), (
+                "unexpected qualif %s" % new_wanted_qualif
+            )
             # Historize the updated rows (can be a lot!)
             an_obj_set.historize_classification(only_qual=None)
             row_upd = {
                 classif_id_col: new_classif_id,
                 classif_qual_col: new_wanted_qualif,
+                classif_when_col: log_timestamp,
+                classif_who_col: user_id,
             }
-            if new_wanted_qualif in (VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL):
-                row_upd.update(
-                    {classif_who_col: user_id, classif_when_col: log_timestamp}
-                )
-            else:
-                row_upd.update(
-                    {
-                        classif_auto_when_col: log_timestamp,
-                        classif_who_col: None,
-                        classif_when_col: None,
-                    }
-                )
-            # Do the update itsef
+            # Do the update itself
             nb_updated += an_obj_set.update_all(row_upd)
 
         logger.info("%d rows updated in %d queries", nb_updated, len(updates))

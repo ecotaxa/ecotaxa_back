@@ -88,6 +88,7 @@ class ObjectHeader(Model):
     depth_max = Column(FLOAT)
     #
     sunpos = Column(CHAR(1))  # Sun position, from date, time and coords
+
     # The displayed (to users) classification
     classif_id = Column(INTEGER)
     # The following is logically out of this block of 4, because depending on its value,
@@ -95,21 +96,19 @@ class ObjectHeader(Model):
     # - or the classif_auto_* ones.
     classif_qual = Column(CHAR(1))
     classif_who = Column(Integer, ForeignKey("users.id"))
+    # Date the current other classif_* were last set
     classif_when = Column(TIMESTAMP)
 
-    # The following 3 are set if the object was ever predicted, then they remain
-    # forever with these values. They reflect the "last state" only if classif_qual is 'P'.
+    # If the object was ever predicted, the last training which produced the predictions
     training_id = Column(INTEGER, ForeignKey(Training.training_id))
-    # TODO: is NULL on prod' DB even if classif_qual='P' and other classif_auto_* are set
-    # classif_auto_when = Column(TIMESTAMP)  # AKA training_when of last training
 
-    classif_crossvalidation_id = Column(
-        INTEGER
-    )  # Always NULL in prod', verified 02/12/2023
+    # classif_crossvalidation_id = Column(
+    #     INTEGER
+    # )  # Always NULL in prod', verified 02/12/2023
 
     complement_info = Column(VARCHAR)  # e.g. "Part of ostracoda"
 
-    similarity = Column(DOUBLE_PRECISION)  # Always NULL in prod', verified 02/12/2023
+    # similarity = Column(DOUBLE_PRECISION)  # Always NULL in prod', verified 02/12/2023
 
     # TODO: Why random? It makes testing a bit more difficult
     random_value = Column(INTEGER)
@@ -282,7 +281,7 @@ class ObjectsClassifHisto(Model):
     objid = Column(
         BIGINT, ForeignKey("obj_head.objid", ondelete="CASCADE"), primary_key=True
     )
-    # The date
+    # The date, set if manual action
     classif_date = Column(TIMESTAMP, primary_key=True)
     # classif_type = Column(CHAR(1))  # A : Automatic, M : Manual
     classif_id = Column(INTEGER, ForeignKey(Taxonomy.id, ondelete="CASCADE"))

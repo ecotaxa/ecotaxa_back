@@ -62,18 +62,10 @@ class _ObjectHeaderModel(DescriptiveModel):
     )
     training_id = Field(
         title="Training Id",
-        description="If the object was ever predicted, id of the automatic prediction operation.",
-    )
-    classif_crossvalidation_id = Field(
-        title="Classification crossvalidation Id",
-        description="Always NULL in prod.",
-        example="null",
+        description="If the object was ever predicted, id of the last automatic prediction operation.",
     )
     complement_info = Field(
         title="Complement info", description="", example="Part of ostracoda"
-    )
-    similarity = Field(
-        title="Similarity", description="Always NULL in prod.", example="null"
     )
     random_value = Field(title="random_value", description="")
     object_link = Field(
@@ -84,6 +76,7 @@ class _ObjectHeaderModel(DescriptiveModel):
 
 
 class _ObjectHeaderComplement(BaseModel):
+    # Still there but now computed
     classif_auto_id: Optional[int] = Field(
         title="Classification auto Id",
         description="Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. ",
@@ -99,6 +92,16 @@ class _ObjectHeaderComplement(BaseModel):
         title="Classification auto when",
         description="Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification date.",
         example="2021-09-21T14:59:01.007110",
+    )
+    # Historical, kept for compat with old interface
+    classif_crossvalidation_id: Optional[int] = Field(
+        title="Classification crossvalidation Id",
+        description="Always NULL in prod.",
+        example="null",
+    )
+
+    similarity: Optional[float] = Field(
+        title="Similarity", description="Always NULL in prod.", example="null"
     )
 
 

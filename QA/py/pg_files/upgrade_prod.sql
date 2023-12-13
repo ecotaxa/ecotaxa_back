@@ -1231,6 +1231,50 @@ $$;
 UPDATE alembic_version SET version_num='1b1beb672279' WHERE alembic_version.version_num = '34d91185174c';
 
 COMMIT;
+
+-- Running upgrade 1b1beb672279 -> d3bfaa54d544
+
+ALTER TABLE obj_head ADD COLUMN training_id INTEGER;
+
+ALTER TABLE obj_head ADD FOREIGN KEY(training_id) REFERENCES training (training_id);
+
+DROP INDEX is_objectsacqclassifqual2;
+
+CREATE INDEX is_objectsacqclassifqual ON obj_head (acquisid, classif_id, classif_qual);
+
+
+ALTER TABLE obj_head DROP COLUMN classif_auto_id;
+
+ALTER TABLE obj_head DROP COLUMN classif_auto_score;
+
+ALTER TABLE obj_head DROP COLUMN classif_auto_when;
+
+ALTER TABLE obj_head DROP COLUMN classif_crossvalidation_id;
+
+ALTER TABLE obj_head DROP COLUMN similarity;
+
+
+ALTER TABLE objectsclassifhisto ADD COLUMN training_id INTEGER;
+
+ALTER TABLE objectsclassifhisto ADD FOREIGN KEY(training_id) REFERENCES training (training_id) ON DELETE CASCADE;
+
+ALTER TABLE objectsclassifhisto ADD FOREIGN KEY(classif_id) REFERENCES taxonomy (id) ON DELETE CASCADE;
+
+ALTER TABLE objectsclassifhisto DROP COLUMN classif_score;
+
+ALTER TABLE objectsclassifhisto DROP COLUMN classif_type;
+
+
+ALTER TABLE user_password_reset ALTER COLUMN temp_password SET NOT NULL;
+
+ALTER TABLE user_password_reset DROP CONSTRAINT user_password_reset_user_id_fkey;
+
+ALTER TABLE user_password_reset ADD FOREIGN KEY(user_id) REFERENCES users (id);
+
+UPDATE alembic_version SET version_num='d3bfaa54d544' WHERE alembic_version.version_num = '1b1beb672279';
+
+COMMIT;
+
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;

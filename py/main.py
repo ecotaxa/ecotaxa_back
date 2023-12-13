@@ -147,7 +147,7 @@ fastapi_logger.setLevel(INFO)
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.35",
+    version="0.0.35.mlp",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -2216,7 +2216,6 @@ def classify_auto_mult_object_set(
                 req.target_ids,
                 req.classifications,
                 req.scores,
-                req.keep_log,
             )
         with DBSyncService(ProjectTaxoStat, ProjectTaxoStat.projid, prj_id) as ssce:
             ssce.wait()

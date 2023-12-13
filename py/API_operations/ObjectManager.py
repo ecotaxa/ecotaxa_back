@@ -220,7 +220,7 @@ class ObjectManager(Service):
     ) -> str:
         """
             From an API-named list of columns, return the real text for the SELECT to return them
-        :param return_fields: The filefs in prefix+name convention
+        :param return_fields: The fields in prefix+name convention
         :param mapping: Mapping to use
         :return:
         """
@@ -486,7 +486,10 @@ class ObjectManager(Service):
         classif_ids = [forced_id] * len(obj_set.object_ids)
         now = db_server_now(self.session)
         nb_upd, all_changes = obj_set.classify_validate(
-            current_user_id, classif_ids, "=", now
+            current_user_id,
+            classif_ids,
+            "=",  # TODO bug here, we have to keep consistency
+            now,
         )
 
         if only_taxon is not None:

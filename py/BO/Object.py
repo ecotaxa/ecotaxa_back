@@ -53,6 +53,16 @@ MANUAL_STATES_TEXT = text(
 )
 PREDICTED_STATE_TEXT = text("'%s'" % PREDICTED_CLASSIF_QUAL)
 
+CLASSIF_OBJ_FIELDS_IN_PREDICTION = {
+    # Presented as -> Physical in Prediction
+    "classif_auto_score": "score",
+    "classif_auto_id": "classif_id",
+}
+CLASSIF_OBJ_FIELDS_IN_TRAINING = {
+    # Presented as -> Physical in Training
+    "classif_auto_when": "training_when"
+}
+
 
 def _get_proj(obj: ObjectHeader) -> Project:
     return obj.acquisition.sample.project
@@ -138,6 +148,10 @@ class ObjectBO(MappedEntity):
                 return "obh." + name
             elif name == "imgcount":
                 return "(SELECT COUNT(img2.imgrank) FROM images img2 WHERE img2.objid = obh.objid) AS imgcount"
+            elif name in CLASSIF_OBJ_FIELDS_IN_PREDICTION:
+                return "prd." + CLASSIF_OBJ_FIELDS_IN_PREDICTION[name]
+            elif name in CLASSIF_OBJ_FIELDS_IN_TRAINING:
+                return "trn." + CLASSIF_OBJ_FIELDS_IN_TRAINING[name]
         elif prfx == "fre":
             if name in mapping.tsv_cols_to_real:
                 mpg = mapping.tsv_cols_to_real[name]
