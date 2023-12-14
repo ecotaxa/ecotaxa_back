@@ -31,6 +31,6 @@ class Training(Model):
     predictions: relationship
 
     def __str__(self):
-        return "{0} by {1} on the {2}".format(
+        return "Training #{0} by user {1} on the {2}".format(
             self.training_id, self.training_author, self.training_when
         )

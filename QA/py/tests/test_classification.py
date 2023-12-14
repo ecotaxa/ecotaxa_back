@@ -65,18 +65,18 @@ def get_stats(fastapi, prj_id):
 
 def get_predictions_stats(obj_ids):
     with SamplesService() as sce:
-        qry = select(Prediction.object_id, Prediction.discarded)
+        qry = select(Prediction.object_id)  # TODO: makes sense to update this
         qry = qry.where(Prediction.object_id == any_(obj_ids))
         res: Result = sce.session.execute(qry)
-        pred_stats = {'n_predicted_objects': 0, 'n_predictions': 0, 'n_discarded': 0}
+        pred_stats = {"n_predicted_objects": 0, "n_predictions": 0, "n_discarded": 0}
         pred_objects = list()
         for rec in res.fetchall():
-            if rec['object_id'] not in pred_objects:
-                pred_objects.append(rec['object_id'])
-                pred_stats['n_predicted_objects'] += 1
-            pred_stats['n_predictions'] += 1
-            if rec['discarded'] :
-                pred_stats['n_discarded'] += 1
+            if rec["object_id"] not in pred_objects:
+                pred_objects.append(rec["object_id"])
+                pred_stats["n_predicted_objects"] += 1
+            pred_stats["n_predictions"] += 1
+            # if rec["discarded"]:
+            #     pred_stats["n_discarded"] += 1
     return pred_stats
 
 
@@ -132,7 +132,7 @@ def classify_auto_incorrect(fastapi, obj_ids):
             },
         )
     # List of scores outside [0, 1], should raise an error
-    scores = [[2.] * n for _obj in obj_ids]
+    scores = [[2.0] * n for _obj in obj_ids]
     with pytest.raises(AssertionError):
         rsp = fastapi.post(
             url,
@@ -292,7 +292,9 @@ def test_classif(database, fastapi, caplog):
     classify_auto_incorrect(fastapi, obj_ids[:4])
 
     # Super ML result, 4 first objects are crustacea
-    classify_auto_mult_all(fastapi, obj_ids[:4], [crustacea, copepod_id, entomobryomorpha_id])
+    classify_auto_mult_all(
+        fastapi, obj_ids[:4], [crustacea, copepod_id, entomobryomorpha_id]
+    )
 
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
@@ -302,13 +304,20 @@ def test_classif(database, fastapi, caplog):
         "projid": prj_id,
         "used_taxa": [-1, crustacea],
     }
-    
-    assert get_predictions_stats(obj_ids) == {'n_predicted_objects': 4,
-                                              'n_predictions': 12,
-                                              'n_discarded': 0}
+
+    assert get_predictions_stats(obj_ids) == {
+        "n_predicted_objects": 4,
+        "n_predictions": 12,
+        "n_discarded": 0,
+    }
 
     # New ML results with a different score for the second object
-    classify_auto_mult_all(fastapi, [obj_ids[1]], [crustacea, copepod_id, entomobryomorpha_id], [[0.8, 0.1, 0.05]])
+    classify_auto_mult_all(
+        fastapi,
+        [obj_ids[1]],
+        [crustacea, copepod_id, entomobryomorpha_id],
+        [[0.8, 0.1, 0.05]],
+    )
     url = OBJECT_QUERY_URL.format(object_id=obj_ids[1])
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
@@ -322,15 +331,21 @@ def test_classif(database, fastapi, caplog):
         "used_taxa": [-1, crustacea],
     }
 
-    assert get_predictions_stats(obj_ids) == {'n_predicted_objects': 4,
-                                              'n_predictions': 12,
-                                              'n_discarded': 0}
+    assert get_predictions_stats(obj_ids) == {
+        "n_predicted_objects": 4,
+        "n_predictions": 12,
+        "n_discarded": 0,
+    }
 
     with SamplesService() as sce:
         qry = select(Prediction.classif_id, Prediction.score)
         qry = qry.where(Prediction.object_id == obj_ids[1])
         res: Result = sce.session.execute(qry)
-        assert res.fetchall() == [(crustacea, 0.8), (copepod_id, 0.1), (entomobryomorpha_id, 0.05)]
+        assert res.fetchall() == [
+            (crustacea, 0.8),
+            (copepod_id, 0.1),
+            (entomobryomorpha_id, 0.05),
+        ]
 
     # Admin (me!) thinks that all is a copepod :)
     classify_all(fastapi, obj_ids, copepod_id)

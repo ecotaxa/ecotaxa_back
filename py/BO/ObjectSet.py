@@ -37,7 +37,7 @@ from BO.Classification import (
 )
 from BO.ColumnUpdate import ColUpdateList
 from BO.Mappings import ProjectMapping, TableMapping
-from BO.Object import ObjectIDWithParentsT, MANUAL_STATES_TEXT
+from BO.Object import ObjectIDWithParentsT, MANUAL_STATES_TEXT, PREDICTED_STATE_TEXT
 from BO.Taxonomy import TaxonomyBO
 from BO.User import UserIDT
 from BO.helpers.MappedTable import MappedTable
@@ -54,14 +54,14 @@ from DB.Object import (
     ObjectHeader,
     ObjectIDT,
 )
-from DB.Prediction import Prediction
+from DB.Prediction import Prediction, ClassifScore
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
 from DB.Training import Training, TrainingIDT
 from DB.helpers import Result
 from DB.helpers.Core import select
 from DB.helpers.Direct import text, func
-from DB.helpers.ORM import Row, Delete, Insert, Update, any_, and_, or_, case
+from DB.helpers.ORM import Row, Delete, Update, any_, and_, or_, case
 from DB.helpers.Postgres import pg_insert, PgInsert
 from DB.helpers.SQL import WhereClause, SQLParamDict, FromClause, OrderClause
 from helpers.DynamicLogs import get_logger
@@ -476,7 +476,12 @@ class EnumeratedObjectSet(MappedTable):
             func.coalesce(
                 subq_alias.c.classif_date  # TODO, ObjectHeader.classif_auto_when
             ).label("histo_classif_date"),
-            subq_alias.c.classif_type.label("histo_classif_type"),
+            case(  # och.classif_type,  # Emulate previous value TODO: dup code?
+                [
+                    (ObjectHeader.classif_qual.in_(MANUAL_STATES_TEXT), "M"),
+                    (ObjectHeader.classif_qual == PREDICTED_STATE_TEXT, "A"),
+                ]
+            ).label("histo_classif_type"),
             func.coalesce(subq_alias.c.classif_id).label("histo_classif_id"),
             subq_alias.c.classif_qual.label("histo_classif_qual"),
             subq_alias.c.classif_who.label("histo_classif_who"),
@@ -646,14 +651,15 @@ class EnumeratedObjectSet(MappedTable):
     def classify_auto_mult(
         self,
         training_id: TrainingIDT,
-        classif_ids: List[ClassifIDListT],
-        classif_scores: List[ClassifScoresListT],
+        classif_id_lists: List[ClassifIDListT],
+        classif_score_lists: List[ClassifScoresListT],
     ) -> Tuple[int, ObjectSetClassifChangesT]:
         """
         Set automatic classifications in self, keeping an history of previous objects' state.
-        :param classif_ids: all predicted category ids for each of the object ids in self,
+        :param training_id: the operation holder for all predictions.
+        :param classif_id_lists: all predicted category ids for each of the object ids in self,
                                 from automatic classification algorithm.
-        :param classif_scores: all predicted confidence scores for each object,
+        :param classif_score_lists: all predicted confidence scores for each object,
                                 from automatic classification algorithm.
         :returns updated rows and a summary of changes, for stats.
         """
@@ -661,96 +667,81 @@ class EnumeratedObjectSet(MappedTable):
         # Gather state of classification, for impacted objects, before the change. Keep a lock on rows.
         prev = self._fetch_classifs_and_lock()
 
-        prev_preds = self._fetch_predictions()
+        # prev_preds = self._fetch_predictions()
 
         # Cook a diff b/w present and wanted values, both for the update of obj_head and preparing the ones on _stat
         # updates: Dict[Tuple, EnumeratedObjectSet] = {}
         all_changes: ObjectSetClassifChangesT = OrderedDict()
-        # A bit of obsessive optimization
+        # A bit of obsessive optimization, and avoid semantically unbound literal
+        objid_col = ObjectHeader.objid.name
         classif_id_col = ObjectHeader.classif_id.name
         classif_qual_col = ObjectHeader.classif_qual.name
-        pred_id_col = ObjectHeader.pred_id.name
-        pred_objid_col = Prediction.object_id.name
+        training_id_col = ObjectHeader.training_id.name
+        pred_training_id_col = Prediction.training_id.name
+        pred_object_id_col = Prediction.object_id.name
         pred_classif_id_col = Prediction.classif_id.name
         pred_score_col = Prediction.score.name
-        pred_discarded_col = Prediction.discarded.name
-        full_updates = []
-        partial_updates = []
-        pred_inserts = []
-        pred_deletes = []
-        objid_param = "_objid"
+        full_updates: List[Dict[str, Any]] = []
 
-        # Prepare insertions in the Predictions table
+        # Bulk insert into the Predictions table, of max_preds (classif_id, score) per object
+        max_preds = self.MAX_PREDICTIONS_PER_OBJECT
+        preds_for_bulk = []
+        preds_by_object: Dict[ObjectIDT, List[ClassifScore]] = {}
         for obj_id, list_classifs, list_scores in zip(
-            self.object_ids, classif_ids, classif_scores
+            self.object_ids, classif_id_lists, classif_score_lists
         ):
-            if obj_id in prev_preds:
-                for pred in prev_preds[obj_id]:
-                    if pred["discarded"] and pred["classif_id"] in list_classifs:
-                        # The prediction was discarded by a user e.g. "This image does _not_ correspond to a Copepod"
-                        to_remove_index = list_classifs.index(pred["classif_id"])
-                        list_classifs.pop(to_remove_index)
-                        list_scores.pop(to_remove_index)
-                    else:
-                        pred_deletes.append(pred["pred_id"])
-
-            max_preds = self.MAX_PREDICTIONS_PER_OBJECT
-            for pred_classif, pred_score in zip(
-                list_classifs[:max_preds], list_scores[:max_preds]
-            ):
-                a_pred_insert: Dict[str, Any] = {
-                    pred_objid_col: obj_id,
-                    pred_classif_id_col: pred_classif,
-                    pred_score_col: pred_score,
-                    pred_discarded_col: False,
-                }
-                pred_inserts.append(a_pred_insert)
-
-        # Predictions table update # TODO: Not anymore
-        if len(pred_deletes) > 0:
-            pred_del_query: Delete = Prediction.__table__.delete()
-            pred_del_query = pred_del_query.where(Prediction.pred_id.in_(pred_deletes))
-            self.session.execute(pred_del_query)
-        if len(pred_inserts) > 0:
-            pred_ins_query: Insert = Prediction.__table__.insert()
-            pred_ins_query = pred_ins_query.values(
-                object_id=bindparam(pred_objid_col),
-                classif_id=bindparam(pred_classif_id_col),
-                score=bindparam(pred_score_col),
-                discarded=bindparam(pred_discarded_col),
-            )
-            self.session.execute(pred_ins_query, pred_inserts)
+            preds_for_object = [
+                ClassifScore(classif, score)
+                for classif, score in zip(
+                    list_classifs[:max_preds], list_scores[:max_preds]
+                )
+            ]
+            preds_by_object[obj_id] = preds_for_object
+            for pred_classif, pred_score in preds_for_object:
+                preds_for_bulk.append(
+                    {
+                        pred_training_id_col: training_id,
+                        pred_object_id_col: obj_id,
+                        pred_classif_id_col: pred_classif,
+                        pred_score_col: pred_score,
+                    }
+                )
+        self.session.bulk_insert_mappings(Prediction, preds_for_bulk)
 
         # Fetch new predictions to get pred_ids
-        new_preds = self._fetch_predictions()
+        # new_preds = self._fetch_predictions()
 
-        # Prepare insertions in the ObjHead table
-        for obj_id in new_preds:
-            preds = new_preds[obj_id]
-            classif = preds[0]["classif_id"]
-            pred_id = preds[0]["pred_id"]
+        # Prepare updates in the obj_head table
+        for obj_id, preds in preds_by_object.items():
+            # Present state
             prev_obj = prev[obj_id]
             prev_classif_id: Optional[int] = prev_obj["classif_id"]
             prev_classif_qual = prev_obj["classif_qual"]
-            # Whatever, set the auto_* fields, on the object
-            an_update: Dict[str, Any] = {objid_param: obj_id, pred_id_col: pred_id}
-            if prev_classif_qual in self.OVERRIDEN_BY_PREDICTION:
-                # If not manually modified, go to Predicted state and set prediction as classification
-                an_update[classif_id_col] = classif
-                an_update[classif_qual_col] = PREDICTED_CLASSIF_QUAL
-                full_updates.append(an_update)
-                # Prepare changes, for stats update, grouped by operation
-                change_key = (
-                    prev_classif_id,
-                    prev_classif_qual,
-                    classif,
-                    PREDICTED_CLASSIF_QUAL,
-                )
-                for_this_change = all_changes.setdefault(change_key, [])
-                for_this_change.append(obj_id)
-            else:
-                # Just store prediction, no change on user-visible data
-                partial_updates.append(an_update)
+            # Wanted possible classifications
+            preds.sort(key=lambda t: -t.score)
+            # Just override what would not spoil human work
+            if prev_classif_qual not in self.OVERRIDEN_BY_PREDICTION:
+                continue
+            # Not manually modified, go to Predicted state and set prediction as classification
+            next_classif_id = preds[
+                0
+            ].classif  # Highest score TODO: remove discarded ones
+            an_update: Dict[str, Any] = {
+                "_" + objid_col: obj_id,
+                classif_qual_col: PREDICTED_CLASSIF_QUAL,
+                classif_id_col: next_classif_id,
+                training_id_col: training_id,
+            }
+            full_updates.append(an_update)
+            # Prepare changes, for stats update, grouped by operation
+            change_key = (
+                prev_classif_id,
+                prev_classif_qual,
+                next_classif_id,
+                PREDICTED_CLASSIF_QUAL,
+            )
+            for_this_change = all_changes.setdefault(change_key, [])
+            for_this_change.append(obj_id)
 
         # Historize (auto)
         self.historize_classification(only_qual=None)
@@ -758,30 +749,32 @@ class EnumeratedObjectSet(MappedTable):
         # Bulk (or sort of) update of obj_head
         sql_now = text("now()")
         obj_upd_qry: Update = ObjectHeader.__table__.update()
-        obj_upd_qry = obj_upd_qry.where(ObjectHeader.objid == bindparam(objid_param))
+        obj_upd_qry = obj_upd_qry.where(
+            ObjectHeader.objid == bindparam("_" + objid_col)
+        )
         if len(full_updates) > 0:
             full_upd_qry = obj_upd_qry.values(
-                classif_id=bindparam(classif_id_col),
                 classif_qual=bindparam(classif_qual_col),
-                pred_id=bindparam(pred_id_col),
-                classif_auto_when=sql_now,
+                classif_id=bindparam(classif_id_col),
+                classif_when=sql_now,
+                training_id=bindparam(training_id_col),
             )
             self.session.execute(full_upd_qry, full_updates)
         # Partial updates
-        if len(partial_updates) > 0:
-            part_upd_qry = obj_upd_qry.values(
-                pred_id=bindparam(pred_id_col),
-                classif_auto_when=sql_now,
-            )
-            self.session.execute(part_upd_qry, partial_updates)
+        # if len(partial_updates) > 0:
+        #     part_upd_qry = obj_upd_qry.values(
+        #         pred_id=bindparam(pred_id_col),
+        #         classif_auto_when=sql_now,
+        #     )
+        #     self.session.execute(part_upd_qry, partial_updates)
 
         # TODO: Cache upd
         logger.info(
-            "_auto: %d full updates and %d partial updates ",
+            "_auto: %d updates ",
             len(full_updates),
-            len(partial_updates),
+            # len(partial_updates),
         )
-        nb_updated = len(full_updates) + len(partial_updates)
+        nb_updated = len(full_updates)  # + len(partial_updates)
 
         # Return statuses
         return nb_updated, all_changes

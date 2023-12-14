@@ -7,6 +7,8 @@
 #
 from __future__ import annotations
 
+from typing import NamedTuple
+
 from DB.helpers.DDL import Index, Column, ForeignKey, Integer
 from DB.helpers.ORM import Model
 from DB.helpers.Postgres import BIGINT, INTEGER, DOUBLE_PRECISION
@@ -15,6 +17,12 @@ from .Taxonomy import Taxonomy
 from .Training import Training
 
 
+class ClassifScore(NamedTuple):
+    classif: int
+    score: float
+
+
+# TODO: Re-ordering might align and save some bytes per tuple
 class Prediction(Model):
     __tablename__ = "prediction"
 
@@ -36,7 +44,7 @@ class Prediction(Model):
         nullable=False,
         primary_key=True,
     )
-    score = Column(DOUBLE_PRECISION, nullable=False)
+    score = Column(DOUBLE_PRECISION, nullable=False, primary_key=True)
 
 
 Index(
@@ -44,5 +52,6 @@ Index(
     Prediction.training_id,
     Prediction.object_id,
     Prediction.classif_id,
+    Prediction.score,
     unique=True,
 )

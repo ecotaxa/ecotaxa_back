@@ -2213,6 +2213,7 @@ def classify_auto_mult_object_set(
         with RightsThrower():
             ret, prj_id, changes = sce.classify_auto_mult_set(
                 current_user,
+                None,
                 req.target_ids,
                 req.classifications,
                 req.scores,

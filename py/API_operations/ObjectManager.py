@@ -27,6 +27,7 @@ from BO.Project import ProjectBO, ChangeTypeT
 from BO.ReClassifyLog import ReClassificationBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
+from BO.Training import TrainingBO
 from BO.User import UserIDT
 from DB.Object import (
     VALIDATED_CLASSIF_QUAL,
@@ -555,6 +556,10 @@ class ObjectManager(Service):
         object_set, project = self._the_project_for(
             current_user_id, target_ids, Action.ANNOTATE
         )
+        # Temporary: create a new training if not set # TODO
+        if training_id is None:
+            trn = TrainingBO.create_one(self.session, current_user_id)
+            training_id = trn.training_id
         # Do the raw classification, eventually with history.
         nb_upd, all_changes = object_set.classify_auto_mult(
             training_id, classif_ids, scores

@@ -23,7 +23,7 @@ class HistoricalLastClassif:
     objid: int
     classif_id: ClassifIDT
     histo_classif_date: datetime.datetime
-    histo_classif_type: str
+    histo_classif_type: str  # Now computed
     histo_classif_id: ClassifIDT
     histo_classif_qual: str
     histo_classif_who: int
@@ -44,5 +44,6 @@ class HistoricalClassification:
     classif_who: int  # 'UserIDT' makes a circular dependency issue
     classif_type: str
     classif_qual: str
+    classif_score: float
     user_name: str
     taxon_name: str

@@ -19,6 +19,7 @@ from BO.Project import ProjectBO
 from BO.ProjectSet import LimitedInCategoriesProjectSet, FeatureConsistentProjectSet
 from BO.Rights import RightsBO, Action
 from BO.Training import TrainingBO
+from BO.User import UserIDT
 from DB.Project import ProjectIDT, Project
 from DB.helpers import Result
 from DB.helpers.Direct import text
@@ -54,7 +55,7 @@ class GPUPredictForProject(PredictForProject):
         req = self.req
         logger.info("Input Param = %s", self.req.__dict__)
 
-        _user, tgt_prj = RightsBO.user_wants(
+        user, tgt_prj = RightsBO.user_wants(
             self.session, self._get_owner_id(), Action.ANNOTATE, self.req.project_id
         )
 
@@ -75,7 +76,7 @@ class GPUPredictForProject(PredictForProject):
         self.update_progress(25, "Retrieving objects to classify")
         target_result = self.select_target(tgt_prj, used_features)
         nb_rows = self.classify(
-            target_result, classifier, used_features, np_medians_per_feat
+            user.id, target_result, classifier, used_features, np_medians_per_feat
         )
 
         final_message = "New category set on %d objects." % nb_rows
@@ -219,6 +220,7 @@ class GPUPredictForProject(PredictForProject):
 
     def classify(
         self,
+        user_id: UserIDT,
         tgt_res: Result,
         classifier: OurRandomForestClassifier,
         features: List[str],
@@ -230,7 +232,9 @@ class GPUPredictForProject(PredictForProject):
         total_rows = tgt_res.rowcount  # type:ignore # case1
         done_count = 0
         nb_changes = 0
-        training = TrainingBO.create_one(self.session)  # Where we record the training
+        training = TrainingBO.create_one(
+            self.session, user_id
+        )  # Where we record the training
         while True:
             obj_ids: ObjectIDListT = []
             unused: ClassifIDListT = []

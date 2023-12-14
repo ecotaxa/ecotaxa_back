@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2023  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-
+from BO.User import UserIDT
 from DB.Training import Training
 from DB.helpers import Session
 from helpers import DateTime
@@ -30,9 +30,11 @@ class TrainingBO(object):
         return getattr(self._training, item)
 
     @classmethod
-    def create_one(cls, session: Session) -> "TrainingBO":
+    def create_one(cls, session: Session, author: UserIDT) -> "TrainingBO":
         trn = Training()
         trn.training_when = DateTime.now_time()
+        trn.training_author = author
+        trn.training_path = "?"
         session.add(trn)
         session.flush([trn])  # to get the training ID populated
         return TrainingBO(trn)

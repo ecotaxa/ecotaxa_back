@@ -15,6 +15,7 @@ from BO.Classification import HistoricalClassificationListT, HistoricalClassific
 from BO.Mappings import TableMapping
 from BO.Sample import SampleIDT
 from BO.helpers.MappedEntity import MappedEntity
+from DB import Prediction
 from DB.Acquisition import Acquisition
 from DB.Image import Image
 from DB.Object import (
@@ -39,6 +40,7 @@ from DB.helpers.ORM import (
     minimal_model_of,
     case,
     text,
+    and_,
 )
 from helpers.DynamicLogs import get_logger
 
@@ -122,13 +124,21 @@ class ObjectBO(MappedEntity):
                     (och.classif_qual.in_(MANUAL_STATES_TEXT), "M"),
                     (och.classif_qual == PREDICTED_STATE_TEXT, "A"),
                 ]
-            ),
+            ).label("classif_type"),
             och.classif_qual,
+            Prediction.score.label("classif_score"),
             User.name.label("user_name"),
             Taxonomy.display_name.label("taxon_name"),
         ).filter(ObjectsClassifHisto.objid == self.header.objid)
         qry = qry.outerjoin(User)
         qry = qry.outerjoin(Taxonomy, Taxonomy.id == och.classif_id)
+        qry = qry.outerjoin(
+            Prediction,
+            and_(
+                Prediction.training_id == och.training_id,
+                Prediction.object_id == och.objid,
+            ),
+        )
         ret = [HistoricalClassification(**rec._mapping) for rec in qry]
         return ret
 
