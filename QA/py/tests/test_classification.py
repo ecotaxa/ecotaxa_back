@@ -3,17 +3,17 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import logging
-import pytest
-
 from typing import List
-from API_models.filters import ProjectFilters, ProjectFiltersDict
-from starlette import status
 
-from API_operations.CRUD.ObjectParents import SamplesService
+import pytest
+from API_models.filters import ProjectFiltersDict
+from API_operations.helpers.Service import Service
+from DB.Object import ObjectHeader
 from DB.Prediction import Prediction
-from DB.helpers.Core import select
-from DB.helpers.ORM import any_
 from DB.helpers import Result
+from DB.helpers.Core import select
+from DB.helpers.ORM import any_, and_
+from starlette import status
 
 from tests.credentials import CREATOR_AUTH, ORDINARY_USER2_USER_ID, ADMIN_AUTH
 from tests.test_objectset_query import OBJECT_SET_QUERY_URL
@@ -64,7 +64,7 @@ def get_stats(fastapi, prj_id):
 
 
 def get_predictions_stats(obj_ids):
-    with SamplesService() as sce:
+    with Service() as sce:
         qry = select(Prediction.object_id)  # TODO: makes sense to update this
         qry = qry.where(Prediction.object_id == any_(obj_ids))
         res: Result = sce.session.execute(qry)
@@ -95,11 +95,9 @@ def classify_all(fastapi, obj_ids, classif_id):
     assert rsp.status_code == status.HTTP_200_OK
 
 
-def classify_auto_mult_all(fastapi, obj_ids, classif_id, scores=None):
+def classify_auto_mult_all(fastapi, obj_ids, classif_id, scores):
     url = OBJECT_SET_CLASSIFY_AUTO_URL2
     classifications = [classif_id for _obj in obj_ids]
-    if not scores:
-        scores = [[0.52, 0.2, 0.08] for _obj in obj_ids]
     rsp = fastapi.post(
         url,
         headers=ADMIN_AUTH,
@@ -283,7 +281,7 @@ def test_classif(database, fastapi, caplog):
         "validated_objects": 0,
     }
 
-    # Reset all to predicted
+    # Reset all to predicted. This does nothing as no objet is in target state (dubious or validated)
     url = OBJECT_SET_RESET_PREDICTED_URL.format(project_id=prj_id)
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
     assert rsp.status_code == status.HTTP_200_OK
@@ -291,9 +289,12 @@ def test_classif(database, fastapi, caplog):
     # Incorrect ML results
     classify_auto_incorrect(fastapi, obj_ids[:4])
 
-    # Super ML result, 4 first objects are crustacea
+    # Super ML result, 4 first objects are crustacea with same scores
     classify_auto_mult_all(
-        fastapi, obj_ids[:4], [crustacea, copepod_id, entomobryomorpha_id]
+        fastapi,
+        obj_ids[:4],
+        [crustacea, copepod_id, entomobryomorpha_id],
+        [[0.52, 0.2, 0.08]] * 4,
     )
 
     assert get_stats(fastapi, prj_id) == {
@@ -333,13 +334,20 @@ def test_classif(database, fastapi, caplog):
 
     assert get_predictions_stats(obj_ids) == {
         "n_predicted_objects": 4,
-        "n_predictions": 12,
+        "n_predictions": 15,  # +3 predictions, first training is kept for eventual revert
         "n_discarded": 0,
     }
 
-    with SamplesService() as sce:
-        qry = select(Prediction.classif_id, Prediction.score)
-        qry = qry.where(Prediction.object_id == obj_ids[1])
+    with Service() as sce:
+        # Get _last_ training stored results for second object
+        qry = select(Prediction.classif_id, Prediction.score).join(ObjectHeader)
+        qry = qry.where(
+            and_(
+                Prediction.object_id == ObjectHeader.objid,
+                Prediction.training_id == ObjectHeader.training_id,
+                ObjectHeader.objid == obj_ids[1],
+            )
+        )
         res: Result = sce.session.execute(qry)
         assert res.fetchall() == [
             (crustacea, 0.8),
@@ -360,7 +368,7 @@ def test_classif(database, fastapi, caplog):
         "used_taxa": [copepod_id],
     }  # No more Unclassified and Copepod is in +
 
-    # No history yet as the object was just created
+    # No history yet as the object was just created, but history comprises current state
     classif = classif_history(fastapi, obj_ids[0])
     assert len(classif) == 1
     assert classif[0]["classif_date"] is not None  # e.g. 2021-09-12T09:28:03.278626
@@ -373,7 +381,7 @@ def test_classif(database, fastapi, caplog):
             "classif_who": None,
             "classif_type": "A",
             "classif_qual": "P",
-            "pred_id": 1,
+            "classif_score": 0.52,  # Highest score
             "user_name": None,
             "taxon_name": "Crustacea",
         }
@@ -440,7 +448,7 @@ def test_classif(database, fastapi, caplog):
             "classif_date": "hopefully just now",
             "classif_id": copepod_id,
             "classif_qual": "V",
-            "pred_id": 1,
+            "classif_score": 0.2,
             "classif_type": "M",
             "classif_who": 1,
             "objid": obj_ids[0],
@@ -451,7 +459,7 @@ def test_classif(database, fastapi, caplog):
             "classif_date": "a bit before",
             "classif_id": crustacea,
             "classif_qual": "P",
-            "pred_id": 1,
+            "classif_score": 0.52,
             "classif_type": "A",
             "classif_who": None,
             "objid": obj_ids[0],

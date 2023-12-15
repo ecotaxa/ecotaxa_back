@@ -39,6 +39,7 @@ from BO.ColumnUpdate import ColUpdateList
 from BO.Mappings import ProjectMapping, TableMapping
 from BO.Object import ObjectIDWithParentsT, MANUAL_STATES_TEXT, PREDICTED_STATE_TEXT
 from BO.Taxonomy import TaxonomyBO
+from BO.Training import TrainingBO
 from BO.User import UserIDT
 from BO.helpers.MappedTable import MappedTable
 from DB import Session, Query
@@ -285,32 +286,37 @@ class EnumeratedObjectSet(MappedTable):
 
         return nb_objs, nb_img_rows, img_files
 
-    def reset_to_predicted(self) -> None:
+    def force_to_predicted(self, training: TrainingBO) -> None:
         """
-        Reset to Predicted state, keeping log, i.e. history, of previous change. Only Validated
-        and Dubious states are affected.
-        Note: It's really a state change only, _not_ a "reset to last predicted value". If a user assigned
-        the category manually and triggers this function, the object will be in 'P' state even if
-        no ML algorithm ever set this category.
+        Force to Predicted state, keeping log, i.e. history, of current state.
+        Only Validated and Dubious states are affected.
+        A pseudo-training is created with conventional score per object.
         """
-        oh = ObjectHeader
-        self.historize_classification(
-            only_qual=[VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL]
+        classif_id_lists = []
+        classif_score_lists = []
+        PSEUDO_TRAINING_SCORE = 1.0
+        # Create pseudo-predictions for the training
+        qry = self.session.query(
+            ObjectHeader.objid,
+            ObjectHeader.classif_id,
+        )
+        qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))
+        qry = qry.filter(ObjectHeader.classif_qual.in_(MANUAL_STATES_TEXT))
+        # A bit dirty but fast
+        prev_nb_objs = len(self.object_ids)
+        self.object_ids.clear()
+        for rec in qry:
+            self.object_ids.append(rec["objid"])
+            classif_id_lists.append([rec["classif_id"]])  # Single-elem list
+            classif_score_lists.append([PSEUDO_TRAINING_SCORE])  # Ditto
+
+        # Classify with new training
+        self.classify_auto_mult(
+            training.training_id, classif_id_lists, classif_score_lists
         )
 
-        # Update objects table
-        obj_upd_qry: Update = oh.__table__.update()
-        obj_upd_qry = obj_upd_qry.where(
-            and_(
-                oh.objid == any_(self.object_ids),
-                (oh.classif_qual.in_([VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL])),
-            )
-        )
-        obj_upd_qry = obj_upd_qry.values(classif_qual=PREDICTED_CLASSIF_QUAL)
-        nb_objs = self.session.execute(obj_upd_qry).rowcount  # type:ignore  # case1
-        # TODO: Cache upd
         logger.info(
-            " %d out of %d rows reset to predicted", nb_objs, len(self.object_ids)
+            " %d out of %d rows forced to predicted", len(self.object_ids), prev_nb_objs
         )
 
         self.session.commit()
@@ -656,6 +662,7 @@ class EnumeratedObjectSet(MappedTable):
     ) -> Tuple[int, ObjectSetClassifChangesT]:
         """
         Set automatic classifications in self, keeping an history of previous objects' state.
+        ⚠️ There is a strong assumption that below lists are in self.object_ids order ⚠️
         :param training_id: the operation holder for all predictions.
         :param classif_id_lists: all predicted category ids for each of the object ids in self,
                                 from automatic classification algorithm.

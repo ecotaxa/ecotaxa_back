@@ -363,18 +363,20 @@ class ObjectManager(Service):
         remover.wait_for_done()
         return nb_objs, 0, nb_img_rows, len(img_files)
 
-    def reset_to_predicted(
+    def force_to_predicted(
         self, current_user_id: UserIDT, proj_id: ProjectIDT, filters: ProjectFiltersDict
     ) -> None:
         """
-        Query the given project with given filters, reset the resulting objects to predicted.
+        Query the given project with given filters, force the resulting objects to Predicted with their
+        current classification and a conventional score.
         """
         # Security check
         RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, proj_id)
 
         impacted_objs = [r[0] for r in self.query(current_user_id, proj_id, filters)[0]]
 
-        EnumeratedObjectSet(self.session, impacted_objs).reset_to_predicted()
+        training = TrainingBO.create_one(self.session, current_user_id)
+        EnumeratedObjectSet(self.session, impacted_objs).force_to_predicted(training)
 
         # Update stats
         ProjectBO.update_taxo_stats(self.session, proj_id)

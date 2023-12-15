@@ -137,6 +137,7 @@ class ObjectBO(MappedEntity):
             and_(
                 Prediction.training_id == och.training_id,
                 Prediction.object_id == och.objid,
+                Prediction.classif_id == och.classif_id,
             ),
         )
         ret = [HistoricalClassification(**rec._mapping) for rec in qry]

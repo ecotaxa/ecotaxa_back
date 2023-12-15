@@ -2014,7 +2014,7 @@ def get_object_set_summary(
     response_model=None,
     responses={200: {"content": {"application/json": {"example": null}}}},
 )
-def reset_object_set_to_predicted(
+def force_object_set_to_predicted(
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", example=1
     ),
@@ -2022,13 +2022,13 @@ def reset_object_set_to_predicted(
     current_user: int = Depends(get_current_user),
 ) -> None:
     """
-    **Reset to Predicted** all objects for the given project with the filters.
+    **Force to Predicted** all objects for the given project with the filters.
 
     Return **NULL upon success.**
     """
     with ObjectManager() as sce:
         with RightsThrower():
-            return sce.reset_to_predicted(current_user, project_id, filters.base())
+            return sce.force_to_predicted(current_user, project_id, filters.base())
 
 
 @app.post(
