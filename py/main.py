@@ -1577,6 +1577,84 @@ def set_project_predict_settings(
 
 # ######################## END OF PROJECT
 
+@app.get(
+    "/samples/simsearch",
+    operation_id="samples_sim_search",
+    tags=["samples"],
+#    response_model=List[SampleModel],
+   response_model=dict(),
+)
+def samples_sim_search(
+    project_ids: str = Query(
+        ...,
+        title="Project Ids",
+        description="String containing the list of one or more project id separated by non-num char.",
+        example="1,55",
+    ),
+    id_pattern: str = Query(
+        ...,
+        title="oObject Id",
+        description="Object is the seed for the similarity search",
+        example="*",
+    ),
+    current_user: Optional[int] = Depends(get_optional_current_user),
+) -> JsonDict:
+#-> List[SampleBO]:
+    """
+    **Search for samples.**
+    """
+    res_sim_search_hc = [
+  {
+    "sampleid": 152305,
+    "projid": 3326,
+    "orig_id": "D20130517T102429_IFCB013",
+    "latitude": null,
+    "longitude": null,
+    "dataportal_descriptor": null,
+    "free_columns": {
+      
+    }
+  },
+  {
+    "sampleid": 152327,
+    "projid": 3326,
+    "orig_id": "D20130518T140019_IFCB013",
+    "latitude": null,
+    "longitude": null,
+    "dataportal_descriptor": null,
+    "free_columns": {
+      
+    }
+  },
+  {
+    "sampleid": 153212,
+    "projid": 3326,
+    "orig_id": "D20130520T093304_IFCB013",
+    "latitude": 48.22305,
+    "longitude": -5.438477,
+    "dataportal_descriptor": null,
+    "free_columns": {
+      
+    }
+  },
+  {
+    "sampleid": 153502,
+    "projid": 3326,
+    "orig_id": "D20130520T095428_IFCB013",
+    "latitude": 48.23944,
+    "longitude": -5.463454,
+    "dataportal_descriptor": null,
+    "free_columns": {
+      
+    }
+  }]
+  return res_sim_search_hc
+#    with SamplesService() as sce:
+#        proj_ids = _split_num_list(project_ids)
+#        with RightsThrower():
+#            ret = sce.search(current_user, proj_ids, id_pattern)
+#        return ret
+
 
 @app.get(
     "/samples/search",
