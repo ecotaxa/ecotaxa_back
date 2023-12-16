@@ -50,7 +50,6 @@ from DB.Object import (
     ObjectFields,
     PREDICTED_CLASSIF_QUAL,
     VALIDATED_CLASSIF_QUAL,
-    DUBIOUS_CLASSIF_QUAL,
     DEFAULT_CLASSIF_HISTORY_DATE,
     ObjectHeader,
     ObjectIDT,
@@ -416,6 +415,7 @@ class EnumeratedObjectSet(MappedTable):
         # Insert into the log table
         ins_qry: PgInsert = pg_insert(och.__table__)
         ins_qry = ins_qry.from_select(ins_columns, sel_subqry)
+        # TODO: Below not clean
         ins_qry = ins_qry.on_conflict_do_nothing(constraint="objectsclassifhisto_pkey")
         # TODO: mypy crashes due to pg_dialect below
         # logger.info("Histo query: %s", ins_qry.compile(dialect=pg_dialect()))
@@ -629,13 +629,9 @@ class EnumeratedObjectSet(MappedTable):
         # Update of obj_head, grouped by similar operations.
         nb_updated = 0
         for (new_classif_id, new_wanted_qualif), an_obj_set in updates.items():
-            # Sanity check, the hard way
-            assert new_wanted_qualif in (
-                VALIDATED_CLASSIF_QUAL,
-                DUBIOUS_CLASSIF_QUAL,
-            ), (
-                "unexpected qualif %s" % new_wanted_qualif
-            )
+            # We can have (new_classif_id, "P") for "forced reclassify" case, but
+            # the simple update below creates an inconsistency as the new_classif_id will
+            # _not_ come from a training. definitely TODO
             # Historize the updated rows (can be a lot!)
             an_obj_set.historize_classification(only_qual=None)
             row_upd = {
