@@ -371,12 +371,19 @@ class ObjectManager(Service):
         current classification and a conventional score.
         """
         # Security check
-        RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, proj_id)
+        _user, project = RightsBO.user_wants(
+            self.session, current_user_id, Action.ADMINISTRATE, proj_id
+        )
 
         impacted_objs = [r[0] for r in self.query(current_user_id, proj_id, filters)[0]]
 
         training = TrainingBO.create_one(self.session, current_user_id)
-        EnumeratedObjectSet(self.session, impacted_objs).force_to_predicted(training)
+        nb_upd, all_changes = EnumeratedObjectSet(
+            self.session, impacted_objs
+        ).force_to_predicted(training)
+
+        # Propagate changes to update projects_taxo_stat
+        self.propagate_classif_changes(nb_upd, all_changes, project)
 
         # Update stats
         ProjectBO.update_taxo_stats(self.session, proj_id)

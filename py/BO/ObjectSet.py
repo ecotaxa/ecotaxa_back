@@ -286,10 +286,13 @@ class EnumeratedObjectSet(MappedTable):
 
         return nb_objs, nb_img_rows, img_files
 
-    def force_to_predicted(self, training: TrainingBO) -> None:
+    def force_to_predicted(
+        self, training: TrainingBO
+    ) -> Tuple[int, ObjectSetClassifChangesT]:
         """
         Force to Predicted state, keeping log, i.e. history, of current state.
-        Only Validated and Dubious states are affected.
+        Only Validated and Dubious states are affected, the goal being to bring
+        the whole set of objects to a Predict-able state.
         A pseudo-training is created with conventional score per object.
         """
         classif_id_lists = []
@@ -304,22 +307,23 @@ class EnumeratedObjectSet(MappedTable):
         qry = qry.filter(ObjectHeader.classif_qual.in_(MANUAL_STATES_TEXT))
         # A bit dirty but fast
         prev_nb_objs = len(self.object_ids)
-        self.object_ids.clear()
+        new_objects_ids = []
         for rec in qry:
-            self.object_ids.append(rec["objid"])
+            new_objects_ids.append(rec["objid"])
             classif_id_lists.append([rec["classif_id"]])  # Single-elem list
             classif_score_lists.append([PSEUDO_TRAINING_SCORE])  # Ditto
 
         # Classify with new training
-        self.classify_auto_mult(
-            training.training_id, classif_id_lists, classif_score_lists
+        self.object_ids = new_objects_ids
+        nb_upd, all_changes = self.classify_auto_mult(
+            training.training_id, classif_id_lists, classif_score_lists, True
         )
 
         logger.info(
             " %d out of %d rows forced to predicted", len(self.object_ids), prev_nb_objs
         )
 
-        self.session.commit()
+        return nb_upd, all_changes
 
     def update_all(self, params: Dict[str, Any]) -> int:
         """
@@ -659,15 +663,17 @@ class EnumeratedObjectSet(MappedTable):
         training_id: TrainingIDT,
         classif_id_lists: List[ClassifIDListT],
         classif_score_lists: List[ClassifScoresListT],
+        force: bool = False,
     ) -> Tuple[int, ObjectSetClassifChangesT]:
         """
-        Set automatic classifications in self, keeping an history of previous objects' state.
+        Set automatic classifications in self, keeping a history of previous objects' state.
         ⚠️ There is a strong assumption that below lists are in self.object_ids order ⚠️
         :param training_id: the operation holder for all predictions.
         :param classif_id_lists: all predicted category ids for each of the object ids in self,
                                 from automatic classification algorithm.
         :param classif_score_lists: all predicted confidence scores for each object,
                                 from automatic classification algorithm.
+        :param force: do not preserve protected states.
         :returns updated rows and a summary of changes, for stats.
         """
 
@@ -726,8 +732,8 @@ class EnumeratedObjectSet(MappedTable):
             prev_classif_qual = prev_obj["classif_qual"]
             # Wanted possible classifications
             preds.sort(key=lambda t: -t.score)
-            # Just override what would not spoil human work
-            if prev_classif_qual not in self.OVERRIDEN_BY_PREDICTION:
+            # Just override what would not spoil human work, except if explicitely required
+            if prev_classif_qual not in self.OVERRIDEN_BY_PREDICTION and not force:
                 continue
             # Not manually modified, go to Predicted state and set prediction as classification
             next_classif_id = preds[
