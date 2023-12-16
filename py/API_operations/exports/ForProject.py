@@ -300,11 +300,11 @@ class ProjectExport(JobServiceBase):
             select_clause += "\n, obh.objid"
 
         if req.with_internal_ids:
+            # TODO: Rediscuss usefulness
             select_clause += """\n, obh.objid, 
                     obh.acquisid AS processid_internal, obh.acquisid AS acq_id_internal, 
                     sam.sampleid AS sample_id_internal, 
-                    obh.classif_id, obh.classif_who, obh.pred_id, txp.name classif_auto_name, 
-                    obh.classif_auto_when,
+                    obh.classif_id, obh.classif_who,
                     obh.random_value object_random_value, obh.sunpos object_sunpos """
             if "S" in req.tsv_entities:
                 select_clause += (
