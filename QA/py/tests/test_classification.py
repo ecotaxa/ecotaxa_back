@@ -485,9 +485,11 @@ def test_classif(database, fastapi, caplog):
             "nb_unclassified": 0,
             "nb_validated": 8,
             "projid": prj_id,
-            "used_taxa": [entomobryomorpha_id],
+            "used_taxa": [
+                entomobryomorpha_id
+            ],  # <- copepod is gone, unclassified as well, replaced with entomobryomorpha
         }
-    ]  # <- copepod is gone, unclassified as well, replaced with entomobryomorpha
+    ]
 
     # Reset to predicted on validated objects
     url = OBJECT_SET_RESET_PREDICTED_URL.format(project_id=prj_id)
@@ -501,8 +503,14 @@ def test_classif(database, fastapi, caplog):
         "nb_unclassified": 0,
         "nb_validated": 0,
         "projid": prj_id,
-        "used_taxa": [entomobryomorpha_id],
+        "used_taxa": [entomobryomorpha_id],  # No change as it's "forced to Predicted"
     }
+
+    # What would a revert of the force do?
+    url = OBJECT_SET_REVERT_URL.format(project_id=prj_id, dry_run=True, tgt_usr="")
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
+    assert rsp.status_code == status.HTTP_200_OK
+    dry_run_output = rsp.json()  # TODO: assert
 
     # Revert after reset to predicted
     url = OBJECT_SET_REVERT_URL.format(project_id=prj_id, dry_run=False, tgt_usr="")

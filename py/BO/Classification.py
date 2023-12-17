@@ -27,6 +27,7 @@ class HistoricalLastClassif:
     histo_classif_id: ClassifIDT
     histo_classif_qual: str
     histo_classif_who: int
+    histo_training_id: int  # TODO: Mask in output?
 
 
 HistoricalClassificationListT = List["HistoricalClassification"]

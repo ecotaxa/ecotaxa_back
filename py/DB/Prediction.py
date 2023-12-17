@@ -22,7 +22,7 @@ class ClassifScore(NamedTuple):
     score: float
 
 
-# TODO: Re-ordering might align and save some bytes per tuple
+# TODO: Re-ordering might align and save some bytes per tuple. To experiment with upgrade script.
 class Prediction(Model):
     __tablename__ = "prediction"
 
