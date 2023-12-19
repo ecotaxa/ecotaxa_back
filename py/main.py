@@ -93,6 +93,7 @@ from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
 from API_operations.ObjectManager import ObjectManager
 from API_operations.Prediction import PredictForProject, PredictionDataService
+from API_operations.FeatureExtraction import FeatureExtractionForProject
 from API_operations.Stats import ProjectStatsFetcher
 from API_operations.Status import StatusService
 from API_operations.Subset import SubsetServiceOnProject
@@ -3528,7 +3529,7 @@ JOB_INTERVAL = 2  # Can be overwritten for testing
 @app.on_event("startup")
 def startup_event() -> None:
     # Don't run predictions, they are left to a specialized runner
-    JobScheduler.FILTER = [PredictForProject.JOB_TYPE]
+    JobScheduler.FILTER = [PredictForProject.JOB_TYPE, FeatureExtractionForProject.JOB_TYPE]
     JobScheduler.launch_at_interval(JOB_INTERVAL)
 
 

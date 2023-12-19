@@ -87,8 +87,7 @@ class JobScheduler(Service):
         # Pick the first pending job which is not already managed by another runner
         qry = self.session.query(Job).filter(Job.state == DBJobStateEnum.Pending)
         if self.INCLUDE:
-            for a_type in self.INCLUDE:
-                qry = qry.filter(Job.type == a_type)
+            qry = qry.filter(Job.type.in_(tuple(self.INCLUDE)))
         for a_type in self.FILTER:
             qry = qry.filter(Job.type != a_type)
         qry = qry.with_for_update(skip_locked=True)

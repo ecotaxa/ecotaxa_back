@@ -9,6 +9,7 @@ from typing import Dict, List, Tuple, Any, Optional, cast
 from API_models.imports import ImportReq, ImportRsp
 from API_operations.helpers.JobService import ArgsDict
 from API_operations.imports.ImportBase import ImportServiceBase
+from API_operations.FeatureExtraction import FeatureExtractionForProject
 from BO.Bundle import InBundle
 from BO.Classification import ClassifIDT
 from BO.Job import JobBO
@@ -341,6 +342,10 @@ class FileImport(ImportServiceBase):
 
         # Update loaded files in DB, removing duplicates
         self.prj.fileloaded = "\n".join(set(import_how.loaded_files))
+
+        # Check if we have a CNN model selected
+        feature_extractor_selected = self.prj.cnn_network_id != ""
+
         self.session.commit()
 
         # Recompute stats
@@ -349,4 +354,10 @@ class FileImport(ImportServiceBase):
 
         msg = "Total of %d rows loaded" % row_count
         logger.info(msg)
+
+        # Create a job for feature extraction
+        if feature_extractor_selected:
+            with FeatureExtractionForProject(self.prj_id) as sce:
+                sce.run(self._get_owner_id())
+        
         self.set_job_result(errors=[], infos={"rowcount": row_count})
