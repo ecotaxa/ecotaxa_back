@@ -1602,12 +1602,13 @@ def set_project_predict_settings(
 
 # ######################## END OF PROJECT
 
+
 @app.get(
     "/samples/simsearch",
     operation_id="samples_sim_search",
     tags=["samples"],
-#    response_model=List[SampleModel],
-   response_model=dict(),
+    #    response_model=List[SampleModel],
+    response_model=dict(),
 )
 def samples_sim_search(
     project_ids: str = Query(
@@ -1623,57 +1624,52 @@ def samples_sim_search(
         example="*",
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
-) -> JsonDict:
-#-> List[SampleBO]:
+) -> List[Dict]:
+    # -> List[SampleBO]:
     """
     **Search for samples.**
     """
     res_sim_search_hc = [
-  {
-    "sampleid": 152305,
-    "projid": 3326,
-    "orig_id": "D20130517T102429_IFCB013",
-    "latitude": null,
-    "longitude": null,
-    "dataportal_descriptor": null,
-    "free_columns": {
-      
-    }
-  },
-  {
-    "sampleid": 152327,
-    "projid": 3326,
-    "orig_id": "D20130518T140019_IFCB013",
-    "latitude": null,
-    "longitude": null,
-    "dataportal_descriptor": null,
-    "free_columns": {
-      
-    }
-  },
-  {
-    "sampleid": 153212,
-    "projid": 3326,
-    "orig_id": "D20130520T093304_IFCB013",
-    "latitude": 48.22305,
-    "longitude": -5.438477,
-    "dataportal_descriptor": null,
-    "free_columns": {
-      
-    }
-  },
-  {
-    "sampleid": 153502,
-    "projid": 3326,
-    "orig_id": "D20130520T095428_IFCB013",
-    "latitude": 48.23944,
-    "longitude": -5.463454,
-    "dataportal_descriptor": null,
-    "free_columns": {
-      
-    }
-  }]
-  return res_sim_search_hc
+        {
+            "sampleid": 152305,
+            "projid": 3326,
+            "orig_id": "D20130517T102429_IFCB013",
+            "latitude": null,
+            "longitude": null,
+            "dataportal_descriptor": null,
+            "free_columns": {},
+        },
+        {
+            "sampleid": 152327,
+            "projid": 3326,
+            "orig_id": "D20130518T140019_IFCB013",
+            "latitude": null,
+            "longitude": null,
+            "dataportal_descriptor": null,
+            "free_columns": {},
+        },
+        {
+            "sampleid": 153212,
+            "projid": 3326,
+            "orig_id": "D20130520T093304_IFCB013",
+            "latitude": 48.22305,
+            "longitude": -5.438477,
+            "dataportal_descriptor": null,
+            "free_columns": {},
+        },
+        {
+            "sampleid": 153502,
+            "projid": 3326,
+            "orig_id": "D20130520T095428_IFCB013",
+            "latitude": 48.23944,
+            "longitude": -5.463454,
+            "dataportal_descriptor": null,
+            "free_columns": {},
+        },
+    ]
+    return res_sim_search_hc
+
+
 #    with SamplesService() as sce:
 #        proj_ids = _split_num_list(project_ids)
 #        with RightsThrower():
@@ -3663,7 +3659,10 @@ JOB_INTERVAL = 5
 @app.on_event("startup")
 def startup_event() -> None:
     # Don't run predictions, they are left to a specialized runner
-    JobScheduler.FILTER = [PredictForProject.JOB_TYPE, FeatureExtractionForProject.JOB_TYPE]
+    JobScheduler.FILTER = [
+        PredictForProject.JOB_TYPE,
+        FeatureExtractionForProject.JOB_TYPE,
+    ]
     JobScheduler.launch_at_interval(JOB_INTERVAL)
 
 
