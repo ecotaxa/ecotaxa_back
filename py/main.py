@@ -1579,8 +1579,8 @@ def set_project_predict_settings(
 # ######################## END OF PROJECT
 
 @app.post(
-    "object_set/{project_id}/similiraty_search", # should be similar to ../{}/query
-    operation_id="get_object_set_similiraty_search",
+    "object_set/{project_id}/similarity_search", # should be similar to ../{}/query
+    operation_id="get_object_set_similarity_search",
     tags=["objects"],
     response_model=ObjectSetQueryRsp,
     response_class=MyORJSONResponse,  # Force the ORJSON encoder
