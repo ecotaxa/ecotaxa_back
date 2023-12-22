@@ -1578,79 +1578,78 @@ def set_project_predict_settings(
 
 # ######################## END OF PROJECT
 
-
-@app.get(
-    "/samples/simsearch",
-    operation_id="samples_sim_search",
-    tags=["samples"],
-    #    response_model=List[SampleModel],
-    response_model=dict(),
+@app.post(
+    "object_set/{project_id}/similiraty_search", # should be similar to ../{}/query
+    operation_id="get_object_set_similiraty_search",
+    tags=["objects"],
+    response_model=ObjectSetQueryRsp,
+    response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
-def samples_sim_search(
-    project_ids: str = Query(
-        ...,
-        title="Project Ids",
-        description="String containing the list of one or more project id separated by non-num char.",
-        example="1,55",
+def object_similiraty_search(
+    project_id: int = Path(
+        ..., description="Internal, numeric id of the project.", example=1
     ),
-    id_pattern: str = Query(
-        ...,
-        title="oObject Id",
-        description="Object is the seed for the similarity search",
-        example="*",
+    filters: ProjectFilters = Body(...),
+    fields: Optional[str] = Query(
+        title="Fields",
+        description="""
+TODO, deleted while copying same info as os/{pid}/query
+                   """,
+        default=None,
+        example="obj.longitude,fre.feret",
+    ),
+    order_field: Optional[str] = Query(
+        title="Order field",
+        description='Order the result using given field. If prefixed with "-" then it will be reversed.',
+        default=None,
+        example="obj.longitude",
+    ),
+    # TODO: order_field should be a user-visible field name, not nXXX, in case of free field
+    window_start: Optional[int] = Query(
+        default=None,
+        title="Window start",
+        description="""
+Allows to return only a slice of the result, by skipping window_start objects before returning data.
+If no **unique order** is specified, the result can vary for same call and conditions.""",
+        example="10",
+    ),
+    window_size: Optional[int] = Query(
+        default=None,
+        title="Window size",
+        description="""
+Allows to return only a slice of the result, by returning a _maximum_ of window_size lines.
+If no **unique order** is specified, the result can vary for same call and conditions.""",
+        example="100",
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
-) -> List[Dict]:
-    # -> List[SampleBO]:
+) -> MyORJSONResponse:
     """
-    **Search for samples.**
+    Returns **filtered object Ids** for the given project.
     """
-    res_sim_search_hc = [
-        {
-            "sampleid": 152305,
-            "projid": 3326,
-            "orig_id": "D20130517T102429_IFCB013",
-            "latitude": null,
-            "longitude": null,
-            "dataportal_descriptor": null,
-            "free_columns": {},
-        },
-        {
-            "sampleid": 152327,
-            "projid": 3326,
-            "orig_id": "D20130518T140019_IFCB013",
-            "latitude": null,
-            "longitude": null,
-            "dataportal_descriptor": null,
-            "free_columns": {},
-        },
-        {
-            "sampleid": 153212,
-            "projid": 3326,
-            "orig_id": "D20130520T093304_IFCB013",
-            "latitude": 48.22305,
-            "longitude": -5.438477,
-            "dataportal_descriptor": null,
-            "free_columns": {},
-        },
-        {
-            "sampleid": 153502,
-            "projid": 3326,
-            "orig_id": "D20130520T095428_IFCB013",
-            "latitude": 48.23944,
-            "longitude": -5.463454,
-            "dataportal_descriptor": null,
-            "free_columns": {},
-        },
-    ]
-    return res_sim_search_hc
+    return_fields = None
+    if fields is not None:
+        return_fields = fields.split(",")
+    with ObjectManager() as sce:
+        with RightsThrower():
+            rsp = ObjectSetQueryRsp()
+            obj_with_parents, details, total = sce.query(
+                current_user,
+                project_id,
+                filters.base(),
+                return_fields,
+                order_field,
+                window_start,
+                window_size,
+            )
+        rsp.total_ids = total
+        rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
+        rsp.acquisition_ids = [with_p[1] for with_p in obj_with_parents]
+        rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
+        rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
+        rsp.details = details
+    # Serialize
+    return MyORJSONResponse(rsp)
 
-
-#    with SamplesService() as sce:
-#        proj_ids = _split_num_list(project_ids)
-#        with RightsThrower():
-#            ret = sce.search(current_user, proj_ids, id_pattern)
-#        return ret
 
 
 @app.get(
