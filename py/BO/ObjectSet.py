@@ -145,7 +145,7 @@ class DescribedObjectSet(object):
             preds_ref = Prediction.__tablename__ + " prd"
             selected_tables += (
                 preds_ref
-                + " ON prd.training_id = obh.training_id AND prd.classif_id = obh.classif_id"
+                + " ON prd.training_id = obh.training_id AND prd.object_id = obh.objid AND prd.classif_id = obh.classif_id"
             )
             selected_tables.set_outer(preds_ref)
         if "trn." in column_referencing_sql:

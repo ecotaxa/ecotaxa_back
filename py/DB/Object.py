@@ -49,12 +49,9 @@ if TYPE_CHECKING:
     # from .Image import Image
 
 # Classification qualification
-PREDICTED_CLASSIF_QUAL = (
-    "P"  # according to 'training_id' output, the object might be a 'classif_id'
-)
-DUBIOUS_CLASSIF_QUAL = "D"  # 'classif_who' said at 'classif_when' moment that the object is _probably not_ a 'classif_id'
+PREDICTED_CLASSIF_QUAL = "P"  # according to 'training_id' output, the object _might be_ a 'classif_id' with 'score' probability
+DUBIOUS_CLASSIF_QUAL = "D"  #   'classif_who' said at 'classif_when' moment that the object is _probably not_ a 'classif_id'
 VALIDATED_CLASSIF_QUAL = "V"  # 'classif_who' said at 'classif_when' moment that the object _is_ a 'classif_id'
-# TODO: For below, can it ever be seen in object, or always in history?
 DISCARDED_CLASSIF_QUAL = "X"  # 'classif_who' said at 'classif_when' moment that the object _is not_ a 'classif_id'
 classif_qual_labels = {
     PREDICTED_CLASSIF_QUAL: "predicted",
@@ -281,10 +278,12 @@ class ObjectsClassifHisto(Model):
     objid = Column(
         BIGINT, ForeignKey("obj_head.objid", ondelete="CASCADE"), primary_key=True
     )
-    # The date, set if manual action
+    # The date of last (classif_qual, classif_id, classif_who, training_id) change
     classif_date = Column(TIMESTAMP, primary_key=True)
     # classif_type = Column(CHAR(1))  # A : Automatic, M : Manual
-    classif_id = Column(INTEGER, ForeignKey(Taxonomy.id, ondelete="CASCADE"))
+    classif_id = Column(
+        INTEGER, ForeignKey(Taxonomy.id, ondelete="CASCADE"), nullable=False
+    )
     classif_qual = Column(CHAR(1))  # 'P', 'V', 'D' + 'X' for discarded
     classif_who = Column(Integer, ForeignKey("users.id"))  # The user who did the action
     training_id = Column(
