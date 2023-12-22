@@ -73,6 +73,14 @@ class ProjectFiltersDict(TypedDict, total=False):
     filt_last_annot: Optional[str]
     """ Coma-separated list of annotator, i.e. person who validated the classification
         in last. """
+    seed_object_id: Optional[str]
+    """
+    gpt a trouvé tout seul je sais pas comment enfin j'étais en debug avec un point d'arret
+    """
+    seed_object_ids: Optional[str]
+    """
+    gpt a trouvé tout seul je sais pas comment enfin j'étais en debug avec un point d'arret
+    """
 
 
 class _ProjectFilters2Model(DescriptiveModel):
