@@ -1653,8 +1653,16 @@ If no **unique order** is specified, the result can vary for same call and condi
     return_fields = None
     if fields is not None:
         return_fields = fields.split(",")
+
+    print(filters)
+
+    from API_models.UnsupervisedSearch import test_integration_nn
+#    ret = test_integration_nn(project_id, filters.seed_object_id)
+
+
     with ObjectManager() as sce:
         with RightsThrower():
+
             rsp = ObjectSetQueryRsp()
             obj_with_parents, details, total = sce.query(
                 current_user,
@@ -1671,8 +1679,19 @@ If no **unique order** is specified, the result can vary for same call and condi
         rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
         rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
         rsp.details = details
+
+        rsp_reordered_by_nearest_neighbor = test_integration_nn(project_id,
+                              seed_object_id=filters.seed_object_id,
+                              source_project_ids=filters.seed_object_ids,
+                              features=[],
+                              use_scn=False,
+                              filters=filters,
+                              ro_session=sce.ro_session,
+                                  list_object_ids_from_proj = rsp.object_ids,
+                                  rest_of_data_maybe_needed=rsp)
+
     # Serialize
-    return MyORJSONResponse(rsp)
+    return MyORJSONResponse(rsp_reordered_by_nearest_neighbor)
 
 
 
