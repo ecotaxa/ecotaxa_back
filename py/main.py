@@ -1656,7 +1656,7 @@ If no **unique order** is specified, the result can vary for same call and condi
 
     print(filters)
 
-    from API_models.UnsupervisedSearch import test_integration_nn
+    from API_models.UnsupervisedSearch import similarity_search_nn
 #    ret = test_integration_nn(project_id, filters.seed_object_id)
 
 
@@ -1680,15 +1680,15 @@ If no **unique order** is specified, the result can vary for same call and condi
         rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
         rsp.details = details
 
-        rsp_reordered_by_nearest_neighbor = test_integration_nn(project_id,
-                              seed_object_id=filters.seed_object_id,
-                              source_project_ids=filters.seed_object_ids,
-                              features=[],
-                              use_scn=False,
-                              filters=filters,
-                              ro_session=sce.ro_session,
-                                  list_object_ids_from_proj = rsp.object_ids,
-                                  rest_of_data_maybe_needed=rsp)
+        rsp_reordered_by_nearest_neighbor = similarity_search_nn(project_id,
+                                                                 seed_object_id=filters.seed_object_id,
+                                                                 source_project_ids=filters.seed_object_ids,
+                                                                 features=[],
+                                                                 use_scn=False,
+                                                                 filters=filters,
+                                                                 ro_session=sce.ro_session,
+                                                                 list_object_ids_from_proj = rsp.object_ids,
+                                                                 rest_of_data_maybe_needed=rsp)
 
     # Serialize
     return MyORJSONResponse(rsp_reordered_by_nearest_neighbor)
