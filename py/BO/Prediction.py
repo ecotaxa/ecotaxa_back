@@ -13,7 +13,7 @@ import numpy as np  # type: ignore
 from numpy import ndarray
 
 from DB.Acquisition import Acquisition
-from DB.CNNFeature import DEEP_FEATURES, ObjectCNNFeaturesBean, ObjectCNNFeature
+from DB.CNNFeatureVector import N_DEEP_FEATURES, ObjectCNNFeaturesVectorBean, ObjectCNNFeatureVector
 from DB.Image import Image
 from DB.Object import ObjectHeader, ObjectIDT
 from DB.Project import ProjectIDT
@@ -33,7 +33,7 @@ class DeepFeatures(object):
 
     OTOH, it can also _generate_ features, using another class of machine learning algorithm: CNN
      @see https://en.wikipedia.org/wiki/Convolutional_neural_network
-    These other features are stored in a dedicated DB table @see ObjectCNNFeature.
+    These other features are stored in a dedicated DB table @see ObjectCNNFeatureVector.
     """
 
     SAVE_EVERY: ClassVar = 500
@@ -53,9 +53,11 @@ class DeepFeatures(object):
                 Sample.sampleid == Acquisition.acq_sample_id, Sample.projid == proj_id
             ),
         )
-        qry = session.query(ObjectCNNFeature)
-        qry = qry.filter(ObjectCNNFeature.objcnnid.in_(sub_qry))
+
+        qry = session.query(ObjectCNNFeatureVector)
+        qry = qry.filter(ObjectCNNFeatureVector.objcnnid.in_(sub_qry))
         nb_deleted = qry.delete(synchronize_session=False)
+
         return nb_deleted
 
     @staticmethod
@@ -72,9 +74,9 @@ class DeepFeatures(object):
             ),
         )
         qry = qry.outerjoin(Image)  # For detecting missing images
-        qry = qry.outerjoin(ObjectCNNFeature)  # For detecting missing features
+        qry = qry.outerjoin(ObjectCNNFeatureVector)  # For detecting missing features
         # noinspection PyComparisonWithNone
-        qry = qry.filter(ObjectCNNFeature.objcnnid == None)  # SQLAlchemy
+        qry = qry.filter(ObjectCNNFeatureVector.objcnnid == None)  # SQLAlchemy
         qry = qry.order_by(ObjectHeader.objid, Image.imgrank)
         ret = {}
         for a_res in session.execute(qry):
@@ -97,7 +99,7 @@ class DeepFeatures(object):
         # for a_rec in features.to_records(index=True): # This is nice and can produce tuple()
         # but I found no way to feed them into DBWriter without going low-level.
         for obj_id, row in features.iterrows():
-            bean = ObjectCNNFeaturesBean(obj_id, row)
+            bean = ObjectCNNFeaturesVectorBean(obj_id, row)
             writer.add_cnn_features_with_pk(bean)
             nb_rows += 1
             if nb_rows % cls.SAVE_EVERY == 0:
@@ -112,10 +114,10 @@ class DeepFeatures(object):
         """
         Read CNN lines AKA features, in order, for given object_ids
         """
-        fk_to_objid = ObjectCNNFeature.objcnnid.name
+        fk_to_objid = ObjectCNNFeatureVector.objcnnid.name
         sql = "WITH ordr (seq, objid) AS (select * from UNNEST(:seq, :oids)) "
-        sql += "SELECT " + ",".join(DEEP_FEATURES)
-        sql += " FROM " + ObjectCNNFeature.__tablename__
+        sql += "SELECT features"
+        sql += " FROM " + ObjectCNNFeatureVector.__tablename__
         sql += " JOIN ordr ON " + fk_to_objid + " = ordr.objid "
         sql += " ORDER BY ordr.seq "
         params = {"seq": list(range(len(oid_lst))), "oids": oid_lst}
@@ -128,12 +130,12 @@ class DeepFeatures(object):
         Read CNN lines AKA features, in order, for given object_ids, into a NumPy array
         """
         res = cls.read_for_objects(session, oid_lst)
-        ret = np.ndarray(shape=(len(oid_lst), len(res.keys())), dtype=np.float32)
+        ret = np.ndarray(shape=(len(oid_lst), N_DEEP_FEATURES), dtype=np.float32)
         ndx = 0
         for a_row in res:
-            ret[ndx] = a_row
+            ret[ndx] = [float(x) for x in a_row["features"].strip("[]").split(",")]
             ndx += 1
         assert ndx == len(
             oid_lst
-        ), "No enough CNN features in DB: expected %d read %d" % (len(oid_lst), ndx)
+        ), "Not enough CNN features in DB: expected %d read %d" % (len(oid_lst), ndx)
         return ret
