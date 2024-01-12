@@ -58,7 +58,7 @@ def test_reclassif(database, fastapi, caplog):
     # Reclassify them to entomobryomorpha
     reclassify(fastapi, prj_id, detritus_classif_id, entomobryomorpha_id)
 
-    # Of course stats changed, detritus is gone and entomobryomorpha appeared
+    # Stats changed, detritus is gone and entomobryomorpha appeared
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
         "nb_predicted": 8,

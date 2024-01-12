@@ -94,11 +94,12 @@ def test_updates(database, caplog, tstlogs):
 
     # Special column, this one will eventually add row into classification history
     # TODO: Avoiding diff on purpose, it's just to cover code.
-    with ObjectManager() as sce:
-        nb_upd = sce.update_set(
-            ADMIN_USER_ID, objs, ColUpdateList([upd("classif_id", "100")])
-        )
-    assert nb_upd == 15
+    # NOT VALID ANYMORE, use classification API instead
+    # with ObjectManager() as sce:
+    #     nb_upd = sce.update_set(
+    #         ADMIN_USER_ID, objs, ColUpdateList([upd("classif_id", "100")])
+    #     )
+    # assert nb_upd == 15
 
     # Json diff
     with open(tstlogs / OUT_JSON_REF) as fd1:

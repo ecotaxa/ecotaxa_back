@@ -6,10 +6,15 @@
 from __future__ import annotations
 
 import datetime
-from typing import Dict, Set, Iterable, TYPE_CHECKING
-
+from BO.helpers.TSVHelpers import convert_degree_minute_float_to_decimal_degree
 # noinspection PyPackageRequirements
-from sqlalchemy import Index, Column, ForeignKey, Sequence, Integer
+from sqlalchemy import (
+    Index,
+    Column,
+    ForeignKey,
+    Sequence,
+    Integer,
+)
 # noinspection PyPackageRequirements
 from sqlalchemy.dialects.postgresql import (
     BIGINT,
@@ -24,12 +29,14 @@ from sqlalchemy.dialects.postgresql import (
 )
 # noinspection PyPackageRequirements
 from sqlalchemy.orm import relationship, Session
+from typing import Dict, Set, Iterable, TYPE_CHECKING
 
-from BO.helpers.TSVHelpers import convert_degree_minute_float_to_decimal_degree
 from .Acquisition import Acquisition
 from .Image import Image
 from .Project import Project, ProjectIDT
 from .Sample import Sample
+from .Taxonomy import Taxonomy
+from .Training import Training
 from .helpers import Result
 from .helpers.Direct import text
 from .helpers.ORM import Model
@@ -41,17 +48,19 @@ if TYPE_CHECKING:
     # from .Image import Image
 
 # Classification qualification
-PREDICTED_CLASSIF_QUAL = "P"
-DUBIOUS_CLASSIF_QUAL = "D"
-VALIDATED_CLASSIF_QUAL = "V"
-classif_qual = {
+PREDICTED_CLASSIF_QUAL = "P"  # according to 'training_id' output, the object _might be_ a 'classif_id' with 'score' probability
+DUBIOUS_CLASSIF_QUAL = "D"  # 'classif_who' said at 'classif_when' moment that the object is _probably not_ a 'classif_id'
+VALIDATED_CLASSIF_QUAL = "V"  # 'classif_who' said at 'classif_when' moment that the object _is_ a 'classif_id'
+DISCARDED_CLASSIF_QUAL = "X"  # 'classif_who' said at 'classif_when' moment that the object _is not_ a 'classif_id'
+classif_qual_labels = {
     PREDICTED_CLASSIF_QUAL: "predicted",
     DUBIOUS_CLASSIF_QUAL: "dubious",
     VALIDATED_CLASSIF_QUAL: "validated",
+    DISCARDED_CLASSIF_QUAL: "discarded",
 }
-CLASSIF_QUALS = set(classif_qual.keys())
+CLASSIF_QUALS = set(classif_qual_labels.keys())
 classif_qual_revert = {}
-for k, v in classif_qual.items():
+for k, v in classif_qual_labels.items():
     classif_qual_revert[v] = k
 
 
@@ -75,33 +84,40 @@ class ObjectHeader(Model):
     depth_max = Column(FLOAT)
     #
     sunpos = Column(CHAR(1))  # Sun position, from date, time and coords
-    #
+
+    # The displayed (to users) classification
     classif_id = Column(INTEGER)
     # The following is logically out of this block of 4, because depending on its value,
     # - it's the other classif_* columns which reflecting the "last state"
     # - or the classif_auto_* ones.
     classif_qual = Column(CHAR(1))
     classif_who = Column(Integer, ForeignKey("users.id"))
+    # Date the current other classif_* were last set
     classif_when = Column(TIMESTAMP)
 
-    # The following 3 are set if the object was ever predicted, then they remain
-    # forever with these values. They reflect the "last state" only if classif_qual is 'P'.
-    classif_auto_id = Column(INTEGER)
-    classif_auto_score = Column(DOUBLE_PRECISION)
-    # TODO: is NULL on prod' DB even if classif_qual='P' and other classif_auto_* are set
-    classif_auto_when = Column(TIMESTAMP)
+    # If the object was ever predicted, the last training which produced the predictions
+    training_id = Column(INTEGER, ForeignKey(Training.training_id))
 
-    classif_crossvalidation_id = Column(INTEGER)  # Always NULL in prod'
+    # classif_crossvalidation_id = Column(
+    #     INTEGER
+    # )  # Always NULL in prod', verified 02/12/2023
 
     complement_info = Column(VARCHAR)  # e.g. "Part of ostracoda"
 
-    similarity = Column(DOUBLE_PRECISION)  # Always NULL in prod'
+    # similarity = Column(DOUBLE_PRECISION)  # Always NULL in prod', verified 02/12/2023
 
     # TODO: Why random? It makes testing a bit more difficult
     random_value = Column(INTEGER)
 
-    # TODO: Can't see any value in DB
+    # 72832 unique values as of 02/12/2023
     object_link = Column(VARCHAR(255))
+
+    # Below is not true if not Predicted or Validated, left here for reference
+    # ForeignKeyConstraint(
+    #     ["training_id", "objid", "classif_id"],
+    #     ["Prediction.training_id", "Prediction.object_id", "Prediction.classif_id"],
+    #     name="obj2pred",
+    # )
 
     # The relationships are created in Relations.py but the typing here helps the IDE
     fields: ObjectFields
@@ -112,6 +128,7 @@ class ObjectHeader(Model):
     all_images: Iterable[Image]
     acquisition: relationship
     history: relationship
+    last_training: relationship
 
     @classmethod
     def fetch_existing_objects(
@@ -251,6 +268,7 @@ Index(
 )
 # For FK checks during deletion
 Index("is_objectsacquisition", ObjectHeader.__table__.c.acquisid)
+Index("is_objecttraining", ObjectHeader.__table__.c.training_id)
 
 DEFAULT_CLASSIF_HISTORY_DATE = "TO_TIMESTAMP(0)"
 
@@ -260,13 +278,21 @@ class ObjectsClassifHisto(Model):
     objid = Column(
         BIGINT, ForeignKey("obj_head.objid", ondelete="CASCADE"), primary_key=True
     )
-    # TODO: FK on taxonomy
+    # The date of last (classif_qual, classif_id, classif_who, training_id) change
     classif_date = Column(TIMESTAMP, primary_key=True)
-    classif_type = Column(CHAR(1))  # A : Automatic, M : Manual
-    classif_id = Column(INTEGER)
-    classif_qual = Column(CHAR(1))
-    classif_who = Column(Integer, ForeignKey("users.id"))
-    classif_score = Column(DOUBLE_PRECISION)
+    # classif_type = Column(CHAR(1))  # A : Automatic, M : Manual
+    classif_id = Column(
+        INTEGER, ForeignKey(Taxonomy.id, ondelete="CASCADE"), nullable=False
+    )
+    classif_qual = Column(CHAR(1))  # 'P', 'V', 'D' + 'X' for discarded
+    classif_who = Column(Integer, ForeignKey("users.id"))  # The user who did the action
+    training_id = Column(
+        INTEGER, ForeignKey(Training.training_id, ondelete="CASCADE")
+    )  # The training causing the values
 
     # The relationships are created in Relations.py but the typing here helps the IDE
     object: relationship
+
+
+# For FK checks during deletion
+Index("is_objecthistotraining", ObjectsClassifHisto.__table__.c.training_id)

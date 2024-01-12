@@ -2,14 +2,13 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Tuple, List, Optional, Set, Any
-
 from API_models.filters import ProjectFiltersDict
 from BO.Classification import (
     HistoricalLastClassif,
     ClassifIDSetT,
     ClassifIDListT,
     ClassifIDT,
+    ClassifScoresListT,
 )
 from BO.ColumnUpdate import ColUpdateList
 from BO.Mappings import TableMapping
@@ -26,6 +25,7 @@ from BO.Project import ProjectBO, ChangeTypeT
 from BO.ReClassifyLog import ReClassificationBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
+from BO.Training import TrainingBO
 from BO.User import UserIDT
 from DB.Object import (
     VALIDATED_CLASSIF_QUAL,
@@ -35,15 +35,19 @@ from DB.Object import (
     ObjectHeader,
 )
 from DB.Project import ProjectIDT, Project
+from DB.Training import TrainingIDT
 from DB.helpers import Result
 from DB.helpers.Direct import text
 from DB.helpers.Postgres import db_server_now
 from DB.helpers.SQL import OrderClause
+
 # noinspection PyUnresolvedReferences
 from FS.ObjectCache import ObjectCache, ObjectCacheWriter
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
+from typing import Tuple, List, Optional, Set, Any
+
 from .helpers.Service import Service
 
 logger = get_logger(__name__)
@@ -218,7 +222,7 @@ class ObjectManager(Service):
     ) -> str:
         """
             From an API-named list of columns, return the real text for the SELECT to return them
-        :param return_fields: The filefs in prefix+name convention
+        :param return_fields: The fields in prefix+name convention
         :param mapping: Mapping to use
         :return:
         """
@@ -360,18 +364,27 @@ class ObjectManager(Service):
         remover.wait_for_done()
         return nb_objs, 0, nb_img_rows, len(img_files)
 
-    def reset_to_predicted(
+    def force_to_predicted(
         self, current_user_id: UserIDT, proj_id: ProjectIDT, filters: ProjectFiltersDict
     ) -> None:
         """
-        Query the given project with given filters, reset the resulting objects to predicted.
+        Query the given project with given filters, force the resulting objects to Predicted with their
+        current classification and a conventional score.
         """
         # Security check
-        RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, proj_id)
+        _user, project = RightsBO.user_wants(
+            self.session, current_user_id, Action.ADMINISTRATE, proj_id
+        )
 
         impacted_objs = [r[0] for r in self.query(current_user_id, proj_id, filters)[0]]
 
-        EnumeratedObjectSet(self.session, impacted_objs).reset_to_predicted()
+        training = TrainingBO.create_one(self.session, current_user_id)
+        nb_upd, all_changes = EnumeratedObjectSet(
+            self.session, impacted_objs
+        ).force_to_predicted(training)
+
+        # Propagate changes to update projects_taxo_stat
+        self.propagate_classif_changes(nb_upd, all_changes, project)
 
         # Update stats
         ProjectBO.update_taxo_stats(self.session, proj_id)
@@ -466,6 +479,7 @@ class ObjectManager(Service):
     ) -> int:
         """
         Regardless of present classification or state, set the new classification for this object set.
+        This can be used to, e.g. move to another taxonomy system.
         """
         # Security check
         user, project = RightsBO.user_wants(
@@ -484,7 +498,10 @@ class ObjectManager(Service):
         classif_ids = [forced_id] * len(obj_set.object_ids)
         now = db_server_now(self.session)
         nb_upd, all_changes = obj_set.classify_validate(
-            current_user_id, classif_ids, "=", now
+            current_user_id,
+            classif_ids,
+            "=",  # TODO bug here? we have to keep consistency
+            now,
         )
 
         if only_taxon is not None:
@@ -519,7 +536,7 @@ class ObjectManager(Service):
         wanted_qualif: str,
     ) -> Tuple[int, int, ObjectSetClassifChangesT]:
         """
-        Classify (from human source) or validate/set to dubious a set of objects.
+        Classify (mostly from human source) or validate/set to dubious a set of objects.
         """
         # Get the objects and project, checking rights at the same time.
         object_set, project = self._the_project_for(
@@ -535,13 +552,13 @@ class ObjectManager(Service):
         # Return status
         return nb_upd, project.projid, all_changes
 
-    def classify_auto_set(
+    def classify_auto_mult_set(
         self,
         current_user_id: UserIDT,
+        training_id: TrainingIDT,
         target_ids: ObjectIDListT,
-        classif_ids: ClassifIDListT,
-        scores: List[float],
-        keep_logs: bool,
+        classif_ids: List[ClassifIDListT],
+        scores: List[ClassifScoresListT],
     ) -> Tuple[int, int, ObjectSetClassifChangesT]:
         """
         Classify (from automatic source) a set of objects.
@@ -550,8 +567,14 @@ class ObjectManager(Service):
         object_set, project = self._the_project_for(
             current_user_id, target_ids, Action.ANNOTATE
         )
+        # Temporary: create a new training if not set # TODO
+        if training_id is None:
+            trn = TrainingBO.create_one(self.session, current_user_id)
+            training_id = trn.training_id
         # Do the raw classification, eventually with history.
-        nb_upd, all_changes = object_set.classify_auto(classif_ids, scores, keep_logs)
+        nb_upd, all_changes = object_set.classify_auto_mult(
+            training_id, classif_ids, scores
+        )
         # Propagate changes to update projects_taxo_stat
         self.propagate_classif_changes(nb_upd, all_changes, project)
         # Return status

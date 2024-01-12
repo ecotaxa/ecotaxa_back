@@ -35,6 +35,11 @@ if True:
 
     # noinspection PyUnresolvedReferences
     from .WoRMs import WoRMS
+
+    from .Training import Training
+
+    from .Prediction import Prediction
+
     from .helpers.ORM import relationship
 
     # User
@@ -121,18 +126,13 @@ if True:
     )
     User.classified_objects = relationship(ObjectHeader)
 
-    ObjectHeader.classif_auto = relationship(
-        Taxonomy,
-        primaryjoin="Taxonomy.id==foreign(ObjectHeader.classif_auto_id)",
-        uselist=False,
-    )
-
     ObjectCNNFeature.object = relationship(
         ObjectHeader,
         foreign_keys="ObjectHeader.objid",
         primaryjoin="ObjectCNNFeature.objcnnid==ObjectHeader.objid",
         uselist=False,
     )
+
     ObjectHeader.cnn_features = relationship(ObjectCNNFeature, uselist=False)
 
     ObjectHeader.all_images = relationship(Image)
@@ -142,6 +142,17 @@ if True:
 
     ObjectHeader.history = relationship(ObjectsClassifHisto, viewonly=True)
     ObjectsClassifHisto.object = relationship(ObjectHeader)
+
+    ObjectHeader.last_training = relationship(
+        Training,
+    )
+
+    Training.predictions = relationship(
+        Prediction,
+    )
+    Training.project = relationship(
+        Project,
+    )
     # Task
     Task.owner = relationship(User)
 

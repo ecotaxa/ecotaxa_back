@@ -4,6 +4,7 @@
 #
 #  Models used in Objects API operations.
 #
+from datetime import datetime
 from typing import List, Optional, Dict, Any
 
 from API_models.helpers.DBtoModel import combine_models
@@ -59,30 +60,12 @@ class _ObjectHeaderModel(DescriptiveModel):
         description="The classification date.",
         example="2021-09-21T14:59:01.007110",
     )
-    classif_auto_id = Field(
-        title="Classification auto Id",
-        description="Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. ",
-    )
-    classif_auto_score = Field(
-        title="Classification auto score",
-        description="Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification auto score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
-        example=0.085,
-    )
-    classif_auto_when = Field(
-        title="Classification auto when",
-        description="Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification date.",
-        example="2021-09-21T14:59:01.007110",
-    )
-    classif_crossvalidation_id = Field(
-        title="Classification crossvalidation Id",
-        description="Always NULL in prod.",
-        example="null",
+    training_id = Field(
+        title="Training Id",
+        description="If the object was ever predicted, id of the last automatic prediction operation.",
     )
     complement_info = Field(
         title="Complement info", description="", example="Part of ostracoda"
-    )
-    similarity = Field(
-        title="Similarity", description="Always NULL in prod.", example="null"
     )
     random_value = Field(title="random_value", description="")
     object_link = Field(
@@ -92,7 +75,41 @@ class _ObjectHeaderModel(DescriptiveModel):
     )
 
 
-ObjectHeaderModel = combine_models(ObjectHeader, _ObjectHeaderModel)
+class _ObjectHeaderComplement(BaseModel):
+    # Still there but now computed
+    classif_auto_id: Optional[int] = Field(
+        title="Classification auto Id",
+        description="Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. ",
+    )  # Used to be directly available, now needs more calculations.
+
+    classif_auto_score: Optional[float] = Field(
+        title="Classification auto score",
+        description="Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification auto score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
+        example=0.085,
+    )
+
+    classif_auto_when: Optional[datetime] = Field(
+        title="Classification auto when",
+        description="Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification date.",
+        example="2021-09-21T14:59:01.007110",
+    )
+    # Historical, kept for compat with old interface
+    classif_crossvalidation_id: Optional[int] = Field(
+        title="Classification crossvalidation Id",
+        description="Always NULL in prod.",
+        example="null",
+    )
+
+    similarity: Optional[float] = Field(
+        title="Similarity", description="Always NULL in prod.", example="null"
+    )
+
+
+_ObjectHeaderModelFromDB = combine_models(ObjectHeader, _ObjectHeaderModel)
+
+
+class ObjectHeaderModel(_ObjectHeaderModelFromDB, _ObjectHeaderComplement):
+    pass
 
 
 class _Image2Model(DescriptiveModel):
@@ -137,7 +154,7 @@ class ImageModel(_ImageModelFromDB):
     pass
 
 
-class ObjectModel(ObjectHeaderModel):
+class ObjectModel(ObjectHeaderModel, _ObjectHeaderComplement):
     orig_id: str = Field(
         title="Original id",
         description="Original object ID from initial TSV load.",
@@ -357,6 +374,24 @@ class ClassifyAutoReq(BaseModel):
         description="Set if former automatic classification history is needed.",
     )
 
+
+class ClassifyAutoReqMult(BaseModel):
+    target_ids: List[int] = Field(
+        title="Target Ids", description="The IDs of the target objects."
+    )
+    classifications: List[List[int]] = Field(
+        title="Classifications",
+        description="The wanted new classifications, i.e. taxon ID, one for each object.",
+    )
+    scores: List[List[float]] = Field(
+        title="Scores",
+        description="The classification score is generally between 0 and 1. It indicates the probability that the taxon prediction of this object is correct.",
+    )
+    keep_log: bool = Field(
+        title="Keep log",
+        description="Set if former automatic classification history is needed. Deprecated, always True.",
+    )
+
     class Config:
         schema_extra = {
             "title": "Classify auto request Model",
@@ -393,11 +428,6 @@ class _DBHistoricalClassificationDescription(DescriptiveModel):
         title="Classification qualification",
         description="The classification qualification. Could be **P** for predicted, **V** for validated or **D** for Dubious.",
         example="P",
-    )
-    classif_score = Field(
-        title="Classification score",
-        description="The classification score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
-        example=0.085,
     )
     user_name = Field(
         title="User name",
