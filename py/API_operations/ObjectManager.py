@@ -2,8 +2,6 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Tuple, List, Optional, Set, Any
-
 from API_models.filters import ProjectFiltersDict
 from BO.Classification import (
     HistoricalLastClassif,
@@ -42,11 +40,14 @@ from DB.helpers import Result
 from DB.helpers.Direct import text
 from DB.helpers.Postgres import db_server_now
 from DB.helpers.SQL import OrderClause
+
 # noinspection PyUnresolvedReferences
 from FS.ObjectCache import ObjectCache, ObjectCacheWriter
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
+from typing import Tuple, List, Optional, Set, Any
+
 from .helpers.Service import Service
 
 logger = get_logger(__name__)
@@ -478,6 +479,7 @@ class ObjectManager(Service):
     ) -> int:
         """
         Regardless of present classification or state, set the new classification for this object set.
+        This can be used to, e.g. move to another taxonomy system.
         """
         # Security check
         user, project = RightsBO.user_wants(
@@ -498,7 +500,7 @@ class ObjectManager(Service):
         nb_upd, all_changes = obj_set.classify_validate(
             current_user_id,
             classif_ids,
-            "=",  # TODO bug here, we have to keep consistency
+            "=",  # TODO bug here? we have to keep consistency
             now,
         )
 
@@ -534,7 +536,7 @@ class ObjectManager(Service):
         wanted_qualif: str,
     ) -> Tuple[int, int, ObjectSetClassifChangesT]:
         """
-        Classify (from human source) or validate/set to dubious a set of objects.
+        Classify (mostly from human source) or validate/set to dubious a set of objects.
         """
         # Get the objects and project, checking rights at the same time.
         object_set, project = self._the_project_for(

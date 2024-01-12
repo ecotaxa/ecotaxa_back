@@ -149,7 +149,9 @@ if True:
 
     Training.predictions = relationship(
         Prediction,
-        # primaryjoin="Training.training_id==Prediction.training_id",
+    )
+    Training.project = relationship(
+        Project,
     )
     # Task
     Task.owner = relationship(User)

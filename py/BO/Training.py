@@ -32,7 +32,8 @@ class TrainingBO(object):
     @classmethod
     def create_one(cls, session: Session, author: UserIDT) -> "TrainingBO":
         trn = Training()
-        trn.training_when = DateTime.now_time()
+        trn.training_start = DateTime.now_time()
+        trn.training_end = trn.training_start
         trn.training_author = author
         trn.training_path = "?"
         session.add(trn)

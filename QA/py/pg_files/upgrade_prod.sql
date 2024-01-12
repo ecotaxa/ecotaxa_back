@@ -1234,44 +1234,162 @@ COMMIT;
 
 -- Running upgrade 1b1beb672279 -> d3bfaa54d544
 
+CREATE TABLE training (
+    training_id SERIAL NOT NULL,
+    projid INTEGER,
+    training_author INTEGER NOT NULL,
+    training_start TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    training_end TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    training_path VARCHAR(80) NOT NULL,
+    PRIMARY KEY (training_id),
+    FOREIGN KEY(training_author) REFERENCES users (id),
+    FOREIGN KEY(projid) REFERENCES projects (projid) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX trn_projid_start ON training (projid, training_start);
+
+CREATE TABLE prediction (
+    object_id BIGINT NOT NULL,
+    training_id INTEGER NOT NULL,
+    classif_id INTEGER NOT NULL,
+    score DOUBLE PRECISION NOT NULL,
+    PRIMARY KEY (object_id, training_id, classif_id, score),
+    FOREIGN KEY(classif_id) REFERENCES taxonomy (id) ON DELETE CASCADE,
+    FOREIGN KEY(object_id) REFERENCES obj_head (objid) ON DELETE CASCADE,
+    FOREIGN KEY(training_id) REFERENCES training (training_id) ON DELETE CASCADE
+);
+
+CREATE INDEX pred_object_id ON prediction (training_id, object_id);
+
 ALTER TABLE obj_head ADD COLUMN training_id INTEGER;
+
+CREATE INDEX is_objecttraining ON obj_head (training_id);
 
 ALTER TABLE obj_head ADD FOREIGN KEY(training_id) REFERENCES training (training_id);
 
-DROP INDEX is_objectsacqclassifqual2;
-
-CREATE INDEX is_objectsacqclassifqual ON obj_head (acquisid, classif_id, classif_qual);
-
-
-ALTER TABLE obj_head DROP COLUMN classif_auto_id;
-
-ALTER TABLE obj_head DROP COLUMN classif_auto_score;
-
-ALTER TABLE obj_head DROP COLUMN classif_auto_when;
-
-ALTER TABLE obj_head DROP COLUMN classif_crossvalidation_id;
-
-ALTER TABLE obj_head DROP COLUMN similarity;
-
-
 ALTER TABLE objectsclassifhisto ADD COLUMN training_id INTEGER;
 
-ALTER TABLE objectsclassifhisto ADD FOREIGN KEY(training_id) REFERENCES training (training_id) ON DELETE CASCADE;
+-- No classif_id, 777 lines as of 07/01/2024
+delete from objectsclassifhisto where classif_id is null;
+
+-- Wrong classif_id,  8960 lines as of 07/01/2024
+delete from objectsclassifhisto where classif_id not in (SELECT id from taxonomy);
+
+ALTER TABLE objectsclassifhisto ALTER COLUMN classif_id SET NOT NULL;
 
 ALTER TABLE objectsclassifhisto ADD FOREIGN KEY(classif_id) REFERENCES taxonomy (id) ON DELETE CASCADE;
 
-ALTER TABLE objectsclassifhisto DROP COLUMN classif_score;
+ALTER TABLE objectsclassifhisto ADD FOREIGN KEY(training_id) REFERENCES training (training_id) ON DELETE CASCADE;
 
-ALTER TABLE objectsclassifhisto DROP COLUMN classif_type;
+CREATE INDEX is_objecthistotraining ON objectsclassifhisto (training_id);
 
+-- Some 6256 objects have an invalid classif_auto
+update obj_head
+set classif_auto_when=null,
+    classif_auto_id=null,
+    classif_auto_score=null
+where classif_auto_id is not null
+  and classif_auto_id not in (SELECT id from taxonomy);
 
-ALTER TABLE user_password_reset ALTER COLUMN temp_password SET NOT NULL;
+-- All objects with their project
+create view mig_obj_prj as
+SELECT prj.projid,
+       obh.objid,
+       obh.classif_auto_id,
+       obh.classif_auto_score,
+       obh.classif_auto_when,
+       obh.training_id
+FROM obj_head obh
+         JOIN acquisitions acq ON obh.acquisid = acq.acquisid
+         JOIN samples sam ON acq.acq_sample_id = sam.sampleid
+         JOIN projects prj ON sam.projid = prj.projid;;
 
-ALTER TABLE user_password_reset DROP CONSTRAINT user_password_reset_user_id_fkey;
+-- Grouped writes of previous prediction tasks, per project & date
+create table mig_unq_classif_per_proj as
+SELECT projid, classif_auto_when, count(objid) as nb_objs
+from mig_obj_prj
+where classif_auto_when is not null
+group by projid, classif_auto_when;;
 
-ALTER TABLE user_password_reset ADD FOREIGN KEY(user_id) REFERENCES users (id);
+-- Look for start and end dates of prediction tasks
+-- assuming that 5 minutes have elapsed b/w 2 tasks on same project (time for human to read a bit the result)
+create table mig_classif_chunks_per_proj as
+SELECT case when delta_prev > '5 min' then 'B' end as B,
+       case when delta_next > '5 min' then 'E' end as E,
+       *
+from (SELECT projid,
+             classif_auto_when,
+             nb_objs,
+             case -- no previous line or different project -> yesterday -> kept in filter
+                 when (lead(projid, -1, -1) OVER paw) != projid then '1 day'::interval
+                 else classif_auto_when - lead(classif_auto_when, -1) OVER paw
+                 end as delta_prev,
+             case -- no next line or different project -> tomorrow -> kept in filter
+                 when (lead(projid, 1, -1) OVER paw) != projid then '1 day'::interval
+                 else lead(classif_auto_when, 1) OVER paw - classif_auto_when
+                 end as delta_next
+      from mig_unq_classif_per_proj
+      window paw as (ORDER BY projid, classif_auto_when)) deltas
+where (delta_next > '5 min'
+    or delta_prev > '5 min')
+order by projid, classif_auto_when;
 
-UPDATE alembic_version SET version_num='d3bfaa54d544' WHERE alembic_version.version_num = '1b1beb672279';
+-- reconstituted old tasks
+create table mig_classif_tasks as
+SELECT projid,
+       classif_auto_when as begin_date,
+       (SELECT classif_auto_when
+        from mig_classif_chunks_per_proj ct2
+        where ct2.classif_auto_when >= ct1.classif_auto_when
+          and ct2.projid = ct1.projid
+          and ct2.delta_next > '5 min'
+        order by ct2.classif_auto_when
+        limit 1) as end_date
+from mig_classif_chunks_per_proj ct1
+where delta_prev > '5 min';
+-- perf fix
+create unique index on mig_classif_tasks (projid, begin_date, end_date);
+analyze mig_classif_tasks;
+
+-- Each task becomes a training.
+-- Note that some old tasks have the _same_ begin_date for different projects.
+insert into training (projid, training_author, training_start, training_end, training_path)
+select ct.projid, 1, ct.begin_date, ct.end_date, 'Migrated ' || current_date
+from mig_classif_tasks ct;
+
+do
+$$
+    declare
+        curprj  record;
+        o_count integer;
+    begin
+        for curprj in (select projid from projects order by projid)
+            loop
+                -- Each object having some classif_auto becomes a Prediction
+                with obj_prd as (
+                insert into prediction(training_id, object_id, classif_id, score)
+                select trn.training_id, obp.objid, obp.classif_auto_id, obp.classif_auto_score
+                from mig_obj_prj obp
+                join training trn
+                     on trn.projid = obp.projid
+                    and obp.classif_auto_when between trn.training_start and trn.training_end
+                where obp.projid = curprj.projid
+                  and obp.training_id is null
+                  and obp.classif_auto_when is not null
+                returning training_id, object_id)
+                -- Inject training back into objects
+                update obj_head obh
+                   set training_id = prd.training_id
+                  from obj_prd prd
+                 where obh.objid = prd.object_id;
+                GET DIAGNOSTICS o_count = ROW_COUNT;
+                commit;
+                RAISE NOTICE 'project: % preds % objs, time:%', curprj.projid, o_count, current_time;
+            end loop;
+    end;
+$$;;
+
+UPDATE alembic_version SET version_num='e20ae43425bb' WHERE alembic_version.version_num = '1b1beb672279';
 
 COMMIT;
 

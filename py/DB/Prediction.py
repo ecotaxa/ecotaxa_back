@@ -7,11 +7,11 @@
 #
 from __future__ import annotations
 
-from typing import NamedTuple
-
-from DB.helpers.DDL import Index, Column, ForeignKey, Integer
+from DB.helpers.DDL import Index, Column, ForeignKey
 from DB.helpers.ORM import Model
 from DB.helpers.Postgres import BIGINT, INTEGER, DOUBLE_PRECISION
+from typing import NamedTuple
+
 from .Object import ObjectHeader
 from .Taxonomy import Taxonomy
 from .Training import Training
@@ -22,23 +22,24 @@ class ClassifScore(NamedTuple):
     score: float
 
 
-# TODO: Re-ordering might align and save some bytes per tuple. To experiment with upgrade script.
+# pg_table_size: 13851295744 of 230M lines using (training_id,object_id,classif_id,score) -> 60 b/tuple
+# pg_table_size: 11998306304 of 230M lines using (object_id,training_id,classif_id,score) -> 52 b/tuple
 class Prediction(Model):
     __tablename__ = "prediction"
 
-    training_id = Column(
-        Integer,
-        ForeignKey(Training.training_id, ondelete="CASCADE"),
-        nullable=False,
-        primary_key=True,
-    )
-    object_id = Column(
+    object_id: int = Column(
         BIGINT,
         ForeignKey(ObjectHeader.objid, ondelete="CASCADE"),
         nullable=False,
         primary_key=True,
     )
-    classif_id = Column(
+    training_id: int = Column(
+        INTEGER,
+        ForeignKey(Training.training_id, ondelete="CASCADE"),
+        nullable=False,
+        primary_key=True,
+    )
+    classif_id: int = Column(
         INTEGER,
         ForeignKey(Taxonomy.id, ondelete="CASCADE"),
         nullable=False,
@@ -47,11 +48,4 @@ class Prediction(Model):
     score = Column(DOUBLE_PRECISION, nullable=False, primary_key=True)
 
 
-Index(
-    "pred_object_id_index",
-    Prediction.training_id,
-    Prediction.object_id,
-    Prediction.classif_id,
-    Prediction.score,
-    unique=True,
-)
+Index("pred_object_id", Prediction.training_id, Prediction.object_id)

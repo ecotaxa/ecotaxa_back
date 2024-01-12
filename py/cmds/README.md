@@ -25,6 +25,11 @@ Next step is to generate SQL for DB creation giant SQL in QA directory:
 
 Copy/paste the last section (signalled by "-- Running upgrade...") at the end of `upgrade_prod.sql`.
 
+Alternatively you can generate only the _last_ script, provided you noted down the revision, e.g.:
+
+`PATH=../venv38/bin PYTHONPATH=.. APP_CONFIG=../config.ini alembic upgrade --sql 1b1beb672279:head
+`
+
 Finally upgrade your local DB:
 
 `PATH=../venv38/bin PYTHONPATH=.. APP_CONFIG=../config.ini alembic upgrade head

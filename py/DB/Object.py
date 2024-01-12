@@ -6,8 +6,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import Dict, Set, Iterable, TYPE_CHECKING
-
+from BO.helpers.TSVHelpers import convert_degree_minute_float_to_decimal_degree
 # noinspection PyPackageRequirements
 from sqlalchemy import (
     Index,
@@ -30,8 +29,8 @@ from sqlalchemy.dialects.postgresql import (
 )
 # noinspection PyPackageRequirements
 from sqlalchemy.orm import relationship, Session
+from typing import Dict, Set, Iterable, TYPE_CHECKING
 
-from BO.helpers.TSVHelpers import convert_degree_minute_float_to_decimal_degree
 from .Acquisition import Acquisition
 from .Image import Image
 from .Project import Project, ProjectIDT
@@ -50,7 +49,7 @@ if TYPE_CHECKING:
 
 # Classification qualification
 PREDICTED_CLASSIF_QUAL = "P"  # according to 'training_id' output, the object _might be_ a 'classif_id' with 'score' probability
-DUBIOUS_CLASSIF_QUAL = "D"  #   'classif_who' said at 'classif_when' moment that the object is _probably not_ a 'classif_id'
+DUBIOUS_CLASSIF_QUAL = "D"  # 'classif_who' said at 'classif_when' moment that the object is _probably not_ a 'classif_id'
 VALIDATED_CLASSIF_QUAL = "V"  # 'classif_who' said at 'classif_when' moment that the object _is_ a 'classif_id'
 DISCARDED_CLASSIF_QUAL = "X"  # 'classif_who' said at 'classif_when' moment that the object _is not_ a 'classif_id'
 classif_qual_labels = {
@@ -269,6 +268,7 @@ Index(
 )
 # For FK checks during deletion
 Index("is_objectsacquisition", ObjectHeader.__table__.c.acquisid)
+Index("is_objecttraining", ObjectHeader.__table__.c.training_id)
 
 DEFAULT_CLASSIF_HISTORY_DATE = "TO_TIMESTAMP(0)"
 
@@ -292,3 +292,7 @@ class ObjectsClassifHisto(Model):
 
     # The relationships are created in Relations.py but the typing here helps the IDE
     object: relationship
+
+
+# For FK checks during deletion
+Index("is_objecthistotraining", ObjectsClassifHisto.__table__.c.training_id)
