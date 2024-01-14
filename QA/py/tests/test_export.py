@@ -1,20 +1,24 @@
 import datetime
+import json
 import logging
+from typing import Dict, Any
 from unittest import mock
 
+from deepdiff import DeepDiff
+from deepdiff.helper import TREE_VIEW
 # noinspection PyPackageRequirements
 from starlette import status
 
 from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID
 from tests.export_shared import download_and_unzip_and_check, download_and_check
-from tests.test_fastapi import PROJECT_QUERY_URL
-from tests.test_import import create_project, do_import, DATA_DIR, dump_project
 from tests.jobs import (
     JOB_QUERY_URL,
     wait_for_stable,
     api_check_job_ok,
     get_job_and_wait_until_ok,
 )
+from tests.test_fastapi import PROJECT_QUERY_URL
+from tests.test_import import create_project, do_import, DATA_DIR, dump_project
 
 OBJECT_SET_EXPORT_URL = "/object_set/export"
 
@@ -181,9 +185,45 @@ def test_export_roundtrip(database, fastapi, caplog, tstlogs):
         source_path=DATA_DIR / "ftp" / ("task_%d_%s" % (job_id, file_in_ftp)),
         user_id=ADMIN_USER_ID,
     )
+    changes = diff_projects(
+        prj_id, "exp_source.json", clone_prj_id, "exp_clone.json", tstlogs
+    )
+    assert len(changes) == 1
+    assert changes[0].path() == "root['ttl']"  # Just title changed
 
-    # TODO: Automate diff
-    with open(tstlogs / "exp_source.json", "w") as fd:
-        dump_project(ADMIN_USER_ID, prj_id, fd)
-    with open(tstlogs / "exp_clone.json", "w") as fd:
-        dump_project(ADMIN_USER_ID, clone_prj_id, fd)
+
+def force_leaves(prj_json: Dict, forced: Dict[str, Any]):
+    """Force values on leaf nodes"""
+    if isinstance(prj_json, list):
+        for node in prj_json:
+            force_leaves(node, forced)
+    else:
+        for k in prj_json.keys():
+            v = prj_json[k]
+            if k in forced and type(v) == type(forced[k]):
+                prj_json[k] = forced[k]
+                continue
+            if isinstance(v, (list, dict)):
+                force_leaves(v, forced)
+
+
+def diff_projects(
+    ref_prj_id: int, ref_prj_dump: str, other_prj_id: int, other_prj_dump: str, tstlogs
+):
+    jsons = []
+    for prj_id, dump in zip((ref_prj_id, other_prj_id), (ref_prj_dump, other_prj_dump)):
+        with open(tstlogs / dump, "w") as fd:
+            dump_project(ADMIN_USER_ID, prj_id, fd)
+        with open(tstlogs / dump, "r") as fd:
+            prj_json = json.load(fd)
+            force_leaves(
+                prj_json, {"id": 0, "fil": "xx.png"}
+            )  # IDs and file names are unpredictable
+            jsons.append(prj_json)
+    diffs = DeepDiff(jsons[0], jsons[1], view=TREE_VIEW)
+    assert "iterable_item_added" not in diffs
+    assert "iterable_item_removed" not in diffs
+    assert "dictionary_item_added" not in diffs
+    assert "dictionary_item_removed" not in diffs
+    changed_values = diffs["values_changed"]
+    return changed_values
