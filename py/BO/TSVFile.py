@@ -54,6 +54,8 @@ from .helpers.TSVHelpers import (
 
 logger = get_logger(__name__)
 
+ABSORBED_DIFF_CLASSIF_WHEN = datetime.timedelta(seconds=1)
+
 
 class TSVFile(object):
     """
@@ -294,6 +296,26 @@ class TSVFile(object):
             # for {'objtime': datetime.time(12, 29), 'latitude': -64.2, 'objdate': datetime.date(2011, 1, 9),
             # 'longitude': -52.59 }
             logger.error("Astral error : %s for %s", e, object_head_to_write)
+
+    @staticmethod
+    def prepare_classif_update(object_head: ObjectHeader, object_update: Bean):
+        """
+        Detect intent to update classification related data: category, time of change, author
+        """
+        if object_head.classif_id != object_update.get("classif_id"):
+            pass  # Normal update, if relevant
+        elif object_head.classif_who != object_update.get("classif_who"):
+            pass  # Same classification, different author, update if relevant
+        else:
+            upd_when = object_update.get("classif_when")
+            # Just a date update, could be due to precision difference
+            if (
+                object_head.classif_when is not None
+                and upd_when is not None
+                and object_head.classif_when > upd_when
+                and object_head.classif_when - upd_when < ABSORBED_DIFF_CLASSIF_WHEN
+            ):
+                object_update.classif_when = object_head.classif_when
 
     def path_for_image(self, image_path: str):
         """
@@ -692,6 +714,8 @@ class TSVFile(object):
                             ):
                                 an_upd[a_field] = getattr(obj, a_field)
                             TSVFile.do_sun_position_field(an_upd)
+                        # Care for classification update
+                        TSVFile.prepare_classif_update(obj, an_upd)
                     updates = TSVFile.update_orm_object(obj, an_upd)
                     if len(updates) > 0:
                         logger.info("Updating '%s' using %s", filter_for_id, updates)

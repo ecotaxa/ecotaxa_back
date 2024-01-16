@@ -298,7 +298,7 @@ def test_equal_dump_prj1(database, caplog, tstlogs):
 
 
 # @pytest.mark.skip()
-# noinspection DuplicatedCode
+# noinspection DuplicatedCode,PyUnusedLocal
 @pytest.mark.parametrize("title", ["Test LS 2"])
 def test_import_uvp6(database, caplog, title):
     caplog.set_level(logging.DEBUG)

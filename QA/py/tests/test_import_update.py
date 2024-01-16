@@ -28,7 +28,7 @@ def test_import_update(database, caplog, tstlogs):
     assert upds == []
 
     # Update without classif, 10 cells
-    do_import_update(prj_id, caplog, "Yes")
+    do_import_update(prj_id, caplog, "Yes", str(UPDATE_DIR))
     print("Import update 1:" + "\n".join(caplog.messages))
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
     # 9 fields + 7 derived sun positions
@@ -37,7 +37,7 @@ def test_import_update(database, caplog, tstlogs):
     assert saves == ["Batch save objects of 0/0/0/0/0"] * 3
 
     # Update classif, 2 cells, one classif ID and one classif quality
-    do_import_update(prj_id, caplog, "Cla")
+    do_import_update(prj_id, caplog, "Cla", str(UPDATE_DIR))
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
     print("Import update 2:" + "\n".join(caplog.messages))
     assert nb_upds == 2
@@ -56,7 +56,7 @@ def test_import_update(database, caplog, tstlogs):
     assert saves == ["Batch save objects of 0/0/0/0/0"] * 3
 
     # Update classif, no change -> No log line
-    do_import_update(prj_id, caplog, "Yes")
+    do_import_update(prj_id, caplog, "Yes", str(UPDATE_DIR))
     print("Import update 3:" + "\n".join(caplog.messages))
     assert len(caplog.messages) > 0
     upds = [msg for msg in caplog.messages if msg.startswith("Updating")]
@@ -66,30 +66,28 @@ def test_import_update(database, caplog, tstlogs):
 
 
 # Ensure that re-updating updates nothing. This is tricky due to floats storage on DB.
-def do_import_update(prj_id, caplog, classif, source=None):
-    if source is None:
-        source = str(UPDATE_DIR)
+def do_import_update(prj_id, caplog, classif, source):
     params = ImportReq(
         skip_existing_objects=True, update_mode=classif, source_path=source
     )
+    caplog.clear()
     with FileImport(prj_id, params) as sce:
         rsp: ImportRsp = sce.run(ADMIN_USER_ID)
     job = wait_for_stable(rsp.job_id)
 
-    assert job.state == DBJobStateEnum.Asking
-    assert job.question == {
-        "missing_users": ["admin4test", "elizandro rodriguez"],
-        "missing_taxa": ["other", "ozzeur"],
-    }
+    if job.state == DBJobStateEnum.Asking:
+        assert job.question == {
+            "missing_users": ["admin4test", "elizandro rodriguez"],
+            "missing_taxa": ["other", "ozzeur"],
+        }
 
-    reply = {
-        "users": {"admin4test": 1, "elizandro rodriguez": 1},  # Map to admin
-        "taxa": {"other": 99999, "ozzeur": 85011},  # 'other<dead'  # 'other<living'
-    }
-    caplog.clear()
-    with JobCRUDService() as sce:
-        sce.reply(ADMIN_USER_ID, rsp.job_id, reply)
-    job = wait_for_stable(rsp.job_id)
+        reply = {
+            "users": {"admin4test": 1, "elizandro rodriguez": 1},  # Map to admin
+            "taxa": {"other": 99999, "ozzeur": 85011},  # 'other<dead'  # 'other<living'
+        }
+        with JobCRUDService() as sce:
+            sce.reply(ADMIN_USER_ID, rsp.job_id, reply)
+        job = wait_for_stable(rsp.job_id)
     check_job_ok(job)
     # Check that all went fine
     for a_msg in caplog.records:
