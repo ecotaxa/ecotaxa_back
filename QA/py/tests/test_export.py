@@ -29,11 +29,13 @@ from tests.test_classification import (
     query_all_objects,
     copepod_id,
     crustacea,
+    classif_history,
 )
 from tests.test_fastapi import PROJECT_QUERY_URL
 from tests.test_import import create_project, do_import, DATA_DIR, dump_project
 from tests.test_import_update import do_import_update
 from tests.test_update_prj import PROJECT_UPDATE_URL
+from tests.test_subentities import current_object
 
 OBJECT_SET_EXPORT_URL = "/object_set/export"
 
@@ -177,19 +179,7 @@ def test_export_roundtrip(database, fastapi, caplog, tstlogs):
     _prj_json = rsp.json()
 
     # Admin exports it
-    url = OBJECT_SET_EXPORT_URL
-    req = dict(BAK_EXP_TMPL, **{"project_id": prj_id})
-    req_and_filters = {"filters": {}, "request": req}
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
-    assert rsp.status_code == status.HTTP_200_OK
-
-    job_id = rsp.json()["job_id"]
-    wait_for_stable(job_id)
-    api_check_job_ok(fastapi, job_id)
-    url = JOB_QUERY_URL.format(job_id=job_id)
-    rsp = fastapi.get(url, headers=ADMIN_AUTH)
-    job_dict = rsp.json()
-    file_in_ftp = job_dict["result"]["out_file"]
+    job_id, file_in_ftp = export_project_to_ftp(fastapi, prj_id)
 
     # Create a clone project
     clone_prj_id = create_project(
@@ -283,18 +273,7 @@ def test_export_roundtrip_self(database, fastapi, caplog, tstlogs):
     classify_validate_all(ADMIN_AUTH)
 
     # Admin BAK-exports it
-    req = dict(BAK_EXP_TMPL, **{"project_id": prj_id})
-    req_and_filters = {"filters": {}, "request": req}
-    rsp = fastapi.post(OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters)
-    assert rsp.status_code == status.HTTP_200_OK
-
-    export_job_id = rsp.json()["job_id"]
-    wait_for_stable(export_job_id)
-    api_check_job_ok(fastapi, export_job_id)
-    url = JOB_QUERY_URL.format(job_id=export_job_id)
-    rsp = fastapi.get(url, headers=ADMIN_AUTH)
-    job_dict = rsp.json()
-    file_in_ftp = job_dict["result"]["out_file"]
+    export_job_id, file_in_ftp = export_project_to_ftp(fastapi, prj_id)
 
     do_import_update(
         prj_id,
@@ -331,3 +310,51 @@ def test_export_roundtrip_self(database, fastapi, caplog, tstlogs):
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
     # All changed, restored to backup
     assert nb_upds == 15
+
+    if False:
+        for an_obj in sorted(obj_ids):
+            curr_obj = current_object(fastapi, an_obj)
+            info = {k: v for k, v in curr_obj.items() if k.startswith("classif")}
+            print(info)
+            an_hist = classif_history(fastapi, an_obj)
+            for hist in sorted(
+                an_hist,
+                key=lambda x: datetime.datetime.fromisoformat(x["classif_date"]),
+                reverse=True,
+            ):
+                print(hist)
+            print()
+
+    for an_obj in obj_ids:
+        an_hist = classif_history(fastapi, an_obj)
+        assert len(an_hist) == 4
+
+    # Restore a second time the same backup
+    do_import_update(
+        prj_id,
+        caplog,
+        "Cla",
+        str(DATA_DIR / "ftp" / ("task_%d_%s" % (export_job_id, file_in_ftp))),
+    )
+    nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
+    # No change
+    assert nb_upds == 0
+    # Not more history
+    for an_obj in obj_ids:
+        an_hist = classif_history(fastapi, an_obj)
+        assert len(an_hist) == 4
+
+
+def export_project_to_ftp(fastapi, prj_id):
+    req = dict(BAK_EXP_TMPL, **{"project_id": prj_id})
+    req_and_filters = {"filters": {}, "request": req}
+    rsp = fastapi.post(OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters)
+    assert rsp.status_code == status.HTTP_200_OK
+    export_job_id = rsp.json()["job_id"]
+    wait_for_stable(export_job_id)
+    api_check_job_ok(fastapi, export_job_id)
+    url = JOB_QUERY_URL.format(job_id=export_job_id)
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    job_dict = rsp.json()
+    file_in_ftp = job_dict["result"]["out_file"]
+    return export_job_id, file_in_ftp

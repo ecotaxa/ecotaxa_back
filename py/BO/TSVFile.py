@@ -44,6 +44,7 @@ from DB.helpers.Direct import text
 from DB.helpers.ORM import Model, detach_from_session
 from helpers.DynamicLogs import get_logger
 from .Image import ImageBO
+from .ObjectSet import EnumeratedObjectSet
 from .helpers.TSVHelpers import (
     clean_value,
     clean_value_and_none,
@@ -298,14 +299,14 @@ class TSVFile(object):
             logger.error("Astral error : %s for %s", e, object_head_to_write)
 
     @staticmethod
-    def prepare_classif_update(object_head: ObjectHeader, object_update: Bean):
+    def prepare_classif_update(object_head: ObjectHeader, object_update: Bean) -> bool:
         """
         Detect intent to update classification related data: category, time of change, author
         """
         if object_head.classif_id != object_update.get("classif_id"):
-            pass  # Normal update, if relevant
+            return True  # Normal update, if relevant
         elif object_head.classif_who != object_update.get("classif_who"):
-            pass  # Same classification, different author, update if relevant
+            return True  # Same classification, different author, update if relevant
         else:
             upd_when = object_update.get("classif_when")
             # Just a date update, could be due to precision difference
@@ -316,6 +317,9 @@ class TSVFile(object):
                 and object_head.classif_when - upd_when < ABSORBED_DIFF_CLASSIF_WHEN
             ):
                 object_update.classif_when = object_head.classif_when
+            else:
+                return True
+        return False
 
     def path_for_image(self, image_path: str):
         """
@@ -715,7 +719,12 @@ class TSVFile(object):
                                 an_upd[a_field] = getattr(obj, a_field)
                             TSVFile.do_sun_position_field(an_upd)
                         # Care for classification update
-                        TSVFile.prepare_classif_update(obj, an_upd)
+                        if TSVFile.prepare_classif_update(obj, an_upd):
+                            EnumeratedObjectSet.historize_classification_for(
+                                session,
+                                [objid],
+                                only_qual=None,  # TODO: Quite inefficient but simple
+                            )
                     updates = TSVFile.update_orm_object(obj, an_upd)
                     if len(updates) > 0:
                         logger.info("Updating '%s' using %s", filter_for_id, updates)
