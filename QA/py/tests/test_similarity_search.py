@@ -7,7 +7,7 @@ from starlette import status
 
 from tests.credentials import ADMIN_AUTH
 from tests.jobs import get_job_and_wait_until_ok, api_check_job_ok
-from tests.test_classification import _prj_query
+from tests.test_objectset_query import _prj_query
 
 from BO.Prediction import DeepFeatures
 
