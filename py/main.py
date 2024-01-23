@@ -66,6 +66,7 @@ from API_models.objects import (
     ObjectHeaderModel,
 )
 from API_models.prediction import PredictionRsp, PredictionReq, MLModel
+from API_models.simsearch import SimilaritySearchReq, SimilaritySearchRsp
 from API_models.subset import SubsetReq, SubsetRsp
 from API_models.taxonomy import (
     TaxaSearchRsp,
@@ -94,6 +95,7 @@ from API_operations.Merge import MergeService
 from API_operations.ObjectManager import ObjectManager
 from API_operations.Prediction import PredictForProject, PredictionDataService
 from API_operations.FeatureExtraction import FeatureExtractionForProject
+from API_operations.SimilaritySearch import SimilaritySearchForProject
 from API_operations.Stats import ProjectStatsFetcher
 from API_operations.Status import StatusService
 from API_operations.Subset import SubsetServiceOnProject
@@ -1577,6 +1579,25 @@ def set_project_predict_settings(
 
 
 # ######################## END OF PROJECT
+
+@app.post(
+    "/object_set/similarity_search", 
+    operation_id="object_set_similarity_search",
+    tags=["objects"],
+    response_model=SimilaritySearchRsp,
+)
+def object_set_similarity_search(
+    filters: ProjectFilters = Body(...),
+    request: SimilaritySearchReq = Body(...),
+    current_user: Optional[int] = Depends(get_optional_current_user),
+) -> SimilaritySearchRsp:
+    """
+    Perform a similarity search on a set of objects.
+    """
+    with SimilaritySearchForProject(request, filters.base()) as sce:
+        rsp = sce.run(current_user)
+    return rsp
+
 
 @app.post(
     "/object_set/{project_id}/similarity_search", # should be similar to ../{}/query
