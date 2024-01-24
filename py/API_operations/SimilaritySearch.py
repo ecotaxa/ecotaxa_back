@@ -12,6 +12,7 @@ from DB.CNNFeatureVector import ObjectCNNFeatureVector
 from DB.helpers.Direct import text
 from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
+from BO.ObjectSet import DescribedObjectSet
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 # TODO: Move somewhere else
 from .helpers.JobService import JobServiceBase, ArgsDict
@@ -64,19 +65,33 @@ class SimilaritySearchForProject(JobServiceBase):
         """
         Similarity search on a project.
         """
-        session = self.ro_session
+        _user, project = RightsBO.user_wants(
+            self.session, self._get_owner_id(), Action.ANNOTATE, self.req.project_id
+        )
         target_id = self.req.target_id
         limit = self.NUM_NEIGHBORS
+
+        # Prepare a where clause and parameters from filter
+        object_set: DescribedObjectSet = DescribedObjectSet(
+            self.ro_session, project, self._get_owner_id(), self.filters
+        )
+        from_, where_clause, params = object_set.get_sql()
+        where_clause_sql = where_clause.get_sql()
+        if where_clause_sql != " ":
+            where_clause_sql += " AND objcnnid = obh.objid"
+        else:
+            where_clause_sql = "WHERE objcnnid = obh.objid"
 
         query = f"""
             SELECT objcnnid, features <-> (
                 SELECT features FROM {ObjectCNNFeatureVector.__tablename__}
                 WHERE objcnnid={target_id}
             ) AS dist
-            FROM {ObjectCNNFeatureVector.__tablename__}
+            FROM {ObjectCNNFeatureVector.__tablename__}, {from_.get_sql()}
+            {where_clause_sql}
             ORDER BY dist LIMIT {limit};
         """
-
-        result = session.execute(text(query))
+        print(query)
+        result = self.ro_session.execute(text(query), params)
         neighbors = [res["objcnnid"] for res in result]
         self.set_job_result(errors=[], infos={"neighbor_ids": neighbors})
