@@ -91,7 +91,7 @@ class SimilaritySearchForProject(JobServiceBase):
             {where_clause_sql}
             ORDER BY dist LIMIT {limit};
         """
-        print(query)
+
         result = self.ro_session.execute(text(query), params)
         neighbors = [res["objcnnid"] for res in result]
         self.set_job_result(errors=[], infos={"neighbor_ids": neighbors})
