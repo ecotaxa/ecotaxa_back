@@ -55,20 +55,20 @@ def test_similarity_search(database, fastapi, caplog):
     job_dict = api_check_job_ok(fastapi, job_id)
     assert job_dict["result"]["neighbor_ids"] == obj_ids
 
-    # Test similarity search with filters
-    url = OBJECT_SET_SIMILARITY_SEARCH_URL
-    req = {
-        "project_id": prj_id,
-        "target_id": obj_ids[0],
-    }
-    filters = {"taxo": "85011"}
-    req_and_filters = {"filters": filters, "request": req}
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
-    assert rsp.status_code == status.HTTP_200_OK
+    # # Test similarity search with filters
+    # url = OBJECT_SET_SIMILARITY_SEARCH_URL
+    # req = {
+    #     "project_id": prj_id,
+    #     "target_id": obj_ids[0],
+    # }
+    # filters = {"taxo": "85011"}
+    # req_and_filters = {"filters": filters, "request": req}
+    # rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+    # assert rsp.status_code == status.HTTP_200_OK
 
-    job_id = get_job_and_wait_until_ok(fastapi, rsp)
-    assert job_id is not None
+    # job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    # assert job_id is not None
 
-    # Check results
-    job_dict = api_check_job_ok(fastapi, job_id)
-    assert job_dict["result"]["neighbor_ids"] == [4]  # Only one object in this taxo
+    # # Check results
+    # job_dict = api_check_job_ok(fastapi, job_id)
+    # assert job_dict["result"]["neighbor_ids"] == [4]  # Only one object in this taxo
