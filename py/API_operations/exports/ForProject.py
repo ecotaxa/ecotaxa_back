@@ -109,15 +109,19 @@ class ProjectExport(JobServiceBase):
         # Fetch the source project
         src_project = self.ro_session.query(Project).get(req.project_id)
         assert src_project is not None
-        # Force options for some types
-        if req.exp_type in (ExportTypeEnum.backup, ExportTypeEnum.dig_obj_ident):
-            req.tsv_entities = "OPAS"  # Not Comments nor History
+        # Force some options for some types
+        if req.exp_type == ExportTypeEnum.dig_obj_ident:
+            req.tsv_entities = "OPAS"  # No Comments
             req.with_internal_ids = False
-        if req.exp_type == ExportTypeEnum.backup:
-            req.split_by = "sample"
-            req.coma_as_separator = False
-        elif req.exp_type == ExportTypeEnum.dig_obj_ident:
             req.split_by = ""
+            req.coma_as_separator = False
+        elif (
+            req.exp_type == ExportTypeEnum.backup
+        ):  # TODO: It's a mess on these conditions. Force and use only flags.
+            req.tsv_entities = "OPAS"  # C is missing, too much work to align tests. In theory, we're supposed to restore identical, even if C cannot in full
+            req.only_first_image = False  # We're supposed to restore identical
+            req.with_internal_ids = False
+            req.split_by = "sample"
             req.coma_as_separator = False
         elif req.exp_type == ExportTypeEnum.general_tsv:
             req.with_images = False
@@ -307,6 +311,7 @@ class ProjectExport(JobServiceBase):
                     obh.classif_auto_score, obh.classif_auto_when,
                     obh.random_value object_random_value, obh.sunpos object_sunpos """
             if "S" in req.tsv_entities:
+                # This is not really an id, it's computed, why not
                 select_clause += (
                     "\n, sam.latitude sample_lat, sam.longitude sample_long "
                 )
@@ -434,8 +439,8 @@ class ProjectExport(JobServiceBase):
                     quoting=csv.QUOTE_NONNUMERIC,
                 )
                 csv_wtr.writeheader()
-                if req.exp_type == ExportTypeEnum.backup:
-                    # Write types line for backup type
+                if req.with_types_row or req.exp_type == ExportTypeEnum.backup:
+                    # Write types line for backup type or if forced
                     csv_wtr.writerow(tsv_types_line)
             if req.with_images:
                 copy_op = {"src_path": a_row.pop("img_src_path")}
@@ -471,7 +476,7 @@ class ProjectExport(JobServiceBase):
                     copy_op["dst_path"] = dst_path
                 img_wtr.writerow(copy_op)
                 nb_images += 1
-            # Remove CR from comments
+            # Remove CR from comments, means reimport will produce a != DB line
             if "C" in req.tsv_entities and a_row["complement_info"]:
                 a_row["complement_info"] = " ".join(
                     a_row["complement_info"].splitlines()

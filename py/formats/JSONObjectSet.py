@@ -50,6 +50,7 @@ JSON_FIELDS: Dict[ModelT, JSONDesc] = {
         ObjectHeader.depth_max: "depth_max",
         ObjectHeader.latitude: "latitude",
         ObjectHeader.longitude: "longitude",
+        ObjectHeader.complement_info: "cmt",
         ObjectHeader.fields: "fields",  # type:ignore # 1-1 so should be joined right away and disappear
     },
     ObjectFields: {},

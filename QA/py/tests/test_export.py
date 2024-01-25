@@ -34,12 +34,12 @@ from tests.test_classification import (
 from tests.test_fastapi import PROJECT_QUERY_URL
 from tests.test_import import create_project, do_import, DATA_DIR, dump_project
 from tests.test_import_update import do_import_update
-from tests.test_update_prj import PROJECT_UPDATE_URL
 from tests.test_subentities import current_object
+from tests.test_update_prj import PROJECT_UPDATE_URL
 
-OBJECT_SET_EXPORT_URL = "/object_set/export"
+DEPRECATED_OBJECT_SET_EXPORT_URL = "/object_set/export"
 
-_req_tmpl = {
+DEPRECATED_GEN_EXPORT_TMPL = {
     "exp_type": "TSV",
     "tsv_entities": "OPASHC",
     "coma_as_separator": False,
@@ -52,17 +52,27 @@ _req_tmpl = {
     "sum_subtotal": "",
 }
 
+OBJECT_SET_GENERAL_EXPORT_URL = "/object_set/export/general"
+
+GEN_EXPORT_TMPL = {
+    "split_by": "sample",
+    "with_images": "none",
+    "with_internal_ids": False,
+    "with_types_row": False,
+    "out_to_ftp": False,
+}
+
 BAK_EXP_TMPL = {
     "exp_type": "BAK",
-    "tsv_entities": "OPASHC",
-    "coma_as_separator": False,
-    "format_dates_times": True,
+    "tsv_entities": "",  # Defaulted by type
+    "coma_as_separator": True,  # Defaulted by type
+    "format_dates_times": True,  # Defaulted by type
     "with_images": True,
-    "only_first_image": False,
-    "split_by": "sample",
-    "with_internal_ids": False,
+    "only_first_image": True,  # Defaulted by type
+    "split_by": "",  # Defaulted by type
+    "with_internal_ids": True,  # Defaulted by type
     "out_to_ftp": True,
-    "sum_subtotal": "",
+    "sum_subtotal": "",  # Defaulted by type
 }
 
 
@@ -84,38 +94,56 @@ def test_export_tsv(database, fastapi, caplog):
     caplog.set_level(logging.DEBUG)
 
     # Admin exports it
-    url = OBJECT_SET_EXPORT_URL
-    filters = {}
-    req = _req_tmpl.copy()
-    req.update({"project_id": prj_id})
-    req_and_filters = {"filters": filters, "request": req}
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+    req_and_filters = {
+        "filters": {},
+        "request": dict(GEN_EXPORT_TMPL, **{"project_id": prj_id}),
+    }
+    rsp = fastapi.post(
+        OBJECT_SET_GENERAL_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    )
     assert rsp.status_code == status.HTTP_200_OK
 
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
     download_and_unzip_and_check(fastapi, job_id, "tsv_all_entities_no_img_no_ids")
 
     # Backup export
-    req.update({"exp_type": "BAK", "with_images": True, "only_first_image": False})
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+    req_and_filters = {
+        "filters": {},
+        "request": dict(
+            DEPRECATED_GEN_EXPORT_TMPL,
+            **{
+                "project_id": prj_id,
+                "exp_type": "BAK",
+                "with_images": True,
+                "only_first_image": False,
+            }
+        ),
+    }
+    rsp = fastapi.post(
+        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    )
     assert rsp.status_code == status.HTTP_200_OK
 
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
     download_and_unzip_and_check(fastapi, job_id, "bak_all_images")
 
     # Backup export without images (but their ref is still in the TSVs)
-    req.update({"exp_type": "BAK", "with_images": False, "only_first_image": False})
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+    req_and_filters["request"]["with_images"] = False
+    rsp = fastapi.post(
+        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    )
     assert rsp.status_code == status.HTTP_200_OK
 
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
     download_and_unzip_and_check(fastapi, job_id, "bak_no_image")
 
     # DOI export
-    req.update({"exp_type": "DOI"})
+    req_and_filters["request"]["exp_type"] = "DOI"
     fixed_date = datetime.datetime(2021, 5, 30, 11, 22, 33)
     with mock.patch("helpers.DateTime._now_time", return_value=fixed_date):
-        rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+        rsp = fastapi.post(
+            DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+        )
         assert rsp.status_code == status.HTTP_200_OK
         _job_id = get_job_and_wait_until_ok(fastapi, rsp)
     # The object_id inside prevents predictability
@@ -123,7 +151,7 @@ def test_export_tsv(database, fastapi, caplog):
     # download_and_unzip_and_check(fastapi, job_id, "doi", only_hdr=True)
 
     # TSV export with IDs
-    req.update(
+    req_and_filters["request"].update(
         {
             "exp_type": "TSV",
             "with_internal_ids": True,
@@ -131,7 +159,9 @@ def test_export_tsv(database, fastapi, caplog):
             "coma_as_separator": True,
         }
     )
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+    rsp = fastapi.post(
+        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    )
     assert rsp.status_code == status.HTTP_200_OK
 
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
@@ -140,22 +170,34 @@ def test_export_tsv(database, fastapi, caplog):
     download_and_unzip_and_check(fastapi, job_id, "tsv_with_ids", only_hdr=True)
 
     # Summary export, 3 types
-    req.update({"exp_type": "SUM", "out_to_ftp": True, "sum_subtotal": "S"})
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+    req_and_filters["request"].update(
+        {"exp_type": "SUM", "out_to_ftp": True, "sum_subtotal": "S"}
+    )
+    rsp = fastapi.post(
+        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    )
     assert rsp.status_code == status.HTTP_200_OK
 
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
     download_and_check(fastapi, job_id, "summary_per_sample", only_hdr=True)
 
-    req.update({"exp_type": "SUM", "out_to_ftp": True, "sum_subtotal": "A"})
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+    req_and_filters["request"].update(
+        {"exp_type": "SUM", "out_to_ftp": True, "sum_subtotal": "A"}
+    )
+    rsp = fastapi.post(
+        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    )
     assert rsp.status_code == status.HTTP_200_OK
 
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
     download_and_check(fastapi, job_id, "summary_per_subsample", only_hdr=True)
 
-    req.update({"exp_type": "SUM", "out_to_ftp": True, "sum_subtotal": ""})
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+    req_and_filters["request"].update(
+        {"exp_type": "SUM", "out_to_ftp": True, "sum_subtotal": ""}
+    )
+    rsp = fastapi.post(
+        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    )
     assert rsp.status_code == status.HTTP_200_OK
 
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
@@ -348,7 +390,9 @@ def test_export_roundtrip_self(database, fastapi, caplog, tstlogs):
 def export_project_to_ftp(fastapi, prj_id):
     req = dict(BAK_EXP_TMPL, **{"project_id": prj_id})
     req_and_filters = {"filters": {}, "request": req}
-    rsp = fastapi.post(OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters)
+    rsp = fastapi.post(
+        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    )
     assert rsp.status_code == status.HTTP_200_OK
     export_job_id = rsp.json()["job_id"]
     wait_for_stable(export_job_id)

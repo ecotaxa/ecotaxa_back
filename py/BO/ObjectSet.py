@@ -103,7 +103,7 @@ class DescribedObjectSet(object):
         all_images: bool = False,
     ) -> Tuple[FromClause, WhereClause, SQLParamDict]:
         """
-        Construct SQL parts for getting the IDs of objects.
+        Construct SQL parts for getting per-object information.
         :param order_clause: The required order by clause.
         :param select_list: Used for hinting the builder that some specific table will be needed in join.
                 major tables obj_head, samples and acquisitions are always joined.

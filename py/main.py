@@ -48,7 +48,16 @@ from API_models.crud import (
     ResetPasswordReq,
     UserActivateReq,
 )
-from API_models.exports import ExportReq, ExportRsp, TaxonomyRecast, DarwinCoreExportReq
+from API_models.exports import (
+    ExportReq,
+    ExportRsp,
+    TaxonomyRecast,
+    DarwinCoreExportReq,
+    GeneralExportReq,
+    ExportTypeEnum,
+    ExportImagesOptionsEnum,
+    SummaryExportGroupingEnum,
+)
 from API_models.filesystem import DirectoryModel
 from API_models.filters import ProjectFilters
 from API_models.helpers.Introspect import plain_columns
@@ -146,7 +155,7 @@ fastapi_logger.setLevel(INFO)
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.35",
+    version="0.0.36",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -2246,11 +2255,65 @@ def query_object_set_parents(
 )
 def export_object_set(
     filters: ProjectFilters = Body(...),
+    request: ExportReq = Body(..., deprecated=True),
+    current_user: int = Depends(get_current_user),
+) -> ExportRsp:
+    """
+    ** Deprecated: Start an export job for the given object set and options. @see extract and summarize**
+    """
+    with ProjectExport(request, filters.base()) as sce:
+        with RightsThrower():
+            rsp = sce.run(current_user)
+    return rsp
+
+
+@app.post(
+    "/object_set/export/general",
+    operation_id="export_object_set_general",
+    tags=["objects"],
+    response_model=ExportRsp,
+)
+def export_object_set_general(
+    filters: ProjectFilters = Body(...),
+    request: GeneralExportReq = Body(...),
+    current_user: int = Depends(get_current_user),
+) -> ExportRsp:
+    """
+    ** Start a general-purpose export job for the given object set and options.**
+    """
+    old_req = ExportReq(
+        project_id=request.project_id,
+        exp_type=ExportTypeEnum.general_tsv,
+        tsv_entities="OPASC",
+        split_by=request.split_by,
+        coma_as_separator=False,
+        format_dates_times=True,
+        with_images=request.with_images != ExportImagesOptionsEnum.none,
+        with_internal_ids=request.with_internal_ids,
+        with_types_row=request.with_types_row,
+        only_first_image=request.with_images == ExportImagesOptionsEnum.first,
+        sum_subtotal=SummaryExportGroupingEnum.by_project,
+        out_to_ftp=request.out_to_ftp,
+    )
+    with ProjectExport(old_req, filters.base()) as sce:
+        with RightsThrower():
+            rsp = sce.run(current_user)
+    return rsp
+
+
+@app.post(
+    "/object_set/export/backup",
+    operation_id="export_object_set_backup",
+    tags=["objects"],
+    response_model=ExportRsp,
+)
+def export_object_set_backup(
+    filters: ProjectFilters = Body(...),
     request: ExportReq = Body(...),
     current_user: int = Depends(get_current_user),
 ) -> ExportRsp:
     """
-    **Start an export job for the given object set and options.**
+    ** Start a backup export job for the given object set and options.**
     """
     with ProjectExport(request, filters.base()) as sce:
         with RightsThrower():
