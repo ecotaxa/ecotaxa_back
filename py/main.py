@@ -1619,7 +1619,7 @@ def object_set_similarity_search(
     Perform a similarity search on a set of objects.
     """
     with SimilaritySearchForProject(request, filters.base()) as sce:
-        rsp = sce.run(current_user)
+        rsp = sce.similarity_search(current_user)
     return rsp
 
 
