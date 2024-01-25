@@ -37,21 +37,22 @@ class SimilaritySearchRsp(BaseModel):
     Similarity search response.
     """
 
-    errors: List[str] = Field(
-        title="Errors",
-        description="Showstopper problems found while preparing the similarity search.",
-        example=[],
-        default=[],
+    neighbor_ids: List[int] = Field(
+        title="Neighbor IDs",
+        description="The list of similar objects.",
     )
-    warnings: List[str] = Field(
-        title="Warnings",
-        description="Problems found while preparing the similarity search.",
-        example=[],
-        default=[],
+
+    message: Optional[str] = Field(
+        title="Message",
+        description="A message to the user.",
     )
-    job_id: int = Field(
-        title="Job Id",
-        description="The created job, 0 if there were problems.",
-        example=482,
-        default=0,
-    )
+
+    class Config:
+        schema_extra = {
+            "title": "Similarity Search Response",
+            "description": "The list of similar objects.",
+            "example": {
+                "neighbor_ids": [1040, 1041, 1042, 1043, 1044, 1045, 1046, 1047],
+                "message": "Success",
+            },
+        }
