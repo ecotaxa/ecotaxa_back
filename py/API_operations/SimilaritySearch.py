@@ -8,72 +8,68 @@ from typing import cast, List
 
 from API_models.filters import ProjectFiltersDict
 from API_models.simsearch import SimilaritySearchReq, SimilaritySearchRsp
+from API_operations.FeatureExtraction import FeatureExtractionForProject
 from DB.CNNFeatureVector import ObjectCNNFeatureVector
 from DB.helpers.Direct import text
 from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
 from BO.ObjectSet import DescribedObjectSet
+from BO.Prediction import DeepFeatures
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 # TODO: Move somewhere else
-from .helpers.JobService import JobServiceBase, ArgsDict
 from .helpers.Service import Service
 
 logger = get_logger(__name__)
 
 
-class SimilaritySearchForProject(JobServiceBase):
+class SimilaritySearchForProject(Service):
     """ """
-    JOB_TYPE = "SimilaritySearch"
     NUM_NEIGHBORS = 100
 
     def __init__(self, req: SimilaritySearchReq, filters: ProjectFiltersDict) -> None:
         super().__init__()
         self.req = req
         self.filters = filters
+
     
-    def run(self, current_user_id: int) -> SimilaritySearchRsp:
-        """
-        Initial creation, do security and consistency checks, then create the job.
-        """
-        _user, _project = RightsBO.user_wants(
-            self.session, current_user_id, Action.ANNOTATE, self.req.project_id
-        )
-
-        # Security OK, create pending job
-        self.create_job(self.JOB_TYPE, current_user_id)
-        ret = SimilaritySearchRsp(job_id=self.job_id)
-        return ret
-
-    def init_args(self, args: ArgsDict) -> ArgsDict:
-        args["req"] = self.req.dict()
-        args["filters"] = self.filters
-        return args
-
-    @staticmethod
-    def deser_args(json_args: ArgsDict) -> None:
-        json_args["req"] = SimilaritySearchReq(**json_args["req"])
-        json_args["filters"] = cast(ProjectFiltersDict, json_args["filters"])
-
-    def do_background(self) -> None:
-        """
-        Background part of the job.
-        """
-        with LogsSwitcher(self):
-            self.do_similarity_search()
-    
-    def do_similarity_search(self) -> None:
+    def similarity_search(self, current_user) -> SimilaritySearchRsp:
         """
         Similarity search on a project.
         """
         _user, project = RightsBO.user_wants(
-            self.session, self._get_owner_id(), Action.ANNOTATE, self.req.project_id
+            self.session, current_user, Action.ANNOTATE, self.req.project_id
         )
+
+        # Check that deep features are present for given project.
+        ids_and_images = DeepFeatures.find_missing(self.ro_session, self.req.project_id)
+        if len(ids_and_images) != 0:
+
+            # Launch a feature extraction job
+            feature_extractor_selected = project.cnn_network_id != ""
+            if feature_extractor_selected:
+                with FeatureExtractionForProject(self.req.project_id) as sce:
+                    sce.run(current_user)
+                
+                rsp : SimilaritySearchRsp = SimilaritySearchRsp(
+                    neighbor_ids=[],
+                    message="Missing CNN features, feature extraction job launched",
+                )
+                return rsp
+
+            # No feature extractor selected, so we cannot extract features
+            else:
+                rsp = SimilaritySearchRsp(
+                    neighbor_ids=[],
+                    message="Missing CNN features, please select a feature extractor",
+                )
+                return rsp
+
         target_id = self.req.target_id
         limit = self.NUM_NEIGHBORS
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(
-            self.ro_session, project, self._get_owner_id(), self.filters
+            self.ro_session, project, current_user, self.filters
         )
         from_, where_clause, params = object_set.get_sql()
         where_clause_sql = where_clause.get_sql()
@@ -94,4 +90,9 @@ class SimilaritySearchForProject(JobServiceBase):
 
         result = self.ro_session.execute(text(query), params)
         neighbors = [res["objcnnid"] for res in result]
-        self.set_job_result(errors=[], infos={"neighbor_ids": neighbors})
+        rsp = SimilaritySearchRsp(
+            neighbor_ids=neighbors,
+            message="Success"
+        )
+
+        return rsp
