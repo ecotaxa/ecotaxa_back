@@ -52,6 +52,7 @@ class SimilaritySearchForProject(Service):
                 
                 rsp : SimilaritySearchRsp = SimilaritySearchRsp(
                     neighbor_ids=[],
+                    sim_scores=[],
                     message="Missing CNN features, feature extraction job launched",
                 )
                 return rsp
@@ -60,6 +61,7 @@ class SimilaritySearchForProject(Service):
             else:
                 rsp = SimilaritySearchRsp(
                     neighbor_ids=[],
+                    sim_scores=[],
                     message="Missing CNN features, please select a feature extractor",
                 )
                 return rsp
@@ -88,10 +90,14 @@ class SimilaritySearchForProject(Service):
             ORDER BY dist LIMIT {limit};
         """
 
-        result = self.ro_session.execute(text(query), params)
+        result = self.ro_session.execute(text(query), params).fetchall()
         neighbors = [res["objcnnid"] for res in result]
+        distances = [res["dist"] for res in result]
+        scores = [round(1 - (dist / distances[-1]), 4) for dist in distances]
+
         rsp = SimilaritySearchRsp(
             neighbor_ids=neighbors,
+            sim_scores=scores,
             message="Success"
         )
 

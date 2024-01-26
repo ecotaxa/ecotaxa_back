@@ -42,6 +42,11 @@ class SimilaritySearchRsp(BaseModel):
         description="The list of similar objects.",
     )
 
+    sim_scores: List[float] = Field(
+        title="Similarity Scores",
+        description="The list of similarity scores.",
+    )
+
     message: Optional[str] = Field(
         title="Message",
         description="A message to the user.",
@@ -53,6 +58,7 @@ class SimilaritySearchRsp(BaseModel):
             "description": "The list of similar objects.",
             "example": {
                 "neighbor_ids": [1040, 1041, 1042, 1043, 1044, 1045, 1046, 1047],
+                "sim_scores": [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3],
                 "message": "Success",
             },
         }
