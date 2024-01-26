@@ -115,12 +115,19 @@ class ProjectExport(JobServiceBase):
             req.with_internal_ids = False
             req.split_by = ""
             req.coma_as_separator = False
+            req.only_annotations = False
         elif req.exp_type == ExportTypeEnum.backup:
-            req.tsv_entities = "OPAS"  # C is missing, too much work to align tests. In theory, we're supposed to restore identical, even if C cannot in full
-            req.with_images = True  # We're supposed to restore identical
-            req.only_first_image = False  # We're supposed to restore identical
+            if req.only_annotations:
+                req.tsv_entities = ""
+                req.with_images = False  # Thin single TSV
+                req.only_first_image = False
+                req.split_by = ""
+            else:
+                req.tsv_entities = "OPAS"  # C is missing, too much work to align tests. In theory, we're supposed to restore identical, even if C cannot in full
+                req.with_images = True  # We're supposed to restore identical
+                req.only_first_image = False  # We're supposed to restore identical
+                req.split_by = "sample"
             req.with_internal_ids = False
-            req.split_by = "sample"
             req.coma_as_separator = False
             req.format_dates_times = False
             req.with_types_row = True
@@ -128,6 +135,7 @@ class ProjectExport(JobServiceBase):
             req.with_images = False
             if req.split_by == "sample" and "S" not in req.tsv_entities:
                 req.tsv_entities += "S"
+            req.only_annotations = False
         # Bulk of the job
         if req.exp_type == ExportTypeEnum.general_tsv:
             nb_rows, _nb_images = self.create_tsv(src_project, progress_before_copy)
@@ -221,12 +229,19 @@ class ProjectExport(JobServiceBase):
                 select_clause += ", img.file_name AS img_src_path"
             select_clause += ",\n"
 
+        select_clause += "obh.orig_id AS object_id, "
+        if not req.only_annotations:
+            select_clause += (
+                """
+                             obh.latitude AS object_lat, obh.longitude AS object_lon,
+                             TO_CHAR(obh.objdate,'{0}') AS object_date,
+                             TO_CHAR(obh.objtime,'{1}') AS object_time,
+                             obh.object_link, obh.depth_min AS object_depth_min, obh.depth_max AS object_depth_max,
+                         """
+            ).format(date_fmt, time_fmt)
         select_clause += (
-            """obh.orig_id AS object_id, obh.latitude AS object_lat, obh.longitude AS object_lon,
-                         TO_CHAR(obh.objdate,'{0}') AS object_date,
-                         TO_CHAR(obh.objtime,'{1}') AS object_time,
-                         obh.object_link, obh.depth_min AS object_depth_min, obh.depth_max AS object_depth_max,
-                         CASE obh.classif_qual 
+            """
+                CASE obh.classif_qual 
                             WHEN '"""
             + VALIDATED_CLASSIF_QUAL
             + """' then 'validated' 
@@ -371,7 +386,7 @@ class ProjectExport(JobServiceBase):
                 db_float_type = a_desc.type_code
                 break
         else:
-            raise
+            db_float_type = None
         float_cols = set()
         # Prepare float separator conversion, if not required the set will just be empty
         if req.coma_as_separator:

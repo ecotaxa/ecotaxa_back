@@ -3,6 +3,7 @@ import json
 import logging
 from typing import Dict, Any
 
+import pytest
 from deepdiff import DeepDiff
 from deepdiff.helper import TREE_VIEW
 
@@ -16,7 +17,7 @@ from tests.credentials import (
     ORDINARY_USER_USER_ID,
     USER_AUTH,
 )
-from tests.export_shared import download_and_unzip_and_check, download_and_check
+from tests.export_shared import download_and_unzip_and_check
 from tests.jobs import (
     JOB_QUERY_URL,
     wait_for_stable,
@@ -66,14 +67,6 @@ DEPRECATED_BAK_EXP_TMPL = {
 
 OBJECT_SET_GENERAL_EXPORT_URL = "/object_set/export/general"
 
-GEN_EXPORT_TMPL = {
-    "split_by": "sample",  # Each TSV in a sub-dir
-}
-
-BAK_EXPORT_TMPL = {
-    "export_type": "backup",  # The rest is defaulted
-}
-
 
 def test_export_tsv(database, fastapi, caplog):
     caplog.set_level(logging.FATAL)
@@ -95,7 +88,7 @@ def test_export_tsv(database, fastapi, caplog):
     # Admin exports it
     req_and_filters = {
         "filters": {},
-        "request": dict(GEN_EXPORT_TMPL, **{"project_id": prj_id}),
+        "request": {"project_id": prj_id, "split_by": "sample"},
     }
     rsp = fastapi.post(
         OBJECT_SET_GENERAL_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
@@ -108,12 +101,10 @@ def test_export_tsv(database, fastapi, caplog):
     # Backup export
     req_and_filters = {
         "filters": {},
-        "request": dict(
-            BAK_EXPORT_TMPL,
-            **{
-                "project_id": prj_id,
-            }
-        ),
+        "request": {
+            "project_id": prj_id,
+            "export_type": "backup",
+        },
     }
     rsp = fastapi.post(
         OBJECT_SET_GENERAL_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
@@ -150,9 +141,11 @@ def test_export_tsv(database, fastapi, caplog):
     # TSV export with IDs
     req_and_filters = {
         "filters": {},
-        "request": dict(
-            GEN_EXPORT_TMPL, **{"project_id": prj_id, "with_internal_ids": True}
-        ),
+        "request": {
+            "project_id": prj_id,
+            "split_by": "sample",
+            "with_internal_ids": True,
+        },
     }
     rsp = fastapi.post(
         OBJECT_SET_GENERAL_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
@@ -217,7 +210,7 @@ def test_export_roundtrip(database, fastapi, caplog, tstlogs):
     _prj_json = rsp.json()
 
     # Admin exports it
-    job_id, file_in_ftp = export_project_to_ftp(fastapi, prj_id)
+    job_id, file_in_ftp = export_project_to_ftp(fastapi, prj_id, just_annots=False)
 
     # Create a clone project
     clone_prj_id = create_project(
@@ -277,9 +270,13 @@ def json_dump_project(prj_id, dump_file, tstlogs):
     return prj_json
 
 
-def test_export_roundtrip_self(database, fastapi, caplog, tstlogs):
+@pytest.mark.parametrize(
+    "export_method", ["full", "annots"]
+)  # Try two methods of saving annotation data
+def test_export_roundtrip_self(database, fastapi, caplog, export_method):
     """Roundtrip export/validates/import self
     Scenario: Someone saves a validated project's classifs and wants to restore it to saved state.
+    The format makes it possible to import update into another project, provided object_ids are present.
     """
     caplog.set_level(logging.FATAL)
 
@@ -311,7 +308,9 @@ def test_export_roundtrip_self(database, fastapi, caplog, tstlogs):
     classify_validate_all(ADMIN_AUTH)
 
     # Admin BAK-exports it
-    export_job_id, file_in_ftp = export_project_to_ftp(fastapi, prj_id)
+    export_job_id, file_in_ftp = export_project_to_ftp(
+        fastapi, prj_id, just_annots=export_method != "full"
+    )
 
     do_import_update(
         prj_id,
@@ -325,6 +324,10 @@ def test_export_roundtrip_self(database, fastapi, caplog, tstlogs):
 
     # Re-classify different ID
     classify_validate_all(ADMIN_AUTH, True)
+    # And save the new classification
+    export_job_id2, file_in_ftp2 = export_project_to_ftp(
+        fastapi, prj_id, just_annots=True
+    )
     # Oops, let's get back to saved state
     do_import_update(
         prj_id,
@@ -382,10 +385,32 @@ def test_export_roundtrip_self(database, fastapi, caplog, tstlogs):
         an_hist = classif_history(fastapi, an_obj)
         assert len(an_hist) == 4
 
+    # Restore the second backup, i.e. back in time
+    do_import_update(
+        prj_id,
+        caplog,
+        "Cla",
+        str(DATA_DIR / "ftp" / ("task_%d_%s" % (export_job_id2, file_in_ftp2))),
+    )
+    nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
+    # All changed
+    assert nb_upds == 15
+    # Not more history as all was historized before
+    for an_obj in obj_ids:
+        an_hist = classif_history(fastapi, an_obj)
+        assert len(an_hist) == 4
 
-def export_project_to_ftp(fastapi, prj_id):
-    req = dict(BAK_EXPORT_TMPL, **{"project_id": prj_id, "out_to_ftp": True})
-    req_and_filters = {"filters": {}, "request": req}
+
+def export_project_to_ftp(fastapi, prj_id, just_annots):
+    req_and_filters = {
+        "filters": {},
+        "request": {
+            "project_id": prj_id,
+            "export_type": "backup",
+            "only_annotations": just_annots,
+            "out_to_ftp": True,
+        },
+    }
     rsp = fastapi.post(
         OBJECT_SET_GENERAL_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
     )
