@@ -3,20 +3,18 @@ from typing import Dict
 
 from starlette import status
 
-from tests.formulae import uvp_formulae
 from tests.credentials import CREATOR_AUTH, ADMIN_AUTH, ADMIN_USER_ID
 from tests.export_shared import download_and_check
+from tests.formulae import uvp_formulae
+from tests.jobs import get_job_and_wait_until_ok
 from tests.test_classification import OBJECT_SET_CLASSIFY_URL
-from tests.test_export import (
-    DEPRECATED_GEN_EXPORT_TMPL,
-    DEPRECATED_OBJECT_SET_EXPORT_URL,
-)
 from tests.test_export_emodnet import add_concentration_data, PROJECT_SEARCH_SAMPLES_URL
 from tests.test_fastapi import PROJECT_QUERY_URL
 from tests.test_import import DATA_DIR, do_import
-from tests.jobs import get_job_and_wait_until_ok
 from tests.test_objectset_query import _prj_query
 from tests.test_update_prj import PROJECT_UPDATE_URL
+
+OBJECT_SET_SUMMARY_EXPORT_URL = "/object_set/export/summary"
 
 
 def set_formulae_in_project(fastapi, prj_id: int, prj_formulae: Dict):
@@ -60,12 +58,12 @@ def test_export_abundances(database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
 
     # Abundance export whole project
-    filters = {}
-    req = DEPRECATED_GEN_EXPORT_TMPL.copy()
-    req.update({"project_id": prj_id, "exp_type": "ABO", "sum_subtotal": ""})
-    req_and_filters = {"filters": filters, "request": req}
+    req_and_filters = {
+        "filters": {},
+        "request": {"project_id": prj_id, "summarise_by": "none"}
+    }
     rsp = fastapi.post(
-        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+        OBJECT_SET_SUMMARY_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
     )
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -73,13 +71,13 @@ def test_export_abundances(database, fastapi, caplog):
     download_and_check(fastapi, job_id, "abundances_whole_project", only_hdr=True)
     # log = get_log_file(fastapi, job_id)
 
-    # Abundance export by sample
-    filters = {}
-    req = DEPRECATED_GEN_EXPORT_TMPL.copy()
-    req.update({"project_id": prj_id, "exp_type": "ABO", "sum_subtotal": "S"})
-    req_and_filters = {"filters": filters, "request": req}
+    # Abundance export by sample, default values everywhere
+    req_and_filters = {
+        "filters": {},
+        "request": {"project_id": prj_id}
+    }
     rsp = fastapi.post(
-        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+        OBJECT_SET_SUMMARY_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
     )
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -88,12 +86,12 @@ def test_export_abundances(database, fastapi, caplog):
     # log = get_log_file(fastapi, job_id)
 
     # Abundance export by subsample
-    filters = {}
-    req = DEPRECATED_GEN_EXPORT_TMPL.copy()
-    req.update({"project_id": prj_id, "exp_type": "ABO", "sum_subtotal": "A"})
-    req_and_filters = {"filters": filters, "request": req}
+    req_and_filters = {
+        "filters": {},
+        "request": {"project_id": prj_id, "summarise_by": "acquisition"}
+    }
     rsp = fastapi.post(
-        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+        OBJECT_SET_SUMMARY_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
     )
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -102,24 +100,21 @@ def test_export_abundances(database, fastapi, caplog):
     # log = get_log_file(fastapi, job_id)
 
     # Abundance export by subsample but playing with taxa mapping
-    filters = {}
-    req = DEPRECATED_GEN_EXPORT_TMPL.copy()
-    req.update(
-        {
+    req_and_filters = {
+        "filters": {},
+        "request": {
             "project_id": prj_id,
-            "exp_type": "ABO",
-            "sum_subtotal": "A",
-            "pre_mapping": {
+            "summarise_by": "acquisition",
+            "taxo_mapping": {
                 85012: None,  # t001 -> Remove
                 84963: None,  # detritus -> Remove
                 85078: 78418,  # egg<other -> Oncaeidae
                 92731: 78418,  # small<egg -> Oncaeidae
-            },
+            }
         }
-    )
-    req_and_filters = {"filters": filters, "request": req}
+    }
     rsp = fastapi.post(
-        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+        OBJECT_SET_SUMMARY_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
     )
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -167,12 +162,12 @@ def test_export_conc_biovol(database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
 
     # Concentrations export by sample
-    filters = {}
-    req = DEPRECATED_GEN_EXPORT_TMPL.copy()
-    req.update({"project_id": prj_id, "exp_type": "CNC", "sum_subtotal": "S"})
-    req_and_filters = {"filters": filters, "request": req}
+    req_and_filters = {
+        "filters": {},
+        "request": {"project_id": prj_id, "quantities": "concentration"}
+    }
     rsp = fastapi.post(
-        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+        OBJECT_SET_SUMMARY_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
     )
     assert rsp.status_code == status.HTTP_200_OK
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
@@ -180,12 +175,12 @@ def test_export_conc_biovol(database, fastapi, caplog):
     # log = get_log_file(fastapi, job_id)
 
     # Biovolume export by sample
-    filters = {}
-    req = DEPRECATED_GEN_EXPORT_TMPL.copy()
-    req.update({"project_id": prj_id, "exp_type": "BIV", "sum_subtotal": "S"})
-    req_and_filters = {"filters": filters, "request": req}
+    req_and_filters = {
+        "filters": {},
+        "request": {"project_id": prj_id, "quantities": "biovolume"},
+    }
     rsp = fastapi.post(
-        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+        OBJECT_SET_SUMMARY_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
     )
     assert rsp.status_code == status.HTTP_200_OK
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
@@ -193,9 +188,12 @@ def test_export_conc_biovol(database, fastapi, caplog):
     # log = get_log_file(fastapi, job_id)
 
     # Biovolume export by subsample AKA Acquisition
-    req.update({"sum_subtotal": "A"})
+    req_and_filters = {
+        "filters": {},
+        "request": {"project_id": prj_id, "quantities": "biovolume", "summarise_by": "acquisition"},
+    }
     rsp = fastapi.post(
-        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+        OBJECT_SET_SUMMARY_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
     )
     assert rsp.status_code == status.HTTP_200_OK
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
@@ -231,15 +229,15 @@ def test_export_abundances_filtered_by_taxo(database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
 
     # Abundance export, per sample with a filter on a category
-    filters = {
-        "taxo": "45072",
-        "taxochild": "Y",
-    }  # TODO: Not very useful as the test has a very reduced tree
-    req = DEPRECATED_GEN_EXPORT_TMPL.copy()
-    req.update({"project_id": prj_id, "exp_type": "ABO", "sum_subtotal": "S"})
-    req_and_filters = {"filters": filters, "request": req}
+    req_and_filters = {
+        "filters": {
+            "taxo": "45072",
+            "taxochild": "Y",
+        },  # TODO: Not very useful as the test has a very reduced tree
+        "request": {"project_id": prj_id},
+    }
     rsp = fastapi.post(
-        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+        OBJECT_SET_SUMMARY_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
     )
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -282,12 +280,13 @@ def test_export_abundances_filtered_by_sample(database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
     # TODO: This need for IDs in the API is a bit of pain
     sample_ids = [str(r["sampleid"]) for r in rsp.json() if "n2" not in r["orig_id"]]
-    filters = {"samples": ",".join(sample_ids)}
-    req = DEPRECATED_GEN_EXPORT_TMPL.copy()
-    req.update({"project_id": prj_id, "exp_type": "ABO", "sum_subtotal": "S"})
-    req_and_filters = {"filters": filters, "request": req}
+
+    req_and_filters = {
+        "filters": {"samples": ",".join(sample_ids)},
+        "request": {"project_id": prj_id},
+    }
     rsp = fastapi.post(
-        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+        OBJECT_SET_SUMMARY_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
     )
     assert rsp.status_code == status.HTTP_200_OK
 

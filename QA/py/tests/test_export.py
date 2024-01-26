@@ -2,7 +2,6 @@ import datetime
 import json
 import logging
 from typing import Dict, Any
-from unittest import mock
 
 from deepdiff import DeepDiff
 from deepdiff.helper import TREE_VIEW
@@ -52,17 +51,7 @@ DEPRECATED_GEN_EXPORT_TMPL = {
     "sum_subtotal": "",
 }
 
-OBJECT_SET_GENERAL_EXPORT_URL = "/object_set/export/general"
-
-GEN_EXPORT_TMPL = {
-    "split_by": "sample",
-    "with_images": "none",
-    "with_internal_ids": False,
-    "with_types_row": False,
-    "out_to_ftp": False,
-}
-
-BAK_EXP_TMPL = {
+DEPRECATED_BAK_EXP_TMPL = {
     "exp_type": "BAK",
     "tsv_entities": "",  # Defaulted by type
     "coma_as_separator": True,  # Defaulted by type
@@ -73,6 +62,16 @@ BAK_EXP_TMPL = {
     "with_internal_ids": True,  # Defaulted by type
     "out_to_ftp": True,
     "sum_subtotal": "",  # Defaulted by type
+}
+
+OBJECT_SET_GENERAL_EXPORT_URL = "/object_set/export/general"
+
+GEN_EXPORT_TMPL = {
+    "split_by": "sample",  # Each TSV in a sub-dir
+}
+
+BAK_EXPORT_TMPL = {
+    "export_type": "backup",  # The rest is defaulted
 }
 
 
@@ -110,17 +109,14 @@ def test_export_tsv(database, fastapi, caplog):
     req_and_filters = {
         "filters": {},
         "request": dict(
-            DEPRECATED_GEN_EXPORT_TMPL,
+            BAK_EXPORT_TMPL,
             **{
                 "project_id": prj_id,
-                "exp_type": "BAK",
-                "with_images": True,
-                "only_first_image": False,
             }
         ),
     }
     rsp = fastapi.post(
-        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+        OBJECT_SET_GENERAL_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
     )
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -128,39 +124,38 @@ def test_export_tsv(database, fastapi, caplog):
     download_and_unzip_and_check(fastapi, job_id, "bak_all_images")
 
     # Backup export without images (but their ref is still in the TSVs)
-    req_and_filters["request"]["with_images"] = False
-    rsp = fastapi.post(
-        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
-    )
-    assert rsp.status_code == status.HTTP_200_OK
-
-    job_id = get_job_and_wait_until_ok(fastapi, rsp)
-    download_and_unzip_and_check(fastapi, job_id, "bak_no_image")
+    # Not valid anymore (Jan 2024), backup means restore all
+    # req_and_filters["request"]["with_images"] = False
+    # rsp = fastapi.post(
+    #     DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    # )
+    # assert rsp.status_code == status.HTTP_200_OK
+    # job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    # download_and_unzip_and_check(fastapi, job_id, "bak_no_image")
 
     # DOI export
-    req_and_filters["request"]["exp_type"] = "DOI"
-    fixed_date = datetime.datetime(2021, 5, 30, 11, 22, 33)
-    with mock.patch("helpers.DateTime._now_time", return_value=fixed_date):
-        rsp = fastapi.post(
-            DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
-        )
-        assert rsp.status_code == status.HTTP_200_OK
-        _job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    # Not possible anymore (Jan 2024)
+    # req_and_filters["request"]["exp_type"] = "DOI"
+    # fixed_date = datetime.datetime(2021, 5, 30, 11, 22, 33)
+    # with mock.patch("helpers.DateTime._now_time", return_value=fixed_date):
+    #     rsp = fastapi.post(
+    #         DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    #     )
+    #     assert rsp.status_code == status.HTTP_200_OK
+    #     _job_id = get_job_and_wait_until_ok(fastapi, rsp)
     # The object_id inside prevents predictability
     # TODO: Better comparison ignoring columns, inject project id and so on
     # download_and_unzip_and_check(fastapi, job_id, "doi", only_hdr=True)
 
     # TSV export with IDs
-    req_and_filters["request"].update(
-        {
-            "exp_type": "TSV",
-            "with_internal_ids": True,
-            "out_to_ftp": True,
-            "coma_as_separator": True,
-        }
-    )
+    req_and_filters = {
+        "filters": {},
+        "request": dict(
+            GEN_EXPORT_TMPL, **{"project_id": prj_id, "with_internal_ids": True}
+        ),
+    }
     rsp = fastapi.post(
-        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+        OBJECT_SET_GENERAL_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
     )
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -170,38 +165,39 @@ def test_export_tsv(database, fastapi, caplog):
     download_and_unzip_and_check(fastapi, job_id, "tsv_with_ids", only_hdr=True)
 
     # Summary export, 3 types
-    req_and_filters["request"].update(
-        {"exp_type": "SUM", "out_to_ftp": True, "sum_subtotal": "S"}
-    )
-    rsp = fastapi.post(
-        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
-    )
-    assert rsp.status_code == status.HTTP_200_OK
-
-    job_id = get_job_and_wait_until_ok(fastapi, rsp)
-    download_and_check(fastapi, job_id, "summary_per_sample", only_hdr=True)
-
-    req_and_filters["request"].update(
-        {"exp_type": "SUM", "out_to_ftp": True, "sum_subtotal": "A"}
-    )
-    rsp = fastapi.post(
-        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
-    )
-    assert rsp.status_code == status.HTTP_200_OK
-
-    job_id = get_job_and_wait_until_ok(fastapi, rsp)
-    download_and_check(fastapi, job_id, "summary_per_subsample", only_hdr=True)
-
-    req_and_filters["request"].update(
-        {"exp_type": "SUM", "out_to_ftp": True, "sum_subtotal": ""}
-    )
-    rsp = fastapi.post(
-        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
-    )
-    assert rsp.status_code == status.HTTP_200_OK
-
-    job_id = get_job_and_wait_until_ok(fastapi, rsp)
-    download_and_check(fastapi, job_id, "summary_whole", only_hdr=True)
+    # Not possible anymore (Jan 2024)
+    # req_and_filters["request"].update(
+    #     {"exp_type": "SUM", "out_to_ftp": True, "sum_subtotal": "S"}
+    # )
+    # rsp = fastapi.post(
+    #     DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    # )
+    # assert rsp.status_code == status.HTTP_200_OK
+    #
+    # job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    # download_and_check(fastapi, job_id, "summary_per_sample", only_hdr=True)
+    #
+    # req_and_filters["request"].update(
+    #     {"exp_type": "SUM", "out_to_ftp": True, "sum_subtotal": "A"}
+    # )
+    # rsp = fastapi.post(
+    #     DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    # )
+    # assert rsp.status_code == status.HTTP_200_OK
+    #
+    # job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    # download_and_check(fastapi, job_id, "summary_per_subsample", only_hdr=True)
+    #
+    # req_and_filters["request"].update(
+    #     {"exp_type": "SUM", "out_to_ftp": True, "sum_subtotal": ""}
+    # )
+    # rsp = fastapi.post(
+    #     DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    # )
+    # assert rsp.status_code == status.HTTP_200_OK
+    #
+    # job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    # download_and_check(fastapi, job_id, "summary_whole", only_hdr=True)
 
 
 def test_export_roundtrip(database, fastapi, caplog, tstlogs):
@@ -388,10 +384,10 @@ def test_export_roundtrip_self(database, fastapi, caplog, tstlogs):
 
 
 def export_project_to_ftp(fastapi, prj_id):
-    req = dict(BAK_EXP_TMPL, **{"project_id": prj_id})
+    req = dict(BAK_EXPORT_TMPL, **{"project_id": prj_id, "out_to_ftp": True})
     req_and_filters = {"filters": {}, "request": req}
     rsp = fastapi.post(
-        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+        OBJECT_SET_GENERAL_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
     )
     assert rsp.status_code == status.HTTP_200_OK
     export_job_id = rsp.json()["job_id"]

@@ -38,7 +38,7 @@ def unzip_and_check(zip_content, ref_dir: str, only_hdr: bool):
         name = a_file.filename
         if name.endswith(".log"):
             continue
-        assert name in ref_dir_content
+        assert name in ref_dir_content, "not found %s" % name
         ref_dir_content.remove(name)
         with zip_file.open(name) as myfile:
             content_bin = myfile.read()

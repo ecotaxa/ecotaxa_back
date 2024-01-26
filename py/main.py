@@ -57,6 +57,10 @@ from API_models.exports import (
     ExportTypeEnum,
     ExportImagesOptionsEnum,
     SummaryExportGroupingEnum,
+    ExportTypeOptionsEnum,
+    SummaryExportReq,
+    SummaryExportQuantitiesOptionsEnum,
+    SummaryExportSumOptionsEnum,
 )
 from API_models.filesystem import DirectoryModel
 from API_models.filters import ProjectFilters
@@ -180,7 +184,7 @@ templates = Jinja2Templates(directory=os.path.dirname(__file__) + "/pages/templa
 CDNs = " ".join(["cdn.datatables.net"])
 CRSF_header = {
     "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval' "
-    f"blob: data: {CDNs};frame-ancestors 'self';form-action 'self';"
+                               f"blob: data: {CDNs};frame-ancestors 'self';form-action 'self';"
 }
 
 # Establish second routes via /api to same app
@@ -227,7 +231,7 @@ def get_users(
         "",
         title="Ids",
         description="String containing the list of one or more id separated by non-num char. \n"
-        " \n **If several ids are provided**, one full info is returned per user.",
+                    " \n **If several ids are provided**, one full info is returned per user.",
         example="1",
     ),
     current_user: int = Depends(get_current_user),
@@ -1798,7 +1802,7 @@ def instrument_query(
         ...,
         title="Projects ids",
         description="String containing the list of one or more project ids,"
-        " separated by non-num char, or 'all' for all instruments.",
+                    " separated by non-num char, or 'all' for all instruments.",
         example="1,2,3",
     )
 ) -> List[str]:
@@ -1974,7 +1978,7 @@ If no **unique order** is specified, the result can vary for same call and condi
 
 
 @app.post(
-    "/object_set/{project_id}/summary",
+    "/object_set/{project_id:int}/summary",
     operation_id="get_object_set_summary",
     tags=["objects"],
     response_model=ObjectSetSummaryRsp,
@@ -2283,16 +2287,16 @@ def export_object_set_general(
     """
     old_req = ExportReq(
         project_id=request.project_id,
-        exp_type=ExportTypeEnum.general_tsv,
-        tsv_entities="OPASC",
-        split_by=request.split_by,
-        coma_as_separator=False,
-        format_dates_times=True,
+        exp_type=ExportTypeEnum.general_tsv
+        if request.export_type == ExportTypeOptionsEnum.general
+        else ExportTypeEnum.backup,
         with_images=request.with_images != ExportImagesOptionsEnum.none,
         with_internal_ids=request.with_internal_ids,
         with_types_row=request.with_types_row,
         only_first_image=request.with_images == ExportImagesOptionsEnum.first,
-        sum_subtotal=SummaryExportGroupingEnum.by_project,
+        split_by=request.split_by,
+        tsv_entities="OPASC",
+        only_annotations=request.only_annotations,
         out_to_ftp=request.out_to_ftp,
     )
     with ProjectExport(old_req, filters.base()) as sce:
@@ -2302,20 +2306,38 @@ def export_object_set_general(
 
 
 @app.post(
-    "/object_set/export/backup",
-    operation_id="export_object_set_backup",
+    "/object_set/export/summary",
+    operation_id="export_object_set_summary",
     tags=["objects"],
     response_model=ExportRsp,
 )
-def export_object_set_backup(
+def export_object_set_summary(
     filters: ProjectFilters = Body(...),
-    request: ExportReq = Body(...),
+    request: SummaryExportReq = Body(...),
     current_user: int = Depends(get_current_user),
 ) -> ExportRsp:
     """
-    ** Start a backup export job for the given object set and options.**
+    ** Start a summary export job for the given object set and options.**
     """
-    with ProjectExport(request, filters.base()) as sce:
+    new_type_to_old = {
+        SummaryExportQuantitiesOptionsEnum.abundance: ExportTypeEnum.abundances,
+        SummaryExportQuantitiesOptionsEnum.biovolume: ExportTypeEnum.biovols,
+        SummaryExportQuantitiesOptionsEnum.concentration: ExportTypeEnum.concentrations,
+    }
+    new_level_to_old = {
+        SummaryExportSumOptionsEnum.none: SummaryExportGroupingEnum.just_by_taxon,
+        SummaryExportSumOptionsEnum.sample: SummaryExportGroupingEnum.by_sample,
+        SummaryExportSumOptionsEnum.acquisition: SummaryExportGroupingEnum.by_subsample,
+    }
+    old_req = ExportReq(
+        project_id=request.project_id,
+        exp_type=new_type_to_old[request.quantities],
+        sum_subtotal=new_level_to_old[request.summarise_by],
+        pre_mapping=request.taxo_mapping,
+        formulae=request.formulae,
+        out_to_ftp=request.out_to_ftp,
+    )
+    with ProjectExport(old_req, filters.base()) as sce:
         with RightsThrower():
             rsp = sce.run(current_user)
     return rsp

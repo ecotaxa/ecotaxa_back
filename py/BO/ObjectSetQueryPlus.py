@@ -298,7 +298,7 @@ class ObjectSetQueryPlus(object):
         all_null: bool = True
         for from_txo, to_txo in self.taxo_mapping.items():
             all_null = all_null and to_txo is None
-            to_val = "NULL" if to_txo is None else str(to_txo)
+            to_val = "NULL" if (to_txo is None or to_txo == 0) else str(to_txo)
             pairs.append("(%d,%s)" % (from_txo, to_val))
         # PG needs a type if there is no value at all
         if all_null:

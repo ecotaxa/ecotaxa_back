@@ -115,14 +115,15 @@ class ProjectExport(JobServiceBase):
             req.with_internal_ids = False
             req.split_by = ""
             req.coma_as_separator = False
-        elif (
-            req.exp_type == ExportTypeEnum.backup
-        ):  # TODO: It's a mess on these conditions. Force and use only flags.
+        elif req.exp_type == ExportTypeEnum.backup:
             req.tsv_entities = "OPAS"  # C is missing, too much work to align tests. In theory, we're supposed to restore identical, even if C cannot in full
+            req.with_images = True  # We're supposed to restore identical
             req.only_first_image = False  # We're supposed to restore identical
             req.with_internal_ids = False
             req.split_by = "sample"
             req.coma_as_separator = False
+            req.format_dates_times = False
+            req.with_types_row = True
         elif req.exp_type == ExportTypeEnum.general_tsv:
             req.with_images = False
             if req.split_by == "sample" and "S" not in req.tsv_entities:
@@ -205,39 +206,14 @@ class ProjectExport(JobServiceBase):
             self.ro_session, src_project, user_id, self.filters
         )
 
-        # Backup or not, the column namings are taken from common mapping
-        # @See Mapping.py
-        # TSV column order
-        # field_order = ["object_id", "object_lat", "object_lon", "object_date", "object_time", "object_depth_max",
-        #                "object_annotation_status", "object_annotation_person_name", "object_annotation_person_email",
-        #                "object_annotation_date", "object_annotation_time", "object_annotation_category"]
-        # formats = {"object_date": "TO_CHAR({0},'YYYYMMDD')",
-        #            "object_time": "TO_CHAR({0},'HH24MISS')",
-        #            "object_annotation_date": "TO_CHAR({0},'YYYYMMDD')",
-        #            "object_annotation_time": "TO_CHAR({0},'HH24MISS')",
-        #            "object_annotation_status": """
-        #                  CASE {0}
-        #                     WHEN 'V' then 'validated'
-        #                     WHEN 'P' then 'predicted'
-        #                     WHEN 'D' then 'dubious'
-        #                     ELSE {0}
-        #                  END
-        #            """
-        #            }
-        # prefices = {ObjectHeader.__tablename__: "obh",
-        #             }
-        # for a_fld in field_order:
-        #     mpg = GlobalMapping.PREDEFINED_FIELDS[a_fld]
-        #     mpg[""]
-        #     assert a_fld in GlobalMapping.PREDEFINED_FIELDS, "%s is not a mapped column" % a_fld
         date_fmt, time_fmt = "YYYYMMDD", "HH24MISS"
-        if req.format_dates_times and not (req.exp_type == ExportTypeEnum.backup):
+        if req.format_dates_times:
             # Do not make nice dates for backup
             date_fmt, time_fmt = "YYYY-MM-DD", "HH24:MI:SS"
 
         select_clause = "select "
 
-        if req.with_images or (req.exp_type == ExportTypeEnum.backup):
+        if req.with_images:
             select_clause += (
                 "img.orig_file_name AS img_file_name, img.imgrank AS img_rank"
             )
@@ -329,7 +305,7 @@ class ProjectExport(JobServiceBase):
             split_field = "object_id"  # cette valeur permet d'éviter des erreurs plus loin dans r[split_field]
         order_clause.add_expression("obh", "objid")
 
-        if req.with_images or (req.exp_type == ExportTypeEnum.backup):
+        if req.with_images:
             order_clause.add_expression(None, "img_rank")
 
         # Base SQL comes from filters
@@ -439,7 +415,7 @@ class ProjectExport(JobServiceBase):
                     quoting=csv.QUOTE_NONNUMERIC,
                 )
                 csv_wtr.writeheader()
-                if req.with_types_row or req.exp_type == ExportTypeEnum.backup:
+                if req.with_types_row:
                     # Write types line for backup type or if forced
                     csv_wtr.writerow(tsv_types_line)
             if req.with_images:
