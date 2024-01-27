@@ -11,7 +11,8 @@ from helpers.pydantic import BaseModel, Field
 
 
 class ExportTypeEnum(str, Enum):
-    """ Externally deprecated """
+    """Externally deprecated"""
+
     general_tsv = "TSV"
     backup = "BAK"
     dig_obj_ident = "DOI"
@@ -43,9 +44,13 @@ class ExportImagesOptionsEnum(str, Enum):
 
 
 class SummaryExportQuantitiesOptionsEnum(str, Enum):
-    abundance = "abundance"  # Abundance summary https://github.com/ecotaxa/ecotaxa/issues/615
+    abundance = (
+        "abundance"  # Abundance summary https://github.com/ecotaxa/ecotaxa/issues/615
+    )
     concentration = "concentration"  # Concentration summary https://github.com/ecotaxa/ecotaxa/issues/616
-    biovolume = "biovolume"  # Biovolume summary https://github.com/ecotaxa/ecotaxa/issues/617
+    biovolume = (
+        "biovolume"  # Biovolume summary https://github.com/ecotaxa/ecotaxa/issues/617
+    )
 
 
 class SummaryExportSumOptionsEnum(str, Enum):
@@ -86,16 +91,16 @@ class ExportReq(BaseModel):
         example=ExportTypeEnum.general_tsv,
     )
     use_latin1: bool = Field(
-        default=False,
         title="Use latin1",
         description="Export using latin 1 character set, AKA iso-8859-1. Default is utf-8.",
         example=False,
+        default=False,
     )
     tsv_entities: str = Field(
         title="Tsv entities",
         description="For 'TSV' type, the entities to export, one letter for each of "
-                    "O(bject), P(rocess), A(cquisition), S(ample), "
-                    "C(omments).",
+        "O(bject), P(rocess), A(cquisition), S(ample), "
+        "C(omments).",
         example="OPAS",
         default="",
     )
@@ -108,7 +113,7 @@ class ExportReq(BaseModel):
     split_by: str = Field(
         title="Split by",
         description="For 'TSV' type, inside archives, split in one directory per... "
-                    "'sample', 'taxo' or '' (no split).",
+        "'sample', 'taxo' or '' (no split).",
         example="sample",
         default="",
     )
@@ -152,25 +157,25 @@ class ExportReq(BaseModel):
     sum_subtotal: SummaryExportGroupingEnum = Field(
         title="Sum subtotal",
         description="For 'SUM', 'ABO', 'CNC' and 'BIV' types, if "
-                    "computations should be combined. "
-                    "Per A(cquisition) or S(ample) or <Empty>(just taxa).",
+        "computations should be combined. "
+        "Per A(cquisition) or S(ample) or <Empty>(just taxa).",
         example="A",
         default=SummaryExportGroupingEnum.just_by_taxon,
     )
     pre_mapping: Dict[int, Optional[int]] = Field(
         title="Categories mapping",
         description="For 'ABO', 'CNC' and 'BIV' types types, mapping "
-                    "from present taxon (key) to output replacement one (value)."
-                    " Use a null replacement to _discard_ the present taxon.",
+        "from present taxon (key) to output replacement one (value)."
+        " Use a null replacement to _discard_ the present taxon.",
         example={456: 956, 2456: 213},
         default={},
     )
     formulae: Dict[str, str] = Field(
         title="Computation formulas",
         description="Transitory: For 'CNC' and 'BIV' type, how to get values from DB "
-                    "free columns. Python syntax, prefixes are 'sam', 'ssm' and 'obj'."
-                    "Variables used in computations are 'total_water_volume', 'subsample_coef' "
-                    "and 'individual_volume'",
+        "free columns. Python syntax, prefixes are 'sam', 'ssm' and 'obj'."
+        "Variables used in computations are 'total_water_volume', 'subsample_coef' "
+        "and 'individual_volume'",
         example={
             "subsample_coef": "1/ssm.sub_part",
             "total_water_volume": "sam.tot_vol/1000",
@@ -237,7 +242,7 @@ class GeneralExportReq(BaseModel):
     )
     only_annotations: bool = Field(
         title="Backup annotations",
-        description="Only save objects' last annotation data in backup.",
+        description="Only save objects' last annotation data.",
         default=False,
         example=False,
     )
@@ -290,17 +295,17 @@ class SummaryExportReq(BaseModel):
     taxo_mapping: Dict[int, Optional[int]] = Field(
         title="Categories mapping",
         description="Mapping "
-                    "from present taxon (key) to output replacement one (value)."
-                    " Use a 0 replacement to _discard_ the present taxon.",
+        "from present taxon (key) to output replacement one (value)."
+        " Use a 0 replacement to _discard_ the present taxon.",
         example={456: 956, 2456: 213, 7153: 0},
         default={},
     )
     formulae: Dict[str, str] = Field(
         title="Computation formulas",
         description="Transitory: How to get values from DB "
-                    "free columns. Python syntax, prefixes are 'sam', 'ssm' and 'obj'."
-                    "Variables used in computations are 'total_water_volume', 'subsample_coef' "
-                    "and 'individual_volume'",
+        "free columns. Python syntax, prefixes are 'sam', 'ssm' and 'obj'."
+        "Variables used in computations are 'total_water_volume', 'subsample_coef' "
+        "and 'individual_volume'",
         example={
             "subsample_coef": "1/ssm.sub_part",
             "total_water_volume": "sam.tot_vol/1000",
@@ -349,7 +354,7 @@ class DarwinCoreExportReq(BaseModel):
     include_predicted: bool = Field(
         title="Include predicted",
         description="If set, then predicted objects, as well as validated ones, will be exported. "
-                    "A validation status will allow to distinguish between the two possible statuses.",
+        "A validation status will allow to distinguish between the two possible statuses.",
         example=False,
         default=False,
     )
@@ -357,7 +362,7 @@ class DarwinCoreExportReq(BaseModel):
     with_absent: bool = Field(
         title="With absent",
         description="If set, then *absent* records will be generated, in the relevant samples, "
-                    "for categories present in other samples.",
+        "for categories present in other samples.",
         example=False,
         default=False,
     )
@@ -371,16 +376,16 @@ class DarwinCoreExportReq(BaseModel):
     computations_pre_mapping: Dict[int, int] = Field(
         title="Computation mapping",
         description="Mapping from present taxon (key) to output replacement one (value), during computations."
-                    " Use a 0 replacement to _discard_ the objects with present taxon."
-                    " Note: These are EcoTaxa categories, WoRMS mapping happens after, whatever.",
+        " Use a 0 replacement to _discard_ the objects with present taxon."
+        " Note: These are EcoTaxa categories, WoRMS mapping happens after, whatever.",
         example={456: 956, 2456: 213, 93672: 0},
         default={},
     )
     formulae: Dict[str, str] = Field(
         title="Computation formulas",
         description="Transitory: How to get values from DB free columns. "
-                    "Python syntax, prefixes are 'sam', 'ssm' and 'obj'. "
-                    "Variables used in computations are 'total_water_volume', 'subsample_coef' and 'individual_volume'",
+        "Python syntax, prefixes are 'sam', 'ssm' and 'obj'. "
+        "Variables used in computations are 'total_water_volume', 'subsample_coef' and 'individual_volume'",
         example={
             "subsample_coef": "1/ssm.sub_part",
             "total_water_volume": "sam.tot_vol/1000",
@@ -391,7 +396,7 @@ class DarwinCoreExportReq(BaseModel):
     extra_xml: List[str] = Field(
         title="Extra XML",
         description="XML blocks which will be output, reformatted, inside the <dataset> tag of produced EML. "
-                    "Formal schema is in dataset section of: https://eml.ecoinformatics.org/schema/eml_xsd ",
+        "Formal schema is in dataset section of: https://eml.ecoinformatics.org/schema/eml_xsd ",
         example={
             """<associatedParty>
     <individualName><givenName>Coco</givenName><surName>Rico</surName>
@@ -404,7 +409,7 @@ class DarwinCoreExportReq(BaseModel):
 
     # noinspection PyMethodParameters
     @validator("computations_pre_mapping")
-    def username_alphanumeric(cls, v):
+    def ensure_consistent_mapping(cls, v):
         vals_but_0 = set(v.values()).difference({0})
         assert set(v.keys()).isdisjoint(
             vals_but_0
@@ -455,7 +460,7 @@ class TaxonomyRecast(BaseModel):
     from_to: Dict[int, Optional[int]] = Field(
         title="Categories mapping",
         description="Mapping from seen taxon (key) to output replacement one (value)."
-                    " Use a null replacement to _discard_ the present taxon. Note: keys are strings.",
+        " Use a null replacement to _discard_ the present taxon. Note: keys are strings.",
         example={"456": 956, "2456": 213, "9134": None},
     )
 

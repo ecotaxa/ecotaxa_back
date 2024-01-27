@@ -6391,7 +6391,7 @@
           "BIV"
         ],
         "type":"string",
-        "description":"Externally deprecated "
+        "description":"Externally deprecated"
       },
       "ExportTypeOptionsEnum":{
         "title":"ExportTypeOptionsEnum",
@@ -6465,7 +6465,7 @@
           "only_annotations":{
             "title":"Backup annotations",
             "type":"boolean",
-            "description":"Only save objects' last annotation data in backup.",
+            "description":"Only save objects' last annotation data.",
             "default":false,
             "example":false
           },

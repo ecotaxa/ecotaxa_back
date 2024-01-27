@@ -2,6 +2,7 @@ import datetime
 import json
 import logging
 from typing import Dict, Any
+from unittest import mock
 
 import pytest
 from deepdiff import DeepDiff
@@ -17,7 +18,7 @@ from tests.credentials import (
     ORDINARY_USER_USER_ID,
     USER_AUTH,
 )
-from tests.export_shared import download_and_unzip_and_check
+from tests.export_shared import download_and_unzip_and_check, download_and_check
 from tests.jobs import (
     JOB_QUERY_URL,
     wait_for_stable,
@@ -114,30 +115,6 @@ def test_export_tsv(database, fastapi, caplog):
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
     download_and_unzip_and_check(fastapi, job_id, "bak_all_images")
 
-    # Backup export without images (but their ref is still in the TSVs)
-    # Not valid anymore (Jan 2024), backup means restore all
-    # req_and_filters["request"]["with_images"] = False
-    # rsp = fastapi.post(
-    #     DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
-    # )
-    # assert rsp.status_code == status.HTTP_200_OK
-    # job_id = get_job_and_wait_until_ok(fastapi, rsp)
-    # download_and_unzip_and_check(fastapi, job_id, "bak_no_image")
-
-    # DOI export
-    # Not possible anymore (Jan 2024)
-    # req_and_filters["request"]["exp_type"] = "DOI"
-    # fixed_date = datetime.datetime(2021, 5, 30, 11, 22, 33)
-    # with mock.patch("helpers.DateTime._now_time", return_value=fixed_date):
-    #     rsp = fastapi.post(
-    #         DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
-    #     )
-    #     assert rsp.status_code == status.HTTP_200_OK
-    #     _job_id = get_job_and_wait_until_ok(fastapi, rsp)
-    # The object_id inside prevents predictability
-    # TODO: Better comparison ignoring columns, inject project id and so on
-    # download_and_unzip_and_check(fastapi, job_id, "doi", only_hdr=True)
-
     # TSV export with IDs
     req_and_filters = {
         "filters": {},
@@ -157,40 +134,95 @@ def test_export_tsv(database, fastapi, caplog):
     # TODO: Better comparison ignoring columns
     download_and_unzip_and_check(fastapi, job_id, "tsv_with_ids", only_hdr=True)
 
+
+def test_deprecated_export_tsv(database, fastapi, caplog):
+    """Still in /object_set/export for eventual unknown users"""
+    caplog.set_level(logging.FATAL)
+
+    # Admin imports the project
+    from tests.test_import import test_import, test_import_a_bit_more_skipping
+
+    prj_id = test_import(database, caplog, "TSV deprecated export project")
+    # Add a sample spanning 2 days
+    test_import_a_bit_more_skipping(database, caplog, "TSV deprecated export project")
+
+    # Get the project for update
+    url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    _prj_json = rsp.json()
+
+    caplog.set_level(logging.DEBUG)
+
+    # Backup export without images (but their ref is still in the TSVs)
+    # Deprecated (Jan 2024), backup means restore all
+    req_and_filters = {
+        "filters": {},
+        "request": {
+            "project_id": prj_id,
+            "exp_type": "BAK",
+        },
+    }
+    rsp = fastapi.post(
+        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_unzip_and_check(fastapi, job_id, "bak_no_image")
+
+    # DOI export
+    # Deprecated (Jan 2024)
+    req_and_filters = {
+        "filters": {},
+        "request": {
+            "project_id": prj_id,
+            "exp_type": "DOI",
+        },
+    }
+    fixed_date = datetime.datetime(2021, 5, 30, 11, 22, 33)
+    with mock.patch("helpers.DateTime._now_time", return_value=fixed_date):
+        rsp = fastapi.post(
+            DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+        )
+        assert rsp.status_code == status.HTTP_200_OK
+        _job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    # The object_id inside prevents predictability
+    # TODO: Better comparison ignoring columns, inject project id and so on
+    # download_and_unzip_and_check(fastapi, job_id, "doi", only_hdr=True)
+
     # Summary export, 3 types
-    # Not possible anymore (Jan 2024)
-    # req_and_filters["request"].update(
-    #     {"exp_type": "SUM", "out_to_ftp": True, "sum_subtotal": "S"}
-    # )
-    # rsp = fastapi.post(
-    #     DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
-    # )
-    # assert rsp.status_code == status.HTTP_200_OK
-    #
-    # job_id = get_job_and_wait_until_ok(fastapi, rsp)
-    # download_and_check(fastapi, job_id, "summary_per_sample", only_hdr=True)
-    #
-    # req_and_filters["request"].update(
-    #     {"exp_type": "SUM", "out_to_ftp": True, "sum_subtotal": "A"}
-    # )
-    # rsp = fastapi.post(
-    #     DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
-    # )
-    # assert rsp.status_code == status.HTTP_200_OK
-    #
-    # job_id = get_job_and_wait_until_ok(fastapi, rsp)
-    # download_and_check(fastapi, job_id, "summary_per_subsample", only_hdr=True)
-    #
-    # req_and_filters["request"].update(
-    #     {"exp_type": "SUM", "out_to_ftp": True, "sum_subtotal": ""}
-    # )
-    # rsp = fastapi.post(
-    #     DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
-    # )
-    # assert rsp.status_code == status.HTTP_200_OK
-    #
-    # job_id = get_job_and_wait_until_ok(fastapi, rsp)
-    # download_and_check(fastapi, job_id, "summary_whole", only_hdr=True)
+    # Deprecated (Jan 2024)
+    req_and_filters["request"].update(
+        {"exp_type": "SUM", "out_to_ftp": True, "sum_subtotal": "S"}
+    )
+    rsp = fastapi.post(
+        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_check(fastapi, job_id, "summary_per_sample", only_hdr=True)
+
+    req_and_filters["request"].update(
+        {"exp_type": "SUM", "out_to_ftp": True, "sum_subtotal": "A"}
+    )
+    rsp = fastapi.post(
+        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_check(fastapi, job_id, "summary_per_subsample", only_hdr=True)
+
+    req_and_filters["request"].update(
+        {"exp_type": "SUM", "out_to_ftp": True, "sum_subtotal": ""}
+    )
+    rsp = fastapi.post(
+        DEPRECATED_OBJECT_SET_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_check(fastapi, job_id, "summary_whole", only_hdr=True)
 
 
 def test_export_roundtrip(database, fastapi, caplog, tstlogs):
@@ -322,12 +354,20 @@ def test_export_roundtrip_self(database, fastapi, caplog, export_method):
     # There should be no update, even if export of classif_when truncates microseconds
     assert nb_upds == 0
 
-    # Re-classify different ID
+    # Re-classify with a different ID (idea...)
     classify_validate_all(ADMIN_AUTH, True)
-    # And save the new classification
+    # And save the new classification, just annotations
     export_job_id2, file_in_ftp2 = export_project_to_ftp(
         fastapi, prj_id, just_annots=True
     )
+    download_and_unzip_and_check(
+        fastapi,
+        export_job_id2,
+        "just_annotations",
+        only_hdr=True,  # We have just classified data inside TODO: Fix PG time somehow
+        file_map={"ref.tsv": "ecotaxa_" + file_in_ftp2.replace(".zip", ".tsv")},
+    )
+
     # Oops, let's get back to saved state
     do_import_update(
         prj_id,
@@ -370,7 +410,7 @@ def test_export_roundtrip_self(database, fastapi, caplog, export_method):
         an_hist = classif_history(fastapi, an_obj)
         assert len(an_hist) == 4
 
-    # Restore a second time the same backup
+    # Restore a second time the same first backup
     do_import_update(
         prj_id,
         caplog,

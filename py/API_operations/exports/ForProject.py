@@ -57,6 +57,7 @@ class ProjectExport(JobServiceBase):
         self.filters = filters
         self.out_file_name: str = ""
         self.out_path: Path = Path("")
+        self.backup_with_just_image_refs = False
 
     def run(self, current_user_id: int) -> ExportRsp:
         """
@@ -109,24 +110,26 @@ class ProjectExport(JobServiceBase):
         # Fetch the source project
         src_project = self.ro_session.query(Project).get(req.project_id)
         assert src_project is not None
-        # Force some options for some types
-        if req.exp_type == ExportTypeEnum.dig_obj_ident:
+        # Force some implied (in UI) options.
+        if req.only_annotations:
+            req.exp_type = ExportTypeEnum.general_tsv  # No need for a subdir in ZIP
+            req.tsv_entities = ""
+            req.with_images = False  # Thin single TSV
+            req.only_first_image = False
+            req.split_by = ""
+            req.format_dates_times = False
+            req.with_types_row = True
+        elif req.exp_type == ExportTypeEnum.dig_obj_ident:
             req.tsv_entities = "OPAS"  # No Comments
             req.with_internal_ids = False
             req.split_by = ""
             req.coma_as_separator = False
-            req.only_annotations = False
         elif req.exp_type == ExportTypeEnum.backup:
-            if req.only_annotations:
-                req.tsv_entities = ""
-                req.with_images = False  # Thin single TSV
-                req.only_first_image = False
-                req.split_by = ""
-            else:
-                req.tsv_entities = "OPAS"  # C is missing, too much work to align tests. In theory, we're supposed to restore identical, even if C cannot in full
-                req.with_images = True  # We're supposed to restore identical
-                req.only_first_image = False  # We're supposed to restore identical
-                req.split_by = "sample"
+            req.tsv_entities = "OPAS"  # C is missing, too much work to align tests. In theory, we're supposed to restore identical, even if C cannot in full
+            # req.with_images = True  # We're supposed to restore identical but deprecated data-only backup does not set it
+            self.backup_with_just_image_refs = not req.with_images
+            req.only_first_image = False  # We're supposed to restore identical
+            req.split_by = "sample"
             req.with_internal_ids = False
             req.coma_as_separator = False
             req.format_dates_times = False
@@ -135,7 +138,6 @@ class ProjectExport(JobServiceBase):
             req.with_images = False
             if req.split_by == "sample" and "S" not in req.tsv_entities:
                 req.tsv_entities += "S"
-            req.only_annotations = False
         # Bulk of the job
         if req.exp_type == ExportTypeEnum.general_tsv:
             nb_rows, _nb_images = self.create_tsv(src_project, progress_before_copy)
@@ -221,11 +223,11 @@ class ProjectExport(JobServiceBase):
 
         select_clause = "select "
 
-        if req.with_images:
+        if req.with_images or self.backup_with_just_image_refs:
             select_clause += (
                 "img.orig_file_name AS img_file_name, img.imgrank AS img_rank"
             )
-            if req.with_images:
+            if not self.backup_with_just_image_refs:
                 select_clause += ", img.file_name AS img_src_path"
             select_clause += ",\n"
 
@@ -259,7 +261,10 @@ class ProjectExport(JobServiceBase):
                          txo.display_name AS object_annotation_category 
                     """
         ).format(date_fmt, time_fmt)
-        if req.exp_type in (ExportTypeEnum.backup, ExportTypeEnum.dig_obj_ident):
+        if (
+            req.exp_type in (ExportTypeEnum.backup, ExportTypeEnum.dig_obj_ident)
+            or req.only_annotations
+        ):
             select_clause += ", txo.id AS object_annotation_category_id"
         else:
             # TODO: I didn't find where the below is used.
@@ -413,7 +418,7 @@ class ProjectExport(JobServiceBase):
                 # Start of sequence, eventually end of previous sequence
                 if csv_fd:
                     csv_fd.close()  # Close previous file
-                    self.store_csv_into_zip(zfile, prev_value, csv_path)
+                    self.store_tsv_into_zip(zfile, prev_value, csv_path)
                 if splitcsv:
                     prev_value = a_row[split_field]
                 logger.info("Writing into file %s", csv_path)
@@ -486,14 +491,14 @@ class ProjectExport(JobServiceBase):
                 self.update_progress(1 + progress_range / obj_count * nb_rows, msg)
         if csv_fd:
             csv_fd.close()  # Close last file
-            self.store_csv_into_zip(zfile, prev_value, csv_path)
+            self.store_tsv_into_zip(zfile, prev_value, csv_path)
         logger.info("Extracted %d rows", nb_rows)
         img_file_fd.close()
         if zfile:
             zfile.close()
         return nb_rows, nb_images
 
-    def store_csv_into_zip(self, zfile, prev_value, in_file: Path) -> None:
+    def store_tsv_into_zip(self, zfile, prev_value, in_file: Path) -> None:
         # Add a new file into the zip
         name_in_zip = "ecotaxa_" + str(prev_value) + ".tsv"
         if self.req.exp_type == ExportTypeEnum.backup:

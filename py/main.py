@@ -184,7 +184,7 @@ templates = Jinja2Templates(directory=os.path.dirname(__file__) + "/pages/templa
 CDNs = " ".join(["cdn.datatables.net"])
 CRSF_header = {
     "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval' "
-                               f"blob: data: {CDNs};frame-ancestors 'self';form-action 'self';"
+    f"blob: data: {CDNs};frame-ancestors 'self';form-action 'self';"
 }
 
 # Establish second routes via /api to same app
@@ -231,7 +231,7 @@ def get_users(
         "",
         title="Ids",
         description="String containing the list of one or more id separated by non-num char. \n"
-                    " \n **If several ids are provided**, one full info is returned per user.",
+        " \n **If several ids are provided**, one full info is returned per user.",
         example="1",
     ),
     current_user: int = Depends(get_current_user),
@@ -1802,7 +1802,7 @@ def instrument_query(
         ...,
         title="Projects ids",
         description="String containing the list of one or more project ids,"
-                    " separated by non-num char, or 'all' for all instruments.",
+        " separated by non-num char, or 'all' for all instruments.",
         example="1,2,3",
     )
 ) -> List[str]:
@@ -2285,12 +2285,15 @@ def export_object_set_general(
     """
     ** Start a general-purpose export job for the given object set and options.**
     """
+    backup_chosen = request.export_type == ExportTypeOptionsEnum.backup
+    general_chosen = request.export_type == ExportTypeOptionsEnum.general
     old_req = ExportReq(
         project_id=request.project_id,
         exp_type=ExportTypeEnum.general_tsv
-        if request.export_type == ExportTypeOptionsEnum.general
+        if general_chosen
         else ExportTypeEnum.backup,
-        with_images=request.with_images != ExportImagesOptionsEnum.none,
+        with_images=backup_chosen
+        or request.with_images != ExportImagesOptionsEnum.none,
         with_internal_ids=request.with_internal_ids,
         with_types_row=request.with_types_row,
         only_first_image=request.with_images == ExportImagesOptionsEnum.first,
