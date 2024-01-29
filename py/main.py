@@ -57,10 +57,11 @@ from API_models.exports import (
     ExportTypeEnum,
     ExportImagesOptionsEnum,
     SummaryExportGroupingEnum,
-    ExportTypeOptionsEnum,
     SummaryExportReq,
     SummaryExportQuantitiesOptionsEnum,
     SummaryExportSumOptionsEnum,
+    BackupExportReq,
+    ExportSplitOptionsEnum,
 )
 from API_models.filesystem import DirectoryModel
 from API_models.filters import ProjectFilters
@@ -2263,7 +2264,11 @@ def export_object_set(
     current_user: int = Depends(get_current_user),
 ) -> ExportRsp:
     """
-    ** Deprecated: Start an export job for the given object set and options. @see extract and summarize**
+    ⚠️ Deprecated, see general, summary and backup exports for alternatives.
+
+    Start an export job for the given object set and options.
+
+    🔒 Current user needs *at least Read* right on the requested project.
     """
     with ProjectExport(request, filters.base()) as sce:
         with RightsThrower():
@@ -2283,21 +2288,28 @@ def export_object_set_general(
     current_user: int = Depends(get_current_user),
 ) -> ExportRsp:
     """
-    ** Start a general-purpose export job for the given object set and options.**
+    Start a general-purpose export job for the given object set and options.
+
+    🔒 Current user needs *at least Read* right on the requested project.
     """
-    backup_chosen = request.export_type == ExportTypeOptionsEnum.backup
-    general_chosen = request.export_type == ExportTypeOptionsEnum.general
+    old_split = (
+        request.split_by
+        if request.split_by
+        in (
+            ExportSplitOptionsEnum.sample,
+            ExportSplitOptionsEnum.acquisition,
+            ExportSplitOptionsEnum.taxon,
+        )
+        else ""
+    )
     old_req = ExportReq(
         project_id=request.project_id,
-        exp_type=ExportTypeEnum.general_tsv
-        if general_chosen
-        else ExportTypeEnum.backup,
-        with_images=backup_chosen
-        or request.with_images != ExportImagesOptionsEnum.none,
+        exp_type=ExportTypeEnum.general_tsv,
+        with_images=request.with_images != ExportImagesOptionsEnum.none,
         with_internal_ids=request.with_internal_ids,
         with_types_row=request.with_types_row,
         only_first_image=request.with_images == ExportImagesOptionsEnum.first,
-        split_by=request.split_by,
+        split_by=old_split,
         tsv_entities="OPASC",
         only_annotations=request.only_annotations,
         out_to_ftp=request.out_to_ftp,
@@ -2320,7 +2332,9 @@ def export_object_set_summary(
     current_user: int = Depends(get_current_user),
 ) -> ExportRsp:
     """
-    ** Start a summary export job for the given object set and options.**
+    Start a summary export job for the given object set and options.
+
+    🔒 Current user needs *at least Read* right on the requested project.
     """
     new_type_to_old = {
         SummaryExportQuantitiesOptionsEnum.abundance: ExportTypeEnum.abundances,
@@ -2334,10 +2348,39 @@ def export_object_set_summary(
     }
     old_req = ExportReq(
         project_id=request.project_id,
-        exp_type=new_type_to_old[request.quantities],
+        exp_type=new_type_to_old[request.quantity],
         sum_subtotal=new_level_to_old[request.summarise_by],
         pre_mapping=request.taxo_mapping,
         formulae=request.formulae,
+        out_to_ftp=request.out_to_ftp,
+    )
+    with ProjectExport(old_req, filters.base()) as sce:
+        with RightsThrower():
+            rsp = sce.run(current_user)
+    return rsp
+
+
+@app.post(
+    "/object_set/export/backup",
+    operation_id="export_object_set_backup",
+    tags=["objects"],
+    response_model=ExportRsp,
+)
+def export_object_set_backup(
+    filters: ProjectFilters = Body(...),
+    request: BackupExportReq = Body(...),
+    current_user: int = Depends(get_current_user),
+) -> ExportRsp:
+    """
+    Start a backup export job for the given object set and options.
+    If filters are empty, the produced zip will contain the full project.
+
+    🔒 Current user needs *at least Read* right on the requested project.
+    """
+    old_req = ExportReq(
+        project_id=request.project_id,
+        exp_type=ExportTypeEnum.backup,
+        with_images=True,
         out_to_ftp=request.out_to_ftp,
     )
     with ProjectExport(old_req, filters.base()) as sce:

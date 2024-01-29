@@ -3672,7 +3672,7 @@
           "objects"
         ],
         "summary":"Export Object Set",
-        "description":"** Deprecated: Start an export job for the given object set and options. @see extract and summarize**",
+        "description":"⚠️ Deprecated, see general, summary and backup exports for alternatives.\n\nStart an export job for the given object set and options.\n\n🔒 Current user needs *at least Read* right on the requested project.",
         "operationId":"export_object_set",
         "requestBody":{
           "content":{
@@ -3719,7 +3719,7 @@
           "objects"
         ],
         "summary":"Export Object Set General",
-        "description":"** Start a general-purpose export job for the given object set and options.**",
+        "description":"Start a general-purpose export job for the given object set and options.\n\n🔒 Current user needs *at least Read* right on the requested project.",
         "operationId":"export_object_set_general",
         "requestBody":{
           "content":{
@@ -3766,13 +3766,60 @@
           "objects"
         ],
         "summary":"Export Object Set Summary",
-        "description":"** Start a summary export job for the given object set and options.**",
+        "description":"Start a summary export job for the given object set and options.\n\n🔒 Current user needs *at least Read* right on the requested project.",
         "operationId":"export_object_set_summary",
         "requestBody":{
           "content":{
             "application/json":{
               "schema":{
                 "$ref":"#/components/schemas/Body_export_object_set_summary_object_set_export_summary_post"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/ExportRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/object_set/export/backup":{
+      "post":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Export Object Set Backup",
+        "description":"Start a backup export job for the given object set and options.\nIf filters are empty, the produced zip will contain the full project.\n\n🔒 Current user needs *at least Read* right on the requested project.",
+        "operationId":"export_object_set_backup",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/Body_export_object_set_backup_object_set_export_backup_post"
               }
             }
           },
@@ -5456,6 +5503,45 @@
           }
         }
       },
+      "BackupExportReq":{
+        "title":"Backup Export request Model",
+        "required":[
+          "project_id"
+        ],
+        "type":"object",
+        "properties":{
+          "project_id":{
+            "title":"Project Id",
+            "type":"integer",
+            "description":"The project to export.",
+            "example":1
+          },
+          "out_to_ftp":{
+            "title":"Out to ftp",
+            "type":"boolean",
+            "description":"Copy result file to FTP area. Original file is still available.",
+            "default":false,
+            "example":false
+          }
+        },
+        "description":"Backup export request."
+      },
+      "Body_export_object_set_backup_object_set_export_backup_post":{
+        "title":"Body_export_object_set_backup_object_set_export_backup_post",
+        "required":[
+          "filters",
+          "request"
+        ],
+        "type":"object",
+        "properties":{
+          "filters":{
+            "$ref":"#/components/schemas/ProjectFilters"
+          },
+          "request":{
+            "$ref":"#/components/schemas/BackupExportReq"
+          }
+        }
+      },
       "Body_export_object_set_general_object_set_export_general_post":{
         "title":"Body_export_object_set_general_object_set_export_general_post",
         "required":[
@@ -6236,7 +6322,7 @@
           "split_by":{
             "title":"Split by",
             "type":"string",
-            "description":"For 'TSV' type, inside archives, split in one directory per... 'sample', 'taxo' or '' (no split).",
+            "description":"For 'TSV' type, inside archives, split in one directory per... 'sample', 'acquisition', 'taxon' or '' (no split).",
             "default":"",
             "example":"sample"
           },
@@ -6374,6 +6460,7 @@
         "enum":[
           "sample",
           "acquisition",
+          "taxon",
           "none"
         ],
         "type":"string",
@@ -6393,15 +6480,6 @@
         "type":"string",
         "description":"Externally deprecated"
       },
-      "ExportTypeOptionsEnum":{
-        "title":"ExportTypeOptionsEnum",
-        "enum":[
-          "general",
-          "backup"
-        ],
-        "type":"string",
-        "description":"An enumeration."
-      },
       "GeneralExportReq":{
         "title":"General Export request Model",
         "required":[
@@ -6415,17 +6493,6 @@
             "description":"The project to export.",
             "example":1
           },
-          "export_type":{
-            "title":"Export type",
-            "allOf":[
-              {
-                "$ref":"#/components/schemas/ExportTypeOptionsEnum"
-              }
-            ],
-            "description":"Backup type will force many options in order to produce an EcoTaxa Import compatible ZIP.",
-            "default":"general",
-            "example":"general"
-          },
           "split_by":{
             "title":"Split by",
             "allOf":[
@@ -6433,7 +6500,7 @@
                 "$ref":"#/components/schemas/ExportSplitOptionsEnum"
               }
             ],
-            "description":"If not none, separate (in ZIP sub-directories) output per sample or acquisition. 'backup' means 'sample'.",
+            "description":"If not none, separate (in ZIP sub-directories) output per given field.",
             "default":"none",
             "example":"sample"
           },
@@ -6444,21 +6511,21 @@
                 "$ref":"#/components/schemas/ExportImagesOptionsEnum"
               }
             ],
-            "description":"Add in ZIP first image, all images, or no image. 'backup' means 'all'.",
+            "description":"Add in ZIP first (i.e. visible) image, all images, or no image.⚠️ 'all' means maybe several lines per object in TSVs.",
             "default":"none",
             "example":"first"
           },
           "with_internal_ids":{
             "title":"With internal ids",
             "type":"boolean",
-            "description":"Export internal database IDs. 'backup' means 'false'.",
+            "description":"Export internal database IDs.",
             "default":false,
             "example":false
           },
           "with_types_row":{
             "title":"With types row",
             "type":"boolean",
-            "description":"Add an EcoTaxa-compatible second line with types. 'backup' means 'true'.",
+            "description":"Add an EcoTaxa-compatible second line with types.",
             "default":false,
             "example":false
           },
@@ -8625,7 +8692,7 @@
             "description":"The project to export.",
             "example":1
           },
-          "quantities":{
+          "quantity":{
             "title":"Quantity",
             "allOf":[
               {
@@ -8683,7 +8750,7 @@
             "example":false
           }
         },
-        "description":"Export request."
+        "description":"Summary export request."
       },
       "SummaryExportSumOptionsEnum":{
         "title":"SummaryExportSumOptionsEnum",

@@ -26,14 +26,10 @@ class ExportTypeEnum(str, Enum):
     biovols = "BIV"  # Biovolume summary https://github.com/ecotaxa/ecotaxa/issues/617
 
 
-class ExportTypeOptionsEnum(str, Enum):
-    general = "general"
-    backup = "backup"
-
-
 class ExportSplitOptionsEnum(str, Enum):
     sample = "sample"
     acquisition = "acquisition"
+    taxon = "taxon"
     none = "none"
 
 
@@ -113,7 +109,7 @@ class ExportReq(BaseModel):
     split_by: str = Field(
         title="Split by",
         description="For 'TSV' type, inside archives, split in one directory per... "
-        "'sample', 'taxo' or '' (no split).",
+        "'sample', 'acquisition', 'taxon' or '' (no split).",
         example="sample",
         default="",
     )
@@ -210,33 +206,27 @@ class GeneralExportReq(BaseModel):
     project_id: int = Field(
         title="Project Id", description="The project to export.", example=1
     )
-    export_type: ExportTypeOptionsEnum = Field(
-        title="Export type",
-        description="Backup type will force many options in order to produce an EcoTaxa Import compatible ZIP.",
-        example=ExportTypeOptionsEnum.general,
-        default=ExportTypeOptionsEnum.general,
-    )
     split_by: ExportSplitOptionsEnum = Field(
         title="Split by",
-        description="If not none, separate (in ZIP sub-directories) output per sample or acquisition. 'backup' means 'sample'.",
+        description="If not none, separate (in ZIP sub-directories) output per given field.",
         example=ExportSplitOptionsEnum.sample,
         default=ExportSplitOptionsEnum.none,
     )
     with_images: ExportImagesOptionsEnum = Field(
         title="With images",
-        description="Add in ZIP first image, all images, or no image. 'backup' means 'all'.",
+        description="Add in ZIP first (i.e. visible) image, all images, or no image.⚠️ 'all' means maybe several lines per object in TSVs.",
         example=ExportImagesOptionsEnum.first,
         default=ExportImagesOptionsEnum.none,
     )
     with_internal_ids: bool = Field(
         title="With internal ids",
-        description="Export internal database IDs. 'backup' means 'false'.",
+        description="Export internal database IDs.",
         example=False,
         default=False,
     )
     with_types_row: bool = Field(
         title="With types row",
-        description="Add an EcoTaxa-compatible second line with types. 'backup' means 'true'.",
+        description="Add an EcoTaxa-compatible second line with types.",
         example=False,
         default=False,
     )
@@ -274,13 +264,13 @@ class GeneralExportReq(BaseModel):
 
 class SummaryExportReq(BaseModel):
     """
-    Export request.
+    Summary export request.
     """
 
     project_id: int = Field(
         title="Project Id", description="The project to export.", example=1
     )
-    quantities: SummaryExportQuantitiesOptionsEnum = Field(
+    quantity: SummaryExportQuantitiesOptionsEnum = Field(
         title="Quantity",
         description="The quantity to compute. Abundance is always possible.",
         example=SummaryExportQuantitiesOptionsEnum.abundance,
@@ -330,6 +320,25 @@ class SummaryExportReq(BaseModel):
 
     class Config:
         schema_extra = {"title": "Summary Export request Model"}
+
+
+class BackupExportReq(BaseModel):
+    """
+    Backup export request.
+    """
+
+    project_id: int = Field(
+        title="Project Id", description="The project to export.", example=1
+    )
+    out_to_ftp: bool = Field(
+        title="Out to ftp",
+        description="Copy result file to FTP area. Original file is still available.",
+        default=False,
+        example=False,
+    )
+
+    class Config:
+        schema_extra = {"title": "Backup Export request Model"}
 
 
 class DarwinCoreExportReq(BaseModel):

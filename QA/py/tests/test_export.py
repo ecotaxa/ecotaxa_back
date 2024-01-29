@@ -67,6 +67,7 @@ DEPRECATED_BAK_EXP_TMPL = {
 }
 
 OBJECT_SET_GENERAL_EXPORT_URL = "/object_set/export/general"
+OBJECT_SET_BACKUP_EXPORT_URL = "/object_set/export/backup"
 
 
 def test_export_tsv(database, fastapi, caplog):
@@ -104,11 +105,10 @@ def test_export_tsv(database, fastapi, caplog):
         "filters": {},
         "request": {
             "project_id": prj_id,
-            "export_type": "backup",
         },
     }
     rsp = fastapi.post(
-        OBJECT_SET_GENERAL_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+        OBJECT_SET_BACKUP_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
     )
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -134,6 +134,42 @@ def test_export_tsv(database, fastapi, caplog):
     # TODO: Better comparison ignoring columns
     download_and_unzip_and_check(fastapi, job_id, "tsv_with_ids", only_hdr=True)
 
+    # TSV export by acquisition
+    req_and_filters = {
+        "filters": {},
+        "request": {
+            "project_id": prj_id,
+            "split_by": "acquisition",
+            "with_images": "all",
+        },
+    }
+    rsp = fastapi.post(
+        OBJECT_SET_GENERAL_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_unzip_and_check(fastapi, job_id, "tsv_by_acquisition")
+
+    # TSV export by taxon
+    req_and_filters = {
+        "filters": {},
+        "request": {
+            "project_id": prj_id,
+            "split_by": "taxon",
+            "with_images": "first",  # Avoid dups in TSV
+            "with_types_row": True,
+            "out_to_ftp": True,
+        },
+    }
+    rsp = fastapi.post(
+        OBJECT_SET_GENERAL_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_unzip_and_check(fastapi, job_id, "tsv_by_taxon")
+
 
 def test_deprecated_export_tsv(database, fastapi, caplog):
     """Still in /object_set/export for eventual unknown users"""
@@ -154,7 +190,7 @@ def test_deprecated_export_tsv(database, fastapi, caplog):
     caplog.set_level(logging.DEBUG)
 
     # Backup export without images (but their ref is still in the TSVs)
-    # Deprecated (Jan 2024), backup means restore all
+    # Deprecated (Jan 2024), backup means produce all the data needed to restore all
     req_and_filters = {
         "filters": {},
         "request": {
@@ -376,7 +412,7 @@ def test_export_roundtrip_self(database, fastapi, caplog, export_method):
         str(DATA_DIR / "ftp" / ("task_%d_%s" % (export_job_id, file_in_ftp))),
     )
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
-    # All changed, restored to backup
+    # All changed, restored to backup state
     assert nb_upds == 15
 
     # Re-classify different user
@@ -389,7 +425,7 @@ def test_export_roundtrip_self(database, fastapi, caplog, export_method):
         str(DATA_DIR / "ftp" / ("task_%d_%s" % (export_job_id, file_in_ftp))),
     )
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
-    # All changed, restored to backup
+    # All changed, restored to backup state
     assert nb_upds == 15
 
     if False:
@@ -442,17 +478,19 @@ def test_export_roundtrip_self(database, fastapi, caplog, export_method):
 
 
 def export_project_to_ftp(fastapi, prj_id, just_annots):
-    req_and_filters = {
+    req_and_filters = {  # Common param to both entry points
         "filters": {},
         "request": {
             "project_id": prj_id,
-            "export_type": "backup",
-            "only_annotations": just_annots,
             "out_to_ftp": True,
         },
     }
+    if just_annots:
+        req_and_filters["request"]["only_annotations"] = True
     rsp = fastapi.post(
-        OBJECT_SET_GENERAL_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+        OBJECT_SET_GENERAL_EXPORT_URL if just_annots else OBJECT_SET_BACKUP_EXPORT_URL,
+        headers=ADMIN_AUTH,
+        json=req_and_filters,
     )
     assert rsp.status_code == status.HTTP_200_OK
     export_job_id = rsp.json()["job_id"]

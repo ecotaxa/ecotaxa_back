@@ -135,13 +135,16 @@ class ProjectExport(JobServiceBase):
             req.format_dates_times = False
             req.with_types_row = True
         elif req.exp_type == ExportTypeEnum.general_tsv:
-            req.with_images = False
             if req.split_by == "sample" and "S" not in req.tsv_entities:
                 req.tsv_entities += "S"
+            if req.split_by == "acquisition" and "A" not in req.tsv_entities:
+                req.tsv_entities += "A"
         # Bulk of the job
-        if req.exp_type == ExportTypeEnum.general_tsv:
-            nb_rows, _nb_images = self.create_tsv(src_project, progress_before_copy)
-        elif req.exp_type in (ExportTypeEnum.backup, ExportTypeEnum.dig_obj_ident):
+        if req.exp_type in (
+            ExportTypeEnum.general_tsv,
+            ExportTypeEnum.backup,
+            ExportTypeEnum.dig_obj_ident,
+        ):
             nb_rows, nb_images = self.create_tsv(
                 src_project, 10 if req.with_images else progress_before_copy
             )
@@ -267,7 +270,6 @@ class ProjectExport(JobServiceBase):
         ):
             select_clause += ", txo.id AS object_annotation_category_id"
         else:
-            # TODO: I didn't find where the below is used.
             select_clause += (
                 ","
                 + TaxonomyBO.parents_sql("obh.classif_id")
@@ -316,10 +318,12 @@ class ProjectExport(JobServiceBase):
         if req.split_by == "sample":
             order_clause.add_expression("sam", "orig_id")
             split_field = "sample_id"  # AKA sam.orig_id, but renamed in select list
-        elif req.split_by == "taxo":
-            select_clause += "\n, txo.display_name AS taxo_parent_child "
-            order_clause.add_expression(None, "taxo_parent_child")
-            split_field = "taxo_parent_child"
+        elif req.split_by == "acquisition":
+            order_clause.add_expression("acq", "orig_id")
+            split_field = "acq_id"  # AKA acq.orig_id, but renamed in select list
+        elif req.split_by == "taxon":
+            order_clause.add_expression("txo", "display_name")
+            split_field = "object_annotation_category"
         else:
             order_clause.add_expression("sam", "orig_id")
             split_field = "object_id"  # cette valeur permet d'éviter des erreurs plus loin dans r[split_field]
@@ -391,13 +395,15 @@ class ProjectExport(JobServiceBase):
                 db_float_type = a_desc.type_code
                 break
         else:
-            db_float_type = None
-        float_cols = set()
+            db_float_type = (
+                None  # No such column if only annotations, but OTOH no float to format
+            )
+        float_cols_to_reformat = set()
         # Prepare float separator conversion, if not required the set will just be empty
         if req.coma_as_separator:
             for a_desc in col_descs:
                 if a_desc.type_code == db_float_type:
-                    float_cols.add(a_desc.name)
+                    float_cols_to_reformat.add(a_desc.name)
 
         tsv_cols = [a_desc.name for a_desc in col_descs]
         tsv_types_line = {
@@ -421,10 +427,14 @@ class ProjectExport(JobServiceBase):
                     self.store_tsv_into_zip(zfile, prev_value, csv_path)
                 if splitcsv:
                     prev_value = a_row[split_field]
-                logger.info("Writing into file %s", csv_path)
+                    if req.split_by == "taxon":
+                        prev_value = self.normalize_for_filename(prev_value)
+                logger.info("Writing into temptask file %s", csv_filename)
                 if req.use_latin1:
                     csv_fd = open(csv_path, "w", encoding="latin_1")
                 else:
+                    # Add a BOM marker signaling utf8, correctly guessed in all spreadsheet apps seen so far,
+                    # see https://docs.python.org/3/library/codecs.html
                     csv_fd = open(csv_path, "w", encoding="utf-8-sig")
                 csv_wtr = csv.DictWriter(
                     csv_fd,
@@ -453,21 +463,25 @@ class ProjectExport(JobServiceBase):
                         a_row["img_file_name"],
                     )
                     copy_op["dst_path"] = a_row["img_file_name"]
-                else:  # It's a backup
-                    # Images are stored in the Zip subdirectory per sample/taxo, i.e. at the same place as
-                    # their referring TSV
-                    dst_path = "{0}/{1}".format(prev_value, a_row["img_file_name"])
+                else:  # It's a backup or TSV
+                    # Images are stored in the Zip subdirectory per sample/acq/taxo
+                    # - At the same place as their referring TSV for backups
+                    # - In a subdirectory for general TSV
+                    img_file_name = a_row["img_file_name"]
+                    dst_path = "{0}/{1}".format(prev_value, img_file_name)
                     if dst_path in used_dst_pathes:
                         # Avoid duplicates in zip as only the last entry will be present during unzip
                         # root cause: for UVP6 bundles, the vignette and original image are both stored
                         # with the same name.
                         img_with_rank = "{0}/{1}".format(
-                            a_row["img_rank"], a_row["img_file_name"]
+                            a_row["img_rank"], img_file_name
                         )
                         a_row[
                             "img_file_name"
                         ] = img_with_rank  # write into TSV the corrected path
-                        dst_path = prev_value + "/" + img_with_rank
+                        dst_path = "{0}/{1}".format(prev_value, img_with_rank)
+                    if req.exp_type == ExportTypeEnum.general_tsv:
+                        a_row["img_file_name"] = dst_path
                     used_dst_pathes.add(dst_path)
                     copy_op["dst_path"] = dst_path
                 img_wtr.writerow(copy_op)
@@ -478,7 +492,7 @@ class ProjectExport(JobServiceBase):
                     a_row["complement_info"].splitlines()
                 )
             # Replace decimal separator
-            for cname in float_cols:
+            for cname in float_cols_to_reformat:
                 if a_row[cname] is not None:
                     a_row[cname] = str(a_row[cname]).replace(".", ",")
             assert csv_wtr is not None
@@ -526,14 +540,15 @@ class ProjectExport(JobServiceBase):
             for r in csv.DictReader(
                 temp_images_csv_fd, delimiter="\t", quotechar='"', lineterminator="\n"
             ):
-                img_file_path = vault.image_path(r["src_path"])
+                rel_image_path = r["src_path"]
+                img_file_path = vault.image_path(rel_image_path)
                 path_in_zip = r["dst_path"]
                 try:
                     zfile.write(img_file_path, arcname=path_in_zip)
                 except FileNotFoundError:
                     logger.error("Not found image: %s", img_file_path)
                     continue
-                logger.info("Added file %s as %s", img_file_path, path_in_zip)
+                logger.info("Added vault file %s as %s", rel_image_path, path_in_zip)
                 nb_files_added += 1
                 if nb_files_added % self.IMAGES_REPORT_EVERY == 0:
                     msg = "Added %d files" % nb_files_added
@@ -559,7 +574,7 @@ class ProjectExport(JobServiceBase):
             assert classif_id
             taxofolder += "__%d" % classif_id
         file_name = "images/{0}/{1}_{2}{3}".format(
-            self.normalize_filename(taxofolder),
+            self.normalize_for_filename(taxofolder),
             objid,
             imgrank,
             Path(originalfilename).suffix.lower(),
@@ -567,9 +582,9 @@ class ProjectExport(JobServiceBase):
         return file_name
 
     @staticmethod
-    def normalize_filename(filename) -> str:
+    def normalize_for_filename(name) -> str:
         # noinspection RegExpRedundantEscape
-        return re.sub(R"[^a-zA-Z0-9 \.\-\(\)]", "_", str(filename))
+        return re.sub(R"[^a-zA-Z0-9 \.\-\(\)]", "_", str(name))
 
     def _get_summary_file(self, src_project):
         now_txt = DateTime.now_time().strftime("%Y%m%d_%H%M")

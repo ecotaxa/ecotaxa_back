@@ -70,11 +70,14 @@ def one_tsv_check(content_bin, name, only_hdr, ref_dir_path):
     ref_content = open(ref_dir_path / name).readlines()
     assert len(file_content) == len(
         ref_content
-    ), "For %s, not same number of lines %s vs %s" % (
+    ), "For %s and %s, not same number of lines %s vs %s" % (
+        name,
         ref_dir_path,
         len(ref_content),
         len(file_content),
     )
+    if ref_content[0][0] == "\ufeff":  # Remove BOM, in case
+        ref_content[0] = ref_content[0][1:]
     num_line = 1
     for act, ref in zip(file_content, ref_content):
         assert act == ref, "diff A'%s'E'%s' in %s/%s line %d" % (

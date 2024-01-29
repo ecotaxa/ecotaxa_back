@@ -2,7 +2,6 @@ import logging
 from typing import Dict
 
 from starlette import status
-
 from tests.credentials import CREATOR_AUTH, ADMIN_AUTH, ADMIN_USER_ID
 from tests.export_shared import download_and_check
 from tests.formulae import uvp_formulae
@@ -60,7 +59,7 @@ def test_export_abundances(database, fastapi, caplog):
     # Abundance export whole project
     req_and_filters = {
         "filters": {},
-        "request": {"project_id": prj_id, "summarise_by": "none"}
+        "request": {"project_id": prj_id, "summarise_by": "none"},
     }
     rsp = fastapi.post(
         OBJECT_SET_SUMMARY_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
@@ -72,10 +71,7 @@ def test_export_abundances(database, fastapi, caplog):
     # log = get_log_file(fastapi, job_id)
 
     # Abundance export by sample, default values everywhere
-    req_and_filters = {
-        "filters": {},
-        "request": {"project_id": prj_id}
-    }
+    req_and_filters = {"filters": {}, "request": {"project_id": prj_id}}
     rsp = fastapi.post(
         OBJECT_SET_SUMMARY_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
     )
@@ -88,7 +84,7 @@ def test_export_abundances(database, fastapi, caplog):
     # Abundance export by subsample
     req_and_filters = {
         "filters": {},
-        "request": {"project_id": prj_id, "summarise_by": "acquisition"}
+        "request": {"project_id": prj_id, "summarise_by": "acquisition"},
     }
     rsp = fastapi.post(
         OBJECT_SET_SUMMARY_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
@@ -110,8 +106,8 @@ def test_export_abundances(database, fastapi, caplog):
                 84963: None,  # detritus -> Remove
                 85078: 78418,  # egg<other -> Oncaeidae
                 92731: 78418,  # small<egg -> Oncaeidae
-            }
-        }
+            },
+        },
     }
     rsp = fastapi.post(
         OBJECT_SET_SUMMARY_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
@@ -164,7 +160,7 @@ def test_export_conc_biovol(database, fastapi, caplog):
     # Concentrations export by sample
     req_and_filters = {
         "filters": {},
-        "request": {"project_id": prj_id, "quantities": "concentration"}
+        "request": {"project_id": prj_id, "quantity": "concentration"},
     }
     rsp = fastapi.post(
         OBJECT_SET_SUMMARY_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
@@ -177,7 +173,7 @@ def test_export_conc_biovol(database, fastapi, caplog):
     # Biovolume export by sample
     req_and_filters = {
         "filters": {},
-        "request": {"project_id": prj_id, "quantities": "biovolume"},
+        "request": {"project_id": prj_id, "quantity": "biovolume"},
     }
     rsp = fastapi.post(
         OBJECT_SET_SUMMARY_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
@@ -190,7 +186,11 @@ def test_export_conc_biovol(database, fastapi, caplog):
     # Biovolume export by subsample AKA Acquisition
     req_and_filters = {
         "filters": {},
-        "request": {"project_id": prj_id, "quantities": "biovolume", "summarise_by": "acquisition"},
+        "request": {
+            "project_id": prj_id,
+            "quantity": "biovolume",
+            "summarise_by": "acquisition",
+        },
     }
     rsp = fastapi.post(
         OBJECT_SET_SUMMARY_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
