@@ -1651,11 +1651,13 @@ If no **unique order** is specified, the result can vary for same call and condi
     if fields is not None:
         return_fields = fields.split(",")
 
-    print(filters)
+    sim_search_request = SimilaritySearchReq(
+        project_id = project_id,
+        target_id = int(filters.seed_object_id.lstrip("I")) if filters.seed_object_id else None,
+    )
 
-    from API_models.UnsupervisedSearch import similarity_search_nn
-#    ret = test_integration_nn(project_id, filters.seed_object_id)
-
+    with SimilaritySearchForProject(sim_search_request, filters.base()) as sce:
+        sim_search_rsp = sce.similarity_search(current_user)
 
     with ObjectManager() as sce:
         with RightsThrower():
@@ -1670,26 +1672,20 @@ If no **unique order** is specified, the result can vary for same call and condi
                 window_start,
                 window_size,
             )
-        rsp.total_ids = total
-        rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
-        rsp.acquisition_ids = [with_p[1] for with_p in obj_with_parents]
-        rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
-        rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
-        rsp.details = details
 
-        rsp_reordered_by_nearest_neighbor = similarity_search_nn(project_id,
-                                                                 seed_object_id=filters.seed_object_id,
-                                                                 source_project_ids=filters.seed_object_ids,
-                                                                 features=[],
-                                                                 use_scn=False,
-                                                                 filters=filters,
-                                                                 ro_session=sce.ro_session,
-                                                                 list_object_ids_from_proj = rsp.object_ids,
-                                                                 rest_of_data_maybe_needed=rsp)
+        object_ids = [with_p[0] for with_p in obj_with_parents]
+        for objid in sim_search_rsp.neighbor_ids:
+            if objid not in object_ids:
+                continue
+            index = object_ids.index(objid)
+            rsp.object_ids.append(obj_with_parents[index][0])
+            rsp.acquisition_ids.append(obj_with_parents[index][1])
+            rsp.sample_ids.append(obj_with_parents[index][2])
+            rsp.project_ids.append(obj_with_parents[index][3])
+            rsp.details.append(details[index])
 
     # Serialize
-    return MyORJSONResponse(rsp_reordered_by_nearest_neighbor)
-
+    return MyORJSONResponse(rsp)
 
 
 @app.get(
