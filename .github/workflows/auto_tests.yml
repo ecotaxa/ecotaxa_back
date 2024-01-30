@@ -48,7 +48,7 @@ jobs:
         POSTGRES_HOST: postgres
         # The default PostgreSQL port
         POSTGRES_PORT: 5432
-    #- uses: codecov/codecov-action@v3
-    #  with:
-    #    token: ${{ secrets.CODECOV_TOKEN }}
-    #    verbose: true # optional (default = false)
+    # - uses: codecov/codecov-action@v3
+    #   with:
+    #      token: ${{ secrets.CODECOV_TOKEN }}
+    #      verbose: true # optional (default = false)
