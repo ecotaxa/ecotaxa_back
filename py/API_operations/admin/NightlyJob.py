@@ -26,6 +26,7 @@ class NightlyJobService(JobServiceBase):
     """
 
     JOB_TYPE = "NightlyMaintenance"
+    REPORT_EVERY = 20
 
     def __init__(self) -> None:
         super().__init__()
@@ -96,7 +97,7 @@ class NightlyJobService(JobServiceBase):
             ProjectBO.update_taxo_stats(self.session, proj_id)
             self.session.commit()
             chunk.append(proj_id)
-            if len(chunk) == 20:
+            if len(chunk) == self.REPORT_EVERY:
                 self.progress_update(start, chunk, total, end)
         logger.info("Done for %s", chunk)
 
@@ -114,7 +115,7 @@ class NightlyJobService(JobServiceBase):
             ProjectBO.update_stats(self.session, proj_id)
             self.session.commit()
             chunk.append(proj_id)
-            if len(chunk) == 20:
+            if len(chunk) == self.REPORT_EVERY:
                 self.progress_update(start, chunk, total, end)
         logger.info("Done for %s", chunk)
 
@@ -135,22 +136,26 @@ class NightlyJobService(JobServiceBase):
         """
         logger.info("Starting cleanup of old jobs")
         thirty_days_ago = datetime.datetime.today() - datetime.timedelta(days=30)
-        old_jobs_qry_1 = self.ro_session.query(Job.id).filter(
-            Job.creation_date < thirty_days_ago
+        old_jobs_qry_1 = (
+            self.ro_session.query(Job.id)
+            .filter(Job.id > 0)
+            .filter(Job.creation_date < thirty_days_ago)
         )
         old_jobs = [an_id for an_id, in old_jobs_qry_1]
         one_week_ago = datetime.datetime.today() - datetime.timedelta(days=7)
         old_jobs_qry_2 = (
             self.ro_session.query(Job.id)
+            .filter(Job.id > 0)
             .filter(Job.creation_date < one_week_ago)
             .filter(Job.state == "F")
         )
         old_jobs_2 = [an_id for an_id, in old_jobs_qry_2]
         to_clean = set(old_jobs).union(set(old_jobs_2))
-        logger.info("About to clean %s", to_clean)
+        logger.info("About to clean %d jobs %s", len(to_clean), to_clean)
         temp_for_job = TempDirForTasks(self.config.jobs_dir())
         for job_id in to_clean:
-            job_bo = JobBO.get_for_update(self.session, job_id)
-            temp_for_job.erase_for(job_id)
-            job_bo.delete()
+            # Commit each job, a bit inefficient but in case of trouble we have less de-sync with filesystem
+            with JobBO.get_for_update(self.session, job_id) as job_bo:
+                temp_for_job.archive_for(job_id, {JobServiceBase.JOB_LOG_FILE_NAME})
+                job_bo.archive()
         logger.info("Cleanup of old jobs done")

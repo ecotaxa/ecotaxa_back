@@ -1,5 +1,6 @@
 import logging
 
+from API_operations.helpers.Service import Service
 from starlette import status
 
 from tests.credentials import ADMIN_AUTH, USER_AUTH
@@ -34,9 +35,19 @@ def test_admin_images(database, fastapi, caplog):
     assert rsp.json() == "Digest for 0 images done."
 
 
-def test_nightly_job(fastapi, caplog):
+def test_nightly_job(database, fastapi, caplog, tstlogs):
     # TODO: Not a real test, as we can't know in advance when the test runs, so the output
     # can't be verified against a reference.
+
+    from test_export import test_export_roundtrip
+
+    # Generate a few jobs however, and warp them back in time
+    test_export_roundtrip(database, fastapi, caplog, tstlogs)  # Import/Export/Import
+    with Service() as sce:
+        sce.session.execute(
+            "update job set creation_date='2022-06-01' where id in (select id from job order by id desc limit 3)"
+        )
+        sce.session.commit()
 
     # Simple user cannot
     rsp = fastapi.get(NIGHTLY_URL, headers=USER_AUTH)
@@ -44,9 +55,24 @@ def test_nightly_job(fastapi, caplog):
 
     # Only Admin can
     caplog.set_level(logging.DEBUG)
-    rsp = fastapi.get(NIGHTLY_URL, headers=ADMIN_AUTH)
-    assert rsp.status_code == status.HTTP_200_OK
 
-    job_id = rsp.json()
-    job = wait_for_stable(job_id)
-    check_job_ok(job)
+    def do_nightly():
+        rsp = fastapi.get(NIGHTLY_URL, headers=ADMIN_AUTH)
+        assert rsp.status_code == status.HTTP_200_OK
+
+        job_id = rsp.json()
+        job = wait_for_stable(job_id)
+        check_job_ok(job)
+
+    do_nightly()
+    msgs = len(
+        [msg for msg in caplog.messages if msg.startswith("About to clean 3 jobs")]
+    )
+    assert msgs > 0
+
+    # Second cleanup must do nothing
+    do_nightly()
+    msgs = len(
+        [msg for msg in caplog.messages if msg.startswith("About to clean 0 jobs")]
+    )
+    assert msgs > 0

@@ -19,6 +19,7 @@ from DB.helpers.DBWriter import DBWriter
 from BO.TSVFile import TSVFile
 from FS.Vault import Vault
 from API_operations.exports.ForProject import ProjectExport
+from API_operations.admin.NightlyJob import NightlyJobService
 
 
 class EcoTaxaConfig(object):
@@ -34,6 +35,7 @@ def config() -> EcoTaxaConfig:
     TSVFile.REPORT_EVERY = 5
     ProjectExport.ROWS_REPORT_EVERY = 5
     ProjectExport.IMAGES_REPORT_EVERY = 7
+    NightlyJobService.REPORT_EVERY = 2
     # Empty Vault
     vault = Vault((HERE / "vault").as_posix())
     shutil.rmtree(vault.path.joinpath("0000").as_posix(), ignore_errors=True)
