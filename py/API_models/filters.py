@@ -75,11 +75,7 @@ class ProjectFiltersDict(TypedDict, total=False):
         in last. """
     seed_object_id: Optional[str]
     """
-    gpt a trouvé tout seul je sais pas comment enfin j'étais en debug avec un point d'arret
-    """
-    seed_object_ids: Optional[str]
-    """
-    gpt a trouvé tout seul je sais pas comment enfin j'étais en debug avec un point d'arret
+    Target objid for similarity search
     """
 
 
@@ -235,13 +231,8 @@ class _ProjectFilters2Model(DescriptiveModel):
     )
     seed_object_id = Field(
         title="Seed object id",
-        description="gpt a trouvé tout seul je sais pas comment enfin j'étais en debug avec un point d'arret",
+        description="Target objid for similarity search",
         example="1234",
-    )
-    seed_object_ids = Field(
-        title="Seed object ids",
-        description="gpt a trouvé tout seul je sais pas comment enfin j'étais en debug avec un point d'arret",
-        example="1234,5678",
     )
 
     class Config:
