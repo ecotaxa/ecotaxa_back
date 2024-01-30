@@ -81,10 +81,10 @@ class SimilaritySearchForProject(Service):
             where_clause_sql = "WHERE objcnnid = obh.objid"
 
         query = f"""
-            SELECT objcnnid, features <-> (
+            SELECT objcnnid, features::vector <-> (
                 SELECT features FROM {ObjectCNNFeatureVector.__tablename__}
                 WHERE objcnnid={target_id}
-            ) AS dist
+            )::vector AS dist
             FROM {ObjectCNNFeatureVector.__tablename__}, {from_.get_sql()}
             {where_clause_sql}
             ORDER BY dist LIMIT {limit};
