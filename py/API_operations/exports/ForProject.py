@@ -4,18 +4,26 @@
 #
 # Textual export of data. Presently TSV with images or not, XML.
 #
+import abc
 import csv
 import os
 import re
 import zipfile
 from pathlib import Path
-from typing import Optional, Tuple, TextIO, cast, Dict, List, Set, Any
+from typing import Optional, Tuple, TextIO, Dict, List, Set, Any
 
 from API_models.exports import (
     ExportRsp,
     ExportReq,
     ExportTypeEnum,
     SummaryExportGroupingEnum,
+    GeneralExportReq,
+    ExportSplitOptionsEnum,
+    ExportImagesOptionsEnum,
+    SummaryExportReq,
+    BackupExportReq,
+    SummaryExportQuantitiesOptionsEnum,
+    SummaryExportSumOptionsEnum,
 )
 from API_models.filters import ProjectFiltersDict
 from BO.Mappings import ProjectMapping
@@ -79,7 +87,7 @@ class ProjectExport(JobServiceBase):
     @staticmethod
     def deser_args(json_args: ArgsDict) -> None:
         json_args["req"] = ExportReq(**json_args["req"])
-        json_args["filters"] = cast(ProjectFiltersDict, json_args["filters"])
+        assert json_args["filters"]
 
     def do_background(self) -> None:
         """
@@ -117,6 +125,8 @@ class ProjectExport(JobServiceBase):
             req.with_images = False  # Thin single TSV
             req.only_first_image = False
             req.split_by = ""
+            req.with_internal_ids = False
+            req.coma_as_separator = False
             req.format_dates_times = False
             req.with_types_row = True
         elif req.exp_type == ExportTypeEnum.dig_obj_ident:
@@ -865,3 +875,100 @@ class ProjectExport(JobServiceBase):
         self.update_progress(90, msg)
 
         return 0
+
+
+class SpecializedProjectExport(ProjectExport):
+    """A specialized kind of export, transferring params to main one"""
+
+    def __init__(self, req: Any, filters: ProjectFiltersDict):
+        super().__init__(self.new_to_old(req), filters)
+        self.sreq = req  # The specialized request
+
+    @staticmethod
+    @abc.abstractmethod
+    def new_to_old(req: Any) -> ExportReq:
+        pass
+
+    def init_args(self, args: ArgsDict) -> ArgsDict:
+        args["req"] = self.sreq.dict()  # Serialize the specialized version
+        args["filters"] = self.filters
+        return args
+
+
+class GeneralProjectExport(SpecializedProjectExport):
+    JOB_TYPE = "GeneralExport"
+
+    @staticmethod
+    def new_to_old(req: GeneralExportReq) -> ExportReq:
+        old_split = (
+            req.split_by
+            if req.split_by
+            in (
+                ExportSplitOptionsEnum.sample,
+                ExportSplitOptionsEnum.acquisition,
+                ExportSplitOptionsEnum.taxon,
+            )
+            else ""
+        )
+        return ExportReq(
+            project_id=req.project_id,
+            exp_type=ExportTypeEnum.general_tsv,
+            with_images=req.with_images != ExportImagesOptionsEnum.none,
+            with_internal_ids=req.with_internal_ids,
+            with_types_row=req.with_types_row,
+            only_first_image=req.with_images == ExportImagesOptionsEnum.first,
+            split_by=old_split,
+            tsv_entities="OPASC",
+            only_annotations=req.only_annotations,
+            out_to_ftp=req.out_to_ftp,
+        )
+
+    @staticmethod
+    def deser_args(json_args: ArgsDict) -> None:
+        json_args["req"] = GeneralExportReq(**json_args["req"])
+
+
+class SummaryProjectExport(SpecializedProjectExport):
+    JOB_TYPE = "SummaryExport"
+
+    @staticmethod
+    def new_to_old(req: SummaryExportReq) -> ExportReq:
+        new_type_to_old = {
+            SummaryExportQuantitiesOptionsEnum.abundance: ExportTypeEnum.abundances,
+            SummaryExportQuantitiesOptionsEnum.biovolume: ExportTypeEnum.biovols,
+            SummaryExportQuantitiesOptionsEnum.concentration: ExportTypeEnum.concentrations,
+        }
+        new_level_to_old = {
+            SummaryExportSumOptionsEnum.none: SummaryExportGroupingEnum.just_by_taxon,
+            SummaryExportSumOptionsEnum.sample: SummaryExportGroupingEnum.by_sample,
+            SummaryExportSumOptionsEnum.acquisition: SummaryExportGroupingEnum.by_subsample,
+        }
+        return ExportReq(
+            project_id=req.project_id,
+            exp_type=new_type_to_old[req.quantity],
+            sum_subtotal=new_level_to_old[req.summarise_by],
+            pre_mapping=req.taxo_mapping,
+            formulae=req.formulae,
+            out_to_ftp=req.out_to_ftp,
+        )
+
+    @staticmethod
+    def deser_args(json_args: ArgsDict) -> None:
+        json_args["req"] = SummaryExportReq(**json_args["req"])
+
+
+class BackupProjectExport(SpecializedProjectExport):
+    JOB_TYPE = "BackupExport"
+
+    @staticmethod
+    def new_to_old(req: BackupExportReq) -> ExportReq:
+        return ExportReq(
+            project_id=req.project_id,
+            exp_type=ExportTypeEnum.backup,
+            with_images=True,
+            out_to_ftp=req.out_to_ftp,
+        )
+
+    @staticmethod
+    def deser_args(json_args: ArgsDict) -> None:
+        json_args["req"] = BackupExportReq(**json_args["req"])

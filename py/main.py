@@ -54,14 +54,8 @@ from API_models.exports import (
     TaxonomyRecast,
     DarwinCoreExportReq,
     GeneralExportReq,
-    ExportTypeEnum,
-    ExportImagesOptionsEnum,
-    SummaryExportGroupingEnum,
     SummaryExportReq,
-    SummaryExportQuantitiesOptionsEnum,
-    SummaryExportSumOptionsEnum,
     BackupExportReq,
-    ExportSplitOptionsEnum,
 )
 from API_models.filesystem import DirectoryModel
 from API_models.filters import ProjectFilters
@@ -117,7 +111,12 @@ from API_operations.admin.Database import DatabaseService
 from API_operations.admin.ImageManager import ImageManagerService
 from API_operations.admin.NightlyJob import NightlyJobService
 from API_operations.exports.DarwinCore import DarwinCoreExport
-from API_operations.exports.ForProject import ProjectExport
+from API_operations.exports.ForProject import (
+    ProjectExport,
+    GeneralProjectExport,
+    SummaryProjectExport,
+    BackupProjectExport,
+)
 from API_operations.imports.Import import FileImport
 from API_operations.imports.SimpleImport import SimpleImport
 from BG_operations.JobScheduler import JobScheduler
@@ -2292,29 +2291,7 @@ def export_object_set_general(
 
     🔒 Current user needs *at least Read* right on the requested project.
     """
-    old_split = (
-        request.split_by
-        if request.split_by
-        in (
-            ExportSplitOptionsEnum.sample,
-            ExportSplitOptionsEnum.acquisition,
-            ExportSplitOptionsEnum.taxon,
-        )
-        else ""
-    )
-    old_req = ExportReq(
-        project_id=request.project_id,
-        exp_type=ExportTypeEnum.general_tsv,
-        with_images=request.with_images != ExportImagesOptionsEnum.none,
-        with_internal_ids=request.with_internal_ids,
-        with_types_row=request.with_types_row,
-        only_first_image=request.with_images == ExportImagesOptionsEnum.first,
-        split_by=old_split,
-        tsv_entities="OPASC",
-        only_annotations=request.only_annotations,
-        out_to_ftp=request.out_to_ftp,
-    )
-    with ProjectExport(old_req, filters.base()) as sce:
+    with GeneralProjectExport(request, filters.base()) as sce:
         with RightsThrower():
             rsp = sce.run(current_user)
     return rsp
@@ -2336,25 +2313,7 @@ def export_object_set_summary(
 
     🔒 Current user needs *at least Read* right on the requested project.
     """
-    new_type_to_old = {
-        SummaryExportQuantitiesOptionsEnum.abundance: ExportTypeEnum.abundances,
-        SummaryExportQuantitiesOptionsEnum.biovolume: ExportTypeEnum.biovols,
-        SummaryExportQuantitiesOptionsEnum.concentration: ExportTypeEnum.concentrations,
-    }
-    new_level_to_old = {
-        SummaryExportSumOptionsEnum.none: SummaryExportGroupingEnum.just_by_taxon,
-        SummaryExportSumOptionsEnum.sample: SummaryExportGroupingEnum.by_sample,
-        SummaryExportSumOptionsEnum.acquisition: SummaryExportGroupingEnum.by_subsample,
-    }
-    old_req = ExportReq(
-        project_id=request.project_id,
-        exp_type=new_type_to_old[request.quantity],
-        sum_subtotal=new_level_to_old[request.summarise_by],
-        pre_mapping=request.taxo_mapping,
-        formulae=request.formulae,
-        out_to_ftp=request.out_to_ftp,
-    )
-    with ProjectExport(old_req, filters.base()) as sce:
+    with SummaryProjectExport(request, filters.base()) as sce:
         with RightsThrower():
             rsp = sce.run(current_user)
     return rsp
@@ -2377,13 +2336,7 @@ def export_object_set_backup(
 
     🔒 Current user needs *at least Read* right on the requested project.
     """
-    old_req = ExportReq(
-        project_id=request.project_id,
-        exp_type=ExportTypeEnum.backup,
-        with_images=True,
-        out_to_ftp=request.out_to_ftp,
-    )
-    with ProjectExport(old_req, filters.base()) as sce:
+    with BackupProjectExport(request, filters.base()) as sce:
         with RightsThrower():
             rsp = sce.run(current_user)
     return rsp
