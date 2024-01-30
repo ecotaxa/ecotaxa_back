@@ -233,6 +233,16 @@ class _ProjectFilters2Model(DescriptiveModel):
         description="Coma-separated list of annotators, i.e. persons who validated the classification in last.",
         example="34,67",
     )
+    seed_object_id = Field(
+        title="Seed object id",
+        description="gpt a trouvé tout seul je sais pas comment enfin j'étais en debug avec un point d'arret",
+        example="1234",
+    )
+    seed_object_ids = Field(
+        title="Seed object ids",
+        description="gpt a trouvé tout seul je sais pas comment enfin j'étais en debug avec un point d'arret",
+        example="1234,5678",
+    )
 
     class Config:
         schema_extra = {
