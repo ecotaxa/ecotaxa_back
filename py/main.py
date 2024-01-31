@@ -1674,8 +1674,6 @@ If no **unique order** is specified, the result can vary for same call and condi
             )
 
         object_ids = [with_p[0] for with_p in obj_with_parents]
-        print(sim_search_rsp.neighbor_ids)
-        print(object_ids)
         for objid in sim_search_rsp.neighbor_ids:
             if objid not in object_ids:
                 continue
