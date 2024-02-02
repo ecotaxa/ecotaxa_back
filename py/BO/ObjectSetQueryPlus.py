@@ -54,6 +54,7 @@ class ResultGrouping(enum.IntEnum):
     BY_SAMPLE = 2  # Aggregates are per sample
     BY_SUBSAMPLE = 4  # Aggregates are per subsample
     BY_PROJECT = 8  # Aggregates are per project
+    BY_STATUS = 16  # Aggregate per status as well
     BY_SAMPLE_AND_TAXO = BY_TAXO + BY_SAMPLE
     BY_SUBSAMPLE_AND_TAXO = BY_TAXO + BY_SUBSAMPLE
     BY_SAMPLE_SUBSAMPLE_AND_TAXO = BY_TAXO + BY_SUBSAMPLE + BY_SAMPLE
@@ -66,11 +67,16 @@ class ResultGrouping(enum.IntEnum):
     def without_taxo(cls, val: "ResultGrouping") -> "ResultGrouping":
         return val & ~cls.BY_TAXO  # type:ignore
 
+    @classmethod
+    def with_status(cls, val: "ResultGrouping") -> "ResultGrouping":
+        return val + cls.BY_STATUS  # type:ignore
+
 
 class ObjectSetQueryPlus(object):
     """ """
 
     COUNT_STAR = "COUNT(*)"
+    STATUS_COL = "obh.classif_qual"
     TAXONOMY_PK = "txo.id"
     SAMPLE_PK = "sam.sampleid"
     SUBSAMPLE_PK = "acq.acquisid"
@@ -106,6 +112,8 @@ class ObjectSetQueryPlus(object):
             self._check_select_contains("acq.", "prc.")
         if grouping & ResultGrouping.BY_SAMPLE:
             self._check_select_contains("sam.")
+        if grouping & ResultGrouping.BY_STATUS:
+            self._check_select_contains("obh.")
         self.grouping = grouping
         return self
 
@@ -226,6 +234,8 @@ class ObjectSetQueryPlus(object):
             ret.append(self.SUBSAMPLE_PK)
         if self.grouping & ResultGrouping.BY_TAXO:
             ret.append(self.TAXONOMY_PK)
+        if self.grouping & ResultGrouping.BY_STATUS:
+            ret.append(self.STATUS_COL)
         return ret
 
     def _compute_group_by(self) -> str:
@@ -297,7 +307,7 @@ class ObjectSetQueryPlus(object):
         pairs = []
         all_null: bool = True
         for from_txo, to_txo in self.taxo_mapping.items():
-            all_null = all_null and to_txo is None
+            all_null = all_null and (to_txo is None or to_txo == 0)
             to_val = "NULL" if (to_txo is None or to_txo == 0) else str(to_txo)
             pairs.append("(%d,%s)" % (from_txo, to_val))
         # PG needs a type if there is no value at all

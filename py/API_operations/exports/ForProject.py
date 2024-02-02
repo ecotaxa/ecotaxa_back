@@ -604,18 +604,21 @@ class ProjectExport(JobServiceBase):
         out_file = self.temp_for_jobs.base_dir_for(self.job_id) / self.out_file_name
         return out_file
 
-    def _grouping_from_req(self) -> ResultGrouping:
+    def _grouping_from_req(self, with_status_grouping: bool) -> ResultGrouping:
         req_sum = self.req.sum_subtotal
         if req_sum == SummaryExportGroupingEnum.just_by_taxon:
-            return ResultGrouping.BY_TAXO
+            ret = ResultGrouping.BY_TAXO
         elif req_sum == SummaryExportGroupingEnum.by_sample:
-            return ResultGrouping.BY_SAMPLE_AND_TAXO
+            ret = ResultGrouping.BY_SAMPLE_AND_TAXO
         elif req_sum == SummaryExportGroupingEnum.by_subsample:
-            return ResultGrouping.BY_SAMPLE_SUBSAMPLE_AND_TAXO
+            ret = ResultGrouping.BY_SAMPLE_SUBSAMPLE_AND_TAXO
         elif req_sum == SummaryExportGroupingEnum.by_project:
             assert False, "No collections yet to get multiple projects"
         else:
             assert False, "Incorrect required grouping : %s" % req_sum
+        if with_status_grouping:
+            ret = ResultGrouping.with_status(ret)
+        return ret
 
     def create_summary(self, src_project: Project) -> int:
         req = self.req
@@ -653,7 +656,7 @@ class ProjectExport(JobServiceBase):
             aug_qry.add_selects(["sam.orig_id", "acq.orig_id"])
         # We want the count, that's the goal of all this
         aug_qry.add_selects(["txo.display_name", aug_qry.COUNT_STAR])
-        aug_qry.set_grouping(self._grouping_from_req())
+        aug_qry.set_grouping(self._grouping_from_req(False))
 
         msg = "Writing to file %s" % out_file
         self.update_progress(50, msg)
@@ -750,19 +753,25 @@ class ProjectExport(JobServiceBase):
         object_set: DescribedObjectSet,
     ):
         """
-        Produce lines with 0 abundance/concentration/biovolume for relevant (sample, category) pairs
-        or (sample, acquisition, category) triplets.
+        Produce lines with 0 abundance/concentration/biovolume for relevant (sample, status, category) triplets
+        or (sample, acquisition, status, category) tuples.
         Specs: https://github.com/ecotaxa/ecotaxa/issues/615#issuecomment-1158781701
         """
         # Get all sampling_units (from the samples or subsamples AKA acquisition table)
         sampling_units_qry = (
             ObjectSetQueryPlus(object_set.without_filtering_taxo())
             .add_selects(self._id_columns_from_req())
-            .set_aliases({"sam.orig_id": "sampleid", "acq.orig_id": "acquisid"})
-            .set_grouping(ResultGrouping.without_taxo(self._grouping_from_req()))
+            .set_aliases(
+                {
+                    "sam.orig_id": "sampleid",
+                    "acq.orig_id": "acquisid",
+                    "obh.classif_qual": "status",
+                }
+            )
+            .set_grouping(ResultGrouping.without_taxo(self._grouping_from_req(True)))
         )
         all_sampling_units: Set[Tuple] = set()
-        # Tuples here have either one or two values
+        # Tuples here have either one, two or three values
         for a_row in sampling_units_qry.get_result(self.ro_session):
             all_sampling_units.add(tuple([a_row[id_col] for id_col in id_cols]))
         # Get possible taxa names
@@ -798,7 +807,7 @@ class ProjectExport(JobServiceBase):
                     not_presents.append(a_not_present)
         return not_presents
 
-    def _id_columns_from_req(self):
+    def _id_columns_from_req(self) -> List[str]:
         ret = []
         req = self.req
         if req.sum_subtotal == SummaryExportGroupingEnum.just_by_taxon:
@@ -807,7 +816,7 @@ class ProjectExport(JobServiceBase):
             ret = ["sam.orig_id"]
         elif req.sum_subtotal == SummaryExportGroupingEnum.by_subsample:
             ret = ["sam.orig_id", "acq.orig_id"]
-        return ret
+        return ret + ["obh.classif_qual"]
 
     def create_sci_summary(self, src_project: Project) -> int:
         """
@@ -818,8 +827,9 @@ class ProjectExport(JobServiceBase):
         exp_type = req.exp_type
         out_file = self._get_summary_file(src_project)
 
-        # Ensure we work on validated objects only
-        self.filters["statusfilter"] = "V"
+        # Ensure we work on validated objects only.
+        # Not anymore, should user need to narrow the export the filters are available.
+        # self.filters["statusfilter"] = "V"
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(
             self.ro_session, src_project, user_id, self.filters
@@ -839,6 +849,7 @@ class ProjectExport(JobServiceBase):
                 "sam.orig_id": "sampleid",
                 "acq.orig_id": "acquisid",
                 "txo.display_name": "taxonid",
+                "obh.classif_qual": "status",
             }
         )
         id_cols = self._id_columns_from_req()
@@ -858,7 +869,7 @@ class ProjectExport(JobServiceBase):
             zero_col = self.create_sci_biovolumes_summary(aug_qry)
 
         # Group according to request
-        aug_qry.set_grouping(self._grouping_from_req())
+        aug_qry.set_grouping(self._grouping_from_req(True))
 
         msg = "Computing zero lines to add"
         logger.info(msg)

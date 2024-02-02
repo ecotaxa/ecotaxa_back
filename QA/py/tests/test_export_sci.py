@@ -1,7 +1,8 @@
 import logging
-from typing import Dict
+from typing import Dict, List
 
 from starlette import status
+
 from tests.credentials import CREATOR_AUTH, ADMIN_AUTH, ADMIN_USER_ID
 from tests.export_shared import download_and_check
 from tests.formulae import uvp_formulae
@@ -142,15 +143,17 @@ def test_export_conc_biovol(database, fastapi, caplog):
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     prj_json = rsp.json()
     # Validate everything, otherwise no export.
-    obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
+    obj_ids: List[int] = _prj_query(fastapi, CREATOR_AUTH, prj_id)
     assert len(obj_ids) == 15
     url = OBJECT_SET_CLASSIFY_URL
-    classifications = [-1 for _obj in obj_ids]  # Keep current
+    obj_ids.sort()
+    just_some_objs = obj_ids[::2]
+    classifications = [-1 for _obj in just_some_objs]  # Keep current
     rsp = fastapi.post(
         url,
         headers=ADMIN_AUTH,
         json={
-            "target_ids": obj_ids,
+            "target_ids": just_some_objs,
             "classifications": classifications,
             "wanted_qualification": "V",
         },
@@ -198,6 +201,24 @@ def test_export_conc_biovol(database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
     download_and_check(fastapi, job_id, "biovolumes_by_subsample", only_hdr=True)
+    # log = get_log_file(fastapi, job_id)
+
+    # Biovolume export by subsample AKA Acquisition, only validated ones.
+    # biovols are identical to un-filtered ones
+    req_and_filters = {
+        "filters": {"statusfilter": "V"},
+        "request": {
+            "project_id": prj_id,
+            "quantity": "biovolume",
+            "summarise_by": "acquisition",
+        },
+    }
+    rsp = fastapi.post(
+        OBJECT_SET_SUMMARY_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_check(fastapi, job_id, "biovolumes_by_subsample_only_v", only_hdr=True)
     # log = get_log_file(fastapi, job_id)
 
 

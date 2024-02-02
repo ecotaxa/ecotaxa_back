@@ -1,8 +1,8 @@
-taxonid	count
-Cyclopoida	1
-Oncaeidae	2
-detritus	4
-egg<other	1
-other<living	1
-small<egg	1
-t001	1
+status	taxonid	count
+V	Cyclopoida	1
+V	Oncaeidae	2
+V	detritus	4
+V	egg<other	1
+V	other<living	1
+V	small<egg	1
+V	t001	1

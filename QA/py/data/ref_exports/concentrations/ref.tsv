@@ -1,19 +1,19 @@
-sampleid	taxonid	count
-m106_mn01_n1_sml	Cyclopoida	1
-m106_mn01_n1_sml	Oncaeidae	2
-m106_mn01_n1_sml	other<living	1
-m106_mn01_n1_sml	t001	1
-m106_mn01_n1_sml	detritus	0
-m106_mn01_n1_sml	egg<other	0
-m106_mn01_n2_sml	detritus	2
-m106_mn01_n2_sml	egg<other	1
-m106_mn01_n2_sml	Cyclopoida	0
-m106_mn01_n2_sml	Oncaeidae	0
-m106_mn01_n2_sml	other<living	0
-m106_mn01_n2_sml	t001	0
-m106_mn01_n3_sml	detritus	2
-m106_mn01_n3_sml	egg<other	1
-m106_mn01_n3_sml	Cyclopoida	0
-m106_mn01_n3_sml	Oncaeidae	0
-m106_mn01_n3_sml	other<living	0
-m106_mn01_n3_sml	t001	0
+sampleid	status	taxonid	count
+m106_mn01_n1_sml	V	Cyclopoida	1
+m106_mn01_n1_sml	V	Oncaeidae	2
+m106_mn01_n1_sml	V	other<living	1
+m106_mn01_n1_sml	V	t001	1
+m106_mn01_n1_sml	V	detritus	0
+m106_mn01_n1_sml	V	egg<other	0
+m106_mn01_n2_sml	V	detritus	2
+m106_mn01_n2_sml	V	egg<other	1
+m106_mn01_n2_sml	V	Cyclopoida	0
+m106_mn01_n2_sml	V	Oncaeidae	0
+m106_mn01_n2_sml	V	other<living	0
+m106_mn01_n2_sml	V	t001	0
+m106_mn01_n3_sml	V	detritus	2
+m106_mn01_n3_sml	V	egg<other	1
+m106_mn01_n3_sml	V	Cyclopoida	0
+m106_mn01_n3_sml	V	Oncaeidae	0
+m106_mn01_n3_sml	V	other<living	0
+m106_mn01_n3_sml	V	t001	0
