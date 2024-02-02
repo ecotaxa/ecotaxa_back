@@ -626,17 +626,13 @@ class TSVFile(object):
                 elif a_field == "object_time":
                     cached_field_value = ObjectHeader.time_from_txt(csv_val)
                 elif field_name == "classif_when":
-                    v2 = clean_value(lig.get("object_annotation_time", "000000")).zfill(
+                    date = ObjectHeader.date_from_txt(csv_val)
+                    csv_val_time = clean_value(lig.get("object_annotation_time", "000000")).zfill(
                         6
                     )
-                    cached_field_value = datetime.datetime(
-                        int(csv_val[0:4]),
-                        int(csv_val[4:6]),
-                        int(csv_val[6:8]),
-                        int(v2[0:2]),
-                        int(v2[2:4]),
-                        int(v2[4:6]),
-                    )
+                    time = ObjectHeader.time_from_txt(csv_val_time)
+                    
+                    cached_field_value = datetime.datetime.combine(date, time)
                     # no caching of this one as it depends on another value on same line
                     cache_key = "0"
                 elif field_name == "classif_id":
