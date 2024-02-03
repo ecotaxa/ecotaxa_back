@@ -627,11 +627,11 @@ class TSVFile(object):
                     cached_field_value = ObjectHeader.time_from_txt(csv_val)
                 elif field_name == "classif_when":
                     date = ObjectHeader.date_from_txt(csv_val)
-                    csv_val_time = clean_value(lig.get("object_annotation_time", "000000")).zfill(
-                        6
+                    csv_val_time = clean_value(
+                        lig.get("object_annotation_time", "00:00:00")
                     )
                     time = ObjectHeader.time_from_txt(csv_val_time)
-                    
+
                     cached_field_value = datetime.datetime.combine(date, time)
                     # no caching of this one as it depends on another value on same line
                     cache_key = "0"
@@ -1003,14 +1003,17 @@ class TSVFile(object):
         """
         latitude_was_seen = False
         predefined_mapping = GlobalMapping.PREDEFINED_FIELDS
+        second_mapping = GlobalMapping.DOUBLED_FIELDS
         custom_mapping = how.custom_mapping
         for raw_field, a_field in self.clean_fields.items():
             m = predefined_mapping.get(a_field)
             if m is None:
-                m = custom_mapping.search_field(a_field)
-                # No mapping, not stored
+                m = second_mapping.get(a_field)
                 if m is None:
-                    continue
+                    m = custom_mapping.search_field(a_field)
+                    # No mapping, not stored
+                    if m is None:
+                        continue
             raw_val = lig.get(raw_field)
             # Try to get the value from the cache
             cache_key = (raw_field, raw_val)
@@ -1056,7 +1059,7 @@ class TSVFile(object):
                     )
                 elif a_field == "object_annotation_category_id":
                     diag.classif_id_seen.add(int(csv_val))
-            elif a_field == "object_date":
+            elif a_field in ("object_date", "object_annotation_date"):
                 try:
                     ObjectHeader.date_from_txt(csv_val)
                 except ValueError:
@@ -1064,7 +1067,7 @@ class TSVFile(object):
                         "Invalid Date value '%s' for Field '%s' in file %s."
                         % (csv_val, raw_field, self.relative_name)
                     )
-            elif a_field == "object_time":
+            elif a_field in ("object_time", "object_annotation_time"):
                 try:
                     ObjectHeader.time_from_txt(csv_val)
                 except ValueError:

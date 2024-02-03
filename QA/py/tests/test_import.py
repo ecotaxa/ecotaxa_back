@@ -385,10 +385,12 @@ def test_import_issues(database, caplog):
         "Invalid Date value '20140433' for Field 'object_date' in file ecotaxa_m106_mn01_n3_sml.tsv.",
         "Invalid Time value '9920' for Field 'object_time' in file ecotaxa_m106_mn01_n3_sml.tsv.",
         "Invalid Annotation Status 'predit' for Field 'object_annotation_status' in file ecotaxa_m106_mn01_n3_sml.tsv.",
+        "Invalid Date value '2015-11-31' for Field 'object_annotation_date' in file ecotaxa_m106_mn01_n3_sml.tsv.",
+        "Invalid Time value '5:31' for Field 'object_annotation_time' in file ecotaxa_m106_mn01_n3_sml.tsv.",
         "Missing Image 'm106_mn01_n3_sml_1081.jpg2' in file ecotaxa_m106_mn01_n3_sml.tsv. ",
         "Error while reading image 'm106_mn01_n3_sml_corrupted_image.jpg' "
         "from file ecotaxa_m106_mn01_n3_sml.tsv: cannot identify image file '.../m106_mn01_n3_sml_corrupted_image.jpg' <class 'PIL.UnidentifiedImageError'>",
-        "Missing object_id in line '5' of file ecotaxa_m106_mn01_n3_sml.tsv. ",
+        "Missing object_id in line '6' of file ecotaxa_m106_mn01_n3_sml.tsv. ",
         "Missing Image 'nada.png' in file ecotaxa_m106_mn01_n3_sml.tsv. ",
     ]
 

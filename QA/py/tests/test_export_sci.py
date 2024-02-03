@@ -136,7 +136,9 @@ def test_export_conc_biovol(database, fastapi, caplog):
     set_formulae_in_project(fastapi, prj_id, uvp_formulae)
     # Add some data for calculations
     add_concentration_data(fastapi, prj_id)
-    # Add a sample with weird data in free columns
+    # Add a sample with weird data in free columns:
+    # rightmost column acq_sub_part in TSV has unusual values
+    # date format is mixed
     do_import(prj_id, WEIRD_DIR, ADMIN_USER_ID)
     # Get the project for update
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
