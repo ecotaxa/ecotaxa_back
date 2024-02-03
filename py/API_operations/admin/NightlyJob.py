@@ -5,6 +5,7 @@
 # Maintenance operations on the DB.
 #
 import datetime
+from dataclasses import dataclass
 
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
 from BO.Job import JobBO
@@ -14,6 +15,8 @@ from BO.Taxonomy import TaxonomyBO
 from DB.Job import JobIDT, Job
 from DB.Project import Project, ProjectIDListT
 from DB.User import Role
+from DB.helpers import Result
+from DB.helpers.Direct import text
 from FS.TempDirForTasks import TempDirForTasks
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 
@@ -72,7 +75,13 @@ class NightlyJobService(JobServiceBase):
         self.compute_all_projects_stats(all_prj_ids, 30, 60)
         self.refresh_taxo_tree_stats()
         self.clean_old_jobs()
-        self.set_job_result(errors=[], infos={"status": "ok"})
+        const_status = self.check_consistency()
+        if const_status is False:
+            self.set_job_result(
+                errors=["See log for consistency problems"], infos={"status": "error"}
+            )
+        else:
+            self.set_job_result(errors=[], infos={"status": "ok"})
         logger.info("Job done")
 
     def progress_update(
@@ -159,3 +168,70 @@ class NightlyJobService(JobServiceBase):
                 temp_for_job.archive_for(job_id, {JobServiceBase.JOB_LOG_FILE_NAME})
                 job_bo.archive()
         logger.info("Cleanup of old jobs done")
+
+    def check_consistency(self) -> bool:
+        """Ensure data is how it should be"""
+        # So far just focus on Predicted state as we need consistent data to move to a new system.
+        checks = [
+            ConsistencyCheckAndFix(
+                "There is a (user-visible) classif_id for 'P'",
+                "select count(1) as res from obj_head where classif_qual='P' and classif_id is null",
+                0,
+                "need investigation",
+            ),
+            ConsistencyCheckAndFix(
+                "Columns classif_auto_id and classif_auto_when are present for 'P', supposed to come from last prediction",
+                "select count(1) as res from obj_head where classif_qual='P' and classif_auto_id is null",
+                0,
+                """update obj_head
+set classif_auto_id   = classif_id,
+    classif_auto_score=1,
+    classif_auto_when=coalesce(classif_when, '1970-01-01')
+where classif_qual = 'P'
+  and classif_auto_id is null""",
+            ),
+            ConsistencyCheckAndFix(
+                "'P' relates to _auto fields, plain ones are for users - general case we have a complete prediction",
+                "select count(1) as res from obj_head where classif_qual='P' and (classif_who is not null or classif_when is not null) and classif_auto_id is not null",
+                0,
+                """update obj_head
+set classif_who   = NULL,
+    classif_when  = NULL
+where classif_qual = 'P'
+  and (classif_who is not null or classif_when is not null)
+  and classif_auto_id is not null""",
+            ),
+            ConsistencyCheckAndFix(
+                "'P' relates to _auto fields, plain ones are for users - special case of imported as 'P' with no other info",
+                "select count(1) as res from obj_head where classif_qual='P' and (classif_who is not null or classif_when is not null) and classif_auto_id is null",
+                0,
+                """update obj_head
+set classif_who   = NULL,
+    classif_when  = NULL
+where classif_qual = 'P'
+  and (classif_who is not null or classif_when is not null)
+  and classif_auto_id is null""",
+            ),
+        ]
+        no_problem = True
+        for a_check in checks:
+            logger.info("Consistency: %s", a_check.background)
+            res: Result = self.ro_session.execute(text(a_check.query))
+            actual = next(res)[0]
+            if actual != a_check.expected:
+                logger.info("Failed: expected %s actual %s", actual, a_check.expected)
+                logger.info("Query was: %s", a_check.query)
+                logger.info(
+                    "_POTENTIAL_ SQL to fix (but better fix root cause): %s",
+                    a_check.fix,
+                )
+                no_problem = False
+        return no_problem
+
+
+@dataclass
+class ConsistencyCheckAndFix(object):
+    background: str
+    query: str
+    expected: int
+    fix: str
