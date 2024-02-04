@@ -73,18 +73,19 @@ class NightlyJobService(JobServiceBase):
         all_prj_ids.sort()
         self.compute_all_projects_taxo_stats(all_prj_ids, 0, 30)
         self.compute_all_projects_stats(all_prj_ids, 30, 60)
-        self.refresh_taxo_tree_stats()
-        self.clean_old_jobs()
-        const_status = self.check_consistency()
+        self.refresh_taxo_tree_stats(60)
+        self.clean_old_jobs(75)
+        const_status = self.check_consistency(80, 100)
         if const_status is False:
             self.set_job_result(
                 errors=["See log for consistency problems"], infos={"status": "error"}
             )
         else:
             self.set_job_result(errors=[], infos={"status": "ok"})
+        self.update_progress(100, "Done")
         logger.info("Job done")
 
-    def progress_update(
+    def stats_progress_update(
         self, start: int, chunk: ProjectIDListT, total: int, end: int
     ) -> None:
         logger.info("Done for %s", chunk)
@@ -107,7 +108,7 @@ class NightlyJobService(JobServiceBase):
             self.session.commit()
             chunk.append(proj_id)
             if len(chunk) == self.REPORT_EVERY:
-                self.progress_update(start, chunk, total, end)
+                self.stats_progress_update(start, chunk, total, end)
         logger.info("Done for %s", chunk)
 
     def compute_all_projects_stats(
@@ -125,24 +126,26 @@ class NightlyJobService(JobServiceBase):
             self.session.commit()
             chunk.append(proj_id)
             if len(chunk) == self.REPORT_EVERY:
-                self.progress_update(start, chunk, total, end)
+                self.stats_progress_update(start, chunk, total, end)
         logger.info("Done for %s", chunk)
 
-    def refresh_taxo_tree_stats(self) -> None:
+    def refresh_taxo_tree_stats(self, start: int) -> None:
         """
         Recompute taxonomy summaries.
         """
+        self.update_progress(start, "Recomputing taxonomy stats")
         logger.info("Starting recompute of taxonomy stats")
         TaxonomyBO.compute_stats(self.session)
         self.session.commit()
         logger.info("Recompute of taxonomy stats done")
 
-    def clean_old_jobs(self) -> None:
+    def clean_old_jobs(self, start: int) -> None:
         """
         Reclaim space on disk (and in DB) for old jobs.
         Rules: Jobs older than 30 days are erased whatever
                Jobs older than 1 week are erased if they ran OK.
         """
+        self.update_progress(start, "Recomputing taxonomy stats")
         logger.info("Starting cleanup of old jobs")
         thirty_days_ago = datetime.datetime.today() - datetime.timedelta(days=30)
         old_jobs_qry_1 = (
@@ -169,7 +172,7 @@ class NightlyJobService(JobServiceBase):
                 job_bo.archive()
         logger.info("Cleanup of old jobs done")
 
-    def check_consistency(self) -> bool:
+    def check_consistency(self, start: int, end: int) -> bool:
         """Ensure data is how it should be"""
         # So far just focus on Predicted state as we need consistent data to move to a new system.
         checks = [
@@ -214,12 +217,17 @@ where classif_qual = 'P'
             ),
         ]
         no_problem = True
-        for a_check in checks:
+        total = len(checks)
+        for idx, a_check in enumerate(checks):
+            progress = round(start + (end - start) / total * idx)
+            self.update_progress(
+                progress, "Checking consistency: %s" % a_check.background
+            )
             logger.info("Consistency: %s", a_check.background)
             res: Result = self.ro_session.execute(text(a_check.query))
             actual = next(res)[0]
             if actual != a_check.expected:
-                logger.info("Failed: expected %s actual %s", actual, a_check.expected)
+                logger.info("Failed: expected %s actual %s", a_check.expected, actual)
                 logger.info("Query was: %s", a_check.query)
                 logger.info(
                     "_POTENTIAL_ SQL to fix (but better fix root cause): %s",
