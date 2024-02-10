@@ -59,7 +59,9 @@ $$
                 GET DIAGNOSTICS row_count = ROW_COUNT;
                 RAISE NOTICE '%: Done %, % lines',current_time,cp_objid,row_count;
                 COMMIT;
-                cp_objid = (select max(objid) from objectsclassifhisto2);
+                cp_objid = (select max(objid) from (select objid from objectsclassifhisto
+                where objid > cp_objid order by objid
+                limit chunk) done);
             END LOOP;
     END;
 $$;
@@ -87,8 +89,10 @@ ALTER TABLE ONLY public.objectsclassifhisto2
 --
 -- Name: objectsclassifhisto objectsclassifhisto_objid_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
-
 ALTER TABLE ONLY public.objectsclassifhisto
+    RENAME CONSTRAINT objectsclassifhisto_objid_fkey TO objectsclassifhisto_objid_fkey_old;
+
+ALTER TABLE ONLY public.objectsclassifhisto2
     ADD CONSTRAINT objectsclassifhisto_objid_fkey FOREIGN KEY (objid) REFERENCES public.obj_head(objid) ON DELETE CASCADE;
 
 ALTER TABLE public.objectsclassifhisto RENAME TO objectsclassifhisto_old;
