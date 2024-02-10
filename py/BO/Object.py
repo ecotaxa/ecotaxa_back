@@ -73,6 +73,10 @@ class ObjectBO(MappedEntity):
         self.project_id = self.header.acquisition.sample.projid
         # noinspection PyTypeChecker
         self.images: List[Image] = [an_img for an_img in self.header.all_images]
+        # Always null fields or unpredictable fields kept for API identity
+        self.similarity = None
+        self.classif_crossvalidation_id = None
+        self.random_value = 0
 
     def get_history(self) -> HistoricalClassificationListT:
         """
@@ -111,6 +115,8 @@ class ObjectBO(MappedEntity):
                 return "obh." + name
             elif name == "imgcount":
                 return "(SELECT COUNT(img2.imgrank) FROM images img2 WHERE img2.objid = obh.objid) AS imgcount"
+            elif name == "random_value":
+                return "HASHTEXT(obh.orig_id)"
         elif prfx == "fre":
             if name in mapping.tsv_cols_to_real:
                 mpg = mapping.tsv_cols_to_real[name]

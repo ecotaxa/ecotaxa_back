@@ -4,7 +4,6 @@
 #
 import csv
 import datetime
-import random
 import sys
 from collections import OrderedDict
 from pathlib import Path
@@ -744,7 +743,7 @@ class TSVFile(object):
             else:
                 # or create it
                 # object_head_to_write.projid = how.prj_id
-                object_head_to_write.random_value = random.randint(1, 99999999)
+                # object_head_to_write.random_value = random.randint(1, 99999999)
                 # Below left NULL @see self.update_counts_and_img0
                 # object_head_to_write.img0id = XXXXX
                 ret = 3  # new image + new object_head + new object_fields

@@ -73,18 +73,9 @@ class _ObjectHeaderModel(DescriptiveModel):
         description="Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification date.",
         example="2021-09-21T14:59:01.007110",
     )
-    classif_crossvalidation_id = Field(
-        title="Classification crossvalidation Id",
-        description="Always NULL in prod.",
-        example="null",
-    )
     complement_info = Field(
         title="Complement info", description="", example="Part of ostracoda"
     )
-    similarity = Field(
-        title="Similarity", description="Always NULL in prod.", example="null"
-    )
-    random_value = Field(title="random_value", description="")
     object_link = Field(
         title="Object link",
         description="Object link.",
@@ -182,6 +173,23 @@ class ObjectModel(ObjectHeaderModel):
         description="Free columns from object mapping in project.",
         example={"area": 49.0, "mean": 232.27, "stddev": 2.129},
         default={},
+    )
+    classif_crossvalidation_id: Optional[int] = Field(
+        title="Classification crossvalidation Id",
+        description="Always NULL, kept for compat.",
+        example="null",
+        default=None,
+    )
+    similarity: Optional[float] = Field(
+        title="Similarity",
+        description="Always NULL, kept for compat.",
+        example="null",
+        default=None,
+    )
+    random_value: int = Field(
+        title="random_value",
+        description="Random value associated to an image",
+        example=1234,
     )
 
 

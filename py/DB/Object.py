@@ -30,8 +30,6 @@ from .Acquisition import Acquisition
 from .Image import Image
 from .Project import Project, ProjectIDT
 from .Sample import Sample
-from .helpers import Result
-from .helpers.Direct import text
 from .helpers.ORM import Model
 
 # Typings
@@ -58,50 +56,55 @@ for k, v in classif_qual.items():
 class ObjectHeader(Model):
     __tablename__ = "obj_head"
     # Self
-    objid = Column(BIGINT, Sequence("seq_objects"), primary_key=True)
+    objid = Column(BIGINT, Sequence("seq_objects"), primary_key=True)  # 8 bytes align d
     # Parent
     acquisid = Column(
         INTEGER, ForeignKey("acquisitions.acquisid", ondelete="CASCADE"), nullable=False
-    )
-    # User-provided identifier
-    orig_id = Column(VARCHAR(255), nullable=False)
+    )  # 4 bytes align i
+    # User-visible classification
+    classif_id = Column(INTEGER)  # 4 bytes align i
 
-    objdate = Column(DATE)
-    objtime = Column(TIME)
-
-    latitude = Column(DOUBLE_PRECISION)
-    longitude = Column(DOUBLE_PRECISION)
-    depth_min = Column(FLOAT)
-    depth_max = Column(FLOAT)
+    objtime = Column(TIME)  # 8 bytes align d
+    latitude = Column(DOUBLE_PRECISION)  # 8 bytes align d
+    longitude = Column(DOUBLE_PRECISION)  # 8 bytes align d
+    depth_min = Column(FLOAT)  # AKA DOUBLE_PRECISION, 8 bytes align d
+    depth_max = Column(
+        FLOAT
+    )  # AKA DOUBLE_PRECISION, 8 bytes align d # max = 99999999999 conventional value prevents move to float4
+    objdate = Column(DATE)  # 4 bytes align i
     #
-    sunpos = Column(CHAR(1))  # Sun position, from date, time and coords
-    #
-    classif_id = Column(INTEGER)
-    # The following is logically out of this block of 4, because depending on its value,
+    # Depending on its value,
     # - it's the other classif_* columns which reflecting the "last state"
     # - or the classif_auto_* ones.
-    classif_qual = Column(CHAR(1))
-    classif_who = Column(Integer, ForeignKey("users.id"))
-    classif_when = Column(TIMESTAMP)
+    classif_qual = Column(CHAR(1))  # 2 bytes (len + content) align c as len < 127
+    #
+    sunpos = Column(
+        CHAR(1)
+    )  # Sun position, from date, time and coords # 2 bytes (len + content) align c as len < 127
+    classif_when = Column(TIMESTAMP)  # 8 bytes align d
+    classif_who = Column(Integer, ForeignKey("users.id"))  # 4 bytes align i
 
     # The following 3 are set if the object was ever predicted, then they remain
     # forever with these values. They reflect the "last state" only if classif_qual is 'P'.
-    classif_auto_id = Column(INTEGER)
-    classif_auto_score = Column(DOUBLE_PRECISION)
-    # TODO: is NULL on prod' DB even if classif_qual='P' and other classif_auto_* are set
-    classif_auto_when = Column(TIMESTAMP)
+    classif_auto_id = Column(INTEGER)  # 4 bytes align i
+    # TODO: is sometimes NULL on prod' DB even if classif_qual='P' and other classif_auto_* are set
+    classif_auto_when = Column(TIMESTAMP)  # 8 bytes align d
+    classif_auto_score = Column(DOUBLE_PRECISION)  # 8 bytes align d
 
-    classif_crossvalidation_id = Column(INTEGER)  # Always NULL in prod'
+    # classif_crossvalidation_id = Column(INTEGER)  # TODO: Always NULL in prod' # 4 bytes align i
 
-    complement_info = Column(VARCHAR)  # e.g. "Part of ostracoda"
-
-    similarity = Column(DOUBLE_PRECISION)  # Always NULL in prod'
+    # similarity = Column(DOUBLE_PRECISION)  # TODO: Always NULL in prod' # 8 bytes align d
 
     # TODO: Why random? It makes testing a bit more difficult
-    random_value = Column(INTEGER)
+    # random_value = Column(INTEGER)  # 4 bytes align i
 
-    # TODO: Can't see any value in DB
+    # User-provided identifier
+    orig_id = Column(VARCHAR(255), nullable=False)  # len+1 bytes, align i if len > 127
+
+    # 176M values in DB as of 2024-02-02
     object_link = Column(VARCHAR(255))
+
+    complement_info = Column(VARCHAR)  # e.g. "Part of ostracoda"
 
     # The relationships are created in Relations.py but the typing here helps the IDE
     fields: ObjectFields
@@ -117,13 +120,11 @@ class ObjectHeader(Model):
     def fetch_existing_objects(
         cls, session: Session, prj_id: ProjectIDT
     ) -> Dict[str, int]:
-        # TODO: Why using the view?
-        sql = text(
-            "SELECT o.orig_id, o.objid " "  FROM objects o " " WHERE o.projid = :prj"
-        )
-        res: Result = session.execute(sql, {"prj": prj_id})
-        ret = {orig_id: objid for orig_id, objid in res}
-        return ret  # type: ignore
+        qry = session.query(ObjectHeader.orig_id, ObjectHeader.objid)
+        qry = qry.join(Acquisition).join(Sample).join(Project)
+        qry = qry.filter(Project.projid == prj_id)
+        ret = {orig_id: objid for orig_id, objid in qry}
+        return ret
 
     @classmethod
     def fetch_existing_ranks(cls, session: Session, prj_id) -> Dict[int, Set[int]]:
@@ -216,29 +217,33 @@ for i in range(1, 501):
 for i in range(1, 21):
     setattr(ObjectFields, "t%02d" % i, Column(VARCHAR(250)))
 
+# Nearly-always used index for recursive descent into object tree, e.g. in manual classification page.
+# Also for FK checks during deletion
 Index(
-    "is_objectsacqclassifqual",
+    "is_objectsacquisition",
     ObjectHeader.__table__.c.acquisid,
-    ObjectHeader.__table__.c.classif_id,
-    ObjectHeader.__table__.c.classif_qual,
 )
-Index(
-    "is_objectsacqrandom",
-    ObjectHeader.__table__.c.acquisid,
-    ObjectHeader.__table__.c.random_value,
-    ObjectHeader.__table__.c.classif_qual,
-)
+# Index(
+#     "is_objectsacqrandom",
+#     ObjectHeader.__table__.c.acquisid,
+#     ObjectHeader.__table__.c.random_value,
+#     ObjectHeader.__table__.c.classif_qual,
+# )
+# For finding globally objects in some depth range
 Index(
     "is_objectsdepth",
     ObjectHeader.__table__.c.depth_max,
     ObjectHeader.__table__.c.depth_min,
     ObjectHeader.__table__.c.acquisid,
 )
+# For finding globally objects in some geo range
 Index(
     "is_objectslatlong",
     ObjectHeader.__table__.c.latitude,
     ObjectHeader.__table__.c.longitude,
+    ObjectHeader.__table__.c.acquisid,
 )
+# For finding globally objects in some time range
 Index(
     "is_objectstime",
     ObjectHeader.__table__.c.objtime,
@@ -249,8 +254,6 @@ Index(
     ObjectHeader.__table__.c.objdate,
     ObjectHeader.__table__.c.acquisid,
 )
-# For FK checks during deletion
-Index("is_objectsacquisition", ObjectHeader.__table__.c.acquisid)
 
 DEFAULT_CLASSIF_HISTORY_DATE = "TO_TIMESTAMP(0)"
 
@@ -259,14 +262,16 @@ class ObjectsClassifHisto(Model):
     __tablename__ = "objectsclassifhisto"
     objid = Column(
         BIGINT, ForeignKey("obj_head.objid", ondelete="CASCADE"), primary_key=True
-    )
+    )  # 8 bytes align d
     # TODO: FK on taxonomy
-    classif_date = Column(TIMESTAMP, primary_key=True)
-    classif_type = Column(CHAR(1))  # A : Automatic, M : Manual
-    classif_id = Column(INTEGER)
-    classif_qual = Column(CHAR(1))
-    classif_who = Column(Integer, ForeignKey("users.id"))
-    classif_score = Column(DOUBLE_PRECISION)
+    classif_date = Column(TIMESTAMP, primary_key=True)  # 8 bytes align d
+    classif_id = Column(INTEGER)  # 4 bytes align i
+    classif_type = Column(
+        CHAR(1)
+    )  # A : Automatic, M : Manual # 2 bytes (len + content) align c as len < 127
+    classif_qual = Column(CHAR(1))  # 2 bytes (len + content) align c as len < 127
+    classif_score = Column(DOUBLE_PRECISION)  # 8 bytes align d
+    classif_who = Column(Integer, ForeignKey("users.id"))  # 4 bytes align i
 
     # The relationships are created in Relations.py but the typing here helps the IDE
     object: relationship

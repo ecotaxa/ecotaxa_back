@@ -317,7 +317,7 @@ class ProjectExport(JobServiceBase):
                     sam.sampleid AS sample_id_internal, 
                     obh.classif_id, obh.classif_who, obh.classif_auto_id, txp.name classif_auto_name, 
                     obh.classif_auto_score, obh.classif_auto_when,
-                    obh.random_value object_random_value, obh.sunpos object_sunpos """
+                    HASHTEXT(obh.orig_id) object_random_value, obh.sunpos object_sunpos """
             if "S" in req.tsv_entities:
                 # This is not really an id, it's computed, why not
                 select_clause += (
