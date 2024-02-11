@@ -31,14 +31,13 @@ GRANT SELECT ON TABLE public.objectsclassifhisto2 TO repuser;
 DO
 $$
     DECLARE
-        cp_objid  integer = (select min(objid) - 1
-                             from objectsclassifhisto);
+        cp_objid  integer = 0;
+        next_cp_objid integer = 1;
         chunk     integer = 1000000;
-        row_count integer = 1;
     BEGIN
-        WHILE row_count > 0
+        WHILE next_cp_objid IS NOT NULL
             LOOP
-                insert into objectsclassifhisto2 (objid,
+                with done as (insert into objectsclassifhisto2 (objid,
                                                   classif_date,
                                                   classif_id,
                                                   classif_type,
@@ -55,13 +54,11 @@ $$
                 from objectsclassifhisto
                 where objid > cp_objid and classif_id is not null
                 order by objid
-                limit chunk;
-                GET DIAGNOSTICS row_count = ROW_COUNT;
-                RAISE NOTICE '%: Done %, % lines',current_time,cp_objid,row_count;
+                limit chunk
+                returning objid) select max(objid) into next_cp_objid from done;
+                RAISE NOTICE '%: Done up to %',current_time,next_cp_objid;
                 COMMIT;
-                cp_objid = (select max(objid) from (select objid from objectsclassifhisto
-                where objid > cp_objid order by objid
-                limit chunk) done);
+                cp_objid = next_cp_objid;
             END LOOP;
     END;
 $$;
