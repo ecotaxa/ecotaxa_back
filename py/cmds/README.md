@@ -13,7 +13,7 @@ To generate diff script for upgrade:
 `PATH=../venv38/bin PYTHONPATH=.. APP_CONFIG=../config.ini alembic revision --autogenerate -m "say something"
 `
 
-Then check the newly appeared .py script which should contain the commands to upgrade the DB. It's often the case that
+Then check the newly appeared .py script in py/cmds/db_upg/versions which should contain the commands to upgrade the DB. It's often the case that
 some manually generated tables appear there, so adjust manually the content.
 
 Add the new script to the local git repo.
