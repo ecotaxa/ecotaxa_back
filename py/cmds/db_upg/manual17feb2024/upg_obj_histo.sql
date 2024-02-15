@@ -2,9 +2,9 @@
 -- Based on a pg_dump -t objectsclassifhisto from production DB on the 9th of Feb 2024
 --
 
-drop table public.objectsclassifhisto2;
+drop table public.objectsclassifhisto_new;
 
-create table public.objectsclassifhisto2
+create table public.objectsclassifhisto_new
 (
     objid         bigint                      not null,
     classif_date  timestamp without time zone not null,
@@ -15,18 +15,18 @@ create table public.objectsclassifhisto2
     classif_who   integer
 );
 
-ALTER TABLE ONLY public.objectsclassifhisto2 ALTER COLUMN classif_date SET STATISTICS 10000;
+ALTER TABLE ONLY public.objectsclassifhisto_new ALTER COLUMN classif_date SET STATISTICS 10000;
 
 
-ALTER TABLE public.objectsclassifhisto2 OWNER TO postgres;
+ALTER TABLE public.objectsclassifhisto_new OWNER TO postgres;
 
 --
 -- Name: TABLE objectsclassifhisto; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE public.objectsclassifhisto2 TO readerole;
-GRANT SELECT ON TABLE public.objectsclassifhisto2 TO zoo;
-GRANT SELECT ON TABLE public.objectsclassifhisto2 TO repuser;
+GRANT SELECT ON TABLE public.objectsclassifhisto_new TO readerole;
+GRANT SELECT ON TABLE public.objectsclassifhisto_new TO zoo;
+GRANT SELECT ON TABLE public.objectsclassifhisto_new TO repuser;
 
 DO
 $$
@@ -37,7 +37,7 @@ $$
     BEGIN
         WHILE next_cp_objid IS NOT NULL
             LOOP
-                with done as (insert into objectsclassifhisto2 (objid,
+                with done as (insert into objectsclassifhisto_new (objid,
                                                   classif_date,
                                                   classif_id,
                                                   classif_type,
@@ -69,7 +69,7 @@ ALTER TABLE ONLY public.objectsclassifhisto
 -- Name: objectsclassifhisto objectsclassifhisto_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.objectsclassifhisto2
+ALTER TABLE ONLY public.objectsclassifhisto_new
     ADD CONSTRAINT objectsclassifhisto_pkey PRIMARY KEY (objid, classif_date);
 
 
@@ -80,7 +80,7 @@ ALTER TABLE ONLY public.objectsclassifhisto
 -- Name: objectsclassifhisto objectsclassifhisto_classif_who_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.objectsclassifhisto2
+ALTER TABLE ONLY public.objectsclassifhisto_new
     ADD CONSTRAINT objectsclassifhisto_classif_who_fkey FOREIGN KEY (classif_who) REFERENCES public.users(id);
 
 --
@@ -89,9 +89,11 @@ ALTER TABLE ONLY public.objectsclassifhisto2
 ALTER TABLE ONLY public.objectsclassifhisto
     RENAME CONSTRAINT objectsclassifhisto_objid_fkey TO objectsclassifhisto_objid_fkey_old;
 
-ALTER TABLE ONLY public.objectsclassifhisto2
+ALTER TABLE ONLY public.objectsclassifhisto_new
     ADD CONSTRAINT objectsclassifhisto_objid_fkey FOREIGN KEY (objid) REFERENCES public.obj_head(objid) ON DELETE CASCADE;
 
 ALTER TABLE public.objectsclassifhisto RENAME TO objectsclassifhisto_old;
 
-ALTER TABLE public.objectsclassifhisto2 RENAME TO objectsclassifhisto;
+ALTER TABLE public.objectsclassifhisto_new RENAME TO objectsclassifhisto;
+
+-- drop table objectsclassifhisto_old;

@@ -64,6 +64,7 @@ class ObjectHeader(Model):
     # User-visible classification
     classif_id = Column(INTEGER)  # 4 bytes align i
 
+    # 86400 different values, basically all possible minutes of day
     objtime = Column(TIME)  # 8 bytes align d
     latitude = Column(DOUBLE_PRECISION)  # 8 bytes align d
     longitude = Column(DOUBLE_PRECISION)  # 8 bytes align d
@@ -71,6 +72,7 @@ class ObjectHeader(Model):
     depth_max = Column(
         FLOAT
     )  # AKA DOUBLE_PRECISION, 8 bytes align d # max = 99999999999 conventional value prevents move to float4
+    # _only_ 7018 different values
     objdate = Column(DATE)  # 4 bytes align i
     #
     # Depending on its value,
@@ -99,7 +101,9 @@ class ObjectHeader(Model):
     # random_value = Column(INTEGER)  # 4 bytes align i
 
     # User-provided identifier
-    orig_id = Column(VARCHAR(255), nullable=False)  # len+1 bytes, align i if len > 127
+    orig_id = Column(
+        VARCHAR(255), nullable=False
+    )  # (len+1) bytes, align i if len > 127
 
     # 176M values in DB as of 2024-02-02
     object_link = Column(VARCHAR(255))
@@ -218,41 +222,46 @@ for i in range(1, 21):
     setattr(ObjectFields, "t%02d" % i, Column(VARCHAR(250)))
 
 # Nearly-always used index for recursive descent into object tree, e.g. in manual classification page.
-# Also for FK checks during deletion
+# Also for FK checks during deletion.
 Index(
     "is_objectsacquisition",
     ObjectHeader.__table__.c.acquisid,
 )
-# Index(
-#     "is_objectsacqrandom",
-#     ObjectHeader.__table__.c.acquisid,
-#     ObjectHeader.__table__.c.random_value,
-#     ObjectHeader.__table__.c.classif_qual,
-# )
+
+# Speed up a bit top bar with stats by state.
+Index(
+    "is_objectsacqclassifqual",
+    ObjectHeader.__table__.c.acquisid,
+    postgresql_include=[
+        ObjectHeader.__table__.c.classif_qual,
+        ObjectHeader.__table__.c.classif_id,
+    ],
+)
+
 # For finding globally objects in some depth range
 Index(
     "is_objectsdepth",
     ObjectHeader.__table__.c.depth_max,
     ObjectHeader.__table__.c.depth_min,
-    ObjectHeader.__table__.c.acquisid,
+    postgresql_include=[ObjectHeader.__table__.c.acquisid],
 )
 # For finding globally objects in some geo range
 Index(
     "is_objectslatlong",
     ObjectHeader.__table__.c.latitude,
     ObjectHeader.__table__.c.longitude,
-    ObjectHeader.__table__.c.acquisid,
+    postgresql_include=[ObjectHeader.__table__.c.acquisid],
 )
 # For finding globally objects in some time range
 Index(
     "is_objectstime",
     ObjectHeader.__table__.c.objtime,
-    ObjectHeader.__table__.c.acquisid,
+    postgresql_include=[ObjectHeader.__table__.c.acquisid],
 )
 Index(
     "is_objectsdate",
     ObjectHeader.__table__.c.objdate,
-    ObjectHeader.__table__.c.acquisid,
+    postgresql_include=[ObjectHeader.__table__.c.acquisid],
 )
 
 DEFAULT_CLASSIF_HISTORY_DATE = "TO_TIMESTAMP(0)"
@@ -265,7 +274,7 @@ class ObjectsClassifHisto(Model):
     )  # 8 bytes align d
     # TODO: FK on taxonomy
     classif_date = Column(TIMESTAMP, primary_key=True)  # 8 bytes align d
-    classif_id = Column(INTEGER)  # 4 bytes align i
+    classif_id = Column(INTEGER, nullable=False)  # 4 bytes align i
     classif_type = Column(
         CHAR(1)
     )  # A : Automatic, M : Manual # 2 bytes (len + content) align c as len < 127
