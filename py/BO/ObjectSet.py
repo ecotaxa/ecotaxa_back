@@ -399,7 +399,9 @@ class EnumeratedObjectSet(MappedTable):
                     ]
                 ),
             ]
-        )
+        ).filter(
+            oh.classif_id != None
+        )  # Protect from possible inconsistencies via import
         if only_qual is not None:
             # Pick only the required states
             qual_cond = oh.classif_qual.in_(only_qual)
