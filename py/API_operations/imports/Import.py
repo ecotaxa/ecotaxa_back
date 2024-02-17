@@ -344,7 +344,7 @@ class FileImport(ImportServiceBase):
         self.prj.fileloaded = "\n".join(set(import_how.loaded_files))
 
         # Check if we have a CNN model selected
-        feature_extractor_selected = self.prj.cnn_network_id != ""
+        feature_extractor_selected = self.prj.cnn_network_id != None and self.prj.cnn_network_id != ""
 
         self.session.commit()
 
