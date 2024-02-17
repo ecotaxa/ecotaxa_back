@@ -45,7 +45,7 @@ class SimilaritySearchForProject(Service):
         if len(ids_and_images) != 0:
 
             # Launch a feature extraction job
-            feature_extractor_selected = project.cnn_network_id != ""
+            feature_extractor_selected = project.cnn_network_id != None and project.cnn_network_id != ""
             if feature_extractor_selected:
                 with FeatureExtractionForProject(self.req.project_id) as sce:
                     sce.run(current_user)
