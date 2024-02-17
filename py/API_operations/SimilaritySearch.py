@@ -48,8 +48,9 @@ class SimilaritySearchForProject(Service):
             feature_extractor_selected = project.cnn_network_id != None and project.cnn_network_id != ""
             if feature_extractor_selected:
                 with FeatureExtractionForProject(self.req.project_id) as sce:
-                    sce.run(current_user)
-                
+#                    sce.run(current_user)
+                    sce.run_in_background()
+
                 rsp : SimilaritySearchRsp = SimilaritySearchRsp(
                     neighbor_ids=[],
                     sim_scores=[],
