@@ -53,7 +53,7 @@ def test_similarity_search(database, fastapi, caplog):
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
 
     assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json()["message"] == "Missing CNN features, feature extraction job launched"
+    assert rsp.json()["message"] == "Missing CNN features, please select a feature extractor"
     assert rsp.json()["neighbor_ids"] == []
     assert rsp.json()["sim_scores"] == []
 
