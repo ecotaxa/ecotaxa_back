@@ -34,5 +34,7 @@ class EcoTaxoServerClient(object):
             "ecotaxa_version": "2.5.11",  # TODO: Wondering why this param
         }
         params.update(endpoint_params)
-        r = requests.post(self.url + endpoint, params)
+        r = requests.post(
+            self.url + endpoint, params
+        )  # TODO: Use some async lib instead of requests
         return r.json()

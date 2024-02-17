@@ -3,7 +3,10 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from typing import Optional, List, Any, Tuple
+
+from fastapi import HTTPException
 from sqlalchemy import func
+
 from API_models.crud import (
     UserModelWithRights,
     ProjectSummaryModel,
@@ -23,14 +26,8 @@ from BO.User import (
 )
 from DB.Project import ProjectIDT
 from DB.User import User, Role, UserRole, TempPasswordReset, UserStatus
-from helpers.DynamicLogs import get_logger
-from helpers.pydantic import BaseModel, Field
-from helpers.login import LoginService
-from providers.HomeCaptcha import HomeCaptcha
-from ..helpers.Service import Service
-from fastapi import HTTPException
-from ..helpers.UserValidation import UserValidation, ActivationType
 from helpers import DateTime
+from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
     DETAIL_VALIDATION_NOT_ACTIVE,
     DETAIL_INVALID_PARAMETER,
@@ -40,9 +37,13 @@ from helpers.httpexception import (
     DETAIL_INVALID_STATUS,
     DETAIL_NO_USERS_ADMIN,
     DETAIL_EMAIL_OWNED_BY_OTHER,
-    DETAIL_NAME_OWNED_BY_OTHER,
     DETAIL_NOTHING_DONE,
 )
+from helpers.login import LoginService
+from helpers.pydantic import BaseModel, Field
+from providers.HomeCaptcha import HomeCaptcha
+from ..helpers.Service import Service
+from ..helpers.UserValidation import UserValidation, ActivationType
 
 logger = get_logger(__name__)
 
@@ -391,7 +392,6 @@ class UserService(Service):
                 # get_user_details = self._get_full_user
                 qry = qry.filter(User.id.in_(user_ids))
             for db_usr in qry:
-
                 ret.append(get_user_details(db_usr))
         return ret
 
@@ -402,7 +402,7 @@ class UserService(Service):
         Get a preference, for given project and user. Keys are not standardized (for now).
         """
         return UserBO.get_preferences_per_project(
-            self.session, user_id, project_id, key
+            self.ro_session, user_id, project_id, key
         )
 
     def set_preferences_per_project(
@@ -831,7 +831,7 @@ class UserService(Service):
                         detail=[NOT_AUTHORIZED],
                     )
         now = DateTime.now_time()
-        from datetime import timedelta, datetime
+        from datetime import timedelta
 
         cols_to_upd = []
         if self.verify_email == True:

@@ -59,6 +59,7 @@ def run_gunicorn() -> None:
                 # Below is only for gthread workers type
                 # 'threads': 2,
                 "timeout": 600,
+                "graceful_timeout": 600,
                 # Keep gunicorn silent after start sequence
                 # "accesslog": "-",
                 # "errorlog": "-",

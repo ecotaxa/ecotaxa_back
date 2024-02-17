@@ -10,8 +10,8 @@ from typing import Optional, Union
 from fastapi import UploadFile
 
 from API_models.filesystem import DirectoryEntryModel, DirectoryModel
-from BO.User import UserIDT
 from BO.Rights import RightsBO
+from BO.User import UserIDT
 from DB.User import User
 from FS.CommonDir import CommonFolder
 from FS.UserDir import UserDirectory
@@ -53,7 +53,7 @@ class UserFolderService(Service):
         ret = await UserDirectory(current_user_id, tag).add_file(file_name, path, file)
         return ret
 
-    async def list(self, sub_path: str, current_user_id: UserIDT) -> DirectoryModel:
+    def list(self, sub_path: str, current_user_id: UserIDT) -> DirectoryModel:
         """
         List the files in given subpath of the private folder.
         """
@@ -93,7 +93,7 @@ class CommonFolderService(Service):
     def __init__(self) -> None:
         super().__init__()
 
-    async def list(self, sub_path: str, current_user_id: UserIDT) -> DirectoryModel:
+    def list(self, sub_path: str, current_user_id: UserIDT) -> DirectoryModel:
         """
         List the files in given subpath of the common folder.
         """
