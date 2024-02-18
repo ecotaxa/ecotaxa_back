@@ -1057,7 +1057,7 @@ class TSVFile(object):
                         % (csv_val, raw_field, self.relative_name)
                     )
                 elif a_field == "object_annotation_category_id":
-                    diag.classif_id_seen.add(int(csv_val))
+                    diag.classif_id_seen.add(int(vf))
             elif a_field in ("object_date", "object_annotation_date"):
                 try:
                     ObjectHeader.date_from_txt(csv_val)
