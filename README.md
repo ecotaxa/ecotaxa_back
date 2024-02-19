@@ -10,7 +10,6 @@ In this directory:
 - `py` is for Python back-end
 - `QA` contains all tests & measurements on the code.
 
-
 In `docker` one can find build scripts, as well as a simple docker-compose configuration for setting up a DB server quickly, without impacting your whole
   system. It also embeds a PgAdmin4 docker image.
 
