@@ -2130,6 +2130,30 @@ CREATE UNIQUE INDEX is_samples_project_orig_id ON samples (projid, orig_id) INCL
 UPDATE alembic_version SET version_num='52a9d347f2b2' WHERE alembic_version.version_num = '1b1beb672279';
 
 COMMIT;
+
+-- Running upgrade 52a9d347f2b2 -> a9dd3c62b7b0
+
+CREATE TABLE obj_cnn_features_vector (
+    objcnnid BIGINT NOT NULL,
+    features VECTOR(50),
+    PRIMARY KEY (objcnnid),
+    FOREIGN KEY(objcnnid) REFERENCES obj_head (objid) ON DELETE CASCADE
+);
+
+INSERT INTO obj_cnn_features_vector (objcnnid, features)
+        SELECT objcnnid, ARRAY[cnn01, cnn02, cnn03, cnn04, cnn05, cnn06, cnn07, cnn08, cnn09, cnn10,
+        cnn11, cnn12, cnn13, cnn14, cnn15, cnn16, cnn17, cnn18, cnn19, cnn20,
+        cnn21, cnn22, cnn23, cnn24, cnn25, cnn26, cnn27, cnn28, cnn29, cnn30,
+        cnn31, cnn32, cnn33, cnn34, cnn35, cnn36, cnn37, cnn38, cnn39, cnn40,
+        cnn41, cnn42, cnn43, cnn44, cnn45, cnn46, cnn47, cnn48, cnn49, cnn50]::vector
+        FROM obj_cnn_features;
+
+DROP TABLE obj_cnn_features;
+
+UPDATE alembic_version SET version_num='a9dd3c62b7b0' WHERE alembic_version.version_num = '52a9d347f2b2';
+
+COMMIT;
+
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;
