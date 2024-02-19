@@ -9,9 +9,37 @@ See https://alembic.sqlalchemy.org/en/latest/autogenerate.html for background
 * As a dev:
 
 To generate diff script for upgrade:
+- Current Directory : `<ECO_TAXA_BACK>/py/cmds`
+- Create file `script.py.mako`
+<details>
 
-`PATH=../venv38/bin PYTHONPATH=.. APP_CONFIG=../config.ini alembic revision --autogenerate -m "say something"
-`
+```
+"""${message}
+
+Revision ID: ${up_revision}
+Revises: ${down_revision}
+Create Date: ${create_date}
+
+"""
+
+# revision identifiers, used by Alembic.
+revision = ${repr(up_revision)}
+down_revision = ${repr(down_revision)}
+
+from alembic import op
+import sqlalchemy as sa
+${imports if imports else ""}
+
+def upgrade():
+    ${upgrades if upgrades else "pass"}
+
+
+def downgrade():
+    ${downgrades if downgrades else "pass"}
+```
+
+</details>
+- `PATH=../venv38/bin PYTHONPATH=.. APP_CONFIG=../config.ini alembic revision --autogenerate -m "say something"`
 
 Then check the newly appeared .py script in py/cmds/db_upg/versions which should contain the commands to upgrade the DB. It's often the case that
 some manually generated tables appear there, so adjust manually the content.
