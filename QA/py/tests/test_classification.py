@@ -3,10 +3,10 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import logging
-import pytest
-
 from typing import List
-from API_models.filters import ProjectFilters, ProjectFiltersDict
+
+import pytest
+from API_models.filters import ProjectFiltersDict
 from starlette import status
 
 from tests.credentials import CREATOR_AUTH, ORDINARY_USER2_USER_ID, ADMIN_AUTH
@@ -16,8 +16,8 @@ from tests.test_subentities import OBJECT_HISTORY_QUERY_URL
 from tests.test_taxa_query import TAXA_SET_QUERY_URL
 
 
-def _prj_query(fastapi, auth, prj_id, **kwargs) -> List[int]:
-    """Query using the filters in kwargs"""
+def query_all_objects(fastapi, auth, prj_id, **kwargs) -> List[int]:
+    """Query using the filters in kwargs,return the full list of object IDs"""
     url = OBJECT_SET_QUERY_URL.format(project_id=prj_id)
     rsp = fastapi.post(url, headers=auth, json=kwargs)
     obj_ids = rsp.json()["object_ids"]
@@ -56,12 +56,12 @@ def get_stats(fastapi, prj_id):
     return stats_rsp.json()[0]
 
 
-def classify_all(fastapi, obj_ids, classif_id):
+def classify_all(fastapi, obj_ids, classif_id, who=ADMIN_AUTH):
     url = OBJECT_SET_CLASSIFY_URL
     classifications = [classif_id for _obj in obj_ids]
     rsp = fastapi.post(
         url,
-        headers=ADMIN_AUTH,
+        headers=who,
         json={
             "target_ids": obj_ids,
             "classifications": classifications,
@@ -142,7 +142,7 @@ def test_classif(database, fastapi, caplog):
 
     prj_id = test_import(database, caplog, "Test Classify/Validate")
 
-    obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
+    obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id)
     assert len(obj_ids) == 8
 
     # See if the taxa we are going to use are OK
@@ -408,10 +408,10 @@ def test_classif(database, fastapi, caplog):
     ]
 
     # There should be 0 predicted
-    obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id, statusfilter="P")
+    obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id, statusfilter="P")
     assert len(obj_ids) == 0
     # There should be 8 validated
-    obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id, statusfilter="V")
+    obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id, statusfilter="V")
     assert len(obj_ids) == 8
 
     url = PROJECT_CLASSIF_STATS_URL.format(prj_ids="%s" % prj_id)

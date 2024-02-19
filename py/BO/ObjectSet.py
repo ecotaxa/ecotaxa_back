@@ -103,7 +103,7 @@ class DescribedObjectSet(object):
         all_images: bool = False,
     ) -> Tuple[FromClause, WhereClause, SQLParamDict]:
         """
-        Construct SQL parts for getting the IDs of objects.
+        Construct SQL parts for getting per-object information.
         :param order_clause: The required order by clause.
         :param select_list: Used for hinting the builder that some specific table will be needed in join.
                 major tables obj_head, samples and acquisitions are always joined.
@@ -318,6 +318,15 @@ class EnumeratedObjectSet(MappedTable):
         Copy current classification information into history table, for all rows in self.
         :param only_qual: If set, only historize for current rows with this classification.
         """
+        nb_histo = EnumeratedObjectSet.historize_classification_for(
+            self.session, self.object_ids, only_qual
+        )
+        logger.info(" %d out of %d rows copied to log", nb_histo, len(self.object_ids))
+
+    @staticmethod
+    def historize_classification_for(
+        session: Session, object_ids: List[int], only_qual: Optional[List[str]]
+    ) -> int:
         # Light up a bit the SQLA expressions
         oh = ObjectHeader
         och = ObjectsClassifHisto
@@ -390,24 +399,24 @@ class EnumeratedObjectSet(MappedTable):
                     ]
                 ),
             ]
-        )
+        ).filter(
+            oh.classif_id != None
+        )  # Protect from possible inconsistencies via import
         if only_qual is not None:
             # Pick only the required states
             qual_cond = oh.classif_qual.in_(only_qual)
         else:
             # Pick any present state
             qual_cond = oh.classif_qual.isnot(None)
-        sel_subqry = sel_subqry.where(
-            and_(oh.objid == any_(self.object_ids), qual_cond)
-        )
+        sel_subqry = sel_subqry.where(and_(oh.objid == any_(object_ids), qual_cond))
         # Insert into the log table
         ins_qry: PgInsert = pg_insert(och.__table__)
         ins_qry = ins_qry.from_select(ins_columns, sel_subqry)
         ins_qry = ins_qry.on_conflict_do_nothing(constraint="objectsclassifhisto_pkey")
         # TODO: mypy crashes due to pg_dialect below
         # logger.info("Histo query: %s", ins_qry.compile(dialect=pg_dialect()))
-        nb_objs = self.session.execute(ins_qry).rowcount  # type:ignore  # case1
-        logger.info(" %d out of %d rows copied to log", nb_objs, len(self.object_ids))
+        nb_obj_histos = session.execute(ins_qry).rowcount  # type:ignore  # case1
+        return nb_obj_histos
 
     def apply_on_all(self, project: Project, updates: ColUpdateList) -> int:
         """

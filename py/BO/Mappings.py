@@ -4,6 +4,7 @@
 #
 #         Information about mapping process (from TSV to DB)
 #
+import json
 from collections import OrderedDict, namedtuple
 from typing import Dict, Tuple, List, Union, Type, Optional, Set, Final, Any
 
@@ -180,7 +181,7 @@ if False:  # !!! NO COMMIT if True !!!
     # Switch free columns to another storage and/or naming method.
     # DO NOT SET for prod', lol
     # LS: My playground, a single table grouping obj_head and obj_field, accessed e.g. using obj3.free_n[xx]
-    ObjectHeader.__tablename__ = "obj3"
+    ObjectHeader.__tablename__ = "obj_head"
     FREE_COLS_ARE_ELSEWHERE = False
     PHY_COL_TO_EXPERIMENT_COL = lambda col: "free_n[" + col[1:] + "]"
 
@@ -235,12 +236,12 @@ class ProjectMapping(object):
 
     def write_to_project(self, prj: Project) -> None:
         """
-        Write the mappings into given Project .
+        Write the mappings into given Project, new form.
         """
-        prj.mappingobj = self.object_mappings.as_equal_list()
-        prj.mappingsample = self.sample_mappings.as_equal_list()
-        prj.mappingacq = self.acquisition_mappings.as_equal_list()
-        prj.mappingprocess = self.process_mappings.as_equal_list()
+        prj.mappingobj = self.object_mappings.as_json()
+        prj.mappingsample = self.sample_mappings.as_json()
+        prj.mappingacq = self.acquisition_mappings.as_json()
+        prj.mappingprocess = self.process_mappings.as_json()
 
     def load_from_project(self, prj: Project) -> "ProjectMapping":
         """
@@ -348,10 +349,19 @@ class TableMapping(object):
             n01=lat_end
             n02=lon_end
             n03=area
+        Or now json (text) in the reverse form
+            {"lat_end":"n01"...}
             ...
         """
         if not str_mapping:
             # None or "" => nothing to do
+            return self
+        if str_mapping.startswith("{"):
+            self.tsv_cols_to_real = json.loads(str_mapping)
+            self.real_cols_to_tsv = {
+                v: k
+                for k, v in sorted(self.tsv_cols_to_real.items(), key=lambda kv: kv[1])
+            }  # Paranoid re-sort
             return self
         real_cols_to_tsv = self.real_cols_to_tsv
         tsv_cols_to_real = self.tsv_cols_to_real
@@ -412,6 +422,9 @@ class TableMapping(object):
 
     def as_equal_list(self) -> str:
         return encode_equal_list(self.real_cols_to_tsv, "\n")
+
+    def as_json(self) -> str:
+        return json.dumps(self.tsv_cols_to_real)
 
     def as_select_list(self, alias: str) -> str:
         """

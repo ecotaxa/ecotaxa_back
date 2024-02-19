@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.35"
+    "version":"0.0.36"
   },
   "servers":[
     {
@@ -3672,13 +3672,154 @@
           "objects"
         ],
         "summary":"Export Object Set",
-        "description":"**Start an export job for the given object set and options.**",
+        "description":"⚠️ Deprecated, see general, summary and backup exports for alternatives.\n\nStart an export job for the given object set and options.\n\n🔒 Current user needs *at least Read* right on the requested project.",
         "operationId":"export_object_set",
         "requestBody":{
           "content":{
             "application/json":{
               "schema":{
                 "$ref":"#/components/schemas/Body_export_object_set_object_set_export_post"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/ExportRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/object_set/export/general":{
+      "post":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Export Object Set General",
+        "description":"Start a general-purpose export job for the given object set and options.\n\n🔒 Current user needs *at least Read* right on the requested project.",
+        "operationId":"export_object_set_general",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/Body_export_object_set_general_object_set_export_general_post"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/ExportRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/object_set/export/summary":{
+      "post":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Export Object Set Summary",
+        "description":"Start a summary export job for the given object set and options.\n\n🔒 Current user needs *at least Read* right on the requested project.",
+        "operationId":"export_object_set_summary",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/Body_export_object_set_summary_object_set_export_summary_post"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/ExportRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/object_set/export/backup":{
+      "post":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Export Object Set Backup",
+        "description":"Start a backup export job for the given object set and options.\nIf filters are empty, the produced zip will contain the full project.\n\n🔒 Current user needs *at least Read* right on the requested project.",
+        "operationId":"export_object_set_backup",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/Body_export_object_set_backup_object_set_export_backup_post"
               }
             }
           },
@@ -5362,6 +5503,61 @@
           }
         }
       },
+      "BackupExportReq":{
+        "title":"Backup Export request Model",
+        "required":[
+          "project_id"
+        ],
+        "type":"object",
+        "properties":{
+          "project_id":{
+            "title":"Project Id",
+            "type":"integer",
+            "description":"The project to export.",
+            "example":1
+          },
+          "out_to_ftp":{
+            "title":"Out to ftp",
+            "type":"boolean",
+            "description":"Copy result file to FTP area. Original file is still available.",
+            "default":false,
+            "example":false
+          }
+        },
+        "description":"Backup export request."
+      },
+      "Body_export_object_set_backup_object_set_export_backup_post":{
+        "title":"Body_export_object_set_backup_object_set_export_backup_post",
+        "required":[
+          "filters",
+          "request"
+        ],
+        "type":"object",
+        "properties":{
+          "filters":{
+            "$ref":"#/components/schemas/ProjectFilters"
+          },
+          "request":{
+            "$ref":"#/components/schemas/BackupExportReq"
+          }
+        }
+      },
+      "Body_export_object_set_general_object_set_export_general_post":{
+        "title":"Body_export_object_set_general_object_set_export_general_post",
+        "required":[
+          "filters",
+          "request"
+        ],
+        "type":"object",
+        "properties":{
+          "filters":{
+            "$ref":"#/components/schemas/ProjectFilters"
+          },
+          "request":{
+            "$ref":"#/components/schemas/GeneralExportReq"
+          }
+        }
+      },
       "Body_export_object_set_object_set_export_post":{
         "title":"Body_export_object_set_object_set_export_post",
         "required":[
@@ -5374,7 +5570,29 @@
             "$ref":"#/components/schemas/ProjectFilters"
           },
           "request":{
-            "$ref":"#/components/schemas/ExportReq"
+            "title":"Request",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/ExportReq"
+              }
+            ],
+            "deprecated":true
+          }
+        }
+      },
+      "Body_export_object_set_summary_object_set_export_summary_post":{
+        "title":"Body_export_object_set_summary_object_set_export_summary_post",
+        "required":[
+          "filters",
+          "request"
+        ],
+        "type":"object",
+        "properties":{
+          "filters":{
+            "$ref":"#/components/schemas/ProjectFilters"
+          },
+          "request":{
+            "$ref":"#/components/schemas/SummaryExportReq"
           }
         }
       },
@@ -5815,6 +6033,18 @@
             "type":"integer",
             "description":"Profile modification token lifespan.",
             "default":24
+          },
+          "recaptchaid":{
+            "title":"Google ReCaptcha",
+            "type":"boolean",
+            "description":"use Google ReCaptcha",
+            "default":false
+          },
+          "add_ticket":{
+            "title":"ticket separator",
+            "type":"string",
+            "description":"string separator, permits to add ticket number when asking more information before user validation",
+            "default":""
           }
         },
         "description":"Values which can be considered identical over the lifetime of the back-end."
@@ -5965,7 +6195,7 @@
             "description":"XML blocks which will be output, reformatted, inside the <dataset> tag of produced EML. Formal schema is in dataset section of: https://eml.ecoinformatics.org/schema/eml_xsd ",
             "default":[],
             "example":[
-              "<associatedParty>\n    <individualName><givenName>Coco</givenName><surName>Rico</surName>\n    </individualName>\n    <organizationName>CHICK</organizationName>\n  </associatedParty>"
+              "<associatedParty>\n    <individualName><givenName>Coco</givenName><surName>Rico</surName>\n    </individualName>\n    <organizationName>CHICK</organizationName>\n      </associatedParty>"
             ]
           }
         },
@@ -6034,20 +6264,21 @@
         },
         "description":"A path + list of entries inside. The path is relative to an implied root."
       },
+      "ExportImagesOptionsEnum":{
+        "title":"ExportImagesOptionsEnum",
+        "enum":[
+          "all",
+          "first",
+          "none"
+        ],
+        "type":"string",
+        "description":"An enumeration."
+      },
       "ExportReq":{
         "title":"Export request Model",
         "required":[
           "project_id",
-          "exp_type",
-          "tsv_entities",
-          "split_by",
-          "coma_as_separator",
-          "format_dates_times",
-          "with_images",
-          "with_internal_ids",
-          "only_first_image",
-          "sum_subtotal",
-          "out_to_ftp"
+          "exp_type"
         ],
         "type":"object",
         "properties":{
@@ -6077,43 +6308,64 @@
           "tsv_entities":{
             "title":"Tsv entities",
             "type":"string",
-            "description":"For 'TSV' type, the entities to export, one letter for each of O(bject), P(rocess), A(cquisition), S(ample), classification H(istory), C(omments).",
+            "description":"For 'TSV' type, the entities to export, one letter for each of O(bject), P(rocess), A(cquisition), S(ample), C(omments).",
+            "default":"",
             "example":"OPAS"
+          },
+          "only_annotations":{
+            "title":"Backup annotations",
+            "type":"boolean",
+            "description":"For 'BAK' type, only save objects' last annotation data in backup.",
+            "default":false,
+            "example":false
           },
           "split_by":{
             "title":"Split by",
             "type":"string",
-            "description":"For 'TSV' type, inside archives, split in one directory per... 'sample', 'taxo' or '' (no split).",
+            "description":"For 'TSV' type, inside archives, split in one directory per... 'sample', 'acquisition', 'taxon' or '' (no split).",
+            "default":"",
             "example":"sample"
           },
           "coma_as_separator":{
             "title":"Coma as separator",
             "type":"boolean",
             "description":"For 'TSV' type, use a , instead of . for decimal separator.",
+            "default":false,
             "example":false
           },
           "format_dates_times":{
             "title":"Format dates times",
             "type":"boolean",
             "description":"For 'TSV' type, format dates and times using - and : respectively.",
+            "default":true,
             "example":false
           },
           "with_images":{
             "title":"With images",
             "type":"boolean",
             "description":"For 'BAK' and 'DOI' types, export images as well.",
+            "default":false,
             "example":false
           },
           "with_internal_ids":{
             "title":"With internal ids",
             "type":"boolean",
-            "description":"For 'BAK' and 'DOI' types, export internal DB IDs.",
+            "description":"For 'TSV' type, export internal DB IDs.",
+            "default":false,
+            "example":false
+          },
+          "with_types_row":{
+            "title":"With types row",
+            "type":"boolean",
+            "description":"Add an EcoTaxa-compatible second line with types.",
+            "default":false,
             "example":false
           },
           "only_first_image":{
             "title":"Only first image",
             "type":"boolean",
             "description":"For 'DOI' type, export only first (displayed) image.",
+            "default":false,
             "example":false
           },
           "sum_subtotal":{
@@ -6124,6 +6376,7 @@
               }
             ],
             "description":"For 'SUM', 'ABO', 'CNC' and 'BIV' types, if computations should be combined. Per A(cquisition) or S(ample) or <Empty>(just taxa).",
+            "default":"",
             "example":"A"
           },
           "pre_mapping":{
@@ -6157,6 +6410,7 @@
             "title":"Out to ftp",
             "type":"boolean",
             "description":"Copy result file to FTP area. Original file is still available.",
+            "default":false,
             "example":false
           }
         },
@@ -6201,6 +6455,17 @@
         },
         "description":"Export response, for all export jobs, either on Project or Collection"
       },
+      "ExportSplitOptionsEnum":{
+        "title":"ExportSplitOptionsEnum",
+        "enum":[
+          "sample",
+          "acquisition",
+          "taxon",
+          "none"
+        ],
+        "type":"string",
+        "description":"An enumeration."
+      },
       "ExportTypeEnum":{
         "title":"ExportTypeEnum",
         "enum":[
@@ -6213,7 +6478,73 @@
           "BIV"
         ],
         "type":"string",
-        "description":"An enumeration."
+        "description":"Externally deprecated"
+      },
+      "GeneralExportReq":{
+        "title":"General Export request Model",
+        "required":[
+          "project_id"
+        ],
+        "type":"object",
+        "properties":{
+          "project_id":{
+            "title":"Project Id",
+            "type":"integer",
+            "description":"The project to export.",
+            "example":1
+          },
+          "split_by":{
+            "title":"Split by",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/ExportSplitOptionsEnum"
+              }
+            ],
+            "description":"If not none, separate (in ZIP sub-directories) output per given field.",
+            "default":"none",
+            "example":"sample"
+          },
+          "with_images":{
+            "title":"With images",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/ExportImagesOptionsEnum"
+              }
+            ],
+            "description":"Add in ZIP first (i.e. visible) image, all images, or no image.⚠️ 'all' means maybe several lines per object in TSVs.",
+            "default":"none",
+            "example":"first"
+          },
+          "with_internal_ids":{
+            "title":"With internal ids",
+            "type":"boolean",
+            "description":"Export internal database IDs.",
+            "default":false,
+            "example":false
+          },
+          "with_types_row":{
+            "title":"With types row",
+            "type":"boolean",
+            "description":"Add an EcoTaxa-compatible second line with types.",
+            "default":false,
+            "example":false
+          },
+          "only_annotations":{
+            "title":"Backup annotations",
+            "type":"boolean",
+            "description":"Only save objects' last annotation data.",
+            "default":false,
+            "example":false
+          },
+          "out_to_ftp":{
+            "title":"Out to ftp",
+            "type":"boolean",
+            "description":"Copy result file to FTP area. Original file is still available.",
+            "default":false,
+            "example":false
+          }
+        },
+        "description":"General purpose export request, produce a zip in a job with many options."
       },
       "GroupDefinitions":{
         "title":"GroupDefinitions",
@@ -7307,8 +7638,9 @@
             1820
           ],
           "features":[
-            "area",
-            "esd"
+            "fre.area",
+            "fre.esd",
+            "obj.depth_max"
           ],
           "use_scn":true
         }
@@ -8336,6 +8668,99 @@
         ],
         "type":"string",
         "description":"It's implied that we minimally group/aggregate by category AKA classification AKA taxon"
+      },
+      "SummaryExportQuantitiesOptionsEnum":{
+        "title":"SummaryExportQuantitiesOptionsEnum",
+        "enum":[
+          "abundance",
+          "concentration",
+          "biovolume"
+        ],
+        "type":"string",
+        "description":"An enumeration."
+      },
+      "SummaryExportReq":{
+        "title":"Summary Export request Model",
+        "required":[
+          "project_id"
+        ],
+        "type":"object",
+        "properties":{
+          "project_id":{
+            "title":"Project Id",
+            "type":"integer",
+            "description":"The project to export.",
+            "example":1
+          },
+          "quantity":{
+            "title":"Quantity",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/SummaryExportQuantitiesOptionsEnum"
+              }
+            ],
+            "description":"The quantity to compute. Abundance is always possible.",
+            "default":"abundance",
+            "example":"abundance"
+          },
+          "summarise_by":{
+            "title":"Summarise by",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/SummaryExportSumOptionsEnum"
+              }
+            ],
+            "description":"Computations aggregation level.",
+            "default":"sample",
+            "example":"acquisition"
+          },
+          "taxo_mapping":{
+            "title":"Categories mapping",
+            "type":"object",
+            "additionalProperties":{
+              "type":"integer"
+            },
+            "description":"Mapping from present taxon (key) to output replacement one (value). Use a 0 replacement to _discard_ the present taxon.",
+            "default":{},
+            "example":{
+              "456":956,
+              "2456":213,
+              "7153":0
+            }
+          },
+          "formulae":{
+            "title":"Computation formulas",
+            "type":"object",
+            "additionalProperties":{
+              "type":"string"
+            },
+            "description":"Transitory: How to get values from DB free columns. Python syntax, prefixes are 'sam', 'ssm' and 'obj'.Variables used in computations are 'total_water_volume', 'subsample_coef' and 'individual_volume'",
+            "default":{},
+            "example":{
+              "subsample_coef":"1/ssm.sub_part",
+              "total_water_volume":"sam.tot_vol/1000",
+              "individual_volume":"4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3"
+            }
+          },
+          "out_to_ftp":{
+            "title":"Out to ftp",
+            "type":"boolean",
+            "description":"Copy result file to FTP area. Original file is still available.",
+            "default":false,
+            "example":false
+          }
+        },
+        "description":"Summary export request."
+      },
+      "SummaryExportSumOptionsEnum":{
+        "title":"SummaryExportSumOptionsEnum",
+        "enum":[
+          "none",
+          "sample",
+          "acquisition"
+        ],
+        "type":"string",
+        "description":"An enumeration."
       },
       "TaxaSearchRsp":{
         "title":"TaxaSearchRsp",

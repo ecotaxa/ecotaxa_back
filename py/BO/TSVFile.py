@@ -4,7 +4,6 @@
 #
 import csv
 import datetime
-import random
 import sys
 from collections import OrderedDict
 from pathlib import Path
@@ -44,6 +43,7 @@ from DB.helpers.Direct import text
 from DB.helpers.ORM import Model, detach_from_session
 from helpers.DynamicLogs import get_logger
 from .Image import ImageBO
+from .ObjectSet import EnumeratedObjectSet
 from .helpers.TSVHelpers import (
     clean_value,
     clean_value_and_none,
@@ -53,6 +53,8 @@ from .helpers.TSVHelpers import (
 )
 
 logger = get_logger(__name__)
+
+ABSORBED_DIFF_CLASSIF_WHEN = datetime.timedelta(seconds=1)
 
 
 class TSVFile(object):
@@ -294,6 +296,29 @@ class TSVFile(object):
             # for {'objtime': datetime.time(12, 29), 'latitude': -64.2, 'objdate': datetime.date(2011, 1, 9),
             # 'longitude': -52.59 }
             logger.error("Astral error : %s for %s", e, object_head_to_write)
+
+    @staticmethod
+    def prepare_classif_update(object_head: ObjectHeader, object_update: Bean) -> bool:
+        """
+        Detect intent to update classification related data: category, time of change, author
+        """
+        if object_head.classif_id != object_update.get("classif_id"):
+            return True  # Normal update, if relevant
+        elif object_head.classif_who != object_update.get("classif_who"):
+            return True  # Same classification, different author, update if relevant
+        else:
+            upd_when = object_update.get("classif_when")
+            # Just a date update, could be due to precision difference
+            if (
+                object_head.classif_when is not None
+                and upd_when is not None
+                and object_head.classif_when > upd_when
+                and object_head.classif_when - upd_when < ABSORBED_DIFF_CLASSIF_WHEN
+            ):
+                object_update.classif_when = object_head.classif_when
+            else:
+                return True
+        return False
 
     def path_for_image(self, image_path: str):
         """
@@ -600,17 +625,13 @@ class TSVFile(object):
                 elif a_field == "object_time":
                     cached_field_value = ObjectHeader.time_from_txt(csv_val)
                 elif field_name == "classif_when":
-                    v2 = clean_value(lig.get("object_annotation_time", "000000")).zfill(
-                        6
+                    date = ObjectHeader.date_from_txt(csv_val)
+                    csv_val_time = clean_value(
+                        lig.get("object_annotation_time", "00:00:00")
                     )
-                    cached_field_value = datetime.datetime(
-                        int(csv_val[0:4]),
-                        int(csv_val[4:6]),
-                        int(csv_val[6:8]),
-                        int(v2[0:2]),
-                        int(v2[2:4]),
-                        int(v2[4:6]),
-                    )
+                    time = ObjectHeader.time_from_txt(csv_val_time)
+
+                    cached_field_value = datetime.datetime.combine(date, time)
                     # no caching of this one as it depends on another value on same line
                     cache_key = "0"
                 elif field_name == "classif_id":
@@ -692,6 +713,13 @@ class TSVFile(object):
                             ):
                                 an_upd[a_field] = getattr(obj, a_field)
                             TSVFile.do_sun_position_field(an_upd)
+                        # Care for classification update
+                        if TSVFile.prepare_classif_update(obj, an_upd):
+                            EnumeratedObjectSet.historize_classification_for(
+                                session,
+                                [objid],
+                                only_qual=None,  # TODO: Quite inefficient but simple
+                            )
                     updates = TSVFile.update_orm_object(obj, an_upd)
                     if len(updates) > 0:
                         logger.info("Updating '%s' using %s", filter_for_id, updates)
@@ -715,7 +743,7 @@ class TSVFile(object):
             else:
                 # or create it
                 # object_head_to_write.projid = how.prj_id
-                object_head_to_write.random_value = random.randint(1, 99999999)
+                # object_head_to_write.random_value = random.randint(1, 99999999)
                 # Below left NULL @see self.update_counts_and_img0
                 # object_head_to_write.img0id = XXXXX
                 ret = 3  # new image + new object_head + new object_fields
@@ -974,14 +1002,17 @@ class TSVFile(object):
         """
         latitude_was_seen = False
         predefined_mapping = GlobalMapping.PREDEFINED_FIELDS
+        second_mapping = GlobalMapping.DOUBLED_FIELDS
         custom_mapping = how.custom_mapping
         for raw_field, a_field in self.clean_fields.items():
             m = predefined_mapping.get(a_field)
             if m is None:
-                m = custom_mapping.search_field(a_field)
-                # No mapping, not stored
+                m = second_mapping.get(a_field)
                 if m is None:
-                    continue
+                    m = custom_mapping.search_field(a_field)
+                    # No mapping, not stored
+                    if m is None:
+                        continue
             raw_val = lig.get(raw_field)
             # Try to get the value from the cache
             cache_key = (raw_field, raw_val)
@@ -1026,8 +1057,8 @@ class TSVFile(object):
                         % (csv_val, raw_field, self.relative_name)
                     )
                 elif a_field == "object_annotation_category_id":
-                    diag.classif_id_seen.add(int(csv_val))
-            elif a_field == "object_date":
+                    diag.classif_id_seen.add(int(vf))
+            elif a_field in ("object_date", "object_annotation_date"):
                 try:
                     ObjectHeader.date_from_txt(csv_val)
                 except ValueError:
@@ -1035,7 +1066,7 @@ class TSVFile(object):
                         "Invalid Date value '%s' for Field '%s' in file %s."
                         % (csv_val, raw_field, self.relative_name)
                     )
-            elif a_field == "object_time":
+            elif a_field in ("object_time", "object_annotation_time"):
                 try:
                     ObjectHeader.time_from_txt(csv_val)
                 except ValueError:

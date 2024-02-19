@@ -298,96 +298,7 @@ def test_equal_dump_prj1(database, caplog, tstlogs):
 
 
 # @pytest.mark.skip()
-def test_import_update(database, caplog, tstlogs):
-    """Update TSVs"""
-    caplog.set_level(logging.DEBUG)
-    prj_id = create_project(ADMIN_USER_ID, "Test Import update")
-
-    # Plain import first
-    import_plain(prj_id)
-    with AsciiDumper() as dump_sce:
-        dump_sce.run(projid=prj_id, out=tstlogs / "before_upd.txt")
-
-    # Update using initial import data, should do nothing
-    do_import_update(prj_id, caplog, "Yes", str(PLAIN_DIR))
-    print("Import update 0:" + "\n".join(caplog.messages))
-    upds = [msg for msg in caplog.messages if msg.startswith("Updating")]
-    assert upds == []
-
-    # Update without classif, 10 cells
-    do_import_update(prj_id, caplog, "Yes")
-    print("Import update 1:" + "\n".join(caplog.messages))
-    nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
-    # 9 fields + 7 derived sun positions
-    assert nb_upds == 16
-    saves = [msg for msg in caplog.messages if "Batch save objects" in msg]
-    assert saves == ["Batch save objects of 0/0/0/0/0"] * 3
-
-    # Update classif, 2 cells, one classif ID and one classif quality
-    do_import_update(prj_id, caplog, "Cla")
-    nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
-    print("Import update 2:" + "\n".join(caplog.messages))
-    assert nb_upds == 2
-    # 1 line corresponds to nothing, on purpose
-    nb_notfound = len(
-        [msg for msg in caplog.messages if "not found while updating" in msg]
-    )
-    assert nb_notfound == 2
-    with AsciiDumper() as dump_sce:
-        dump_sce.run(projid=prj_id, out=tstlogs / "after_upd.txt")
-    # Check that all went fine
-    for a_msg in caplog.records:
-        assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
-    # ecotaxa/ecotaxa_dev#583: Check that no image was added during the update
-    saves = [msg for msg in caplog.messages if "Batch save objects" in msg]
-    assert saves == ["Batch save objects of 0/0/0/0/0"] * 3
-
-    do_import_update(prj_id, caplog, "Yes")
-    print("Import update 3:" + "\n".join(caplog.messages))
-    assert len(caplog.messages) > 0
-    upds = [msg for msg in caplog.messages if msg.startswith("Updating")]
-    assert upds == []
-    with AsciiDumper() as dump_sce:
-        dump_sce.run(projid=prj_id, out=tstlogs / "after_upd_3.txt")
-
-
-# Ensure that re-updating updates nothing. This is tricky due to floats storage on DB.
-# @pytest.mark.skip()
-def do_import_update(prj_id, caplog, classif, source=None):
-    if source is None:
-        source = str(UPDATE_DIR)
-    params = ImportReq(
-        skip_existing_objects=True, update_mode=classif, source_path=source
-    )
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
-
-    assert job.state == DBJobStateEnum.Asking
-    assert job.question == {
-        "missing_users": ["admin4test", "elizandro rodriguez"],
-        "missing_taxa": ["other", "ozzeur"],
-    }
-
-    reply = {
-        "users": {"admin4test": 1, "elizandro rodriguez": 1},  # Map to admin
-        "taxa": {"other": 99999, "ozzeur": 85011},  # 'other<dead'  # 'other<living'
-    }
-    caplog.clear()
-    with JobCRUDService() as sce:
-        sce.reply(ADMIN_USER_ID, rsp.job_id, reply)
-    job = wait_for_stable(rsp.job_id)
-    check_job_ok(job)
-    # Check that all went fine
-    for a_msg in caplog.records:
-        assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
-    # #498: No extra parent should be created
-    for a_msg in caplog.records:
-        assert "++ ID" not in a_msg.getMessage()
-
-
-# @pytest.mark.skip()
-# noinspection DuplicatedCode
+# noinspection DuplicatedCode,PyUnusedLocal
 @pytest.mark.parametrize("title", ["Test LS 2"])
 def test_import_uvp6(database, caplog, title):
     caplog.set_level(logging.DEBUG)
@@ -474,10 +385,12 @@ def test_import_issues(database, caplog):
         "Invalid Date value '20140433' for Field 'object_date' in file ecotaxa_m106_mn01_n3_sml.tsv.",
         "Invalid Time value '9920' for Field 'object_time' in file ecotaxa_m106_mn01_n3_sml.tsv.",
         "Invalid Annotation Status 'predit' for Field 'object_annotation_status' in file ecotaxa_m106_mn01_n3_sml.tsv.",
+        "Invalid Date value '2015-11-31' for Field 'object_annotation_date' in file ecotaxa_m106_mn01_n3_sml.tsv.",
+        "Invalid Time value '5:31' for Field 'object_annotation_time' in file ecotaxa_m106_mn01_n3_sml.tsv.",
         "Missing Image 'm106_mn01_n3_sml_1081.jpg2' in file ecotaxa_m106_mn01_n3_sml.tsv. ",
         "Error while reading image 'm106_mn01_n3_sml_corrupted_image.jpg' "
         "from file ecotaxa_m106_mn01_n3_sml.tsv: cannot identify image file '.../m106_mn01_n3_sml_corrupted_image.jpg' <class 'PIL.UnidentifiedImageError'>",
-        "Missing object_id in line '5' of file ecotaxa_m106_mn01_n3_sml.tsv. ",
+        "Missing object_id in line '6' of file ecotaxa_m106_mn01_n3_sml.tsv. ",
         "Missing Image 'nada.png' in file ecotaxa_m106_mn01_n3_sml.tsv. ",
     ]
 

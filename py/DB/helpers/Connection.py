@@ -2,11 +2,15 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import logging
+import time
 from typing import ClassVar
 
 import sqlalchemy
 from sqlalchemy import MetaData, text
 from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.pool import QueuePool
+from sqlalchemy.util.queue import Queue
 
 from helpers.DynamicLogs import get_logger
 
@@ -26,18 +30,46 @@ def check_sqlalchemy_version() -> None:
         exit(-1)
 
 
-# @listens_for(Pool, "connect")
-# def my_on_connect(dbapi_conn, _conn_record):
-#     # Fix for https://github.com/ecotaxa/ecotaxa_dev/issues/636
-#     # Align the DB precision of floats with the one in python
-#     # This is not necessary anymore with PG12+
-#     # ref: https://www.postgresql.org/docs/12/datatype-numeric.html#DATATYPE-FLOAT
-#     #  and https://www.postgresql.org/docs/11/runtime-config-client.html
-#     # TODO: Remove when go to PG12+
-#     crs = dbapi_conn.cursor()
-#     crs.execute("set extra_float_digits=2")
-#     crs.close()
-#     dbapi_conn.commit()
+class TimeEvictedQueue(Queue):
+    TOO_OLD: ClassVar[int] = 120  # No session should be older than 2m
+    CLEAN_INTERVAL: ClassVar[int] = 1  # Expire some session after every sec
+
+    def __init__(self, maxsize=0, use_lifo=False):
+        assert (
+            use_lifo
+        ), "If not set eviction fails"  # With FIFO we might end up reusing a fresh cnx while older ones are not closed
+        super().__init__(maxsize, use_lifo=use_lifo)
+        self.last_cleanup: float = 0
+
+    def put(self, item, block=True, timeout=None):
+        super().put(item, block, timeout)
+        now = time.time()
+        if now - self.last_cleanup < self.CLEAN_INTERVAL:
+            return
+        self.last_cleanup = now
+        with self.mutex:
+            for a_conn in self.queue:  # type:sqlalchemy.pool.base._ConnectionRecord
+                if a_conn.dbapi_connection and now - a_conn.starttime > self.TOO_OLD:
+                    # Note: below produces infor logs for each invalidation in global logger, if set.
+                    a_conn.invalidate()
+
+
+class TimeEvictedQueuePool(QueuePool):
+    _queue_class = TimeEvictedQueue
+
+    def __init__(
+        self, creator, pool_size=5, max_overflow=10, timeout=30.0, use_lifo=False, **kw
+    ):
+        super().__init__(creator, pool_size, max_overflow, timeout, use_lifo, **kw)
+        # A logger is created somewhere in inheritance chain, it gets the invalidation INFO messages, we don't want them
+        q_logger = logging.getLogger()
+        q_logger.disabled = True
+        setattr(self, "logger", q_logger)
+
+    # Uncomment for debug
+    # def _do_get(self):
+    #     logger.info("Stats: %s", self.status())
+    #     return QueuePool._do_get(self)
 
 
 class Connection(object):
@@ -73,16 +105,16 @@ class Connection(object):
             echo_pool=False,
             # echo=True, echo_pool="debug",
             executemany_mode="batch",
-            # Reminders: QueuePool is default implementation
-            # and this code executes for _both_ ro and rw connections.
-            # So for each Connection (ro and rw), singletons per process:
-            # - 1 session for serving requests
-            # - 1 session for knowing which jobs to run, ~every sec,
-            #   _or running the job_ as we don't look for other jobs if one is running
-            pool_size=1,
-            max_overflow=1,
+            poolclass=TimeEvictedQueuePool,
+            pool_use_lifo=True,
+            # We have our own age-based eviction strategy, the pool below will contain invalidated connections
+            pool_size=16,
+            max_overflow=8,
+            # In case something goes unexpected, user will wait for this time for a free connection (or failure)
+            pool_timeout=60,
             # This way we can restart the DB and sessions will re-establish themselves
-            # the cost is 1 (simple) query per connection pool recycle.
+            # The cost is 1 (simple) query per connection pool recycle.
+            # Important: The invalidation mechanism now depends on it.
             pool_pre_ping=True,
             execution_options=exec_options,
             connect_args={"application_name": self.APP_NAME},

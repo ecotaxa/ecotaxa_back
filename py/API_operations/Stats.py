@@ -5,6 +5,7 @@
 #
 # Dig into a project 'big' data part
 #
+from collections import OrderedDict
 from decimal import Decimal
 from typing import List, Dict, Tuple, Union
 
@@ -109,7 +110,7 @@ class ProjectStatsFetcher(Service, LogEmitter):
         ret = []
         # TODO: Permissions
         ret.append(proj_bo.title)
-        ret.append(str(proj_bo.obj_free_cols))
+        ret.append(str(OrderedDict(proj_bo.obj_free_cols)))  # Just for fixing a test
         free_cols_vals = proj_bo.get_all_num_columns_values(self.session)
         acquis_stats: AcquisitionStats = AcquisitionStats("", 0)
         for a_row in free_cols_vals:

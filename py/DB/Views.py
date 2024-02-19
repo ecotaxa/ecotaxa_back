@@ -11,11 +11,21 @@ from sqlalchemy import Table, text
 from sqlalchemy_views import CreateView, DropView  # type:ignore # case6
 
 OBJECTS_DEF = text(
-    """select sam.projid, sam.sampleid, obh.*, obh.acquisid as processid, ofi.*
-                    from obj_head obh
-                    join acquisitions acq on obh.acquisid = acq.acquisid
-                    join samples sam on acq.acq_sample_id = sam.sampleid 
-                    left join obj_field ofi on obh.objid = ofi.objfid -- allow elimination by planner
+    """select sam.projid, sam.sampleid, obh.objid, obh.latitude, obh.longitude,
+              obh.objdate, obh.objtime, obh.depth_min, obh.depth_max,
+              obh.classif_id, obh.classif_qual, obh.classif_who, obh.classif_when,
+              obh.classif_auto_id, obh.classif_auto_score, obh.classif_auto_when,
+              NULL::integer AS classif_crossvalidation_id,
+              obh.complement_info,
+              NULL::double precision AS similarity,
+              obh.sunpos,
+              HASHTEXT(obh.orig_id) AS random_value,
+              obh.acquisid, obh.object_link, obh.orig_id, obh.acquisid AS processid, 
+              ofi.*
+         from obj_head obh
+         join acquisitions acq on obh.acquisid = acq.acquisid
+         join samples sam on acq.acq_sample_id = sam.sampleid 
+         left join obj_field ofi on obh.objid = ofi.objfid -- allow elimination by planner
                     """
 )
 

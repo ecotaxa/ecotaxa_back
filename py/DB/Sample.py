@@ -94,4 +94,12 @@ class Sample(Model):
 for i in range(1, SAMPLE_FREE_COLUMNS):
     setattr(Sample, "t%02d" % i, Column(VARCHAR(250)))
 
-Index("IS_SamplesProjectOrigId", Sample.projid, Sample.orig_id, unique=True)
+Index(
+    "is_samples_project_orig_id",
+    Sample.__table__.c.projid,
+    Sample.__table__.c.orig_id,
+    postgresql_include=[
+        Sample.__table__.c.sampleid
+    ],  # For Index Only scans during recursive descent
+    unique=True,
+)

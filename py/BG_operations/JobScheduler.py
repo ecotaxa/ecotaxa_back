@@ -85,7 +85,11 @@ class JobScheduler(Service):
                 return
             cls.the_runner = None
         # Pick the first pending job which is not already managed by another runner
-        qry = self.session.query(Job).filter(Job.state == DBJobStateEnum.Pending)
+        qry = (
+            self.session.query(Job)
+            .filter(Job.id > 0)
+            .filter(Job.state == DBJobStateEnum.Pending)
+        )
         if self.INCLUDE:
             qry = qry.filter(Job.type.in_(tuple(self.INCLUDE)))
         for a_type in self.FILTER:
@@ -93,6 +97,8 @@ class JobScheduler(Service):
         qry = qry.with_for_update(skip_locked=True)
         the_job: Optional[Job] = qry.first()
         if the_job is None:
+            # Exercise the ro_session for Connection pool cleanup
+            self.ro_session.query(Job).filter(Job.id == 0).first()
             return
         logger.info("Found job to run: %s", str(the_job))
         # Align DB job state
@@ -151,6 +157,7 @@ class JobScheduler(Service):
                 # noinspection PyProtectedMember
                 sce._run_one()
         except Exception as e:
+            # TODO here we have cryptic startup message if DB issue
             logger.exception("Job run() exception: %s", e)
         if not cls.do_run.is_set():
             if cls.the_runner is not None:

@@ -22,6 +22,13 @@ ACQUISITION_QUERY_URL = "/acquisition/{acquisition_id}"
 PROCESS_QUERY_URL = "/process/{process_id}"
 
 
+def current_object(fastapi, object_id):
+    url = OBJECT_QUERY_URL.format(object_id=object_id)
+    response = fastapi.get(url, headers=ADMIN_AUTH)
+    assert response.status_code == status.HTTP_200_OK
+    return response.json()
+
+
 @pytest.mark.parametrize("prj_id", [-1])
 def test_check_project_via_api(prj_id: int, fastapi):
     if prj_id == -1:  # Hack to avoid the test being marked as 'skipped'
@@ -52,10 +59,7 @@ def test_subentities(database, fastapi, caplog, tstlogs):
     response = fastapi.get(url, headers=ADMIN_AUTH)
     assert response.status_code == status.HTTP_404_NOT_FOUND
     # OK ID
-    url = OBJECT_QUERY_URL.format(object_id=first_objid)
-    response = fastapi.get(url, headers=ADMIN_AUTH)
-    assert response.status_code == status.HTTP_200_OK
-    obj = response.json()
+    obj = current_object(fastapi, first_objid)
     assert obj is not None
     # OK ID with anonymous
     url = OBJECT_QUERY_URL.format(object_id=first_objid)

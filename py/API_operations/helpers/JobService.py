@@ -125,7 +125,7 @@ class JobServiceBase(Service, LogEmitter, ABC):
             [new_job]
         )  # Flush sends the SQL to PG, so we can get the id from sequence
         self.job_id = new_job.id
-        self.temp_for_jobs.erase_for(new_job.id)
+        self.temp_for_jobs.erase_for(new_job.id)  # mainly for tests
         with LogsSwitcher(self):
             logger.info("Creating job %d", self.job_id)
         self.session.commit()

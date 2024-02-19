@@ -119,6 +119,7 @@ DEBUG = True
 SECRET_KEY = 'THIS KEY MUST BE CHANGED'
 BACKEND_URL = 'http://localhost:8000'
 ECOPART_URL = 'http://localhost:5002'
+APP_GUI_MESSAGE_FILE = "app_gui_messages.json"
 ```
 
 ### Lancement du serveur du front

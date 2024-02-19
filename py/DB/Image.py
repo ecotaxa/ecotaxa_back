@@ -14,11 +14,13 @@ from .helpers.ORM import Model
 
 class Image(Model):
     __tablename__ = "images"
+    # TODO: The PK is unused from DB stats, we only use the "real PK" below
     imgid = Column(BIGINT, Sequence("seq_images"), primary_key=True)
     # The Object that this image belongs to
     # TODO: It looks like we have a relationship cycle Object->Image->Object
     #  Probably due to the fact that several images can exist for a single Object
-    # Real PK: objid + imgrank or better orig_id + imgrank, unless we can share images b/w objects... WIP
+    # Real PK: objid + imgrank unless we can share images b/w objects... WIP
+    # TODO: objid is nullable=False
     objid = Column(BIGINT, ForeignKey("obj_head.objid"))
     imgrank = Column(INTEGER, nullable=False)
     file_name = Column(VARCHAR(255), nullable=False)
@@ -51,7 +53,7 @@ class Image(Model):
         return self.imgid < other.imgid
 
 
-# Covering index with rank
+# Covering and unicity-enforcing index with rank
 Index(
     "is_imageobjrank", Image.__table__.c.objid, Image.__table__.c.imgrank, unique=True
 )

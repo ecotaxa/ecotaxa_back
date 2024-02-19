@@ -3,6 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import json
+from datetime import datetime
 from typing import Dict, List, Any, Set, TextIO
 
 from API_models.filters import ProjectFiltersDict
@@ -109,6 +110,8 @@ class JsonDumper(Service):
                 else:
                     # Dump into same output dict.
                     self._dump_into_dict(out_stream, attr, tgt_dict)
+            elif isinstance(attr, datetime):
+                tgt_dict[how] = attr.isoformat()
             else:
                 # Ordinary field
                 if attr is not None:

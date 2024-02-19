@@ -48,7 +48,15 @@ from API_models.crud import (
     ResetPasswordReq,
     UserActivateReq,
 )
-from API_models.exports import ExportReq, ExportRsp, TaxonomyRecast, DarwinCoreExportReq
+from API_models.exports import (
+    ExportReq,
+    ExportRsp,
+    TaxonomyRecast,
+    DarwinCoreExportReq,
+    GeneralExportReq,
+    SummaryExportReq,
+    BackupExportReq,
+)
 from API_models.filesystem import DirectoryModel
 from API_models.filters import ProjectFilters
 from API_models.helpers.Introspect import plain_columns
@@ -106,7 +114,12 @@ from API_operations.admin.Database import DatabaseService
 from API_operations.admin.ImageManager import ImageManagerService
 from API_operations.admin.NightlyJob import NightlyJobService
 from API_operations.exports.DarwinCore import DarwinCoreExport
-from API_operations.exports.ForProject import ProjectExport
+from API_operations.exports.ForProject import (
+    ProjectExport,
+    GeneralProjectExport,
+    SummaryProjectExport,
+    BackupProjectExport,
+)
 from API_operations.imports.Import import FileImport
 from API_operations.imports.SimpleImport import SimpleImport
 from BG_operations.JobScheduler import JobScheduler
@@ -149,7 +162,7 @@ fastapi_logger.setLevel(INFO)
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.35",
+    version="0.0.36",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -197,7 +210,7 @@ app.mount("/api", app)
     },
     response_model=str,
 )
-async def login(params: LoginReq = Body(...)) -> str:
+def login(params: LoginReq = Body(...)) -> str:
     """
     **Login barrier,**
 
@@ -909,7 +922,7 @@ project_model_columns = plain_columns(ProjectModel)
     tags=["projects"],
     response_model=List[ProjectModel],
 )
-def search_projects(
+async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> await
     current_user: Optional[int] = Depends(get_optional_current_user),
     also_others: bool = Query(
         default=False,
@@ -1072,8 +1085,9 @@ def project_query(
     operation_id="project_set_get_stats",
     tags=["projects"],
     response_model=List[ProjectTaxoStatsModel],
+    response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
-def project_set_get_stats(
+async def project_set_get_stats(  # MyORJSONResponse -> JSONResponse -> Response -> await
     ids: str = Query(
         ...,
         title="Ids",
@@ -1980,7 +1994,8 @@ def process_query(
     response_model=ObjectSetQueryRsp,
     response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
-def get_object_set(
+async def get_object_set(
+    # MyORJSONResponse -> JSONResponse -> Response -> await
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", example=1
     ),
@@ -2064,18 +2079,18 @@ If no **unique order** is specified, the result can vary for same call and condi
                 window_start,
                 window_size,
             )
-        rsp.total_ids = total
-        rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
-        rsp.acquisition_ids = [with_p[1] for with_p in obj_with_parents]
-        rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
-        rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
-        rsp.details = details
+    rsp.total_ids = total
+    rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
+    rsp.acquisition_ids = [with_p[1] for with_p in obj_with_parents]
+    rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
+    rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
+    rsp.details = details
     # Serialize
     return MyORJSONResponse(rsp)
 
 
 @app.post(
-    "/object_set/{project_id}/summary",
+    "/object_set/{project_id:int}/summary",
     operation_id="get_object_set_summary",
     tags=["objects"],
     response_model=ObjectSetSummaryRsp,
@@ -2324,7 +2339,7 @@ def classify_auto_object_set(
     response_model=ObjectSetQueryRsp,
     response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
-def query_object_set_parents(
+async def query_object_set_parents(  # MyORJSONResponse -> JSONResponse -> Response -> await
     object_ids: ObjectIDListT = Body(
         ...,
         title="Object IDs list",
@@ -2340,12 +2355,12 @@ def query_object_set_parents(
         with RightsThrower():
             rsp = ObjectSetQueryRsp()
             obj_with_parents = sce.parents_by_id(current_user, object_ids)
-        rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
-        rsp.acquisition_ids = [with_p[1] for with_p in obj_with_parents]
-        rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
-        rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
-        rsp.total_ids = len(rsp.object_ids)
-        return rsp
+    rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
+    rsp.acquisition_ids = [with_p[1] for with_p in obj_with_parents]
+    rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
+    rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
+    rsp.total_ids = len(rsp.object_ids)
+    return rsp
 
 
 @app.post(
@@ -2356,13 +2371,84 @@ def query_object_set_parents(
 )
 def export_object_set(
     filters: ProjectFilters = Body(...),
-    request: ExportReq = Body(...),
+    request: ExportReq = Body(..., deprecated=True),
     current_user: int = Depends(get_current_user),
 ) -> ExportRsp:
     """
-    **Start an export job for the given object set and options.**
+    ⚠️ Deprecated, see general, summary and backup exports for alternatives.
+
+    Start an export job for the given object set and options.
+
+    🔒 Current user needs *at least Read* right on the requested project.
     """
     with ProjectExport(request, filters.base()) as sce:
+        with RightsThrower():
+            rsp = sce.run(current_user)
+    return rsp
+
+
+@app.post(
+    "/object_set/export/general",
+    operation_id="export_object_set_general",
+    tags=["objects"],
+    response_model=ExportRsp,
+)
+def export_object_set_general(
+    filters: ProjectFilters = Body(...),
+    request: GeneralExportReq = Body(...),
+    current_user: int = Depends(get_current_user),
+) -> ExportRsp:
+    """
+    Start a general-purpose export job for the given object set and options.
+
+    🔒 Current user needs *at least Read* right on the requested project.
+    """
+    with GeneralProjectExport(request, filters.base()) as sce:
+        with RightsThrower():
+            rsp = sce.run(current_user)
+    return rsp
+
+
+@app.post(
+    "/object_set/export/summary",
+    operation_id="export_object_set_summary",
+    tags=["objects"],
+    response_model=ExportRsp,
+)
+def export_object_set_summary(
+    filters: ProjectFilters = Body(...),
+    request: SummaryExportReq = Body(...),
+    current_user: int = Depends(get_current_user),
+) -> ExportRsp:
+    """
+    Start a summary export job for the given object set and options.
+
+    🔒 Current user needs *at least Read* right on the requested project.
+    """
+    with SummaryProjectExport(request, filters.base()) as sce:
+        with RightsThrower():
+            rsp = sce.run(current_user)
+    return rsp
+
+
+@app.post(
+    "/object_set/export/backup",
+    operation_id="export_object_set_backup",
+    tags=["objects"],
+    response_model=ExportRsp,
+)
+def export_object_set_backup(
+    filters: ProjectFilters = Body(...),
+    request: BackupExportReq = Body(...),
+    current_user: int = Depends(get_current_user),
+) -> ExportRsp:
+    """
+    Start a backup export job for the given object set and options.
+    If filters are empty, the produced zip will contain the full project.
+
+    🔒 Current user needs *at least Read* right on the requested project.
+    """
+    with BackupProjectExport(request, filters.base()) as sce:
         with RightsThrower():
             rsp = sce.run(current_user)
     return rsp
@@ -2527,7 +2613,7 @@ def object_query_history(
     tags=["Taxonomy Tree"],
     response_model=List[TaxonModel],
 )
-async def query_root_taxa() -> List[TaxonBO]:
+def query_root_taxa() -> List[TaxonBO]:
     """
     **Return all taxa with no parent.**
     """
@@ -2542,7 +2628,7 @@ async def query_root_taxa() -> List[TaxonBO]:
     tags=["Taxonomy Tree"],
     response_model=TaxonomyTreeStatus,
 )
-async def taxa_tree_status(
+def taxa_tree_status(
     current_user: int = Depends(get_current_user),
 ) -> TaxonomyTreeStatus:
     """
@@ -2591,7 +2677,7 @@ async def taxa_tree_status(
     },
     response_model=List[TaxonModel],
 )
-async def reclassif_stats(
+def reclassif_stats(
     taxa_ids: str = Query(
         ...,
         title="Taxa ids",
@@ -2621,7 +2707,7 @@ async def reclassif_stats(
     tags=["Taxonomy Tree"],
     response_model=List[Dict[str, Any]],
 )
-async def reclassif_project_stats(
+def reclassif_project_stats(
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", example=1
     ),
@@ -2670,7 +2756,7 @@ async def reclassif_project_stats(
     },
     response_model=TaxonModel,
 )
-async def query_taxa(
+def query_taxa(
     taxon_id: int = Path(
         ..., description="Internal, the unique numeric id of this taxon.", example=12876
     ),
@@ -2690,7 +2776,7 @@ async def query_taxa(
     tags=["Taxonomy Tree"],
     response_model=List[TaxonUsageModel],
 )
-async def query_taxa_usage(
+def query_taxa_usage(
     taxon_id: int = Path(
         ..., description="Internal, the unique numeric id of this taxon.", example=12876
     ),
@@ -2712,7 +2798,7 @@ async def query_taxa_usage(
     tags=["Taxonomy Tree"],
     response_model=List[TaxaSearchRsp],
 )
-async def search_taxa(
+def search_taxa(
     query: str = Query(
         ...,
         description="Use this query for matching returned taxa names.",
@@ -2750,7 +2836,7 @@ async def search_taxa(
     response_model=List[TaxonModel],
     response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
-async def query_taxa_set(
+async def query_taxa_set(  # MyORJSONResponse -> JSONResponse -> Response -> await
     ids: str = Query(
         ...,
         title="Ids",
@@ -2762,8 +2848,8 @@ async def query_taxa_set(
     """
     Returns **information about several taxa**, including their lineage.
     """
+    num_ids = _split_num_list(ids)
     with TaxonomyService() as sce:
-        num_ids = _split_num_list(ids)
         ret = sce.query_set(num_ids)
     return MyORJSONResponse(ret)
 
@@ -2774,7 +2860,7 @@ async def query_taxa_set(
     tags=["Taxonomy Tree"],
     response_model=List[TaxonCentral],
 )
-async def get_taxon_in_central(
+def get_taxon_in_central(
     taxon_id: int = Path(
         ..., description="Internal, the unique numeric id of this taxon.", example=12876
     ),
@@ -2791,7 +2877,7 @@ async def get_taxon_in_central(
 # Below pragma is because we need the same params as EcoTaxoServer, but we just relay them
 # noinspection PyUnusedLocal
 @app.put("/taxon/central", operation_id="add_taxon_in_central", tags=["Taxonomy Tree"])
-async def add_taxon_in_central(
+def add_taxon_in_central(
     name: str = Query(
         ...,
         title="Name",
@@ -2847,7 +2933,7 @@ async def add_taxon_in_central(
     operation_id="push_taxa_stats_in_central",
     tags=["Taxonomy Tree"],
 )
-async def push_taxa_stats_in_central(
+def push_taxa_stats_in_central(
     _current_user: int = Depends(get_current_user),
 ) -> Any:
     """
@@ -2862,7 +2948,7 @@ async def push_taxa_stats_in_central(
     operation_id="pull_taxa_update_from_central",
     tags=["Taxonomy Tree"],
 )
-async def pull_taxa_update_from_central(
+def pull_taxa_update_from_central(
     _current_user: int = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
@@ -2882,7 +2968,7 @@ async def pull_taxa_update_from_central(
     include_in_schema=False,
     response_model=TaxonModel,
 )
-async def query_taxa_in_worms(
+def query_taxa_in_worms(
     aphia_id: int,
     # = Path(..., description="Internal, the unique numeric id of this user.", default=None)
     _current_user: Optional[int] = Depends(get_optional_current_user),
@@ -2902,7 +2988,7 @@ async def query_taxa_in_worms(
     include_in_schema=False,
     status_code=status.HTTP_200_OK,
 )
-async def refresh_taxa_db(
+async def refresh_taxa_db(  # async due to StreamingResponse
     max_requests: int, current_user: int = Depends(get_current_user)
 ) -> StreamingResponse:  # pragma:nocover
     """
@@ -2912,10 +2998,10 @@ async def refresh_taxa_db(
         with RightsThrower():
             tsk = sce.db_refresh(current_user)
             async_bg_run(tsk)  # Run in bg while streaming logs
-        # Below produces a chunked HTTP encoding, which is officially only HTTP 1.1 protocol
-        return StreamingResponse(
-            log_streamer(sce.temp_log, "Done,"), media_type="text/plain"
-        )
+    # Below produces a chunked HTTP encoding, which is officially only HTTP 1.1 protocol
+    return StreamingResponse(
+        log_streamer(sce.temp_log, "Done,"), media_type="text/plain"
+    )
 
 
 @app.get(
@@ -2925,7 +3011,7 @@ async def refresh_taxa_db(
     include_in_schema=False,
     status_code=status.HTTP_200_OK,
 )
-async def check_taxa_db(
+async def check_taxa_db(  # async due to Response
     aphia_id: int, current_user: int = Depends(get_current_user)
 ) -> Response:  # pragma:nocover
     """
@@ -2934,8 +3020,8 @@ async def check_taxa_db(
     with TaxonomyChangeService(1) as sce:
         with RightsThrower():
             msg = await sce.check_id(current_user, aphia_id)
-        # Below produces a chunked HTTP encoding, which is officially only HTTP 1.1 protocol
-        return Response(msg, media_type="text/plain")
+    # Below produces a chunked HTTP encoding, which is officially only HTTP 1.1 protocol
+    return Response(msg, media_type="text/plain")
 
 
 @app.get(
@@ -2945,7 +3031,7 @@ async def check_taxa_db(
     include_in_schema=False,
     status_code=status.HTTP_200_OK,
 )
-async def matching_with_worms_nice(
+def matching_with_worms_nice(
     request: Request, current_user: int = 0  # Depends(get_current_user)
 ) -> Response:  # pragma:nocover
     """
@@ -3104,7 +3190,7 @@ def machine_learning_train(
     include_in_schema=True,
     response_class=MyORJSONResponse,
 )
-def direct_db_query(
+async def direct_db_query(  # MyORJSONResponse -> JSONResponse -> Response -> await
     q: str = Query(
         ...,
         title="Query",
@@ -3120,8 +3206,8 @@ def direct_db_query(
     with DatabaseService() as sce:
         with RightsThrower():
             hdr, data = sce.execute_query(current_user, q)
-        ret = {"header": hdr, "data": data}
-        return MyORJSONResponse(ret)
+    ret = {"header": hdr, "data": data}
+    return MyORJSONResponse(ret)
 
 
 # ######################## END OF ADMIN
@@ -3221,7 +3307,7 @@ def restart_job(
 
 
 @app.get("/jobs/{job_id}/log", operation_id="get_job_log_file", tags=["jobs"])
-def get_job_log_file(
+async def get_job_log_file(  # async due to FileResponse
     job_id: int = Path(
         ..., description="Internal, the unique numeric id of this job.", example=47445
     ),
@@ -3235,7 +3321,7 @@ def get_job_log_file(
     with JobCRUDService() as sce:
         with RightsThrower():
             path = sce.get_log_path(current_user, job_id)
-        return FileResponse(str(path))
+    return FileResponse(str(path))
 
 
 @app.get(
@@ -3249,7 +3335,7 @@ def get_job_log_file(
         }
     },
 )
-def get_job_file(
+async def get_job_file(  # async due to StreamingResponse
     job_id: int = Path(
         ..., description="Internal, the unique numeric id of this job.", example=47445
     ),
@@ -3269,7 +3355,7 @@ def get_job_file(
             "content-disposition": 'attachment; filename="' + file_name + '"',
             "content-length": str(length),
         }
-        return StreamingResponse(file_like, headers=headers, media_type=media_type)
+    return StreamingResponse(file_like, headers=headers, media_type=media_type)
 
 
 @app.delete(
@@ -3306,8 +3392,8 @@ def erase_job(
     tags=["Files"],
     response_model=DirectoryModel,
 )
-async def list_user_files(
-    sub_path: str = Query(..., title="Sub path", description="", example=""),
+def list_user_files(
+    sub_path: str,  # = Query(..., title="Sub path", description="", example=""),
     current_user: int = Depends(get_current_user),
 ) -> DirectoryModel:
     """
@@ -3318,7 +3404,7 @@ async def list_user_files(
     """
     with UserFolderService() as sce:
         with RightsThrower():
-            file_list = await sce.list(sub_path, current_user)
+            file_list = sce.list(sub_path, current_user)
     return file_list
 
 
@@ -3337,7 +3423,7 @@ async def list_user_files(
     },
     response_model=str,
 )
-async def put_user_file(
+async def put_user_file(  # async due to await file store
     file: UploadFile = File(..., title="File", description=""),
     path: Optional[str] = Form(
         title="Path", description="The client-side full path of the file.", default=None
@@ -3369,7 +3455,7 @@ async def put_user_file(
     tags=["Files"],
     response_model=DirectoryModel,
 )
-async def list_common_files(
+def list_common_files(
     path: str = Query(
         ..., title="path", description="", example="/ftp_plankton/Ecotaxa_Exported_data"
     ),
@@ -3382,7 +3468,7 @@ async def list_common_files(
     """
     with CommonFolderService() as sce:
         with RightsThrower():
-            file_list = await sce.list(path, current_user)
+            file_list = sce.list(path, current_user)
     return file_list
 
 
@@ -3497,7 +3583,7 @@ def used_constants() -> Constants:
     tags=["misc"],
     response_model=List[MLModel],
 )
-async def query_ml_models() -> List[MLModel]:
+def query_ml_models() -> List[MLModel]:
     """
     **Return the list of machine learning models, which can be used for extracting image features.**
     """
@@ -3515,7 +3601,7 @@ async def query_ml_models() -> List[MLModel]:
     tags=["image"],
     include_in_schema=False,
 )
-def get_image(
+async def get_image(  # async due to StreamingResponse
     dir_id: str = Path(
         ...,
         description="Internal, image directory ID, 0-padded if < 1000.",
@@ -3530,8 +3616,8 @@ def get_image(
     """
     with ImageService() as sce:
         file_like, length, media_type = sce.get_stream(dir_id, img_in_dir)
-        headers = {"content-length": str(length)}
-        return StreamingResponse(file_like, headers=headers, media_type=media_type)
+    headers = {"content-length": str(length)}
+    return StreamingResponse(file_like, headers=headers, media_type=media_type)
 
 
 # ######################## END OF MISC
