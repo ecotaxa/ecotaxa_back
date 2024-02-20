@@ -1593,26 +1593,6 @@ def set_project_predict_settings(
 
 
 # ######################## END OF PROJECT
-
-@app.post(
-    "/object_set/similarity_search", 
-    operation_id="object_set_similarity_search",
-    tags=["objects"],
-    response_model=SimilaritySearchRsp,
-)
-def object_set_similarity_search(
-    filters: ProjectFilters = Body(...),
-    request: SimilaritySearchReq = Body(...),
-    current_user: Optional[int] = Depends(get_optional_current_user),
-) -> SimilaritySearchRsp:
-    """
-    Perform a similarity search on a set of objects.
-    """
-    with SimilaritySearchForProject(request, filters.base()) as sce:
-        rsp = sce.similarity_search(current_user)
-    return rsp
-
-
 @app.post(
     "/object_set/{project_id}/similarity_search", # should be similar to ../{}/query
     operation_id="get_object_set_similarity_search",
