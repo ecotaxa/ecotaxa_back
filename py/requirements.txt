@@ -9,6 +9,8 @@ sqlalchemy_views==0.3.1
 # When SQLAlchemy moves to 2.0 we'll be able to use psycopg3
 #psycopg[binary]==3.0.8
 psycopg2-binary==2.9.3
+# pgvector for similarity search
+pgvector==0.2.4
 # Pillow needs manual testing
 # mac: brew install libjpeg
 Pillow==8.1.0

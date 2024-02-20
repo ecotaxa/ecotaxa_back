@@ -9,7 +9,7 @@ from .Bean import Bean
 from .Direct import text
 from .ORM import Session, Table, MetaData, minimal_table_of
 from .Postgres import SequenceCache
-from ..CNNFeature import ObjectCNNFeature
+from ..CNNFeatureVector import ObjectCNNFeatureVector
 from ..Image import Image
 from ..Object import ObjectHeader, ObjectFields, ObjectsClassifHisto
 
@@ -37,7 +37,7 @@ class DBWriter(object):
         self.obj_fields_bulks: List[Bean] = []
         self.obj_fields_tbl: Table
         self.obj_cnn_bulks: List[Bean] = []
-        self.obj_cnn_tbl = ObjectCNNFeature.__table__
+        self.obj_cnn_vector_tbl = ObjectCNNFeatureVector.__table__
         self.img_bulks: List[Bean] = []
         self.img_tbl: Table
         self.obj_history_bulks: List[Bean] = []
@@ -100,7 +100,7 @@ class DBWriter(object):
         inserts = [
             self.obj_tbl.insert(),
             self.obj_fields_tbl.insert(),
-            self.obj_cnn_tbl.insert(),
+            self.obj_cnn_vector_tbl.insert(),
             self.img_tbl.insert(),
             self.obj_history_tbl.insert(),
         ]
