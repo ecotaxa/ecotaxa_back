@@ -6,15 +6,19 @@ import logging
 
 from starlette import status
 
-from tests.credentials import CREATOR_AUTH, ORDINARY_USER2_USER_ID, ADMIN_AUTH
+from tests.credentials import CREATOR_AUTH
 
 OBJECT_SET_QUERY_URL = "/object_set/{project_id}/query"  # ?order_field={order}&window_start={start}&window_size={size}"
 
 
 # TODO: Dup/extend of the same in test_classification.py
-def _prj_query(fastapi, auth, prj_id, order=None, start=None, size=None, **kwargs):
+def _prj_query(
+    fastapi, auth, prj_id, order=None, start=None, size=None, fields=None, **kwargs
+):
     """Query using the filters in kwargs"""
     params = []
+    if fields:
+        params.append("fields=%s" % fields)
     if order:
         params.append("order_field=%s" % order)
     if start:
@@ -27,7 +31,8 @@ def _prj_query(fastapi, auth, prj_id, order=None, start=None, size=None, **kwarg
     rsp = fastapi.post(url, headers=auth, json=kwargs)
     assert rsp.status_code == status.HTTP_200_OK
     obj_ids = rsp.json()["object_ids"]
-    return obj_ids
+    details = rsp.json()["details"]
+    return obj_ids if fields is None else (obj_ids, details)
 
 
 def test_queries(database, fastapi, caplog):
@@ -69,3 +74,16 @@ def test_queries(database, fastapi, caplog):
     assert len(limit_4_start_4) == 4
 
     assert set(limit_4).isdisjoint(set(limit_4_start_4))
+
+    # What we get from UI, std page
+    objs, details = _prj_query(
+        fastapi, CREATOR_AUTH, prj_id, fields="img.file_name,img.thumb_file_name"
+    )
+    there_was_a_mini = False
+    for a_det_list in details:
+        file_name, thumb_file_name = a_det_list
+        assert file_name.endswith(".jpg") or file_name.endswith(".png")
+        if thumb_file_name:
+            there_was_a_mini = True
+            assert file_name[:9] == thumb_file_name[:9]
+    assert there_was_a_mini

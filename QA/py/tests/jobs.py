@@ -30,7 +30,7 @@ def wait_for_stable(job_id: int):
             # This is ORM query so you need a fresh session for cross-session read
             sce.ro_session.expire_all()
             job = sce.query(ADMIN_USER_ID, job_id)
-            time.sleep(0.1)
+            time.sleep(0.01)
     if sched:
         JobScheduler.shutdown()
     return job
