@@ -41,7 +41,7 @@ from DB.helpers.Direct import text
 from DB.helpers.Postgres import db_server_now
 from DB.helpers.SQL import OrderClause
 # noinspection PyUnresolvedReferences
-from FS.ObjectCache import ObjectCache, ObjectCacheWriter
+from FS.ObjectCache import ObjectCache, ObjectCacheWriter  # fmt:skip
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer

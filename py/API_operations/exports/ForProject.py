@@ -48,7 +48,7 @@ from helpers import (
 )  # Need to keep the whole module imported, as the function is mocked
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 # TODO: Move somewhere else
-from ..helpers.JobService import JobServiceBase, ArgsDict
+from ..helpers.JobService import JobServiceBase, ArgsDict  # fmt:skip
 
 logger = get_logger(__name__)
 

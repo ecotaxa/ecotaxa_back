@@ -10,7 +10,7 @@ from enum import Enum
 from typing import List, Tuple, Any
 
 # noinspection PyUnresolvedReferences
-from sqlalchemy import VARCHAR, INTEGER, CHAR
+from sqlalchemy import VARCHAR, INTEGER, CHAR  # fmt: skip
 # noinspection PyUnresolvedReferences
 from sqlalchemy.dialects.postgresql import (
     DOUBLE_PRECISION,
