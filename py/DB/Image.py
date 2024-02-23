@@ -26,7 +26,6 @@ class Image(Model):
     height = Column(SMALLINT, nullable=False)
     # file_name = Column(VARCHAR(255), nullable=False) # Now computed
     orig_file_name = Column(VARCHAR(255), nullable=False)
-
     # thumb_file_name = Column(VARCHAR(255)) # Now computed
     thumb_width = Column(SMALLINT)
     thumb_height = Column(SMALLINT)
@@ -123,7 +122,7 @@ class ImageFileStateEnum(Enum):
 class ImageFile(Model):
     # An image on disk. Can be referenced (or not...) from the application
     __tablename__ = "image_file"
-    # Same PK as Image, but we can keep here deleted objects reference
+    # No FK as imgid is not anymore a PK or unique in Image
     imgid = Column(BIGINT, primary_key=True)
     # Extension shortened
     ext: str = Column(CHAR(3), default="?", server_default="?", nullable=False)

@@ -1,3 +1,40 @@
+CREATE OR REPLACE FUNCTION img_to_file(rec images) RETURNS text
+   LANGUAGE plpgsql IMMUTABLE STRICT AS
+$$DECLARE
+   dir text;
+   ext text;
+   imgid bigint = rec.imgid;
+BEGIN
+   IF imgid < 10000000 THEN
+       dir = lpad((imgid / 10000)::text, 4, '0');
+   ELSE
+       dir =  (imgid / 10000)::text;
+   END IF;
+   ext = right(rec.orig_file_name, 4);
+   IF ext = 'jpeg' THEN ext = '.jpeg'; END IF;
+   RETURN dir || '/' || lpad((imgid % 10000)::text, 4, '0') || ext;
+END;$$;
+
+CREATE OR REPLACE FUNCTION img_to_thumb_file(rec images) RETURNS text
+   LANGUAGE plpgsql IMMUTABLE STRICT AS
+$$DECLARE
+   dir text;
+   imgid bigint = rec.imgid;
+BEGIN
+   IF rec.thumb_height IS NULL THEN RETURN NULL::text; END IF;
+   IF imgid < 10000000 THEN
+       dir = lpad((imgid / 10000)::text, 4, '0');
+   ELSE
+       dir =  (imgid / 10000)::text;
+   END IF;
+   RETURN dir || '/' || lpad((imgid % 10000)::text, 4, '0') || '_mini.jpg';
+END;$$;
+
+-- Sanity check should return only mentioned rows (238)
+select *
+from images img
+where img_to_file(img.*) != img.file_name;
+
 with mv(ifrm, ito, fto) as (values (185400000, 185400005, '18540/0005.jpg'),
                                    (186510000, 186511364, '18651/1364.jpg'),
                                    (186710000, 186711630, '18671/1630.jpg'),
@@ -258,18 +295,11 @@ set imgid = tbl.img - 10000
 from tbl
 where imgid = img;
 
--- Sanity check should return nothing, i.e. no problem
-with theo
-         as (select
-                 (case when imgid < 10000000 THEN lpad((imgid / 10000)::text, 4, '0') ELSE (imgid / 10000)::text end) ||
-                 '/' ||
-                 lpad((imgid % 10000)::text, 4, '0') || '.' as theo_name,
-                 objid,
-                 imgrank
-             from images)
-select theo.theo_name, images.*
-from images
-         join theo on theo.imgrank = images.imgrank and theo.objid = images.objid
-where not starts_with(file_name, theo_name)
-order by objid
-limit 1000
+
+-- Sanity check should now return nothing
+select *
+from images img
+where img_to_file(img.*) != img.file_name;
+
+
+
