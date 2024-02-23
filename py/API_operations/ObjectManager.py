@@ -27,6 +27,7 @@ from BO.ReClassifyLog import ReClassificationBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
 from BO.User import UserIDT
+from DB.Image import IMAGE_VIRTUAL_COLUMNS
 from DB.Object import (
     VALIDATED_CLASSIF_QUAL,
     PREDICTED_CLASSIF_QUAL,
@@ -158,8 +159,10 @@ class ObjectManager(Service):
         objid: int
         acquisid: int
         sampleid: int
+        to_apply = IMAGE_VIRTUAL_COLUMNS.get_transformers(res, offset_to_data=4)
         for objid, acquisid, sampleid, total, *extra in res:
             ids.append((objid, acquisid, sampleid, proj_id))
+            [fct(extra) for fct in to_apply]
             details.append(extra)
 
         if total == 0:

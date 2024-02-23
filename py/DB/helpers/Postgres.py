@@ -7,7 +7,7 @@
 #
 from datetime import datetime
 from enum import Enum
-from typing import List, Tuple
+from typing import List, Tuple, Any
 
 # noinspection PyUnresolvedReferences
 from sqlalchemy import VARCHAR, INTEGER, CHAR
@@ -18,6 +18,7 @@ from sqlalchemy.dialects.postgresql import (
     DATE,
     TIMESTAMP,
     BIGINT,
+    SMALLINT,
     BYTEA,
     JSONB,
 )
@@ -112,3 +113,10 @@ def values_cte(name: str, cols: Tuple[str, str], values: List[Tuple[int, int]]):
     )
     ret = vals_text.cte(name=name)
     return ret
+
+
+def find_in_cursor(columns: Any, name: str) -> int:
+    for idx, a_col in enumerate(columns):
+        if a_col.name == name:
+            return idx
+    return -1

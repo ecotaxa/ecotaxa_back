@@ -219,20 +219,27 @@ class EnumeratedObjectSet(MappedTable):
         Delete a chunk from self's object list.
         Technical Note: We use SQLA Core as we don't want to fetch the rows
         """
-        # Start with images which are not deleted via a CASCADE on DB side
+        # Start with physical images, which are not deleted via a CASCADE on DB side
         # This is maybe due to relationship cycle b/w ObjectHeader and Images @See comment in Image class
         img_del_qry: Delete = Image.__table__.delete()
         img_del_qry = img_del_qry.where(Image.objid == any_(a_chunk))
-        img_del_qry = img_del_qry.returning(Image.file_name, Image.thumb_file_name)
+        img_del_qry = img_del_qry.returning(
+            Image.imgid, Image.orig_file_name, Image.thumb_height
+        )
+        img_from_id_and_orig = Image.img_from_id_and_orig
+        thumb_img_from_id_and_orig = Image.thumb_img_from_id_if_there
         with CodeTimer("DELETE for %d images: " % len(a_chunk), logger):
             files_res = session.execute(img_del_qry)
             img_files = []
             nb_img_rows = 0
-            for a_file_tuple in files_res:
+            for imgid, orig_file_name, thumb_height in files_res:
+                main_img_file, thumb_img_file = img_from_id_and_orig(
+                    imgid, orig_file_name
+                ), thumb_img_from_id_and_orig(imgid, thumb_height)
                 # We have main file and optionally the thumbnail one
-                for a_file in a_file_tuple:
-                    if a_file:
-                        img_files.append(a_file)
+                img_files.append(main_img_file)
+                if thumb_img_file is not None:
+                    img_files.append(thumb_img_file)
                 nb_img_rows += 1
             logger.info(
                 "Removed: %d rows, to remove: %d files", nb_img_rows, len(img_files)

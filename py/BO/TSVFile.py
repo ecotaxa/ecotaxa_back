@@ -243,7 +243,6 @@ class TSVFile(object):
                         # In this case, the original image is kept in another DB line
                         backup_img_to_write = ImageGen(**dicts_to_write["images"])
                         backup_img_to_write.imgrank = 100
-                        backup_img_to_write.thumb_file_name = None
                         backup_img_to_write.thumb_width = None
                         backup_img_to_write.thumb_height = None
                         # Store backup image into DB
@@ -257,7 +256,6 @@ class TSVFile(object):
                         sub_path = where.vault.store_image(
                             orig_file_name, backup_img_to_write.imgid
                         )
-                        backup_img_to_write.file_name = sub_path
                         # Get original image dimensions
                         im = PIL_Image.open(where.vault.image_path(sub_path))
                         backup_img_to_write.width, backup_img_to_write.height = im.size
@@ -768,12 +766,11 @@ class TSVFile(object):
             # Source file is a replacement
             img_file_path = instead_image
         else:
-            # Files are in a subdirectory for UVP6, same directory for non-UVP6
+            # Files come from a subdirectory for UVP6 but from same directory for non-UVP6
             # TODO: Unsure if it works on Windows, as there is a "/" for UVP6
             img_file_path = self.path_for_image(image_to_write.orig_file_name)
 
         sub_path = where.vault.store_image(img_file_path, image_to_write.imgid)
-        image_to_write.file_name = sub_path
         present_ranks = how.image_ranks_per_obj.setdefault(image_to_write.objid, set())
         if image_to_write.get("imgrank") is None:
             self.compute_rank(image_to_write, present_ranks)
@@ -785,7 +782,7 @@ class TSVFile(object):
                 self.compute_rank(image_to_write, present_ranks)
                 logger.info(
                     "For %s, cannot use rank from TSV %d, using %d instead",
-                    image_to_write.file_name,
+                    img_file_path,
                     tsv_rank,
                     image_to_write.imgrank,
                 )

@@ -63,7 +63,7 @@ class DeepFeatures(object):
         """
         Find missing cnn features for this project.
         """
-        qry = session.query(ObjectHeader.objid, Image.file_name)
+        qry = session.query(ObjectHeader.objid, Image.imgid, Image.orig_file_name)
         qry = qry.join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
         qry = qry.join(
             Sample,
@@ -78,10 +78,10 @@ class DeepFeatures(object):
         qry = qry.order_by(ObjectHeader.objid, Image.imgrank)
         ret = {}
         for a_res in session.execute(qry):
-            objid, img_file = a_res
-            assert img_file is not None, "Object %d has no image in DB" % objid
+            objid, imgid, orig_file_name = a_res
+            assert imgid is not None, "Object %d has no image in DB" % objid
             if not objid in ret:
-                ret[objid] = img_file
+                ret[objid] = Image.img_from_id_and_orig(imgid, orig_file_name)
             else:  # Only pick the first image
                 pass
         return ret

@@ -94,9 +94,6 @@ class _Image2Model(DescriptiveModel):
         example=376456,
     )
     imgrank = Field(title="Image rank", description="The rank of the image.", example=0)
-    file_name = Field(
-        title="File name", description="The file name.", example="0037/6456.jpg"
-    )
     orig_file_name = Field(
         title="Original file name",
         description="The file name of the original image.",
@@ -104,11 +101,6 @@ class _Image2Model(DescriptiveModel):
     )
     width = Field(title="Width", description="The width of the image.", example=98)
     height = Field(title="Height", description="The height of the image.", example=63)
-    thumb_file_name = Field(
-        title="Thumb file name",
-        description="Generate thumbnail if image is too large. This generated thumbnail file name.",
-        example="null",
-    )
     thumb_width = Field(
         title="Thumb width",
         description="Generate thumbnail if image is too large. This generated thumbnail width.",
@@ -125,7 +117,16 @@ _ImageModelFromDB = combine_models(Image, _Image2Model)
 
 
 class ImageModel(_ImageModelFromDB):
-    pass
+    """Computed inside ObjectBO"""
+
+    file_name: str = Field(
+        title="File name", description="The file name.", example="0037/6456.jpg"
+    )
+    thumb_file_name: Optional[str] = Field(
+        title="Thumb file name",
+        description="If image was too large at import time, the generated thumbnail file name.",
+        example="null",
+    )
 
 
 class ObjectModel(ObjectHeaderModel):
