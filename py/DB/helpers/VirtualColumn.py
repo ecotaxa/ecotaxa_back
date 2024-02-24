@@ -8,8 +8,6 @@ import functools
 from typing import Callable, List, Any, Dict
 from typing import TYPE_CHECKING
 
-from mypy.plugins.default import partial
-
 from DB.helpers import Result
 from DB.helpers.Postgres import find_in_cursor
 
@@ -29,8 +27,10 @@ class VirtualColumn(object):
 # TODO: Remove when py3.9+
 if TYPE_CHECKING:
     VirtualColumnSetT = Dict[str, VirtualColumn]
+    from mypy.plugins.default import partial
 else:
     VirtualColumnSetT = dict
+    partial = Any
 
 
 class VirtualColumnSet(VirtualColumnSetT):

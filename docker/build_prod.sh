@@ -15,7 +15,7 @@ docker push ecotaxa/ecotaxa_back:$VERSION
 docker push ecotaxa/ecotaxa_back:latest
 # GPU
 docker tag ecotaxa/ecotaxa_gpu_back:latest ecotaxa/ecotaxa_gpu_back:$VERSION
-# The push takes ages because the image comes from official Nvidia one which is 1.4G in size
+# The push takes ages because the image comes from official Nvidia one which is 1.7G in size
 docker push ecotaxa/ecotaxa_gpu_back:$VERSION
 docker push ecotaxa/ecotaxa_gpu_back:latest
 
