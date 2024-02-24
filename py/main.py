@@ -2974,7 +2974,9 @@ def digest_project_images(
     response_model=str,
 )
 def digest_images(
-    max_digests: Optional[int],
+    max_digests: Optional[int] = Query(
+        default=100000, description="Number of images to scan."
+    ),
     project_id: Optional[int] = Query(
         default=None, description="Internal, numeric id of the project."
     ),
@@ -2983,7 +2985,6 @@ def digest_images(
     """
     Compute digests if they are not.
     """
-    max_digests = 1000 if max_digests is None else max_digests
     with ImageManagerService() as sce:
         with RightsThrower():
             ret: str = sce.do_digests(
@@ -3530,7 +3531,9 @@ app.add_exception_handler(
 
 dump_openapi(app, __file__)
 
-JOB_INTERVAL = 2  # Can be overwritten for testing
+# Can be overwritten for testing
+# Note: in PROD there are 16 workers, statistically the jobs will start very fast
+JOB_INTERVAL = 5
 
 
 @app.on_event("startup")

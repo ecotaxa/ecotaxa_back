@@ -73,7 +73,7 @@ class ImageManagerService(Service):
             img_file = ImageFile(imgid=imgid)  # type:ignore
             self.session.add(img_file)
             self._md5_on_record(img_file, imgid, orig_file_name)
-            if cnt % 100 == 0:
+            if cnt % 1000 == 0:
                 self.session.commit()
         self.session.commit()
         # Eventually we can still satisfy the constraint while doing a few missing md5s
@@ -107,6 +107,8 @@ class ImageManagerService(Service):
                 cnt += 1
                 img_file = ImageFile(imgid=imgid)  # type:ignore
                 self._md5_on_record(img_file, imgid, orig_file_name)
+                if cnt % 1000 == 0:
+                    self.session.commit()
             self.session.commit()
         return "Digest for %d images done." % cnt
 
