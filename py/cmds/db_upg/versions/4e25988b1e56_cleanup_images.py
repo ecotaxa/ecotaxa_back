@@ -75,8 +75,11 @@ ANALYSE images_new;
 
 ALTER TABLE images RENAME TO images_old;
 
-ALTER TABLE images_new RENAME TO images
+ALTER TABLE images_new RENAME TO images;
 
+ALTER INDEX images_pkey RENAME TO images_pkey_old;
+
+ALTER INDEX images_pkey_new RENAME TO images_pkey
     """
     )
     op.execute(
@@ -90,7 +93,10 @@ CREATE TABLE image_file (
     digest_type CHAR DEFAULT '?' NOT NULL,
     digest BYTEA,
     PRIMARY KEY (imgid)
-)
+);
+
+ALTER TABLE image_file OWNER TO postgres
+
 """
     )
     op.execute(
