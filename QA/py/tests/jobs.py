@@ -50,7 +50,7 @@ def check_job_ok(job):
 
 
 def check_job_errors(job) -> List[str]:
-    assert job.state == DBJobStateEnum.Error, "Job is :%s" % [
+    assert job.state == DBJobStateEnum.Error, "Job is _not_ failed:%s" % [
         job.state,
         job.progress_pct,
         job.progress_msg,

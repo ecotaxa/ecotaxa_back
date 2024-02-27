@@ -19,7 +19,7 @@ from starlette import status
 from tests.test_fastapi import ADMIN_AUTH
 from tests.test_import import ADMIN_USER_ID, test_import_uvp6, dump_project
 from tests.test_import_simple import test_import_images_only
-from tests.test_subset_merge import check_project
+from tests.prj_utils import check_project
 
 OUT_JSON_REF = "out_upd_tst.json"
 OUT_JSON_MODIF = "out_upd_tst_after.json"

@@ -43,6 +43,7 @@ from tests.jobs import (
     api_wait_for_stable_job,
     api_check_job_errors,
 )
+from tests.prj_utils import check_project
 from tests.test_fastapi import PRJ_CREATE_URL, ADMIN_AUTH, PROJECT_QUERY_URL
 from tests.test_import import (
     ADMIN_USER_ID,
@@ -61,14 +62,6 @@ OUT_SUBS_JSON = "out_subs.json"
 OUT_MERGE_REMAP_JSON = "out_merge_remap.json"
 
 PROJECT_MERGE_URL = "/projects/{project_id}/merge?source_project_id={source_project_id}&dry_run={dry_run}"
-
-
-def check_project(tstlogs, prj_id: int):
-    with pushd(tstlogs):
-        with ProjectConsistencyChecker(prj_id) as sce:
-            problems = sce.run(ADMIN_USER_ID)
-        assert problems == []
-
 
 PROJECT_CHECK_URL = "/projects/{project_id}/check"
 
