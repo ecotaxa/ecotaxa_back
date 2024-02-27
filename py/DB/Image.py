@@ -83,8 +83,10 @@ class FileNameVirtualColumn(VirtualColumn):
 
     @staticmethod
     def result_to_py(from_sel: Any) -> Any:
-        # For some SQLAlchemy reason we select a tuple (row) but we get a str
+        # For some SQLAlchemy reason we select a tuple (row/record) but we get a str
         imgid, orig_file_name = from_sel[1:-1].rsplit(",", 1)
+        # The name on the right gets enclosed in double quote if it contains a space
+        orig_file_name = orig_file_name.strip('"')
         imgid = int(imgid)
         return Image.img_from_id_and_orig(imgid, orig_file_name)
 
