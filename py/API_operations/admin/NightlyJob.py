@@ -6,6 +6,7 @@
 #
 import datetime
 from dataclasses import dataclass
+from typing import Tuple, Any, List
 
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
 from BO.Job import JobBO
@@ -16,6 +17,7 @@ from DB.Job import JobIDT, Job
 from DB.Project import Project, ProjectIDListT
 from DB.User import Role
 from DB.helpers import Result
+from DB.helpers import Session
 from DB.helpers.Direct import text
 from FS.TempDirForTasks import TempDirForTasks
 from helpers.DynamicLogs import get_logger, LogsSwitcher
@@ -30,6 +32,7 @@ class NightlyJobService(JobServiceBase):
 
     JOB_TYPE = "NightlyMaintenance"
     REPORT_EVERY = 20
+    NIGHTLY_CHECKS: List["ConsistencyCheckAndFix"] = []
 
     def __init__(self) -> None:
         super().__init__()
@@ -174,59 +177,16 @@ class NightlyJobService(JobServiceBase):
 
     def check_consistency(self, start: int, end: int) -> bool:
         """Ensure data is how it should be"""
-        # So far just focus on Predicted state as we need consistent data to move to a new system.
-        checks = [
-            ConsistencyCheckAndFix(
-                "There is a (user-visible) classif_id for 'P'",
-                "select count(1) as res from obj_head where classif_qual='P' and classif_id is null",
-                0,
-                "need investigation",
-            ),
-            ConsistencyCheckAndFix(
-                "Columns classif_auto_id and classif_auto_when are present for 'P', supposed to come from last prediction",
-                "select count(1) as res from obj_head where classif_qual='P' and classif_auto_id is null",
-                0,
-                """update obj_head
-set classif_auto_id   = classif_id,
-    classif_auto_score=1,
-    classif_auto_when=coalesce(classif_when, '1970-01-01')
-where classif_qual = 'P'
-  and classif_auto_id is null""",
-            ),
-            ConsistencyCheckAndFix(
-                "'P' relates to _auto fields, plain ones are for users - general case we have a complete prediction",
-                "select count(1) as res from obj_head where classif_qual='P' and (classif_who is not null or classif_when is not null) and classif_auto_id is not null",
-                0,
-                """update obj_head
-set classif_who   = NULL,
-    classif_when  = NULL
-where classif_qual = 'P'
-  and (classif_who is not null or classif_when is not null)
-  and classif_auto_id is not null""",
-            ),
-            ConsistencyCheckAndFix(
-                "'P' relates to _auto fields, plain ones are for users - special case of imported as 'P' with no other info",
-                "select count(1) as res from obj_head where classif_qual='P' and (classif_who is not null or classif_when is not null) and classif_auto_id is null",
-                0,
-                """update obj_head
-set classif_who   = NULL,
-    classif_when  = NULL
-where classif_qual = 'P'
-  and (classif_who is not null or classif_when is not null)
-  and classif_auto_id is null""",
-            ),
-        ]
         no_problem = True
-        total = len(checks)
-        for idx, a_check in enumerate(checks):
+        total = len(self.NIGHTLY_CHECKS)
+        for idx, a_check in enumerate(self.NIGHTLY_CHECKS):
             progress = round(start + (end - start) / total * idx)
             self.update_progress(
                 progress, "Checking consistency: %s" % a_check.background
             )
             logger.info("Consistency: %s", a_check.background)
-            res: Result = self.ro_session.execute(text(a_check.query))
-            actual = next(res)[0]
-            if actual != a_check.expected:
+            ok, actual = a_check.verify_ok(self.ro_session)
+            if not ok:
                 logger.info("Failed: expected %s actual %s", a_check.expected, actual)
                 logger.info("Query was: %s", a_check.query)
                 logger.info(
@@ -243,3 +203,60 @@ class ConsistencyCheckAndFix(object):
     query: str
     expected: int
     fix: str
+
+    def verify_ok(self, session: Session) -> Tuple[bool, Any]:
+        res: Result = session.execute(text(self.query))
+        actual = next(res)[0]
+        return actual == self.expected, actual
+
+
+# So far just focus on Predicted state as we need consistent data to move to a new system.
+NightlyJobService.NIGHTLY_CHECKS = [
+    ConsistencyCheckAndFix(
+        "There is a (user-visible) classif_id for 'P'",
+        "select count(1) as res from obj_head where classif_qual='P' and classif_id is null",
+        0,
+        "need investigation",
+    ),
+    ConsistencyCheckAndFix(
+        "Columns classif_auto_id and classif_auto_when are present for 'P', supposed to come from last prediction",
+        "select count(1) as res from obj_head where classif_qual='P' and classif_auto_id is null",
+        0,
+        """update obj_head
+set classif_auto_id   = classif_id,
+classif_auto_score=1,
+classif_auto_when=coalesce(classif_when, '1970-01-01')
+where classif_qual = 'P'
+and classif_auto_id is null""",
+    ),
+    ConsistencyCheckAndFix(
+        "'P' relates to _auto fields, plain ones are for users - general case we have a complete prediction",
+        "select count(1) as res from obj_head where classif_qual='P' and (classif_who is not null or classif_when is not null) and classif_auto_id is not null",
+        0,
+        """update obj_head
+set classif_who   = NULL,
+classif_when  = NULL
+where classif_qual = 'P'
+and (classif_who is not null or classif_when is not null)
+and classif_auto_id is not null""",
+    ),
+    ConsistencyCheckAndFix(
+        "'P' relates to _auto fields, plain ones are for users - special case of imported as 'P' with no other info",
+        "select count(1) as res from obj_head where classif_qual='P' and (classif_who is not null or classif_when is not null) and classif_auto_id is null",
+        0,
+        """update obj_head
+set classif_who   = NULL,
+classif_when  = NULL
+where classif_qual = 'P'
+and (classif_who is not null or classif_when is not null)
+and classif_auto_id is null""",
+    ),
+    ConsistencyCheckAndFix(
+        "All obj_fields have same acquisid as object",
+        "select count(1) from obj_head obh join obj_field obf on obf.objfid = obh.objid where obh.acquisid != obf.acquis_id",
+        0,
+        """
+        -- find root cause
+        """,
+    ),
+]
