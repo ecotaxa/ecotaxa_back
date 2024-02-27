@@ -5,10 +5,11 @@
 #
 # A few services for verifying consistency (DB mainly)
 #
-from typing import List
+from typing import List, Any
 
 from BO.ProjectTidying import ProjectTopology
 from BO.Rights import RightsBO, Action
+from DB import ObjectHeader, Acquisition, Sample, Project, ObjectFields
 from helpers.DynamicLogs import LogsSwitcher, LogEmitter
 from .helpers.Service import Service
 
@@ -37,6 +38,7 @@ class ProjectConsistencyChecker(Service, LogEmitter):
         ret = []
         # TODO: Permissions
         ret.extend(self.check_paths_unicity())
+        ret.extend(self.check_acquisid_mirror())
         return ret
 
     def check_paths_unicity(self) -> List[str]:
@@ -60,4 +62,18 @@ class ProjectConsistencyChecker(Service, LogEmitter):
         """
         Objects which are partially located in time/space.
         """
+        return []
+
+    def check_acquisid_mirror(self) -> List[Any]:
+        """
+        Did we break the assumption that an object's fields are in same acquisition?
+        """
+        qry = self.ro_session.query(ObjectHeader.objid)
+        qry = qry.join(ObjectFields).join(Acquisition).join(Sample).join(Project)
+
+        qry = qry.filter(Project.projid == self.prj_id)
+        qry = qry.filter(ObjectHeader.acquisid != ObjectFields.acquis_id)
+        broken = [objid for objid, in qry]
+        if len(broken) > 0:
+            return ["acquisid mirror broken", broken]
         return []
