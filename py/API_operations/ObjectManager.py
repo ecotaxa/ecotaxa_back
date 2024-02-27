@@ -40,8 +40,6 @@ from DB.helpers import Result
 from DB.helpers.Direct import text
 from DB.helpers.Postgres import db_server_now
 from DB.helpers.SQL import OrderClause
-# noinspection PyUnresolvedReferences
-from FS.ObjectCache import ObjectCache, ObjectCacheWriter  # fmt:skip
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
@@ -102,15 +100,7 @@ class ObjectManager(Service):
 
         from_, where_clause, params = object_set.get_sql(order_clause, extra_cols)
 
-        oid_lst, cnt = None, None
-        # with ObjectCache(project=prj, mapping=free_columns_mappings,
-        #                  where_clause=where_clause, order_clause=order_clause, params=params,
-        #                  window_start=window_start, window_size=window_size) as cache:
-        #     oid_lst, cnt = cache.pump_cache()
-
-        if oid_lst is not None:
-            total_col = "%d AS total" % cnt
-        elif "obf." in where_clause.get_sql():  # TODO: Drop when unused in mapping
+        if "obf." in where_clause.get_sql():  # TODO: Drop when unused in mapping
             # If the filter needs obj_field data it's more efficient to count with a window function
             # than issuing a second query.
             total_col = "COUNT(obh.objid) OVER() AS total"
@@ -118,24 +108,7 @@ class ObjectManager(Service):
             # Otherwise, no need for obj_field in count, less DB buffers
             total_col = "0 AS total"
 
-        sql = ""
-        if oid_lst is not None:
-            if (
-                len(oid_lst) == 0
-            ):  # All was filtered but an empty array does not work in below query
-                oid_lst = [-1]  # impossible objid
-            # SqlDialectInspection,SqlResolve
-            sql += "\n    WITH ordr (ordr, objid)"
-            sql += " AS (select * from UNNEST(:numbrs, :oids)) "
-            # The CTE is ordered and in practice it orders the result as well,
-            # but let's not depend on it, in case PG behavior evolves.
-            params["numbrs"] = list(range(len(oid_lst)))
-            params["oids"] = oid_lst
-            from_ += "ordr ON ordr.objid = obh.objid"
-            order_clause = OrderClause()
-            order_clause.add_expression("ordr", "ordr")
-            window_start = window_size = None  # The window is in the CTE
-        sql += """
+        sql = """
     SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
       FROM """ % (
             total_col,
