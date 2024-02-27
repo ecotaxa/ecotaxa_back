@@ -93,8 +93,9 @@ class ObjectManager(Service):
         )
         free_columns_mappings = object_set.mapping.object_mappings
 
-        # The order field has an impact on the query
+        # The order fields have an impact on the query
         order_clause = self.cook_order_clause(order_field, free_columns_mappings)
+        order_clause.set_window(window_start, window_size)
 
         extra_cols = self.add_return_fields(return_fields, free_columns_mappings)
 
@@ -119,10 +120,6 @@ class ObjectManager(Service):
         # Add order & window if relevant
         if order_clause is not None:
             sql += order_clause.get_sql()
-        if window_start is not None:
-            sql += " OFFSET %d" % window_start
-        if window_size is not None:
-            sql += " LIMIT %d" % window_size
 
         with CodeTimer("query: for %d using %s " % (proj_id, sql), logger):
             res: Result = self.ro_session.execute(text(sql), params)
@@ -155,21 +152,21 @@ class ObjectManager(Service):
     @staticmethod
     def cook_order_clause(
         order_field: Optional[str], mappings: TableMapping
-    ) -> Optional[OrderClause]:
+    ) -> OrderClause:
         """
         Prepare a SQL "order by" clause from the required field.
         The field is expressed using same table prefixes as return fields.
         """
-        if order_field is None:
-            return None
         ret = OrderClause()
+        if order_field is None:
+            return ret
         asc_desc = None
         if order_field[0] == "-":
             asc_desc = "DESC"
             order_field = order_field[1:]
         order_expr = ObjectBO._field_to_db_col(order_field, mappings)
         if order_expr is None:
-            return None
+            return ret
         alias, order_col = order_expr.split(".", 1)
         # From PG doc: If NULLS LAST is specified, null values sort after all non-null values;
         # if NULLS FIRST is specified, null values sort before all non-null values.

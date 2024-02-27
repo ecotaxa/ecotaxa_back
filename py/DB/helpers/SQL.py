@@ -140,6 +140,7 @@ class OrderClause(object):
     def __init__(self) -> None:
         self.expressions: List[str] = []
         self.columns: List[str] = []
+        self.window_start = self.window_size = None
 
     def add_expression(
         self,
@@ -167,8 +168,19 @@ class OrderClause(object):
         else:
             return set([a_col.split(".")[1] for a_col in self.columns])
 
+    def set_window(self, start: Optional[int], size: Optional[int]) -> None:
+        self.window_start: Optional[int] = start
+        self.window_size: Optional[int] = size
+
     def get_sql(self) -> str:
-        return "\nORDER BY " + ", ".join(self.expressions)
+        ret = (
+            ("\nORDER BY " + ", ".join(self.expressions)) if self.expressions else "\n"
+        )
+        if self.window_start is not None:
+            ret += " OFFSET %d" % self.window_start
+        if self.window_size is not None:
+            ret += " LIMIT %d" % self.window_size
+        return ret
 
     def replace(self, chunk_from, chunk_to):
         self.expressions = [
