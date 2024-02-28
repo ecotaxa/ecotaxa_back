@@ -36,7 +36,7 @@ from BO.Object import ObjectIDWithParentsT
 from BO.Taxonomy import TaxonomyBO
 from BO.User import UserIDT
 from BO.helpers.MappedTable import MappedTable
-from DB import Session, Query
+from DB import Session, Query, Process, Taxonomy, User
 from DB.Acquisition import Acquisition
 from DB.Image import Image
 from DB.Object import (
@@ -104,7 +104,7 @@ class DescribedObjectSet(object):
     ) -> Tuple[FromClause, WhereClause, SQLParamDict]:
         """
         Construct SQL parts for getting per-object information.
-        :param order_clause: The required order by clause.
+        :param order_clause: The required order by clause, possibly containing a resultset window.
         :param select_list: Used for hinting the builder that some specific table will be needed in join.
                 major tables obj_head, samples and acquisitions are always joined.
         :param all_images: If not set (default), only return the lowest rank, i.e. visible, image
@@ -118,48 +118,65 @@ class DescribedObjectSet(object):
         self.filters.get_sql_filter(
             obj_where, params, self.user_id, self.mapping.object_mappings
         )
-        selected_tables = FromClause("%s obh" % ObjectHeader.__tablename__)
-        selected_tables += "acquisitions acq ON acq.acquisid = obh.acquisid"
-        selected_tables += (
-            "samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :projid"
-        )
         column_referencing_sql = (
             obj_where.get_sql() + order_clause.get_sql() + select_list
         )
-        if "prj." in column_referencing_sql:
-            selected_tables += "projects prj ON prj.projid = sam.projid"
+
+        selected_tables = FromClause(
+            f"(select (:projid) as projid) prjs"
+        )  # Prepare a future _set_ of projects
+        selected_tables += f"{Project.__tablename__} prj ON prj.projid = prjs.projid"
+        selected_tables += f"{Sample.__tablename__} sam ON sam.projid = prj.projid"
+        selected_tables += (
+            f"{Acquisition.__tablename__} acq ON acq.acq_sample_id = sam.sampleid"
+        )
         if "prc." in column_referencing_sql:
-            selected_tables += "process prc ON prc.processid = acq.acquisid"
-        if "obf." in column_referencing_sql:
             selected_tables += (
-                ObjectFields.__tablename__ + " obf ON obf.objfid = obh.objid"
-            )  # TODO: Drop when unused in mapping
+                f"{Process.__tablename__} prc ON prc.processid = acq.acquisid"
+            )
+        if "obf." in column_referencing_sql:
+            # This is a table with big rows, better narrow the fetched ones ASAP
+            # noinspection PyUnreachableCode
+            if True:
+                selected_tables += (
+                    f"{ObjectFields.__tablename__} obf ON obf.acquis_id = acq.acquisid"
+                )
+            else:
+                # Experimental code
+                selected_tables += f"{ObjectFields.__tablename__}_new obf ON obf.projid = :projid AND obf.acquisid = acq.acquisid"
+            selected_tables += (
+                f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid"
+            )
+        else:
+            selected_tables += (
+                f"{ObjectHeader.__tablename__} obh ON obh.acquisid = acq.acquisid"
+            )
         if "ohu." in column_referencing_sql:  # Inline query for annotators in history
             selected_tables += (
-                "(select 1 as in_annots WHERE EXISTS (select * from "
-                + ObjectsClassifHisto.__tablename__
-                + " och WHERE och.objid = obh.objid AND och.classif_who = ANY (:filt_annot) ) ) ohu ON True"
+                f"(select 1 as in_annots WHERE EXISTS (select * from {ObjectsClassifHisto.__tablename__} och "
+                "WHERE och.objid = obh.objid AND och.classif_who = ANY (:filt_annot) ) ) ohu ON True"
             )
             selected_tables.set_outer("(select 1 as in_annots ")
             selected_tables.set_lateral("(select 1 as in_annots ")
         if "txo." in column_referencing_sql or "txp." in column_referencing_sql:
-            selected_tables += "taxonomy txo ON txo.id = obh.classif_id"
+            selected_tables += (
+                f"{Taxonomy.__tablename__} txo ON txo.id = obh.classif_id"
+            )
             if self.filters.status_filter not in MEANS_CLASSIF_ID_EXIST:
-                selected_tables.set_outer("taxonomy txo ")
+                selected_tables.set_outer(f"{Taxonomy.__tablename__} txo ")
         if "img." in column_referencing_sql:
-            selected_tables += "images img ON obh.objid = img.objid " + (
-                "AND img.imgrank = (SELECT MIN(img3.imgrank) "
-                "FROM images img3 WHERE img3.objid = obh.objid)"
+            selected_tables += f"{Image.__tablename__} img ON obh.objid = img.objid " + (
+                f"AND img.imgrank = (SELECT MIN(img2.imgrank) FROM {Image.__tablename__} img2 WHERE img2.objid = obh.objid)"
                 if not all_images
                 else ""
             )
             #  selected_tables.set_outer("images img ")
         if "usr." in column_referencing_sql:
-            selected_tables += "users usr ON obh.classif_who = usr.id"
-            selected_tables.set_outer("users usr ")
+            selected_tables += f"{User.__tablename__} usr ON obh.classif_who = usr.id"
+            selected_tables.set_outer(f"{User.__tablename__} usr ")
         if "txp." in column_referencing_sql:
-            selected_tables += "taxonomy txp ON txp.id = txo.parent_id"
-            selected_tables.set_outer("taxonomy txp ")
+            selected_tables += f"{Taxonomy.__tablename__} txp ON txp.id = txo.parent_id"
+            selected_tables.set_outer(f"{Taxonomy.__tablename__} txp ")
         return selected_tables, obj_where, params
 
     def without_filtering_taxo(self):

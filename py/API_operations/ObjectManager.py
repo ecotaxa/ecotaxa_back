@@ -110,8 +110,8 @@ class ObjectManager(Service):
             total_col = "0 AS total"
 
         sql = """
-    SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
-      FROM """ % (
+SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
+  FROM """ % (
             total_col,
             extra_cols,
         )
@@ -263,7 +263,7 @@ class ObjectManager(Service):
         )
         from_, where, params = object_set.get_sql()
         sql = """
-    SELECT COUNT(*) nbr"""
+SELECT COUNT(*) nbr"""
         if only_total:
             sql += """, NULL nbr_v, NULL nbr_d, NULL nbr_p"""
         else:
