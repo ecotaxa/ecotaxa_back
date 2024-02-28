@@ -821,7 +821,7 @@ class TSVFile(object):
             split_col = a_field.split("_", 1)
             if len(split_col) != 2:
                 diag.error(
-                    "Invalid Header '%s' in file %s. Format must be Table_Field. Field ignored"
+                    "Invalid Header '%s' in file %s. Format must be Table_Field."
                     % (a_field, self.relative_name)
                 )
                 continue
@@ -844,8 +844,8 @@ class TSVFile(object):
             target_table = GlobalMapping.TSV_table_to_table(tsv_table_prfx)
             if target_table not in GlobalMapping.POSSIBLE_TABLES:
                 diag.error(
-                    "Invalid Header '%s' in file %s. Unknown table prefix. Field ignored"
-                    % (a_field, self.relative_name)
+                    "Invalid Header '%s' in file %s. Unknown table prefix '%s'."
+                    % (a_field, self.relative_name, target_table)
                 )
                 continue
             if target_table not in (
@@ -862,8 +862,7 @@ class TSVFile(object):
                 except KeyError:
                     diag.error(
                         "Invalid Type '%s' for Field '%s' in file %s. "
-                        "Incorrect Type. Field ignored"
-                        % (sel_type, a_field, self.relative_name)
+                        "Incorrect Type." % (sel_type, a_field, self.relative_name)
                     )
                     continue
             # Add the new custom column

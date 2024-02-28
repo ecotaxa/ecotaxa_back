@@ -376,9 +376,9 @@ def test_import_issues(database, caplog):
     check_job_errors(job)
     errors = get_job_errors(job)
     assert errors == [
-        "Invalid Header 'nounderscorecol' in file ecotaxa_m106_mn01_n3_sml.tsv. Format must be Table_Field. Field ignored",
-        "Invalid Header 'unknown_target' in file ecotaxa_m106_mn01_n3_sml.tsv. Unknown table prefix. Field ignored",
-        "Invalid Type '[H]' for Field 'object_wrongtype' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect Type. Field ignored",
+        "Invalid Header 'nounderscorecol' in file ecotaxa_m106_mn01_n3_sml.tsv. Format must be Table_Field.",
+        "Invalid Header 'unknown_target' in file ecotaxa_m106_mn01_n3_sml.tsv. Unknown table prefix 'unknown'.",
+        "Invalid Type '[H]' for Field 'object_wrongtype' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect Type.",
         "Invalid float value 'a' for Field 'object_buggy_float' in file ecotaxa_m106_mn01_n3_sml.tsv.",
         "Invalid Lat. value '100' for Field 'object_lat' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect range -90/+90°.",
         "Invalid Long. value '200' for Field 'object_lon' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect range -180/+180°.",
@@ -396,20 +396,21 @@ def test_import_issues(database, caplog):
 
     # @pytest.mark.skip()
 
-    def test_import_classif_issue(database, caplog):
-        """The TSV contains an unknown classification id"""
-        caplog.set_level(logging.DEBUG)
-        prj_id = create_project(ADMIN_USER_ID, "Test LS 5")
 
-        params = ImportReq(source_path=str(ISSUES_DIR2))
-        with FileImport(prj_id, params) as sce:
-            rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-        job = wait_for_stable(rsp.job_id)
-        check_job_errors(job)
-        errors = get_job_errors(job)
-        assert errors == [
-            "Some specified classif_id don't exist, correct them prior to reload: 99999999"
-        ]
+def test_import_no_valid_category(database, caplog):
+    """The TSV contains an unknown classification id"""
+    caplog.set_level(logging.DEBUG)
+    prj_id = create_project(ADMIN_USER_ID, "Test LS 5")
+
+    params = ImportReq(source_path=str(ISSUES_DIR2))
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    check_job_errors(job)
+    errors = get_job_errors(job)
+    assert errors == [
+        "Some specified classif_id don't exist, correct them prior to reload: 99999999"
+    ]
 
 
 # @pytest.mark.skip()
