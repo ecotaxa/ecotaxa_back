@@ -16,7 +16,6 @@ from API_models.subset import SubsetReq, SubsetRsp
 from API_operations.CRUD.Projects import ProjectsService
 
 # noinspection PyPackageRequirements
-from API_operations.Consistency import ProjectConsistencyChecker
 from API_operations.Merge import MergeService
 from API_operations.Subset import SubsetServiceOnProject
 
@@ -1404,6 +1403,7 @@ def test_merge_remap(fastapi, caplog, tstlogs):
     response = fastapi.post(url, headers=ADMIN_AUTH)
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["errors"] == []
+    check_project(tstlogs, prj_id)
 
 
 def test_empty_subset_uvp6(database, fastapi, caplog):
@@ -1577,14 +1577,14 @@ def test_subset_of_no_visible_issue_484(fastapi, caplog):
     test_check_project_via_api(tgt_prj_id, fastapi)
 
 
-def test_subset_consistency(database, caplog, tstlogs):
+def test_subset_consistency(database, fastapi, caplog, tstlogs):
     caplog.set_level(logging.ERROR)
     from tests.test_import import import_plain
 
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test Import update")
     # Plain import first
-    import_plain(prj_id)
+    import_plain(fastapi, prj_id)
     check_project(tstlogs, prj_id)
     # Dump the project
     caplog.set_level(logging.DEBUG)

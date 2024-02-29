@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.prj_utils import sce_check_consistency
 from tools.dbBuildSQL import EcoTaxaDBFrom0, EcoTaxaExistingDB
 
 HERE = Path(dirname(realpath(__file__)))
@@ -18,6 +19,7 @@ def database(config) -> EcoTaxaDBFrom0:
     db.create()
     yield db
     # Teardown
+    sce_check_consistency("db fx")
     db.cleanup()
 
 
@@ -28,3 +30,11 @@ def filled_database(config) -> EcoTaxaDBFrom0:
     db.write_config(CONF_FILE, "localhost", 5434)
     yield db
     # Teardown
+
+
+@pytest.fixture(scope="function")
+def ccheck():
+    # Setup
+    yield
+    # Teardown
+    sce_check_consistency("ccheck fx")

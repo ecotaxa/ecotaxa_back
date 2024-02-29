@@ -33,14 +33,19 @@ from BO.helpers.ImportHelpers import (
     ImportStats,
 )
 from DB.Acquisition import Acquisition
-from DB.Object import classif_qual_revert, ObjectHeader, ObjectFields
+from DB.Object import (
+    classif_qual_revert,
+    ObjectHeader,
+    ObjectFields,
+    PREDICTED_CLASSIF_QUAL,
+)
 from DB.Process import Process
 from DB.Project import ProjectIDT
 from DB.Sample import Sample
 from DB.helpers import Session
 from DB.helpers.Bean import Bean
 from DB.helpers.Direct import text
-from DB.helpers.ORM import Model, detach_from_session
+from DB.helpers.ORM import detach_from_session
 from helpers.DynamicLogs import get_logger
 from .Image import ImageBO
 from .ObjectSet import EnumeratedObjectSet
@@ -140,8 +145,7 @@ class TSVFile(object):
                 target_fields
             )
 
-            # For annotation, if there is both an id and a category then ignore category
-            ignore_annotation_category: bool = (
+            both_categories_present: bool = (
                 "object_annotation_category_id" in field_set
                 and "object_annotation_category" in field_set
             )
@@ -159,10 +163,11 @@ class TSVFile(object):
 
                 lig = {self.clean_fields[field]: v for field, v in rawlig2.items()}
 
-                if ignore_annotation_category:
-                    # Remove category as required, but only if there is really an id value
-                    # it can happen that the id is empty, even if table header is present
-                    if clean_value(lig.get("object_annotation_category_id", "")) != "":
+                if both_categories_present:
+                    # Remove textual category if the category id is provided and populated
+                    if clean_value(lig.get("object_annotation_category_id", "")) == "":
+                        del lig["object_annotation_category_id"]
+                    else:
                         del lig["object_annotation_category"]
 
                 # First, read TSV line into dicts, faster than doing settattr()
@@ -525,23 +530,14 @@ class TSVFile(object):
         In-memory update of the ORM record, based on the difference with a needed state.
         :return: An explanation text for the updates to come.
         """
-        updateMsgs = []
+        update_msgs = []
         for attr, value in model.__dict__.items():
             if attr in update_dict and update_dict[attr] != value:
                 upd_val = update_dict[attr]
                 setattr(model, attr, upd_val)
-                updateMsgs.append((attr, repr(value) + "->" + repr(upd_val)))
+                update_msgs.append((attr, repr(value) + "->" + repr(upd_val)))
         # TODO: Extra values in update_dict ?
-        return updateMsgs
-
-    @staticmethod
-    def diff_orm_object(model: Model, update_dict: Dict[str, str]):
-        diffs = []
-        for attr, value in model.__dict__.items():
-            if attr in update_dict and update_dict[attr] != value:
-                upd_val = update_dict[attr]
-                diffs.append((attr, upd_val))
-        return diffs
+        return update_msgs
 
     @staticmethod
     def dispatch_fields_by_table(
@@ -585,7 +581,7 @@ class TSVFile(object):
         """
         predefined_mapping = GlobalMapping.PREDEFINED_FIELDS
         custom_mapping = how.custom_mapping
-        # CSV reader returns a minimal dict with no value equal to None
+        # CSV reader returns a minimal dict with no value equal to None,
         # so we have values only for common fields.
         for a_field in field_set.intersection(lig.keys()):
             # We have a value
@@ -594,11 +590,11 @@ class TSVFile(object):
             if not m:
                 m = custom_mapping.search_field(a_field)
                 assert m is not None
-            field_table = m["table"]
-            field_name = m["field"]
+            db_table = m["table"]
+            db_col = m["field"]
             is_numeric = m["type"] == "n"
             # Try to get the transformed value from the cache
-            cache_key: Any = (a_field, raw_val)
+            cache_key: Tuple[str, Any] = (a_field, raw_val)
             if cache_key in vals_cache:
                 cached_field_value = vals_cache.get(cache_key)
             else:
@@ -622,7 +618,7 @@ class TSVFile(object):
                     cached_field_value = ObjectHeader.date_from_txt(csv_val)
                 elif a_field == "object_time":
                     cached_field_value = ObjectHeader.time_from_txt(csv_val)
-                elif field_name == "classif_when":
+                elif db_col == "classif_when":
                     date = ObjectHeader.date_from_txt(csv_val)
                     csv_val_time = clean_value(
                         lig.get("object_annotation_time", "00:00:00")
@@ -631,8 +627,8 @@ class TSVFile(object):
 
                     cached_field_value = datetime.datetime.combine(date, time)
                     # no caching of this one as it depends on another value on same line
-                    cache_key = "0"
-                elif field_name == "classif_id":
+                    cache_key = ("0", None)
+                elif db_col == "classif_id":
                     # We map 2 fields to classif_id, the second (text one) has [t] type, treated here.
                     # The first, numeric, version is in "if type=n" case above.
                     mapped_val = how.taxo_mapping.get(csv_val.lower(), csv_val)
@@ -648,11 +644,11 @@ class TSVFile(object):
                         csv_val,
                         mapped_val,
                     )
-                elif field_name == "classif_who":
+                elif db_col == "classif_who":
                     # Eventually map to another user if asked so
                     usr_key = none_to_empty(csv_val).lower()
                     cached_field_value = how.found_users[usr_key].get("id", None)
-                elif field_name == "classif_qual":
+                elif db_col == "classif_qual":
                     cached_field_value = classif_qual_revert.get(csv_val.lower())
                 else:
                     # Assume it's an ordinary text field with nothing special
@@ -661,8 +657,8 @@ class TSVFile(object):
                 vals_cache[cache_key] = cached_field_value
 
             # Write the field into the right object
-            dict_to_write = dicts_to_write[field_table]
-            dict_to_write[field_name] = cached_field_value
+            dict_to_write = dicts_to_write[db_table]
+            dict_to_write[db_col] = cached_field_value
         # Ensure that all dicts' fields are valued, to None if needed. This is needed for bulk inserts,
         # in DBWriter.py, as SQL Alchemy core computes an insert for the first line and just injects the
         # data for following ones.
@@ -981,6 +977,19 @@ class TSVFile(object):
                         diag.error(maybe_err)
                 # Add the association anyway, it will reduce the repetition of errors
                 diag.topology.add_association(sample_id, acquis_id)
+
+            # Verify that implied associated categories are really present
+            classif_qual = lig.get("object_annotation_status", "")
+            if classif_qual != "":
+                classif_id = lig.get(
+                    "object_annotation_category",
+                    lig.get("object_annotation_category_id", ""),
+                ).strip()
+                if not classif_id:
+                    diag.error(
+                        "When annotation status '%s' is provided there has to be a category, in file %s."
+                        % (classif_qual, self.relative_name)
+                    )
 
         # For next TSV analysis
         diag.existing_objects_and_image.update(local_keys)

@@ -11,13 +11,13 @@ from tests.jobs import wait_for_stable, check_job_ok
 from tests.test_import import create_project, import_plain, PLAIN_DIR, UPDATE_DIR
 
 
-def test_import_update(database, caplog, tstlogs):
+def test_import_update(fastapi, caplog, tstlogs):
     """Update TSVs"""
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test Import update")
 
     # Plain import first
-    import_plain(prj_id)
+    import_plain(fastapi, prj_id)
     with AsciiDumper() as dump_sce:
         dump_sce.run(projid=prj_id, out=tstlogs / "before_upd.txt")
 

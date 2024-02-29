@@ -33,6 +33,7 @@ class NightlyJobService(JobServiceBase):
     JOB_TYPE = "NightlyMaintenance"
     REPORT_EVERY = 20
     NIGHTLY_CHECKS: List["ConsistencyCheckAndFix"] = []
+    IDLE_CHECKS: List["ConsistencyCheckAndFix"] = []
 
     def __init__(self) -> None:
         super().__init__()
@@ -175,11 +176,12 @@ class NightlyJobService(JobServiceBase):
                 job_bo.archive()
         logger.info("Cleanup of old jobs done")
 
-    def check_consistency(self, start: int, end: int) -> bool:
+    def check_consistency(self, start: int, end: int, idle: bool = False) -> bool:
         """Ensure data is how it should be"""
         no_problem = True
-        total = len(self.NIGHTLY_CHECKS)
-        for idx, a_check in enumerate(self.NIGHTLY_CHECKS):
+        to_run = self.NIGHTLY_CHECKS + self.IDLE_CHECKS if idle else []
+        total = len(to_run)
+        for idx, a_check in enumerate(to_run):
             progress = round(start + (end - start) / total * idx)
             self.update_progress(
                 progress, "Checking consistency: %s" % a_check.background
@@ -201,7 +203,7 @@ class NightlyJobService(JobServiceBase):
 class ConsistencyCheckAndFix(object):
     background: str
     query: str
-    expected: int
+    expected: Any
     fix: str
 
     def verify_ok(self, session: Session) -> Tuple[bool, Any]:
@@ -209,6 +211,15 @@ class ConsistencyCheckAndFix(object):
         actual = next(res)[0]
         return actual == self.expected, actual
 
+
+NightlyJobService.IDLE_CHECKS = [
+    ConsistencyCheckAndFix(
+        "No job is active",
+        "select array_agg(id) from job where state in ('P','R','A')",
+        None,
+        "need investigation",
+    ),
+]
 
 # So far just focus on Predicted state as we need consistent data to move to a new system.
 NightlyJobService.NIGHTLY_CHECKS = [
@@ -230,7 +241,7 @@ where classif_qual = 'P'
 and classif_auto_id is null""",
     ),
     ConsistencyCheckAndFix(
-        "'P' relates to _auto fields, plain ones are for users - general case we have a complete prediction",
+        "'P' relates to _auto fields, plain ones are for users - general case we have a complete last prediction",
         "select count(1) as res from obj_head where classif_qual='P' and (classif_who is not null or classif_when is not null) and classif_auto_id is not null",
         0,
         """update obj_head

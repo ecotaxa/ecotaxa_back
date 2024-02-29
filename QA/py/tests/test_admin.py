@@ -4,6 +4,7 @@ from API_operations.helpers.Service import Service
 from starlette import status
 
 from tests.credentials import ADMIN_AUTH, USER_AUTH
+from tests.export_shared import get_log_file
 from tests.jobs import wait_for_stable, check_job_ok
 
 PROJECT_DIGEST_URL = "/admin/images/{project_id}/digest?max_digests=100"
@@ -41,6 +42,9 @@ def do_nightly(fastapi):
 
     job_id = rsp.json()
     job = wait_for_stable(job_id)
+    log = str(get_log_file(fastapi, job.id))
+    if ":ERROR" in log:
+        print([a_line for a_line in log.split("\n")])
     check_job_ok(job)
 
 

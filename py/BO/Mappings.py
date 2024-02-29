@@ -20,7 +20,7 @@ ParentTableT = Union[Sample, Acquisition, Process]
 ParentTableClassT = Type[ParentTableT]
 
 ANNOTATION_FIELDS: Final = {
-    # !!! 2 TSV fields end up into a single DB column, it's one OR the other
+    # !!! 2 TSV fields end up into a single DB column, we read both and arbitrate
     "object_annotation_category": {
         "table": ObjectHeader.__tablename__,
         "field": "classif_id",

@@ -3,13 +3,13 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import os
-import typing
 from typing import Optional, ContextManager
+
+from sqlalchemy import event
+from sqlalchemy.orm import Session
 
 from DB.helpers.Connection import Connection, check_sqlalchemy_version
 from helpers.AppConfig import Config
-from sqlalchemy import event
-from sqlalchemy.orm import Session
 
 
 class BaseService(object):
@@ -203,7 +203,7 @@ class Service(BaseService, ContextManager):
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Release DB session
         self._in_with -= 1
-        # assert self.in_with == 0 # To track issues
+        # assert self._in_with == 0  # To track issues
         self.close_db_sessions()
 
     @classmethod

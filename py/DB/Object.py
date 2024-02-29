@@ -9,7 +9,7 @@ import datetime
 from typing import Dict, Set, Iterable, TYPE_CHECKING
 
 # noinspection PyPackageRequirements
-from sqlalchemy import Index, Column, ForeignKey, Sequence, Integer
+from sqlalchemy import Index, Column, ForeignKey, Sequence, Integer  # fmt:skip
 # noinspection PyPackageRequirements
 from sqlalchemy.dialects.postgresql import (
     BIGINT,
@@ -21,7 +21,7 @@ from sqlalchemy.dialects.postgresql import (
     FLOAT,
     CHAR,
     TIMESTAMP,
-)
+)  # fmt:skip
 # noinspection PyPackageRequirements
 from sqlalchemy.orm import relationship, Session
 
@@ -200,7 +200,7 @@ class ObjectFields(Model):
     object: relationship
 
 
-Index(
+Index(  # We CLUSTER using this one, object ids tend to be consecutively read
     "obj_field_acquisid_objfid_idx",
     ObjectFields.__table__.c.acquis_id,
     ObjectFields.__table__.c.objfid,
@@ -214,7 +214,7 @@ Index(
 #         ).execute_if(dialect='postgresql')
 # )
 
-# Ajout des colonnes numériques & textuelles libres
+# Add free columns, numerical and textual ones
 for i in range(1, 501):
     # 8 bytes each, if present
     setattr(ObjectFields, "n%02d" % i, Column(FLOAT))
