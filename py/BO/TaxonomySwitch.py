@@ -5,7 +5,7 @@
 # Switch from UniEUK (present in march 2021) taxonomy to WoRMS.
 #   Data sources are Worms DB table and ToWorms manual file.
 #
-from typing import Dict
+from typing import Dict, Optional
 
 from BO.Classification import ClassifIDListT, ClassifIDT
 from BO.Taxonomy import StrictWoRMSSetFromTaxaSet, TaxonomyBO
@@ -25,6 +25,9 @@ class TaxonomyMapper(object):
     of corresponding aphia_ids, i.e. WoRMS records.
     """
 
+    # This comes from constant-over-process-life data so let's cache it
+    TO_WORMS: Optional[ToWorms] = None
+
     def __init__(self, ro_session: Session, taxon_ids: ClassifIDListT):
         self.session = ro_session
         self.taxa_ids = set(taxon_ids)
@@ -36,20 +39,23 @@ class TaxonomyMapper(object):
 
         # Do the manual (i.e. XLSX-driven) matching of what can be.
         # In this part, both Morpho and Phylo taxa are matched to WoRMS.
-        with CodeTimer("Building ToWorms: ", logger):
-            to_worms: ToWorms = ToWorms(self.session)
-            # Load & QC data
-            pbs = to_worms.pre_validate()  # TODO use pbs
-            # assert pbs == []
-            to_worms.prepare()
-            to_worms.validate_with_trees()
-            to_worms.show_stats()
-            # Apply
-            to_worms.apply()
-            # Sanity check. TODO: Does print()s !
-            to_worms.check_ancestors()
-            to_worms.check_closure()
-            to_worms.check_sums()
+        to_worms: Optional[ToWorms] = self.TO_WORMS
+        if to_worms is None:
+            with CodeTimer("Building ToWorms: ", logger):
+                to_worms = ToWorms(self.session)
+                # Load & QC data
+                pbs = to_worms.pre_validate()  # TODO use pbs
+                # assert pbs == []
+                to_worms.prepare()
+                to_worms.validate_with_trees()
+                to_worms.show_stats()
+                # Apply
+                to_worms.apply()
+                # Sanity check. TODO: Does print()s !
+                to_worms.check_ancestors()
+                to_worms.check_closure()
+                to_worms.check_sums()
+            TaxonomyMapper.TO_WORMS = to_worms
 
         # Some taxa have a directly declared (in ToWoRMs, i.e. in golden XLSX) correspondance
         # ⚠ These might be Morpho ones? Or not... TODO: Check
