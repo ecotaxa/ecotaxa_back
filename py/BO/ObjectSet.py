@@ -73,6 +73,7 @@ logger = get_logger(__name__)
 
 # If one of these statuses are required, then the classif_id must be valid
 MEANS_CLASSIF_ID_EXIST = ("V", "PV", "PVD", "NVM", "VM")
+NO_HISTO = "n"
 
 
 class DescribedObjectSet(object):
@@ -497,19 +498,22 @@ class EnumeratedObjectSet(MappedTable):
             ObjectsClassifHisto.objid == any_(self.object_ids)
         ).subquery()
 
-        # Also get some fields from ObjectHeader for referencing, info, and fallback
+        # We have a maximum of 1 line from ObjectsClassifHisto (the one with most recent date) from subquery
         qry = self.session.query(
             ObjectHeader.objid,
             ObjectHeader.classif_id,
             func.coalesce(
                 subq_alias.c.classif_date, ObjectHeader.classif_auto_when
             ).label("histo_classif_date"),
-            subq_alias.c.classif_type.label("histo_classif_type"),
+            func.coalesce(
+                subq_alias.c.classif_type.label("histo_classif_type"),
+                NO_HISTO,
+            ).label("histo_classif_type"),
             func.coalesce(subq_alias.c.classif_id, ObjectHeader.classif_auto_id).label(
                 "histo_classif_id"
             ),
             func.coalesce(
-                subq_alias.c.classif_qual,
+                subq_alias.c.classif_qual,  # No classif_qual returned, i.e. no history
                 case(
                     [(ObjectHeader.classif_auto_id.isnot(None), PREDICTED_CLASSIF_QUAL)]
                 ),
@@ -556,7 +560,21 @@ class EnumeratedObjectSet(MappedTable):
                 ObjectHeader.classif_qual.name: an_histo.histo_classif_qual,
             }
             for an_histo in histo
+            if an_histo.histo_classif_type != NO_HISTO
         ]
+        updates.extend(
+            [
+                {
+                    ObjectHeader.objid.name: an_histo.objid,
+                    ObjectHeader.classif_id.name: None,
+                    ObjectHeader.classif_who.name: None,
+                    ObjectHeader.classif_when.name: None,
+                    ObjectHeader.classif_qual.name: None,
+                }
+                for an_histo in histo
+                if an_histo.histo_classif_type == NO_HISTO
+            ]
+        )
         self.session.bulk_update_mappings(ObjectHeader, updates)
         self.session.commit()
         return histo

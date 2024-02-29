@@ -192,7 +192,10 @@ class TSVFile(object):
                 if how.can_update_only:
                     self.update_parent_objects(how, session, dicts_to_write)
                 else:
-                    # Initial load attempt to compute sun position
+                    self.ensure_consistent_fields(
+                        object_head_to_write, stats.start_time
+                    )
+                    # Initial load, attempt to compute sun position
                     self.do_sun_position_field(object_head_to_write)
                     # Add parents
                     self.add_parent_objects(
@@ -299,6 +302,30 @@ class TSVFile(object):
             # for {'objtime': datetime.time(12, 29), 'latitude': -64.2, 'objdate': datetime.date(2011, 1, 9),
             # 'longitude': -52.59 }
             logger.error("Astral error : %s for %s", e, object_head_to_write)
+
+    @staticmethod
+    def ensure_consistent_fields(
+        object_head_to_write: Bean, start_time: Optional[float] = None
+    ):
+        """
+        Some fields need defaults to keep consistency.
+        - 'Validated' needs a category (now blocked during TSV read)
+        - 'Predicted' should set same fields as prediction inside EcoTaxa
+        """
+        state = object_head_to_write.get("classif_qual")
+        if state == PREDICTED_CLASSIF_QUAL:
+            if start_time is not None:
+                classif_id = object_head_to_write.get("classif_id")
+                assert classif_id
+                # Provide reasonable default values
+                object_head_to_write["classif_auto_id"] = classif_id
+                object_head_to_write[
+                    "classif_auto_when"
+                ] = datetime.datetime.fromtimestamp(start_time)
+                object_head_to_write["classif_auto_score"] = 1.0
+            # These are for manual states 'V' or 'D, when 'P' we wipe them
+            object_head_to_write["classif_who"] = None
+            object_head_to_write["classif_when"] = None
 
     @staticmethod
     def prepare_classif_update(object_head: ObjectHeader, object_update: Bean) -> bool:
@@ -699,6 +726,7 @@ class TSVFile(object):
                     obj = session.query(a_cls).filter(filter_for_id).first()
                     assert obj is not None
                     if a_cls == ObjectHeader:
+                        TSVFile.ensure_consistent_fields(an_upd)
                         # Eventually refresh sun position
                         if an_upd.nb_fields_from(USED_FIELDS_FOR_SUNPOS) > 0:
                             # Give the bean enough data for computation
