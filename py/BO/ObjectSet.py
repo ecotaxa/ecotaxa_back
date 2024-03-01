@@ -48,6 +48,7 @@ from DB.Object import (
     DEFAULT_CLASSIF_HISTORY_DATE,
     ObjectHeader,
     ObjectIDT,
+    NON_UPDATABLE_VIA_API,
 )
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
@@ -457,9 +458,10 @@ class EnumeratedObjectSet(MappedTable):
         mapped_updates = []
         direct_updates = []
         for an_upd in updates.lst:
-            if an_upd["ucol"] in ObjectHeader.__dict__:
-                if an_upd["ucol"] == "classif_id":
-                    self.historize_classification(only_qual=None)
+            dest_col = an_upd["ucol"]
+            if dest_col in ObjectHeader.__dict__:
+                if dest_col in NON_UPDATABLE_VIA_API:
+                    continue
                 direct_updates.append(an_upd)
             else:
                 mapped_updates.append(an_upd)

@@ -79,7 +79,6 @@ class MappedTable(metaclass=ABCMeta):
             return 0
         upd = self.session.query(clazz)
         upd = self.add_filter(upd)
-        # TODO: Cache update if ObjectHeader or ObjectField
         affected_rows = upd.update(
             values=ColUpdateList(updates).as_dict_for_db(), synchronize_session=False
         )

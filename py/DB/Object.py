@@ -200,6 +200,7 @@ HIDDEN_FIELDS_FOR_CLASSIF = {  # Internally managed
     ObjectHeader.classif_auto_when.name,
     ObjectHeader.classif_auto_score.name,
 }
+NON_UPDATABLE_VIA_API = USED_FIELDS_FOR_CLASSIF.union(HIDDEN_FIELDS_FOR_CLASSIF)
 
 
 class ObjectFields(Model):
