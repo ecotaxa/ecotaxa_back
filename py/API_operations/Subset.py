@@ -127,7 +127,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         # Create a DB writer
         writer = DBWriter(self.session)
         # Narrow the writes in ObjectFields thanks to mappings of original project
-        writer.generators({ObjectFields.__tablename__: used_columns})
+        writer.narrow_to(used_columns)
         # Use import helpers
         dest_prj_id = self.dest_prj.projid
         import_how = ImportHow(
@@ -277,6 +277,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         # Write object and children
         new_records = TSVFile.create_or_link_slaves(
             how=import_how,
+            start_time=None,
             session=self.session,
             object_head_to_write=obj,
             object_fields_to_write=fields,

@@ -69,6 +69,7 @@ EMPTY_TSV_DIR2 = DATA_DIR / "import_issues" / "empty_tsv2"
 BREAKING_HIERARCHY_DIR = DATA_DIR / "import_issues" / "breaking_hierarchy"
 EMPTY_TSV_IN_UPD_DIR = DATA_DIR / "import_test_upd_empty"
 AMBIG_DIR = DATA_DIR / "import de categories ambigues"
+VARIOUS_STATES_DIR = DATA_DIR / "import_various_states"
 
 FILE_IMPORT_URL = "/file_import/{project_id}"
 
@@ -270,6 +271,29 @@ def import_plain(fastapi, prj_id):
     reply = {
         "users": {"admin4test": 1, "elizandro rodriguez": 1},  # Map to admin
         "taxa": {"other": 99999, "ozzeur": 85011},  # 'other<dead'  # 'other<living'
+    }
+    # with JobCRUDService() as sce:
+    #     sce.reply(ADMIN_USER_ID, rsp.job_id, reply)
+    api_reply_to_waiting_job(fastapi, rsp.job_id, reply)
+    job = wait_for_stable(rsp.job_id)
+    check_job_ok(job)
+
+
+def import_various(fastapi, prj_id):
+    params = ImportReq(source_path=str(VARIOUS_STATES_DIR), skip_existing_objects=True)
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+
+    assert job.state == DBJobStateEnum.Asking
+    assert job.question == {
+        "missing_users": ["elizandro rodriguez"],
+        "missing_taxa": [],
+    }
+
+    reply = {
+        "users": {"elizandro rodriguez": 1},  # Map to admin
+        "taxa": {},  # 'other<dead'  # 'other<living'
     }
     # with JobCRUDService() as sce:
     #     sce.reply(ADMIN_USER_ID, rsp.job_id, reply)

@@ -93,9 +93,6 @@ class DeepFeatures(object):
         Features is an iterable dict-like, a pandas dataframe for the moment.
         """
         writer = DBWriter(session)
-        writer.generators(
-            {}
-        )  # TODO: A bit weird, DBWriter should be usable straight away
         nb_rows = 0
         # for a_rec in features.to_records(index=True): # This is nice and can produce tuple()
         # but I found no way to feed them into DBWriter without going low-level.

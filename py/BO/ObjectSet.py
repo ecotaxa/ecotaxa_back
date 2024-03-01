@@ -296,7 +296,7 @@ class EnumeratedObjectSet(MappedTable):
         """
         Reset to Predicted state, keeping log, i.e. history, of previous change. Only Validated
         and Dubious states are affected.
-        Note: It's really a state change only, _not_ a "reset to last predicted value". If a user assigned
+        Note: It's really a forced state change, _not_ a "reset to last predicted value". If a user assigned
         the category manually and triggers this function, the object will be in 'P' state even if
         no ML algorithm ever set this category.
         """
@@ -313,7 +313,14 @@ class EnumeratedObjectSet(MappedTable):
                 (oh.classif_qual.in_([VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL])),
             )
         )
-        obj_upd_qry = obj_upd_qry.values(classif_qual=PREDICTED_CLASSIF_QUAL)
+        obj_upd_qry = obj_upd_qry.values(
+            classif_qual=PREDICTED_CLASSIF_QUAL,
+            classif_who=None,
+            classif_when=None,
+            classif_auto_id=oh.classif_id,
+            classif_auto_score=1,
+            classif_auto_when=text("NOW()"),
+        )
         nb_objs = self.session.execute(obj_upd_qry).rowcount  # type:ignore  # case1
         # TODO: Cache upd
         logger.info(

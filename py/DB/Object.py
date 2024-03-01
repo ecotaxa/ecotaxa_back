@@ -189,6 +189,19 @@ class ObjectHeader(Model):
         return self.objid < other.objid
 
 
+USED_FIELDS_FOR_CLASSIF = {  # From user point of view, only these can be changed
+    ObjectHeader.classif_qual.name,
+    ObjectHeader.classif_id.name,
+    ObjectHeader.classif_who.name,
+    ObjectHeader.classif_when.name,
+}
+HIDDEN_FIELDS_FOR_CLASSIF = {  # Internally managed
+    ObjectHeader.classif_auto_id.name,
+    ObjectHeader.classif_auto_when.name,
+    ObjectHeader.classif_auto_score.name,
+}
+
+
 class ObjectFields(Model):
     __tablename__ = "obj_field"
     objfid = Column(

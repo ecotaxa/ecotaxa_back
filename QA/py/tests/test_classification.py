@@ -10,6 +10,7 @@ from API_models.filters import ProjectFiltersDict
 from starlette import status
 
 from tests.credentials import CREATOR_AUTH, ORDINARY_USER2_USER_ID, ADMIN_AUTH
+from tests.test_import import VARIOUS_STATES_DIR
 from tests.test_objectset_query import OBJECT_SET_QUERY_URL
 from tests.test_prj_admin import PROJECT_CLASSIF_STATS_URL
 from tests.test_subentities import OBJECT_HISTORY_QUERY_URL
@@ -140,7 +141,9 @@ def test_classif(database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
     from tests.test_import import test_import
 
-    prj_id = test_import(database, caplog, "Test Classify/Validate")
+    prj_id = test_import(
+        database, caplog, "Test Classify/Validate", path=str(VARIOUS_STATES_DIR)
+    )
 
     obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id)
     assert len(obj_ids) == 8
@@ -206,12 +209,12 @@ def test_classif(database, fastapi, caplog):
         assert stats_rsp.status_code == status.HTTP_200_OK
         return stats_rsp.json()
 
-    # All is predicted, see source archive
+    # We have a like-in-real-life mix of states
     assert get_stats(fastapi, prj_id) == {
-        "nb_dubious": 0,
-        "nb_predicted": 8,
+        "nb_dubious": 1,
+        "nb_predicted": 3,
         "nb_unclassified": 0,
-        "nb_validated": 0,
+        "nb_validated": 4,
         "projid": prj_id,
         "used_taxa": [45072, 78418, 84963, 85011, 85012, 85078],
     }
@@ -489,3 +492,26 @@ def test_classif(database, fastapi, caplog):
     ref_stats[0]["activities"][0]["last_annot"] = "FIXED DATE"
     stats[0]["activities"][0]["last_annot"] = "FIXED DATE"
     assert stats == ref_stats
+
+
+def test_reset_fresh_import(database, fastapi, caplog):
+    caplog.set_level(logging.ERROR)
+    from tests.test_import import test_import
+
+    prj_id = test_import(
+        database, caplog, "Test reset to pred", path=str(VARIOUS_STATES_DIR)
+    )
+
+    # Reset all to predicted
+    url = OBJECT_SET_RESET_PREDICTED_URL.format(project_id=prj_id)
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
+    assert rsp.status_code == status.HTTP_200_OK
+
+    assert get_stats(fastapi, prj_id) == {
+        "nb_dubious": 0,
+        "nb_predicted": 8,
+        "nb_unclassified": 0,
+        "nb_validated": 0,
+        "projid": prj_id,
+        "used_taxa": [45072, 78418, 84963, 85011, 85012, 85078],
+    }
