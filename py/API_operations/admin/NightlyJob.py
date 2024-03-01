@@ -224,6 +224,14 @@ NightlyJobService.IDLE_CHECKS = [
 # So far just focus on Predicted state as we need consistent data to move to a new system.
 NightlyJobService.NIGHTLY_CHECKS = [
     ConsistencyCheckAndFix(
+        "In initial state there is no anciliary residual info",
+        "select count(1) as res from obj_head where classif_qual is null "
+        "and (classif_id is not null or classif_when is not null or classif_who is not null  "
+        "or classif_auto_id is not null or classif_auto_score is not null or classif_auto_when is not null)",
+        0,
+        "need investigation",
+    ),
+    ConsistencyCheckAndFix(
         "There is a (user-visible) classif_id for 'P'",
         "select count(1) as res from obj_head where classif_qual='P' and classif_id is null",
         0,

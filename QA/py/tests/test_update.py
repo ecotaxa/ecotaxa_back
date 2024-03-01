@@ -94,11 +94,12 @@ def test_updates(database, caplog, tstlogs):
 
     # Special column, this one will eventually add row into classification history
     # TODO: Avoiding diff on purpose, it's just to cover code.
-    with ObjectManager() as sce:
-        nb_upd = sce.update_set(
-            ADMIN_USER_ID, objs, ColUpdateList([upd("classif_id", "100")])
-        )
-    assert nb_upd == 15
+    # TODO2: Forbid
+    # with ObjectManager() as sce:
+    #     nb_upd = sce.update_set(
+    #         ADMIN_USER_ID, objs, ColUpdateList([upd("classif_id", "100")])
+    #     )
+    # assert nb_upd == 15
 
     # Json diff
     with open(tstlogs / OUT_JSON_REF) as fd1:
@@ -335,7 +336,7 @@ def test_api_updates(database, fastapi, caplog, tstlogs):
         "target_ids": objs[0:4],
         "updates": [
             {"ucol": "orig_id", "uval": "no more unique :("},
-            {"ucol": "classif_when", "uval": "current_timestamp"},
+            # TODO: Forbid      {"ucol": "classif_when", "uval": "current_timestamp"},
         ],
     }
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
