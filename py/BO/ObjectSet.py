@@ -121,7 +121,7 @@ class DescribedObjectSet(object):
             obj_where, params, self.user_id, self.mapping.object_mappings
         )
         column_referencing_sql = (
-            obj_where.get_sql() + order_clause.get_sql() + select_list
+            select_list + obj_where.get_sql() + order_clause.get_sql()
         )
 
         selected_tables = FromClause(
@@ -136,16 +136,14 @@ class DescribedObjectSet(object):
             selected_tables += (
                 f"{Process.__tablename__} prc ON prc.processid = acq.acquisid"
             )
-        if "obf." in column_referencing_sql:
-            # This is a table with big rows, better narrow the fetched ones ASAP
-            # noinspection PyUnreachableCode
-            if True:
-                selected_tables += (
-                    f"{ObjectFields.__tablename__} obf ON obf.acquis_id = acq.acquisid"
-                )
-            else:
-                # Experimental code
-                selected_tables += f"{ObjectFields.__tablename__}_new obf ON obf.projid = :projid AND obf.acquisid = acq.acquisid"
+        obj_field_joined = "obf." in column_referencing_sql
+        if obj_field_joined and self.driving_table_is_obj_field(
+            obj_where.get_sql(),
+            order_clause.get_sql(),
+        ):
+            selected_tables += (
+                f"{ObjectFields.__tablename__} obf ON obf.acquis_id = acq.acquisid"
+            )
             selected_tables += (
                 f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid"
             )
@@ -153,6 +151,10 @@ class DescribedObjectSet(object):
             selected_tables += (
                 f"{ObjectHeader.__tablename__} obh ON obh.acquisid = acq.acquisid"
             )
+            if obj_field_joined:
+                selected_tables += (
+                    f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid"
+                )
         if "ohu." in column_referencing_sql:  # Inline query for annotators in history
             selected_tables += (
                 f"(select 1 as in_annots WHERE EXISTS (select * from {ObjectsClassifHisto.__tablename__} och "
@@ -189,6 +191,24 @@ class DescribedObjectSet(object):
         return DescribedObjectSet(
             self.filters.session, self.prj, self.user_id, filters_but_taxo
         )
+
+    @staticmethod
+    def driving_table_is_obj_field(where: str, order: str) -> bool:
+        """Choose the fastest way to find needed objects.
+        We mirror acquis_id from obj_head to obj_fields so 2 options are:
+        -1 Fetch via acquis_id the big rows in obj_fields and then PK access to obj_head
+        -2 Fetch via acquis_id the small rows in obj_head and then PK access to obj_fields
+        1 is faster if we need all rows, 2 is better if some filter eliminates based on obj_head cols.
+        We don't know in advance the selectivity of filters, so there is kind of heuristic here.
+        """
+        ret = False
+        if ("obf." in order) or ("obf." in where and "obh." not in where):
+            ret = True
+        if (
+            "obh.classif_id" in where or "obh.classif_qual" in where
+        ):  # These are included in index
+            ret = False
+        return ret
 
 
 class EnumeratedObjectSet(MappedTable):
