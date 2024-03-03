@@ -209,7 +209,7 @@ class ObjectFields(Model):
         BIGINT, ForeignKey(ObjectHeader.objid, ondelete="CASCADE"), primary_key=True
     )
     # Not a real FK, this is used for a cluster which groups together data blocks by acquisition
-    acquis_id = Column(INTEGER, nullable=True)
+    acquis_id = Column(INTEGER, nullable=False)
     # The relationships are created in Relations.py but the typing here helps the IDE
     object: relationship
 

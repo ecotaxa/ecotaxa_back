@@ -1,11 +1,12 @@
 #!/bin/bash
-VERSION=2.7.3.2
+VERSION=2.7.3.4
 # In case of doubt on the image sanity or if you have time, uncomment below
 #NO_CACHE=--no-cache
 # Preliminary, log using ecotaxa docker account
 #docker login -u ecotaxa
 # Copy all sources
-rsync -avr --delete --exclude-from=not_to_copy.lst ../py/ py/
+(cd .. && git status py --porcelain | grep "??" | sed -e "s/.. py\///g" > docker/not_in_git.lst)
+rsync -avr --delete --exclude-from=not_to_copy.lst --exclude-from=not_in_git.lst ../py/ py/
 # Build
 docker build $NO_CACHE -t ecotaxa/ecotaxa_back -f prod_image/Dockerfile .
 docker build $NO_CACHE -t ecotaxa/ecotaxa_gpu_back -f gpu_prod_image/Dockerfile .
