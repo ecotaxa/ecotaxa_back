@@ -53,13 +53,10 @@ class DBWriter(object):
             self.session, "seq_images", self.SEQUENCE_CACHE_SIZE
         )
 
-    obj_fields_prog_cols = {ObjectFields.acquis_id.name}
-
     def narrow_to(self, target_fields: set):
         # Small optimization, the below allows minimal SQLAlchemy SQL sent to DB for large fields table
         metadata = MetaData()
-        obj_fields_cols = target_fields.union(self.obj_fields_prog_cols)
-        self.obj_fields_tbl = minimal_table_of(metadata, ObjectFields, obj_fields_cols)
+        self.obj_fields_tbl = minimal_table_of(metadata, ObjectFields, target_fields)
 
     def do_bulk_save(self) -> None:
         nb_bulks = "%d/%d/%d/%d/%d" % (
