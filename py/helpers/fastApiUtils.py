@@ -20,12 +20,12 @@ from fastapi.security import OAuth2
 from fastapi.security.utils import get_authorization_scheme_param
 from itsdangerous import URLSafeTimedSerializer, TimestampSigner, SignatureExpired, BadSignature  # type: ignore
 # noinspection PyPackageRequirements
-from pydantic.main import BaseModel
+from pydantic.main import BaseModel  # fmt:skip
 from starlette.requests import Request
 # noinspection PyPackageRequirements
-from starlette.responses import JSONResponse, StreamingResponse
+from starlette.responses import JSONResponse, StreamingResponse  # fmt:skip
 # noinspection PyPackageRequirements
-from starlette.status import HTTP_403_FORBIDDEN
+from starlette.status import HTTP_403_FORBIDDEN  # fmt:skip
 
 from helpers.AppConfig import Config
 from .starlette import status, PlainTextResponse
