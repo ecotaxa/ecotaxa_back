@@ -11,6 +11,7 @@ from typing import Union, Tuple, List, Dict, Any, Optional
 from fastapi import (
     FastAPI,
     Request,
+    Header,
     Response,
     status,
     Depends,
@@ -146,6 +147,7 @@ from helpers.fastApiUtils import (
     get_optional_current_user,
     MyORJSONResponse,
     ValidityThrower,
+    ranged_streaming_response,
 )
 from helpers.login import LoginService
 from helpers.pydantic import sort_and_prune
@@ -3231,6 +3233,7 @@ async def get_job_file(  # async due to StreamingResponse
         ..., description="Internal, the unique numeric id of this job.", example=47445
     ),
     current_user: int = Depends(get_current_user),
+    range_header: Optional[str] = Header(None, alias="Range"),
 ) -> StreamingResponse:
     """
     **Return the file produced by given job.**
@@ -3245,8 +3248,15 @@ async def get_job_file(  # async due to StreamingResponse
         headers = {
             "content-disposition": 'attachment; filename="' + file_name + '"',
             "content-length": str(length),
+            "accept-ranges": "bytes",
         }
-    return StreamingResponse(file_like, headers=headers, media_type=media_type)
+    return ranged_streaming_response(
+        content=file_like,
+        range_hdr=range_header,
+        file_size=length,
+        headers=headers,
+        media_type=media_type,
+    )
 
 
 @app.delete(

@@ -179,7 +179,7 @@ class NightlyJobService(JobServiceBase):
     def check_consistency(self, start: int, end: int, idle: bool = False) -> bool:
         """Ensure data is how it should be"""
         no_problem = True
-        to_run = self.NIGHTLY_CHECKS + self.IDLE_CHECKS if idle else []
+        to_run = self.NIGHTLY_CHECKS + (self.IDLE_CHECKS if idle else [])
         total = len(to_run)
         for idx, a_check in enumerate(to_run):
             progress = round(start + (end - start) / total * idx)
