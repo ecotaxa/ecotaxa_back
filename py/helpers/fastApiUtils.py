@@ -10,6 +10,7 @@ import logging
 import sys
 import traceback
 from contextlib import AbstractContextManager
+from http import HTTPStatus
 from os.path import dirname
 from typing import Any, Optional, Dict, List, Type, Union, BinaryIO, Tuple
 
@@ -21,9 +22,11 @@ from fastapi.security.utils import get_authorization_scheme_param
 from itsdangerous import URLSafeTimedSerializer, TimestampSigner, SignatureExpired, BadSignature  # type: ignore
 # noinspection PyPackageRequirements
 from pydantic.main import BaseModel  # fmt:skip
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 # noinspection PyPackageRequirements
 from starlette.responses import JSONResponse, StreamingResponse  # fmt:skip
+from starlette.responses import Response
 # noinspection PyPackageRequirements
 from starlette.status import HTTP_403_FORBIDDEN  # fmt:skip
 
@@ -341,3 +344,32 @@ def ranged_streaming_response(
     return StreamingResponse(
         content=content, status_code=status_code, headers=headers, media_type=media_type
     )
+
+
+class SuppressNoResponseReturnedMiddleware(BaseHTTPMiddleware):
+    """
+    From https://github.com/encode/starlette/discussions/1527 as we have time to time:
+    - "No response returned." from maybe a client disconnect
+    -> A crash of timing_middleware
+    -> loss of anyio event loop
+    -> Worker stated unresponsive by Gunicorn and killed, even if some job is running in background
+    """
+
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        try:
+            response = await call_next(request)
+        except RuntimeError as e:
+            if await request.is_disconnected() and str(e) == "No response returned.":
+                # logger.warning(
+                #     "Error `No response returned` detected. "
+                #     "At the same time we know that the client is disconnected "
+                #     "and not waiting for a response."
+                # )
+
+                return Response(status_code=HTTPStatus.NO_CONTENT)
+            else:
+                raise
+
+        return response

@@ -148,6 +148,7 @@ from helpers.fastApiUtils import (
     MyORJSONResponse,
     ValidityThrower,
     ranged_streaming_response,
+    SuppressNoResponseReturnedMiddleware,
 )
 from helpers.login import LoginService
 from helpers.pydantic import sort_and_prune
@@ -176,8 +177,12 @@ app = FastAPI(
 # Instrument a bit
 add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
 
-# Optimize large responses
+# 'Client disconnect kills running job' problem workaround. _Must_ be the _last_ added middleware in chain.
+app.add_middleware(SuppressNoResponseReturnedMiddleware)
+
+# Optimize large responses -> Let's leave this task to some proxy coded in C
 # app.add_middleware(GZipMiddleware, minimum_size=1024)
+
 
 # HTML stuff
 # app.mount("/styles", StaticFiles(directory="pages/styles"), name="styles")

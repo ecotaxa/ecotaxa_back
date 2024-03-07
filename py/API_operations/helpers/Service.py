@@ -161,7 +161,7 @@ class Service(BaseService, ContextManager):
 
     def close_db_sessions(self):
         # Release DB session
-        if self.session is not None:
+        if hasattr(self, "session") and self.session is not None:
             # noinspection PyBroadException
             try:
                 self.session.close()
@@ -182,7 +182,7 @@ class Service(BaseService, ContextManager):
 
     def __del__(self):
         # DB session should have been released during __exit__
-        if self.session is not None:
+        if hasattr(self, "session") and self.session is not None:
             try:
                 self.close_db_sessions()
             except:
