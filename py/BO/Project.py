@@ -473,6 +473,8 @@ class ProjectBO(object):
         ):
             last_prj: Optional[int] = None
             for projid, user_id, user_name, cnt, last_date in pqry:
+                if last_date is None:
+                    continue
                 last_date_str = last_date.replace(microsecond=0).isoformat()
                 if projid != last_prj:
                     last_prj = projid

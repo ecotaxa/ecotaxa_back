@@ -10,7 +10,6 @@ import logging
 import sys
 import traceback
 from contextlib import AbstractContextManager
-from http import HTTPStatus
 from os.path import dirname
 from typing import Any, Optional, Dict, List, Type, Union, BinaryIO, Tuple
 
@@ -28,7 +27,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, StreamingResponse  # fmt:skip
 from starlette.responses import Response
 # noinspection PyPackageRequirements
-from starlette.status import HTTP_403_FORBIDDEN  # fmt:skip
+from starlette.status import HTTP_403_FORBIDDEN, HTTP_204_NO_CONTENT  # fmt:skip
 
 from helpers.AppConfig import Config
 from .starlette import status, PlainTextResponse
@@ -368,7 +367,7 @@ class SuppressNoResponseReturnedMiddleware(BaseHTTPMiddleware):
                 #     "and not waiting for a response."
                 # )
 
-                return Response(status_code=HTTPStatus.NO_CONTENT)
+                return Response(status_code=HTTP_204_NO_CONTENT)
             else:
                 raise
 
