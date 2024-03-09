@@ -138,7 +138,7 @@ from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.User import User
 from helpers.Asyncio import async_bg_run, log_streamer
-from helpers.DynamicLogs import get_logger
+from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
     internal_server_error_handler,
     dump_openapi,
@@ -158,6 +158,8 @@ logger = get_logger(__name__)
 # TODO: A nicer API doc, see https://github.com/tiangolo/fastapi/issues/1140
 
 fastapi_logger.setLevel(INFO)
+
+api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
@@ -191,7 +193,7 @@ templates = Jinja2Templates(directory=os.path.dirname(__file__) + "/pages/templa
 CDNs = " ".join(["cdn.datatables.net"])
 CRSF_header = {
     "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval' "
-    f"blob: data: {CDNs};frame-ancestors 'self';form-action 'self';"
+                               f"blob: data: {CDNs};frame-ancestors 'self';form-action 'self';"
 }
 
 # Establish second routes via /api to same app
@@ -238,7 +240,7 @@ def get_users(
         "",
         title="Ids",
         description="String containing the list of one or more id separated by non-num char. \n"
-        " \n **If several ids are provided**, one full info is returned per user.",
+                    " \n **If several ids are provided**, one full info is returned per user.",
         example="1",
     ),
     current_user: int = Depends(get_current_user),
@@ -1810,7 +1812,7 @@ def instrument_query(
         ...,
         title="Projects ids",
         description="String containing the list of one or more project ids,"
-        " separated by non-num char, or 'all' for all instruments.",
+                    " separated by non-num char, or 'all' for all instruments.",
         example="1,2,3",
     )
 ) -> List[str]:
@@ -1964,6 +1966,15 @@ If no **unique order** is specified, the result can vary for same call and condi
     return_fields = None
     if fields is not None:
         return_fields = fields.split(",")
+    api_logger.info(
+        "ObjectSetQuery(prj=%s, flt=%s, ord=%s, ret=%s, winf=%s, wint=%s)",
+        project_id,
+        filters.min_base(),
+        repr(order_field),
+        return_fields,
+        window_start,
+        window_size,
+    )
     with ObjectManager() as sce:
         with RightsThrower():
             rsp = ObjectSetQueryRsp()
@@ -3041,6 +3052,20 @@ def nightly_maintenance(current_user: int = Depends(get_current_user)) -> int:
         with RightsThrower():
             ret: int = sce.run(current_user)
     return ret
+
+
+@app.get(
+    "/admin/monitor",
+    operation_id="activity_monitor",
+    tags=["MONITOR"],
+    include_in_schema=False,
+    response_model=str,
+)
+async def activity_monitor(_current_user: int = Depends(get_current_user)) -> FileResponse:  # async due to FileResponse
+    """
+    Return some API endpoints activity log
+    """
+    return FileResponse(str(MONITOR_LOG_PATH))
 
 
 @app.get(
