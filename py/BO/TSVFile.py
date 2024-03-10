@@ -389,8 +389,8 @@ class TSVFile(object):
                 field
                 for field in field_set
                 if how.custom_mapping.search_field(field) is not None
-                or field in GlobalMapping.PREDEFINED_FIELDS
-                or field in GlobalMapping.DOUBLED_FIELDS
+                   or field in GlobalMapping.PREDEFINED_FIELDS
+                   or field in GlobalMapping.DOUBLED_FIELDS
             ]
         )
         # Remove classification fields if updating but not classification
@@ -1030,16 +1030,24 @@ class TSVFile(object):
 
             # Verify that implied associated categories are really present
             classif_qual = lig.get("object_annotation_status", "")
+            classif_id = lig.get(
+                "object_annotation_category",
+                lig.get("object_annotation_category_id", ""),
+            ).strip()
             if classif_qual != "":
-                classif_id = lig.get(
-                    "object_annotation_category",
-                    lig.get("object_annotation_category_id", ""),
-                ).strip()
                 if not classif_id:
                     diag.error(
                         "When annotation status '%s' is provided there has to be a category, in file %s."
                         % (classif_qual, self.relative_name)
                     )
+            # Verify that a present category is associated with a state
+            if classif_id != "":
+                if classif_qual == "":
+                    diag.error(
+                        "When a category (%s) is provided it has to be with a status, in file %s."
+                        % (classif_id, self.relative_name)
+                    )
+
 
         # For next TSV analysis
         diag.existing_objects_and_image.update(local_keys)

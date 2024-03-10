@@ -62,6 +62,7 @@ ISSUES_DIR2 = DATA_DIR / "import_issues" / "no_classif_id"
 ISSUES_DIR3 = DATA_DIR / "import_issues" / "tsv_too_many_cols"
 ISSUES_DIR4 = DATA_DIR / "import_issues" / "duplicate_in_tsv"
 ISSUES_DIR5 = DATA_DIR / "import_issues" / "predicted_but_what"
+ISSUES_DIR6 = DATA_DIR / "import_issues" / "classif_without_state"
 MIX_OF_STATES = DATA_DIR / "import_mixed_states"
 EMPTY_DIR = DATA_DIR / "import_issues" / "no_relevant_file"
 EMPTY_TSV_DIR = DATA_DIR / "import_issues" / "empty_tsv"
@@ -460,6 +461,21 @@ def test_import_no_valid_state_and_others(database, ccheck, caplog, tstlogs):
     ]
     check_project(tstlogs, prj_id)
 
+def test_import_classif_without_state(database, ccheck, caplog, tstlogs):
+    """Importing a classification implies having a state"""
+    caplog.set_level(logging.DEBUG)
+    prj_id = create_project(ADMIN_USER_ID, "Test import problem 11")
+
+    params = ImportReq(source_path=str(ISSUES_DIR6))
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    check_job_errors(job)
+    errors = get_job_errors(job)
+    assert errors == [
+        "When a category (84963) is provided it has to be with a status, in file m106_mn01_n3_sml/ecotaxa_m106_mn01_n3_sml_pls.tsv."
+    ]
+    check_project(tstlogs, prj_id)
 
 # @pytest.mark.skip()
 def test_import_too_many_custom_columns(database, ccheck, caplog):

@@ -224,7 +224,7 @@ NightlyJobService.IDLE_CHECKS = [
 # So far just focus on Predicted state as we need consistent data to move to a new system.
 NightlyJobService.NIGHTLY_CHECKS = [
     ConsistencyCheckAndFix(
-        "In initial state there is no anciliary residual info",
+        "In initial state there is no ancillary residual info",
         "select count(1) as res from obj_head where classif_qual is null "
         "and (classif_id is not null or classif_when is not null or classif_who is not null  "
         "or classif_auto_id is not null or classif_auto_score is not null or classif_auto_when is not null)",
@@ -232,8 +232,20 @@ NightlyJobService.NIGHTLY_CHECKS = [
         "need investigation",
     ),
     ConsistencyCheckAndFix(
-        "There is a (user-visible) classif_id for 'P'",
-        "select count(1) as res from obj_head where classif_qual='P' and classif_id is null",
+        "A classif_id but no classif_qual",
+        "select count(1) from obj_head where classif_qual is null and classif_id is not null",
+        0,
+        "",
+    ),
+    ConsistencyCheckAndFix(
+        "No classif_qual nor classif_id but full prediction info",
+        "select count(1) from obj_head where classif_qual is null and classif_id is null and (classif_auto_id is not null and classif_auto_score is not null and classif_auto_when is not null)",
+        0,
+        "update obj_head set classif_qual='P', classif_id=classif_auto_id, classif_who=null, classif_when=null where classif_qual is null and classif_id is null and (classif_auto_id is not null and classif_auto_score is not null and classif_auto_when is not null)",
+    ),
+    ConsistencyCheckAndFix(
+        "There is a (user-visible) classif_id for any state",
+        "select count(1) from obj_head where classif_qual in ('P','V','D') and classif_id is null",
         0,
         "need investigation",
     ),
@@ -273,6 +285,14 @@ and classif_auto_id is null""",
     ConsistencyCheckAndFix(
         "All obj_fields have same acquisid as object",
         "select count(1) from obj_head obh join obj_field obf on obf.objfid = obh.objid where obh.acquisid != obf.acquis_id",
+        0,
+        """
+        -- find root cause
+        """,
+    ),
+    ConsistencyCheckAndFix(
+        "Validated and Dubious were set by humans, we must know who and when",
+        "select count(1) from obj_head where classif_qual in ('V','D') and (classif_who is null or classif_when is null)",
         0,
         """
         -- find root cause
