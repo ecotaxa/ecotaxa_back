@@ -136,6 +136,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             custom_mapping=ProjectMapping(),
             skip_object_duplicates=False,
             loaded_files=[],
+            user_id=self._get_owner_id()
         )
         # Get parent (enclosing) Sample, Acquisition. There should be 0 in this context as the project is new.
         (

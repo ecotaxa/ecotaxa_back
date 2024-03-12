@@ -232,37 +232,28 @@ NightlyJobService.NIGHTLY_CHECKS = [
         "need investigation",
     ),
     ConsistencyCheckAndFix(
-        "A classif_id but no classif_qual",
-        "select count(1) from obj_head where classif_qual is null and classif_id is not null",
-        0,
-        "",
-    ),
-    ConsistencyCheckAndFix(
-        "No classif_qual nor classif_id but full prediction info",
-        "select count(1) from obj_head where classif_qual is null and classif_id is null and (classif_auto_id is not null and classif_auto_score is not null and classif_auto_when is not null)",
-        0,
-        "update obj_head set classif_qual='P', classif_id=classif_auto_id, classif_who=null, classif_when=null where classif_qual is null and classif_id is null and (classif_auto_id is not null and classif_auto_score is not null and classif_auto_when is not null)",
-    ),
-    ConsistencyCheckAndFix(
-        "There is a (user-visible) classif_id for any state",
+        "There is a (user-visible) category for any non-initial state",
         "select count(1) from obj_head where classif_qual in ('P','V','D') and classif_id is null",
         0,
         "need investigation",
     ),
     ConsistencyCheckAndFix(
-        "Columns classif_auto_id and classif_auto_when are present for 'P', supposed to come from last prediction",
-        "select count(1) as res from obj_head where classif_qual='P' and classif_auto_id is null",
+        "There is a state if there is a category",
+        "select count(1) from obj_head where classif_qual is null and classif_id is not null",
         0,
-        """update obj_head
-set classif_auto_id   = classif_id,
-classif_auto_score=1,
-classif_auto_when=coalesce(classif_when, '1970-01-01')
-where classif_qual = 'P'
-and classif_auto_id is null""",
+        "",
     ),
     ConsistencyCheckAndFix(
-        "'P' relates to _auto fields, plain ones are for users - general case we have a complete last prediction",
-        "select count(1) as res from obj_head where classif_qual='P' and (classif_who is not null or classif_when is not null) and classif_auto_id is not null",
+        "Validated and Dubious were set by humans, we must know who and when",
+        "select count(1) from obj_head where classif_qual in ('V','D') and (classif_who is null or classif_when is null)",
+        0,
+        """
+        -- find root cause
+        """,
+    ),
+    ConsistencyCheckAndFix(
+        "Predicted was set by machine, no trailing traces of previous human action",
+        "select count(1) from obj_head where classif_qual = 'P' and (classif_who is not null or classif_when is not null)",
         0,
         """update obj_head
 set classif_who   = NULL,
@@ -272,27 +263,31 @@ and (classif_who is not null or classif_when is not null)
 and classif_auto_id is not null""",
     ),
     ConsistencyCheckAndFix(
-        "'P' relates to _auto fields, plain ones are for users - special case of imported as 'P' with no other info",
-        "select count(1) as res from obj_head where classif_qual='P' and (classif_who is not null or classif_when is not null) and classif_auto_id is null",
+        "No classif_qual nor classif_id but full prediction info",
+        "select count(1) from obj_head where classif_qual is null and classif_id is null and (classif_auto_id is not null and classif_auto_score is not null and classif_auto_when is not null)",
+        0,
+        """update obj_head 
+set classif_qual='P', 
+classif_id=classif_auto_id, 
+classif_who=null, 
+classif_when=null 
+where classif_qual is null and classif_id is null and 
+(classif_auto_id is not null and classif_auto_score is not null and classif_auto_when is not null)""",
+    ),
+    ConsistencyCheckAndFix(
+        "Columns classif_auto_id and classif_auto_when are present for 'P', supposed to come from last prediction",
+        "select count(1) as res from obj_head where classif_qual='P' and classif_auto_id is null",
         0,
         """update obj_head
-set classif_who   = NULL,
-classif_when  = NULL
+set classif_auto_id = classif_id,
+classif_auto_score=1,
+classif_auto_when=coalesce(classif_when, '1970-01-01')
 where classif_qual = 'P'
-and (classif_who is not null or classif_when is not null)
 and classif_auto_id is null""",
     ),
     ConsistencyCheckAndFix(
         "All obj_fields have same acquisid as object",
         "select count(1) from obj_head obh join obj_field obf on obf.objfid = obh.objid where obh.acquisid != obf.acquis_id",
-        0,
-        """
-        -- find root cause
-        """,
-    ),
-    ConsistencyCheckAndFix(
-        "Validated and Dubious were set by humans, we must know who and when",
-        "select count(1) from obj_head where classif_qual in ('V','D') and (classif_who is null or classif_when is null)",
         0,
         """
         -- find root cause

@@ -40,6 +40,8 @@ from DB.Object import (
     PREDICTED_CLASSIF_QUAL,
     USED_FIELDS_FOR_CLASSIF,
     HIDDEN_FIELDS_FOR_CLASSIF,
+    VALIDATED_CLASSIF_QUAL,
+    DUBIOUS_CLASSIF_QUAL,
 )
 from DB.Process import Process
 from DB.Project import ProjectIDT
@@ -51,6 +53,7 @@ from DB.helpers.ORM import detach_from_session
 from helpers.DynamicLogs import get_logger
 from .Image import ImageBO
 from .ObjectSet import EnumeratedObjectSet
+from .User import UserIDT
 from .helpers.TSVHelpers import (
     clean_value,
     clean_value_and_none,
@@ -197,7 +200,7 @@ class TSVFile(object):
                 else:
                     # Initial load
                     self.ensure_consistent_fields(
-                        object_head_to_write, stats.start_time
+                        object_head_to_write, stats.start_time, how.user_id
                     )
                     # Attempt to compute sun position
                     self.do_sun_position_field(object_head_to_write)
@@ -310,11 +313,13 @@ class TSVFile(object):
 
     @staticmethod
     def ensure_consistent_fields(
-        object_head_to_write: Bean, start_time: Optional[float]
+        object_head_to_write: Bean,
+        start_time: Optional[float],
+        current_user: Optional[UserIDT],
     ):
         """
         Some fields need defaults to keep consistency.
-        - 'Validated' needs a category (now blocked during TSV read)
+        - 'Validated' and 'Dubious' need a category (now blocked during TSV read), an author and a date
         - 'Predicted' should set same fields as a prediction ran inside EcoTaxa
         """
         if start_time is None:
@@ -332,6 +337,13 @@ class TSVFile(object):
             # These are for manual states 'V' or 'D, when 'P' we wipe them
             object_head_to_write["classif_who"] = None
             object_head_to_write["classif_when"] = None
+        elif state in (VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL):
+            if object_head_to_write.get("classif_who") is None:
+                object_head_to_write["classif_who"] = current_user
+            if object_head_to_write.get("classif_when") is None:
+                object_head_to_write["classif_when"] = datetime.datetime.fromtimestamp(
+                    start_time
+                )
 
     @staticmethod
     def prepare_classif_update(object_head: ObjectHeader, object_update: Bean) -> bool:
@@ -389,8 +401,8 @@ class TSVFile(object):
                 field
                 for field in field_set
                 if how.custom_mapping.search_field(field) is not None
-                   or field in GlobalMapping.PREDEFINED_FIELDS
-                   or field in GlobalMapping.DOUBLED_FIELDS
+                or field in GlobalMapping.PREDEFINED_FIELDS
+                or field in GlobalMapping.DOUBLED_FIELDS
             ]
         )
         # Remove classification fields if updating but not classification
@@ -750,7 +762,7 @@ class TSVFile(object):
                             # Give the bean enough data for computation
                             an_upd.update_from_obj(obj, USED_FIELDS_FOR_CLASSIF)
                             TSVFile.ensure_consistent_fields(
-                                an_upd, start_time=start_time
+                                an_upd, start_time=start_time, current_user=how.user_id
                             )
                             # Care for classification historization
                             if TSVFile.prepare_classif_update(obj, an_upd):
@@ -1047,7 +1059,6 @@ class TSVFile(object):
                         "When a category (%s) is provided it has to be with a status, in file %s."
                         % (classif_id, self.relative_name)
                     )
-
 
         # For next TSV analysis
         diag.existing_objects_and_image.update(local_keys)

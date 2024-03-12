@@ -3,27 +3,21 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import logging
-import time
 from os.path import dirname, realpath
 from pathlib import Path
 
 import pytest
 from API_models.crud import *
-
 # noinspection PyPackageRequirements
 from API_models.imports import *
-
 # noinspection PyPackageRequirements
 from API_operations.AsciiDump import AsciiDumper
-
 # noinspection PyPackageRequirements
 from API_operations.CRUD.Jobs import JobCRUDService
-
 # Import services
 # noinspection PyPackageRequirements
 from API_operations.CRUD.Projects import ProjectsService
 from API_operations.JsonDumper import JsonDumper
-
 # noinspection PyPackageRequirements
 from API_operations.imports.Import import FileImport
 from DB.Job import DBJobStateEnum
@@ -56,6 +50,7 @@ BAD_FREE_DIR = DATA_DIR / "import_bad_free_data"
 SPARSE_DIR = DATA_DIR / "import_sparse"
 PLUS_DIR = DATA_DIR / "import_test_plus"
 JUST_PREDICTED_DIR = DATA_DIR / "import_just_predicted"
+V_OR_D_ONLY_DIR = DATA_DIR / "import_v_or_d_just_state"
 WEIRD_DIR = DATA_DIR / "import_test_weird"
 ISSUES_DIR = DATA_DIR / "import_issues" / "tsv_issues"
 ISSUES_DIR2 = DATA_DIR / "import_issues" / "no_classif_id"
@@ -461,6 +456,7 @@ def test_import_no_valid_state_and_others(database, ccheck, caplog, tstlogs):
     ]
     check_project(tstlogs, prj_id)
 
+
 def test_import_classif_without_state(database, ccheck, caplog, tstlogs):
     """Importing a classification implies having a state"""
     caplog.set_level(logging.DEBUG)
@@ -476,6 +472,22 @@ def test_import_classif_without_state(database, ccheck, caplog, tstlogs):
         "When a category (84963) is provided it has to be with a status, in file m106_mn01_n3_sml/ecotaxa_m106_mn01_n3_sml_pls.tsv."
     ]
     check_project(tstlogs, prj_id)
+
+
+def test_import_state_without_related(database, ccheck, caplog, tstlogs):
+    """Importing just 'V' or 'D' is OK, we provide reasonable defaults"""
+    caplog.set_level(logging.DEBUG)
+    prj_id = create_project(ADMIN_USER_ID, "Test import case 12")
+
+    params = ImportReq(source_path=str(V_OR_D_ONLY_DIR))
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    check_job_ok(job)
+    errors = get_job_errors(job)
+    assert errors == []
+    check_project(tstlogs, prj_id)
+
 
 # @pytest.mark.skip()
 def test_import_too_many_custom_columns(database, ccheck, caplog):
