@@ -5,6 +5,7 @@
 # Based on https://fastapi.tiangolo.com/
 #
 import os
+import time
 from logging import INFO
 from typing import Union, Tuple, List, Dict, Any, Optional
 
@@ -193,7 +194,7 @@ templates = Jinja2Templates(directory=os.path.dirname(__file__) + "/pages/templa
 CDNs = " ".join(["cdn.datatables.net"])
 CRSF_header = {
     "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval' "
-                               f"blob: data: {CDNs};frame-ancestors 'self';form-action 'self';"
+    f"blob: data: {CDNs};frame-ancestors 'self';form-action 'self';"
 }
 
 # Establish second routes via /api to same app
@@ -240,7 +241,7 @@ def get_users(
         "",
         title="Ids",
         description="String containing the list of one or more id separated by non-num char. \n"
-                    " \n **If several ids are provided**, one full info is returned per user.",
+        " \n **If several ids are provided**, one full info is returned per user.",
         example="1",
     ),
     current_user: int = Depends(get_current_user),
@@ -1812,7 +1813,7 @@ def instrument_query(
         ...,
         title="Projects ids",
         description="String containing the list of one or more project ids,"
-                    " separated by non-num char, or 'all' for all instruments.",
+        " separated by non-num char, or 'all' for all instruments.",
         example="1,2,3",
     )
 ) -> List[str]:
@@ -1966,15 +1967,7 @@ If no **unique order** is specified, the result can vary for same call and condi
     return_fields = None
     if fields is not None:
         return_fields = fields.split(",")
-    api_logger.info(
-        "ObjectSetQuery(prj=%s, flt=%s, ord=%s, ret=%s, winf=%s, wint=%s)",
-        project_id,
-        filters.min_base(),
-        repr(order_field),
-        return_fields,
-        window_start,
-        window_size,
-    )
+    before = time.time()
     with ObjectManager() as sce:
         with RightsThrower():
             rsp = ObjectSetQueryRsp()
@@ -1993,6 +1986,16 @@ If no **unique order** is specified, the result can vary for same call and condi
     rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
     rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
     rsp.details = details
+    api_logger.info(
+        "ObjectSetQuery(prj=%s, flt=%s, ord=%s, ret=%s, winf=%s, wint=%s, seen_ms=%.2f)",
+        project_id,
+        filters.min_base(),
+        repr(order_field),
+        return_fields,
+        window_start,
+        window_size,
+        (time.time() - before) * 1000,
+    )
     # Serialize
     return MyORJSONResponse(rsp)
 
@@ -3061,7 +3064,9 @@ def nightly_maintenance(current_user: int = Depends(get_current_user)) -> int:
     include_in_schema=False,
     response_model=str,
 )
-async def activity_monitor(_current_user: int = Depends(get_current_user)) -> FileResponse:  # async due to FileResponse
+async def activity_monitor(
+    _current_user: int = Depends(get_current_user),
+) -> FileResponse:  # async due to FileResponse
     """
     Return some API endpoints activity log
     """
