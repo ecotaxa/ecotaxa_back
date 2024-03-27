@@ -9,7 +9,7 @@ CREATE ROLE readerole WITH
   PASSWORD 'Ec0t1x1Rd4';
 
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO readerole;
-
+ALTER table users add orcid varchar(20) default null;
 delete from users where id > 1;
 
 COPY public.users (id, email, password, name, organisation, status, preferences, country, usercreationdate, usercreationreason) FROM stdin;
