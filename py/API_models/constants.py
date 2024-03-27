@@ -83,8 +83,3 @@ class Constants(BaseModel):
         description="use Google ReCaptcha",
         default=False,
     )
-    add_ticket: str = Field(
-        title="ticket separator",
-        description="string separator, permits to add ticket number when asking more information before user validation",
-        default="",
-    )
