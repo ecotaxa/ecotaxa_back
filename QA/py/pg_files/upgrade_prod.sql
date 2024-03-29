@@ -2215,6 +2215,10 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO zoo;
 
 UPDATE alembic_version SET version_num='4e25988b1e56' WHERE alembic_version.version_num = '52a9d347f2b2';
 
+-- Running upgrade 4e25988b1e56 -> 0a3132f436fb
+ALTER TABLE users ADD COLUMN orcid VARCHAR(20) DEFAULT NULL;
+UPDATE alembic_version SET version_num='0a3132f436fb' WHERE alembic_version.version_num = '4e25988b1e56';
+
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;
