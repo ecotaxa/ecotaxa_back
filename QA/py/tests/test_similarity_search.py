@@ -43,7 +43,7 @@ def test_similarity_search(database, fastapi, caplog):
     distances_to_target = [np.linalg.norm(features_df.loc[target_id] - features_df.loc[oi]) for oi in obj_ids]
     
     # Test similarity search without features
-    url = OBJECT_SET_SIMILARITY_SEARCH_URL
+    url = f"/object_set/{prj_id}/similarity_search"
     req = {
         "project_id": prj_id,
         "target_id": target_id,
