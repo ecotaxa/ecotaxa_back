@@ -1672,11 +1672,20 @@ If no **unique order** is specified, the result can vary for same call and condi
             if objid not in object_ids:
                 continue
             index = object_ids.index(objid)
+            index_ss = sim_search_rsp.neighbor_ids.index(objid) # VR TODO est-ce qu'un zip serait mieux ?
             rsp.object_ids.append(obj_with_parents[index][0])
             rsp.acquisition_ids.append(obj_with_parents[index][1])
             rsp.sample_ids.append(obj_with_parents[index][2])
             rsp.project_ids.append(obj_with_parents[index][3])
             rsp.details.append(details[index])
+            sim_search_score_current = sim_search_rsp.sim_scores[index_ss]
+            if len(rsp.details[len(rsp.details) - 1]) > 12:
+                rsp.details[len(rsp.details) - 1][12] = sim_search_score_current
+            elif len(rsp.details[len(rsp.details) - 1]) == 12:
+                rsp.details[len(rsp.details) - 1].append(sim_search_score_current)
+            else :
+                print("Unexpected short details, sim score not send to front : " + str(len(rsp.details[len(rsp.details) - 1])))
+
 
     # Serialize
     return MyORJSONResponse(rsp)
