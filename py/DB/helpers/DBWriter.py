@@ -2,12 +2,12 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List, Optional, ClassVar
+from typing import Dict, Tuple, List, Type, Optional, ClassVar
 
 from helpers.DynamicLogs import get_logger
 from .Bean import Bean
 from .Direct import text
-from .ORM import Session, MetaData, minimal_table_of
+from .ORM import Session, Table, MetaData, minimal_table_of
 from .Postgres import SequenceCache
 from ..CNNFeatureVector import ObjectCNNFeatureVector
 from ..Image import Image
@@ -32,17 +32,16 @@ class DBWriter(object):
     def __init__(self, session: Session):
         self.session = session
 
-        self.obj_tbl = ObjectHeader.__table__
-        self.obj_fields_tbl = ObjectFields.__table__  # Slow by default @see narrow_to
-        self.img_tbl = Image.__table__
-        self.obj_cnn_vector_tbl = ObjectCNNFeatureVector.__table__
-        self.obj_history_tbl = ObjectsClassifHisto.__table__
-        # Data
         self.obj_bulks: List[Bean] = []
+        self.obj_tbl: Table
         self.obj_fields_bulks: List[Bean] = []
-        self.img_bulks: List[Bean] = []
+        self.obj_fields_tbl: Table
         self.obj_cnn_bulks: List[Bean] = []
+        self.obj_cnn_vector_tbl = ObjectCNNFeatureVector.__table__
+        self.img_bulks: List[Bean] = []
+        self.img_tbl: Table
         self.obj_history_bulks: List[Bean] = []
+        self.obj_history_tbl = ObjectsClassifHisto.__table__
 
         # Save a bit of time for commit
         self.session.execute(text("SET synchronous_commit TO OFF;"))
@@ -53,10 +52,41 @@ class DBWriter(object):
             self.session, "seq_images", self.SEQUENCE_CACHE_SIZE
         )
 
-    def narrow_to(self, target_fields: set):
-        # Small optimization, the below allows minimal SQLAlchemy SQL sent to DB for large fields table
+    # The properties used in code, not in mapping. If not listed here they are not persisted
+    # TODO: Provoke a crash at runtime for tests if one is forgotten. Dropping data silently is bad.
+    obj_head_prog_cols = {"sunpos", "acquisid", "sampleid"}
+    obj_fields_prog_cols = {"acquis_id"}
+
+    # The generated classes are objects of course, but classes as well, so the variable names
+    # follow the classes naming convention.
+    # noinspection PyPep8Naming
+    def generators(self, target_fields: Dict[str, set]) -> Tuple[Type, Type, Type]:
+        # Small optimization, the below allows minimal SQLAlchemy SQL sent to DB
         metadata = MetaData()
-        self.obj_fields_tbl = minimal_table_of(metadata, ObjectFields, target_fields)
+
+        ObjectView = Bean
+        if "obj_head" in target_fields:
+            obj_head_cols = target_fields["obj_head"].union(self.obj_head_prog_cols)
+            self.obj_tbl = minimal_table_of(metadata, ObjectHeader, obj_head_cols)
+        else:
+            self.obj_tbl = ObjectHeader.__table__
+
+        ObjectFieldsView = Bean
+        if "obj_field" in target_fields:
+            obj_fields_cols = target_fields["obj_field"].union(
+                self.obj_fields_prog_cols
+            )
+            self.obj_fields_tbl = minimal_table_of(
+                metadata, ObjectFields, obj_fields_cols
+            )
+        else:
+            self.obj_fields_tbl = ObjectFields.__table__
+
+        ImageView = Bean
+        # noinspection PyUnresolvedReferences
+        self.img_tbl = Image.__table__
+
+        return ObjectView, ObjectFieldsView, ImageView
 
     def do_bulk_save(self) -> None:
         nb_bulks = "%d/%d/%d/%d/%d" % (
