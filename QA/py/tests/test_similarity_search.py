@@ -14,8 +14,6 @@ from BO.Prediction import DeepFeatures
 
 from API_operations.CRUD.ObjectParents import SamplesService
 
-OBJECT_SET_SIMILARITY_SEARCH_URL = "/object_set/similarity_search"
-
 copepod_id = 25828
 entomobryomorpha_id = 25835
 crustacea = 12846
@@ -64,7 +62,7 @@ def test_similarity_search(database, fastapi, caplog):
         sce.session.commit()
 
     # Test similarity search with features
-    url = OBJECT_SET_SIMILARITY_SEARCH_URL
+    url = f"/object_set/{prj_id}/similarity_search"
     req = {
         "project_id": prj_id,
         "target_id": target_id,
@@ -85,7 +83,7 @@ def test_similarity_search(database, fastapi, caplog):
     taxo_ids_to_filter = [copepod_id, entomobryomorpha_id]
 
     # Test similarity search with filters on taxo
-    url = OBJECT_SET_SIMILARITY_SEARCH_URL
+    url = f"/object_set/{prj_id}/similarity_search"
     req = {
         "project_id": prj_id,
         "target_id": target_id,
