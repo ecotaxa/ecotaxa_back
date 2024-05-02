@@ -23,8 +23,8 @@ jobs:
     services:
       # Label used to access the service container
       postgres:
-        # Docker Hub image with pgvector installed
-        image: pgvector/pgvector:pg16
+        # Docker Hub image
+        image: pgvector/pgvector:pg14
         # Provide the password for postgres
         env:
           POSTGRES_PASSWORD: postgres12
