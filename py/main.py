@@ -5,14 +5,12 @@
 # Based on https://fastapi.tiangolo.com/
 #
 import os
-import time
 from logging import INFO
 from typing import Union, Tuple, List, Dict, Any, Optional
 
 from fastapi import (
     FastAPI,
     Request,
-    Header,
     Response,
     status,
     Depends,
@@ -142,7 +140,7 @@ from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.User import User
 from helpers.Asyncio import async_bg_run, log_streamer
-from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
+from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import (
     internal_server_error_handler,
     dump_openapi,
@@ -151,7 +149,6 @@ from helpers.fastApiUtils import (
     get_optional_current_user,
     MyORJSONResponse,
     ValidityThrower,
-    ranged_streaming_response,
 )
 from helpers.login import LoginService
 from helpers.pydantic import sort_and_prune
@@ -162,8 +159,6 @@ logger = get_logger(__name__)
 # TODO: A nicer API doc, see https://github.com/tiangolo/fastapi/issues/1140
 
 fastapi_logger.setLevel(INFO)
-
-api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
@@ -182,13 +177,8 @@ app = FastAPI(
 # Instrument a bit
 add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
 
-# 'Client disconnect kills running job' problem workaround. _Must_ be the _last_ added middleware in chain.
-# Update 08/03/2024: Bad diagnostic probably, workaround disabled.
-# app.add_middleware(SuppressNoResponseReturnedMiddleware)
-
-# Optimize large responses -> Let's leave this task to some proxy coded in C
+# Optimize large responses
 # app.add_middleware(GZipMiddleware, minimum_size=1024)
-
 
 # HTML stuff
 # app.mount("/styles", StaticFiles(directory="pages/styles"), name="styles")
@@ -2077,7 +2067,6 @@ If no **unique order** is specified, the result can vary for same call and condi
     return_fields = None
     if fields is not None:
         return_fields = fields.split(",")
-    before = time.time()
     with ObjectManager() as sce:
         with RightsThrower():
             rsp = ObjectSetQueryRsp()
@@ -2096,16 +2085,6 @@ If no **unique order** is specified, the result can vary for same call and condi
     rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
     rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
     rsp.details = details
-    api_logger.info(
-        "ObjectSetQuery(prj=%s, flt=%s, ord=%s, ret=%s, winf=%s, wint=%s, seen_ms=%.2f)",
-        project_id,
-        filters.min_base(),
-        repr(order_field),
-        return_fields,
-        window_start,
-        window_size,
-        (time.time() - before) * 1000,
-    )
     # Serialize
     return MyORJSONResponse(rsp)
 
@@ -3105,9 +3084,7 @@ def digest_project_images(
     response_model=str,
 )
 def digest_images(
-    max_digests: Optional[int] = Query(
-        default=100000, description="Number of images to scan."
-    ),
+    max_digests: Optional[int],
     project_id: Optional[int] = Query(
         default=None, description="Internal, numeric id of the project."
     ),
@@ -3116,6 +3093,7 @@ def digest_images(
     """
     Compute digests if they are not.
     """
+    max_digests = 1000 if max_digests is None else max_digests
     with ImageManagerService() as sce:
         with RightsThrower():
             ret: str = sce.do_digests(
@@ -3165,22 +3143,6 @@ def nightly_maintenance(current_user: int = Depends(get_current_user)) -> int:
         with RightsThrower():
             ret: int = sce.run(current_user)
     return ret
-
-
-@app.get(
-    "/admin/monitor",
-    operation_id="activity_monitor",
-    tags=["MONITOR"],
-    include_in_schema=False,
-    response_model=str,
-)
-async def activity_monitor(
-    _current_user: int = Depends(get_current_user),
-) -> FileResponse:  # async due to FileResponse
-    """
-    Return some API endpoints activity log
-    """
-    return FileResponse(str(MONITOR_LOG_PATH))
 
 
 @app.get(
@@ -3378,7 +3340,6 @@ async def get_job_file(  # async due to StreamingResponse
         ..., description="Internal, the unique numeric id of this job.", example=47445
     ),
     current_user: int = Depends(get_current_user),
-    range_header: Optional[str] = Header(None, alias="Range"),
 ) -> StreamingResponse:
     """
     **Return the file produced by given job.**
@@ -3393,15 +3354,8 @@ async def get_job_file(  # async due to StreamingResponse
         headers = {
             "content-disposition": 'attachment; filename="' + file_name + '"',
             "content-length": str(length),
-            "accept-ranges": "bytes",
         }
-    return ranged_streaming_response(
-        content=file_like,
-        range_hdr=range_header,
-        file_size=length,
-        headers=headers,
-        media_type=media_type,
-    )
+    return StreamingResponse(file_like, headers=headers, media_type=media_type)
 
 
 @app.delete(
@@ -3686,9 +3640,7 @@ app.add_exception_handler(
 
 dump_openapi(app, __file__)
 
-# Can be overwritten for testing
-# Note: in PROD there are 16 workers, statistically the jobs will start very fast
-JOB_INTERVAL = 5
+JOB_INTERVAL = 2  # Can be overwritten for testing
 
 
 @app.on_event("startup")

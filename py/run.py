@@ -58,14 +58,8 @@ def run_gunicorn() -> None:
                 # https://docs.gunicorn.org/en/stable/settings.html#workers
                 # Below is only for gthread workers type
                 # 'threads': 2,
-                # "timeout" is misnamed, it's in fact the maximum time for a worker to reply to a request
-                # https://stackoverflow.com/questions/54832771/gunicorn-doesnt-kill-worker-even-after-timeout
-                # We have quite long occasional queries so increase from default value of 30 (sec)
-                "timeout": 120,
-                # Kill workers after this number of requests received. Good and simple concept but killing the worker
-                # means eventually killing the running task inside. Idea can be recycled but inside the app itself.
-                # "max_requests": 1024,
-                # "graceful_timeout": 10,
+                "timeout": 600,
+                "graceful_timeout": 600,
                 # Keep gunicorn silent after start sequence
                 # "accesslog": "-",
                 # "errorlog": "-",
