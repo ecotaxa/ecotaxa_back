@@ -1681,8 +1681,8 @@ If no **unique order** is specified, the result can vary for same call and condi
         rsp.details = details
 
         rsp_reordered_by_nearest_neighbor = similarity_search_nn(project_id,
-                                                                 seed_object_id=filters.seed_object_id,
-                                                                 source_project_ids=filters.seed_object_ids,
+                                                                #  seed_object_id=filters.seed_object_id,
+                                                                #  source_project_ids=filters.seed_object_ids,
                                                                  features=[],
                                                                  use_scn=False,
                                                                  filters=filters,
