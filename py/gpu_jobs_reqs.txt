@@ -3,6 +3,8 @@
 SQLAlchemy==1.4.31
 psycopg2-binary==2.9.3
 astral==2.2
+# pgvector for similarity search
+pgvector==0.2.4
 # Last (April 2023) pydantic
 # ERROR: Cannot install -r reqs.txt (line 12) and pydantic[mypy]==1.10.7 because these package versions have conflicting dependencies.
 # The conflict is caused by:
