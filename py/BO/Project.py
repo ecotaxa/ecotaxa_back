@@ -473,6 +473,8 @@ class ProjectBO(object):
         ):
             last_prj: Optional[int] = None
             for projid, user_id, user_name, cnt, last_date in pqry:
+                if last_date is None:
+                    continue
                 last_date_str = last_date.replace(microsecond=0).isoformat()
                 if projid != last_prj:
                     last_prj = projid
@@ -774,27 +776,6 @@ class ProjectBO(object):
             and_(Sample.sampleid == Acquisition.acq_sample_id, Sample.projid == prj_id),
         )
         return [an_id for an_id, in qry]
-
-    @classmethod
-    def get_all_object_ids_with_first_image(
-        cls, session: Session, prj_id: int
-    ) -> Dict[Any, str]:  # ObjectIDT
-        """
-        Return the full list of objects IDs and first image file name inside a project.
-        """
-        sql = text(
-            """
-    SELECT obh.objid, img.file_name
-      FROM %s obh
-      JOIN images img ON obh.objid = img.objid
-                     AND img.imgrank = (SELECT MIN(img3.imgrank) FROM images img3 WHERE img3.objid = obh.objid)
-      JOIN acquisitions acq ON acq.acquisid = obh.acquisid
-      JOIN samples sam ON sam.sampleid = acq.acq_sample_id
-     WHERE sam.projid = :prj"""
-            % ObjectHeader.__tablename__
-        )
-        res: Result = session.execute(sql, {"prj": prj_id})
-        return {objid: file_name for (objid, file_name) in res.fetchall()}
 
     @classmethod
     def incremental_update_taxo_stats(

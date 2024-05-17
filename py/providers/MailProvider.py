@@ -331,6 +331,7 @@ class MailProvider(object):
     def send_status_mail(
         self,
         recipient: str,
+        id: int,
         assistance_email: str,
         status_name: str,
         action: str,
@@ -338,17 +339,12 @@ class MailProvider(object):
         reason: Optional[str] = None,
         url: Optional[str] = None,
     ) -> None:
-        ticket = ""
-        if reason is not None and self.ADD_TICKET != "":
-            reasons = reason.split(self.ADD_TICKET)
-            if len(reasons) > 1 and reasons[0].strip() != "":
-                ticket = "[" + reasons[0] + "]"
-                reason = self.ADD_TICKET.join(reasons[1:])
+        ticket = self.get_ticket(recipient, id)
         data = ReplaceInMail(
             email=assistance_email,
             token=token,
             tokenage=self.PROFILE_TOKEN_AGE,
-            ticket=ticket,
+            ticket=str(ticket or ""),
             url=url,
         )
         mailmsg = self.mail_message(AccountMailType.status, data, action=status_name)

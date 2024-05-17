@@ -238,11 +238,11 @@ class TaxonomyChangeService(Service):  # pragma:nocover
             subqry = TaxonomyChangeService.strict_match_subquery(
                 self.session, used_taxo_ids, phylo_or_morpho="M"
             )
-            qry = self.session.query(Taxonomy, WoRMS)
-            qry = qry.join(subqry, subqry.c.id == Taxonomy.id)
-            qry = qry.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
-            logger.info("matching qry:%s", str(qry))
-            res = qry.all()
+            qry2 = self.session.query(Taxonomy, WoRMS)
+            qry2 = qry2.join(subqry, subqry.c.id == Taxonomy.id)
+            qry2 = qry2.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
+            logger.info("matching qry2:%s", str(qry2))
+            res = qry2.all()
             # Format result
             for taxo, worms in res:
                 ret.append((taxo, worms))
@@ -264,7 +264,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
             # flt = statuses[4]
             # status_filt = text("ARRAY['%s'::varchar]" % flt)
             # qry3 = qry3.filter(subqry.c.acc.op('@>')(status_filt))
-            logger.info("matching qry:%s", str(qry3))
+            logger.info("matching qry3:%s", str(qry3))
             res3 = qry3.all()
             # Format result
             for taxo, worms in res3:
@@ -280,7 +280,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
                 not_(subqry.c.acc.op("@>")(text("ARRAY['accepted'::varchar]")))
             )
             qry31 = qry31.filter(WoRMS.valid_name == None)
-            logger.info("matching qry:%s", str(qry31))
+            logger.info("matching qry31:%s", str(qry31))
             res31 = qry31.all()
             # Format result
             for taxo, worms in res31:
@@ -307,7 +307,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
             # qry4 = self.session.query(Taxonomy, WoRMS)
             # qry4 = qry4.join(subqry, subqry.c.id == Taxonomy.id)
             # qry4 = qry4.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
-            logger.info("matching qry:%s", str(qry4))
+            logger.info("matching qry4:%s", str(qry4))
             res = qry4.all()
             # Format result
             for taxo, worms in res:
@@ -324,7 +324,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
             qry5 = qry5.filter(Taxonomy.taxotype == "P")
             qry5 = qry5.filter(not_(Taxonomy.id.in_(self.session.query(subqry.c.id))))
             qry5 = qry5.filter(not_(Taxonomy.id.in_(self.session.query(subqry2.c.id))))
-            logger.info("matching qry:%s", str(qry5))
+            logger.info("matching qry5:%s", str(qry5))
             res5 = qry5.all()
             # Format result
             for taxo in res5:
@@ -338,7 +338,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
             qry6 = qry6.filter(Taxonomy.id == any_(used_taxo_ids))
             qry6 = qry6.filter(Taxonomy.taxotype == "M")
             qry6 = qry6.filter(not_(Taxonomy.id.in_(self.session.query(subqry.c.id))))
-            logger.info("matching qry:%s", str(qry6))
+            logger.info("matching qry6:%s", str(qry6))
             res6 = qry6.all()
             # Format result
             for taxo in res6:
@@ -378,7 +378,7 @@ class TaxonomyChangeService(Service):  # pragma:nocover
         qry = session.query(Taxonomy, WoRMS)
         qry = qry.join(subqry, subqry.c.id == Taxonomy.id)
         qry = qry.join(WoRMS, subqry.c.aphia_id == WoRMS.aphia_id)
-        logger.info("matching qry:%s", str(qry))
+        logger.info("matching qry strict:%s", str(qry))
         res = qry.all()
         return res
 

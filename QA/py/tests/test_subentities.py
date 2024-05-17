@@ -10,7 +10,7 @@ from starlette import status
 
 from tests.test_fastapi import ADMIN_AUTH
 from tests.test_import import ADMIN_USER_ID
-from tests.test_subset_merge import check_project
+from tests.prj_utils import check_project
 
 PROJECT_CHECK_URL = "/projects/{project_id}/check"
 

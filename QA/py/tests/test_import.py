@@ -8,25 +8,19 @@ from pathlib import Path
 
 import pytest
 from API_models.crud import *
-
 # noinspection PyPackageRequirements
 from API_models.imports import *
-
 # noinspection PyPackageRequirements
 from API_operations.AsciiDump import AsciiDumper
-
 # noinspection PyPackageRequirements
 from API_operations.CRUD.Jobs import JobCRUDService
-
 # Import services
 # noinspection PyPackageRequirements
 from API_operations.CRUD.Projects import ProjectsService
 from API_operations.JsonDumper import JsonDumper
-
 # noinspection PyPackageRequirements
 from API_operations.imports.Import import FileImport
 from DB.Job import DBJobStateEnum
-
 from starlette import status
 
 from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID
@@ -37,7 +31,9 @@ from tests.jobs import (
     get_job_errors,
     api_wait_for_stable_job,
     api_check_job_questions,
+    api_reply_to_waiting_job,
 )
+from tests.prj_utils import check_project
 
 # All files paths are now relative to root shared directory
 TEST_DIR = Path(dirname(realpath(__file__))).resolve()
@@ -54,11 +50,14 @@ BAD_FREE_DIR = DATA_DIR / "import_bad_free_data"
 SPARSE_DIR = DATA_DIR / "import_sparse"
 PLUS_DIR = DATA_DIR / "import_test_plus"
 JUST_PREDICTED_DIR = DATA_DIR / "import_just_predicted"
+V_OR_D_ONLY_DIR = DATA_DIR / "import_v_or_d_just_state"
 WEIRD_DIR = DATA_DIR / "import_test_weird"
 ISSUES_DIR = DATA_DIR / "import_issues" / "tsv_issues"
 ISSUES_DIR2 = DATA_DIR / "import_issues" / "no_classif_id"
 ISSUES_DIR3 = DATA_DIR / "import_issues" / "tsv_too_many_cols"
 ISSUES_DIR4 = DATA_DIR / "import_issues" / "duplicate_in_tsv"
+ISSUES_DIR5 = DATA_DIR / "import_issues" / "predicted_but_what"
+ISSUES_DIR6 = DATA_DIR / "import_issues" / "classif_without_state"
 MIX_OF_STATES = DATA_DIR / "import_mixed_states"
 EMPTY_DIR = DATA_DIR / "import_issues" / "no_relevant_file"
 EMPTY_TSV_DIR = DATA_DIR / "import_issues" / "empty_tsv"
@@ -66,6 +65,7 @@ EMPTY_TSV_DIR2 = DATA_DIR / "import_issues" / "empty_tsv2"
 BREAKING_HIERARCHY_DIR = DATA_DIR / "import_issues" / "breaking_hierarchy"
 EMPTY_TSV_IN_UPD_DIR = DATA_DIR / "import_test_upd_empty"
 AMBIG_DIR = DATA_DIR / "import de categories ambigues"
+VARIOUS_STATES_DIR = DATA_DIR / "import_various_states"
 
 FILE_IMPORT_URL = "/file_import/{project_id}"
 
@@ -151,7 +151,7 @@ def test_import(database, caplog, title, path=str(PLAIN_FILE), instrument=None):
 
 
 # @pytest.mark.skip()
-def test_import_again_skipping(database, caplog):
+def test_import_again_skipping(database, ccheck, caplog):
     """Re-import similar files into same project
     CANNOT RUN BY ITSELF"""
     caplog.set_level(logging.DEBUG)
@@ -175,7 +175,7 @@ def test_import_again_skipping(database, caplog):
 
 
 # @pytest.mark.skip()
-def test_import_again_irrelevant_skipping(database, caplog):
+def test_import_again_irrelevant_skipping(database, ccheck, caplog):
     """Re-import similar files into same project
     CANNOT RUN BY ITSELF"""
     caplog.set_level(logging.DEBUG)
@@ -234,14 +234,17 @@ def test_import_a_bit_more_skipping(database, caplog, title, path=str(PLUS_DIR))
     # TODO: Assert the extra "object_extra" in TSV in data/import_test_plus/m106_mn01_n3_sml
 
 
-def test_import_again_not_skipping_tsv_skipping_imgs(database, caplog):
+def test_import_again_not_skipping_tsv_skipping_imgs(database, fastapi, ccheck, caplog):
     """Re-import into same project, not skipping TSVs
     CANNOT RUN BY ITSELF"""
+    # time.sleep(
+    #     0.5
+    # )  # TODO: There is a race condition writing invalid rows in obj_header
     caplog.set_level(logging.DEBUG)
     srch = search_unique_project(ADMIN_USER_ID, "Test Create Update")
     prj_id = srch.projid  # <- need the project from first test
     # Do preparation
-    import_plain(prj_id)
+    import_plain(fastapi, prj_id)
     # Check that all went fine
     for a_msg in caplog.records:
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
@@ -249,7 +252,7 @@ def test_import_again_not_skipping_tsv_skipping_imgs(database, caplog):
         assert "One more image" not in a_msg.getMessage()
 
 
-def import_plain(prj_id):
+def import_plain(fastapi, prj_id):
     params = ImportReq(source_path=str(PLAIN_DIR), skip_existing_objects=True)
     with FileImport(prj_id, params) as sce:
         rsp: ImportRsp = sce.run(ADMIN_USER_ID)
@@ -265,14 +268,38 @@ def import_plain(prj_id):
         "users": {"admin4test": 1, "elizandro rodriguez": 1},  # Map to admin
         "taxa": {"other": 99999, "ozzeur": 85011},  # 'other<dead'  # 'other<living'
     }
-    with JobCRUDService() as sce:
-        sce.reply(ADMIN_USER_ID, rsp.job_id, reply)
+    # with JobCRUDService() as sce:
+    #     sce.reply(ADMIN_USER_ID, rsp.job_id, reply)
+    api_reply_to_waiting_job(fastapi, rsp.job_id, reply)
+    job = wait_for_stable(rsp.job_id)
+    check_job_ok(job)
+
+
+def import_various(fastapi, prj_id):
+    params = ImportReq(source_path=str(VARIOUS_STATES_DIR), skip_existing_objects=True)
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+
+    assert job.state == DBJobStateEnum.Asking
+    assert job.question == {
+        "missing_users": ["elizandro rodriguez"],
+        "missing_taxa": [],
+    }
+
+    reply = {
+        "users": {"elizandro rodriguez": 1},  # Map to admin
+        "taxa": {},  # 'other<dead'  # 'other<living'
+    }
+    # with JobCRUDService() as sce:
+    #     sce.reply(ADMIN_USER_ID, rsp.job_id, reply)
+    api_reply_to_waiting_job(fastapi, rsp.job_id, reply)
     job = wait_for_stable(rsp.job_id)
     check_job_ok(job)
 
 
 # @pytest.mark.skip()
-def test_import_again_not_skipping_nor_imgs(database, caplog):
+def test_import_again_not_skipping_nor_imgs(database, ccheck, caplog):
     """Re-import into same project, not skipping TSVs or images
     CANNOT RUN BY ITSELF"""
     caplog.set_level(logging.DEBUG)
@@ -290,7 +317,7 @@ def test_import_again_not_skipping_nor_imgs(database, caplog):
 
 
 # @pytest.mark.skip()
-def test_equal_dump_prj1(database, caplog, tstlogs):
+def test_equal_dump_prj1(database, ccheck, caplog, tstlogs):
     caplog.set_level(logging.DEBUG)
     out_dump = "prj1.txt"
     with AsciiDumper() as sce:
@@ -323,7 +350,7 @@ def test_equal_dump_prj2(database, caplog, tstlogs):
 
 
 # @pytest.mark.skip()
-def test_import_empty(database, caplog):
+def test_import_empty(database, ccheck, caplog):
     """Nothing relevant to import"""
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 3")
@@ -337,7 +364,7 @@ def test_import_empty(database, caplog):
 
 
 # @pytest.mark.skip()
-def test_import_empty_tsv(database, caplog):
+def test_import_empty_tsv(database, ccheck, caplog):
     """a TSV with header but no data"""
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 3")
@@ -350,7 +377,7 @@ def test_import_empty_tsv(database, caplog):
     assert len(get_job_errors(job)) == 1
 
 
-def test_import_empty_tsv2(database, caplog):
+def test_import_empty_tsv2(database, ccheck, caplog):
     """a TSV with nothing at all"""
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 2.6.3")
@@ -364,7 +391,7 @@ def test_import_empty_tsv2(database, caplog):
 
 
 # @pytest.mark.skip()
-def test_import_issues(database, caplog):
+def test_import_issues(database, ccheck, caplog):
     """The TSV contains loads of problems"""
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 4")
@@ -376,9 +403,9 @@ def test_import_issues(database, caplog):
     check_job_errors(job)
     errors = get_job_errors(job)
     assert errors == [
-        "Invalid Header 'nounderscorecol' in file ecotaxa_m106_mn01_n3_sml.tsv. Format must be Table_Field. Field ignored",
-        "Invalid Header 'unknown_target' in file ecotaxa_m106_mn01_n3_sml.tsv. Unknown table prefix. Field ignored",
-        "Invalid Type '[H]' for Field 'object_wrongtype' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect Type. Field ignored",
+        "Invalid Header 'nounderscorecol' in file ecotaxa_m106_mn01_n3_sml.tsv. Format must be Table_Field.",
+        "Invalid Header 'unknown_target' in file ecotaxa_m106_mn01_n3_sml.tsv. Unknown table prefix 'unknown'.",
+        "Invalid Type '[H]' for Field 'object_wrongtype' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect Type.",
         "Invalid float value 'a' for Field 'object_buggy_float' in file ecotaxa_m106_mn01_n3_sml.tsv.",
         "Invalid Lat. value '100' for Field 'object_lat' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect range -90/+90°.",
         "Invalid Long. value '200' for Field 'object_lon' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect range -180/+180°.",
@@ -396,24 +423,74 @@ def test_import_issues(database, caplog):
 
     # @pytest.mark.skip()
 
-    def test_import_classif_issue(database, caplog):
-        """The TSV contains an unknown classification id"""
-        caplog.set_level(logging.DEBUG)
-        prj_id = create_project(ADMIN_USER_ID, "Test LS 5")
 
-        params = ImportReq(source_path=str(ISSUES_DIR2))
-        with FileImport(prj_id, params) as sce:
-            rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-        job = wait_for_stable(rsp.job_id)
-        check_job_errors(job)
-        errors = get_job_errors(job)
-        assert errors == [
-            "Some specified classif_id don't exist, correct them prior to reload: 99999999"
-        ]
+def test_import_no_valid_category(database, ccheck, caplog):
+    """The TSV contains an unknown classification id"""
+    caplog.set_level(logging.DEBUG)
+    prj_id = create_project(ADMIN_USER_ID, "Test LS 5")
+
+    params = ImportReq(source_path=str(ISSUES_DIR2))
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    check_job_errors(job)
+    errors = get_job_errors(job)
+    assert errors == [
+        "Some specified classif_id don't exist, correct them prior to reload: 99999999"
+    ]
+
+
+def test_import_no_valid_state_and_others(database, ccheck, caplog, tstlogs):
+    """Some states need complementary information that cannot be defaulted"""
+    caplog.set_level(logging.DEBUG)
+    prj_id = create_project(ADMIN_USER_ID, "Test LS 10")
+
+    params = ImportReq(source_path=str(ISSUES_DIR5))
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    check_job_errors(job)
+    errors = get_job_errors(job)
+    assert errors == [
+        "When annotation status 'predicted' is provided there has to be a category, in file m106_mn01_n3_sml/ecotaxa_m106_mn01_n3_sml_pls.tsv."
+    ]
+    check_project(tstlogs, prj_id)
+
+
+def test_import_classif_without_state(database, ccheck, caplog, tstlogs):
+    """Importing a classification implies having a state"""
+    caplog.set_level(logging.DEBUG)
+    prj_id = create_project(ADMIN_USER_ID, "Test import problem 11")
+
+    params = ImportReq(source_path=str(ISSUES_DIR6))
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    check_job_errors(job)
+    errors = get_job_errors(job)
+    assert errors == [
+        "When a category (84963) is provided it has to be with a status, in file m106_mn01_n3_sml/ecotaxa_m106_mn01_n3_sml_pls.tsv."
+    ]
+    check_project(tstlogs, prj_id)
+
+
+def test_import_state_without_related(database, ccheck, caplog, tstlogs):
+    """Importing just 'V' or 'D' is OK, we provide reasonable defaults"""
+    caplog.set_level(logging.DEBUG)
+    prj_id = create_project(ADMIN_USER_ID, "Test import case 12")
+
+    params = ImportReq(source_path=str(V_OR_D_ONLY_DIR))
+    with FileImport(prj_id, params) as sce:
+        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
+    job = wait_for_stable(rsp.job_id)
+    check_job_ok(job)
+    errors = get_job_errors(job)
+    assert errors == []
+    check_project(tstlogs, prj_id)
 
 
 # @pytest.mark.skip()
-def test_import_too_many_custom_columns(database, caplog):
+def test_import_too_many_custom_columns(database, ccheck, caplog):
     """The TSV contains too many custom columns.
     Not a realistic case, but it simulates what happens if importing into a project with
      mappings"""
@@ -458,7 +535,7 @@ def test_import_too_many_custom_columns(database, caplog):
     assert errors == compare_errors
 
 
-def test_import_dups_in_tsv(database, caplog):
+def test_import_dups_in_tsv(database, ccheck, caplog):
     """The TSV contains duplicated lines.
     Either without _or without_ 'skip_existing_objects' option, it must not pass preliminary validation,
     as such duplicate is against referential integrity."""
@@ -504,6 +581,8 @@ def test_import_ambiguous_classification(fastapi, caplog):
         "missing_users": [],
         "missing_taxa": ["part (annelida)", "part"],
     }
+    api_reply_to_waiting_job(fastapi, job_id, {})
+    api_wait_for_stable_job(fastapi, job_id)
 
 
 # @pytest.mark.skip()
@@ -597,7 +676,7 @@ def test_import_breaking_unicity(database, caplog):
 
 
 # @pytest.mark.skip()
-def test_issue_483(database, caplog):
+def test_issue_483(database, ccheck, caplog):
     """
     Too large image.
     """

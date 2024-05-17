@@ -41,7 +41,7 @@ class User(Model):
     status_admin_comment: str = Column(String(255))
     preferences: str = Column(String(40000))
     country: str = Column(String(50))
-
+    orcid: str = Column(String(20), nullable=True)
     usercreationdate = Column(TIMESTAMP, default=func.now())
     usercreationreason = Column(String(1000))
 

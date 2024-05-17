@@ -9,6 +9,7 @@ from typing import List, Set, Dict, Optional, Callable, Tuple, Any
 from BO.Classification import ClassifIDT
 from BO.Mappings import ProjectMapping
 from BO.ProjectTidying import ProjectTopology
+from BO.User import UserIDT
 from BO.Vignette import VignetteMaker
 from DB.Acquisition import Acquisition
 from DB.Sample import Sample
@@ -65,6 +66,7 @@ class ImportHow(object):
         custom_mapping: ProjectMapping,
         skip_object_duplicates: bool,
         loaded_files: List[str],
+        user_id: UserIDT
     ):
         self.prj_id = prj_id
         # Update or create
@@ -99,6 +101,8 @@ class ImportHow(object):
         self.loaded_files = loaded_files
         # For UVP6 vignetting
         self.vignette_maker: Optional[VignetteMaker] = None
+        # In case we need to default a user
+        self.user_id: UserIDT = user_id
 
     def do_thumbnail_above(self, max_dim: int) -> None:
         self.max_dim = max_dim

@@ -10,7 +10,7 @@ from API_operations.ObjectManager import ObjectManager
 
 from tests.test_import import ADMIN_USER_ID
 
-from tests.test_subset_merge import check_project
+from tests.prj_utils import check_project
 
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below

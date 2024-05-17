@@ -51,7 +51,7 @@ class ImageManagerService(Service):
         _user = RightsBO.user_has_role(
             self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
         )
-        qry = self.ro_session.query(Image.file_name)
+        qry = self.ro_session.query(Image.imgid, Image.orig_file_name)
         if prj_id is not None:
             # Find missing images in a project
             qry = qry.join(ObjectHeader).join(Acquisition).join(Sample).join(Project)
@@ -59,34 +59,37 @@ class ImageManagerService(Service):
         else:
             # Find missing images globally
             pass
-        qry = qry.outerjoin(ImageFile, Image.file_name == ImageFile.path)
-        qry = qry.filter(ImageFile.path.is_(None))
+        qry = qry.outerjoin(
+            ImageFile,
+            ImageFile.imgid == Image.imgid,
+        )
+        qry = qry.filter(ImageFile.imgid.is_(None))
         qry = qry.limit(max_digests)
         cnt = 0
         with CodeTimer("Files without md5, query '%s':" % str(qry), logger):
-            files_without_md5 = [file_name for file_name, in qry]
-        for an_img_file_name in files_without_md5:
+            obj_imgs_without_images = [rec for rec in qry]
+        for imgid, orig_file_name in obj_imgs_without_images:
             cnt += 1
-            img_file = ImageFile(path=an_img_file_name)
+            img_file = ImageFile(imgid=imgid)  # type:ignore
             self.session.add(img_file)
-            self._md5_on_record(img_file)
-            if cnt % 100 == 0:
+            self._md5_on_record(img_file, imgid, orig_file_name)
+            if cnt % 1000 == 0:
                 self.session.commit()
         self.session.commit()
         # Eventually we can still satisfy the constraint while doing a few missing md5s
         left_for_unknown = max_digests - cnt
         if left_for_unknown > 0:
             # Also do unknown image file lines
-            miss_qry = self.session.query(ImageFile)
+            miss_qry = self.session.query(ImageFile.imgid, Image.orig_file_name)
             miss_qry = miss_qry.filter(
                 and_(
                     ImageFile.state == ImageFileStateEnum.UNKNOWN.value,
                     ImageFile.digest_type == "?",
                 )
             )
+            miss_qry = miss_qry.join(Image, ImageFile.imgid == Image.imgid)
             if prj_id is not None:
                 # Find unknown images in a project
-                miss_qry = miss_qry.outerjoin(Image, Image.file_name == ImageFile.path)
                 miss_qry = (
                     miss_qry.join(ObjectHeader)
                     .join(Acquisition)
@@ -100,26 +103,31 @@ class ImageManagerService(Service):
                 "Files with unknown state, query '%s':" % str(miss_qry), logger
             ):
                 missing_ones = [an_img_file for an_img_file in miss_qry]
-            for a_missing in missing_ones:
+            for imgid, orig_file_name in missing_ones:
                 cnt += 1
-                self._md5_on_record(a_missing)
+                img_file = ImageFile(imgid=imgid)  # type:ignore
+                self._md5_on_record(img_file, imgid, orig_file_name)
+                if cnt % 1000 == 0:
+                    self.session.commit()
             self.session.commit()
         return "Digest for %d images done." % cnt
 
-    def _md5_on_record(self, img_file: ImageFile):
-        img_file_path = self.vault.image_path(img_file.path)
+    def _md5_on_record(self, img_file: ImageFile, imgid: int, orig_file_name: str):
+        phy_img = Image.img_from_id_and_orig(imgid, orig_file_name)
+        img_file_path = self.vault.image_path(phy_img)
         try:
             md5 = self.compute_md5(img_file_path)
             img_file.digest = md5
+            img_file.ext = orig_file_name[-3:]
             img_file.digest_type = "5"
             img_file.state = ImageFileStateEnum.OK.value
-        except FileNotFoundError:
+        except (OSError, FileNotFoundError):
             img_file.state = ImageFileStateEnum.MISSING.value
         except Exception as e:
             logger.exception(e)
             img_file.state = ImageFileStateEnum.ERROR.value
 
-    def do_cleanup_dup_same_obj(
+    def do_cleanup_dup_same_obj(  # TODO: Not working and not tested anyway
         self, current_user_id: UserIDT, prj_id: ProjectIDT, max_deletes: int
     ) -> str:
         """
@@ -154,7 +162,7 @@ class ImageManagerService(Service):
         qry = qry.join(
             ImageFile,
             and_(
-                ImageFile.path == Image.file_name,
+                ImageFile.imgid == Image.imgid,
                 ImageFile.state == ImageFileStateEnum.OK.value,
             ),
         )

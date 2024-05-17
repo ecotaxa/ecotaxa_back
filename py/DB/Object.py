@@ -9,7 +9,7 @@ import datetime
 from typing import Dict, Set, Iterable, TYPE_CHECKING
 
 # noinspection PyPackageRequirements
-from sqlalchemy import Index, Column, ForeignKey, Sequence, Integer
+from sqlalchemy import Index, Column, ForeignKey, Sequence, Integer  # fmt:skip
 # noinspection PyPackageRequirements
 from sqlalchemy.dialects.postgresql import (
     BIGINT,
@@ -21,7 +21,7 @@ from sqlalchemy.dialects.postgresql import (
     FLOAT,
     CHAR,
     TIMESTAMP,
-)
+)  # fmt:skip
 # noinspection PyPackageRequirements
 from sqlalchemy.orm import relationship, Session
 
@@ -189,18 +189,32 @@ class ObjectHeader(Model):
         return self.objid < other.objid
 
 
+USED_FIELDS_FOR_CLASSIF = {  # From user point of view, only these can be changed
+    ObjectHeader.classif_qual.name,
+    ObjectHeader.classif_id.name,
+    ObjectHeader.classif_who.name,
+    ObjectHeader.classif_when.name,
+}
+HIDDEN_FIELDS_FOR_CLASSIF = {  # Internally managed
+    ObjectHeader.classif_auto_id.name,
+    ObjectHeader.classif_auto_when.name,
+    ObjectHeader.classif_auto_score.name,
+}
+NON_UPDATABLE_VIA_API = USED_FIELDS_FOR_CLASSIF.union(HIDDEN_FIELDS_FOR_CLASSIF)
+
+
 class ObjectFields(Model):
     __tablename__ = "obj_field"
     objfid = Column(
         BIGINT, ForeignKey(ObjectHeader.objid, ondelete="CASCADE"), primary_key=True
     )
     # Not a real FK, this is used for a cluster which groups together data blocks by acquisition
-    acquis_id = Column(INTEGER, nullable=True)
+    acquis_id = Column(INTEGER, nullable=False)
     # The relationships are created in Relations.py but the typing here helps the IDE
     object: relationship
 
 
-Index(
+Index(  # We CLUSTER using this one, object ids tend to be consecutively read
     "obj_field_acquisid_objfid_idx",
     ObjectFields.__table__.c.acquis_id,
     ObjectFields.__table__.c.objfid,
@@ -214,7 +228,7 @@ Index(
 #         ).execute_if(dialect='postgresql')
 # )
 
-# Ajout des colonnes numériques & textuelles libres
+# Add free columns, numerical and textual ones
 for i in range(1, 501):
     # 8 bytes each, if present
     setattr(ObjectFields, "n%02d" % i, Column(FLOAT))

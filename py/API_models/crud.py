@@ -72,6 +72,11 @@ class _FullUserModel(_MinUserModel):
         description="The country name, as text (but chosen in a consistent list).",
         example="France",
     )
+    orcid = Field(
+        title="ORCID ID",
+        description="The orcid id https://support.orcid.org.",
+        example="0000-0001-2345-6789",
+    )
     usercreationdate = Field(
         title="User creation date",
         description="The date of creation of the user, as text formatted according to the ISO 8601 standard.",

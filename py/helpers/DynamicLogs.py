@@ -4,8 +4,8 @@
 #
 import abc
 import logging
-from logging import Logger
 from abc import ABC
+from logging import Logger
 from threading import get_ident
 
 LOGGING_FORMAT = (
@@ -112,3 +112,17 @@ class LogsSwitcher(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.emitter.log_file_path():
             _the_handler.stop_switch()
+
+
+MONITOR_LOG_PATH = "ecotaxa_api_calls.log"
+
+
+def get_api_logger():
+    """ Return a logger to a dedicated file for knowing what happens in some endpoints """
+    api_logger = logging.getLogger('API')
+    api_logger.setLevel(logging.INFO)
+    api_file_handler = logging.FileHandler(MONITOR_LOG_PATH)
+    api_file_handler.setLevel(logging.INFO)
+    api_file_handler.setFormatter(logging.Formatter("%(message)s #AT %(asctime)-15s"))
+    api_logger.addHandler(api_file_handler)
+    return api_logger

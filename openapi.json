@@ -5094,6 +5094,15 @@
             "example":47445,
             "name":"job_id",
             "in":"path"
+          },
+          {
+            "required":false,
+            "schema":{
+              "title":"Range",
+              "type":"string"
+            },
+            "name":"Range",
+            "in":"header"
           }
         ],
         "responses":{
@@ -6007,7 +6016,7 @@
           "password_regexp":{
             "title":"Password regexp",
             "type":"string",
-            "description":"8 char. minimum, at least one uppercase, one lowercase, one number and one special char in '#?!@%^&*-' ",
+            "description":"8 char. minimum, at least one uppercase, one lowercase, one number and one special char in '#?!@%^&*-+' ",
             "default":"^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#?%^&*-+])).{8,20}$"
           },
           "email_verification":{
@@ -6039,12 +6048,6 @@
             "type":"boolean",
             "description":"use Google ReCaptcha",
             "default":false
-          },
-          "add_ticket":{
-            "title":"ticket separator",
-            "type":"string",
-            "description":"string separator, permits to add ticket number when asking more information before user validation",
-            "default":""
           }
         },
         "description":"Values which can be considered identical over the lifetime of the back-end."
@@ -6682,12 +6685,12 @@
       "ImageModel":{
         "title":"ImageModel",
         "required":[
-          "imgid",
+          "objid",
           "imgrank",
-          "file_name",
-          "orig_file_name",
           "width",
-          "height"
+          "height",
+          "orig_file_name",
+          "file_name"
         ],
         "type":"object",
         "properties":{
@@ -6709,18 +6712,6 @@
             "description":"The rank of the image.",
             "example":0
           },
-          "file_name":{
-            "title":"File name",
-            "type":"string",
-            "description":"The file name.",
-            "example":"0037/6456.jpg"
-          },
-          "orig_file_name":{
-            "title":"Original file name",
-            "type":"string",
-            "description":"The file name of the original image.",
-            "example":"dewex_leg2_63_689.jpg"
-          },
           "width":{
             "title":"Width",
             "type":"integer",
@@ -6733,11 +6724,11 @@
             "description":"The height of the image.",
             "example":63
           },
-          "thumb_file_name":{
-            "title":"Thumb file name",
+          "orig_file_name":{
+            "title":"Original file name",
             "type":"string",
-            "description":"Generate thumbnail if image is too large. This generated thumbnail file name.",
-            "example":"null"
+            "description":"The file name of the original image.",
+            "example":"dewex_leg2_63_689.jpg"
           },
           "thumb_width":{
             "title":"Thumb width",
@@ -6750,8 +6741,21 @@
             "type":"integer",
             "description":"Generate thumbnail if image is too large. The thumb height of the image.",
             "example":"null"
+          },
+          "file_name":{
+            "title":"File name",
+            "type":"string",
+            "description":"The file name.",
+            "example":"0037/6456.jpg"
+          },
+          "thumb_file_name":{
+            "title":"Thumb file name",
+            "type":"string",
+            "description":"If image was too large at import time, the generated thumbnail file name.",
+            "example":"null"
           }
-        }
+        },
+        "description":"Computed inside ObjectBO"
       },
       "ImportReq":{
         "title":"Import request Model",
@@ -7099,16 +7103,11 @@
             "description":"The parent acquisition Id.",
             "example":144
           },
-          "orig_id":{
-            "title":"Original id",
-            "type":"string",
-            "description":"Original object ID from initial TSV load.",
-            "example":"deex_leg1_48_406"
-          },
-          "objdate":{
-            "title":"Object date",
-            "type":"string",
-            "format":"date"
+          "classif_id":{
+            "title":"Classification Id",
+            "type":"integer",
+            "description":"The classification Id.",
+            "example":82399
           },
           "objtime":{
             "title":"Object time",
@@ -7139,17 +7138,10 @@
             "description":"The min depth.",
             "example":300
           },
-          "sunpos":{
-            "title":"Sun position",
+          "objdate":{
+            "title":"Object date",
             "type":"string",
-            "description":"Sun position, from date, time and coords.",
-            "example":"N"
-          },
-          "classif_id":{
-            "title":"Classification Id",
-            "type":"integer",
-            "description":"The classification Id.",
-            "example":82399
+            "format":"date"
           },
           "classif_qual":{
             "title":"Classification qualification",
@@ -7157,11 +7149,11 @@
             "description":"The classification qualification. Could be **P** for predicted, **V** for validated or **D** for Dubious.",
             "example":"P"
           },
-          "classif_who":{
-            "title":"Classification who",
-            "type":"integer",
-            "description":"The user who manualy classify this object.",
-            "example":"null"
+          "sunpos":{
+            "title":"Sun position",
+            "type":"string",
+            "description":"Sun position, from date, time and coords.",
+            "example":"N"
           },
           "classif_when":{
             "title":"Classification when",
@@ -7170,16 +7162,16 @@
             "format":"date-time",
             "example":"2021-09-21T14:59:01.007110"
           },
+          "classif_who":{
+            "title":"Classification who",
+            "type":"integer",
+            "description":"The user who manualy classify this object.",
+            "example":"null"
+          },
           "classif_auto_id":{
             "title":"Classification auto Id",
             "type":"integer",
             "description":"Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. "
-          },
-          "classif_auto_score":{
-            "title":"Classification auto score",
-            "type":"number",
-            "description":"Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification auto score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
-            "example":0.085
           },
           "classif_auto_when":{
             "title":"Classification auto when",
@@ -7188,32 +7180,28 @@
             "format":"date-time",
             "example":"2021-09-21T14:59:01.007110"
           },
-          "classif_crossvalidation_id":{
-            "title":"Classification crossvalidation Id",
-            "type":"integer",
-            "description":"Always NULL in prod.",
-            "example":"null"
-          },
-          "complement_info":{
-            "title":"Complement info",
-            "type":"string",
-            "example":"Part of ostracoda"
-          },
-          "similarity":{
-            "title":"Similarity",
+          "classif_auto_score":{
+            "title":"Classification auto score",
             "type":"number",
-            "description":"Always NULL in prod.",
-            "example":"null"
+            "description":"Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification auto score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
+            "example":0.085
           },
-          "random_value":{
-            "title":"random_value",
-            "type":"integer"
+          "orig_id":{
+            "title":"Original id",
+            "type":"string",
+            "description":"Original object ID from initial TSV load.",
+            "example":"deex_leg1_48_406"
           },
           "object_link":{
             "title":"Object link",
             "type":"string",
             "description":"Object link.",
             "example":"http://www.zooscan.obs-vlfr.fr//"
+          },
+          "complement_info":{
+            "title":"Complement info",
+            "type":"string",
+            "example":"Part of ostracoda"
           }
         }
       },
@@ -7224,7 +7212,8 @@
           "acquisid",
           "orig_id",
           "sample_id",
-          "project_id"
+          "project_id",
+          "random_value"
         ],
         "type":"object",
         "properties":{
@@ -7240,16 +7229,11 @@
             "description":"The parent acquisition Id.",
             "example":144
           },
-          "orig_id":{
-            "title":"Original id",
-            "type":"string",
-            "description":"Original object ID from initial TSV load.",
-            "example":"deex_leg1_48_406"
-          },
-          "objdate":{
-            "title":"Object date",
-            "type":"string",
-            "format":"date"
+          "classif_id":{
+            "title":"Classification Id",
+            "type":"integer",
+            "description":"The classification Id.",
+            "example":82399
           },
           "objtime":{
             "title":"Object time",
@@ -7280,17 +7264,10 @@
             "description":"The min depth.",
             "example":300
           },
-          "sunpos":{
-            "title":"Sun position",
+          "objdate":{
+            "title":"Object date",
             "type":"string",
-            "description":"Sun position, from date, time and coords.",
-            "example":"N"
-          },
-          "classif_id":{
-            "title":"Classification Id",
-            "type":"integer",
-            "description":"The classification Id.",
-            "example":82399
+            "format":"date"
           },
           "classif_qual":{
             "title":"Classification qualification",
@@ -7298,11 +7275,11 @@
             "description":"The classification qualification. Could be **P** for predicted, **V** for validated or **D** for Dubious.",
             "example":"P"
           },
-          "classif_who":{
-            "title":"Classification who",
-            "type":"integer",
-            "description":"The user who manualy classify this object.",
-            "example":"null"
+          "sunpos":{
+            "title":"Sun position",
+            "type":"string",
+            "description":"Sun position, from date, time and coords.",
+            "example":"N"
           },
           "classif_when":{
             "title":"Classification when",
@@ -7311,16 +7288,16 @@
             "format":"date-time",
             "example":"2021-09-21T14:59:01.007110"
           },
+          "classif_who":{
+            "title":"Classification who",
+            "type":"integer",
+            "description":"The user who manualy classify this object.",
+            "example":"null"
+          },
           "classif_auto_id":{
             "title":"Classification auto Id",
             "type":"integer",
             "description":"Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. "
-          },
-          "classif_auto_score":{
-            "title":"Classification auto score",
-            "type":"number",
-            "description":"Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification auto score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
-            "example":0.085
           },
           "classif_auto_when":{
             "title":"Classification auto when",
@@ -7329,32 +7306,28 @@
             "format":"date-time",
             "example":"2021-09-21T14:59:01.007110"
           },
-          "classif_crossvalidation_id":{
-            "title":"Classification crossvalidation Id",
-            "type":"integer",
-            "description":"Always NULL in prod.",
-            "example":"null"
-          },
-          "complement_info":{
-            "title":"Complement info",
-            "type":"string",
-            "example":"Part of ostracoda"
-          },
-          "similarity":{
-            "title":"Similarity",
+          "classif_auto_score":{
+            "title":"Classification auto score",
             "type":"number",
-            "description":"Always NULL in prod.",
-            "example":"null"
+            "description":"Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification auto score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
+            "example":0.085
           },
-          "random_value":{
-            "title":"random_value",
-            "type":"integer"
+          "orig_id":{
+            "title":"Original id",
+            "type":"string",
+            "description":"Original object ID from initial TSV load.",
+            "example":"deex_leg1_48_406"
           },
           "object_link":{
             "title":"Object link",
             "type":"string",
             "description":"Object link.",
             "example":"http://www.zooscan.obs-vlfr.fr//"
+          },
+          "complement_info":{
+            "title":"Complement info",
+            "type":"string",
+            "example":"Part of ostracoda"
           },
           "sample_id":{
             "title":"Sample id",
@@ -7401,6 +7374,24 @@
               "mean":232.27,
               "stddev":2.129
             }
+          },
+          "classif_crossvalidation_id":{
+            "title":"Classification crossvalidation Id",
+            "type":"integer",
+            "description":"Always NULL, kept for compat.",
+            "example":"null"
+          },
+          "similarity":{
+            "title":"Similarity",
+            "type":"number",
+            "description":"Always NULL, kept for compat.",
+            "example":"null"
+          },
+          "random_value":{
+            "title":"random_value",
+            "type":"integer",
+            "description":"Random value associated to an image",
+            "example":1234
           }
         }
       },
@@ -9192,6 +9183,12 @@
             "type":"string",
             "description":"The country name, as text (but chosen in a consistent list).",
             "example":"France"
+          },
+          "orcid":{
+            "title":"ORCID ID",
+            "type":"string",
+            "description":"The orcid id https://support.orcid.org.",
+            "example":"0000-0001-2345-6789"
           },
           "usercreationdate":{
             "title":"User creation date",

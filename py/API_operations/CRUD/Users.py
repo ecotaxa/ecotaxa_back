@@ -82,6 +82,7 @@ class UserService(Service):
         User.status,
         User.organisation,
         User.country,
+        User.orcid,
         User.usercreationreason,
     ]
     COMMON_UPDATABLE_COLS = [
@@ -90,6 +91,7 @@ class UserService(Service):
         User.name,
         User.organisation,
         User.country,
+        User.orcid,
         User.usercreationreason,
     ]
 
@@ -583,9 +585,14 @@ class UserService(Service):
         # check if must send activation request email
         if not is_admin and self.account_validation == True:
             ask_activate = (
-                user_to_update.status == UserStatus.pending.value
-                or (update_src.id == -1 and mail_status == True)
-            ) and update_src.status == UserStatus.inactive.value
+                User.status in cols_to_upd
+                and (
+                    user_to_update.status
+                    in [UserStatus.active.value, UserStatus.pending.value]
+                    or (update_src.id == -1 and mail_status == True)
+                )
+                and update_src.status == UserStatus.inactive.value
+            )
 
         # only update actions from admin - not from profile
         if (
@@ -634,6 +641,7 @@ class UserService(Service):
             "organisation",
             "usercreationreason",
             "country",
+            # "orcid",
         ]
         for f in major_fields:
             if getattr(update_src, f) != getattr(user_to_update, f):
@@ -727,6 +735,19 @@ class UserService(Service):
         update_src.mail_status = mail_status
         status_cols.append(User.mail_status)
         return update_src, status_cols
+
+    @staticmethod
+    # https://support.orcid.org/hc/en-us/articles/360006897674-Structure-of-the-ORCID-Identifier
+    def generateCheckDigit(baseDigits: str):
+        total = 0
+        for i in range(0, len(baseDigits)):
+            digit = int(baseDigits[i])
+            total = (total + digit) * 2
+        remainder = total % 11
+        result = (12 - remainder) % 11
+        if result == 10:
+            return "X"
+        return str(result)
 
     @staticmethod
     def _get_key_name(objdict: dict, value) -> Optional[str]:

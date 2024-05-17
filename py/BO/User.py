@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 MISSING_USER = {"id": -1, "name": "", "email": ""}
 
 USER_PWD_REGEXP = r"^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#?%^&*-+])).{8,20}$"
-USER_PWD_REGEXP_DESCRIPTION = "8 char. minimum, at least one uppercase, one lowercase, one number and one special char in '#?!@%^&*-' "
+USER_PWD_REGEXP_DESCRIPTION = "8 char. minimum, at least one uppercase, one lowercase, one number and one special char in '#?!@%^&*-+' "
 SHORT_TOKEN_AGE = 1
 PROFILE_TOKEN_AGE = 24
 

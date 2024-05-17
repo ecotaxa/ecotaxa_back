@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Optional
+from typing import Optional, Any
 
 from .ORM import _analyze_cols, Model
 
@@ -33,8 +33,21 @@ class Bean(dict):
     def nb_fields_from(self, fields_set: set):
         return len(fields_set.intersection(self.keys()))
 
+    def with_columns(self, *args) -> "Bean":
+        # Ensure these columns are present
+        self.update({an_arg: None for an_arg in args})
+        return self
 
-def bean_of(an_obj: Optional[Model]) -> Optional[Bean]:
+    def update_from_obj(self, obj: Any, used_fields: set, force=False) -> None:
+        if force:
+            to_update = used_fields
+        else:
+            to_update = used_fields.difference(self.keys())
+        for a_field in to_update:
+            self[a_field] = getattr(obj, a_field)
+
+
+def bean_of(an_obj: Optional[Model], keep_pk: bool = False) -> Optional[Bean]:
     """
     Return a plain bean from an ORM-mapped object. All keys are nullified for safety.
     None in, None out.
@@ -45,8 +58,12 @@ def bean_of(an_obj: Optional[Model]) -> Optional[Bean]:
         return None
     ret = Bean()
     to_copy, to_clear = _analyze_cols(an_obj.__table__)
-    for a_col in to_clear:
-        ret[a_col] = None
+    if keep_pk:
+        for a_col in to_clear:
+            ret[a_col] = getattr(an_obj, a_col)
+    else:
+        for a_col in to_clear:
+            ret[a_col] = None
     for a_col in to_copy:
         ret[a_col] = getattr(an_obj, a_col)
     return ret

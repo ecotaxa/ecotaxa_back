@@ -31,13 +31,15 @@ def check_sqlalchemy_version() -> None:
 
 
 class TimeEvictedQueue(Queue):
-    TOO_OLD: ClassVar[int] = 120  # No session should be older than 2m
-    CLEAN_INTERVAL: ClassVar[int] = 1  # Expire some session after every sec
+    DB_SESSION_MAX_AGE: ClassVar[
+        int
+    ] = 300  # No inactive session should be older than 5m
+    CLEAN_INTERVAL: ClassVar[int] = 5  # Find sessions to expire after every n sec
 
     def __init__(self, maxsize=0, use_lifo=False):
         assert (
             use_lifo
-        ), "If not set eviction fails"  # With FIFO we might end up reusing a fresh cnx while older ones are not closed
+        ), "If not set, eviction fails"  # With FIFO we might end up reusing a fresh cnx while older ones are not closed
         super().__init__(maxsize, use_lifo=use_lifo)
         self.last_cleanup: float = 0
 
@@ -49,8 +51,11 @@ class TimeEvictedQueue(Queue):
         self.last_cleanup = now
         with self.mutex:
             for a_conn in self.queue:  # type:sqlalchemy.pool.base._ConnectionRecord
-                if a_conn.dbapi_connection and now - a_conn.starttime > self.TOO_OLD:
-                    # Note: below produces infor logs for each invalidation in global logger, if set.
+                if (
+                    a_conn.dbapi_connection
+                    and now - a_conn.starttime > self.DB_SESSION_MAX_AGE
+                ):
+                    # Note: below produces info logs for each invalidation in global logger, if set.
                     a_conn.invalidate()
 
 

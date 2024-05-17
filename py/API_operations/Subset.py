@@ -127,7 +127,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         # Create a DB writer
         writer = DBWriter(self.session)
         # Narrow the writes in ObjectFields thanks to mappings of original project
-        writer.generators({ObjectFields.__tablename__: used_columns})
+        writer.narrow_to(used_columns)
         # Use import helpers
         dest_prj_id = self.dest_prj.projid
         import_how = ImportHow(
@@ -136,6 +136,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             custom_mapping=ProjectMapping(),
             skip_object_duplicates=False,
             loaded_files=[],
+            user_id=self._get_owner_id()
         )
         # Get parent (enclosing) Sample, Acquisition. There should be 0 in this context as the project is new.
         (
@@ -257,7 +258,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             bean_of(obj_orm),
             bean_of(fields_orm),
             bean_of(cnn_features_orm),
-            bean_of(image_orm),
+            bean_of(image_orm, True),  # We need previous value of rank
             bean_of(sample_orm),
             bean_of(acquisition_orm),
             bean_of(process_orm),
@@ -277,11 +278,13 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         # Write object and children
         new_records = TSVFile.create_or_link_slaves(
             how=import_how,
+            start_time=None,
             session=self.session,
             object_head_to_write=obj,
             object_fields_to_write=fields,
             image_to_write=image,
         )
+        source_imgid = image.imgid if image is not None else None
         writer.add_db_entities(obj, fields, image, new_records)
         # Keep track of existing objects
         if new_records > 1:  # TODO: This is a cumbersome way of stating "new object",
@@ -294,33 +297,34 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
                 writer.add_cnn_features(obj, cnn_features)
             writer.add_classif_log(obj, histo)
         # Do images
-        if new_records > 0 and image and image.file_name is not None:
-            # We have an image, with a new imgid but old paths have been copied
-            old_imgpath = Path(self.vault.image_path(image.file_name))
-            image.file_name = None  # In case, don't reference a non-existing file
+        if new_records > 0 and image and image.imgid is not None:
+            # We have an image, with a new imgid
+            prev_path = Image.img_from_id_and_orig(source_imgid, image.orig_file_name)
+            old_imgpath = Path(self.vault.image_path(prev_path))
             try:
-                sub_path = self.vault.store_image(old_imgpath, image.imgid)
-                image.file_name = sub_path
+                # TODO: Here we could share images
+                self.vault.store_image(old_imgpath, image.imgid)
             except FileNotFoundError:
+                # TODO: Store 'file not there' somewhere?
                 logger.error("Could not duplicate %s, not found", old_imgpath)
             # Proceed to thumbnail if any
-            if image.thumb_file_name is not None:
-                old_thumbnail_path = self.vault.image_path(image.thumb_file_name)
+            prev_thumb_path = Image.thumb_img_from_id_if_there(
+                source_imgid, image.thumb_height
+            )
+            if prev_thumb_path is not None:
+                old_thumbnail_path = self.vault.image_path(prev_thumb_path)
                 thumb_relative_path, thumb_full_path = self.vault.thumbnail_paths(
                     image.imgid
-                )
-                image.thumb_file_name = (
-                    None  # In case, don't reference a non-existing file
                 )
                 try:
                     # TODO: Call a primitive in Vault instead
                     shutil.copyfile(old_thumbnail_path, thumb_full_path)
-                    image.thumb_file_name = thumb_relative_path
                 except FileNotFoundError:
+                    # TODO: Store 'file not there' somewhere?
                     logger.error(
                         "Could not duplicate thumbnail %s, not found", old_imgpath
                     )
-            # Some imgrank are rotten, and the DB does not enforce unicity per object
+            # Some imgrank are rotten, fix them
             images_for_obj = self.images_per_orig_id[obj.orig_id]
             if image.imgrank in images_for_obj:
                 image.imgrank = max(images_for_obj) + 1

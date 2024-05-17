@@ -13,7 +13,7 @@ from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.Rights import RightsBO, Action
 from BO.Sample import SampleIDT
 from DB.Acquisition import Acquisition
-from DB.Object import ObjectHeader
+from DB.Object import ObjectHeader, ObjectFields
 from DB.Project import Project
 from DB.Sample import Sample
 from DB.helpers.ORM import orm_equals, any_, all_, func
@@ -171,7 +171,7 @@ class MergeService(Service, LogEmitter):
 
         # Align foreign keys, to Project, Sample and Acquisition
         upd_values: Dict[str, Any] = {}
-        for a_fk_to_proj_tbl in [Sample, Acquisition, ObjectHeader]:
+        for a_fk_to_proj_tbl in [Sample, Acquisition, ObjectHeader, ObjectFields]:
             upd = self.session.query(a_fk_to_proj_tbl)
             if a_fk_to_proj_tbl == Sample:
                 # Move (i.e. change project) samples which are 'new' from merged project,
@@ -182,62 +182,86 @@ class MergeService(Service, LogEmitter):
                 # And update the column
                 upd_values = {"projid": self.prj_id}
             elif a_fk_to_proj_tbl == Acquisition:
+                if len(common_samples) == 0:
+                    # Nothing to do. There were only new samples, all of them moved to self.
+                    continue
                 # Acquisitions which were created, in source, under new samples, will 'follow'
                 #    them during above move, thanks to the FK on acq_sample_id.
                 # BUT some acquisitions were potentially created in source project, inside
                 #    forked samples. They need to be attached to the dest (self) corresponding sample.
-                if len(common_samples) > 0:
-                    # Build a CTE with values for the update
-                    smp_cte = values_cte(
-                        "upd_smp",
-                        ("src_id", "dst_id"),
-                        [(k, v) for k, v in common_samples.items()],
+                # Build a CTE with values for the update
+                smp_cte = values_cte(
+                    "upd_smp",
+                    ("src_id", "dst_id"),
+                    [(k, v) for k, v in common_samples.items()],
+                )
+                smp_subqry = self.session.query(smp_cte.c.column2).filter(
+                    smp_cte.c.column1 == Acquisition.acq_sample_id
+                )
+                upd_values = {
+                    "acq_sample_id": func.coalesce(
+                        smp_subqry.scalar_subquery(),  # type: ignore
+                        Acquisition.acq_sample_id,
                     )
-                    smp_subqry = self.session.query(smp_cte.c.column2).filter(
-                        smp_cte.c.column1 == Acquisition.acq_sample_id
-                    )
-                    upd_values = {
-                        "acq_sample_id": func.coalesce(
-                            smp_subqry.scalar_subquery(),  # type: ignore
-                            Acquisition.acq_sample_id,
-                        )
-                    }
-                    upd = upd.filter(
-                        Acquisition.acq_sample_id == any_(list(common_samples.keys()))
-                    )
-                    upd = upd.filter(
-                        Acquisition.acquisid != all_(list(common_acquisitions.keys()))
-                    )
-                if len(common_samples) == 0:
-                    # Nothing to do. There were only new samples, all of them moved to self.
-                    continue
+                }
+                upd = upd.filter(
+                    Acquisition.acq_sample_id == any_(list(common_samples.keys()))
+                )
+                upd = upd.filter(
+                    Acquisition.acquisid != all_(list(common_acquisitions.keys()))
+                )
             elif a_fk_to_proj_tbl == ObjectHeader:
+                if len(common_acquisitions) == 0:
+                    # Nothing to do. There were only new acquisitions, all of them moved to self.
+                    continue
                 # Generated SQL looks like:
                 # with upd_acq (src_id, dst_id) as (values (5,6), (7,8))
                 # update obj_head
                 #    set acquisid = coalesce((select dst_id from upd_acq where acquisid=src_id), acquisid)
                 #  where acquisid in (select src_id from upd_acq)
-                if len(common_acquisitions) > 0:
-                    # Object must follow its acquisition
-                    acq_cte = values_cte(
-                        "upd_acq",
-                        ("src_id", "dst_id"),
-                        [(k, v) for k, v in common_acquisitions.items()],
+                # Object must follow its acquisition
+                acq_cte = values_cte(
+                    "upd_acq",
+                    ("src_id", "dst_id"),
+                    [(k, v) for k, v in common_acquisitions.items()],
+                )
+                acq_subqry = self.session.query(acq_cte.c.column2).filter(
+                    acq_cte.c.column1 == ObjectHeader.acquisid
+                )
+                upd_values = {
+                    "acquisid": func.coalesce(
+                        acq_subqry.scalar_subquery(), ObjectHeader.acquisid
                     )
-                    acq_subqry = self.session.query(acq_cte.c.column2).filter(
-                        acq_cte.c.column1 == ObjectHeader.acquisid
-                    )
-                    upd_values = {
-                        "acquisid": func.coalesce(
-                            acq_subqry.scalar_subquery(), ObjectHeader.acquisid
-                        )
-                    }
-                    upd = upd.filter(
-                        ObjectHeader.acquisid == any_(list(common_acquisitions.keys()))
-                    )
+                }
+                upd = upd.filter(
+                    ObjectHeader.acquisid == any_(list(common_acquisitions.keys()))
+                )
+            elif a_fk_to_proj_tbl == ObjectFields:
                 if len(common_acquisitions) == 0:
                     # Nothing to do. There were only new acquisitions, all of them moved to self.
                     continue
+                # Generated SQL looks like:
+                # with upd_acq (src_id, dst_id) as (values (5,6), (7,8))
+                # update obj_field
+                #    set acquis_id = coalesce((select dst_id from upd_acq where acquisid=src_id), acquis_id)
+                #  where acquis_id in (select src_id from upd_acq)
+                # ObjectField must follow its acquisition
+                acq_cte = values_cte(
+                    "upd_acq",
+                    ("src_id", "dst_id"),
+                    [(k, v) for k, v in common_acquisitions.items()],
+                )
+                acq_subqry = self.session.query(acq_cte.c.column2).filter(
+                    acq_cte.c.column1 == ObjectFields.acquis_id
+                )
+                upd_values = {
+                    "acquis_id": func.coalesce(
+                        acq_subqry.scalar_subquery(), ObjectFields.acquis_id
+                    )
+                }
+                upd = upd.filter(
+                    ObjectFields.acquis_id == any_(list(common_acquisitions.keys()))
+                )
             rowcount = upd.update(values=upd_values, synchronize_session=False)
             table_name = a_fk_to_proj_tbl.__tablename__  # type: ignore
             logger.info("Update in %s: %s rows", table_name, rowcount)

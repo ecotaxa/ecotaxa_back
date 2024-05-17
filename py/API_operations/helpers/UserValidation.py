@@ -120,6 +120,7 @@ class UserValidation(object):
             token = None
         self._mailprovider.send_status_mail(
             user.email,
+            user.id,
             assistance_email,
             status_name=status_name,
             action=ActivationType.status.value,

@@ -87,6 +87,7 @@ class SimpleImport(ImportServiceBase):
             custom_mapping=ProjectMapping(),
             skip_object_duplicates=False,
             loaded_files=[],
+            user_id=self._get_owner_id()
         )
         import_how.do_thumbnail_above(self.config.get_thumbnails_limit())
         # Generate TSV

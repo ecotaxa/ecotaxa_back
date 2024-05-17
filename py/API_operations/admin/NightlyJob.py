@@ -6,6 +6,7 @@
 #
 import datetime
 from dataclasses import dataclass
+from typing import Tuple, Any, List
 
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
 from BO.Job import JobBO
@@ -16,6 +17,7 @@ from DB.Job import JobIDT, Job
 from DB.Project import Project, ProjectIDListT
 from DB.User import Role
 from DB.helpers import Result
+from DB.helpers import Session
 from DB.helpers.Direct import text
 from FS.TempDirForTasks import TempDirForTasks
 from helpers.DynamicLogs import get_logger, LogsSwitcher
@@ -30,6 +32,8 @@ class NightlyJobService(JobServiceBase):
 
     JOB_TYPE = "NightlyMaintenance"
     REPORT_EVERY = 20
+    NIGHTLY_CHECKS: List["ConsistencyCheckAndFix"] = []
+    IDLE_CHECKS: List["ConsistencyCheckAndFix"] = []
 
     def __init__(self) -> None:
         super().__init__()
@@ -172,61 +176,19 @@ class NightlyJobService(JobServiceBase):
                 job_bo.archive()
         logger.info("Cleanup of old jobs done")
 
-    def check_consistency(self, start: int, end: int) -> bool:
+    def check_consistency(self, start: int, end: int, idle: bool = False) -> bool:
         """Ensure data is how it should be"""
-        # So far just focus on Predicted state as we need consistent data to move to a new system.
-        checks = [
-            ConsistencyCheckAndFix(
-                "There is a (user-visible) classif_id for 'P'",
-                "select count(1) as res from obj_head where classif_qual='P' and classif_id is null",
-                0,
-                "need investigation",
-            ),
-            ConsistencyCheckAndFix(
-                "Columns classif_auto_id and classif_auto_when are present for 'P', supposed to come from last prediction",
-                "select count(1) as res from obj_head where classif_qual='P' and classif_auto_id is null",
-                0,
-                """update obj_head
-set classif_auto_id   = classif_id,
-    classif_auto_score=1,
-    classif_auto_when=coalesce(classif_when, '1970-01-01')
-where classif_qual = 'P'
-  and classif_auto_id is null""",
-            ),
-            ConsistencyCheckAndFix(
-                "'P' relates to _auto fields, plain ones are for users - general case we have a complete prediction",
-                "select count(1) as res from obj_head where classif_qual='P' and (classif_who is not null or classif_when is not null) and classif_auto_id is not null",
-                0,
-                """update obj_head
-set classif_who   = NULL,
-    classif_when  = NULL
-where classif_qual = 'P'
-  and (classif_who is not null or classif_when is not null)
-  and classif_auto_id is not null""",
-            ),
-            ConsistencyCheckAndFix(
-                "'P' relates to _auto fields, plain ones are for users - special case of imported as 'P' with no other info",
-                "select count(1) as res from obj_head where classif_qual='P' and (classif_who is not null or classif_when is not null) and classif_auto_id is null",
-                0,
-                """update obj_head
-set classif_who   = NULL,
-    classif_when  = NULL
-where classif_qual = 'P'
-  and (classif_who is not null or classif_when is not null)
-  and classif_auto_id is null""",
-            ),
-        ]
         no_problem = True
-        total = len(checks)
-        for idx, a_check in enumerate(checks):
+        to_run = self.NIGHTLY_CHECKS + (self.IDLE_CHECKS if idle else [])
+        total = len(to_run)
+        for idx, a_check in enumerate(to_run):
             progress = round(start + (end - start) / total * idx)
             self.update_progress(
                 progress, "Checking consistency: %s" % a_check.background
             )
             logger.info("Consistency: %s", a_check.background)
-            res: Result = self.ro_session.execute(text(a_check.query))
-            actual = next(res)[0]
-            if actual != a_check.expected:
+            ok, actual = a_check.verify_ok(self.ro_session)
+            if not ok:
                 logger.info("Failed: expected %s actual %s", a_check.expected, actual)
                 logger.info("Query was: %s", a_check.query)
                 logger.info(
@@ -241,5 +203,94 @@ where classif_qual = 'P'
 class ConsistencyCheckAndFix(object):
     background: str
     query: str
-    expected: int
+    expected: Any
     fix: str
+
+    def verify_ok(self, session: Session) -> Tuple[bool, Any]:
+        res: Result = session.execute(text(self.query))
+        actual = next(res)[0]
+        return actual == self.expected, actual
+
+
+NightlyJobService.IDLE_CHECKS = [
+    ConsistencyCheckAndFix(
+        "No job is active",
+        "select array_agg(id) from job where state in ('P','R','A')",
+        None,
+        "need investigation",
+    ),
+]
+
+# So far just focus on Predicted state as we need consistent data to move to a new system.
+NightlyJobService.NIGHTLY_CHECKS = [
+    ConsistencyCheckAndFix(
+        "In initial state there is no ancillary residual info",
+        "select count(1) as res from obj_head where classif_qual is null "
+        "and (classif_id is not null or classif_when is not null or classif_who is not null  "
+        "or classif_auto_id is not null or classif_auto_score is not null or classif_auto_when is not null)",
+        0,
+        "need investigation",
+    ),
+    ConsistencyCheckAndFix(
+        "There is a (user-visible) category for any non-initial state",
+        "select count(1) from obj_head where classif_qual in ('P','V','D') and classif_id is null",
+        0,
+        "need investigation",
+    ),
+    ConsistencyCheckAndFix(
+        "There is a state if there is a category",
+        "select count(1) from obj_head where classif_qual is null and classif_id is not null",
+        0,
+        "",
+    ),
+    ConsistencyCheckAndFix(
+        "Validated and Dubious were set by humans, we must know who and when",
+        "select count(1) from obj_head where classif_qual in ('V','D') and (classif_who is null or classif_when is null)",
+        0,
+        """
+        -- find root cause
+        """,
+    ),
+    ConsistencyCheckAndFix(
+        "Predicted was set by machine, no trailing traces of previous human action",
+        "select count(1) from obj_head where classif_qual = 'P' and (classif_who is not null or classif_when is not null)",
+        0,
+        """update obj_head
+set classif_who   = NULL,
+classif_when  = NULL
+where classif_qual = 'P'
+and (classif_who is not null or classif_when is not null)
+and classif_auto_id is not null""",
+    ),
+    ConsistencyCheckAndFix(
+        "No classif_qual nor classif_id but full prediction info",
+        "select count(1) from obj_head where classif_qual is null and classif_id is null and (classif_auto_id is not null and classif_auto_score is not null and classif_auto_when is not null)",
+        0,
+        """update obj_head 
+set classif_qual='P', 
+classif_id=classif_auto_id, 
+classif_who=null, 
+classif_when=null 
+where classif_qual is null and classif_id is null and 
+(classif_auto_id is not null and classif_auto_score is not null and classif_auto_when is not null)""",
+    ),
+    ConsistencyCheckAndFix(
+        "Columns classif_auto_id and classif_auto_when are present for 'P', supposed to come from last prediction",
+        "select count(1) as res from obj_head where classif_qual='P' and classif_auto_id is null",
+        0,
+        """update obj_head
+set classif_auto_id = classif_id,
+classif_auto_score=1,
+classif_auto_when=coalesce(classif_when, '1970-01-01')
+where classif_qual = 'P'
+and classif_auto_id is null""",
+    ),
+    ConsistencyCheckAndFix(
+        "All obj_fields have same acquisid as object",
+        "select count(1) from obj_head obh join obj_field obf on obf.objfid = obh.objid where obh.acquisid != obf.acquis_id",
+        0,
+        """
+        -- find root cause
+        """,
+    ),
+]
