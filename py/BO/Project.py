@@ -56,6 +56,7 @@ from DB.helpers.ORM import (
     Query,
     any_,
     and_,
+    joinedload,
     subqueryload,
     minimal_table_of,
     func,
@@ -933,18 +934,20 @@ class ProjectBOSet(object):
         # Query the project and ORM-load neighbours as well, as they will be needed in enrich()
         qry = select(Project)
         # qry = session.query(Project)
-        qry = qry.options(subqueryload(Project.privs_for_members))
-        qry = qry.options(subqueryload(Project.members))
-        qry = qry.options(subqueryload(Project.variables))
-        qry = qry.options(subqueryload(Project.instrument))
+        qry = qry.options(
+            subqueryload(Project.privs_for_members).joinedload(ProjectPrivilege.user)
+            # Save a bit of time by joining privileges & users in a single query
+            # Con: More data is returned as users in several projects are returned several times
+        )
+        qry = qry.options(joinedload(Project.variables))  # 1 -> 0,1
+        qry = qry.options(joinedload(Project.instrument))  # 1 -> 0,1
         qry = qry.filter(Project.projid == any_(prj_ids))
-        self.projects: List[ProjectBO] = []
-        # De-duplicate
         projs = []
         with CodeTimer("%s BO projects query:" % len(prj_ids), logger):
             for (a_proj,) in session.execute(qry):
                 projs.append(a_proj)
         # Build BOs and enrich
+        self.projects: List[ProjectBO] = []
         with CodeTimer("%s BO projects init:" % len(projs), logger):
             self_projects_append = self.projects.append
             for a_proj in projs:
