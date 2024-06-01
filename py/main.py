@@ -1003,7 +1003,8 @@ async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> aw
             instrument_filter=instrument_filter,
             filter_subset=filter_subset,
         )
-    # The DB query takes a few ms, and enrich not much more, so we can afford to narrow the search on the result
+    # The DB query takes a few ms (for non-admins), and enrich not much more,
+    # so we can afford to narrow the search on the result in python and not SQL
     ret = sort_and_prune(
         ret, order_field, project_model_columns, window_start, window_size
     )
