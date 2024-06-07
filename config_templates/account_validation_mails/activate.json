@@ -11,6 +11,6 @@
     "data": "{key} : {value}<br>",
     "link": "<a href=\"{url}{id}/active\" style = \"color: rgb(52, 167, 173)\">{url}{id}/active Activate</a>",
     "reason": "This user has to modify his profile :  <a href=\"{url}{id}/pending\" style=\"color: rgb(52,167, 22)\">{url}{id}/pending Pending status</a><br>Deny access to this user: <a href=\"{url}{id}/blocked\" style=\"color: rgb(173, 0,0)\"> {url}{id}/blocked  Blocked status</a><br><br>",
-    "body": "Account [{action}]<br>{data}<br>Please click on the following link to activate this user account :<br>{link}<br>Or click the following link to set the user account status : {reason}<br>"
+    "body": "Account [{action}]<br>{data}<br>Please click on the following link to activate this user account :<br>{link}<br>Or click the following link to set the user account status : {reason}<br><br>*** <a href=\"{url}/list/inactive\">Check</a> other accounts waiting for validation"
   }
 }
