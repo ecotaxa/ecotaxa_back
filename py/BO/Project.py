@@ -218,6 +218,8 @@ class ProjectBO(object):
     ):
         assert contact is not None, "A valid Contact is needed."
         proj_id = self._project.projid
+        # strip title
+        title = title.strip()
         assert instrument is not None, "A valid Instrument is needed."
         # Validate variables
         errors: List[str] = []
@@ -929,7 +931,13 @@ class ProjectBOSet(object):
     Many projects...
     """
 
-    def __init__(self, session: Session, prj_ids: ProjectIDListT, public: bool = False):
+    def __init__(
+        self,
+        session: Session,
+        prj_ids: ProjectIDListT,
+        public: bool = False,
+        summary: bool = False,
+    ):
         # Query the project and ORM-load neighbours as well, as they will be needed in enrich()
         qry = select(Project)
         # qry = session.query(Project)
