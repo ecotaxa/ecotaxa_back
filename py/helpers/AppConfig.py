@@ -74,9 +74,6 @@ class Config(object):
     def get_dir_mail_templates(self) -> Optional[str]:
         return self.parser.get("DIR_MAIL_TEMPLATES")
 
-    def get_captcha_iplist(self) -> Optional[str]:
-        return self.parser.get("CAPTCHA_IPLIST")
-
     def get_recaptchaid(self) -> Optional[str]:
         return self.parser.get("RECAPTCHAID")
 
@@ -101,6 +98,10 @@ class Config(object):
         # TODO find a way to have multi request url ( list of identified url ???)
         url = self.parser.get("SERVERURL").strip()
         return url + ("/" if url[-1] != "/" else "")
+
+    def get_users_files_dir(self) -> Optional[str]:
+        # My files service
+        return self.parser.get("USERSFILESAREA").strip()
 
     def get_cnf(self, key: str, default: Optional[str] = None) -> Optional[str]:
         # TODO: stop using so we can enumerate the keys
