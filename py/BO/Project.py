@@ -18,6 +18,8 @@ from typing import (
     Tuple,
 )
 
+from sqlalchemy.orm import load_only
+
 from BO.Classification import ClassifIDListT
 from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping, TableMapping
 from BO.Prediction import DeepFeatures
@@ -187,6 +189,44 @@ class ProjectBO(object):
         # Variables
         if self._project.variables is not None:
             self.bodc_variables.update(self._project.variables.to_dict())
+        return self
+
+    def summary_enrich(self, excluded_cols) -> "ProjectBO":
+        """
+        Add limited db fields  and relations for main projects list
+        """
+        for col in excluded_cols:
+            setattr(self._project, col, "")
+        # Dispatch members by right
+        by_right_fct = {
+            ProjectPrivilegeBO.MANAGE: self.managers.append,
+            ProjectPrivilegeBO.ANNOTATE: self.annotators.append,
+            ProjectPrivilegeBO.VIEW: self.viewers.append,
+        }
+        a_priv: ProjectPrivilege
+        # noinspection PyTypeChecker
+        for (
+            a_priv
+        ) in self._project.privs_for_members:  # Use ORM to navigate in relationship
+            priv_user = a_priv.user
+            if priv_user is None:  # TODO: There is a line with NULL somewhere in DB
+                continue
+            if priv_user.status != UserStatus.active.value:
+                continue
+            assert a_priv.privilege is not None
+            by_right_fct[a_priv.privilege](priv_user)
+            if "C" == a_priv.extra:
+                self.contact = priv_user
+        return self
+
+    def summary_limited_enrich(self, excluded_cols: List[str] = []) -> "ProjectBO":
+        """
+        Add limited db fields  and relations for main projects list
+        """
+        for col in excluded_cols:
+            setattr(self._project, col, "")
+        if len(self._project.contact):
+            self.contact = self._project.contact[0]
         return self
 
     def public_enrich(self) -> "ProjectBO":
@@ -941,23 +981,60 @@ class ProjectBOSet(object):
         # Query the project and ORM-load neighbours as well, as they will be needed in enrich()
         qry = select(Project)
         # qry = session.query(Project)
-        qry = qry.options(subqueryload(Project.privs_for_members))
-        qry = qry.options(subqueryload(Project.members))
-        qry = qry.options(subqueryload(Project.variables))
-        qry = qry.options(subqueryload(Project.instrument))
+        if not public and not summary:
+            qry = qry.options(subqueryload(Project.instrument))
+            qry = qry.options(subqueryload(Project.variables))
+            qry = qry.options(subqueryload(Project.privs_for_members))
+            qry = qry.options(subqueryload(Project.members))
+        elif summary:
+            columns = [
+                "projid",
+                "title",
+                "instrument_id",
+                "license",
+                "visible",
+                "status",
+                "objcount",
+                "pctvalidated",
+                "pctclassified",
+                "description",
+                "comments",
+                "cnn_network_id",
+            ]
+            excluded_cols = [
+                "fileloaded",
+                "rf_models_used",
+                "mappingobj",
+                "classifsettings",
+                "mappingsample",
+                "initclassiflist",
+                "mappingacq",
+                "classiffieldlist",
+                "mappingprocess",
+                "popoverfieldlist",
+            ]
+            col_members = ["id", "name", "email"]
+            qry = qry.distinct(Project.projid)
+            qry = qry.options(load_only(*columns))
+            qry = qry.options(
+                subqueryload(Project.contact).options(load_only(*col_members))
+            )
+
+        elif public:
+            qry = qry.options(subqueryload(Project.instrument))
         qry = qry.filter(Project.projid == any_(prj_ids))
         self.projects: List[ProjectBO] = []
         # De-duplicate
-        projs = []
+        self_projects_append = self.projects.append
         with CodeTimer("%s BO projects query:" % len(prj_ids), logger):
             for (a_proj,) in session.execute(qry):
-                projs.append(a_proj)
-        # Build BOs and enrich
-        with CodeTimer("%s BO projects init:" % len(projs), logger):
-            self_projects_append = self.projects.append
-            for a_proj in projs:
                 if public:
                     self_projects_append(ProjectBO(a_proj).public_enrich())
+                elif summary:
+                    self_projects_append(
+                        ProjectBO(a_proj).summary_limited_enrich(excluded_cols)
+                    )
+
                 else:
                     self_projects_append(ProjectBO(a_proj).enrich())
 

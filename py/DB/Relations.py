@@ -93,10 +93,17 @@ if True:
     ProjectPrivilege.user = relationship(
         User, cascade="all, delete-orphan", single_parent=True
     )  # type:ignore # case2
+
     User.privs_on_projects = relationship(ProjectPrivilege, viewonly=True)
 
     Project.members = relationship(
         User, secondary=ProjectPrivilege.__tablename__, viewonly=True
+    )
+    Project.contact = relationship(
+        User,
+        secondary=ProjectPrivilege.__tablename__,
+        secondaryjoin="and_(ProjectPrivilege.member == User.id, ProjectPrivilege.extra == 'C')",
+        viewonly=True,
     )
 
     Project.instrument = relationship(Instrument, viewonly=True)
