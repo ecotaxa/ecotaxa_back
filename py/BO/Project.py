@@ -225,8 +225,8 @@ class ProjectBO(object):
         """
         for col in excluded_cols:
             setattr(self._project, col, "")
-        if len(self._project.contact):
-            self.contact = self._project.contact[0]
+        if self._project.contact is not None:
+            self.contact = self._project.contact
         return self
 
     def public_enrich(self) -> "ProjectBO":
@@ -1034,7 +1034,6 @@ class ProjectBOSet(object):
                     self_projects_append(
                         ProjectBO(a_proj).summary_limited_enrich(excluded_cols)
                     )
-
                 else:
                     self_projects_append(ProjectBO(a_proj).enrich())
 

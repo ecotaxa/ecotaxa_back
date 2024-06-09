@@ -101,6 +101,7 @@ if True:
     )
     Project.contact = relationship(
         User,
+        uselist=False,
         secondary=ProjectPrivilege.__tablename__,
         secondaryjoin="and_(ProjectPrivilege.member == User.id, ProjectPrivilege.extra == 'C')",
         viewonly=True,
