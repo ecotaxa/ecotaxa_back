@@ -59,6 +59,7 @@ from DB.helpers.ORM import (
     any_,
     and_,
     subqueryload,
+    joinedload,
     minimal_table_of,
     func,
 )
@@ -982,10 +983,15 @@ class ProjectBOSet(object):
         qry = select(Project)
         # qry = session.query(Project)
         if not public and not summary:
-            qry = qry.options(subqueryload(Project.instrument))
-            qry = qry.options(subqueryload(Project.variables))
-            qry = qry.options(subqueryload(Project.privs_for_members))
-            qry = qry.options(subqueryload(Project.members))
+            qry = qry.options(joinedload(Project.instrument))
+            qry = qry.options(joinedload(Project.variables))
+            qry = qry.options(
+                subqueryload(Project.privs_for_members).joinedload(
+                    ProjectPrivilege.user
+                )
+            )
+            # Save a bit of time by joining privileges & users in a single query
+            # Con: More data is returned as users in several projects are returned several times
         elif summary:
             columns = [
                 "projid",
@@ -1019,15 +1025,27 @@ class ProjectBOSet(object):
             qry = qry.options(
                 subqueryload(Project.contact).options(load_only(*col_members))
             )
+            # qry = qry.options(
+            #    subqueryload(Project.privs_for_members).joinedload(
+            #        ProjectPrivilege.user
+            #    )
+            # )
+            # Save a bit of time by joining privileges & users in a single query
+            # Con: More data is returned as users in several projects are returned several times
 
         elif public:
             qry = qry.options(subqueryload(Project.instrument))
         qry = qry.filter(Project.projid == any_(prj_ids))
         self.projects: List[ProjectBO] = []
         # De-duplicate
-        self_projects_append = self.projects.append
+        projs = []
         with CodeTimer("%s BO projects query:" % len(prj_ids), logger):
             for (a_proj,) in session.execute(qry):
+                projs.append(a_proj)
+        # Build BOs and enrich
+        with CodeTimer("%s BO projects init:" % len(projs), logger):
+            self_projects_append = self.projects.append
+            for a_proj in projs:
                 if public:
                     self_projects_append(ProjectBO(a_proj).public_enrich())
                 elif summary:
