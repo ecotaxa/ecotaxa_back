@@ -160,6 +160,11 @@ class MailProvider(object):
                 )
             except smtplib.SMTPException as e:
                 code, detail = self._log_smtp_error_code(e)
+            except ssl.SSLError as e:
+                code = 500
+                detail = DETAIL_SSL_ERROR
+                self._log_error_code(e)
+
             except Exception as e:
                 code, detail = self._log_error_code(e)
             finally:
