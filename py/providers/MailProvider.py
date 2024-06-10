@@ -23,6 +23,7 @@ from helpers.httpexception import (
     DETAIL_SMTP_RESPONSE_ERROR,
     DETAIL_IMAP4_ERROR,
     DETAIL_UNKNOWN_ERROR,
+    DETAIL_SSL_ERROR,
 )
 
 logger = get_logger(__name__)
@@ -79,7 +80,7 @@ class MailProvider(object):
     """
 
     MODEL_KEYS = ("email", "link", "action", "assistance", "reason")
-    REPLACE_KEYS = ("token", "data", "url", "ticket")
+    REPLACE_KEYS = ("token", "data", "url", "ticket", "reason")
 
     def __init__(
         self,
@@ -159,6 +160,11 @@ class MailProvider(object):
                 )
             except smtplib.SMTPException as e:
                 code, detail = self._log_smtp_error_code(e)
+            except ssl.SSLError as e:
+                code = 500
+                detail = DETAIL_SSL_ERROR
+                self._log_error_code(e)
+
             except Exception as e:
                 code, detail = self._log_error_code(e)
             finally:
@@ -305,7 +311,6 @@ class MailProvider(object):
         when there is a ticket software - ticket number can be found at the beginning of the comment/reason and sent back in the email subject
         """
         ticket = self._get_ticket(recipient, user_id)
-
         values = ReplaceInMail(
             email=assistance_email,
             reason=reason,
@@ -402,7 +407,10 @@ class MailProvider(object):
                 replace["link"] += str(" (valid until %s (UTC))" % ageval)
         for rk in self.REPLACE_KEYS:
             if rk not in replace:
-                replace[rk] = ""
+                if hasattr(values, rk):
+                    replace[rk] = getattr(values, rk)
+                else:
+                    replace[rk] = ""
                 continue
             val = getattr(values, rk, None)
             if val is None:
@@ -411,8 +419,8 @@ class MailProvider(object):
                 replace[rk] = self._replace_dict_data_keys(rk, model, val)
             else:
                 replace[rk] = val
-        model["body"] = model["body"].format(**replace)
         mail_msg = EmailMessage()
+        model["body"] = model["body"].format(**replace)
         mail_msg["Subject"] = model["subject"].format(
             action=str(action or ""),
             id=values.id,
@@ -503,5 +511,5 @@ def html_to_text(html: str) -> str:
     import re
 
     html = html.replace("<br>", "\n")
-    patterns = re.compile("[^>]*|&([a-z0-9]+|#[\d]{1,6}|#x[0-9a-f]{1,6});")
+    patterns = re.compile("<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});")
     return re.sub(patterns, "", html)
