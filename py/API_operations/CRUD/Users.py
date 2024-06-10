@@ -107,8 +107,7 @@ class UserService(Service):
         no_bot: Optional[List[str]],
         token: Optional[str],
     ) -> UserIDT:
-
-        if current_user_id is None:
+        if token is not None or current_user_id is None:
             # Unauthenticated user tries to create an account
             # Verify not a robot
             self._verify_captcha_throw(no_bot)
@@ -578,6 +577,7 @@ class UserService(Service):
         actions = None
         is_admin = current_user is not None and self._current_is_admin(current_user)
         # check if the account needs validation or re-validation
+        ask_activate = None
         if is_admin:
             # only update actions from admin - not from profile
             if current_user is not None and current_user.id != user_to_update.id:
@@ -615,6 +615,11 @@ class UserService(Service):
                 cols_to_upd.append(User.status)
             ask_activate = self._ask_activate_on(
                 update_src, user_to_update, cols_to_upd, mail_status
+            )
+        if ask_activate is None:
+            raise HTTPException(
+                status_code=422,
+                detail=[DETAIL_NOTHING_DONE],
             )
         self._model_to_db(
             user_to_update,
@@ -845,8 +850,8 @@ class UserService(Service):
         if inactive_user is None:
             raise HTTPException(status_code=422, detail=[NOT_FOUND])
         cols_to_upd = []
+        update_src = UserModelWithRights.from_orm(inactive_user)
         if inactive_user.status != status.value:
-            update_src = UserModelWithRights.from_orm(inactive_user)
             update_src.status = status.value
             update_src.status_date = DateTime.now_time()
             cols_to_upd = [User.status, User.status_date]
