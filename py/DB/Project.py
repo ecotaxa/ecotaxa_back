@@ -4,10 +4,11 @@
 #
 from __future__ import annotations
 
-from typing import List, TYPE_CHECKING, Iterable
+from typing import List, TYPE_CHECKING, Iterable, Optional
 
 from BO.DataLicense import LicenseEnum
 from DB.helpers.ORM import Model
+from . import User
 from .Instrument import Instrument
 from .helpers.DDL import Column, Sequence, Boolean, ForeignKey
 from .helpers.ORM import relationship
@@ -81,6 +82,7 @@ class Project(Model):
     privs_for_members: Iterable[ProjectPrivilege]
     # owner: relationship
     members: relationship
+    contact: Optional[User]
     # The twin EcoPart project
     ecopart_project: relationship
     # The related instrument full definition
