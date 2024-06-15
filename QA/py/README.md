@@ -26,3 +26,15 @@ measure, [typings](https://docs.python.org/3/library/typing.html)
 and [mypy](http://mypy-lang.org/) to check that the typings are OK. It's a good idea to be familiar with type checking
 in python, as mypy errors can be quite obscure. You will find in main directory a documented `mypy.ini`, and in code a few
 places where typings was on-purpose ignored.
+
+
+
+
+
+
+
+
+
+
+
+hack modification for commit to force githubactions
