@@ -71,7 +71,6 @@ class ReplaceInMail:
 
 
 DEFAULT_LANGUAGE = "en_EN"
-FROM_CRITERIA = "Ecotaxa"
 
 
 class MailProvider(object):
@@ -469,7 +468,7 @@ class MailProvider(object):
             # select inbox
             mail.select("INBOX")
             criteria = {
-                "FROM": FROM_CRITERIA,
+                "FROM": self.ADD_TICKET,
                 "SUBJECT": str(user_id) + "#" + user_email + "#",
             }
 
