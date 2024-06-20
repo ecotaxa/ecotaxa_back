@@ -677,7 +677,7 @@ class UserService(Service):
     def _conditional_validation(
         self,
         user_to_update: User,
-        ask_activate: bool,
+        ask_activate: Optional[bool],
         inform_about_status: bool,
         action_type: ActivationType,
     ) -> None:
