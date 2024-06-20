@@ -541,16 +541,28 @@ class UserService(Service):
         cols_to_upd: List,
         mail_status: bool,
     ) -> bool:
-        return (
-            self.account_validation == True
-            and User.status in cols_to_upd
-            and (
-                user_to_update.status
-                in [UserStatus.active.value, UserStatus.pending.value]
-                or (update_src.id == -1 and mail_status == True)
-            )
+        if self.account_validation != True:
+            return False
+        # user confirmed email
+        confirmed = self.verify_email != True or mail_status == True
+        new_user = update_src.id == -1
+        # email confirmation if email_verification is on
+        just_confirmed = (
+            (new_user or (user_to_update.status == UserStatus.inactive.value))
+            and confirmed
+        ) and User.mail_status in cols_to_upd
+        # TODO add "and confirmed"  for current_status_on when batch mail to modifiy email has been sent
+        current_status_on = user_to_update.status in [
+            UserStatus.active.value,
+            UserStatus.pending.value,
+        ]
+        # data modified have to be verified
+        major_update = (
+            User.status in cols_to_upd
             and update_src.status == UserStatus.inactive.value
-        )
+        ) and user_to_update.email == update_src.email
+
+        return (major_update and current_status_on) or just_confirmed
 
     def _validate_user_throw(
         self, update_src: UserModelWithRights, user_to_update: User, add_condition=True
@@ -582,15 +594,11 @@ class UserService(Service):
             # only update actions from admin - not from profile
             if current_user is not None and current_user.id != user_to_update.id:
                 actions = update_src.can_do
-            inform_about_status = (
-                update_src.status != user_to_update.status and update_src.id != -1
-            )
+                inform_about_status = (
+                    update_src.status != user_to_update.status and update_src.id != -1
+                )
             # only modify the comment with the status  -
-            if (
-                inform_about_status
-                and update_src.status_admin_comment
-                != user_to_update.status_admin_comment
-            ):
+            if update_src.status_admin_comment != user_to_update.status_admin_comment:
                 cols_to_upd.append(User.status_admin_comment)
             ask_activate = False
 
@@ -616,7 +624,7 @@ class UserService(Service):
             ask_activate = self._ask_activate_on(
                 update_src, user_to_update, cols_to_upd, mail_status
             )
-        if ask_activate is None:
+        if ask_activate is None and len(cols_to_upd) == 0:
             raise HTTPException(
                 status_code=422,
                 detail=[DETAIL_NOTHING_DONE],
