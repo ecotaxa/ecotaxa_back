@@ -87,6 +87,8 @@ class UserFilesDirectory(object):
                 buff = await stream.read(1024)
         if zipfile.is_zipfile(dest_path.as_posix()):
             await self.unpack_zip(dest_path, base_path.absolute())
+        elif tarfile.is_tarfile(dest_path.as_posix()):
+            await self.unpack_tar(dest_path, base_path.absolute())
         return str(dest_path)
 
     def list(self, sub_path: str) -> List[DirEntryT]:
@@ -112,35 +114,22 @@ class UserFilesDirectory(object):
         self._is_trash_dir_throw(dest_name)
         source_path: Path = self._root_path.joinpath(source_name.lstrip(os.path.sep))
         dest_path: Path = self._root_path.joinpath(dest_name.lstrip(os.path.sep))
+
         self.ensure_exists(dest_path.parent)
-        if source_path.is_dir() and dest_path.is_dir():
-            source_files = os.listdir(source_path)
-            try:
-                for source_file in source_files:
-                    shutil.move(
-                        str(source_path.joinpath(source_file)),
-                        dest_path,
-                    )
-            except Exception as e:
-                _log_exception_throw(e)
-        elif dest_path.is_dir():
-            # check if file exist in destination
+        if dest_path.is_dir():
             if dest_path.joinpath(source_path.stem).exists():
                 raise HTTPException(status_code=422, detail=DETAIL_NOTHING_DONE)
-            else:
-                try:
-                    shutil.move(str(source_path), dest_path)
-                except Exception as e:
-                    _log_exception_throw(e)
         elif dest_path.exists():
             # can't rename
             raise HTTPException(status_code=422, detail=DETAIL_NOTHING_DONE)
-        else:
-            # rename and/or move file
-            try:
-                shutil.move(str(source_path), dest_path)
-            except Exception as e:
-                _log_exception_throw(e)
+        try:
+            print(
+                str(source_path) + "____move",
+                str(dest_path) + " dest_name=" + dest_name,
+            )
+            shutil.move(str(source_path), dest_path)
+        except Exception as e:
+            _log_exception_throw(e)
         return str(dest_path)
 
     def remove(self, path: str):
@@ -201,34 +190,6 @@ class UserFilesDirectory(object):
         path_error = str(path.joinpath(filename.lstrip(os.path.sep)))
         self.list_errors.update({"Not accepted": path_error})
         return False
-
-    async def unpack_one_by_one_zip(self, input_path: Path, path: Path):
-        zip_file = input_path.as_posix()
-        try:
-            with zipfile.ZipFile(zip_file, "r", allowZip64=True) as archive:
-                list_zip = archive.infolist()
-                for zip_info in list_zip:
-                    if not zip_info.is_dir():
-                        if self._has_accepted_format(path, zip_info.filename) == True:
-                            archive.extract(zip_info, path)
-                            zip_f = path.joinpath(zip_info.filename.lstrip(os.path.sep))
-                            if zipfile.is_zipfile(zip_f) == True:
-                                sub_path = zip_f.parent
-                                await self.unpack_one_by_one_zip(zip_f, sub_path)
-                        else:
-                            logger.info(
-                                "File format not accepted '%s' '%s' , user_id '%s'",
-                                path,
-                                zip_info.filename,
-                                str(self.user_id),
-                            )
-                            path_error = str(
-                                path.joinpath(zip_info.filename.lstrip(os.path.sep))
-                            )
-                            self.list_errors.update({"Not accepted": path_error})
-                # os.remove(zip_file)
-        except Exception as e:
-            _log_exception_throw(e)
 
     async def unpack_only_zip(self, input_path: Path, path: Path):
         zip_file = input_path.as_posix()
