@@ -7,7 +7,6 @@ import random
 import shutil
 import zipfile
 from pathlib import Path
-
 # noinspection PyPackageRequirements
 from typing import Callable, List, Dict, Tuple, Generator, Set
 
@@ -41,7 +40,7 @@ class InBundle(object):
 
     TSV_FILTERS = ("**/ecotaxa*.txt", "**/ecotaxa*.tsv")
     UVP6_FILTER = "**/*Images.zip"
-    MAX_FILES = 1000
+    MAX_FILES = 2000
 
     def __init__(self, path: str, temp_dir: Path):
         self.path = Path(path)
