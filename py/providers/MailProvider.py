@@ -480,16 +480,17 @@ class MailProvider(object):
             (_, data) = mail.uid("search", search_string(criteria))
             if data != None and isinstance(data, list):
                 inbox_item_list = data[0].split()
-                most_recent = inbox_item_list[-1]
-                _, email_data = mail.uid("fetch", most_recent, "(RFC822)")
-                raw_email = email_data[0][1].decode("UTF-8")
-                email_message = email.message_from_string(raw_email)
-                if "Subject" in email_message:
-                    import re
+                if len(inbox_item_list) > 0:
+                    most_recent = inbox_item_list[-1]
+                    _, email_data = mail.uid("fetch", most_recent, "(RFC822)")
+                    raw_email = email_data[0][1].decode("UTF-8")
+                    email_message = email.message_from_string(raw_email)
+                    if "Subject" in email_message:
+                        import re
 
-                    match = re.match(self.TICKET_MATCH, email_message["Subject"])
-                    if match:
-                        ticket = match.group(0)
+                        match = re.match(self.TICKET_MATCH, email_message["Subject"])
+                        if match:
+                            ticket = match.group(0)
             mail.logout()
         except imaplib.IMAP4.error as e:
             code = 422
