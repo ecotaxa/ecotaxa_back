@@ -107,6 +107,7 @@ class UserFilesDirectory(object):
         Only list the known (with tags) directory.
         """
         # Leading / implies root directory
+        self.ensure_exists(self._root_path)
         sub_path = sub_path.lstrip(os.path.sep)
         ret: List[DirEntryT] = []
         path: Path = self._root_path.joinpath(sub_path)
