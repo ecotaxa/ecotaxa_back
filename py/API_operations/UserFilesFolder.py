@@ -96,7 +96,6 @@ class UserFilesFolderService(Service):
         _: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         # Leading / implies root directory
         dest_path = self._can_use_dir_throw(source_path, exclude_path=["/"])
-        print("----dest create", dest_path)
         if not Path(dest_path).exists():
             folder = UserFilesDirectory(current_user_id)
             return folder.create(source_path)
