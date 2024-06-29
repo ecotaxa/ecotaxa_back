@@ -32,7 +32,6 @@ from BO.ObjectSetQueryPlus import ResultGrouping, IterableRowsT, ObjectSetQueryP
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
 from BO.Vocabulary import Vocabulary, Units
-from DB import Image
 from DB.Object import (
     VALIDATED_CLASSIF_QUAL,
     DUBIOUS_CLASSIF_QUAL,
@@ -48,7 +47,7 @@ from helpers import (
 )  # Need to keep the whole module imported, as the function is mocked
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 # TODO: Move somewhere else
-from ..helpers.JobService import JobServiceBase, ArgsDict  # fmt:skip
+from ..helpers.JobService import JobServiceBase, ArgsDict
 
 logger = get_logger(__name__)
 
@@ -238,12 +237,11 @@ class ProjectExport(JobServiceBase):
         select_clause = "select "
 
         if req.with_images or self.backup_with_just_image_refs:
-            # Reconstitute the imported file name, rank might have been corrected during import
             select_clause += (
                 "img.orig_file_name AS img_file_name, img.imgrank AS img_rank"
             )
             if not self.backup_with_just_image_refs:
-                select_clause += ", img.imgid AS img_internal_id"
+                select_clause += ", img.file_name AS img_src_path"
             select_clause += ",\n"
 
         select_clause += "obh.orig_id AS object_id, "
@@ -399,7 +397,7 @@ class ProjectExport(JobServiceBase):
         col_descs = [
             a_desc
             for a_desc in res.cursor.description  # type:ignore # case2
-            if a_desc.name != "img_internal_id"
+            if a_desc.name != "img_src_path"
         ]
         # read latitude column to get float DB type
         for a_desc in col_descs:
@@ -461,10 +459,7 @@ class ProjectExport(JobServiceBase):
                     # Write types line for backup type or if forced
                     csv_wtr.writerow(tsv_types_line)
             if req.with_images:
-                image_path = Image.img_from_id_and_orig(
-                    a_row.pop("img_internal_id"), a_row["img_file_name"]
-                )
-                copy_op = {"src_path": image_path}
+                copy_op = {"src_path": a_row.pop("img_src_path")}
                 if req.exp_type == ExportTypeEnum.dig_obj_ident:
                     # Images will be stored in a per-category directory, but there is a single TSV at the Zip root
                     categ = a_row["object_annotation_category"]
@@ -588,13 +583,13 @@ class ProjectExport(JobServiceBase):
         else:
             assert classif_id
             taxofolder += "__%d" % classif_id
-        orig_file_name = "images/{0}/{1}_{2}{3}".format(
+        file_name = "images/{0}/{1}_{2}{3}".format(
             self.normalize_for_filename(taxofolder),
             objid,
             imgrank,
             Path(originalfilename).suffix.lower(),
         )
-        return orig_file_name
+        return file_name
 
     @staticmethod
     def normalize_for_filename(name) -> str:

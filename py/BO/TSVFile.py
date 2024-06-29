@@ -33,27 +33,17 @@ from BO.helpers.ImportHelpers import (
     ImportStats,
 )
 from DB.Acquisition import Acquisition
-from DB.Object import (
-    classif_qual_revert,
-    ObjectHeader,
-    ObjectFields,
-    PREDICTED_CLASSIF_QUAL,
-    USED_FIELDS_FOR_CLASSIF,
-    HIDDEN_FIELDS_FOR_CLASSIF,
-    VALIDATED_CLASSIF_QUAL,
-    DUBIOUS_CLASSIF_QUAL,
-)
+from DB.Object import classif_qual_revert, ObjectHeader, ObjectFields
 from DB.Process import Process
 from DB.Project import ProjectIDT
 from DB.Sample import Sample
 from DB.helpers import Session
 from DB.helpers.Bean import Bean
 from DB.helpers.Direct import text
-from DB.helpers.ORM import detach_from_session
+from DB.helpers.ORM import Model, detach_from_session
 from helpers.DynamicLogs import get_logger
 from .Image import ImageBO
 from .ObjectSet import EnumeratedObjectSet
-from .User import UserIDT
 from .helpers.TSVHelpers import (
     clean_value,
     clean_value_and_none,
@@ -145,9 +135,13 @@ class TSVFile(object):
 
             # We can now prepare ORM classes with optimal performance
             target_fields = self.dispatch_fields_by_table(how.custom_mapping, field_set)
-            where.db_writer.narrow_to(target_fields[ObjectFields.__tablename__])
+            # noinspection PyPep8Naming
+            ObjectGen, ObjectFieldsGen, ImageGen = where.db_writer.generators(
+                target_fields
+            )
 
-            both_categories_present: bool = (
+            # For annotation, if there is both an id and a category then ignore category
+            ignore_annotation_category: bool = (
                 "object_annotation_category_id" in field_set
                 and "object_annotation_category" in field_set
             )
@@ -165,11 +159,10 @@ class TSVFile(object):
 
                 lig = {self.clean_fields[field]: v for field, v in rawlig2.items()}
 
-                if both_categories_present:
-                    # Remove textual category if the category id is provided and populated
-                    if clean_value(lig.get("object_annotation_category_id", "")) == "":
-                        del lig["object_annotation_category_id"]
-                    else:
+                if ignore_annotation_category:
+                    # Remove category as required, but only if there is really an id value
+                    # it can happen that the id is empty, even if table header is present
+                    if clean_value(lig.get("object_annotation_category_id", "")) != "":
                         del lig["object_annotation_category"]
 
                 # First, read TSV line into dicts, faster than doing settattr()
@@ -181,28 +174,20 @@ class TSVFile(object):
                 )
 
                 # Create SQLAlchemy mappers of the object itself and slaves (1<->1)
-                object_head_to_write = Bean(
+                object_head_to_write = ObjectGen(
                     **dicts_to_write[ObjectHeader.__tablename__]
-                ).with_columns(
-                    ObjectHeader.classif_auto_id.name,
-                    ObjectHeader.classif_auto_when.name,
-                    ObjectHeader.classif_auto_score.name,
-                )  # These columns _might_ be populated, but DBWriter needs them all the time for bulk insert
-                object_fields_to_write = Bean(
+                )
+                object_fields_to_write = ObjectFieldsGen(
                     **dicts_to_write[ObjectFields.__tablename__]
                 )
-                image_to_write = Bean(**dicts_to_write["images"])
+                image_to_write = ImageGen(**dicts_to_write["images"])
                 # Parents are created the same way, _when needed_ (i.e. nearly never),
                 #  in @see add_parent_objects
 
                 if how.can_update_only:
                     self.update_parent_objects(how, session, dicts_to_write)
                 else:
-                    # Initial load
-                    self.ensure_consistent_fields(
-                        object_head_to_write, stats.start_time, how.user_id
-                    )
-                    # Attempt to compute sun position
+                    # Initial load attempt to compute sun position
                     self.do_sun_position_field(object_head_to_write)
                     # Add parents
                     self.add_parent_objects(
@@ -223,7 +208,6 @@ class TSVFile(object):
 
                 new_records = self.create_or_link_slaves(
                     how,
-                    stats.start_time,
                     session,
                     object_head_to_write,
                     object_fields_to_write,
@@ -257,8 +241,9 @@ class TSVFile(object):
                     if how.vignette_maker.must_keep_original():
                         # TODO: Put the code below in a def
                         # In this case, the original image is kept in another DB line
-                        backup_img_to_write = Bean(**dicts_to_write["images"])
+                        backup_img_to_write = ImageGen(**dicts_to_write["images"])
                         backup_img_to_write.imgrank = 100
+                        backup_img_to_write.thumb_file_name = None
                         backup_img_to_write.thumb_width = None
                         backup_img_to_write.thumb_height = None
                         # Store backup image into DB
@@ -272,6 +257,7 @@ class TSVFile(object):
                         sub_path = where.vault.store_image(
                             orig_file_name, backup_img_to_write.imgid
                         )
+                        backup_img_to_write.file_name = sub_path
                         # Get original image dimensions
                         im = PIL_Image.open(where.vault.image_path(sub_path))
                         backup_img_to_write.width, backup_img_to_write.height = im.size
@@ -312,72 +298,26 @@ class TSVFile(object):
             logger.error("Astral error : %s for %s", e, object_head_to_write)
 
     @staticmethod
-    def ensure_consistent_fields(
-        object_head_to_write: Bean,
-        start_time: Optional[float],
-        current_user: Optional[UserIDT],
-    ):
-        """
-        Some fields need defaults to keep consistency.
-        - 'Validated' and 'Dubious' need a category (now blocked during TSV read), an author and a date
-        - 'Predicted' should set same fields as a prediction ran inside EcoTaxa
-        """
-        if start_time is None:
-            return  # No time to update the record, is must be that the full one is sent (during Subset)
-        state = object_head_to_write.get("classif_qual")
-        if state == PREDICTED_CLASSIF_QUAL:
-            classif_id = object_head_to_write.get("classif_id")
-            assert classif_id
-            # Provide reasonable default values
-            object_head_to_write["classif_auto_id"] = classif_id
-            object_head_to_write["classif_auto_when"] = datetime.datetime.fromtimestamp(
-                start_time
-            )
-            object_head_to_write["classif_auto_score"] = 1.0
-            # These are for manual states 'V' or 'D, when 'P' we wipe them
-            object_head_to_write["classif_who"] = None
-            object_head_to_write["classif_when"] = None
-        elif state in (VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL):
-            if object_head_to_write.get("classif_who") is None:
-                object_head_to_write["classif_who"] = current_user
-            if object_head_to_write.get("classif_when") is None:
-                object_head_to_write["classif_when"] = datetime.datetime.fromtimestamp(
-                    start_time
-                )
-
-    @staticmethod
     def prepare_classif_update(object_head: ObjectHeader, object_update: Bean) -> bool:
         """
         Detect intent to update classification related data: category, time of change, author
         """
-        if object_head.classif_id != object_update.classif_id:
+        if object_head.classif_id != object_update.get("classif_id"):
             return True  # Normal update, if relevant
+        elif object_head.classif_who != object_update.get("classif_who"):
+            return True  # Same classification, different author, update if relevant
         else:
-            previous_state = object_head.classif_qual
-            target_state = object_update.classif_qual
-            if target_state == PREDICTED_CLASSIF_QUAL:
-                if previous_state == PREDICTED_CLASSIF_QUAL:
-                    # Assume that the new pseudo-prediction is not new, as it resulted in same category
-                    object_update.classif_auto_when = object_head.classif_auto_when
-                else:
-                    return True  # Full state change
+            upd_when = object_update.get("classif_when")
+            # Just a date update, could be due to precision difference
+            if (
+                object_head.classif_when is not None
+                and upd_when is not None
+                and object_head.classif_when > upd_when
+                and object_head.classif_when - upd_when < ABSORBED_DIFF_CLASSIF_WHEN
+            ):
+                object_update.classif_when = object_head.classif_when
             else:
-                # Human state
-                if object_head.classif_who != object_update.classif_who:
-                    return True  # Same classification, different author, update if relevant
-                else:
-                    upd_when = object_update.classif_when
-                    # Just a date update, could be due to precision difference
-                    if (
-                        object_head.classif_when is not None
-                        and upd_when is not None
-                        and object_head.classif_when > upd_when
-                        and object_head.classif_when - upd_when
-                        < ABSORBED_DIFF_CLASSIF_WHEN
-                    ):
-                        object_update.classif_when = object_head.classif_when
-                    else:
-                        return True
+                return True
         return False
 
     def path_for_image(self, image_path: str):
@@ -587,14 +527,23 @@ class TSVFile(object):
         In-memory update of the ORM record, based on the difference with a needed state.
         :return: An explanation text for the updates to come.
         """
-        update_msgs = []
+        updateMsgs = []
         for attr, value in model.__dict__.items():
             if attr in update_dict and update_dict[attr] != value:
                 upd_val = update_dict[attr]
                 setattr(model, attr, upd_val)
-                update_msgs.append((attr, repr(value) + "->" + repr(upd_val)))
+                updateMsgs.append((attr, repr(value) + "->" + repr(upd_val)))
         # TODO: Extra values in update_dict ?
-        return update_msgs
+        return updateMsgs
+
+    @staticmethod
+    def diff_orm_object(model: Model, update_dict: Dict[str, str]):
+        diffs = []
+        for attr, value in model.__dict__.items():
+            if attr in update_dict and update_dict[attr] != value:
+                upd_val = update_dict[attr]
+                diffs.append((attr, upd_val))
+        return diffs
 
     @staticmethod
     def dispatch_fields_by_table(
@@ -638,7 +587,7 @@ class TSVFile(object):
         """
         predefined_mapping = GlobalMapping.PREDEFINED_FIELDS
         custom_mapping = how.custom_mapping
-        # CSV reader returns a minimal dict with no value equal to None,
+        # CSV reader returns a minimal dict with no value equal to None
         # so we have values only for common fields.
         for a_field in field_set.intersection(lig.keys()):
             # We have a value
@@ -647,11 +596,11 @@ class TSVFile(object):
             if not m:
                 m = custom_mapping.search_field(a_field)
                 assert m is not None
-            db_table = m["table"]
-            db_col = m["field"]
+            field_table = m["table"]
+            field_name = m["field"]
             is_numeric = m["type"] == "n"
             # Try to get the transformed value from the cache
-            cache_key: Tuple[str, Any] = (a_field, raw_val)
+            cache_key: Any = (a_field, raw_val)
             if cache_key in vals_cache:
                 cached_field_value = vals_cache.get(cache_key)
             else:
@@ -675,7 +624,7 @@ class TSVFile(object):
                     cached_field_value = ObjectHeader.date_from_txt(csv_val)
                 elif a_field == "object_time":
                     cached_field_value = ObjectHeader.time_from_txt(csv_val)
-                elif db_col == "classif_when":
+                elif field_name == "classif_when":
                     date = ObjectHeader.date_from_txt(csv_val)
                     csv_val_time = clean_value(
                         lig.get("object_annotation_time", "00:00:00")
@@ -684,8 +633,8 @@ class TSVFile(object):
 
                     cached_field_value = datetime.datetime.combine(date, time)
                     # no caching of this one as it depends on another value on same line
-                    cache_key = ("0", None)
-                elif db_col == "classif_id":
+                    cache_key = "0"
+                elif field_name == "classif_id":
                     # We map 2 fields to classif_id, the second (text one) has [t] type, treated here.
                     # The first, numeric, version is in "if type=n" case above.
                     mapped_val = how.taxo_mapping.get(csv_val.lower(), csv_val)
@@ -701,11 +650,11 @@ class TSVFile(object):
                         csv_val,
                         mapped_val,
                     )
-                elif db_col == "classif_who":
+                elif field_name == "classif_who":
                     # Eventually map to another user if asked so
                     usr_key = none_to_empty(csv_val).lower()
                     cached_field_value = how.found_users[usr_key].get("id", None)
-                elif db_col == "classif_qual":
+                elif field_name == "classif_qual":
                     cached_field_value = classif_qual_revert.get(csv_val.lower())
                 else:
                     # Assume it's an ordinary text field with nothing special
@@ -714,8 +663,8 @@ class TSVFile(object):
                 vals_cache[cache_key] = cached_field_value
 
             # Write the field into the right object
-            dict_to_write = dicts_to_write[db_table]
-            dict_to_write[db_col] = cached_field_value
+            dict_to_write = dicts_to_write[field_table]
+            dict_to_write[field_name] = cached_field_value
         # Ensure that all dicts' fields are valued, to None if needed. This is needed for bulk inserts,
         # in DBWriter.py, as SQL Alchemy core computes an insert for the first line and just injects the
         # data for following ones.
@@ -729,7 +678,6 @@ class TSVFile(object):
     @staticmethod
     def create_or_link_slaves(
         how: ImportHow,
-        start_time: Optional[float],
         session: Session,
         object_head_to_write,
         object_fields_to_write,
@@ -757,30 +705,21 @@ class TSVFile(object):
                     obj = session.query(a_cls).filter(filter_for_id).first()
                     assert obj is not None
                     if a_cls == ObjectHeader:
-                        # Eventually refresh classification
-                        if an_upd.nb_fields_from(USED_FIELDS_FOR_CLASSIF) > 0:
-                            # Give the bean enough data for computation
-                            an_upd.update_from_obj(obj, USED_FIELDS_FOR_CLASSIF)
-                            TSVFile.ensure_consistent_fields(
-                                an_upd, start_time=start_time, current_user=how.user_id
-                            )
-                            # Care for classification historization
-                            if TSVFile.prepare_classif_update(obj, an_upd):
-                                EnumeratedObjectSet.historize_classification_for(
-                                    session,
-                                    [objid],
-                                    only_qual=None,  # TODO: Quite inefficient but simple
-                                )
-                        else:
-                            # Hidden fields must not trigger an update
-                            an_upd.update_from_obj(
-                                obj, HIDDEN_FIELDS_FOR_CLASSIF, force=True
-                            )
                         # Eventually refresh sun position
                         if an_upd.nb_fields_from(USED_FIELDS_FOR_SUNPOS) > 0:
                             # Give the bean enough data for computation
-                            an_upd.update_from_obj(obj, USED_FIELDS_FOR_SUNPOS)
+                            for a_field in USED_FIELDS_FOR_SUNPOS.difference(
+                                an_upd.keys()
+                            ):
+                                an_upd[a_field] = getattr(obj, a_field)
                             TSVFile.do_sun_position_field(an_upd)
+                        # Care for classification update
+                        if TSVFile.prepare_classif_update(obj, an_upd):
+                            EnumeratedObjectSet.historize_classification_for(
+                                session,
+                                [objid],
+                                only_qual=None,  # TODO: Quite inefficient but simple
+                            )
                     updates = TSVFile.update_orm_object(obj, an_upd)
                     if len(updates) > 0:
                         logger.info("Updating '%s' using %s", filter_for_id, updates)
@@ -802,6 +741,11 @@ class TSVFile(object):
                 )
                 ret = 0
             else:
+                # or create it
+                # object_head_to_write.projid = how.prj_id
+                # object_head_to_write.random_value = random.randint(1, 99999999)
+                # Below left NULL @see self.update_counts_and_img0
+                # object_head_to_write.img0id = XXXXX
                 ret = 3  # new image + new object_head + new object_fields
         return ret
 
@@ -824,11 +768,12 @@ class TSVFile(object):
             # Source file is a replacement
             img_file_path = instead_image
         else:
-            # Files come from a subdirectory for UVP6 but from same directory for non-UVP6
+            # Files are in a subdirectory for UVP6, same directory for non-UVP6
             # TODO: Unsure if it works on Windows, as there is a "/" for UVP6
             img_file_path = self.path_for_image(image_to_write.orig_file_name)
 
         sub_path = where.vault.store_image(img_file_path, image_to_write.imgid)
+        image_to_write.file_name = sub_path
         present_ranks = how.image_ranks_per_obj.setdefault(image_to_write.objid, set())
         if image_to_write.get("imgrank") is None:
             self.compute_rank(image_to_write, present_ranks)
@@ -840,7 +785,7 @@ class TSVFile(object):
                 self.compute_rank(image_to_write, present_ranks)
                 logger.info(
                     "For %s, cannot use rank from TSV %d, using %d instead",
-                    img_file_path,
+                    image_to_write.file_name,
                     tsv_rank,
                     image_to_write.imgrank,
                 )
@@ -879,7 +824,7 @@ class TSVFile(object):
             split_col = a_field.split("_", 1)
             if len(split_col) != 2:
                 diag.error(
-                    "Invalid Header '%s' in file %s. Format must be Table_Field."
+                    "Invalid Header '%s' in file %s. Format must be Table_Field. Field ignored"
                     % (a_field, self.relative_name)
                 )
                 continue
@@ -902,8 +847,8 @@ class TSVFile(object):
             target_table = GlobalMapping.TSV_table_to_table(tsv_table_prfx)
             if target_table not in GlobalMapping.POSSIBLE_TABLES:
                 diag.error(
-                    "Invalid Header '%s' in file %s. Unknown table prefix '%s'."
-                    % (a_field, self.relative_name, target_table)
+                    "Invalid Header '%s' in file %s. Unknown table prefix. Field ignored"
+                    % (a_field, self.relative_name)
                 )
                 continue
             if target_table not in (
@@ -920,7 +865,8 @@ class TSVFile(object):
                 except KeyError:
                     diag.error(
                         "Invalid Type '%s' for Field '%s' in file %s. "
-                        "Incorrect Type." % (sel_type, a_field, self.relative_name)
+                        "Incorrect Type. Field ignored"
+                        % (sel_type, a_field, self.relative_name)
                     )
                     continue
             # Add the new custom column
@@ -1039,26 +985,6 @@ class TSVFile(object):
                         diag.error(maybe_err)
                 # Add the association anyway, it will reduce the repetition of errors
                 diag.topology.add_association(sample_id, acquis_id)
-
-            # Verify that implied associated categories are really present
-            classif_qual = lig.get("object_annotation_status", "")
-            classif_id = lig.get(
-                "object_annotation_category",
-                lig.get("object_annotation_category_id", ""),
-            ).strip()
-            if classif_qual != "":
-                if not classif_id:
-                    diag.error(
-                        "When annotation status '%s' is provided there has to be a category, in file %s."
-                        % (classif_qual, self.relative_name)
-                    )
-            # Verify that a present category is associated with a state
-            if classif_id != "":
-                if classif_qual == "":
-                    diag.error(
-                        "When a category (%s) is provided it has to be with a status, in file %s."
-                        % (classif_id, self.relative_name)
-                    )
 
         # For next TSV analysis
         diag.existing_objects_and_image.update(local_keys)
