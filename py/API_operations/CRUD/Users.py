@@ -2,6 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from datetime import timedelta
 from typing import Optional, List, Any, Tuple
 
 from fastapi import HTTPException
@@ -26,7 +27,6 @@ from BO.User import (
 from DB.Project import ProjectIDT
 from DB.User import User, Role, UserRole, TempPasswordReset, UserStatus
 from helpers import DateTime
-from datetime import timedelta
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
     DETAIL_VALIDATION_NOT_ACTIVE,
@@ -41,7 +41,7 @@ from helpers.httpexception import (
     DETAIL_NOT_FOUND,
 )
 from helpers.login import LoginService
-from helpers.pydantic import BaseModel, Field, sort_and_prune
+from helpers.pydantic import BaseModel, Field
 from providers.HomeCaptcha import HomeCaptcha
 from ..helpers.Service import Service
 from ..helpers.UserValidation import UserValidation, ActivationType
@@ -541,28 +541,16 @@ class UserService(Service):
         cols_to_upd: List,
         mail_status: bool,
     ) -> bool:
-        if self.account_validation != True:
-            return False
-        # user confirmed email
-        confirmed = self.verify_email != True or mail_status == True
-        new_user = update_src.id == -1
-        # email confirmation if email_verification is on
-        just_confirmed = (
-            (new_user or (user_to_update.status == UserStatus.inactive.value))
-            and confirmed
-        ) and User.mail_status in cols_to_upd
-        # TODO add "and confirmed"  for current_status_on when batch mail to modifiy email has been sent
-        current_status_on = user_to_update.status in [
-            UserStatus.active.value,
-            UserStatus.pending.value,
-        ]
-        # data modified have to be verified
-        major_update = (
-            User.status in cols_to_upd
+        return (
+            self.account_validation == True
+            and User.status in cols_to_upd
+            and (
+                user_to_update.status
+                in [UserStatus.active.value, UserStatus.pending.value]
+                or (update_src.id == -1 and mail_status == True)
+            )
             and update_src.status == UserStatus.inactive.value
-        ) and user_to_update.email == update_src.email
-
-        return (major_update and current_status_on) or just_confirmed
+        )
 
     def _validate_user_throw(
         self, update_src: UserModelWithRights, user_to_update: User, add_condition=True
@@ -594,11 +582,15 @@ class UserService(Service):
             # only update actions from admin - not from profile
             if current_user is not None and current_user.id != user_to_update.id:
                 actions = update_src.can_do
-                inform_about_status = (
-                    update_src.status != user_to_update.status and update_src.id != -1
-                )
+            inform_about_status = (
+                update_src.status != user_to_update.status and update_src.id != -1
+            )
             # only modify the comment with the status  -
-            if update_src.status_admin_comment != user_to_update.status_admin_comment:
+            if (
+                inform_about_status
+                and update_src.status_admin_comment
+                != user_to_update.status_admin_comment
+            ):
                 cols_to_upd.append(User.status_admin_comment)
             ask_activate = False
 

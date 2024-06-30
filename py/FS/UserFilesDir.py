@@ -3,21 +3,21 @@
 # Copyright (C) 2015-2021  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import os
-import zipfile
-import tarfile
-import gzip
-from glob import iglob
 import shutil
-
+import tarfile
+import zipfile
+from glob import iglob
 # import magic
 from pathlib import Path
-from typing import Optional, List, Set, NamedTuple, Any, Dict
-from helpers.DynamicLogs import get_logger
+from typing import Optional, List, NamedTuple, Dict
+
+from fastapi import HTTPException
 from starlette.datastructures import UploadFile
+
 from BO.User import UserIDT
 from FS.CommonDir import CommonFolder, DirEntryT
 from helpers.AppConfig import Config
-from fastapi import HTTPException
+from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
     DETAIL_INVALID_ZIP_FILE,
     DETAIL_INVALID_LARGE_ZIP_FILE,
@@ -31,7 +31,6 @@ logger = get_logger(__name__)
 accepted_mime_types = [
     "application/zip",
     "application/gzip",
-    "application/x-tar",
     "text/plain",
     "text/tab-separated-values",
     "image/jpeg",
@@ -55,7 +54,7 @@ class UserFilesDirectory(object):
     USER_DIR_PATTERN = "ecotaxa_user.%d"
     TRASH_DIRECTORY = "trash."
     COMPRESSED_PATTERN = "ecotaxa_*"
-    ARCHIVE_EXTENSIONS = ["zip", "tar", "gzip", "tar.gz", "tar.bz2", "tar.xz", "gz"]
+    ARCHIVE_EXTENSIONS = ["zip", "tar", "gzip", "tar.gz", "tar.bz2", "tar.xz"]
     TSV = ".tsv"
 
     def __init__(self, user_id: UserIDT):
@@ -79,49 +78,29 @@ class UserFilesDirectory(object):
         if path is not None:
             assert path.endswith(name)
             base_path /= path[: -len(name)]
-            self.ensure_exists(base_path)
-        source_path = base_path.absolute().joinpath(name.lstrip(os.path.sep))
+        self.ensure_exists(base_path)
+        dest_path = base_path.absolute().joinpath(name.lstrip(os.path.sep))
         # Copy data from the stream into dest_path
-        with open(source_path, "wb") as file:
+        with open(dest_path, "wb") as file:
             buff = await stream.read(1024)
             while len(buff) != 0:
                 file.write(buff)  # type:ignore # Mypy is unaware of async read result
                 buff = await stream.read(1024)
-        if zipfile.is_zipfile(source_path.as_posix()):
-            await self.unpack_zip(source_path, base_path.absolute())
-        elif tarfile.is_tarfile(source_path.as_posix()):
-            await self.unpack_tar(source_path, base_path.absolute())
-        # should always be zip but ...
-        elif self._is_gz(source_path.as_posix()):
-            name = name.replace(".gz", "")
-            await self.unpack_gz(
-                source_path, base_path.absolute().joinpath(name.lstrip(os.path.sep))
-            )
-
-        else:
-            print("not zipped", str(source_path))
-        return str(source_path)
+        if zipfile.is_zipfile(dest_path.as_posix()):
+            await self.unpack_zip(dest_path, base_path.absolute())
+        return str(dest_path)
 
     def list(self, sub_path: str) -> List[DirEntryT]:
         """
         Only list the known (with tags) directory.
         """
         # Leading / implies root directory
-        self.ensure_exists(self._root_path)
         sub_path = sub_path.lstrip(os.path.sep)
         ret: List[DirEntryT] = []
         path: Path = self._root_path.joinpath(sub_path)
 
         CommonFolder.list_dir_into(path, ret)
         return ret
-
-    @staticmethod
-    def _is_gz(filepath):
-        with open(filepath, "rb") as f:
-            b1 = f.read(1)
-            b2 = f.read(1)
-            f.close()
-        return b1 == b"\x1f" and b2 == b"\x8b"
 
     def _is_trash_dir_throw(self, path: str):
         if self._root_path.joinpath(
@@ -134,18 +113,35 @@ class UserFilesDirectory(object):
         self._is_trash_dir_throw(dest_name)
         source_path: Path = self._root_path.joinpath(source_name.lstrip(os.path.sep))
         dest_path: Path = self._root_path.joinpath(dest_name.lstrip(os.path.sep))
-
         self.ensure_exists(dest_path.parent)
-        if dest_path.is_dir():
+        if source_path.is_dir() and dest_path.is_dir():
+            source_files = os.listdir(source_path)
+            try:
+                for source_file in source_files:
+                    shutil.move(
+                        str(source_path.joinpath(source_file)),
+                        dest_path,
+                    )
+            except Exception as e:
+                _log_exception_throw(e)
+        elif dest_path.is_dir():
+            # check if file exist in destination
             if dest_path.joinpath(source_path.stem).exists():
                 raise HTTPException(status_code=422, detail=DETAIL_NOTHING_DONE)
+            else:
+                try:
+                    shutil.move(str(source_path), dest_path)
+                except Exception as e:
+                    _log_exception_throw(e)
         elif dest_path.exists():
             # can't rename
             raise HTTPException(status_code=422, detail=DETAIL_NOTHING_DONE)
-        try:
-            shutil.move(str(source_path), dest_path)
-        except Exception as e:
-            _log_exception_throw(e)
+        else:
+            # rename and/or move file
+            try:
+                shutil.move(str(source_path), dest_path)
+            except Exception as e:
+                _log_exception_throw(e)
         return str(dest_path)
 
     def remove(self, path: str):
@@ -207,6 +203,34 @@ class UserFilesDirectory(object):
         self.list_errors.update({"Not accepted": path_error})
         return False
 
+    async def unpack_one_by_one_zip(self, input_path: Path, path: Path):
+        zip_file = input_path.as_posix()
+        try:
+            with zipfile.ZipFile(zip_file, "r", allowZip64=True) as archive:
+                list_zip = archive.infolist()
+                for zip_info in list_zip:
+                    if not zip_info.is_dir():
+                        if self._has_accepted_format(path, zip_info.filename) == True:
+                            archive.extract(zip_info, path)
+                            zip_f = path.joinpath(zip_info.filename.lstrip(os.path.sep))
+                            if zipfile.is_zipfile(zip_f) == True:
+                                sub_path = zip_f.parent
+                                await self.unpack_one_by_one_zip(zip_f, sub_path)
+                        else:
+                            logger.info(
+                                "File format not accepted '%s' '%s' , user_id '%s'",
+                                path,
+                                zip_info.filename,
+                                str(self.user_id),
+                            )
+                            path_error = str(
+                                path.joinpath(zip_info.filename.lstrip(os.path.sep))
+                            )
+                            self.list_errors.update({"Not accepted": path_error})
+                # os.remove(zip_file)
+        except Exception as e:
+            _log_exception_throw(e)
+
     async def unpack_only_zip(self, input_path: Path, path: Path):
         zip_file = input_path.as_posix()
         try:
@@ -231,8 +255,8 @@ class UserFilesDirectory(object):
         try:
             with zipfile.ZipFile(compressed_file, "r", allowZip64=True) as archive:
                 archive.extractall(path)
-            await self.unpack_archives(path)
-            os.remove(compressed_file)
+                await self.unpack_archives(path)
+                os.remove(compressed_file)
         except Exception as e:
             _log_exception_throw(e)
 
@@ -241,18 +265,8 @@ class UserFilesDirectory(object):
         try:
             with tarfile.open(compressed_file, "r") as archive:
                 archive.extractall(path)
-            await self.unpack_archives(path)
-            os.remove(compressed_file)
-        except Exception as e:
-            _log_exception_throw(e)
-
-    async def unpack_gz(self, input_path: Path, path: Path):
-        compressed_file = input_path.as_posix()
-        try:
-            with open(compressed_file, "rb") as archive:
-                with open(path.as_posix(), "wb") as decompressed_file:
-                    decompressed_file.write(gzip.decompress(archive.read()))
-            os.remove(compressed_file)
+                await self.unpack_archives(path)
+                os.remove(compressed_file)
         except Exception as e:
             _log_exception_throw(e)
 
@@ -270,14 +284,12 @@ class UserFilesDirectory(object):
         ):
             compressed_path = Path(compressed_f)
             if not compressed_path.is_dir():
-                sub_path = compressed_path.parent
-                if zipfile.is_zipfile(compressed_path):
+                if zipfile.is_zipfile(compressed_path) == True:
+                    sub_path = compressed_path.parent
                     await self.unpack_zip(compressed_path, sub_path)
-                elif tarfile.is_tarfile(compressed_path):
-                    print("--------------------------istarfile =", compressed_path)
+                elif tarfile.is_tarfile(compressed_path) == True:
+                    sub_path = compressed_path.parent
                     await self.unpack_tar(compressed_path, sub_path)
-                elif self._is_gz(compressed_path.as_posix()):
-                    await self.unpack_gz(compressed_path, sub_path)
                 elif not self._has_accepted_format(path, compressed_f):
                     os.remove(compressed_path)
                     self.list_errors.update({"Not accepted": compressed_f})

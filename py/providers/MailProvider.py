@@ -4,13 +4,15 @@
 #
 # Send Account registration , status information and validation emails
 #
-from datetime import datetime, timedelta
-from typing import Optional, Final, Tuple, Dict, Any
-from enum import Enum
-from helpers.DynamicLogs import get_logger
-from email.message import EmailMessage
-from fastapi import HTTPException
 import smtplib
+from datetime import datetime, timedelta
+from email.message import EmailMessage
+from enum import Enum
+from typing import Optional, Final, Tuple, Dict, Any
+
+from fastapi import HTTPException
+
+from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
     DETAIL_TEMPLATE_NOT_FOUND,
     DETAIL_INVALID_PARAMETER,
@@ -23,7 +25,6 @@ from helpers.httpexception import (
     DETAIL_SMTP_RESPONSE_ERROR,
     DETAIL_IMAP4_ERROR,
     DETAIL_UNKNOWN_ERROR,
-    DETAIL_SSL_ERROR,
 )
 
 logger = get_logger(__name__)
@@ -71,6 +72,7 @@ class ReplaceInMail:
 
 
 DEFAULT_LANGUAGE = "en_EN"
+FROM_CRITERIA = "Ecotaxa"
 
 
 class MailProvider(object):
@@ -468,7 +470,7 @@ class MailProvider(object):
             # select inbox
             mail.select("INBOX")
             criteria = {
-                "FROM": self.ADD_TICKET,
+                "FROM": FROM_CRITERIA,
                 "SUBJECT": str(user_id) + "#" + user_email + "#",
             }
 
@@ -480,17 +482,16 @@ class MailProvider(object):
             (_, data) = mail.uid("search", search_string(criteria))
             if data != None and isinstance(data, list):
                 inbox_item_list = data[0].split()
-                if len(inbox_item_list) > 0:
-                    most_recent = inbox_item_list[-1]
-                    _, email_data = mail.uid("fetch", most_recent, "(RFC822)")
-                    raw_email = email_data[0][1].decode("UTF-8")
-                    email_message = email.message_from_string(raw_email)
-                    if "Subject" in email_message:
-                        import re
+                most_recent = inbox_item_list[-1]
+                _, email_data = mail.uid("fetch", most_recent, "(RFC822)")
+                raw_email = email_data[0][1].decode("UTF-8")
+                email_message = email.message_from_string(raw_email)
+                if "Subject" in email_message:
+                    import re
 
-                        match = re.match(self.TICKET_MATCH, email_message["Subject"])
-                        if match:
-                            ticket = match.group(0)
+                    match = re.match(self.TICKET_MATCH, email_message["Subject"])
+                    if match:
+                        ticket = match.group(0)
             mail.logout()
         except imaplib.IMAP4.error as e:
             code = 422

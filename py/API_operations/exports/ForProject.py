@@ -47,7 +47,6 @@ from helpers import (
     DateTime,
 )  # Need to keep the whole module imported, as the function is mocked
 from helpers.DynamicLogs import get_logger, LogsSwitcher
-# TODO: Move somewhere else
 from ..helpers.JobService import JobServiceBase, ArgsDict  # fmt:skip
 
 logger = get_logger(__name__)
@@ -258,22 +257,22 @@ class ProjectExport(JobServiceBase):
             ).format(date_fmt, time_fmt)
         select_clause += (
             """
-                CASE obh.classif_qual 
+                CASE obh.classif_qual
                             WHEN '"""
             + VALIDATED_CLASSIF_QUAL
-            + """' then 'validated' 
+            + """' then 'validated'
                             WHEN '"""
             + PREDICTED_CLASSIF_QUAL
-            + """' then 'predicted' 
+            + """' then 'predicted'
                             WHEN '"""
             + DUBIOUS_CLASSIF_QUAL
-            + """' then 'dubious' 
-                            ELSE obh.classif_qual 
-                         END AS object_annotation_status,                
+            + """' then 'dubious'
+                            ELSE obh.classif_qual
+                         END AS object_annotation_status,
                          usr.name AS object_annotation_person_name, usr.email AS object_annotation_person_email,
                          TO_CHAR(obh.classif_when,'{0}') AS object_annotation_date,
-                         TO_CHAR(obh.classif_when,'{1}') AS object_annotation_time,                
-                         txo.display_name AS object_annotation_category 
+                         TO_CHAR(obh.classif_when,'{1}') AS object_annotation_time,
+                         txo.display_name AS object_annotation_category
                     """
         ).format(date_fmt, time_fmt)
         if (
@@ -314,10 +313,10 @@ class ProjectExport(JobServiceBase):
             select_clause += "\n, obh.objid"
 
         if req.with_internal_ids:
-            select_clause += """\n, obh.objid, 
-                    obh.acquisid AS processid_internal, obh.acquisid AS acq_id_internal, 
-                    sam.sampleid AS sample_id_internal, 
-                    obh.classif_id, obh.classif_who, obh.classif_auto_id, txp.name classif_auto_name, 
+            select_clause += """\n, obh.objid,
+                    obh.acquisid AS processid_internal, obh.acquisid AS acq_id_internal,
+                    sam.sampleid AS sample_id_internal,
+                    obh.classif_id, obh.classif_who, obh.classif_auto_id, txp.name classif_auto_name,
                     obh.classif_auto_score, obh.classif_auto_when,
                     HASHTEXT(obh.orig_id) object_random_value, obh.sunpos object_sunpos """
             if "S" in req.tsv_entities:
