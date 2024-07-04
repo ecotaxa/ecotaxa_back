@@ -14,8 +14,8 @@ jobs:
     environment: Env_for_Actions
     # The type of runner that the job will run on
     runs-on: [ubuntu-latest]
-    # Container with libs (no src)
-    container: ubuntu:22.04
+    # Virgin container
+    container: ubuntu:18.04
 
     # Service containers to run with `container-job`
     services:
@@ -34,26 +34,29 @@ jobs:
           --health-retries 5           
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-    # node is needed by python & codecov actions
+    # node is needed by codecov
     - run: apt-get update
     - run: apt-get install -y curl
-    - run: curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+    - run: curl -fsSL https://deb.nodesource.com/setup_16.x | bash -
     - run: apt-get install -y nodejs
     # git is needed by codecov
     - run: apt-get install -y git
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.8'
-    - run: ${{ env.pythonLocation }}/bin/pip install tox==3.24.3
-    # We use psql to build the test DB
-    - run: apt-get install -y postgresql-client
-    # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+    # python & psql (for the test DB) from repo, same as prod docker
+    - run: apt-get install
+        python3.8 python3-venv python3.8-dev python3.8-venv
+        postgresql-client-10 libpq-dev
+        gcc make file cython3
+        --no-install-recommends --yes
+    - run: python3.8 -m venv /venv
+    - run: PATH=/venv/bin pip3 install --upgrade pip wheel
+    # Checks-out your repository
     - uses: actions/checkout@v4
     # Run both tests and coverage
+    - run: PATH=/venv/bin:$PATH pip3 install tox==3.24.3
     - name: Run tox in QA
       working-directory: ./QA/py
       run: |
-        PATH=/venv/bin:$PATH PYTHONPATH=$PYTHONPATH:. tox
+        PATH=/venv/bin PYTHONPATH=. tox
       env:
         # The hostname used to communicate with the PostgreSQL service container
         POSTGRES_HOST: postgres
