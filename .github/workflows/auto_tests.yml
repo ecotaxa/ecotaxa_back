@@ -40,7 +40,7 @@ jobs:
           --health-retries 5           
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-    # node is needed by codecov
+    # node (or a lib of) is needed by codecov (or GH)
     - run: apt-get update
     - run: apt-get install -y curl
     - run: curl -fsSL https://deb.nodesource.com/setup_16.x | bash -
@@ -55,7 +55,7 @@ jobs:
         --no-install-recommends --yes
     - run: python3.8 -m venv /venv
     - run: PATH=/venv/bin pip3 install --upgrade pip wheel
-    # Checkout. note: @v4 need node20 which is NOK on ubuntu 18
+    # Checkout. note: @v3 or @v4 need node20 which is NOK on ubuntu 18, hack of env above does a workaround
     - uses: actions/checkout@v2
     # Run both tests and coverage
     - run: PATH=/venv/bin:$PATH pip3 install tox==3.24.3
@@ -69,7 +69,7 @@ jobs:
         # The default PostgreSQL port
         POSTGRES_PORT: 5432
     - name: Upload coverage report
-      # Code coverage. note: @v4 need node20 which is NOK on ubuntu 18
+      # Code coverage. note: @v4 needs node20 which is NOK on ubuntu 18
       uses: codecov/codecov-action@v3
       with:
           token: ${{ secrets.CODECOV_TOKEN }}
