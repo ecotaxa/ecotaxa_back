@@ -50,7 +50,7 @@ jobs:
     - run: python3.8 -m venv /venv
     - run: PATH=/venv/bin pip3 install --upgrade pip wheel
     # Checkout. note: @v4 need node20 which is NOK on ubuntu 18
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v2
     # Run both tests and coverage
     - run: PATH=/venv/bin:$PATH pip3 install tox==3.24.3
     - name: Run tox in QA
@@ -64,7 +64,7 @@ jobs:
         POSTGRES_PORT: 5432
     - name: Upload coverage report
       # Code coverage. note: @v4 need node20 which is NOK on ubuntu 18
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v2
       with:
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true # optional (default = false)
