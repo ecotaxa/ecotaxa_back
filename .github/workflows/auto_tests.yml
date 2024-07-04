@@ -17,6 +17,11 @@ jobs:
     # Virgin container
     container: ubuntu:18.04
 
+    # https://github.com/actions/setup-node/issues/922
+    # https://github.com/actions/runner/issues/2906
+    env:
+        ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
+
     # Service containers to run with `container-job`
     services:
       # Label used to access the service container
