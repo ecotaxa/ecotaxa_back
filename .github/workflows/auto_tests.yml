@@ -39,16 +39,16 @@ jobs:
     - run: apt-get install -y curl
     - run: curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
     - run: apt-get install -y nodejs
-    # codecov needs git
+    # git is needed by codecov
     - run: apt-get install -y git
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.8'
+    - run: ${{ env.pythonLocation }}/bin/pip install tox==3.24.3
     # We use psql to build the test DB
     - run: apt-get install -y postgresql-client
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
     - uses: actions/checkout@v4
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.8'
-    - run: pip3 install tox==3.24.3
     # Run both tests and coverage
     - name: Run tox in QA
       working-directory: ./QA/py
