@@ -70,7 +70,7 @@ jobs:
         POSTGRES_PORT: 5432
     - name: Upload coverage report
       # Code coverage. note: @v4 need node20 which is NOK on ubuntu 18
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v3
       with:
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true # optional (default = false)
