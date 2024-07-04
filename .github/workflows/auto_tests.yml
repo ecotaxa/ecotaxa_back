@@ -19,6 +19,7 @@ jobs:
 
     # https://github.com/actions/setup-node/issues/922
     # https://github.com/actions/runner/issues/2906
+    # Due to: https://github.blog/changelog/2024-03-07-github-actions-all-actions-will-run-on-node20-instead-of-node16-by-default/
     env:
         ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
 
@@ -67,9 +68,9 @@ jobs:
         POSTGRES_HOST: postgres
         # The default PostgreSQL port
         POSTGRES_PORT: 5432
-#    - name: Upload coverage report
-#      # Code coverage. note: @v4 need node20 which is NOK on ubuntu 18
-#      uses: codecov/codecov-action@v2
-#      with:
-#          token: ${{ secrets.CODECOV_TOKEN }}
-#          verbose: true # optional (default = false)
+    - name: Upload coverage report
+      # Code coverage. note: @v4 need node20 which is NOK on ubuntu 18
+      uses: codecov/codecov-action@v4
+      with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true # optional (default = false)
