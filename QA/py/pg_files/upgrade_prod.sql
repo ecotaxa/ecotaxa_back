@@ -2131,93 +2131,28 @@ UPDATE alembic_version SET version_num='52a9d347f2b2' WHERE alembic_version.vers
 
 COMMIT;
 
--- Running upgrade 52a9d347f2b2 -> 4e25988b1e56
+-- Running upgrade 52a9d347f2b2 -> a9dd3c62b7b0
 
-DROP TABLE temp_tasks;
-
-CREATE TABLE images_new (
-    imgid bigint NOT NULL,
-    objid bigint NOT NULL,
-    imgrank smallint NOT NULL,
-    width smallint NOT NULL,
-    height smallint NOT NULL,
-    orig_file_name character varying(255) NOT NULL,
-    thumb_width smallint,
-    thumb_height smallint
+CREATE TABLE obj_cnn_features_vector (
+    objcnnid BIGINT NOT NULL,
+    features VECTOR(50),
+    PRIMARY KEY (objcnnid),
+    FOREIGN KEY(objcnnid) REFERENCES obj_head (objid) ON DELETE CASCADE
 );
 
-ALTER TABLE images_new OWNER TO postgres;
+INSERT INTO obj_cnn_features_vector (objcnnid, features)
+        SELECT objcnnid, ARRAY[cnn01, cnn02, cnn03, cnn04, cnn05, cnn06, cnn07, cnn08, cnn09, cnn10,
+        cnn11, cnn12, cnn13, cnn14, cnn15, cnn16, cnn17, cnn18, cnn19, cnn20,
+        cnn21, cnn22, cnn23, cnn24, cnn25, cnn26, cnn27, cnn28, cnn29, cnn30,
+        cnn31, cnn32, cnn33, cnn34, cnn35, cnn36, cnn37, cnn38, cnn39, cnn40,
+        cnn41, cnn42, cnn43, cnn44, cnn45, cnn46, cnn47, cnn48, cnn49, cnn50]::vector
+        FROM obj_cnn_features;
 
-DO
-$$
-    DECLARE
-        chunk     integer = 1000000;
-        total_row_count integer = 0;
-        nb_chunks integer = 0;
-        row_count integer;
-        acq_rec record;
-    BEGIN
-        FOR acq_rec IN (SELECT acquisid FROM acquisitions ORDER BY acquisid)
-            LOOP
-                insert into images_new (imgid, objid, imgrank,
-                                       orig_file_name, width, height,
-                                       thumb_width, thumb_height)
-                select imgid, img.objid,
-                       case when imgrank > 32767 then 32767 else imgrank end,
-                       orig_file_name,
-                       case when width > 32767 then 32767-width else width end,
-                       height,
-                       thumb_width, thumb_height
-                from images img
-                join obj_head obh on img.objid = obh.objid
-                where obh.acquisid = acq_rec.acquisid
-                order by img.objid, img.imgrank;
-                GET DIAGNOSTICS row_count = ROW_COUNT;
-                total_row_count = total_row_count + row_count;
-                IF total_row_count / chunk > nb_chunks
-                THEN
-                    nb_chunks = total_row_count / chunk;
-                    RAISE NOTICE '%: Done % lines',current_time,total_row_count;
-                    -- COMMIT; -- No commit inside Alembic
-                END IF ;
-            END LOOP;
-    END;
-$$;
+DROP TABLE obj_cnn_features;
 
-ALTER TABLE ONLY images_new
-    ADD CONSTRAINT images_pkey_new PRIMARY KEY (objid, imgrank);
+UPDATE alembic_version SET version_num='a9dd3c62b7b0' WHERE alembic_version.version_num = '52a9d347f2b2';
 
-ANALYSE images_new;
-
-ALTER TABLE images RENAME TO images_old;
-
-ALTER TABLE images_new RENAME TO images;
-
-ALTER INDEX images_pkey RENAME TO images_pkey_old;
-
-ALTER INDEX images_pkey_new RENAME TO images_pkey;
-
-DROP TABLE image_file;
-
-CREATE TABLE image_file (
-    imgid BIGINT NOT NULL,
-    ext CHAR(3) DEFAULT '?' NOT NULL,
-    state CHAR DEFAULT '?' NOT NULL,
-    digest_type CHAR DEFAULT '?' NOT NULL,
-    digest BYTEA,
-    PRIMARY KEY (imgid)
-);
-
-ALTER TABLE image_file OWNER TO postgres;
-
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO readerole;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO zoo;
-
-UPDATE alembic_version SET version_num='4e25988b1e56' WHERE alembic_version.version_num = '52a9d347f2b2';
-
--- Running upgrade 4e25988b1e56 -> 0a3132f436fb
-ALTER TABLE users ADD COLUMN orcid VARCHAR(20) DEFAULT NULL;
-UPDATE alembic_version SET version_num='0a3132f436fb' WHERE alembic_version.version_num = '4e25988b1e56';
+COMMIT;
 
 ------- Leave on tail
 
