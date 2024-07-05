@@ -12,6 +12,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 
 from API_models.prediction import PredictionReq
+from API_operations.GPU_FeatureExtraction import GPUFeatureExtractionForProject
 from BO.Classification import ClassifIDListT
 from BO.ObjectSet import DescribedObjectSet, EnumeratedObjectSet, ObjectIDListT
 from BO.Prediction import DeepFeatures
@@ -272,8 +273,9 @@ class GPUPredictForProject(PredictForProject):
         model_name = tgt_project.cnn_network_id
         assert model_name, "Target project has no cnn_network_id"
         for a_projid in [tgt_project.projid] + self.req.source_project_ids:
-            diag = self._ensure_deep_features_for(a_projid, model_name)
-            logger.info(diag)
+            with GPUFeatureExtractionForProject(a_projid) as gpu_feature_extraction:
+                diag = gpu_feature_extraction._ensure_deep_features_for(a_projid, model_name)
+                logger.info(diag)
 
     DEEP_EXTRACT_CHUNK = 10000
 

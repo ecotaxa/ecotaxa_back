@@ -138,13 +138,18 @@ def drop(user: str = "postgres", password: str = "", db_name: str = ""):
 @db_app.command(help="Full DB build, the DB should be usable when done.")
 def build():
     conn = Service.build_connection(app_config)
-    sess = conn.get_session()
     from DB.Project import Project
 
     # It's the same metadata object for the whole app, so pick one
     meta = Project.metadata
 
+    # Create the pgvector extension for similarity search
+    sess = conn.get_session()
+    sess.execute('CREATE EXTENSION IF NOT EXISTS vector;')
+    sess.commit()
+
     # Create the tables
+    sess = conn.get_session()
     meta.create_all(bind=conn.engine)
     # Create the views
     for a_def in views_deletion_queries(meta):
