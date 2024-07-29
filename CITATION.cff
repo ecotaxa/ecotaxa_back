@@ -46,7 +46,7 @@ abstract: >-
   user interface to allow taxonomists to classify thousands
   of images per day. In addition, it can store a large
   quantity of metadata together with the images, with very
-  few contraints on its content. These metadata can be used
+  few constraints on its content. These metadata can be used
   by the operators to sort through the images and by the
   machine learning backend to suggest identifications.
   Finally, EcoTaxa can export the metadata and the
