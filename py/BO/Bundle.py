@@ -42,8 +42,13 @@ class InBundle(object):
     UVP6_FILTER = "**/*Images.zip"
     MAX_FILES = 2000
 
-    def __init__(self, path: str, temp_dir: Path):
+    def __init__(self, path: str, user_loc: str, temp_dir: Path):
+        # Below is a real path, to either:
+        # - a root import directory
+        # - a task temp directory for working with UVP6 archives
         self.path = Path(path)
+        # Below is for messages
+        self.user_loc = user_loc
         # Compute the files we have to process.
         self.possible_files: List[Path] = []
         nb_files = 0
@@ -63,7 +68,10 @@ class InBundle(object):
         self.possible_files.sort()
         self.sub_bundles: List[UVP6Bundle] = []
         for a_bundle in self.path.glob(self.UVP6_FILTER):
-            self.sub_bundles.append(UVP6Bundle(a_bundle, temp_dir))
+            bundle_loc = str(a_bundle.relative_to(self.path))
+            self.sub_bundles.append(
+                UVP6Bundle(a_bundle, user_loc + "/" + bundle_loc, temp_dir)
+            )
             one_more()
 
     def possible_files_as_posix(self) -> Generator[str, None, None]:
@@ -127,8 +135,7 @@ class InBundle(object):
             )
 
         for sub_bundle in self.sub_bundles:
-            relative_name = sub_bundle.relative_name
-            logger.info("Importing UVP6 file %s" % relative_name)
+            logger.info("Importing UVP6 file %s" % self.user_loc)
             sub_bundle.before_import(how)
             _rows_for_bundle = sub_bundle.import_each_file(where, how, stats)
             # Already counted in recursive call
@@ -138,13 +145,22 @@ class InBundle(object):
             # log_stats()
 
         for a_file in self.possible_files:
-            tsv_to_read = TSVFile(a_file, self.path)
+            # TSV file with attached images
+            try:
+                file_user_loc = self.user_loc + "/" + str(a_file.relative_to(self.path))
+            except (
+                ValueError
+            ):  # Fake TSV added by SimpleImport does not relate to bundle
+                file_user_loc = self.user_loc + "/" + a_file.name
+            tsv_to_read = TSVFile(a_file, file_user_loc, self.path)
             relative_name = tsv_to_read.relative_name
             if relative_name in how.files_not_to_import:
-                logger.info("Skipping load of already loaded file %s" % relative_name)
+                logger.info(
+                    "Skipping load of already loaded file %s" % tsv_to_read.user_loc
+                )
                 continue
             else:
-                logger.info("Importing file %s" % relative_name)
+                logger.info("Importing file %s" % tsv_to_read.user_loc)
             rows_for_csv = tsv_to_read.do_import(where, how, stats)
             stats.add_rows(rows_for_csv)
             how.loaded_files.append(relative_name)
@@ -260,30 +276,42 @@ class InBundle(object):
         total_row_count = 0
         for num_file, sub_bundle in enumerate(self.sub_bundles):
             # It's another kind of bundle
-            relative_name = sub_bundle.relative_name
-            logger.info("Analyzing UVP6 %s" % relative_name)
+            logger.info("Analyzing UVP6 %s" % sub_bundle.user_loc)
             rows_for_csv = sub_bundle.validate_each_file(how, diag, report_def)
 
-            logger.info("File %s : %d row analysed", relative_name, rows_for_csv)
+            logger.info("File %s : %d rows analysed", sub_bundle.user_loc, rows_for_csv)
             report_def(num_file, len(self.sub_bundles))
             total_row_count += rows_for_csv
 
         for num_file, a_file in enumerate(self.possible_files):
             # TSV file with attached images
-            tsv_to_validate = TSVFile(a_file, self.path)
+            try:
+                file_user_loc = self.user_loc + "/" + str(a_file.relative_to(self.path))
+            except (
+                ValueError
+            ):  # Fake TSV added by SimpleImport does not relate to bundle
+                file_user_loc = self.user_loc + "/" + a_file.name
+            tsv_to_validate = TSVFile(a_file, file_user_loc, self.path)
             relative_name = tsv_to_validate.relative_name
             if relative_name in how.files_not_to_import:
                 logger.info(
-                    "Skipping validation of already loaded file %s" % relative_name
+                    "Skipping validation of already loaded file %s/%s",
+                    self.user_loc,
+                    relative_name,
                 )
                 diag.skipped_files.append(relative_name)
                 continue
             else:
-                logger.info("Analyzing file %s" % relative_name)
+                logger.info("Analyzing file %s/%s", self.user_loc, relative_name)
             report_def(num_file, len(self.possible_files))
             rows_for_csv = tsv_to_validate.do_validate(how, diag)
 
-            logger.info("File %s : %d row analysed", relative_name, rows_for_csv)
+            logger.info(
+                "File %s/%s : %d rows analysed",
+                self.user_loc,
+                relative_name,
+                rows_for_csv,
+            )
             total_row_count += rows_for_csv
 
         return total_row_count
@@ -346,9 +374,8 @@ class UVP6Bundle(InBundle):
     VIGNETTE_CONFIG = "compute_vignette.txt"
     TEMP_VIGNETTE = "tempvignette.png"
 
-    def __init__(self, path: Path, temp_dir: Path):
+    def __init__(self, path: Path, user_loc: str, temp_dir: Path):
         assert path.suffix.lower() == ".zip"
-        self.relative_name = path.name
         # Extract the zip file, in order to fall back to a directory like base InBundle
         name_no_zip = path.stem  # e.g. b_da_19_Images
         sample_id = name_no_zip[:-7]  # e.g. b_da_19
@@ -367,7 +394,7 @@ class UVP6Bundle(InBundle):
             sample_dir.mkdir()
             with zipfile.ZipFile(path.as_posix(), "r") as z:
                 z.extractall(sample_dir.as_posix())
-        super().__init__(sample_dir.as_posix(), temp_dir)
+        super().__init__(sample_dir.as_posix(), user_loc, temp_dir)
 
     def before_import(self, how: ImportHow) -> None:
         how.vignette_maker = None

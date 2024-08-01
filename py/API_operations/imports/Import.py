@@ -159,7 +159,7 @@ class FileImport(ImportServiceBase):
         mapping = ProjectMapping().load_from_project(self.prj)
         # Source bundle construction
         bundle_temp_dir = Path(self.temp_for_jobs.data_dir_for(self.job_id))
-        source_bundle = InBundle(source_dir_or_zip, bundle_temp_dir)
+        source_bundle = InBundle(source_dir_or_zip, "[base]", bundle_temp_dir)
         # Configure the validation to come, directives.
         import_how = ImportHow(
             self.prj_id,
@@ -167,7 +167,7 @@ class FileImport(ImportServiceBase):
             mapping,
             self.req.skip_existing_objects,
             loaded_files,
-            job_owner
+            job_owner,
         )
         if self.req.skip_loaded_files:
             import_how.compute_skipped(source_bundle, logger)
@@ -300,7 +300,6 @@ class FileImport(ImportServiceBase):
         ) = self._load_vars_from_state(self.STATE_KEYS)
         job_user_id: UserIDT = self._get_owner_id()
 
-
         # Save mappings straight away
         col_mapping = ProjectMapping().load_from_dict(col_mapping_dict)
         col_mapping.write_to_project(self.prj)
@@ -308,7 +307,7 @@ class FileImport(ImportServiceBase):
 
         # TODO: Duplicated code
         source_bundle = InBundle(
-            source_path, Path(self.temp_for_jobs.data_dir_for(self.job_id))
+            source_path, "[base]", Path(self.temp_for_jobs.data_dir_for(self.job_id))
         )
         # Configure the import to come, destination
         db_writer = DBWriter(self.session)
@@ -322,7 +321,7 @@ class FileImport(ImportServiceBase):
             col_mapping,
             self.req.skip_existing_objects,
             loaded_files,
-            job_user_id
+            job_user_id,
         )
         import_how.taxo_mapping = self.req.taxo_mappings
         import_how.found_taxa = taxo_found

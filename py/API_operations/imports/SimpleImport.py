@@ -70,7 +70,9 @@ class SimpleImport(ImportServiceBase):
         source_dir_or_zip = self.unzip_if_needed(self._get_owner_id())
         # Use a Bundle
         source_bundle = InBundle(
-            source_dir_or_zip, Path(self.temp_for_jobs.data_dir_for(self.job_id))
+            source_dir_or_zip,
+            "[base]",
+            Path(self.temp_for_jobs.data_dir_for(self.job_id)),
         )
         # Clean it, in case the ZIP contains a CSV
         source_bundle.remove_all_tsvs()
@@ -87,7 +89,7 @@ class SimpleImport(ImportServiceBase):
             custom_mapping=ProjectMapping(),
             skip_object_duplicates=False,
             loaded_files=[],
-            user_id=self._get_owner_id()
+            user_id=self._get_owner_id(),
         )
         import_how.do_thumbnail_above(self.config.get_thumbnails_limit())
         # Generate TSV

@@ -7,22 +7,27 @@ from os.path import dirname, realpath
 from pathlib import Path
 
 import pytest
+from starlette import status
+
 from API_models.crud import *
+
 # noinspection PyPackageRequirements
 from API_models.imports import *
+
 # noinspection PyPackageRequirements
 from API_operations.AsciiDump import AsciiDumper
+
 # noinspection PyPackageRequirements
 from API_operations.CRUD.Jobs import JobCRUDService
+
 # Import services
 # noinspection PyPackageRequirements
 from API_operations.CRUD.Projects import ProjectsService
 from API_operations.JsonDumper import JsonDumper
+
 # noinspection PyPackageRequirements
 from API_operations.imports.Import import FileImport
 from DB.Job import DBJobStateEnum
-from starlette import status
-
 from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID
 from tests.jobs import (
     wait_for_stable,
@@ -311,7 +316,7 @@ def test_import_again_not_skipping_nor_imgs(database, ccheck, caplog):
     job = wait_for_stable(rsp.job_id)
     check_job_errors(job)
     nb_errs = len(
-        [an_err for an_err in get_job_errors(job) if "Duplicate object" in an_err]
+        [an_err for an_err in get_job_errors(job) if "already in EcoTaxa" in an_err]
     )
     assert nb_errs == 11
 
@@ -403,22 +408,22 @@ def test_import_issues(database, ccheck, caplog):
     check_job_errors(job)
     errors = get_job_errors(job)
     assert errors == [
-        "Invalid Header 'nounderscorecol' in file ecotaxa_m106_mn01_n3_sml.tsv. Format must be Table_Field.",
-        "Invalid Header 'unknown_target' in file ecotaxa_m106_mn01_n3_sml.tsv. Unknown table prefix 'unknown'.",
-        "Invalid Type '[H]' for Field 'object_wrongtype' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect Type.",
-        "Invalid float value 'a' for Field 'object_buggy_float' in file ecotaxa_m106_mn01_n3_sml.tsv.",
-        "Invalid Lat. value '100' for Field 'object_lat' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect range -90/+90°.",
-        "Invalid Long. value '200' for Field 'object_lon' in file ecotaxa_m106_mn01_n3_sml.tsv. Incorrect range -180/+180°.",
-        "Invalid Date value '20140433' for Field 'object_date' in file ecotaxa_m106_mn01_n3_sml.tsv.",
-        "Invalid Time value '9920' for Field 'object_time' in file ecotaxa_m106_mn01_n3_sml.tsv.",
-        "Invalid Annotation Status 'predit' for Field 'object_annotation_status' in file ecotaxa_m106_mn01_n3_sml.tsv.",
-        "Invalid Date value '2015-11-31' for Field 'object_annotation_date' in file ecotaxa_m106_mn01_n3_sml.tsv.",
-        "Invalid Time value '5:31' for Field 'object_annotation_time' in file ecotaxa_m106_mn01_n3_sml.tsv.",
-        "Missing Image 'm106_mn01_n3_sml_1081.jpg2' in file ecotaxa_m106_mn01_n3_sml.tsv. ",
-        "Error while reading image 'm106_mn01_n3_sml_corrupted_image.jpg' "
-        "from file ecotaxa_m106_mn01_n3_sml.tsv: cannot identify image file '.../m106_mn01_n3_sml_corrupted_image.jpg' <class 'PIL.UnidentifiedImageError'>",
-        "Missing object_id in line '6' of file ecotaxa_m106_mn01_n3_sml.tsv. ",
-        "Missing Image 'nada.png' in file ecotaxa_m106_mn01_n3_sml.tsv. ",
+        "In [base]/ecotaxa_m106_mn01_n3_sml.tsv:",
+        " - Invalid Header 'nounderscorecol'. Format must be Table_Field.",
+        " - Invalid Header 'unknown_target'. Unknown table prefix 'unknown'.",
+        " - Invalid Type '[H]' for field 'object_wrongtype'.",
+        " - line 3: Invalid float value 'a' for field 'object_buggy_float'.",
+        " - line 3: Invalid Lat. value '100' for field 'object_lat'. Correct range is -90/+90°.",
+        " - line 3: Invalid Long. value '200' for field 'object_lon'. Correct range is -180/+180°.",
+        " - line 3: Invalid Date value '20140433' for field 'object_date'.",
+        " - line 3: Invalid Time value '9920' for field 'object_time'.",
+        " - line 3: Invalid Annotation Status 'predit' for field 'object_annotation_status'.",
+        " - line 5: Invalid Date value '2015-11-31' for field 'object_annotation_date'.",
+        " - line 5: Invalid Time value '5:31' for field 'object_annotation_time'.",
+        " - line 6: Missing Image 'm106_mn01_n3_sml_1081.jpg2'.",
+        " - line 7: Error while reading image 'm106_mn01_n3_sml_corrupted_image.jpg': cannot identify image file '.../m106_mn01_n3_sml_corrupted_image.jpg' <class 'PIL.UnidentifiedImageError'>",
+        " - line 8: Missing object_id.",
+        " - line 8: Missing Image 'nada.png'.",
     ]
 
     # @pytest.mark.skip()
@@ -452,7 +457,8 @@ def test_import_no_valid_state_and_others(database, ccheck, caplog, tstlogs):
     check_job_errors(job)
     errors = get_job_errors(job)
     assert errors == [
-        "When annotation status 'predicted' is provided there has to be a category, in file m106_mn01_n3_sml/ecotaxa_m106_mn01_n3_sml_pls.tsv."
+        "In [base]/m106_mn01_n3_sml/ecotaxa_m106_mn01_n3_sml_pls.tsv:",
+        " - line 3: When annotation status 'predicted' is provided there has to be a category.",
     ]
     check_project(tstlogs, prj_id)
 
@@ -469,7 +475,8 @@ def test_import_classif_without_state(database, ccheck, caplog, tstlogs):
     check_job_errors(job)
     errors = get_job_errors(job)
     assert errors == [
-        "When a category (84963) is provided it has to be with a status, in file m106_mn01_n3_sml/ecotaxa_m106_mn01_n3_sml_pls.tsv."
+        "In [base]/m106_mn01_n3_sml/ecotaxa_m106_mn01_n3_sml_pls.tsv:",
+        " - line 3: When a category (84963) is provided it has to be with a status.",
     ]
     check_project(tstlogs, prj_id)
 
@@ -507,31 +514,23 @@ def test_import_too_many_custom_columns(database, ccheck, caplog):
     from DB.Acquisition import ACQUISITION_FREE_COLUMNS
     from DB.Process import PROCESS_FREE_COLUMNS
 
-    compare_errors = []
+    compare_errors = ["In [base]/ecotaxa_m106_mn01_n3_sml.tsv:"]
     for n in range(SAMPLE_FREE_COLUMNS - 2, SAMPLE_FREE_COLUMNS + 1):
         compare_errors.append(
-            "Field sample_cus{n}, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too "
+            " - Field sample_cus{n} cannot be mapped. Too "
             "many custom fields, or bad type.".format(n=str(n))
         )
     for n in range(PROCESS_FREE_COLUMNS - 2, PROCESS_FREE_COLUMNS + 1):
         compare_errors.append(
-            "Field process_cus{n}, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too "
+            " - Field process_cus{n} cannot be mapped. Too "
             "many custom fields, or bad type.".format(n=str(n))
         )
     for n in range(ACQUISITION_FREE_COLUMNS - 2, ACQUISITION_FREE_COLUMNS + 1):
         compare_errors.append(
-            "Field acq_cus{n}, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too "
+            " - Field acq_cus{n} cannot be mapped. Too "
             "many custom fields, or bad type.".format(n=str(n))
         )
 
-    # assert errors == [
-    #    "Field acq_cus29, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too "
-    #    "many custom fields, or bad type.",
-    #    "Field acq_cus30, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too "
-    #    "many custom fields, or bad type.",
-    #    "Field acq_cus31, in file ecotaxa_m106_mn01_n3_sml.tsv, cannot be mapped. Too "
-    #    "many custom fields, or bad type.",
-    # ]
     assert errors == compare_errors
 
 
@@ -543,7 +542,8 @@ def test_import_dups_in_tsv(database, ccheck, caplog):
     prj_id = create_project(ADMIN_USER_ID, "Test LS 9")
 
     expected_errors = [
-        "In file m106_mn01_n3_sml/ecotaxa_m106_mn01_n3_sml_pls.tsv, line 4: (Object 'm106_mn01_n3_sml_1120', Image 'm106_mn01_n3_sml_1111.jpg') was seen before."
+        "In [base]/m106_mn01_n3_sml/ecotaxa_m106_mn01_n3_sml_pls.tsv:",
+        " - line 4: (Object 'm106_mn01_n3_sml_1120', Image 'm106_mn01_n3_sml_1111.jpg') is already in this TSV line 3.",
     ]
     # No skip, should fail
     params = ImportReq(source_path=str(ISSUES_DIR4), skip_existing_objects=False)
@@ -617,8 +617,9 @@ def test_import_sparse(database, caplog, tstlogs):
     job = wait_for_stable(rsp.job_id)
     errors = check_job_errors(job)
     assert errors == [
-        "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field acq_id is mandatory as there are some acq columns: ['acq_hardware', 'acq_imgtype', 'acq_instrument'].",
-        "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field sample_id is mandatory as there are some sample columns: ['sample_program', 'sample_ship', 'sample_stationid'].",
+        "In [base]/ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv:",
+        " - Field acq_id is mandatory as there are some acq columns: ['acq_hardware', 'acq_imgtype', 'acq_instrument'].",
+        " - Field sample_id is mandatory as there are some sample columns: ['sample_program', 'sample_ship', 'sample_stationid'].",
     ]
     print("\n".join(caplog.messages))
     with AsciiDumper() as sce:
@@ -638,8 +639,9 @@ def test_import_broken_TSV(database, caplog, tstlogs):
     job = wait_for_stable(rsp.job_id)
     errors = check_job_errors(job)
     assert errors == [
-        "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field acq_id is mandatory as there are some acq columns: ['acq_hardware', 'acq_imgtype', 'acq_instrument'].",
-        "In ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv, field sample_id is mandatory as there are some sample columns: ['sample_program', 'sample_ship', 'sample_stationid'].",
+        "In [base]/ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv:",
+        " - Field acq_id is mandatory as there are some acq columns: ['acq_hardware', 'acq_imgtype', 'acq_instrument'].",
+        " - Field sample_id is mandatory as there are some sample columns: ['sample_program', 'sample_ship', 'sample_stationid'].",
     ]
     print("\n".join(caplog.messages))
     with AsciiDumper() as sce:

@@ -72,11 +72,12 @@ class TSVFile(object):
     A tab-separated file, index of images with additional information about them.
     """
 
-    def __init__(self, path: Path, bundle_path: Path):
+    def __init__(self, path: Path, user_loc: str, bundle_path: Path):
         self.path: Path = path
+        self.user_loc: str = user_loc
         try:
             relative_file = path.relative_to(bundle_path)
-            # relative name for logging and recording what was done
+            # relative name for recording what was done
             self.relative_name: str = relative_file.as_posix()
             # Images take TSV directory as base. The TSV can be in a bundle's subdirectory.
             self.image_dir = path.parent
@@ -415,7 +416,7 @@ class TSVFile(object):
             # This cannot happen as step1 prevents it. However the code is left in case API evolves.
             logger.warning(
                 "In %s, field(s) %s not used, values will be ignored",
-                self.relative_name,
+                self.user_loc,
                 ko_fields,
             )
         return ok_fields
@@ -879,8 +880,8 @@ class TSVFile(object):
             split_col = a_field.split("_", 1)
             if len(split_col) != 2:
                 diag.error(
-                    "Invalid Header '%s' in file %s. Format must be Table_Field."
-                    % (a_field, self.relative_name)
+                    "Invalid Header '%s'. Format must be Table_Field." % a_field,
+                    self.user_loc,
                 )
                 continue
             # e.g. acq_sn -> acq
@@ -902,8 +903,9 @@ class TSVFile(object):
             target_table = GlobalMapping.TSV_table_to_table(tsv_table_prfx)
             if target_table not in GlobalMapping.POSSIBLE_TABLES:
                 diag.error(
-                    "Invalid Header '%s' in file %s. Unknown table prefix '%s'."
-                    % (a_field, self.relative_name, target_table)
+                    "Invalid Header '%s'. Unknown table prefix '%s'."
+                    % (a_field, target_table),
+                    self.user_loc,
                 )
                 continue
             if target_table not in (
@@ -919,8 +921,8 @@ class TSVFile(object):
                     sel_type = GlobalMapping.POSSIBLE_TYPES[sel_type]
                 except KeyError:
                     diag.error(
-                        "Invalid Type '%s' for Field '%s' in file %s. "
-                        "Incorrect Type." % (sel_type, a_field, self.relative_name)
+                        "Invalid Type '%s' for field '%s'." % (sel_type, a_field),
+                        self.user_loc,
                     )
                     continue
             # Add the new custom column
@@ -932,19 +934,20 @@ class TSVFile(object):
                 logger.info(
                     "New field %s found in file %s -> %s",
                     a_field,
-                    self.relative_name,
+                    self.user_loc,
                     real_name,
                 )
             else:
                 diag.error(
-                    "Field %s, in file %s, cannot be mapped. Too many custom fields, or bad type."
-                    % (a_field, self.relative_name)
+                    "Field %s cannot be mapped. Too many custom fields, or bad type."
+                    % a_field,
+                    self.user_loc,
                 )
             # Warn that project settings were extended, i.e. empty columns
             if not how.custom_mapping.was_empty:
                 diag.warn(
                     "New field %s found in file %s -> %s"
-                    % (a_field, self.relative_name, real_name)
+                    % (a_field, self.user_loc, real_name)
                 )
         # Ensure we have ids for all objects, at least potentially as we're just checking the header
         for a_prfx, fields in fields_per_prfx.items():
@@ -954,30 +957,32 @@ class TSVFile(object):
             if expected_id not in fields:
                 fields_for_msg = sorted(list(fields))  # Make the output predictable
                 diag.error(
-                    "In %s, field %s is mandatory as there are some %s columns: %s."
-                    % (self.relative_name, expected_id, a_prfx, fields_for_msg)
+                    "Field %s is mandatory as there are some %s columns: %s."
+                    % (expected_id, a_prfx, fields_for_msg),
+                    self.user_loc,
                 )
 
     def validate_content(self, how: ImportHow, diag: ImportDiagnostic):
         row_count_for_csv = 0
         vals_cache: Dict = {}
-        local_keys: Set[str] = set()
+        local_keys: Dict[str, int] = {}
         logged_parents: Set[Tuple[Any, Any]] = set()
         lig: Dict
         for lig in self.rdr:
             row_count_for_csv += 1
+            line_num = row_count_for_csv + 2
 
-            self.validate_line(how, diag, lig, vals_cache)
+            self.validate_line(how, diag, lig, line_num, vals_cache)
 
             # Verify the image file
             object_id = clean_value_and_none(lig.get("object_id", ""))
             if object_id == "":
                 diag.error(
-                    "Missing object_id in line '%s' of file %s. "
-                    % (row_count_for_csv, self.relative_name)
+                    "line %d: Missing object_id." % line_num,
+                    self.user_loc,
                 )
             img_file_name = clean_value_and_none(
-                lig.get("img_file_name", "MissingField img_file_name")
+                lig.get("img_file_name", "absent img_file_name")
             )
             # Below works as well for UVP6, as the file 'name' is in fact a relative path,
             # e.g. 'sub1/20200205-111823_3.png'
@@ -986,8 +991,8 @@ class TSVFile(object):
                 if not how.can_update_only:
                     # Images are not mandatory during update
                     diag.error(
-                        "Missing Image '%s' in file %s. "
-                        % (img_file_name, self.relative_name)
+                        "line %d: Missing Image '%s'." % (line_num, img_file_name),
+                        self.user_loc,
                     )
             else:
                 # noinspection PyBroadException
@@ -998,30 +1003,29 @@ class TSVFile(object):
                     # Drop the vault folder from the error message, if there.
                     exc_str = exc_str.replace(str(self.image_dir), "...")
                     diag.error(
-                        "Error while reading image '%s' from file %s: %s"
-                        % (img_file_name, self.relative_name, exc_str)
+                        "line %d: Error while reading image '%s': %s"
+                        % (line_num, img_file_name, exc_str),
+                        self.user_loc,
                     )
 
             # Verify duplicate images
             key_exist_obj = "%s*%s" % (object_id, img_file_name)
             if key_exist_obj in local_keys:
+                previous_line = local_keys[key_exist_obj]
                 diag.error(
-                    "In file %s, line %d: (Object '%s', Image '%s') was seen before."
-                    % (
-                        self.relative_name,
-                        row_count_for_csv + 2,
-                        object_id,
-                        img_file_name,
-                    )
+                    "line %d: (Object '%s', Image '%s') is already in this TSV line %d."
+                    % (line_num, object_id, img_file_name, previous_line),
+                    self.user_loc,
                 )
             elif not how.skip_object_duplicates:
                 # Ban the duplicates, except if we can skip them.
                 if key_exist_obj in diag.existing_objects_and_image:
                     diag.error(
-                        "Duplicate object '%s' Image '%s' in file %s. "
-                        % (object_id, img_file_name, self.relative_name)
+                        "line %d: (Object '%s', Image '%s') is already in EcoTaxa or being imported."
+                        % (line_num, object_id, img_file_name),
+                        self.user_loc,
                     )
-            local_keys.add(key_exist_obj)
+            local_keys[key_exist_obj] = row_count_for_csv + 2
 
             # Verify that we do not make the topology worse...
             if not how.can_update_only:
@@ -1049,28 +1053,38 @@ class TSVFile(object):
             if classif_qual != "":
                 if not classif_id:
                     diag.error(
-                        "When annotation status '%s' is provided there has to be a category, in file %s."
-                        % (classif_qual, self.relative_name)
+                        "line %d: When annotation status '%s' is provided there has to be a category."
+                        % (line_num, classif_qual),
+                        self.user_loc,
                     )
             # Verify that a present category is associated with a state
             if classif_id != "":
                 if classif_qual == "":
                     diag.error(
-                        "When a category (%s) is provided it has to be with a status, in file %s."
-                        % (classif_id, self.relative_name)
+                        "line %d: When a category (%s) is provided it has to be with a status."
+                        % (line_num, classif_id),
+                        self.user_loc,
                     )
 
-        # For next TSV analysis
-        diag.existing_objects_and_image.update(local_keys)
+        # For other TSV analysis
+        diag.existing_objects_and_image.update(local_keys.keys())
 
         return row_count_for_csv
 
-    def validate_line(self, how: ImportHow, diag: ImportDiagnostic, lig, vals_cache):
+    def validate_line(
+        self,
+        how: ImportHow,
+        diag: ImportDiagnostic,
+        lig: Dict[str, str],
+        line_num: int,
+        vals_cache: Dict,
+    ):
         """
             Validate a line from data point of view.
         :param how:
         :param diag:
         :param lig:
+        :param line_num: User (from 1) line number
         :param vals_cache:
         :return:
         """
@@ -1108,9 +1122,9 @@ class TSVFile(object):
                 vf = convert_degree_minute_float_to_decimal_degree(csv_val)
                 if vf is None or vf < -90 or vf > 90:
                     diag.error(
-                        "Invalid Lat. value '%s' for Field '%s' in file %s. "
-                        "Incorrect range -90/+90°."
-                        % (csv_val, raw_field, self.relative_name)
+                        "line %d: Invalid Lat. value '%s' for field '%s'. "
+                        "Correct range is -90/+90°." % (line_num, csv_val, raw_field),
+                        self.user_loc,
                     )
                     del vals_cache[cache_key]
                 else:
@@ -1119,16 +1133,17 @@ class TSVFile(object):
                 vf = convert_degree_minute_float_to_decimal_degree(csv_val)
                 if vf is None or vf < -180 or vf > 180:
                     diag.error(
-                        "Invalid Long. value '%s' for Field '%s' in file %s. "
-                        "Incorrect range -180/+180°."
-                        % (csv_val, raw_field, self.relative_name)
+                        "line %d: Invalid Long. value '%s' for field '%s'. "
+                        "Correct range is -180/+180°." % (line_num, csv_val, raw_field),
+                        self.user_loc,
                     )
             elif is_numeric:
                 vf = to_float(csv_val)
                 if vf is None:
                     diag.error(
-                        "Invalid float value '%s' for Field '%s' in file %s."
-                        % (csv_val, raw_field, self.relative_name)
+                        "line %d: Invalid float value '%s' for field '%s'."
+                        % (line_num, csv_val, raw_field),
+                        self.user_loc,
                     )
                 elif a_field == "object_annotation_category_id":
                     diag.classif_id_seen.add(int(vf))
@@ -1137,16 +1152,18 @@ class TSVFile(object):
                     ObjectHeader.date_from_txt(csv_val)
                 except ValueError:
                     diag.error(
-                        "Invalid Date value '%s' for Field '%s' in file %s."
-                        % (csv_val, raw_field, self.relative_name)
+                        "line %d: Invalid Date value '%s' for field '%s'."
+                        % (line_num, csv_val, raw_field),
+                        self.user_loc,
                     )
             elif a_field in ("object_time", "object_annotation_time"):
                 try:
                     ObjectHeader.time_from_txt(csv_val)
                 except ValueError:
                     diag.error(
-                        "Invalid Time value '%s' for Field '%s' in file %s."
-                        % (csv_val, raw_field, self.relative_name)
+                        "line %d: Invalid Time value '%s' for field '%s'."
+                        % (line_num, csv_val, raw_field),
+                        self.user_loc,
                     )
             elif a_field == "object_annotation_category":
                 if (
@@ -1166,8 +1183,9 @@ class TSVFile(object):
             elif a_field == "object_annotation_status":
                 if csv_val != "noid" and csv_val.lower() not in classif_qual_revert:
                     diag.error(
-                        "Invalid Annotation Status '%s' for Field '%s' in file %s."
-                        % (csv_val, raw_field, self.relative_name)
+                        "line %d: Invalid Annotation Status '%s' for field '%s'."
+                        % (line_num, csv_val, raw_field),
+                        self.user_loc,
                     )
         # Update missing GPS count
         if not latitude_was_seen:
