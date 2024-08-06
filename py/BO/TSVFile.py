@@ -121,7 +121,9 @@ class TSVFile(object):
         try:
             line_2 = self.rdr.__next__()
             self.type_line = {
-                clean_fields[raw_field]: v for raw_field, v in line_2.items()
+                clean_fields[raw_field]: v
+                for raw_field, v in line_2.items()
+                if raw_field is not None
             }
         except StopIteration:
             self.type_line = {}
@@ -1075,7 +1077,7 @@ class TSVFile(object):
         self,
         how: ImportHow,
         diag: ImportDiagnostic,
-        lig: Dict[str, str],
+        lig: Dict[Optional[str], str],
         line_num: int,
         vals_cache: Dict,
     ):
@@ -1088,6 +1090,13 @@ class TSVFile(object):
         :param vals_cache:
         :return:
         """
+        if None in lig.keys():
+            diag.error(
+                "line %d: Value(s) %s must not be in a header-less column."
+                % (line_num, lig[None]),
+                self.user_loc,
+            )
+            return
         latitude_was_seen = False
         predefined_mapping = GlobalMapping.PREDEFINED_FIELDS
         second_mapping = GlobalMapping.DOUBLED_FIELDS
