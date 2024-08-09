@@ -7,13 +7,14 @@
 import time
 
 from API_operations.GPU_Prediction import GPUPredictForProject
+from API_operations.GPU_FeatureExtraction import GPUFeatureExtractionForProject
 from BG_operations.JobScheduler import JobScheduler
 from DB.helpers.Connection import Connection
 
 
 def main():
     Connection.APP_NAME = "ecotaxa_gpu_back"
-    JobScheduler.INCLUDE = [GPUPredictForProject.JOB_TYPE]
+    JobScheduler.INCLUDE = [GPUPredictForProject.JOB_TYPE, GPUFeatureExtractionForProject.JOB_TYPE]
     # As soon as something is running, exit and free all resources
     # the 'exit' will wait for the thread, i.e. job, to finish.
     while JobScheduler.the_runner is None:
