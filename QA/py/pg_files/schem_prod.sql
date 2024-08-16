@@ -44,6 +44,12 @@ CREATE EXTENSION IF NOT EXISTS tsm_system_time WITH SCHEMA public;
 
 COMMENT ON EXTENSION tsm_system_time IS 'TABLESAMPLE method which accepts time in milliseconds as a limit';
 
+--
+-- Name: vector; Type: EXTENSION; Schema: -; Owner: -
+--
+
+CREATE EXTENSION IF NOT EXISTS vector; 
+
 
 SET default_tablespace = '';
 

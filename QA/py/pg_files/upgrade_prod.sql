@@ -2221,8 +2221,6 @@ UPDATE alembic_version SET version_num='0a3132f436fb' WHERE alembic_version.vers
 
 -- Running upgrade 0a3132f436fb -> a9dd3c62b7b0
 
-CREATE EXTENSION vector;
-
 CREATE TABLE obj_cnn_features_vector (
     objcnnid BIGINT NOT NULL,
     features VECTOR(50),
