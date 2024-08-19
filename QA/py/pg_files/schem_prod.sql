@@ -48,7 +48,8 @@ COMMENT ON EXTENSION tsm_system_time IS 'TABLESAMPLE method which accepts time i
 -- Name: vector; Type: EXTENSION; Schema: -; Owner: -
 --
 
-CREATE EXTENSION IF NOT EXISTS vector; 
+-- doesn't work and should be there in ankane
+-- CREATE EXTENSION IF NOT EXISTS vector; 
 
 
 SET default_tablespace = '';
