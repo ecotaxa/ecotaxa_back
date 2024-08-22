@@ -192,24 +192,9 @@ _meta_emofs_with_computations = r"""
     <field index="2" term="http://rs.tdwg.org/dwc/terms/measurementValue"/>
     <field index="3" term="http://rs.tdwg.org/dwc/terms/measurementType"/>
     <field index="4" term="http://rs.tdwg.org/dwc/terms/measurementUnit"/>
-    <field index="5" term="http://rs.iobis.org/obis/terms/measurementTypeID"/>
-    <field index="6" term="http://rs.iobis.org/obis/terms/measurementUnitID"/>
-  </extension>
-</archive>
-
-"""
-# No occurence emof -> 2 columns less
-_meta_emofs_no_computations = r"""
-  <extension encoding="UTF-8" fieldsTerminatedBy="\t" linesTerminatedBy="\n" fieldsEnclosedBy="" 
-        ignoreHeaderLines="1" rowType="http://rs.iobis.org/obis/terms/ExtendedMeasurementOrFact">
-    <files>
-      <location>extendedmeasurementorfact.txt</location>
-    </files> 
-    <coreid index="0"/>
-    <field index="1" term="http://rs.tdwg.org/dwc/terms/occurrenceID"/>
-    <field index="2" term="http://rs.tdwg.org/dwc/terms/measurementValue"/>
-    <field index="3" term="http://rs.tdwg.org/dwc/terms/measurementType"/>
-    <field index="4" term="http://rs.iobis.org/obis/terms/measurementTypeID"/>
+    <field index="5" term="http://rs.iobis.org/obis/terms/measurementValueID"/>
+    <field index="6" term="http://rs.iobis.org/obis/terms/measurementTypeID"/>
+    <field index="7" term="http://rs.iobis.org/obis/terms/measurementUnitID"/>
   </extension>
 </archive>
 
@@ -252,67 +237,67 @@ m106_mn04_n6_sml	m106_mn04_n6_sml	m106_mn04_n6_sml_56693	MachineObservation	Acti
 """
 _occurence_with_absent = ""
 _emofs = r"""
-id	occurrenceID	measurementValue	measurementType	measurementUnit	measurementTypeID	measurementUnitID
-m106_mn01_n1_sml	m106_mn01_n1_sml_78418	2	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
-m106_mn01_n1_sml	m106_mn01_n1_sml_78418	0.04	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
-m106_mn01_n1_sml	m106_mn01_n1_sml_78418	1992121.390848	Biovolume of biological entity specified elsewhere per unit volume of the water body	Cubic millimetres per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/	http://vocab.nerc.ac.uk/collection/P06/current/CMCM/
-m106_mn01_n1_sml	m106_mn01_n1_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
-m106_mn01_n1_sml	m106_mn01_n1_sml_45072	0.02	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
-m106_mn01_n1_sml	m106_mn01_n1_sml_45072	355604.586438	Biovolume of biological entity specified elsewhere per unit volume of the water body	Cubic millimetres per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/	http://vocab.nerc.ac.uk/collection/P06/current/CMCM/
-m106_mn01_n1_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
-m106_mn01_n2_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
-m106_mn01_n3_sml	m106_mn01_n3_sml_56693	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
-m106_mn01_n3_sml	m106_mn01_n3_sml_56693	0.02	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
-m106_mn01_n3_sml	m106_mn01_n3_sml_56693	200279.314771	Biovolume of biological entity specified elsewhere per unit volume of the water body	Cubic millimetres per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/	http://vocab.nerc.ac.uk/collection/P06/current/CMCM/
-m106_mn01_n3_sml	m106_mn01_n3_sml_P_56693	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
-m106_mn01_n3_sml	m106_mn01_n3_sml_P_56693	0.02	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
-m106_mn01_n3_sml	m106_mn01_n3_sml_P_56693	194359.383023	Biovolume of biological entity specified elsewhere per unit volume of the water body	Cubic millimetres per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/	http://vocab.nerc.ac.uk/collection/P06/current/CMCM/
-m106_mn01_n3_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
-{p1}_m106_mn04_n4_sml	{p1}_m106_mn04_n4_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
-{p1}_m106_mn04_n4_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
-m106_mn04_n5_sml	m106_mn04_n5_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
-m106_mn04_n5_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
-m106_mn04_n6_sml	m106_mn04_n6_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
-m106_mn04_n6_sml	m106_mn04_n6_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
-m106_mn04_n6_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
-{p2}_m106_mn04_n4_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
+id	occurrenceID	measurementValue	measurementType	measurementUnit	measurementValueID	measurementTypeID	measurementUnitID
+m106_mn01_n1_sml	m106_mn01_n1_sml_78418	2	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn01_n1_sml	m106_mn01_n1_sml_78418	0.04	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre		http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
+m106_mn01_n1_sml	m106_mn01_n1_sml_78418	1992121.390848	Biovolume of biological entity specified elsewhere per unit volume of the water body	Cubic millimetres per cubic metre		http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/	http://vocab.nerc.ac.uk/collection/P06/current/CMCM/
+m106_mn01_n1_sml	m106_mn01_n1_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn01_n1_sml	m106_mn01_n1_sml_45072	0.02	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre		http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
+m106_mn01_n1_sml	m106_mn01_n1_sml_45072	355604.586438	Biovolume of biological entity specified elsewhere per unit volume of the water body	Cubic millimetres per cubic metre		http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/	http://vocab.nerc.ac.uk/collection/P06/current/CMCM/
+m106_mn01_n1_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+m106_mn01_n2_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+m106_mn01_n3_sml	m106_mn01_n3_sml_56693	1	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn01_n3_sml	m106_mn01_n3_sml_56693	0.02	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre		http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
+m106_mn01_n3_sml	m106_mn01_n3_sml_56693	200279.314771	Biovolume of biological entity specified elsewhere per unit volume of the water body	Cubic millimetres per cubic metre		http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/	http://vocab.nerc.ac.uk/collection/P06/current/CMCM/
+m106_mn01_n3_sml	m106_mn01_n3_sml_P_56693	1	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn01_n3_sml	m106_mn01_n3_sml_P_56693	0.02	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre		http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
+m106_mn01_n3_sml	m106_mn01_n3_sml_P_56693	194359.383023	Biovolume of biological entity specified elsewhere per unit volume of the water body	Cubic millimetres per cubic metre		http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/	http://vocab.nerc.ac.uk/collection/P06/current/CMCM/
+m106_mn01_n3_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+{p1}_m106_mn04_n4_sml	{p1}_m106_mn04_n4_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+{p1}_m106_mn04_n4_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+m106_mn04_n5_sml	m106_mn04_n5_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn04_n5_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+m106_mn04_n6_sml	m106_mn04_n6_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn04_n6_sml	m106_mn04_n6_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn04_n6_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+{p2}_m106_mn04_n4_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
 """
 _emofs_78418_becomes_45072 = r"""
-id	occurrenceID	measurementValue	measurementType	measurementUnit	measurementTypeID	measurementUnitID
-m106_mn01_n1_sml	m106_mn01_n1_sml_45072	3	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
-m106_mn01_n1_sml	m106_mn01_n1_sml_45072	0.06	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
-m106_mn01_n1_sml	m106_mn01_n1_sml_45072	2347725.977286	Biovolume of biological entity specified elsewhere per unit volume of the water body	Cubic millimetres per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/	http://vocab.nerc.ac.uk/collection/P06/current/CMCM/
-m106_mn01_n1_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
-m106_mn01_n2_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
-m106_mn01_n3_sml	m106_mn01_n3_sml_56693	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
-m106_mn01_n3_sml	m106_mn01_n3_sml_56693	0.02	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
-m106_mn01_n3_sml	m106_mn01_n3_sml_56693	200279.314771	Biovolume of biological entity specified elsewhere per unit volume of the water body	Cubic millimetres per cubic metre	http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/	http://vocab.nerc.ac.uk/collection/P06/current/CMCM/
-m106_mn01_n3_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
-{p1}_m106_mn04_n4_sml	{p1}_m106_mn04_n4_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
-{p1}_m106_mn04_n4_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
-m106_mn04_n5_sml	m106_mn04_n5_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
-m106_mn04_n5_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
-m106_mn04_n6_sml	m106_mn04_n6_sml_45072	2	Count (in assayed sample) of biological entity specified elsewhere		http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
-m106_mn04_n6_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
-{p2}_m106_mn04_n4_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/	
+id	occurrenceID	measurementValue	measurementType	measurementUnit	measurementValueID	measurementTypeID	measurementUnitID
+m106_mn01_n1_sml	m106_mn01_n1_sml_45072	3	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn01_n1_sml	m106_mn01_n1_sml_45072	0.06	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre		http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
+m106_mn01_n1_sml	m106_mn01_n1_sml_45072	2347725.977286	Biovolume of biological entity specified elsewhere per unit volume of the water body	Cubic millimetres per cubic metre		http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/	http://vocab.nerc.ac.uk/collection/P06/current/CMCM/
+m106_mn01_n1_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+m106_mn01_n2_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+m106_mn01_n3_sml	m106_mn01_n3_sml_56693	1	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn01_n3_sml	m106_mn01_n3_sml_56693	0.02	Abundance of biological entity specified elsewhere per unit volume of the water body	Number per cubic metre		http://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/	http://vocab.nerc.ac.uk/collection/P06/current/UPMM/
+m106_mn01_n3_sml	m106_mn01_n3_sml_56693	200279.314771	Biovolume of biological entity specified elsewhere per unit volume of the water body	Cubic millimetres per cubic metre		http://vocab.nerc.ac.uk/collection/P01/current/CVOLUKNB/	http://vocab.nerc.ac.uk/collection/P06/current/CMCM/
+m106_mn01_n3_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+{p1}_m106_mn04_n4_sml	{p1}_m106_mn04_n4_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+{p1}_m106_mn04_n4_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+m106_mn04_n5_sml	m106_mn04_n5_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn04_n5_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+m106_mn04_n6_sml	m106_mn04_n6_sml_45072	2	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn04_n6_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+{p2}_m106_mn04_n4_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
 """
 _emofs_no_computations = r"""
-id	occurrenceID	measurementValue	measurementType	measurementTypeID
-m106_mn01_n1_sml	m106_mn01_n1_sml_78418	2	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
-m106_mn01_n1_sml	m106_mn01_n1_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
-m106_mn01_n1_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name	https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
-m106_mn01_n2_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name	https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
-m106_mn01_n3_sml	m106_mn01_n3_sml_56693	1	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
-m106_mn01_n3_sml	m106_mn01_n3_sml_P_56693	1	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
-m106_mn01_n3_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name	https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
-{p1}_m106_mn04_n4_sml	{p1}_m106_mn04_n4_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
-{p1}_m106_mn04_n4_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name	https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
-m106_mn04_n5_sml	m106_mn04_n5_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
-m106_mn04_n5_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name	https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
-m106_mn04_n6_sml	m106_mn04_n6_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
-m106_mn04_n6_sml	m106_mn04_n6_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere	http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/
-m106_mn04_n6_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name	https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
-{p2}_m106_mn04_n4_sml		http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/	Imaging instrument name	https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+id	occurrenceID	measurementValue	measurementType	measurementUnit	measurementValueID	measurementTypeID	measurementUnitID
+m106_mn01_n1_sml	m106_mn01_n1_sml_78418	2	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn01_n1_sml	m106_mn01_n1_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn01_n1_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+m106_mn01_n2_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+m106_mn01_n3_sml	m106_mn01_n3_sml_56693	1	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn01_n3_sml	m106_mn01_n3_sml_P_56693	1	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn01_n3_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+{p1}_m106_mn04_n4_sml	{p1}_m106_mn04_n4_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+{p1}_m106_mn04_n4_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+m106_mn04_n5_sml	m106_mn04_n5_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn04_n5_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+m106_mn04_n6_sml	m106_mn04_n6_sml_45072	1	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn04_n6_sml	m106_mn04_n6_sml_78418	1	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	
+m106_mn04_n6_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
+{p2}_m106_mn04_n4_sml		Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor	Imaging instrument name	Not applicable	http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/		https://vocab.nerc.ac.uk/collection/P06/current/XXXX/
 """
 
 
@@ -320,7 +305,7 @@ def ref_zip(prj1, prj2):
     return {
         "event.txt": _event.format(p1=prj1, p2=prj2),
         "eml.xml": _eml,
-        "extendedmeasurementorfact.txt": _emofs.format(p1=prj1, p2=prj2),
+        "extendedmeasurementorfact.txt": _emofs.format(p1=prj1, p2=prj2, UVP6="{UVP6}"),
         "meta.xml": _meta + _occurences_meta + _meta_emofs_with_computations,
         "occurrence.txt": _occurence.format(p1=prj1, p2=prj2),
     }
@@ -330,7 +315,7 @@ def with_absent_zip(prj1, prj2):
     return {
         "event.txt": _event.format(p1=prj1, p2=prj2),
         "eml.xml": _eml,
-        "extendedmeasurementorfact.txt": _emofs.format(p1=prj1, p2=prj2),
+        "extendedmeasurementorfact.txt": _emofs.format(p1=prj1, p2=prj2, UVP6="{UVP6}"),
         "meta.xml": _meta + _occurences_meta + _meta_emofs_with_computations,
         "occurrence.txt": _occurence.format(p1=prj1, p2=prj2)
         + _occurence_with_absent.format(p1=prj1, p2=prj2),
@@ -342,9 +327,9 @@ def no_computations_zip(prj1, prj2):
         "event.txt": _event.format(p1=prj1, p2=prj2),
         "eml.xml": _eml,
         "extendedmeasurementorfact.txt": _emofs_no_computations.format(
-            p1=prj1, p2=prj2
+            p1=prj1, p2=prj2, UVP6="{UVP6}"
         ),
-        "meta.xml": _meta + _occurences_meta + _meta_emofs_no_computations,
+        "meta.xml": _meta + _occurences_meta + _meta_emofs_with_computations,
         "occurrence.txt": _occurence.format(p1=prj1, p2=prj2),
     }
 
@@ -384,7 +369,9 @@ def with_recast_zip(prj1, prj2):
     return {
         "event.txt": _event.format(p1=prj1, p2=prj2),
         "eml.xml": _eml,
-        "extendedmeasurementorfact.txt": _emofs_recasted.format(p1=prj1, p2=prj2),
+        "extendedmeasurementorfact.txt": _emofs_recasted.format(
+            p1=prj1, p2=prj2, UVP6="{UVP6}"
+        ),
         "meta.xml": _meta
         + _occurences_meta_no_verif_status
         + _meta_emofs_with_computations,
@@ -395,7 +382,7 @@ def with_recast_zip(prj1, prj2):
                 "{p1}_m106_mn04_n4_sml_45072",
             ),
             "m106_mn01_n3_sml_P_56693",  # Remove Predicted output
-        ).format(p1=prj1, p2=prj2),
+        ).format(p1=prj1, p2=prj2, UVP6="{UVP6}"),
     }
 
 
@@ -404,7 +391,7 @@ def with_recast_zip2(prj1, prj2):
         "event.txt": _event.format(p1=prj1, p2=prj2),
         "eml.xml": _eml,
         "extendedmeasurementorfact.txt": _emofs_78418_becomes_45072.format(
-            p1=prj1, p2=prj2
+            p1=prj1, p2=prj2, UVP6="{UVP6}"
         ),
         "meta.xml": _meta
         + _occurences_meta_no_verif_status
@@ -415,5 +402,5 @@ def with_recast_zip2(prj1, prj2):
                 "m106_mn01_n1_sml_56693",
             ),
             "m106_mn01_n3_sml_P_56693",  # Remove Predicted output
-        ).format(p1=prj1, p2=prj2),
+        ).format(p1=prj1, p2=prj2, UVP6="{UVP6}"),
     }
