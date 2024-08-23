@@ -57,7 +57,7 @@ Specifications and supervision
 Current developers
 
 - Béatrice Caraveo, [Laboratoire d'Océanographie de Villefranche (LOV)][lov], Sorbonne Université
-- Laurent Salinas, Devinitif (previously  [Laboratoire d'Océanographie de Villefranche (LOV)][lov], Sorbonne Université)
+- Laurent Salinas, DevInitIf (previously  [Laboratoire d'Océanographie de Villefranche (LOV)][lov], Sorbonne Université)
 - Julie Coustenoble, [Laboratoire d'Océanographie de Villefranche (LOV)][lov], Sorbonne Université
 
 Past contributors
