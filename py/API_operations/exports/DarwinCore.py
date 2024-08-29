@@ -76,6 +76,7 @@ from formats.DarwinCore.models import (
 )
 from helpers.DateTime import now_time
 from helpers.DynamicLogs import get_logger, LogsSwitcher
+from providers.NERC import NERCFetcher
 from ..helpers.JobService import JobServiceBase, ArgsDict
 
 logger = get_logger(__name__)
@@ -770,15 +771,19 @@ class DarwinCoreExport(JobServiceBase):
             )
 
     @lru_cache(maxsize=None)
-    def _get_instrument_url(self, project: Project):
-        """Cache projects' instrument URL"""
-        ret = project.instrument.bodc_url
-        if ret is None:
+    def _get_instrument_url_and_label(
+        self, project: Project
+    ) -> Optional[Tuple[str, str]]:
+        """Cache projects' instrument URL, and looked up label"""
+        url = project.instrument.bodc_url
+        if url is None:
             self.warnings.append(
                 "Project %s instrument does not have an associated BODC term."
                 % (project.projid,)
             )
-        return ret
+            return None
+        label = NERCFetcher.get_preferred_name(url)
+        return url, label
 
     def add_instrument_eMoFs_about_sample(
         self, sample: Sample, arch: DwC_Archive, event_id: str
@@ -786,9 +791,13 @@ class DarwinCoreExport(JobServiceBase):
         """
         Add imaging instrument eMoF. Unsure at which level the event should be, so kept separated.
         """
-        instrument_url = self._get_instrument_url(sample.project)
-        if instrument_url is not None:
-            ins = ImagingInstrumentName(event_id=event_id, value=instrument_url)
+        instrument_url_and_label = self._get_instrument_url_and_label(sample.project)
+        if instrument_url_and_label is not None:
+            ins = ImagingInstrumentName(
+                event_id=event_id,
+                value_id=instrument_url_and_label[0],
+                value=instrument_url_and_label[1],
+            )
             arch.emofs.add(ins)
 
     @classmethod

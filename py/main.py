@@ -108,7 +108,6 @@ from API_operations.Status import StatusService
 from API_operations.Subset import SubsetServiceOnProject
 from API_operations.TaxoManager import TaxonomyChangeService, CentralTaxonomyService
 from API_operations.TaxonomyService import TaxonomyService
-from API_operations.UserFilesFolder import UserFilesFolderService
 from API_operations.UserFolder import UserFolderService, CommonFolderService
 from API_operations.admin.Database import DatabaseService
 from API_operations.admin.ImageManager import ImageManagerService
@@ -926,6 +925,7 @@ MyORJSONResponse.register(TaxonBO, TaxonModel)
 MyORJSONResponse.register(ObjectSetQueryRsp, ObjectSetQueryRsp)
 
 project_model_columns = plain_columns(ProjectModel)
+
 
 # TODO JCE - description
 # TODO TODO TODO: No verification of GET query parameters by FastAPI. pydantic does POST models OK.

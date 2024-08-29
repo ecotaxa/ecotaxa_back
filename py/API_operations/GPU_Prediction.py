@@ -45,6 +45,9 @@ class GPUPredictForProject(PredictForProject):
     # Remove columns with absent values % exceeding the constant below
     MAX_NO_VAL = 0.25
 
+    # Prohibit a learning set larger than below, it takes too many resources
+    MAX_LEARNING_SET_SIZE = 350000
+
     def do_prediction(self) -> None:
         """
         The real job.
@@ -68,6 +71,11 @@ class GPUPredictForProject(PredictForProject):
             used_features,
             np_medians_per_feat,
         ) = self.build_learning_set(req)
+        ls_size = np_feature_vals.shape[0]
+        if ls_size > self.MAX_LEARNING_SET_SIZE:
+            self.report_ls_too_large(ls_size)
+            return
+
         self.update_progress(20, "Training the classifier")
         classifier = self.build_classifier(np_feature_vals, classif_ids)
 
@@ -81,6 +89,27 @@ class GPUPredictForProject(PredictForProject):
         self.update_progress(100, final_message)
         done_infos = {"rowcount": nb_rows}
         self.set_job_result(errors=[], infos=done_infos)
+
+    def report_ls_too_large(self, ls_size: int) -> None:
+        logger.error(
+            "Learning set too large: {} vs machine maximum of {}".format(
+                ls_size, self.MAX_LEARNING_SET_SIZE
+            )
+        )
+        logger.info(
+            """
+To correct the situation, you might:
+In first step 'Choice of Learning Set data source', use fewer example projects.  
+In second step 'Choice of Learning Set categories and size', where the learning set size is displayed:
+    - lower the number of objects per category (currently set at {}). 
+    - unselect some categories by clicking in '# source' column.""".format(
+                self.req.learning_limit
+            )
+        )
+        self.set_job_result(
+            errors=["Learning set is too large"], infos={"status": "error"}
+        )
+        self.update_progress(100, "Done")
 
     def build_learning_set(
         self, req: PredictionReq
