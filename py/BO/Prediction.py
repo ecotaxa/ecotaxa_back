@@ -131,7 +131,8 @@ class DeepFeatures(object):
         ret = np.ndarray(shape=(len(oid_lst), N_DEEP_FEATURES), dtype=np.float32)
         ndx = 0
         for a_row in res:
-            ret[ndx] = [float(x) for x in a_row["features"].strip("[]").split(",")]
+            all_feats = a_row["features"].strip("[]").split(",") if type(a_row["features"]) == str else a_row["features"]            
+            ret[ndx] = [float(x) for x in all_feats]
             ndx += 1
         assert ndx == len(
             oid_lst
