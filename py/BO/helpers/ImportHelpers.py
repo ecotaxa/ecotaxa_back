@@ -30,6 +30,7 @@ class ImportDiagnostic(object):
         self.nb_objects_without_gps = 0
         self.messages: List[str] = []
         self.errors: List[str] = []
+        self.error_context: Optional[str] = None
         # existing objects for consistency checks
         self.existing_objects_and_image: Set[str] = set()
         self.topology = ProjectTopology()
@@ -39,8 +40,15 @@ class ImportDiagnostic(object):
     def warn(self, message: str):
         self.messages.append(message)
 
-    def error(self, message: str):
-        self.errors.append(message)
+    def error(self, message: str, context: Optional[str] = None):
+        if context is not None:
+            if context != self.error_context:
+                self.errors.append("In " + context + ":")
+                self.error_context = context
+            self.errors.append(" - " + message)
+        else:
+            self.error_context = None
+            self.errors.append(message)
 
 
 class ImportWhere(object):
@@ -66,7 +74,7 @@ class ImportHow(object):
         custom_mapping: ProjectMapping,
         skip_object_duplicates: bool,
         loaded_files: List[str],
-        user_id: UserIDT
+        user_id: UserIDT,
     ):
         self.prj_id = prj_id
         # Update or create

@@ -19,15 +19,11 @@ from fastapi.openapi.models import OAuthFlows as OAuthFlowsModel
 from fastapi.security import OAuth2
 from fastapi.security.utils import get_authorization_scheme_param
 from itsdangerous import URLSafeTimedSerializer, TimestampSigner, SignatureExpired, BadSignature  # type: ignore
-# noinspection PyPackageRequirements
-from pydantic.main import BaseModel  # fmt:skip
+from pydantic.main import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
-# noinspection PyPackageRequirements
-from starlette.responses import JSONResponse, StreamingResponse  # fmt:skip
-from starlette.responses import Response
-# noinspection PyPackageRequirements
-from starlette.status import HTTP_403_FORBIDDEN, HTTP_204_NO_CONTENT  # fmt:skip
+from starlette.responses import Response, JSONResponse, StreamingResponse
+from starlette.status import HTTP_403_FORBIDDEN, HTTP_204_NO_CONTENT
 
 from helpers.AppConfig import Config
 from .starlette import status, PlainTextResponse
@@ -70,6 +66,7 @@ def dump_openapi(app: FastAPI, main_path: str):  # pragma: no cover
         allow_nan=False,
         indent=2,
         separators=(",", ":"),
+        # sort_keys=True, # Uncomment for easier comparison b/w versions
     )
     # Copy here for Git commit but also into another dev tree
     parent_dir = dirname(main_path)

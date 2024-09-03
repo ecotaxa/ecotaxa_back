@@ -4,13 +4,15 @@
 #
 # Send Account registration , status information and validation emails
 #
-from datetime import datetime, timedelta
-from typing import Optional, Final, Tuple, Dict, Any
-from enum import Enum
-from helpers.DynamicLogs import get_logger
-from email.message import EmailMessage
-from fastapi import HTTPException
 import smtplib
+from datetime import datetime, timedelta
+from email.message import EmailMessage
+from enum import Enum
+from typing import Optional, Final, Tuple, Dict, Any
+
+from fastapi import HTTPException
+
+from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
     DETAIL_TEMPLATE_NOT_FOUND,
     DETAIL_INVALID_PARAMETER,
@@ -23,7 +25,6 @@ from helpers.httpexception import (
     DETAIL_SMTP_RESPONSE_ERROR,
     DETAIL_IMAP4_ERROR,
     DETAIL_UNKNOWN_ERROR,
-    DETAIL_SSL_ERROR,
 )
 
 logger = get_logger(__name__)

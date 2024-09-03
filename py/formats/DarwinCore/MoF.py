@@ -91,8 +91,8 @@ class SamplingInstrumentName(DwC_ExtendedMeasurementOrFact):
     def __init__(self, event_id: str, value: str, value_id: str):
         super().__init__(
             eventID=event_id,
-            measurementType="Sampling instrument name",
-            measurementTypeID="http://vocab.nerc.ac.uk/collection/Q01/current/Q0100002/",
+            measurementType="Name of sampling instrument",
+            measurementTypeID="http://vocab.nerc.ac.uk/collection/P01/current/NMSPINST/",
             measurementValue=value,  # e.g."Otter-Trawl Maireta System (OTMS)",
             measurementValueID=value_id,
         )
@@ -114,10 +114,10 @@ class SampleDeviceApertureAreaInSquareMeters(DwC_ExtendedMeasurementOrFact):
     def __init__(self, event_id: str, value: str):
         super().__init__(
             eventID=event_id,
-            measurementType="Sampling device aperture surface area",
+            measurementType="Area of sample collector (aperture) {mouth area}",
             # The 2-dimensional size of the opening of a sampling device (e.g. a grab or a trawl);
             # the type of device is specified elsewhere.
-            measurementTypeID="http://vocab.nerc.ac.uk/collection/Q01/current/Q0100017/",
+            measurementTypeID="http://vocab.nerc.ac.uk/collection/P01/current/MTHAREA1/",
             measurementValue=value,
             measurementUnit="Square metres",
             measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/UMSQ/",
@@ -125,14 +125,13 @@ class SampleDeviceApertureAreaInSquareMeters(DwC_ExtendedMeasurementOrFact):
 
 
 class SampleDeviceApertureLength(DwC_ExtendedMeasurementOrFact):
-    # also width in http://vocab.nerc.ac.uk/collection/Q01/current/Q0100013/
     def __init__(self, event_id: str, value: str):
         super().__init__(
             eventID=event_id,
-            measurementType="Sampling device aperture length",
+            measurementType="Height of sample collector (aperture) {mouth height}",
             # The larger dimension of the sampling area of a device with a rectangular aperture (e.g. a grab);
             # the type of device is specified elsewhere.
-            measurementTypeID="http://vocab.nerc.ac.uk/collection/Q01/current/Q0100014/",
+            measurementTypeID="http://vocab.nerc.ac.uk/collection/P01/current/MTHHGHT1/",
             measurementValue=value,
             measurementUnit="Metres",
             measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/ULAA/",
@@ -143,8 +142,8 @@ class SampleDeviceDiameterInMeters(DwC_ExtendedMeasurementOrFact):
     def __init__(self, event_id: str, value: str):
         super().__init__(
             eventID=event_id,
-            measurementType="Sampling device aperture diameter",
-            measurementTypeID="http://vocab.nerc.ac.uk/collection/Q01/current/Q0100012/",
+            measurementType="Diameter of sample collector (aperture)",
+            measurementTypeID="http://vocab.nerc.ac.uk/collection/P01/current/DSAMPA01/",
             measurementValue=value,
             measurementUnit="Metres",
             measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/ULAA/",
@@ -155,8 +154,8 @@ class SamplingNetMeshSizeInMillimeters(DwC_ExtendedMeasurementOrFact):
     def __init__(self, event_id: str, value: str):
         super().__init__(
             eventID=event_id,
-            measurementType="Sampling net mesh size",
-            measurementTypeID="http://vocab.nerc.ac.uk/collection/Q01/current/Q0100015/",
+            measurementType="Mesh size of sample collector",
+            measurementTypeID="http://vocab.nerc.ac.uk/collection/P01/current/MSHSIZE1/",
             measurementValue=value,
             measurementUnit="Millimetres",
             measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/UXMM/",
@@ -167,8 +166,8 @@ class SamplingNetMeshSizeInMicrons(DwC_ExtendedMeasurementOrFact):
     def __init__(self, event_id: str, value: str):
         super().__init__(
             eventID=event_id,
-            measurementType="Sampling net mesh size",
-            measurementTypeID="http://vocab.nerc.ac.uk/collection/Q01/current/Q0100015/",
+            measurementType="Mesh size of sample collector",
+            measurementTypeID="http://vocab.nerc.ac.uk/collection/P01/current/MSHSIZE1/",
             measurementValue=value,
             measurementUnit="Micrometres (microns)",
             measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/UMIC/",
@@ -188,11 +187,16 @@ class SampleVolumeInCubicMeters(DwC_ExtendedMeasurementOrFact):
 
 
 class ImagingInstrumentName(DwC_ExtendedMeasurementOrFact):
-    def __init__(self, event_id: str, value: str):
+    def __init__(self, event_id: str, value_id: str, value: str):
         super().__init__(
             eventID=event_id,
             measurementType="Imaging instrument name",
-            measurementTypeID="https://vocab.nerc.ac.uk/collection/P06/current/XXXX/",
             # Requested: https://github.com/nvs-vocabs/Q01/issues/1
+            # Aug 22nd, 2024: Above issue is still open. Below field is NOK.
+            # measurementTypeID="http://vocab.nerc.ac.uk/collection/P06/current/XXXX/",
+            measurementTypeID="",
             measurementValue=value,
+            measurementValueID=value_id,
+            measurementUnit="Not applicable",
+            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/XXXX/",
         )
