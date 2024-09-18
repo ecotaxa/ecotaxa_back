@@ -109,6 +109,7 @@ from API_operations.Subset import SubsetServiceOnProject
 from API_operations.TaxoManager import TaxonomyChangeService, CentralTaxonomyService
 from API_operations.TaxonomyService import TaxonomyService
 from API_operations.UserFolder import UserFolderService, CommonFolderService
+from API_operations.UserFilesFolder import UserFilesFolderService
 from API_operations.admin.Database import DatabaseService
 from API_operations.admin.ImageManager import ImageManagerService
 from API_operations.admin.NightlyJob import NightlyJobService
@@ -164,7 +165,7 @@ api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.37",
+    version="0.0.38",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -3423,6 +3424,165 @@ def list_common_files(
 
 
 # ######################## END OF FILES
+# ######################## START OF USERS FILES
+@app.get(
+    "/user_files/{sub_path:path}",
+    operation_id="list_my_files",
+    tags=["Myfiles"],
+    response_model=DirectoryModel,
+)
+def list_my_files(
+    sub_path: str,  # = Query(..., title="Sub path", description="", example=""),
+    current_user: int = Depends(get_current_user),
+) -> DirectoryModel:
+    """
+    **List the private files** from user files directory  which are usable for some file-related operations.
+    A sub_path starting with "/" is considered relative to user folder.
+
+    *e.g. import.*
+    """
+    with UserFilesFolderService() as sce:
+        with RightsThrower():
+            file_list = sce.list(sub_path, current_user)
+    return file_list
+
+
+@app.post(
+    "/user_files/",
+    operation_id="post_my_file",
+    tags=["Myfiles"],
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": "/ftp_plankton/Ecotaxa_Data_to_import/uploadedFile.zip"
+                }
+            }
+        }
+    },
+    response_model=str,
+)
+async def put_my_file(  # async due to await file store
+    file: UploadFile = File(..., title="File", description=""),
+    path: Optional[str] = Form(
+        title="Path", description="The client-side full path of the file.", default=None
+    ),
+    current_user: int = Depends(get_current_user),
+) -> str:
+    """
+    **Upload a file for the current user files directory.**
+
+    The returned text will contain a server-side path which is usable for some file-related operations.
+
+    *e.g. import.*
+    """
+    with UserFilesFolderService() as sce:
+        with ValidityThrower(), RightsThrower():
+            assert ".." not in str(path), "Forbidden"
+            file_name = await sce.store(current_user, file, path)
+    return file_name
+
+
+@app.post(
+    "/user_files/mv/",
+    operation_id="move_my_file",
+    tags=["Myfiles"],
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": "/ftp_plankton/Ecotaxa_Data_to_import/uploadedFile.zip"
+                }
+            }
+        }
+    },
+    response_model=str,
+)
+def move_file(  # async due to await file move
+    source_path: str = Form(
+        title="Source Path",
+        description="The client-side full path of the file or directory to be moved.",
+        default=None,
+    ),
+    dest_path: str = Form(
+        title="Destination Path",
+        description="The client-side full path of the destination file or directory.",
+        default=None,
+    ),
+    current_user: int = Depends(get_current_user),
+) -> str:
+    """
+    **Move (or rename depending on source and dest path) a file or directory in the current user files directory.**
+    The returned text will contain a server-side path which is usable for some file-related operations.
+    """
+    with UserFilesFolderService() as sce:
+        with ValidityThrower(), RightsThrower():
+            assert ".." not in str(source_path), "Forbidden"
+            assert ".." not in str(dest_path), "Forbidden"
+            dest_path = sce.move(source_path, dest_path, current_user)
+    return dest_path
+
+
+@app.post(
+    "/user_files/rm/",
+    operation_id="remove_my_file",
+    tags=["Myfiles"],
+    responses={200: {"content": {"application/json": {"example": 0}}}},
+    response_model=int,
+)
+def remove_file(
+    source_path: str = Form(
+        title="Source Path",
+        description="The client-side full path of the file  or directory to be removed.",
+        default=None,
+    ),
+    current_user: int = Depends(get_current_user),
+) -> int:
+    """
+    **Remove a file, or directory in the current user files directory.**
+    """
+    with UserFilesFolderService() as sce:
+        with ValidityThrower(), RightsThrower():
+            assert ".." not in str(source_path), "Forbidden"
+            sce.remove(source_path, current_user)
+    return 1
+
+
+@app.post(
+    "/user_files/create/",
+    operation_id="create_my_file",
+    tags=["Myfiles"],
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": "/ftp_plankton/Ecotaxa_Data_to_import/uploadedFile.zip"
+                }
+            }
+        }
+    },
+    response_model=str,
+)
+async def create_file(  # async due to await file store
+    source_path: str = Form(
+        title="Source Path",
+        description="The client-side full path of the file or directory to be moved.",
+        default=None,
+    ),
+    current_user: int = Depends(get_current_user),
+) -> str:
+    """
+    **Create a new file or directory in the current user files directory.**
+    The returned text will contain a server-side path which is usable for some file-related operations.
+    """
+    with UserFilesFolderService() as sce:
+        with ValidityThrower(), RightsThrower():
+            assert ".." not in str(source_path), "Forbidden"
+            new_path = sce.create(source_path, current_user)
+    return new_path
+
+
+# ######################## END OF USERS FILES
 
 system_status_resp = """Config dump:
   secret_key: *************
