@@ -293,4 +293,16 @@ and classif_auto_id is null""",
         -- find root cause
         """,
     ),
+    ConsistencyCheckAndFix(
+        "Only consistent history entries are OK. Auto prediction with a score and manual with someone.",
+        """select count(1)
+from objectsclassifhisto
+where not ((classif_type = 'A' and classif_qual = 'P' and classif_score is not null and classif_who is null) or
+           (classif_type = 'M' and classif_qual = 'D' and classif_score is null and classif_who is not null) or
+           (classif_type = 'M' and classif_qual = 'V' and classif_score is null and classif_who is not null))""",
+        0,
+        """
+        -- find root cause
+        """,
+    ),
 ]
