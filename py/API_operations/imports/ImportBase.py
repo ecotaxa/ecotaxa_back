@@ -48,7 +48,7 @@ class ImportServiceBase(JobServiceOnProjectBase, ABC):
         )
         if my_files_source_dir.exists():
 
-            return my_files_source_dir
+            return str(my_files_source_dir)
         elif UserDirectory(owner_id).contains(source_dir_or_zip):
             # OK
             pass
