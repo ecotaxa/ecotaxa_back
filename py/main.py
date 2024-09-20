@@ -111,6 +111,7 @@ from API_operations.TaxoManager import TaxonomyChangeService, CentralTaxonomySer
 from API_operations.TaxonomyService import TaxonomyService
 from API_operations.UserFilesFolder import UserFilesFolderService
 from API_operations.UserFolder import UserFolderService, CommonFolderService
+from API_operations.UserFilesFolder import UserFilesFolderService
 from API_operations.admin.Database import DatabaseService
 from API_operations.admin.ImageManager import ImageManagerService
 from API_operations.admin.NightlyJob import NightlyJobService
