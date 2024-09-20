@@ -26,13 +26,14 @@ from PIL import Image as PIL_Image  # type: ignore
 import BO.Mappings as GlobalMapping
 from BO.Mappings import ProjectMapping, ParentTableClassT
 from BO.SpaceTime import compute_sun_position, USED_FIELDS_FOR_SUNPOS
-from BO.Training import TrainingBO
+from BO.Training import TrainingBOProvider
 from BO.helpers.ImportHelpers import (
     ImportHow,
     ImportWhere,
     ImportDiagnostic,
     ImportStats,
 )
+from DB import Prediction
 from DB.Acquisition import Acquisition
 from DB.Object import (
     classif_qual_revert,
@@ -139,18 +140,11 @@ class TSVFile(object):
         """
         session = where.db_writer.session
         counter = stats.current_row_count
-        current_training: Optional[TrainingBO] = None
-
-        def get_training() -> TrainingBO:
-            """We don't need to query the DB for every single Predicted object, remember it per TSV"""
-            nonlocal current_training
-            if current_training is None:
-                current_training = TrainingBO.find_by_start_time_or_create(
-                    session,
-                    how.user_id,
-                    stats.start_time,
-                )
-            return current_training
+        training_provider = TrainingBOProvider(
+            session,
+            how.user_id,
+            stats.start_time,
+        )
 
         with self.open():
             # Only keep the fields we can persist, the ones ignored at first step would be signalled here as well
@@ -225,7 +219,7 @@ class TSVFile(object):
                         # Need to store a prediction
                         prediction_to_write = Bean(
                             {
-                                "training_id": get_training().training_id,
+                                "training_id": training_provider.get().training_id,
                                 "classif_id": object_head_to_write["classif_id"],
                                 "score": 1.0,
                             }
@@ -257,6 +251,7 @@ class TSVFile(object):
                     object_head_to_write,
                     object_fields_to_write,
                     image_to_write,
+                    training_provider,
                 )
 
                 where.db_writer.add_db_entities(
@@ -393,8 +388,6 @@ class TSVFile(object):
                     # object_update.classif_auto_when = object_head.classif_auto_when
                     pass
                 else:
-                    # TODO: Tricky case, shouldn't we forbid?
-                    raise ArithmeticError
                     return True  # Full state change
             else:
                 # Human state
@@ -769,6 +762,7 @@ class TSVFile(object):
         object_head_to_write,
         object_fields_to_write,
         image_to_write,
+        training_provider: Optional[TrainingBOProvider] = None,
     ) -> int:
         """
         Create, link or update slave entities, i.e. head, fields, image.
@@ -792,15 +786,32 @@ class TSVFile(object):
                     obj = session.query(a_cls).filter(filter_for_id).first()
                     assert obj is not None
                     if a_cls == ObjectHeader:
+                        an_upd.update_from_obj(  # Don't kill hidden but useful field(s)
+                            obj, HIDDEN_FIELDS_FOR_CLASSIF, force=True
+                        )
                         # Eventually refresh classification
                         if an_upd.nb_fields_from(USED_FIELDS_FOR_CLASSIF) > 0:
-                            # Give the bean enough data for computation
+                            # Give the bean enough data for computation, as the update could be partial.
                             an_upd.update_from_obj(obj, USED_FIELDS_FOR_CLASSIF)
-                            TSVFile.ensure_consistent_fields(
+                            state = TSVFile.ensure_consistent_fields(
                                 an_upd,
                                 start_time=start_time,
                                 current_user=how.user_id,
                             )
+                            if (
+                                obj.classif_qual != PREDICTED_CLASSIF_QUAL
+                                and state == PREDICTED_CLASSIF_QUAL
+                            ):
+                                # Need to store a new prediction
+                                pred = Prediction()
+                                assert training_provider is not None
+                                pred.training_id = training_provider.get().training_id
+                                pred.object_id = objid
+                                pred.classif_id = object_head_to_write["classif_id"]
+                                pred.score = 1.0
+                                session.add(pred)
+                                session.flush()
+                                an_upd["training_id"] = pred.training_id
                             # Care for classification historisation
                             if TSVFile.prepare_classif_update(obj, an_upd):
                                 EnumeratedObjectSet.historize_classification_for(
@@ -808,10 +819,6 @@ class TSVFile(object):
                                     [objid],
                                     only_qual=None,  # TODO: Quite inefficient but simple
                                 )
-                        # Whatever, hidden fields must not trigger an update
-                        an_upd.update_from_obj(
-                            obj, HIDDEN_FIELDS_FOR_CLASSIF, force=True
-                        )
                         # Eventually refresh sun position
                         if an_upd.nb_fields_from(USED_FIELDS_FOR_SUNPOS) > 0:
                             # Give the bean enough data for computation

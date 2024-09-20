@@ -16,7 +16,6 @@ class HomeCaptcha(object):
     """ """
 
     def __init__(self, homecaptcha_secret: str):
-
         self.secret = homecaptcha_secret
 
         config = Config()

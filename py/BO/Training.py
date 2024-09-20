@@ -3,6 +3,7 @@
 # Copyright (C) 2015-2023  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from datetime import datetime
+from typing import Optional
 
 from BO.User import UserIDT
 from DB.Training import Training
@@ -59,3 +60,20 @@ class TrainingBO(object):
             return cls.create_one(session, author, start_time)
         else:
             return TrainingBO(ret)
+
+
+class TrainingBOProvider(object):
+    def __init__(self, session: Session, user_id: UserIDT, training_start: datetime):
+        self.session: Session = session
+        self.user_id = user_id
+        self.training_start = training_start
+        self.current_training: Optional[TrainingBO] = None
+
+    def get(self) -> TrainingBO:
+        if self.current_training is None:
+            self.current_training = TrainingBO.find_by_start_time_or_create(
+                self.session,
+                self.user_id,
+                self.training_start,
+            )
+        return self.current_training
