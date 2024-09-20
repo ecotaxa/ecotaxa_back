@@ -9,6 +9,7 @@ from DB.Job import DBJobStateEnum
 from tests.credentials import ADMIN_USER_ID, ADMIN_AUTH
 
 JOB_QUERY_URL = "/jobs/{job_id}/"
+JOB_REPLY_URL = "/jobs/{job_id}/answer"
 
 JOB_STABLE_STATES = (
     DBJobStateEnum.Finished,
@@ -30,7 +31,7 @@ def wait_for_stable(job_id: int):
             # This is ORM query so you need a fresh session for cross-session read
             sce.ro_session.expire_all()
             job = sce.query(ADMIN_USER_ID, job_id)
-            time.sleep(0.1)
+            time.sleep(0.01)
     if sched:
         JobScheduler.shutdown()
     return job
@@ -50,7 +51,7 @@ def check_job_ok(job):
 
 
 def check_job_errors(job) -> List[str]:
-    assert job.state == DBJobStateEnum.Error, "Job is :%s" % [
+    assert job.state == DBJobStateEnum.Error, "Job is _not_ failed:%s" % [
         job.state,
         job.progress_pct,
         job.progress_msg,
@@ -76,6 +77,12 @@ def api_wait_for_stable_job(fastapi, job_id, max_wait=20):
         waited += 1
         if waited > max_wait:
             assert False, "Waited too long, job: %s" + str(job_dict)
+
+
+def api_reply_to_waiting_job(fastapi, job_id, reply):
+    url = JOB_REPLY_URL.format(job_id=job_id)
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=reply)
+    assert rsp.status_code == 200
 
 
 def api_check_job_ok(fastapi, job_id):

@@ -123,6 +123,10 @@ class JobBO(object):
         if self._session:
             self._session.delete(self._job)
 
+    def archive(self) -> None:
+        """Put the job in archival space, negative ids"""
+        self._job.id = -self._job.id
+
     def __enter__(self):
         assert self._session is not None
         return self

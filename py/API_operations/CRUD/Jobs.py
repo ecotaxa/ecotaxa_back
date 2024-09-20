@@ -35,7 +35,7 @@ class JobCRUDService(Service):
         assert not admin_mode or (
             admin_mode and current_user.has_role(Role.APP_ADMINISTRATOR)
         ), NOT_AUTHORIZED
-        qry = self.ro_session.query(Job)
+        qry = self.ro_session.query(Job).filter(Job.id > 0)
         if not admin_mode:
             qry = qry.filter(Job.owner_id == current_user_id)
         ret = [JobBO(a_job) for a_job in qry]
@@ -43,7 +43,7 @@ class JobCRUDService(Service):
 
     def query(self, current_user_id: UserIDT, job_id: JobIDT) -> JobBO:
         """
-        Return a single job BO by its id.
+        Return a single job BO by its id. Users/admin can query archived job if they know how.
         """
         # Sanity & security checks
         job = self.ro_session.query(Job).get(job_id)
@@ -139,7 +139,7 @@ class JobCRUDService(Service):
 
     def delete(self, current_user_id: UserIDT, job_id: JobIDT) -> None:
         """
-        Erase the job.
+        Erase the job, from user's point of view.
         """
         # Security check
         with self._query_for_update(current_user_id, job_id) as job_bo:
@@ -150,8 +150,8 @@ class JobCRUDService(Service):
                 DBJobStateEnum.Pending,
             ):
                 # TODO: Set the job to a state e.g. Trashed and erase in background, better for responsiveness
-                temp_for_job.erase_for(job_id)
-                job_bo.delete()
+                temp_for_job.archive_for(job_id, {JobServiceBase.JOB_LOG_FILE_NAME})
+                job_bo.archive()
             elif job_bo.state == DBJobStateEnum.Running:
                 # Set the job to Killed
                 # TODO: It's not a _real_ kill, bg thread keeps running. It's just presentation

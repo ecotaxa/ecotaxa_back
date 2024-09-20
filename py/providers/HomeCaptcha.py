@@ -5,10 +5,11 @@
 # Clients to Google API services, so far just one.
 #
 from typing import Optional, List
-from fastapi import HTTPException
-from helpers.AppConfig import Config
+
 import requests
-from BO.Rights import NOT_AUTHORIZED
+from fastapi import HTTPException
+
+from helpers.AppConfig import Config
 
 
 class HomeCaptcha(object):
@@ -24,40 +25,10 @@ class HomeCaptcha(object):
             recaptchasecret = str(config.get_recaptchasecret() or "")
             if recaptchasecret != "":
                 self.secret = recaptchasecret
-        self.iplist = str(config.get_captcha_iplist() or "")
 
     def _daily_get_iplist(self):
         # no usage now
         return
-
-    def _is_spam_ip(self, ip: str) -> bool:
-        spamip = False
-        # no usage now
-        return False
-        with open(self.iplist, "r") as file:
-            for line in file:
-                if ip in line:
-                    spamip = True
-                    break
-        return spamip
-
-    def _check_spam_ip(self, ip: str) -> bool:
-        # if no CAPTCHA_IPLIST in config cannot check if ip is spam
-        if self.recaptchaid != "" or self.iplist == None:
-            return False
-        from os import path
-        import time
-
-        if path.exists(self.iplist):
-            oneday = time.mktime(time.localtime()) - path.getmtime(self.iplist)
-            if oneday > 24 * 60 * 60:
-                self._daily_get_iplist()
-                return self._is_spam_ip(ip)
-            else:
-                return self._is_spam_ip(ip)
-        else:
-            self._daily_get_iplist()
-            return self._is_spam_ip(ip)
 
     def validate(self, remote_ip: str, response: str) -> Optional[str]:
         """
@@ -67,7 +38,7 @@ class HomeCaptcha(object):
         if self.recaptchaid != "":
             # call google captcha
             # @see https://developers.google.com/recaptcha/docs/verify
-            params = api_params = {
+            params = {
                 "response": response,
                 "secret": self.secret,
                 "remoteip": remote_ip,
@@ -115,9 +86,6 @@ class HomeCaptcha(object):
         remote_ip = no_bot[0]
         response = no_bot[1]
 
-        if self._check_spam_ip(remote_ip) == False:
-            error = self.validate(remote_ip, response)
-        else:
-            error = NOT_AUTHORIZED
+        error = self.validate(remote_ip, response)
         if error is not None:
             raise HTTPException(status_code=401, detail=[error])

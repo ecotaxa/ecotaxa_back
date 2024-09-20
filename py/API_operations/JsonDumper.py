@@ -3,6 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import json
+from datetime import datetime
 from typing import Dict, List, Any, Set, TextIO
 
 from API_models.filters import ProjectFiltersDict
@@ -90,9 +91,12 @@ class JsonDumper(Service):
         row_class = type(a_row)
         desc: JSONDesc = JSON_FIELDS[row_class]
         for a_field_or_relation, how in desc.items():
-            fld_name = a_field_or_relation.key
-            # This is where SQLAlchemy does all its magic when it's a relation
-            attr = getattr(a_row, fld_name)  # type:ignore # case2
+            if callable(a_field_or_relation):
+                attr = a_field_or_relation(a_row)
+            else:
+                fld_name = a_field_or_relation.key
+                # This is where SQLAlchemy does all its magic when it's a relation
+                attr = getattr(a_row, fld_name)  # type:ignore # case2
             if isinstance(attr, list):
                 # Serialize the list of child entities, ordinary relationship
                 children: List[Dict[str, Any]] = []
@@ -109,6 +113,8 @@ class JsonDumper(Service):
                 else:
                     # Dump into same output dict.
                     self._dump_into_dict(out_stream, attr, tgt_dict)
+            elif isinstance(attr, datetime):
+                tgt_dict[how] = attr.isoformat()
             else:
                 # Ordinary field
                 if attr is not None:

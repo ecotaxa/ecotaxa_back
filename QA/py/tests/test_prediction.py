@@ -7,7 +7,7 @@ from starlette import status
 
 from tests.credentials import ADMIN_AUTH, CREATOR_AUTH
 from tests.jobs import get_job_and_wait_until_ok
-from tests.test_classification import _prj_query
+from tests.test_classification import query_all_objects
 
 from BO.Prediction import DeepFeatures
 
@@ -57,7 +57,7 @@ def test_prediction_functions(database, fastapi, caplog):
 
     prj_id = test_import(database, caplog, "Test Prediction")
 
-    obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
+    obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id)
     assert len(obj_ids) == 8
 
     # Prepare fake CNN features to insert

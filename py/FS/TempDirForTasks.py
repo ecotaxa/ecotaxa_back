@@ -2,7 +2,6 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-import os
 import shutil
 from pathlib import Path
 from typing import Optional, Set
@@ -44,13 +43,29 @@ class TempDirForTasks(object):
 
     def erase_for(self, job_id: int):
         """
-        Wipe temp directory for this job ID.
+        Wipe entire temp directory for this job ID.
         """
         temp_for_job = self.base_dir_for(job_id)
         try:
             shutil.rmtree(temp_for_job)
         except (FileNotFoundError, PermissionError):
             pass
+
+    def archive_for(self, job_id: int, keep: Set[str]):
+        """
+        Leave only the 'keep' files inside the temporary directory
+        """
+        temp_for_job = self.base_dir_for(job_id)
+        for an_entry in temp_for_job.iterdir():
+            try:
+                if an_entry.name in keep:
+                    continue
+                if an_entry.is_dir():
+                    shutil.rmtree(an_entry)
+                else:
+                    an_entry.unlink()
+            except (FileNotFoundError, PermissionError):
+                pass
 
     @staticmethod
     def ensure_exists(path: Path, cache: Optional[Set] = None) -> None:

@@ -65,8 +65,7 @@ class ImageBO(object):
             thumb_relative_path, thumb_full_path = vault.thumbnail_paths(
                 image_to_write.imgid
             )
-            im.save(thumb_full_path)
-            image_to_write.thumb_file_name = thumb_relative_path
+            im.save(thumb_full_path)  # TODO: Should be in Vault, no IO here
             image_to_write.thumb_width = im.size[0]
             image_to_write.thumb_height = im.size[1]
         else:
@@ -74,7 +73,6 @@ class ImageBO(object):
             # Otherwise there is a FD exhaustion on PyPy
             im.close()
             # Need empty fields for bulk insert
-            image_to_write.thumb_file_name = None
             image_to_write.thumb_width = None
             image_to_write.thumb_height = None
         return None

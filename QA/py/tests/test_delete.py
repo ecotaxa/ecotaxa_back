@@ -33,6 +33,11 @@ def test_api_project_delete(fastapi, caplog):
         dump_project(CREATOR_AUTH, prj_id, fd)
         buff = fd.getvalue()
     assert buff == "{}"
+    nb_upds = len(
+        [msg for msg in caplog.messages if msg.startswith("Could not remove")]
+    )
+    # There should be no problem removing the files
+    assert nb_upds == 0
 
 
 def test_api_project_full_delete(fastapi, caplog):

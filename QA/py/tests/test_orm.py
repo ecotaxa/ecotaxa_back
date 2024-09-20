@@ -6,7 +6,6 @@ from DB.Acquisition import Acquisition
 from DB.Process import Process
 from DB.Project import Project
 from DB.Sample import Sample
-from DB.Task import Task
 from DB.Taxonomy import Taxonomy
 from DB.User import User, Role
 from DB.ProjectPrivilege import ProjectPrivilege
@@ -18,7 +17,6 @@ def test_to_str():
     assert str(Process()) is not None
     assert str(Project()) is not None
     assert str(Sample()) is not None
-    assert str(Task()) is not None
     assert str(Taxonomy()) is not None
     assert str(User()) is not None
     assert str(Role()) is not None

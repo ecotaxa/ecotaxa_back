@@ -2,27 +2,32 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-# Maintenance operations on the DB.
+# Send Account registration , status information and validation emails
 #
+import smtplib
 from datetime import datetime, timedelta
-from typing import Optional, Final
-from enum import Enum
-from helpers.DynamicLogs import get_logger
-from helpers.pydantic import BaseModel, Field
 from email.message import EmailMessage
+from enum import Enum
+from typing import Optional, Final, Tuple, Dict, Any
+
 from fastapi import HTTPException
+
+from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
-    DETAIL_INVALID_EMAIL,
-    DETAIL_NO_RECIPIENT,
     DETAIL_TEMPLATE_NOT_FOUND,
     DETAIL_INVALID_PARAMETER,
+    DETAIL_INVALID_EMAIL,
+    DETAIL_NO_RECIPIENT,
     DETAIL_SMTP_RECIPIENT_REFUSED,
     DETAIL_SMTP_DATA_ERROR,
+    DETAIL_SMTP_DISCONNECT_ERROR,
+    DETAIL_SMTP_CONNECT_ERROR,
+    DETAIL_SMTP_RESPONSE_ERROR,
+    DETAIL_IMAP4_ERROR,
     DETAIL_UNKNOWN_ERROR,
 )
 
 logger = get_logger(__name__)
-# special token - only for mail - separate from auth token
 
 
 class AccountMailType(str, Enum):
@@ -30,10 +35,9 @@ class AccountMailType(str, Enum):
     verify: Final = "verify"
     status: Final = "status"
     modify: Final = "modify"
-    passwordreset: Final = "passwordreset"
+    password_reset: Final = "password_reset"
 
 
-# replace in mail templates
 class ReplaceInMail:
     def __init__(
         self,
@@ -44,7 +48,7 @@ class ReplaceInMail:
         token: Optional[str] = None,
         reason: Optional[str] = None,
         url: Optional[str] = None,
-        tokenage: Optional[int] = None,
+        token_age: Optional[int] = None,
         ticket: Optional[str] = "",
     ):
         self.id = id
@@ -61,7 +65,7 @@ class ReplaceInMail:
         # reason to request to modify information from user tag {reason}
         self.url = url
         # url of the requesting app - will be replaced in the mail message template
-        self.tokenage = tokenage
+        self.token_age = token_age
         # token lifespan
         self.ticket = ticket
         # ticket number if provided
@@ -76,19 +80,19 @@ class MailProvider(object):
     """
 
     MODEL_KEYS = ("email", "link", "action", "assistance", "reason")
-    REPLACE_KEYS = ("token", "data", "url", "ticket")
+    REPLACE_KEYS = ("token", "data", "url", "ticket", "reason")
 
     def __init__(
         self,
-        senderaccount: list,
+        sender_account: list,
         dir_mail_templates: str,
         short_token_age: Optional[int] = 1,
         profile_token_age: Optional[int] = 24,
         add_ticket: str = "",
     ):
-        on = len(senderaccount) > 2 and self.is_email(senderaccount[0])
+        on = len(sender_account) > 2 and self.is_email(sender_account[0])
         if on:
-            self.SENDER_ACCOUNT = senderaccount
+            self.SENDER_ACCOUNT = sender_account
             self.DIR_MAIL_TEMPLATES = dir_mail_templates
             self.SHORT_TOKEN_AGE = short_token_age
             self.PROFILE_TOKEN_AGE = profile_token_age
@@ -101,13 +105,11 @@ class MailProvider(object):
     def is_email(email: str) -> bool:
         import re
 
-        regex = re.compile(
-            "(?:[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*|\"(?:[\\x01-\\x08\\x0b\\x0c\\x0e-\\x1f\\x21\\x23-\\x5b\\x5d-\\x7f]|\\\\[\\x01-\\x09\\x0b\\x0c\\x0e-\\x7f])*\")@(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|\\[(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|[a-z0-9-]*[a-z0-9]:(?:[\\x01-\\x08\\x0b\\x0c\\x0e-\\x1f\\x21-\\x5a\\x53-\\x7f]|\\\\[\\x01-\\x09\\x0b\\x0c\\x0e-\\x7f])+)\\])"
-        )
-        return re.fullmatch(regex, email) is not None
+        regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+        return re.match(regex, email) is not None
 
     def send_mail(
-        self, recipients: list, msg: EmailMessage, replyto: Optional[str] = None
+        self, recipients: list, msg: EmailMessage, reply_to: Optional[str] = None
     ) -> None:
         """
         Sendmail .
@@ -121,58 +123,45 @@ class MailProvider(object):
                     status_code=422,
                     detail=[DETAIL_INVALID_EMAIL],
                 )
-        import smtplib, ssl
         import email.utils as utils
 
-        # starttls and 587  - avec ssl 465
-        # senderaccount = self.SENDER_ACCOUNT
-        # senderemail = senderaccount[0].strip()
-        # senderpwd = senderaccount[1].strip()
-        # senderdns = senderaccount[2].strip()
-        # senderport = int(senderaccount[3].strip())
+        # starttls and 587  - with ssl 465
+        # sender_account = self.SENDER_ACCOUNT
+        # sender_email = sender_account[0].strip()
+        # sender_pwd = sender_account[1].strip()
+        # sender_dns = sender_account[2].strip()
+        # sender_port = int(sender_account[3].strip())
+        # imap_port = int(sender_account[4].strip())
         (
-            senderemail,
-            senderpwd,
-            senderdns,
-            senderport,
-            imapport,
-        ) = self.extract_senderaccount()
-        msg["From"] = senderemail
+            sender_email,
+            sender_pwd,
+            sender_dns,
+            sender_port,
+            _,
+        ) = self._extract_sender_account(self.SENDER_ACCOUNT)
+        msg["From"] = sender_email
         msg["To"] = ", ".join(recipients)
-        domain = senderemail.split("@")
+        domain = sender_email.split("@")
         msg["message-id"] = utils.make_msgid(domain=domain[1])
         msg["Date"] = utils.formatdate()
-        if replyto == None:
+        if reply_to == None:
             msg["Reply-To"] = "No-Reply"
         else:
-            msg["Reply-To"] = str(replyto)
+            msg["Reply-To"] = str(reply_to)
         code = 0
-        with smtplib.SMTP_SSL(senderdns, senderport) as smtp:
+        with smtplib.SMTP_SSL(sender_dns, sender_port) as smtp:
             try:
-                smtp.login(senderemail, senderpwd)
+                smtp.login(sender_email, sender_pwd)
                 # message as plain text
-                smtp.sendmail(senderemail, recipients, msg.as_string())
+                smtp.sendmail(sender_email, recipients, msg.as_string())
                 logger.info(
                     "Email subject %s sent  to '%s'"
                     % (msg["Subject"], ", ".join(recipients))
                 )
             except smtplib.SMTPException as e:
-                if isinstance(e, smtplib.SMTPRecipientsRefused):
-                    code = 422
-                    detail = DETAIL_SMTP_RECIPIENT_REFUSED
-                elif isinstance(e, smtplib.SMTPDataError):
-                    code = 422
-                    detail = DETAIL_SMTP_DATA_ERROR
-                else:
-                    code = 500
-                    detail = str(e.args)
-                logger.error(e)
-            except:
-                code = 500
-                import sys
-
-                detail = DETAIL_UNKNOWN_ERROR + ": '%s'" % sys.exc_info()[0]
-                logger.error(code, detail)
+                code, detail = self._log_smtp_error_code(e)
+            except Exception as e:
+                code, detail = self._log_error_code(e)
             finally:
                 if code != 0:
                     raise HTTPException(
@@ -181,95 +170,35 @@ class MailProvider(object):
                     )
                 smtp.quit()
 
-    def mail_message(
-        self,
-        model_name: AccountMailType,
-        values: ReplaceInMail,
-        language: str = DEFAULT_LANGUAGE,
-        action: Optional[str] = None,
-    ) -> EmailMessage:
-        model: Optional[dict] = self.get_mail_message(model_name, language, action)
-        if model is None:
-            raise HTTPException(
-                status_code=422,
-                detail=[DETAIL_INVALID_PARAMETER],
-            )
-        replace = dict({})
-        if "url" in model.keys():
-            modelurl = str(model["url"][1:] if model["url"][0] == "/" else model["url"])
-            if values.url is not None:
-                values.url += modelurl
-            else:
-                values.url = modelurl
-        for key in self.MODEL_KEYS:
-            replace[key] = ""
-            if key in model:
-                if (
-                    key == "action"
-                    and hasattr(values, key)
-                    and getattr(values, key) is not None
-                ):
-                    replace[key] = model[key][getattr(values, key)]
-                else:
-                    replace[key] = model[key].format(**vars(values))
-                    # add info about max_age of the token
-                    if (
-                        key == "link"
-                        and hasattr(values, "token")
-                        and getattr(values, "token") is not None
-                    ):
-                        if (
-                            hasattr(values, "tokenage")
-                            and getattr(values, "tokenage") is not None
-                        ):
-                            tokenage = getattr(values, "tokenage")
-                        else:
-                            tokenage = self.SHORT_TOKEN_AGE
-                        age = datetime.now() + timedelta(hours=int(tokenage))
-                        replace[key] += str(
-                            " (valid until %s (UTC))"
-                            % age.strftime("%Y-%m-%d %H:%M:%S")
-                        )
-
-        for key in self.REPLACE_KEYS:
-            if hasattr(values, key):
-                if (
-                    key == "data"
-                    and values.data is not None
-                    and type(values.data) is dict
-                ):
-                    data = []
-                    if key in model:
-                        for k, v in values.data.items():
-                            data.append(model["data"].format(key=k, value=v))
-
-                    else:
-                        for k, v in values.data.items():
-                            data.append(str(k) + " : " + str(v))
-                    replace[key] = ",  ".join(data)
-                else:
-                    replace[key] = getattr(values, key)
-            elif key not in replace:
-                replace[key] = ""
-        model["body"] = model["body"].format(**replace)
-        mailmsg = EmailMessage()
-        mailmsg["Subject"] = model["subject"].format(
-            action=replace["action"],
-            id=values.id,
-            email=values.email,
-            ticket=replace["ticket"],
-        )
-        text = self.html_to_text(model["body"])
-        mailmsg.set_content(text, subtype="plain", charset="utf-8", cte="8bit")
-        return mailmsg
+    @staticmethod
+    def _log_error_code(e: Exception) -> Tuple[int, str]:
+        code = 500
+        detail = DETAIL_UNKNOWN_ERROR + ": '%s' , '%s'" % (type(e), e.args)
+        logger.error(code, detail)
+        return code, detail
 
     @staticmethod
-    def html_to_text(html: str) -> str:
-        import re
-
-        html = re.sub("<br>", "\n", html)
-        pattrns = re.compile("<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});")
-        return re.sub(pattrns, "", html)
+    def _log_smtp_error_code(e: smtplib.SMTPException) -> Tuple[int, str]:
+        if isinstance(e, smtplib.SMTPRecipientsRefused):
+            code = 422
+            detail = DETAIL_SMTP_RECIPIENT_REFUSED
+        elif isinstance(e, smtplib.SMTPDataError):
+            code = 422
+            detail = DETAIL_SMTP_DATA_ERROR
+        elif isinstance(e, smtplib.SMTPServerDisconnected):
+            code = 500
+            detail = DETAIL_SMTP_DISCONNECT_ERROR
+        elif isinstance(e, smtplib.SMTPConnectError):
+            code = 500
+            detail = DETAIL_SMTP_CONNECT_ERROR
+        elif isinstance(e, smtplib.SMTPResponseException):
+            code = 500
+            detail = DETAIL_SMTP_RESPONSE_ERROR
+        else:
+            code = 500
+            detail = str(type(e)) + str(e.args)
+        logger.error(e, detail)
+        return code, detail
 
     def send_activation_request_mail(
         self,
@@ -281,10 +210,10 @@ class MailProvider(object):
     ) -> None:
         if len(recipients) == 0:
             raise HTTPException(status_code=404, detail=[DETAIL_NO_RECIPIENT])
-        id = data["id"]
-        ticket = self.get_ticket(data["email"], id)
+        user_id = data["id"]
+        ticket = self._get_ticket(data["email"], user_id)
         replace = ReplaceInMail(
-            id=id,
+            id=user_id,
             email=data["email"],
             token=token,
             data=data,
@@ -292,8 +221,10 @@ class MailProvider(object):
             ticket=str(ticket or ""),
             url=url,
         )
-        mailmsg = self.mail_message(AccountMailType.activate, replace)
-        self.send_mail(recipients, mailmsg, replyto=data["email"])
+        mail_msg = self._populate_mail_message(
+            AccountMailType.activate, replace, action=action
+        )
+        self.send_mail(recipients, mail_msg, reply_to=data["email"])
 
     def send_verification_mail(
         self,
@@ -307,15 +238,22 @@ class MailProvider(object):
         data = ReplaceInMail(
             email=assistance_email, token=token, action=action, url=url
         )
-        mailmsg = self.mail_message(AccountMailType.verify, data, action=action)
-        self.send_mail([recipient], mailmsg)
+        mail_msg = self._populate_mail_message(
+            AccountMailType.verify,
+            data,
+            action=action,
+            token_age=self.SHORT_TOKEN_AGE,
+        )
+        self.send_mail([recipient], mail_msg)
         # inform previous email (typo prevent)
         if previous_email is not None:
             data = ReplaceInMail(
                 email=assistance_email, data={"new email": recipient}, url=url
             )
-            mailmsg = self.mail_message(AccountMailType.modify, data, action="inform")
-            self.send_mail([previous_email], mailmsg)
+            mail_msg = self._populate_mail_message(
+                AccountMailType.modify, data, action="inform"
+            )
+            self.send_mail([previous_email], mail_msg)
 
     def send_reset_password_mail(
         self,
@@ -325,36 +263,36 @@ class MailProvider(object):
         url: Optional[str] = None,
     ) -> None:
         data = ReplaceInMail(token=token, email=assistance_email, url=url)
-        mailmsg = self.mail_message(AccountMailType.passwordreset, data)
-        self.send_mail([recipient], mailmsg)
+        mail_msg = self._populate_mail_message(
+            AccountMailType.password_reset, data, token_age=self.SHORT_TOKEN_AGE
+        )
+        self.send_mail([recipient], mail_msg)
 
     def send_status_mail(
         self,
         recipient: str,
+        user_id: int,
         assistance_email: str,
         status_name: str,
-        action: str,
         token: Optional[str] = None,
         reason: Optional[str] = None,
         url: Optional[str] = None,
     ) -> None:
-        ticket = ""
-        if reason is not None and self.ADD_TICKET != "":
-            reasons = reason.split(self.ADD_TICKET)
-            if len(reasons) > 1 and reasons[0].strip() != "":
-                ticket = "[" + reasons[0] + "]"
-                reason = self.ADD_TICKET.join(reasons[1:])
+        ticket = self._get_ticket(recipient, user_id)
         data = ReplaceInMail(
             email=assistance_email,
             token=token,
-            tokenage=self.PROFILE_TOKEN_AGE,
-            ticket=ticket,
+            token_age=self.PROFILE_TOKEN_AGE,
+            reason=reason,
+            ticket=str(ticket or ""),
             url=url,
         )
-        mailmsg = self.mail_message(AccountMailType.status, data, action=status_name)
-        self.send_mail([recipient], mailmsg, replyto=assistance_email)
+        mail_msg = self._populate_mail_message(
+            AccountMailType.status, data, action=status_name
+        )
+        self.send_mail([recipient], mail_msg, reply_to=assistance_email)
 
-    def send_hastomodify_mail(
+    def send_has_to_modify_mail(
         self,
         recipient: str,
         assistance_email: str,
@@ -367,21 +305,29 @@ class MailProvider(object):
         """
         when there is a ticket software - ticket number can be found at the beginning of the comment/reason and sent back in the email subject
         """
-        ticket = self.get_ticket(recipient, user_id, reason, token)
+        ticket = self._get_ticket(recipient, user_id)
         values = ReplaceInMail(
             email=assistance_email,
             reason=reason,
             token=token,
             url=url,
-            tokenage=self.PROFILE_TOKEN_AGE,
+            token_age=self.PROFILE_TOKEN_AGE,
             ticket=str(ticket or ""),
         )
-        mailmsg = self.mail_message(AccountMailType.modify, values, action=action)
-        self.send_mail([recipient], mailmsg, replyto=assistance_email)
+        mail_msg = self._populate_mail_message(
+            AccountMailType.modify,
+            values,
+            action=action,
+            token_age=self.PROFILE_TOKEN_AGE,
+        )
+        self.send_mail([recipient], mail_msg, reply_to=assistance_email)
 
-    def get_mail_message(
-        self, model_name: AccountMailType, language, action: Optional[str] = None
-    ) -> Optional[dict]:
+    def _get_mail_message_throw(
+        self,
+        model_name: AccountMailType,
+        language: str = DEFAULT_LANGUAGE,
+        action: Optional[str] = None,
+    ) -> dict:
         import json
         from pathlib import Path
 
@@ -400,32 +346,105 @@ class MailProvider(object):
         else:
             model = dict(model[DEFAULT_LANGUAGE])
         if action != None and action in model.keys():
-            return model[action]
-        else:
-            return model
-        return None
+            model = model[action]
+        if model is None:
+            raise HTTPException(
+                status_code=422,
+                detail=[DETAIL_INVALID_PARAMETER],
+            )
+        return model
 
-    def extract_senderaccount(self) -> tuple:
-        senderaccount = self.SENDER_ACCOUNT
+    # tools to populate mail_message
+    @staticmethod
+    def _replace_dict_data_keys(key: str, model: dict, val: dict) -> str:
+        if key in model:
+            data = [model[key].format(key=k, value=v) for k, v in val.items()]
+        else:
+            data = [str(k) + " : " + str(v) for k, v in val.items()]
+        return ",  ".join(data)
+
+    def _replace_model_key(
+        self, replace: dict, model: dict, values: ReplaceInMail
+    ) -> Dict[Any, Any]:
+        to_replace_keys = filter(lambda key: (key in model), self.MODEL_KEYS)
+        for key in to_replace_keys:
+            if key == "action" and getattr(values, key, None) is not None:
+                replace[key] = model[key][getattr(values, key)]
+            else:
+                replace[key] = model[key].format(**vars(values))
+        # more tolerant to errors in templates
+        no_replace_keys = filter(lambda key: (key not in model), self.MODEL_KEYS)
+        for key in no_replace_keys:
+            replace[key] = ""
+        return replace
+
+    def _populate_mail_message(
+        self,
+        model_name: AccountMailType,
+        values: ReplaceInMail,
+        language: str = DEFAULT_LANGUAGE,
+        action: Optional[str] = None,
+        token_age: Optional[int] = None,
+    ) -> EmailMessage:
+        model = self._get_mail_message_throw(model_name, language, action=action)
+        if "url" in model.keys():
+            model_url = str(
+                model["url"][1:] if model["url"][0] == "/" else model["url"]
+            )
+            values.url = str(values.url or "") + model_url
+        replace: Dict[Any, Any] = {}
+        replace = self._replace_model_key(replace, model, values)
+        if "link" in replace:
+            token_age = getattr(values, "token_age", token_age)
+            if token_age is not None:
+                age = datetime.now() + timedelta(hours=int(token_age))
+                ageval = age.strftime("%Y-%m-%d %H:%M:%S")
+                replace["link"] += str(" (valid until %s (UTC))" % ageval)
+        for rk in self.REPLACE_KEYS:
+            if rk not in replace:
+                if hasattr(values, rk):
+                    replace[rk] = getattr(values, rk)
+                else:
+                    replace[rk] = ""
+                continue
+            val = getattr(values, rk, None)
+            if val is None:
+                continue
+            if rk == "data":
+                replace[rk] = self._replace_dict_data_keys(rk, model, val)
+            else:
+                replace[rk] = val
+        mail_msg = EmailMessage()
+        model["body"] = model["body"].format(**replace)
+        mail_msg["Subject"] = model["subject"].format(
+            action=str(action or ""),
+            id=values.id,
+            email=values.email,
+            ticket=replace["ticket"],
+        )
+        text = html_to_text(model["body"])
+        mail_msg.set_content(text, subtype="plain", charset="utf-8", cte="8bit")
+        return mail_msg
+
+    @staticmethod
+    def _extract_sender_account(sender_account: list) -> tuple:
         # add default ports smtp and imap if not present
-        if len(senderaccount) == 3:
-            senderaccount.append("465")
-        if len(senderaccount) == 4:
-            senderaccount.append("993")
+        if len(sender_account) == 3:
+            sender_account.append("465")
+        if len(sender_account) == 4:
+            sender_account.append("993")
         return (
-            senderaccount[0].strip(),
-            senderaccount[1].strip(),
-            senderaccount[2].strip(),
-            int(senderaccount[3].strip()),
-            int(senderaccount[4].strip()),
+            sender_account[0].strip(),
+            sender_account[1].strip(),
+            sender_account[2].strip(),
+            int(sender_account[3].strip()),
+            int(sender_account[4].strip()),
         )
 
-    def get_ticket(
+    def _get_ticket(
         self,
         user_email: str,
         user_id: int,
-        token: Optional[str] = None,
-        comment: Optional[str] = None,
     ) -> Optional[str]:
         """Get ticket number from mailbox or status_admin_comment or token"""
         if self.ADD_TICKET == "":
@@ -435,22 +454,22 @@ class MailProvider(object):
         import imaplib
 
         (
-            senderemail,
-            senderpwd,
-            senderdns,
-            senderport,
-            imapport,
-        ) = self.extract_senderaccount()
+            sender_email,
+            sender_pwd,
+            sender_dns,
+            _,
+            imap_port,
+        ) = self._extract_sender_account(self.SENDER_ACCOUNT)
         ticket = None
         try:
             # set connection
-            mail = imaplib.IMAP4_SSL(senderdns, imapport)
+            mail = imaplib.IMAP4_SSL(sender_dns, imap_port)
             # login
-            mail.login(senderemail, senderpwd)
+            mail.login(sender_email, sender_pwd)
             # select inbox
             mail.select("INBOX")
             criteria = {
-                "FROM": "Ecotaxa",
+                "FROM": self.ADD_TICKET,
                 "SUBJECT": str(user_id) + "#" + user_email + "#",
             }
 
@@ -462,17 +481,31 @@ class MailProvider(object):
             (_, data) = mail.uid("search", search_string(criteria))
             if data != None and isinstance(data, list):
                 inbox_item_list = data[0].split()
-                most_recent = inbox_item_list[-1]
-                _, email_data = mail.uid("fetch", most_recent, "(RFC822)")
-                raw_email = email_data[0][1].decode("UTF-8")
-                email_message = email.message_from_string(raw_email)
-                if "Subject" in email_message:
-                    import re
+                if len(inbox_item_list) > 0:
+                    most_recent = inbox_item_list[-1]
+                    _, email_data = mail.uid("fetch", most_recent, "(RFC822)")
+                    raw_email = email_data[0][1].decode("UTF-8")
+                    email_message = email.message_from_string(raw_email)
+                    if "Subject" in email_message:
+                        import re
 
-                    match = re.match(self.TICKET_MATCH, email_message["Subject"])
-                    if match:
-                        ticket = match.group(0)
+                        match = re.match(self.TICKET_MATCH, email_message["Subject"])
+                        if match:
+                            ticket = match.group(0)
             mail.logout()
-        except:
-            pass
+        except imaplib.IMAP4.error as e:
+            code = 422
+            detail = DETAIL_IMAP4_ERROR + str(e.args)
+            logger.info(code, detail)
+        except Exception as e:
+            _, _ = self._log_error_code(e)
+
         return ticket
+
+
+def html_to_text(html: str) -> str:
+    import re
+
+    html = html.replace("<br>", "\n")
+    patterns = re.compile("<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});")
+    return re.sub(patterns, "", html)

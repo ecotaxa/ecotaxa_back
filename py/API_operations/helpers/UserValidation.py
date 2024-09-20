@@ -4,17 +4,18 @@
 #
 # User Validation Service .
 #
-from typing import Optional, Any, Final, List
 from enum import Enum
-from BO.Rights import NOT_AUTHORIZED
-from BO.User import UserIDT, SHORT_TOKEN_AGE, PROFILE_TOKEN_AGE
-from API_models.crud import UserModelProfile
-from helpers.AppConfig import Config
-from providers.MailProvider import MailProvider
-from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
-from helpers.DynamicLogs import get_logger
+from typing import Optional, Final, List
+
 from fastapi import HTTPException
+from itsdangerous import URLSafeTimedSerializer, BadSignature
+
+from API_models.crud import UserModelWithRights
+from BO.User import SHORT_TOKEN_AGE, PROFILE_TOKEN_AGE
+from helpers.AppConfig import Config
+from helpers.DynamicLogs import get_logger
 from helpers.httpexception import DETAIL_BAD_INSTANCE, DETAIL_BAD_SIGN_OR_EXP
+from providers.MailProvider import MailProvider
 
 logger = get_logger(__name__)
 
@@ -25,6 +26,7 @@ class ActivationType(str, Enum):
     status: Final = "status "
     inform: Final = "inform"
     passwordreset: Final = "passwordreset"
+    refresh: Final = "refresh"
 
 
 class UserValidation(object):
@@ -38,10 +40,10 @@ class UserValidation(object):
         config = Config()
         # unset status field "active" value if major modification is done by anyone except users admin
         # 0 email - 1 pwd - 2 - dns - 3 port
-        self.senderaccount = str(config.get_sender_account() or "").split(",")
+        self.sender_account = str(config.get_sender_account() or "").split(",")
         self._mailservice_salt = config.get_mailservice_salt()
-        self._mailprovider = MailProvider(
-            self.senderaccount,
+        self._mail_provider = MailProvider(
+            self.sender_account,
             config.get_dir_mail_templates(),
             SHORT_TOKEN_AGE,
             PROFILE_TOKEN_AGE,
@@ -65,7 +67,7 @@ class UserValidation(object):
         token = self._generate_token(email, id=id, action=action.value)
         if previous_email == email:
             previous_email = None
-        self._mailprovider.send_verification_mail(
+        self._mail_provider.send_verification_mail(
             email,
             assistance_email,
             token,
@@ -78,14 +80,14 @@ class UserValidation(object):
 
     def request_activate_user(
         self,
-        inactive_user: UserModelProfile,
+        inactive_user: UserModelWithRights,
         validation_emails: List[str],
         action: Optional[str] = None,
         url: Optional[str] = None,
     ) -> None:
         if action is None:
             action = ActivationType.create.value
-        self._mailprovider.send_activation_request_mail(
+        self._mail_provider.send_activation_request_mail(
             validation_emails,
             data={
                 "id": inactive_user.id,
@@ -104,10 +106,9 @@ class UserValidation(object):
 
     def inform_user_status(
         self,
-        user: UserModelProfile,
+        user: UserModelWithRights,
         assistance_email: str,
         status_name: str,
-        reason: Optional[str] = None,
         url: Optional[str] = None,
     ) -> None:
         from DB.User import UserStatus
@@ -118,13 +119,13 @@ class UserValidation(object):
             )
         else:
             token = None
-        self._mailprovider.send_status_mail(
+        self._mail_provider.send_status_mail(
             user.email,
+            user.id,
             assistance_email,
             status_name=status_name,
-            action=ActivationType.status.value,
             token=token,
-            reason=reason,
+            reason=str(user.status_admin_comment or ""),
             url=self.get_request_url(url),
         )
         logger.info(
@@ -133,18 +134,17 @@ class UserValidation(object):
 
     def request_user_to_modify_profile(
         self,
-        user: UserModelProfile,
+        user: UserModelWithRights,
         assistance_email: str,
         reason: str,
         action: ActivationType = ActivationType.create,
         url: Optional[str] = None,
     ) -> None:
-
         # exception user email and id in the same token - for mod after creation and active is False
         token = self._generate_token(
             id=user.id, email=user.email, action=action.value, reason=reason
         )
-        self._mailprovider.send_hastomodify_mail(
+        self._mail_provider.send_has_to_modify_mail(
             user.email,
             assistance_email,
             user.id,
@@ -157,13 +157,13 @@ class UserValidation(object):
 
     def request_reset_password(
         self,
-        user_to_reset: UserModelProfile,
+        user_to_reset: UserModelWithRights,
         assistance_email: str,
         temp_password: str,
         url: Optional[str] = None,
     ) -> None:
         token = self._generate_token(id=user_to_reset.id, action=temp_password)
-        self._mailprovider.send_reset_password_mail(
+        self._mail_provider.send_reset_password_mail(
             user_to_reset.email, assistance_email, token, url=self.get_request_url(url)
         )
         logger.info("reset password email sent :  '%s'" % user_to_reset.email)
@@ -174,18 +174,16 @@ class UserValidation(object):
         return url
 
     def is_valid_email(self, email: str) -> bool:
-        return self._mailprovider.is_email(email)
+        return self._mail_provider.is_email(email)
 
     @staticmethod
     def _build_serializer(secret_key: str, salt: str) -> URLSafeTimedSerializer:
-
         from itsdangerous import TimestampSigner
 
         _mailserializer = URLSafeTimedSerializer(
             secret_key=secret_key,
             salt=salt.encode("UTF-8"),
             signer=TimestampSigner,
-            # signer_kwargs={"key_derivation": "hmac"},
         )
         return _mailserializer
 
@@ -233,7 +231,7 @@ class UserValidation(object):
             payload = self._build_serializer(
                 self.secret_key, self._mailservice_salt
             ).loads(token, max_age=int(age) * 3600)
-        except (SignatureExpired, BadSignature):
+        except BadSignature:
             raise HTTPException(
                 status_code=403,
                 detail=[DETAIL_BAD_SIGN_OR_EXP],
@@ -246,9 +244,9 @@ class UserValidation(object):
             value
             and (name != "email" or (email == None or email == value))
             and (action == None or payload.get("action") == action)
+            and (ip == None or payload.get("ip") == ip)
         ):
-            if ip == None or payload.get("ip") == ip:
-                return value
+            return value
         return None
 
     def get_email_from_token(

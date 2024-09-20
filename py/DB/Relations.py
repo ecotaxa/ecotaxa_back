@@ -24,7 +24,6 @@ if True:
     from .ProjectVariables import ProjectVariables
     from .ProjectPrivilege import ProjectPrivilege
     from .Sample import Sample
-    from .Task import Task
     from .Taxonomy import Taxonomy
     from .User import User, Role
     from .UserPreferences import UserPreferences
@@ -153,8 +152,6 @@ if True:
     Training.project = relationship(
         Project,
     )
-    # Task
-    Task.owner = relationship(User)
 
     # Jobs
     Job.owner = relationship(User)

@@ -2,6 +2,8 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from typing import Tuple, List, Optional, Set, Any
+
 from API_models.filters import ProjectFiltersDict
 from BO.Classification import (
     HistoricalLastClassif,
@@ -27,6 +29,7 @@ from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
 from BO.Training import TrainingBO
 from BO.User import UserIDT
+from DB.Image import IMAGE_VIRTUAL_COLUMNS
 from DB.Object import (
     VALIDATED_CLASSIF_QUAL,
     PREDICTED_CLASSIF_QUAL,
@@ -40,14 +43,9 @@ from DB.helpers import Result
 from DB.helpers.Direct import text
 from DB.helpers.Postgres import db_server_now
 from DB.helpers.SQL import OrderClause
-
-# noinspection PyUnresolvedReferences
-from FS.ObjectCache import ObjectCache, ObjectCacheWriter
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
-from typing import Tuple, List, Optional, Set, Any
-
 from .helpers.Service import Service
 
 logger = get_logger(__name__)
@@ -98,22 +96,15 @@ class ObjectManager(Service):
         )
         free_columns_mappings = object_set.mapping.object_mappings
 
-        # The order field has an impact on the query
+        # The order fields have an impact on the query
         order_clause = self.cook_order_clause(order_field, free_columns_mappings)
+        order_clause.set_window(window_start, window_size)
 
         extra_cols = self.add_return_fields(return_fields, free_columns_mappings)
 
         from_, where_clause, params = object_set.get_sql(order_clause, extra_cols)
 
-        oid_lst, cnt = None, None
-        # with ObjectCache(project=prj, mapping=free_columns_mappings,
-        #                  where_clause=where_clause, order_clause=order_clause, params=params,
-        #                  window_start=window_start, window_size=window_size) as cache:
-        #     oid_lst, cnt = cache.pump_cache()
-
-        if oid_lst is not None:
-            total_col = "%d AS total" % cnt
-        elif "obf." in where_clause.get_sql():  # TODO: Drop when unused in mapping
+        if "obf." in where_clause.get_sql():  # TODO: Drop when unused in mapping
             # If the filter needs obj_field data it's more efficient to count with a window function
             # than issuing a second query.
             total_col = "COUNT(obh.objid) OVER() AS total"
@@ -121,26 +112,9 @@ class ObjectManager(Service):
             # Otherwise, no need for obj_field in count, less DB buffers
             total_col = "0 AS total"
 
-        sql = ""
-        if oid_lst is not None:
-            if (
-                len(oid_lst) == 0
-            ):  # All was filtered but an empty array does not work in below query
-                oid_lst = [-1]  # impossible objid
-            # SqlDialectInspection,SqlResolve
-            sql += "\n    WITH ordr (ordr, objid)"
-            sql += " AS (select * from UNNEST(:numbrs, :oids)) "
-            # The CTE is ordered and in practice it orders the result as well,
-            # but let's not depend on it, in case PG behavior evolves.
-            params["numbrs"] = list(range(len(oid_lst)))
-            params["oids"] = oid_lst
-            from_ += "ordr ON ordr.objid = obh.objid"
-            order_clause = OrderClause()
-            order_clause.add_expression("ordr", "ordr")
-            window_start = window_size = None  # The window is in the CTE
-        sql += """
-    SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
-      FROM """ % (
+        sql = """
+SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
+  FROM """ % (
             total_col,
             extra_cols,
         )
@@ -149,10 +123,6 @@ class ObjectManager(Service):
         # Add order & window if relevant
         if order_clause is not None:
             sql += order_clause.get_sql()
-        if window_start is not None:
-            sql += " OFFSET %d" % window_start
-        if window_size is not None:
-            sql += " LIMIT %d" % window_size
 
         with CodeTimer("query: for %d using %s " % (proj_id, sql), logger):
             res: Result = self.ro_session.execute(text(sql), params)
@@ -162,8 +132,10 @@ class ObjectManager(Service):
         objid: int
         acquisid: int
         sampleid: int
+        to_apply = IMAGE_VIRTUAL_COLUMNS.get_transformers(res, offset_to_data=4)
         for objid, acquisid, sampleid, total, *extra in res:
             ids.append((objid, acquisid, sampleid, proj_id))
+            [fct(extra) for fct in to_apply]
             details.append(extra)
 
         if total == 0:
@@ -183,21 +155,21 @@ class ObjectManager(Service):
     @staticmethod
     def cook_order_clause(
         order_field: Optional[str], mappings: TableMapping
-    ) -> Optional[OrderClause]:
+    ) -> OrderClause:
         """
         Prepare a SQL "order by" clause from the required field.
         The field is expressed using same table prefixes as return fields.
         """
-        if order_field is None:
-            return None
         ret = OrderClause()
+        if order_field is None:
+            return ret
         asc_desc = None
         if order_field[0] == "-":
             asc_desc = "DESC"
             order_field = order_field[1:]
         order_expr = ObjectBO._field_to_db_col(order_field, mappings)
         if order_expr is None:
-            return None
+            return ret
         alias, order_col = order_expr.split(".", 1)
         # From PG doc: If NULLS LAST is specified, null values sort after all non-null values;
         # if NULLS FIRST is specified, null values sort before all non-null values.
@@ -294,7 +266,7 @@ class ObjectManager(Service):
         )
         from_, where, params = object_set.get_sql()
         sql = """
-    SELECT COUNT(*) nbr"""
+SELECT COUNT(*) nbr"""
         if only_total:
             sql += """, NULL nbr_v, NULL nbr_d, NULL nbr_p"""
         else:

@@ -5,7 +5,9 @@
 import os.path
 import tempfile
 from pathlib import Path
-from typing import Any, Optional, List, Set
+from typing import Optional, List, Set
+
+from starlette.datastructures import UploadFile
 
 from BO.User import UserIDT
 from FS.CommonDir import CommonFolder, DirEntryT
@@ -27,7 +29,7 @@ class UserDirectory(object):
     def _user_suffix(self):
         return "." + str(self.user_id)
 
-    async def add_file(self, name: str, path: Optional[str], stream: Any) -> str:
+    async def add_file(self, name: str, path: Optional[str], stream: UploadFile) -> str:
         """
         Add the byte stream as the file with name 'name' into self.
         :param name: File name.
@@ -53,7 +55,7 @@ class UserDirectory(object):
         with open(dest_path, "wb") as fout:
             buff = await stream.read(1024)
             while len(buff) != 0:
-                fout.write(buff)
+                fout.write(buff)  # type:ignore # Mypy is unaware of async read result
                 buff = await stream.read(1024)
         return str(dest_path)
 

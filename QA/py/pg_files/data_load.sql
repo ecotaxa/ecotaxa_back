@@ -9,7 +9,6 @@ CREATE ROLE readerole WITH
   PASSWORD 'Ec0t1x1Rd4';
 
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO readerole;
-
 delete from users where id > 1;
 
 COPY public.users (id, email, password, name, organisation, status, preferences, country, usercreationdate, usercreationreason) FROM stdin;
@@ -7734,3 +7733,5 @@ COPY public.worms (aphia_id, url, scientificname, authority, status, unacceptrea
 1828	http://www.marinespecies.org/aphia.php?p=taxdetails&id=1828	Gnathostomata	\N	accepted	\N	50	Superclass	1828	Gnathostomata	\N	146419	Animalia	Chordata	\N	\N	\N	\N	WoRMS (2020). Gnathostomata. Accessed at: http://www.marinespecies.org/aphia.php?p=taxdetails&id=1828 on 2020-09-19	urn:lsid:marinespecies.org:taxname:1828	t	\N	\N	\N	\N	exact	2004-12-21 15:54:05.437	t
 10194	http://www.marinespecies.org/aphia.php?p=taxdetails&id=10194	Actinopterygii	\N	accepted	\N	60	Class	10194	Actinopterygii	\N	1828	Animalia	Chordata	Actinopterygii	\N	\N	\N	WoRMS (2020). Actinopterygii. Accessed at: http://www.marinespecies.org/aphia.php?p=taxdetails&id=10194 on 2020-09-19	urn:lsid:marinespecies.org:taxname:10194	t	\N	\N	\N	\N	exact	2017-02-02 05:40:48.577	t
 \.
+
+analyze taxonomy;

@@ -37,12 +37,12 @@ from BO.Classification import (
 )
 from BO.ColumnUpdate import ColUpdateList
 from BO.Mappings import ProjectMapping, TableMapping
-from BO.Object import ObjectIDWithParentsT, MANUAL_STATES_TEXT, PREDICTED_STATE_TEXT
+from BO.Object import ObjectIDWithParentsT, MANUAL_STATES_TEXT
 from BO.Taxonomy import TaxonomyBO
 from BO.Training import TrainingBO
 from BO.User import UserIDT
 from BO.helpers.MappedTable import MappedTable
-from DB import Session, Query
+from DB import Session, Query, Process, Taxonomy, User
 from DB.Acquisition import Acquisition
 from DB.Image import Image
 from DB.Object import (
@@ -53,6 +53,7 @@ from DB.Object import (
     DEFAULT_CLASSIF_HISTORY_DATE,
     ObjectHeader,
     ObjectIDT,
+    NON_UPDATABLE_VIA_API,
 )
 from DB.Prediction import Prediction, ClassifScore
 from DB.Project import ProjectIDListT, Project
@@ -80,6 +81,7 @@ logger = get_logger(__name__)
 
 # If one of these statuses are required, then the classif_id must be valid
 MEANS_CLASSIF_ID_EXIST = ("V", "PV", "PVD", "NVM", "VM")
+NO_HISTO = "n"
 
 
 class DescribedObjectSet(object):
@@ -110,8 +112,8 @@ class DescribedObjectSet(object):
         all_images: bool = False,
     ) -> Tuple[FromClause, WhereClause, SQLParamDict]:
         """
-        Construct SQL parts for getting the IDs of objects.
-        :param order_clause: The required order by clause.
+        Construct SQL parts for getting per-object information.
+        :param order_clause: The required order by clause, possibly containing a resultset window.
         :param select_list: Used for hinting the builder that some specific table will be needed in join.
                 major tables obj_head, samples and acquisitions are always joined.
         :param all_images: If not set (default), only return the lowest rank, i.e. visible, image
@@ -125,22 +127,41 @@ class DescribedObjectSet(object):
         self.filters.get_sql_filter(
             obj_where, params, self.user_id, self.mapping.object_mappings
         )
-        selected_tables = FromClause("%s obh" % ObjectHeader.__tablename__)
-        selected_tables += "acquisitions acq ON acq.acquisid = obh.acquisid"
-        selected_tables += (
-            "samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :projid"
-        )
         column_referencing_sql = (
-            obj_where.get_sql() + order_clause.get_sql() + select_list
+            select_list + obj_where.get_sql() + order_clause.get_sql()
         )
-        if "prj." in column_referencing_sql:
-            selected_tables += "projects prj ON prj.projid = sam.projid"
+
+        selected_tables = FromClause(
+            f"(select (:projid) as projid) prjs"
+        )  # Prepare a future _set_ of projects
+        selected_tables += f"{Project.__tablename__} prj ON prj.projid = prjs.projid"
+        selected_tables += f"{Sample.__tablename__} sam ON sam.projid = prj.projid"
+        selected_tables += (
+            f"{Acquisition.__tablename__} acq ON acq.acq_sample_id = sam.sampleid"
+        )
         if "prc." in column_referencing_sql:
-            selected_tables += "process prc ON prc.processid = acq.acquisid"
-        if "obf." in column_referencing_sql:
             selected_tables += (
-                ObjectFields.__tablename__ + " obf ON obf.objfid = obh.objid"
-            )  # TODO: Drop when unused in mapping
+                f"{Process.__tablename__} prc ON prc.processid = acq.acquisid"
+            )
+        obj_field_joined = "obf." in column_referencing_sql
+        if obj_field_joined and self.driving_table_is_obj_field(
+            obj_where.get_sql(),
+            order_clause.get_sql(),
+        ):
+            selected_tables += (
+                f"{ObjectFields.__tablename__} obf ON obf.acquis_id = acq.acquisid"
+            )
+            selected_tables += (
+                f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid"
+            )
+        else:
+            selected_tables += (
+                f"{ObjectHeader.__tablename__} obh ON obh.acquisid = acq.acquisid"
+            )
+            if obj_field_joined:
+                selected_tables += (
+                    f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid"
+                )
         if "prd." in column_referencing_sql:
             preds_ref = Prediction.__tablename__ + " prd"
             selected_tables += (
@@ -154,30 +175,30 @@ class DescribedObjectSet(object):
             selected_tables.set_outer(trainings_ref)
         if "ohu." in column_referencing_sql:  # Inline query for annotators in history
             selected_tables += (
-                "(select 1 as in_annots WHERE EXISTS (select * from "
-                + ObjectsClassifHisto.__tablename__
-                + " och WHERE och.objid = obh.objid AND och.classif_who = ANY (:filt_annot) ) ) ohu ON True"
+                f"(select 1 as in_annots WHERE EXISTS (select * from {ObjectsClassifHisto.__tablename__} och "
+                "WHERE och.objid = obh.objid AND och.classif_who = ANY (:filt_annot) ) ) ohu ON True"
             )
             selected_tables.set_outer("(select 1 as in_annots ")
             selected_tables.set_lateral("(select 1 as in_annots ")
         if "txo." in column_referencing_sql or "txp." in column_referencing_sql:
-            selected_tables += "taxonomy txo ON txo.id = obh.classif_id"
+            selected_tables += (
+                f"{Taxonomy.__tablename__} txo ON txo.id = obh.classif_id"
+            )
             if self.filters.status_filter not in MEANS_CLASSIF_ID_EXIST:
-                selected_tables.set_outer("taxonomy txo ")
+                selected_tables.set_outer(f"{Taxonomy.__tablename__} txo ")
         if "img." in column_referencing_sql:
-            selected_tables += "images img ON obh.objid = img.objid " + (
-                "AND img.imgrank = (SELECT MIN(img3.imgrank) "
-                "FROM images img3 WHERE img3.objid = obh.objid)"
+            selected_tables += f"{Image.__tablename__} img ON obh.objid = img.objid " + (
+                f"AND img.imgrank = (SELECT MIN(img2.imgrank) FROM {Image.__tablename__} img2 WHERE img2.objid = obh.objid)"
                 if not all_images
                 else ""
             )
             #  selected_tables.set_outer("images img ")
         if "usr." in column_referencing_sql:
-            selected_tables += "users usr ON obh.classif_who = usr.id"
-            selected_tables.set_outer("users usr ")
+            selected_tables += f"{User.__tablename__} usr ON obh.classif_who = usr.id"
+            selected_tables.set_outer(f"{User.__tablename__} usr ")
         if "txp." in column_referencing_sql:
-            selected_tables += "taxonomy txp ON txp.id = txo.parent_id"
-            selected_tables.set_outer("taxonomy txp ")
+            selected_tables += f"{Taxonomy.__tablename__} txp ON txp.id = txo.parent_id"
+            selected_tables.set_outer(f"{Taxonomy.__tablename__} txp ")
         return selected_tables, obj_where, params
 
     def without_filtering_taxo(self):
@@ -188,6 +209,24 @@ class DescribedObjectSet(object):
         return DescribedObjectSet(
             self.filters.session, self.prj, self.user_id, filters_but_taxo
         )
+
+    @staticmethod
+    def driving_table_is_obj_field(where: str, order: str) -> bool:
+        """Choose the fastest way to find needed objects.
+        We mirror acquis_id from obj_head to obj_fields so 2 options are:
+        -1 Fetch via acquis_id the big rows in obj_fields and then PK access to obj_head
+        -2 Fetch via acquis_id the small rows in obj_head and then PK access to obj_fields
+        1 is faster if we need all rows, 2 is better if some filter eliminates based on obj_head cols.
+        We don't know in advance the selectivity of filters, so there is kind of heuristic here.
+        """
+        ret = False
+        if ("obf." in order) or ("obf." in where and "obh." not in where):
+            ret = True
+        if (
+            "obh.classif_id" in where or "obh.classif_qual" in where
+        ):  # These are included in index
+            ret = False
+        return ret
 
 
 class EnumeratedObjectSet(MappedTable):
@@ -237,20 +276,27 @@ class EnumeratedObjectSet(MappedTable):
         Delete a chunk from self's object list.
         Technical Note: We use SQLA Core as we don't want to fetch the rows
         """
-        # Start with images which are not deleted via a CASCADE on DB side
+        # Start with physical images, which are not deleted via a CASCADE on DB side
         # This is maybe due to relationship cycle b/w ObjectHeader and Images @See comment in Image class
         img_del_qry: Delete = Image.__table__.delete()
         img_del_qry = img_del_qry.where(Image.objid == any_(a_chunk))
-        img_del_qry = img_del_qry.returning(Image.file_name, Image.thumb_file_name)
+        img_del_qry = img_del_qry.returning(
+            Image.imgid, Image.orig_file_name, Image.thumb_height
+        )
+        img_from_id_and_orig = Image.img_from_id_and_orig
+        thumb_img_from_id_and_orig = Image.thumb_img_from_id_if_there
         with CodeTimer("DELETE for %d images: " % len(a_chunk), logger):
             files_res = session.execute(img_del_qry)
             img_files = []
             nb_img_rows = 0
-            for a_file_tuple in files_res:
+            for imgid, orig_file_name, thumb_height in files_res:
+                main_img_file, thumb_img_file = img_from_id_and_orig(
+                    imgid, orig_file_name
+                ), thumb_img_from_id_and_orig(imgid, thumb_height)
                 # We have main file and optionally the thumbnail one
-                for a_file in a_file_tuple:
-                    if a_file:
-                        img_files.append(a_file)
+                img_files.append(main_img_file)
+                if thumb_img_file is not None:
+                    img_files.append(thumb_img_file)
                 nb_img_rows += 1
             logger.info(
                 "Removed: %d rows, to remove: %d files", nb_img_rows, len(img_files)
@@ -317,7 +363,16 @@ class EnumeratedObjectSet(MappedTable):
         nb_upd, all_changes = self.classify_auto_mult(
             training.training_id, classif_id_lists, classif_score_lists, True
         )
-
+        # obj_upd_qry = obj_upd_qry.values(
+        #     classif_qual=PREDICTED_CLASSIF_QUAL,
+        #     classif_who=None,
+        #     classif_when=None,
+        #     classif_auto_id=oh.classif_id,
+        #     classif_auto_score=1,
+        #     classif_auto_when=text("NOW()"),
+        # )
+        # nb_objs = self.session.execute(obj_upd_qry).rowcount  # type:ignore  # case1
+        # TODO: Cache upd
         logger.info(
             " %d out of %d rows forced to predicted", len(self.object_ids), prev_nb_objs
         )
@@ -340,12 +395,22 @@ class EnumeratedObjectSet(MappedTable):
         # ObjectCacheUpdater(prj_id).update_objects(self.object_ids, params)
         return cast(int, updated_objs)
 
-    def historize_classification(self) -> None:
+    def historize_classification(self, only_qual: Optional[List[str]]) -> None:
         """
         Copy current classification information into history table, for all rows in self.
+        :param only_qual: If set, only historize for current rows with this classification.
         """
+        nb_histo = EnumeratedObjectSet.historize_classification_for(
+            self.session, self.object_ids, only_qual
+        )
+        logger.info(" %d out of %d rows copied to log", nb_histo, len(self.object_ids))
+
+    @staticmethod
+    def historize_classification_for(
+        session: Session, object_ids: List[int], only_qual: Optional[List[str]]
+    ) -> int:
         # Light up a bit the SQLA expressions
-        obh = ObjectHeader
+        oh = ObjectHeader
         och = ObjectsClassifHisto
         #
         # No classif_qual AKA state: Assume there is nothing to log.
@@ -364,18 +429,18 @@ class EnumeratedObjectSet(MappedTable):
 
         # What's inserted, both cases, into the history table -- all columns
         ins_columns = [
-            och.objid,  # <- obh.objid
-            och.classif_date,  # <- obh.classif_when or obh.classif_auto_when
+            och.objid,  # <- oh.objid
+            och.classif_date,  # <- oh.classif_when or obh.classif_auto_when
             # och.classif_type, # Now deduced from classif_qual
-            och.classif_id,  # <- obh.classif_id
-            och.classif_qual,  # <- obh.classif_qual
-            och.classif_who,  # <- obh.classif_who
-            och.training_id,  # <- obh.training_id
+            och.classif_id,  # <- oh.classif_id
+            och.classif_qual,  # <- oh.classif_qual
+            och.classif_who,  # <- oh.classif_who
+            och.training_id,  # <- oh.training_id
         ]
         # Conventional defaults for nulls
         # TODO: when should this field be NULL?
         classif_when_exp = func.coalesce(
-            obh.classif_when, text(DEFAULT_CLASSIF_HISTORY_DATE)
+            oh.classif_when, text(DEFAULT_CLASSIF_HISTORY_DATE)
         )
         # classif_auto_when_exp = func.coalesce(
         #     obh.classif_auto_when, text(DEFAULT_CLASSIF_HISTORY_DATE)
@@ -383,7 +448,7 @@ class EnumeratedObjectSet(MappedTable):
         # What we want to historize, as a subquery - The current state
         sel_subqry = select(
             [
-                obh.objid,
+                oh.objid,
                 classif_when_exp,
                 # case(
                 #     [  # TODO: This seems quite redundant. To see in prod' if by chance it's consistent
@@ -391,22 +456,27 @@ class EnumeratedObjectSet(MappedTable):
                 #         (oh.classif_qual == predicted_state, text("'A'")),
                 #     ]
                 # ),
-                obh.classif_id,
-                obh.classif_qual,
+                oh.classif_id,
+                oh.classif_qual,
                 case(
                     [
-                        (obh.classif_qual.in_(MANUAL_STATES_TEXT), obh.classif_who),
+                        (oh.classif_qual.in_(MANUAL_STATES_TEXT), oh.classif_who),
                         # No 'who' for Predicted state, but a training_id
                     ]
                 ),
-                obh.training_id,
+                oh.training_id,
             ]
-        )
+        ).filter(
+            oh.classif_id != None
+        )  # Protect from possible inconsistencies via import
+        if only_qual is not None:
+            # Pick only the required states
+            qual_cond = oh.classif_qual.in_(only_qual)
+        else:
+            pass
         # Pick any present state
-        qual_cond = obh.classif_qual.isnot(None)
-        sel_subqry = sel_subqry.where(
-            and_(obh.objid == any_(self.object_ids), qual_cond)
-        )
+        qual_cond = oh.classif_qual.isnot(None)
+        sel_subqry = sel_subqry.where(and_(oh.objid == any_(object_ids), qual_cond))
         # Insert into the log table
         ins_qry: PgInsert = pg_insert(och.__table__)
         ins_qry = ins_qry.from_select(ins_columns, sel_subqry)
@@ -414,8 +484,8 @@ class EnumeratedObjectSet(MappedTable):
         ins_qry = ins_qry.on_conflict_do_nothing(constraint="objectsclassifhisto_pkey")
         # TODO: mypy crashes due to pg_dialect below
         # logger.info("Histo query: %s", ins_qry.compile(dialect=pg_dialect()))
-        nb_objs = self.session.execute(ins_qry).rowcount  # type:ignore  # case1
-        logger.info(" %d out of %d rows copied to log", nb_objs, len(self.object_ids))
+        nb_obj_histos = session.execute(ins_qry).rowcount  # type:ignore  # case1
+        return nb_obj_histos
 
     def apply_on_all(self, project: Project, updates: ColUpdateList) -> int:
         """
@@ -424,14 +494,9 @@ class EnumeratedObjectSet(MappedTable):
         mapped_updates = []
         direct_updates = []
         for an_upd in updates.lst:
-            if an_upd["ucol"] in ObjectHeader.__dict__:
-                if an_upd["ucol"] in (
-                    ObjectHeader.classif_id.name,
-                    ObjectHeader.classif_qual.name,
-                    ObjectHeader.training_id.name,
-                    ObjectHeader.classif_who.name,
-                ):
-                    # Not possible anymore
+            dest_col = an_upd["ucol"]
+            if dest_col in ObjectHeader.__dict__:
+                if dest_col in NON_UPDATABLE_VIA_API:
                     continue
                 direct_updates.append(an_upd)
             else:
@@ -480,21 +545,16 @@ class EnumeratedObjectSet(MappedTable):
             ObjectsClassifHisto.objid == any_(self.object_ids)
         ).subquery()
 
-        # Also get some fields from ObjectHeader for referencing, info, and fallback
+        # We have a maximum of 1 line from ObjectsClassifHisto (the one with most recent date) from subquery
         qry = self.session.query(
             ObjectHeader.objid,
             ObjectHeader.classif_id,
+            subq_alias.c.classif_date.label("histo_classif_date"),
             func.coalesce(
-                subq_alias.c.classif_date  # TODO, ObjectHeader.classif_auto_when
-            ).label("histo_classif_date"),
-            case(  # och.classif_type,  # Emulate previous value TODO: dup code?
-                [
-                    (ObjectHeader.classif_qual.in_(MANUAL_STATES_TEXT), "M"),
-                    (ObjectHeader.classif_qual == PREDICTED_STATE_TEXT, "A"),
-                ]
-            ).label("histo_classif_type"),
-            func.coalesce(subq_alias.c.classif_id).label("histo_classif_id"),
-            subq_alias.c.classif_qual.label("histo_classif_qual"),
+                subq_alias.c.classif_qual,
+                NO_HISTO,
+            ).label("histo_classif_qual"),
+            subq_alias.c.classif_id.label("histo_classif_id"),
             subq_alias.c.classif_who.label("histo_classif_who"),
             subq_alias.c.training_id.label("histo_training_id"),
         )
@@ -528,18 +588,33 @@ class EnumeratedObjectSet(MappedTable):
         """
         histo = self._get_last_classif_history(from_user_id, but_not_from_user_id)
         # Bulk update. It's less efficient than a plain update with criteria, but in the future we
-        # might be able to do some cherry picking on the history.
+        # might be able to do some cherry-picking on the history.
         updates = [
             {
                 ObjectHeader.objid.name: an_histo.objid,
+                ObjectHeader.classif_qual.name: an_histo.histo_classif_qual,
                 ObjectHeader.classif_id.name: an_histo.histo_classif_id,
                 ObjectHeader.classif_who.name: an_histo.histo_classif_who,
                 ObjectHeader.classif_when.name: an_histo.histo_classif_date,
-                ObjectHeader.classif_qual.name: an_histo.histo_classif_qual,
                 ObjectHeader.training_id.name: an_histo.histo_training_id,
             }
             for an_histo in histo
+            if an_histo.histo_classif_qual != NO_HISTO
         ]
+        updates.extend(
+            [
+                {
+                    ObjectHeader.objid.name: an_histo.objid,
+                    ObjectHeader.classif_qual.name: None,
+                    ObjectHeader.classif_id.name: None,
+                    ObjectHeader.classif_who.name: None,
+                    ObjectHeader.classif_when.name: None,
+                    ObjectHeader.training_id.name: None,
+                }
+                for an_histo in histo
+                if an_histo.histo_classif_qual == NO_HISTO
+            ]
+        )
         self.session.bulk_update_mappings(ObjectHeader, updates)
         self.session.commit()
         return histo
@@ -558,14 +633,14 @@ class EnumeratedObjectSet(MappedTable):
         user_id: UserIDT,
         classif_ids: ClassifIDListT,
         wanted_qualif: str,
-        timestamp: datetime.datetime,
+        log_timestamp: datetime.datetime,
     ) -> Tuple[int, ObjectSetClassifChangesT]:
         """
         Set current classifications in self and/or validate current classification.
         :param user_id: The User who did these changes.
         :param classif_ids: One category id for each of the object ids in self. -1 means "keep current".
         :param wanted_qualif: V(alidate) or D(ubious). Use "=" for keeping same qualification.
-        :param timestamp: The time to set on objects.
+        :param log_timestamp: The time to set on objects.
         :returns updated rows and a summary of changes, for MRU and logging.
         """
         # Gather state of classification, for impacted objects, before the change. Keep a lock on rows.
@@ -641,11 +716,11 @@ class EnumeratedObjectSet(MappedTable):
             # the simple update below creates an inconsistency as the new_classif_id will
             # _not_ come from a training. definitely TODO
             # Historize the updated rows (can be a lot!)
-            an_obj_set.historize_classification()
+            an_obj_set.historize_classification(only_qual=None)
             row_upd = {
                 classif_id_col: next_classif_id,
                 classif_qual_col: new_wanted_qualif,
-                classif_when_col: timestamp,
+                classif_when_col: log_timestamp,
                 classif_who_col: user_id,
             }
             # Do the update itself
@@ -687,22 +762,20 @@ class EnumeratedObjectSet(MappedTable):
         # updates: Dict[Tuple, EnumeratedObjectSet] = {}
         all_changes: ObjectSetClassifChangesT = OrderedDict()
         # A bit of obsessive optimization, and avoid semantically unbound literal
-        objid_col, classif_id_col, classif_qual_col, training_id_col = (
+        (
+            objid_col,
+            classif_id_col,
+            classif_qual_col,
+            classif_who_col,
+            classif_when_col,
+            training_id_col,
+        ) = (
             ObjectHeader.objid.name,
             ObjectHeader.classif_id.name,
             ObjectHeader.classif_qual.name,
+            ObjectHeader.classif_who.name,
+            ObjectHeader.classif_when.name,
             ObjectHeader.training_id.name,
-        )
-        (
-            pred_training_id_col,
-            pred_object_id_col,
-            pred_classif_id_col,
-            pred_score_col,
-        ) = (
-            Prediction.training_id.name,
-            Prediction.object_id.name,
-            Prediction.classif_id.name,
-            Prediction.score.name,
         )
         updates: List[Dict[str, Any]] = []
 
@@ -720,7 +793,7 @@ class EnumeratedObjectSet(MappedTable):
             prev_classif_qual = prev_obj["classif_qual"]
             # Wanted possible classifications
             preds.sort(key=lambda t: -t.score)
-            # Just override what would not spoil human work, except if explicitely required
+            # Just override what would not spoil human work, except if explicitly required
             if prev_classif_qual not in self.OVERRIDEN_BY_PREDICTION and not force:
                 continue
             # Not manually modified, go to Predicted state and set prediction as classification
@@ -731,6 +804,8 @@ class EnumeratedObjectSet(MappedTable):
                 "_" + objid_col: obj_id,
                 classif_qual_col: PREDICTED_CLASSIF_QUAL,
                 classif_id_col: next_classif_id,
+                classif_who_col: None,
+                classif_when_col: None,
                 training_id_col: training_id,
             }
             updates.append(an_update)
@@ -748,7 +823,9 @@ class EnumeratedObjectSet(MappedTable):
         changed_object_ids = [
             an_id for chg_ids in all_changes.values() for an_id in chg_ids
         ]
-        EnumeratedObjectSet(self.session, changed_object_ids).historize_classification()
+        EnumeratedObjectSet(self.session, changed_object_ids).historize_classification(
+            only_qual=None
+        )
 
         # Bulk (or sort of) update of obj_head
         sql_now = text("now()")
@@ -760,7 +837,8 @@ class EnumeratedObjectSet(MappedTable):
             full_upd_qry = obj_upd_qry.values(
                 classif_qual=bindparam(classif_qual_col),
                 classif_id=bindparam(classif_id_col),
-                classif_when=sql_now,
+                classif_who=bindparam(classif_who_col),
+                classif_when=bindparam(classif_when_col),
                 training_id=bindparam(training_id_col),
             )
             self.session.execute(full_upd_qry, updates)

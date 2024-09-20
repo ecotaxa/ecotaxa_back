@@ -24,7 +24,7 @@ from tests.emodnet_ref import (
 )
 from tests.export_shared import JOB_DOWNLOAD_URL
 from tests.formulae import uvp_formulae
-from tests.test_classification import _prj_query, OBJECT_SET_CLASSIFY_URL
+from tests.test_classification import query_all_objects, OBJECT_SET_CLASSIFY_URL
 from tests.test_collections import (
     COLLECTION_CREATE_URL,
     COLLECTION_UPDATE_URL,
@@ -113,10 +113,10 @@ def exportable_collection(database, fastapi, caplog, admin_or_creator):
     assert "warnings" not in json
 
     # Validate nearly everything, otherwise no export.
-    obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
+    obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id)
     assert len(obj_ids) == 20
     # The first Actinopterygii object in m106_mn01_n3_sml remains Predicted and the second one is imported Validated
-    actinopters = _prj_query(fastapi, CREATOR_AUTH, prj_id, taxo="92731")
+    actinopters = query_all_objects(fastapi, CREATOR_AUTH, prj_id, taxo="92731")
     assert len(actinopters) == 2
     for an_objid in actinopters:  # No need to validate any of them
         obj_ids.remove(an_objid)

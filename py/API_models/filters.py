@@ -239,3 +239,6 @@ ProjectFiltersModel = typed_dict_to_model(ProjectFiltersDict, _ProjectFilters2Mo
 class ProjectFilters(ProjectFiltersModel):
     def base(self) -> ProjectFiltersDict:
         return self.dict()  # type:ignore
+
+    def min_base(self) -> ProjectFiltersDict:
+        return {k: v for k, v in self.dict().items() if v}  # type:ignore

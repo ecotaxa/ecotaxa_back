@@ -4,16 +4,16 @@
 #
 # Exported constants, to avoid data duplication b/w back-end and front-end
 #
-from typing import Dict, List, NamedTuple
+from typing import Dict, List
 
 from BO.DataLicense import DataLicense
-from DB.User import UserStatus
 from BO.User import (
     USER_PWD_REGEXP,
     USER_PWD_REGEXP_DESCRIPTION,
     SHORT_TOKEN_AGE,
     PROFILE_TOKEN_AGE,
 )
+from DB.User import UserStatus
 from helpers.pydantic import BaseModel, Field
 
 
@@ -82,9 +82,4 @@ class Constants(BaseModel):
         title="Google ReCaptcha",
         description="use Google ReCaptcha",
         default=False,
-    )
-    add_ticket: str = Field(
-        title="ticket separator",
-        description="string separator, permits to add ticket number when asking more information before user validation",
-        default="",
     )

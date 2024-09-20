@@ -57,6 +57,7 @@ from DB.helpers.ORM import (
     any_,
     and_,
     subqueryload,
+    joinedload,
     minimal_table_of,
     func,
 )
@@ -218,6 +219,8 @@ class ProjectBO(object):
     ):
         assert contact is not None, "A valid Contact is needed."
         proj_id = self._project.projid
+        # strip title
+        title = title.strip()
         assert instrument is not None, "A valid Instrument is needed."
         # Validate variables
         errors: List[str] = []
@@ -473,6 +476,8 @@ class ProjectBO(object):
         ):
             last_prj: Optional[int] = None
             for projid, user_id, user_name, cnt, last_date in pqry:
+                if last_date is None:
+                    continue
                 last_date_str = last_date.replace(microsecond=0).isoformat()
                 if projid != last_prj:
                     last_prj = projid
@@ -776,27 +781,6 @@ class ProjectBO(object):
         return [an_id for an_id, in qry]
 
     @classmethod
-    def get_all_object_ids_with_first_image(
-        cls, session: Session, prj_id: int
-    ) -> Dict[Any, str]:  # ObjectIDT
-        """
-        Return the full list of objects IDs and first image file name inside a project.
-        """
-        sql = text(
-            """
-    SELECT obh.objid, img.file_name
-      FROM %s obh
-      JOIN images img ON obh.objid = img.objid
-                     AND img.imgrank = (SELECT MIN(img3.imgrank) FROM images img3 WHERE img3.objid = obh.objid)
-      JOIN acquisitions acq ON acq.acquisid = obh.acquisid
-      JOIN samples sam ON sam.sampleid = acq.acq_sample_id
-     WHERE sam.projid = :prj"""
-            % ObjectHeader.__tablename__
-        )
-        res: Result = session.execute(sql, {"prj": prj_id})
-        return {objid: file_name for (objid, file_name) in res.fetchall()}
-
-    @classmethod
     def incremental_update_taxo_stats(
         cls, session: Session, prj_id: int, collated_changes: ChangeTypeT
     ) -> None:
@@ -948,14 +932,23 @@ class ProjectBOSet(object):
     Many projects...
     """
 
-    def __init__(self, session: Session, prj_ids: ProjectIDListT, public: bool = False):
+    def __init__(
+        self,
+        session: Session,
+        prj_ids: ProjectIDListT,
+        public: bool = False,
+        summary: bool = False,
+    ):
         # Query the project and ORM-load neighbours as well, as they will be needed in enrich()
         qry = select(Project)
         # qry = session.query(Project)
-        qry = qry.options(subqueryload(Project.privs_for_members))
-        qry = qry.options(subqueryload(Project.members))
-        qry = qry.options(subqueryload(Project.variables))
-        qry = qry.options(subqueryload(Project.instrument))
+        qry = qry.options(
+            subqueryload(Project.privs_for_members).joinedload(ProjectPrivilege.user)
+            # Save a bit of time by joining privileges & users in a single query
+            # Con: More data is returned as users in several projects are returned several times
+        )
+        qry = qry.options(joinedload(Project.variables))  # 1 -> 0,1
+        qry = qry.options(joinedload(Project.instrument))  # 1 -> 0,1
         qry = qry.filter(Project.projid == any_(prj_ids))
         self.projects: List[ProjectBO] = []
         # De-duplicate

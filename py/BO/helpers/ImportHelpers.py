@@ -3,12 +3,14 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import List, Set, Dict, Optional, Callable, Tuple, Any
 
 from BO.Classification import ClassifIDT
 from BO.Mappings import ProjectMapping
 from BO.ProjectTidying import ProjectTopology
+from BO.User import UserIDT
 from BO.Vignette import VignetteMaker
 from DB.Acquisition import Acquisition
 from DB.Sample import Sample
@@ -29,6 +31,7 @@ class ImportDiagnostic(object):
         self.nb_objects_without_gps = 0
         self.messages: List[str] = []
         self.errors: List[str] = []
+        self.error_context: Optional[str] = None
         # existing objects for consistency checks
         self.existing_objects_and_image: Set[str] = set()
         self.topology = ProjectTopology()
@@ -38,8 +41,15 @@ class ImportDiagnostic(object):
     def warn(self, message: str):
         self.messages.append(message)
 
-    def error(self, message: str):
-        self.errors.append(message)
+    def error(self, message: str, context: Optional[str] = None):
+        if context is not None:
+            if context != self.error_context:
+                self.errors.append("In " + context + ":")
+                self.error_context = context
+            self.errors.append(" - " + message)
+        else:
+            self.error_context = None
+            self.errors.append(message)
 
 
 class ImportWhere(object):
@@ -65,6 +75,7 @@ class ImportHow(object):
         custom_mapping: ProjectMapping,
         skip_object_duplicates: bool,
         loaded_files: List[str],
+        user_id: UserIDT,
     ):
         self.prj_id = prj_id
         # Update or create
@@ -99,6 +110,8 @@ class ImportHow(object):
         self.loaded_files = loaded_files
         # For UVP6 vignetting
         self.vignette_maker: Optional[VignetteMaker] = None
+        # In case we need to default a user
+        self.user_id: UserIDT = user_id
 
     def do_thumbnail_above(self, max_dim: int) -> None:
         self.max_dim = max_dim
@@ -118,7 +131,7 @@ class ImportStats(object):
     """
 
     def __init__(self, total_rows: int, report_def: Callable):
-        self.start_time = time.time()
+        self.start_time = datetime.now()
         self.total_row_count = total_rows
         self.current_row_count = 0
         self.report_def = report_def
@@ -127,7 +140,7 @@ class ImportStats(object):
         self.current_row_count += nb_rows
 
     def so_far(self) -> Tuple[float, int]:
-        elapsed = time.time() - self.start_time
+        elapsed = time.time() - self.start_time.timestamp()
         rows_per_sec = int(self.current_row_count / elapsed)
         return elapsed, rows_per_sec
 

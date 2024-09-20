@@ -61,6 +61,7 @@ def test_plain_API_login(database):
     del me_as_user["mail_status_date"]
     del me_as_user["status_date"]
     del me_as_user["status_admin_comment"]
+    del me_as_user["orcid"]
     assert me_as_user == {
         "status": 1,
         "country": None,

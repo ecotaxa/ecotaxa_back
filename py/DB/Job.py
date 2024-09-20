@@ -33,6 +33,7 @@ class Job(Model):
     """
 
     __tablename__ = "job"
+    # Starting 2024 Feb 02, we archive jobs by negating their ids
     id: int = Column(INTEGER, Sequence("seq_temp_tasks"), primary_key=True)
     """ Unique identifier, from a sequence """
     owner_id: int = Column(INTEGER, ForeignKey("users.id"), nullable=False)

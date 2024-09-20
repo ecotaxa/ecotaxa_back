@@ -5,7 +5,7 @@
 #
 # Description on how to move from DB rows to JSON-compatible dicts
 #
-from typing import Dict, Union
+from typing import Dict, Union, Callable
 
 from DB.Acquisition import Acquisition
 from DB.Image import Image
@@ -16,7 +16,7 @@ from DB.Sample import Sample
 from DB.helpers.ORM import ModelT, Column, RelationshipProperty
 
 # Typing for the clarity. Key = DB Column, Value = string in target dict
-JSONDesc = Dict[Union[Column, RelationshipProperty], str]
+JSONDesc = Dict[Union[Column, RelationshipProperty, Callable], str]
 
 JSON_FIELDS: Dict[ModelT, JSONDesc] = {
     Project: {
@@ -41,14 +41,18 @@ JSON_FIELDS: Dict[ModelT, JSONDesc] = {
     },
     ObjectHeader: {
         ObjectHeader.orig_id: "oid",
-        ObjectHeader.classif_id: "mcat",
+        ObjectHeader.classif_id: "ccat",
+        ObjectHeader.classif_when: "cwhn",
+        ObjectHeader.classif_who: "mwho",
+        # ObjectHeader.classif_auto_id: "acat",
         ObjectHeader.all_images: "images",  # type:ignore # case2
         ObjectHeader.depth_min: "depth_min",
         ObjectHeader.depth_max: "depth_max",
         ObjectHeader.latitude: "latitude",
         ObjectHeader.longitude: "longitude",
+        ObjectHeader.complement_info: "cmt",
         ObjectHeader.fields: "fields",  # type:ignore # 1-1 so should be joined right away and disappear
     },
     ObjectFields: {},
-    Image: {Image.file_name: "fil", Image.imgrank: "rnk"},
+    Image: {Image.img_to_file: "fil", Image.imgrank: "rnk"},
 }

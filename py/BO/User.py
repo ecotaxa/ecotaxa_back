@@ -6,10 +6,11 @@
 import json
 from dataclasses import dataclass
 from typing import Any, Final, List
+
 from BO.Classification import ClassifIDListT
-from DB import Session
-from DB.User import User, UserStatus
 from BO.Rights import RightsBO
+from DB import Session
+from DB.User import User
 from DB.UserPreferences import UserPreferences
 from helpers.DynamicLogs import get_logger
 
@@ -22,7 +23,7 @@ logger = get_logger(__name__)
 MISSING_USER = {"id": -1, "name": "", "email": ""}
 
 USER_PWD_REGEXP = r"^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#?%^&*-+])).{8,20}$"
-USER_PWD_REGEXP_DESCRIPTION = "8 char. minimum, at least one uppercase, one lowercase, one number and one special char in '#?!@%^&*-' "
+USER_PWD_REGEXP_DESCRIPTION = "8 char. minimum, at least one uppercase, one lowercase, one number and one special char in '#?!@%^&*-+' "
 SHORT_TOKEN_AGE = 1
 PROFILE_TOKEN_AGE = 24
 
@@ -34,7 +35,7 @@ class UserBO(object):
 
     @staticmethod
     def get_preferences_per_project(
-        session: Session, user_id: int, project_id: int, key: str
+        ro_session: Session, user_id: int, project_id: int, key: str
     ) -> Any:
         """
         Get a preference, for given project and user. Keys are not standardized (for now).
@@ -43,7 +44,7 @@ class UserBO(object):
         # assert (
         #    current_user is not None and current_user.status == UserStatus.active.value
         # )
-        current_user: User = RightsBO.get_user_throw(session, user_id)
+        current_user: User = RightsBO.get_user_throw(ro_session, user_id)
         prefs_for_proj: UserPreferences = (
             current_user.preferences_for_projects.filter_by(
                 project_id=project_id
@@ -159,7 +160,6 @@ class UserBO(object):
         # can check is password is strong  if password not None
         if verify_password == True:
             from helpers.httpexception import DETAIL_PASSWORD_STRENGTH_ERROR
-            from API_operations.helpers import UserValidation
 
             new_password = getattr(user_model, User.password.name)
             if new_password not in ("", None) and not cls.is_strong_password(

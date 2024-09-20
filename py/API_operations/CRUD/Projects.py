@@ -48,6 +48,8 @@ class ProjectsService(Service):
             )
             new_prj = Project()
             new_prj.instrument_id = req.instrument
+        # strip title
+        req.title = req.title.strip()
         new_prj.title = req.title
         new_prj.status = ANNOTATE_STATUS
         new_prj.visible = req.visible
@@ -66,6 +68,7 @@ class ProjectsService(Service):
         title_filter: str = "",
         instrument_filter: str = "",
         filter_subset: bool = False,
+        summary: bool = False,
     ) -> List[ProjectBO]:
         # current_user: Optional[User]
         if current_user_id is None:
@@ -88,7 +91,9 @@ class ProjectsService(Service):
                 instrument_filter,
                 filter_subset,
             )
-            projects = ProjectBOSet(self.ro_session, matching_ids, public=False)
+            projects = ProjectBOSet(
+                self.ro_session, matching_ids, public=False, summary=summary
+            )
         return projects.as_list()
 
     def query(

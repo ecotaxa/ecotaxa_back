@@ -2,6 +2,8 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2023  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from datetime import datetime
+
 from BO.User import UserIDT
 from DB.Training import Training
 from DB.helpers import Session
@@ -11,7 +13,6 @@ from helpers.DynamicLogs import get_logger
 logger = get_logger(__name__)
 
 
-# noinspection SqlDialectInspection
 class TrainingBO(object):
     """
     A training, i.e. the event of producing predictions for lots of objects.
@@ -30,12 +31,31 @@ class TrainingBO(object):
         return getattr(self._training, item)
 
     @classmethod
-    def create_one(cls, session: Session, author: UserIDT) -> "TrainingBO":
+    def create_one(
+        cls,
+        session: Session,
+        author: UserIDT,
+        training_start: datetime = DateTime.now_time(),
+    ) -> "TrainingBO":
         trn = Training()
-        trn.training_start = DateTime.now_time()
+        trn.training_start = training_start
         trn.training_end = trn.training_start
         trn.training_author = author
         trn.training_path = "?"
         session.add(trn)
         session.flush([trn])  # to get the training ID populated
         return TrainingBO(trn)
+
+    @classmethod
+    def find_by_start_time_or_create(
+        cls, session: Session, author: UserIDT, start_time: datetime
+    ) -> "TrainingBO":
+        ret = (
+            session.query(Training)
+            .filter(Training.training_start == start_time)
+            .first()
+        )
+        if ret is None:
+            return cls.create_one(session, author, start_time)
+        else:
+            return TrainingBO(ret)

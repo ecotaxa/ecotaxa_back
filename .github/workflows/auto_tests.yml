@@ -2,13 +2,11 @@
 
 name: CI
 
-# Controls when the action will run. Triggers the workflow on push or pull request
-# events but only for the master branch
+# Controls when the action will run.
 on:
   push:
-    branches: [ master ]
   pull_request:
-    branches: [ master ]
+  workflow_dispatch:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -16,15 +14,21 @@ jobs:
     environment: Env_for_Actions
     # The type of runner that the job will run on
     runs-on: [ubuntu-latest]
-    # Container with libs (no src)
-    container: grololo06/ecotaxa:latest
+    # Virgin container
+    container: ubuntu:18.04
+
+    # https://github.com/actions/setup-node/issues/922
+    # https://github.com/actions/runner/issues/2906
+    # Due to: https://github.blog/changelog/2024-03-07-github-actions-all-actions-will-run-on-node20-instead-of-node16-by-default/
+    env:
+        ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
 
     # Service containers to run with `container-job`
     services:
       # Label used to access the service container
       postgres:
         # Docker Hub image
-        image: postgres:14.9
+        image: pgvector/pgvector:pg14
         # Provide the password for postgres
         env:
           POSTGRES_PASSWORD: postgres12
@@ -36,9 +40,25 @@ jobs:
           --health-retries 5           
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-    # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+    # node (or a lib of) is needed by codecov (or GH)
+    - run: apt-get update
+    - run: apt-get install -y curl
+    - run: curl -fsSL https://deb.nodesource.com/setup_16.x | bash -
+    - run: apt-get install -y nodejs
+    # git is needed by codecov
+    - run: apt-get install -y git
+    # python & psql (for the test DB) from repo, same as prod docker
+    - run: apt-get install
+        python3.8 python3-venv python3.8-dev python3.8-venv
+        postgresql-client-10 libpq-dev
+        gcc make file cython3
+        --no-install-recommends --yes
+    - run: python3.8 -m venv /venv
+    - run: PATH=/venv/bin pip3 install --upgrade pip wheel
+    # Checkout. note: @v3 or @v4 need node20 which is NOK on ubuntu 18, hack of env above does a workaround
     - uses: actions/checkout@v2
     # Run both tests and coverage
+    - run: PATH=/venv/bin:$PATH pip3 install tox==3.24.3
     - name: Run tox in QA
       working-directory: ./QA/py
       run: |
@@ -48,7 +68,9 @@ jobs:
         POSTGRES_HOST: postgres
         # The default PostgreSQL port
         POSTGRES_PORT: 5432
-    - uses: codecov/codecov-action@v3
+    - name: Upload coverage report
+      # Code coverage. note: @v4 needs node20 which is NOK on ubuntu 18
+      uses: codecov/codecov-action@v3
       with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        verbose: true # optional (default = false)
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true # optional (default = false)

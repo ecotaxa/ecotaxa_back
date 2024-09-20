@@ -17,7 +17,7 @@ from BO.Sample import SampleIDT
 from BO.helpers.MappedEntity import MappedEntity
 from DB import Prediction
 from DB.Acquisition import Acquisition
-from DB.Image import Image
+from DB.Image import Image, IMAGE_VIRTUAL_COLUMNS
 from DB.Object import (
     ObjectHeader,
     ObjectFields,
@@ -38,7 +38,6 @@ from DB.helpers.ORM import (
     subqueryload,
     Model,
     minimal_model_of,
-    case,
     text,
     and_,
 )
@@ -107,7 +106,14 @@ class ObjectBO(MappedEntity):
         self.sample_id = self.header.acquisition.acq_sample_id
         self.project_id = self.header.acquisition.sample.projid
         # noinspection PyTypeChecker
-        self.images: List[Image] = [an_img for an_img in self.header.all_images]
+        self.images: List[Image] = [
+            IMAGE_VIRTUAL_COLUMNS.add_to_model(an_img)
+            for an_img in self.header.all_images
+        ]
+        # Always null fields or unpredictable fields kept for API identity
+        self.similarity = None
+        self.classif_crossvalidation_id = None
+        self.random_value = 0
 
     def get_history(self) -> HistoricalClassificationListT:
         """
@@ -119,12 +125,12 @@ class ObjectBO(MappedEntity):
             och.classif_id,
             och.classif_date,
             och.classif_who,
-            case(  # och.classif_type,  # Emulate previous value
-                [
-                    (och.classif_qual.in_(MANUAL_STATES_TEXT), "M"),
-                    (och.classif_qual == PREDICTED_STATE_TEXT, "A"),
-                ]
-            ).label("classif_type"),
+            # case(  # och.classif_type,  # Emulate previous value
+            #     [
+            #         (och.classif_qual.in_(MANUAL_STATES_TEXT), "M"),
+            #         (och.classif_qual == PREDICTED_STATE_TEXT, "A"),
+            #     ]
+            # ).label("classif_type"),
             och.classif_qual,
             Prediction.score.label("classif_score"),
             User.name.label("user_name"),
@@ -159,6 +165,8 @@ class ObjectBO(MappedEntity):
                 return "obh." + name
             elif name == "imgcount":
                 return "(SELECT COUNT(img2.imgrank) FROM images img2 WHERE img2.objid = obh.objid) AS imgcount"
+            elif name == "random_value":  # TODO: A VirtualColumn
+                return "HASHTEXT(obh.orig_id) AS random_value"
             elif name in CLASSIF_OBJ_FIELDS_IN_PREDICTION:
                 return "prd." + CLASSIF_OBJ_FIELDS_IN_PREDICTION[name]
             elif name in CLASSIF_OBJ_FIELDS_IN_TRAINING:
@@ -172,6 +180,8 @@ class ObjectBO(MappedEntity):
         elif prfx == "img":
             if name in Image.__dict__:
                 return a_field
+            elif name in IMAGE_VIRTUAL_COLUMNS:
+                return IMAGE_VIRTUAL_COLUMNS.sql_for(name)
         elif prfx in ("txo", "txp"):
             if name in Taxonomy.__dict__:
                 return a_field

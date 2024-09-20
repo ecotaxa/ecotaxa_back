@@ -10,7 +10,7 @@ from starlette import status
 
 from tests.test_fastapi import ADMIN_AUTH
 from tests.test_import import ADMIN_USER_ID
-from tests.test_subset_merge import check_project
+from tests.prj_utils import check_project
 
 PROJECT_CHECK_URL = "/projects/{project_id}/check"
 
@@ -20,6 +20,13 @@ SAMPLE_QUERY_URL = "/sample/{sample_id}"
 SAMPLE_TAXO_STAT_URL = "/sample_set/taxo_stats?sample_ids={sample_ids}"
 ACQUISITION_QUERY_URL = "/acquisition/{acquisition_id}"
 PROCESS_QUERY_URL = "/process/{process_id}"
+
+
+def current_object(fastapi, object_id):
+    url = OBJECT_QUERY_URL.format(object_id=object_id)
+    response = fastapi.get(url, headers=ADMIN_AUTH)
+    assert response.status_code == status.HTTP_200_OK
+    return response.json()
 
 
 @pytest.mark.parametrize("prj_id", [-1])
@@ -52,10 +59,7 @@ def test_subentities(database, fastapi, caplog, tstlogs):
     response = fastapi.get(url, headers=ADMIN_AUTH)
     assert response.status_code == status.HTTP_404_NOT_FOUND
     # OK ID
-    url = OBJECT_QUERY_URL.format(object_id=first_objid)
-    response = fastapi.get(url, headers=ADMIN_AUTH)
-    assert response.status_code == status.HTTP_200_OK
-    obj = response.json()
+    obj = current_object(fastapi, first_objid)
     assert obj is not None
     # OK ID with anonymous
     url = OBJECT_QUERY_URL.format(object_id=first_objid)

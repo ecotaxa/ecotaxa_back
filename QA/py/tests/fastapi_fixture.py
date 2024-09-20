@@ -3,9 +3,10 @@
 
 import main
 import pytest
+from BG_operations.JobScheduler import JobScheduler
 from fastapi.testclient import TestClient
 
-from BG_operations.JobScheduler import JobScheduler
+from tests.prj_utils import sce_check_consistency
 
 client = TestClient(main.app)
 
@@ -25,5 +26,6 @@ def fastapi(config, database, tstlogs) -> TestClient:
     with client:  # Trigger the fastapi 'startup' event -> launches the JobScheduler
         yield client
     # Teardown, once per module
+    sce_check_consistency("fastapi fx")
     fastApiUtils._serializer.loads = sav_loads
     JobScheduler.shutdown()

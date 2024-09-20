@@ -1,6 +1,6 @@
 import logging
 from copy import deepcopy
-from urllib.parse import urlencode, quote
+from urllib.parse import quote
 
 from starlette import status
 
@@ -8,7 +8,6 @@ from tests.credentials import (
     ADMIN_AUTH,
     ORDINARY_USER_USER_ID,
     ORDINARY_USER2_USER_ID,
-    USER2_AUTH,
     USER_AUTH,
 )
 from tests.test_fastapi import PROJECT_QUERY_URL

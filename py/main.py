@@ -5,12 +5,14 @@
 # Based on https://fastapi.tiangolo.com/
 #
 import os
+import time
 from logging import INFO
 from typing import Union, Tuple, List, Dict, Any, Optional
 
 from fastapi import (
     FastAPI,
     Request,
+    Header,
     Response,
     status,
     Depends,
@@ -48,7 +50,15 @@ from API_models.crud import (
     ResetPasswordReq,
     UserActivateReq,
 )
-from API_models.exports import ExportReq, ExportRsp, TaxonomyRecast, DarwinCoreExportReq
+from API_models.exports import (
+    ExportReq,
+    ExportRsp,
+    TaxonomyRecast,
+    DarwinCoreExportReq,
+    GeneralExportReq,
+    SummaryExportReq,
+    BackupExportReq,
+)
 from API_models.filesystem import DirectoryModel
 from API_models.filters import ProjectFilters
 from API_models.helpers.Introspect import plain_columns
@@ -99,12 +109,18 @@ from API_operations.Status import StatusService
 from API_operations.Subset import SubsetServiceOnProject
 from API_operations.TaxoManager import TaxonomyChangeService, CentralTaxonomyService
 from API_operations.TaxonomyService import TaxonomyService
+from API_operations.UserFilesFolder import UserFilesFolderService
 from API_operations.UserFolder import UserFolderService, CommonFolderService
 from API_operations.admin.Database import DatabaseService
 from API_operations.admin.ImageManager import ImageManagerService
 from API_operations.admin.NightlyJob import NightlyJobService
 from API_operations.exports.DarwinCore import DarwinCoreExport
-from API_operations.exports.ForProject import ProjectExport
+from API_operations.exports.ForProject import (
+    ProjectExport,
+    GeneralProjectExport,
+    SummaryProjectExport,
+    BackupProjectExport,
+)
 from API_operations.imports.Import import FileImport
 from API_operations.imports.SimpleImport import SimpleImport
 from BG_operations.JobScheduler import JobScheduler
@@ -125,7 +141,7 @@ from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.User import User
 from helpers.Asyncio import async_bg_run, log_streamer
-from helpers.DynamicLogs import get_logger
+from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
     internal_server_error_handler,
     dump_openapi,
@@ -134,6 +150,7 @@ from helpers.fastApiUtils import (
     get_optional_current_user,
     MyORJSONResponse,
     ValidityThrower,
+    ranged_streaming_response,
 )
 from helpers.login import LoginService
 from helpers.pydantic import sort_and_prune
@@ -145,9 +162,11 @@ logger = get_logger(__name__)
 
 fastapi_logger.setLevel(INFO)
 
+api_logger = get_api_logger()
+
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.35.mlp",
+    version="0.0.38",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -162,8 +181,13 @@ app = FastAPI(
 # Instrument a bit
 add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
 
-# Optimize large responses
+# 'Client disconnect kills running job' problem workaround. _Must_ be the _last_ added middleware in chain.
+# Update 08/03/2024: Bad diagnostic probably, workaround disabled.
+# app.add_middleware(SuppressNoResponseReturnedMiddleware)
+
+# Optimize large responses -> Let's leave this task to some proxy coded in C
 # app.add_middleware(GZipMiddleware, minimum_size=1024)
+
 
 # HTML stuff
 # app.mount("/styles", StaticFiles(directory="pages/styles"), name="styles")
@@ -195,7 +219,7 @@ app.mount("/api", app)
     },
     response_model=str,
 )
-async def login(params: LoginReq = Body(...)) -> str:
+def login(params: LoginReq = Body(...)) -> str:
     """
     **Login barrier,**
 
@@ -222,6 +246,12 @@ def get_users(
         " \n **If several ids are provided**, one full info is returned per user.",
         example="1",
     ),
+    summary: Optional[bool] = Query(
+        default=None,
+        title="Summary",
+        description="Return users except rights and last_used_projects if set to True. For users list display purpose.",
+        example=True,
+    ),
     current_user: int = Depends(get_current_user),
 ) -> List[UserModelWithRights]:
     """
@@ -232,7 +262,7 @@ def get_users(
     """
     with UserService() as sce:
         usr_ids = _split_num_list(ids)
-        return sce.list(current_user, usr_ids)
+        return sce.list(current_user, usr_ids, summary=summary)
 
 
 @app.get(
@@ -503,12 +533,12 @@ def activate_user(
     then no_bot is a pair [remote IP, reCAPTCHA response].
     """
     with UserService() as sce:
-        sce.set_statusstate_user(
+        sce.set_status_state_user(
             user_id=user_id,
             status_name=status,
             current_user_id=current_user,
             no_bot=no_bot,
-            activatereq=activatereq,
+            activate_req=activatereq,
         )
 
 
@@ -907,7 +937,7 @@ project_model_columns = plain_columns(ProjectModel)
     tags=["projects"],
     response_model=List[ProjectModel],
 )
-def search_projects(
+async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> await
     current_user: Optional[int] = Depends(get_optional_current_user),
     also_others: bool = Query(
         default=False,
@@ -952,6 +982,12 @@ def search_projects(
         description="One of %s" % list(project_model_columns.keys()),
         example="instrument",
     ),
+    summary: Optional[bool] = Query(
+        default=None,
+        title="Summary",
+        description="Return projects except somme fields like bodc_variables if set to True. For projects list display purpose.",
+        example=True,
+    ),
     window_start: Optional[int] = Query(
         default=None,
         title="Window start",
@@ -980,8 +1016,10 @@ def search_projects(
             title_filter=title_filter,
             instrument_filter=instrument_filter,
             filter_subset=filter_subset,
+            summary=summary,
         )
     # The DB query takes a few ms, and enrich not much more, so we can afford to narrow the search on the result
+
     ret = sort_and_prune(
         ret, order_field, project_model_columns, window_start, window_size
     )
@@ -1070,8 +1108,9 @@ def project_query(
     operation_id="project_set_get_stats",
     tags=["projects"],
     response_model=List[ProjectTaxoStatsModel],
+    response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
-def project_set_get_stats(
+async def project_set_get_stats(  # MyORJSONResponse -> JSONResponse -> Response -> await
     ids: str = Query(
         ...,
         title="Ids",
@@ -1871,7 +1910,8 @@ def process_query(
     response_model=ObjectSetQueryRsp,
     response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
-def get_object_set(
+async def get_object_set(
+    # MyORJSONResponse -> JSONResponse -> Response -> await
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", example=1
     ),
@@ -1943,6 +1983,7 @@ If no **unique order** is specified, the result can vary for same call and condi
     return_fields = None
     if fields is not None:
         return_fields = fields.split(",")
+    before = time.time()
     with ObjectManager() as sce:
         with RightsThrower():
             rsp = ObjectSetQueryRsp()
@@ -1955,18 +1996,28 @@ If no **unique order** is specified, the result can vary for same call and condi
                 window_start,
                 window_size,
             )
-        rsp.total_ids = total
-        rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
-        rsp.acquisition_ids = [with_p[1] for with_p in obj_with_parents]
-        rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
-        rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
-        rsp.details = details
+    rsp.total_ids = total
+    rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
+    rsp.acquisition_ids = [with_p[1] for with_p in obj_with_parents]
+    rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
+    rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
+    rsp.details = details
+    api_logger.info(
+        "ObjectSetQuery(prj=%s, flt=%s, ord=%s, ret=%s, winf=%s, wint=%s, seen_ms=%.2f)",
+        project_id,
+        filters.min_base(),
+        repr(order_field),
+        return_fields,
+        window_start,
+        window_size,
+        (time.time() - before) * 1000,
+    )
     # Serialize
     return MyORJSONResponse(rsp)
 
 
 @app.post(
-    "/object_set/{project_id}/summary",
+    "/object_set/{project_id:int}/summary",
     operation_id="get_object_set_summary",
     tags=["objects"],
     response_model=ObjectSetSummaryRsp,
@@ -2231,7 +2282,7 @@ def classify_auto_mult_object_set(
     response_model=ObjectSetQueryRsp,
     response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
-def query_object_set_parents(
+async def query_object_set_parents(  # MyORJSONResponse -> JSONResponse -> Response -> await
     object_ids: ObjectIDListT = Body(
         ...,
         title="Object IDs list",
@@ -2247,12 +2298,12 @@ def query_object_set_parents(
         with RightsThrower():
             rsp = ObjectSetQueryRsp()
             obj_with_parents = sce.parents_by_id(current_user, object_ids)
-        rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
-        rsp.acquisition_ids = [with_p[1] for with_p in obj_with_parents]
-        rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
-        rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
-        rsp.total_ids = len(rsp.object_ids)
-        return rsp
+    rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
+    rsp.acquisition_ids = [with_p[1] for with_p in obj_with_parents]
+    rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
+    rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
+    rsp.total_ids = len(rsp.object_ids)
+    return rsp
 
 
 @app.post(
@@ -2263,13 +2314,84 @@ def query_object_set_parents(
 )
 def export_object_set(
     filters: ProjectFilters = Body(...),
-    request: ExportReq = Body(...),
+    request: ExportReq = Body(..., deprecated=True),
     current_user: int = Depends(get_current_user),
 ) -> ExportRsp:
     """
-    **Start an export job for the given object set and options.**
+    ⚠️ Deprecated, see general, summary and backup exports for alternatives.
+
+    Start an export job for the given object set and options.
+
+    🔒 Current user needs *at least Read* right on the requested project.
     """
     with ProjectExport(request, filters.base()) as sce:
+        with RightsThrower():
+            rsp = sce.run(current_user)
+    return rsp
+
+
+@app.post(
+    "/object_set/export/general",
+    operation_id="export_object_set_general",
+    tags=["objects"],
+    response_model=ExportRsp,
+)
+def export_object_set_general(
+    filters: ProjectFilters = Body(...),
+    request: GeneralExportReq = Body(...),
+    current_user: int = Depends(get_current_user),
+) -> ExportRsp:
+    """
+    Start a general-purpose export job for the given object set and options.
+
+    🔒 Current user needs *at least Read* right on the requested project.
+    """
+    with GeneralProjectExport(request, filters.base()) as sce:
+        with RightsThrower():
+            rsp = sce.run(current_user)
+    return rsp
+
+
+@app.post(
+    "/object_set/export/summary",
+    operation_id="export_object_set_summary",
+    tags=["objects"],
+    response_model=ExportRsp,
+)
+def export_object_set_summary(
+    filters: ProjectFilters = Body(...),
+    request: SummaryExportReq = Body(...),
+    current_user: int = Depends(get_current_user),
+) -> ExportRsp:
+    """
+    Start a summary export job for the given object set and options.
+
+    🔒 Current user needs *at least Read* right on the requested project.
+    """
+    with SummaryProjectExport(request, filters.base()) as sce:
+        with RightsThrower():
+            rsp = sce.run(current_user)
+    return rsp
+
+
+@app.post(
+    "/object_set/export/backup",
+    operation_id="export_object_set_backup",
+    tags=["objects"],
+    response_model=ExportRsp,
+)
+def export_object_set_backup(
+    filters: ProjectFilters = Body(...),
+    request: BackupExportReq = Body(...),
+    current_user: int = Depends(get_current_user),
+) -> ExportRsp:
+    """
+    Start a backup export job for the given object set and options.
+    If filters are empty, the produced zip will contain the full project.
+
+    🔒 Current user needs *at least Read* right on the requested project.
+    """
+    with BackupProjectExport(request, filters.base()) as sce:
         with RightsThrower():
             rsp = sce.run(current_user)
     return rsp
@@ -2434,7 +2556,7 @@ def object_query_history(
     tags=["Taxonomy Tree"],
     response_model=List[TaxonModel],
 )
-async def query_root_taxa() -> List[TaxonBO]:
+def query_root_taxa() -> List[TaxonBO]:
     """
     **Return all taxa with no parent.**
     """
@@ -2449,7 +2571,7 @@ async def query_root_taxa() -> List[TaxonBO]:
     tags=["Taxonomy Tree"],
     response_model=TaxonomyTreeStatus,
 )
-async def taxa_tree_status(
+def taxa_tree_status(
     current_user: int = Depends(get_current_user),
 ) -> TaxonomyTreeStatus:
     """
@@ -2498,7 +2620,7 @@ async def taxa_tree_status(
     },
     response_model=List[TaxonModel],
 )
-async def reclassif_stats(
+def reclassif_stats(
     taxa_ids: str = Query(
         ...,
         title="Taxa ids",
@@ -2528,7 +2650,7 @@ async def reclassif_stats(
     tags=["Taxonomy Tree"],
     response_model=List[Dict[str, Any]],
 )
-async def reclassif_project_stats(
+def reclassif_project_stats(
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", example=1
     ),
@@ -2577,7 +2699,7 @@ async def reclassif_project_stats(
     },
     response_model=TaxonModel,
 )
-async def query_taxa(
+def query_taxa(
     taxon_id: int = Path(
         ..., description="Internal, the unique numeric id of this taxon.", example=12876
     ),
@@ -2597,7 +2719,7 @@ async def query_taxa(
     tags=["Taxonomy Tree"],
     response_model=List[TaxonUsageModel],
 )
-async def query_taxa_usage(
+def query_taxa_usage(
     taxon_id: int = Path(
         ..., description="Internal, the unique numeric id of this taxon.", example=12876
     ),
@@ -2619,7 +2741,7 @@ async def query_taxa_usage(
     tags=["Taxonomy Tree"],
     response_model=List[TaxaSearchRsp],
 )
-async def search_taxa(
+def search_taxa(
     query: str = Query(
         ...,
         description="Use this query for matching returned taxa names.",
@@ -2657,7 +2779,7 @@ async def search_taxa(
     response_model=List[TaxonModel],
     response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
-async def query_taxa_set(
+async def query_taxa_set(  # MyORJSONResponse -> JSONResponse -> Response -> await
     ids: str = Query(
         ...,
         title="Ids",
@@ -2669,8 +2791,8 @@ async def query_taxa_set(
     """
     Returns **information about several taxa**, including their lineage.
     """
+    num_ids = _split_num_list(ids)
     with TaxonomyService() as sce:
-        num_ids = _split_num_list(ids)
         ret = sce.query_set(num_ids)
     return MyORJSONResponse(ret)
 
@@ -2681,7 +2803,7 @@ async def query_taxa_set(
     tags=["Taxonomy Tree"],
     response_model=List[TaxonCentral],
 )
-async def get_taxon_in_central(
+def get_taxon_in_central(
     taxon_id: int = Path(
         ..., description="Internal, the unique numeric id of this taxon.", example=12876
     ),
@@ -2698,7 +2820,7 @@ async def get_taxon_in_central(
 # Below pragma is because we need the same params as EcoTaxoServer, but we just relay them
 # noinspection PyUnusedLocal
 @app.put("/taxon/central", operation_id="add_taxon_in_central", tags=["Taxonomy Tree"])
-async def add_taxon_in_central(
+def add_taxon_in_central(
     name: str = Query(
         ...,
         title="Name",
@@ -2754,7 +2876,7 @@ async def add_taxon_in_central(
     operation_id="push_taxa_stats_in_central",
     tags=["Taxonomy Tree"],
 )
-async def push_taxa_stats_in_central(
+def push_taxa_stats_in_central(
     _current_user: int = Depends(get_current_user),
 ) -> Any:
     """
@@ -2769,7 +2891,7 @@ async def push_taxa_stats_in_central(
     operation_id="pull_taxa_update_from_central",
     tags=["Taxonomy Tree"],
 )
-async def pull_taxa_update_from_central(
+def pull_taxa_update_from_central(
     _current_user: int = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
@@ -2789,7 +2911,7 @@ async def pull_taxa_update_from_central(
     include_in_schema=False,
     response_model=TaxonModel,
 )
-async def query_taxa_in_worms(
+def query_taxa_in_worms(
     aphia_id: int,
     # = Path(..., description="Internal, the unique numeric id of this user.", default=None)
     _current_user: Optional[int] = Depends(get_optional_current_user),
@@ -2809,7 +2931,7 @@ async def query_taxa_in_worms(
     include_in_schema=False,
     status_code=status.HTTP_200_OK,
 )
-async def refresh_taxa_db(
+async def refresh_taxa_db(  # async due to StreamingResponse
     max_requests: int, current_user: int = Depends(get_current_user)
 ) -> StreamingResponse:  # pragma:nocover
     """
@@ -2819,10 +2941,10 @@ async def refresh_taxa_db(
         with RightsThrower():
             tsk = sce.db_refresh(current_user)
             async_bg_run(tsk)  # Run in bg while streaming logs
-        # Below produces a chunked HTTP encoding, which is officially only HTTP 1.1 protocol
-        return StreamingResponse(
-            log_streamer(sce.temp_log, "Done,"), media_type="text/plain"
-        )
+    # Below produces a chunked HTTP encoding, which is officially only HTTP 1.1 protocol
+    return StreamingResponse(
+        log_streamer(sce.temp_log, "Done,"), media_type="text/plain"
+    )
 
 
 @app.get(
@@ -2832,7 +2954,7 @@ async def refresh_taxa_db(
     include_in_schema=False,
     status_code=status.HTTP_200_OK,
 )
-async def check_taxa_db(
+async def check_taxa_db(  # async due to Response
     aphia_id: int, current_user: int = Depends(get_current_user)
 ) -> Response:  # pragma:nocover
     """
@@ -2841,8 +2963,8 @@ async def check_taxa_db(
     with TaxonomyChangeService(1) as sce:
         with RightsThrower():
             msg = await sce.check_id(current_user, aphia_id)
-        # Below produces a chunked HTTP encoding, which is officially only HTTP 1.1 protocol
-        return Response(msg, media_type="text/plain")
+    # Below produces a chunked HTTP encoding, which is officially only HTTP 1.1 protocol
+    return Response(msg, media_type="text/plain")
 
 
 @app.get(
@@ -2852,7 +2974,7 @@ async def check_taxa_db(
     include_in_schema=False,
     status_code=status.HTTP_200_OK,
 )
-async def matching_with_worms_nice(
+def matching_with_worms_nice(
     request: Request, current_user: int = 0  # Depends(get_current_user)
 ) -> Response:  # pragma:nocover
     """
@@ -2905,7 +3027,9 @@ def digest_project_images(
     response_model=str,
 )
 def digest_images(
-    max_digests: Optional[int],
+    max_digests: Optional[int] = Query(
+        default=100000, description="Number of images to scan."
+    ),
     project_id: Optional[int] = Query(
         default=None, description="Internal, numeric id of the project."
     ),
@@ -2914,7 +3038,6 @@ def digest_images(
     """
     Compute digests if they are not.
     """
-    max_digests = 1000 if max_digests is None else max_digests
     with ImageManagerService() as sce:
         with RightsThrower():
             ret: str = sce.do_digests(
@@ -2967,6 +3090,22 @@ def nightly_maintenance(current_user: int = Depends(get_current_user)) -> int:
 
 
 @app.get(
+    "/admin/monitor",
+    operation_id="activity_monitor",
+    tags=["MONITOR"],
+    include_in_schema=False,
+    response_model=str,
+)
+async def activity_monitor(
+    _current_user: int = Depends(get_current_user),
+) -> FileResponse:  # async due to FileResponse
+    """
+    Return some API endpoints activity log
+    """
+    return FileResponse(str(MONITOR_LOG_PATH))
+
+
+@app.get(
     "/admin/machine_learning/train",
     operation_id="machine_learning_train",
     tags=["WIP"],
@@ -3011,7 +3150,7 @@ def machine_learning_train(
     include_in_schema=True,
     response_class=MyORJSONResponse,
 )
-def direct_db_query(
+async def direct_db_query(  # MyORJSONResponse -> JSONResponse -> Response -> await
     q: str = Query(
         ...,
         title="Query",
@@ -3027,8 +3166,8 @@ def direct_db_query(
     with DatabaseService() as sce:
         with RightsThrower():
             hdr, data = sce.execute_query(current_user, q)
-        ret = {"header": hdr, "data": data}
-        return MyORJSONResponse(ret)
+    ret = {"header": hdr, "data": data}
+    return MyORJSONResponse(ret)
 
 
 # ######################## END OF ADMIN
@@ -3128,7 +3267,7 @@ def restart_job(
 
 
 @app.get("/jobs/{job_id}/log", operation_id="get_job_log_file", tags=["jobs"])
-def get_job_log_file(
+async def get_job_log_file(  # async due to FileResponse
     job_id: int = Path(
         ..., description="Internal, the unique numeric id of this job.", example=47445
     ),
@@ -3142,7 +3281,7 @@ def get_job_log_file(
     with JobCRUDService() as sce:
         with RightsThrower():
             path = sce.get_log_path(current_user, job_id)
-        return FileResponse(str(path))
+    return FileResponse(str(path))
 
 
 @app.get(
@@ -3156,11 +3295,12 @@ def get_job_log_file(
         }
     },
 )
-def get_job_file(
+async def get_job_file(  # async due to StreamingResponse
     job_id: int = Path(
         ..., description="Internal, the unique numeric id of this job.", example=47445
     ),
     current_user: int = Depends(get_current_user),
+    range_header: Optional[str] = Header(None, alias="Range"),
 ) -> StreamingResponse:
     """
     **Return the file produced by given job.**
@@ -3175,8 +3315,15 @@ def get_job_file(
         headers = {
             "content-disposition": 'attachment; filename="' + file_name + '"',
             "content-length": str(length),
+            "accept-ranges": "bytes",
         }
-        return StreamingResponse(file_like, headers=headers, media_type=media_type)
+    return ranged_streaming_response(
+        content=file_like,
+        range_hdr=range_header,
+        file_size=length,
+        headers=headers,
+        media_type=media_type,
+    )
 
 
 @app.delete(
@@ -3213,8 +3360,8 @@ def erase_job(
     tags=["Files"],
     response_model=DirectoryModel,
 )
-async def list_user_files(
-    sub_path: str = Query(..., title="Sub path", description="", example=""),
+def list_user_files(
+    sub_path: str,  # = Query(..., title="Sub path", description="", example=""),
     current_user: int = Depends(get_current_user),
 ) -> DirectoryModel:
     """
@@ -3225,7 +3372,7 @@ async def list_user_files(
     """
     with UserFolderService() as sce:
         with RightsThrower():
-            file_list = await sce.list(sub_path, current_user)
+            file_list = sce.list(sub_path, current_user)
     return file_list
 
 
@@ -3244,7 +3391,7 @@ async def list_user_files(
     },
     response_model=str,
 )
-async def put_user_file(
+async def put_user_file(  # async due to await file store
     file: UploadFile = File(..., title="File", description=""),
     path: Optional[str] = Form(
         title="Path", description="The client-side full path of the file.", default=None
@@ -3276,7 +3423,7 @@ async def put_user_file(
     tags=["Files"],
     response_model=DirectoryModel,
 )
-async def list_common_files(
+def list_common_files(
     path: str = Query(
         ..., title="path", description="", example="/ftp_plankton/Ecotaxa_Exported_data"
     ),
@@ -3289,11 +3436,170 @@ async def list_common_files(
     """
     with CommonFolderService() as sce:
         with RightsThrower():
-            file_list = await sce.list(path, current_user)
+            file_list = sce.list(path, current_user)
     return file_list
 
 
 # ######################## END OF FILES
+# ######################## START OF USERS FILES
+@app.get(
+    "/user_files/{sub_path:path}",
+    operation_id="list_my_files",
+    tags=["Myfiles"],
+    response_model=DirectoryModel,
+)
+def list_my_files(
+    sub_path: str,  # = Query(..., title="Sub path", description="", example=""),
+    current_user: int = Depends(get_current_user),
+) -> DirectoryModel:
+    """
+    **List the private files** from user files directory  which are usable for some file-related operations.
+    A sub_path starting with "/" is considered relative to user folder.
+
+    *e.g. import.*
+    """
+    with UserFilesFolderService() as sce:
+        with RightsThrower():
+            file_list = sce.list(sub_path, current_user)
+    return file_list
+
+
+@app.post(
+    "/user_files/",
+    operation_id="post_my_file",
+    tags=["Myfiles"],
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": "/ftp_plankton/Ecotaxa_Data_to_import/uploadedFile.zip"
+                }
+            }
+        }
+    },
+    response_model=str,
+)
+async def put_my_file(  # async due to await file store
+    file: UploadFile = File(..., title="File", description=""),
+    path: Optional[str] = Form(
+        title="Path", description="The client-side full path of the file.", default=None
+    ),
+    current_user: int = Depends(get_current_user),
+) -> str:
+    """
+    **Upload a file for the current user files directory.**
+
+    The returned text will contain a server-side path which is usable for some file-related operations.
+
+    *e.g. import.*
+    """
+    with UserFilesFolderService() as sce:
+        with ValidityThrower(), RightsThrower():
+            assert ".." not in str(path), "Forbidden"
+            file_name = await sce.store(current_user, file, path)
+    return file_name
+
+
+@app.post(
+    "/user_files/mv/",
+    operation_id="move_my_file",
+    tags=["Myfiles"],
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": "/ftp_plankton/Ecotaxa_Data_to_import/uploadedFile.zip"
+                }
+            }
+        }
+    },
+    response_model=str,
+)
+def move_file(  # async due to await file move
+    source_path: str = Form(
+        title="Source Path",
+        description="The client-side full path of the file or directory to be moved.",
+        default=None,
+    ),
+    dest_path: str = Form(
+        title="Destination Path",
+        description="The client-side full path of the destination file or directory.",
+        default=None,
+    ),
+    current_user: int = Depends(get_current_user),
+) -> str:
+    """
+    **Move (or rename depending on source and dest path) a file or directory in the current user files directory.**
+    The returned text will contain a server-side path which is usable for some file-related operations.
+    """
+    with UserFilesFolderService() as sce:
+        with ValidityThrower(), RightsThrower():
+            assert ".." not in str(source_path), "Forbidden"
+            assert ".." not in str(dest_path), "Forbidden"
+            dest_path = sce.move(source_path, dest_path, current_user)
+    return dest_path
+
+
+@app.post(
+    "/user_files/rm/",
+    operation_id="remove_my_file",
+    tags=["Myfiles"],
+    responses={200: {"content": {"application/json": {"example": 0}}}},
+    response_model=int,
+)
+def remove_file(
+    source_path: str = Form(
+        title="Source Path",
+        description="The client-side full path of the file  or directory to be removed.",
+        default=None,
+    ),
+    current_user: int = Depends(get_current_user),
+) -> int:
+    """
+    **Remove a file, or directory in the current user files directory.**
+    """
+    with UserFilesFolderService() as sce:
+        with ValidityThrower(), RightsThrower():
+            assert ".." not in str(source_path), "Forbidden"
+            sce.remove(source_path, current_user)
+    return 1
+
+
+@app.post(
+    "/user_files/create/",
+    operation_id="create_my_file",
+    tags=["Myfiles"],
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": "/ftp_plankton/Ecotaxa_Data_to_import/uploadedFile.zip"
+                }
+            }
+        }
+    },
+    response_model=str,
+)
+async def create_file(  # async due to await file store
+    source_path: str = Form(
+        title="Source Path",
+        description="The client-side full path of the file or directory to be moved.",
+        default=None,
+    ),
+    current_user: int = Depends(get_current_user),
+) -> str:
+    """
+    **Create a new file or directory in the current user files directory.**
+    The returned text will contain a server-side path which is usable for some file-related operations.
+    """
+    with UserFilesFolderService() as sce:
+        with ValidityThrower(), RightsThrower():
+            assert ".." not in str(source_path), "Forbidden"
+            new_path = sce.create(source_path, current_user)
+    return new_path
+
+
+# ######################## END OF USERS FILES
 
 system_status_resp = """Config dump:
   secret_key: *************
@@ -3404,7 +3710,7 @@ def used_constants() -> Constants:
     tags=["misc"],
     response_model=List[MLModel],
 )
-async def query_ml_models() -> List[MLModel]:
+def query_ml_models() -> List[MLModel]:
     """
     **Return the list of machine learning models, which can be used for extracting image features.**
     """
@@ -3422,7 +3728,7 @@ async def query_ml_models() -> List[MLModel]:
     tags=["image"],
     include_in_schema=False,
 )
-def get_image(
+async def get_image(  # async due to StreamingResponse
     dir_id: str = Path(
         ...,
         description="Internal, image directory ID, 0-padded if < 1000.",
@@ -3437,8 +3743,8 @@ def get_image(
     """
     with ImageService() as sce:
         file_like, length, media_type = sce.get_stream(dir_id, img_in_dir)
-        headers = {"content-length": str(length)}
-        return StreamingResponse(file_like, headers=headers, media_type=media_type)
+    headers = {"content-length": str(length)}
+    return StreamingResponse(file_like, headers=headers, media_type=media_type)
 
 
 # ######################## END OF MISC
@@ -3461,7 +3767,9 @@ app.add_exception_handler(
 
 dump_openapi(app, __file__)
 
-JOB_INTERVAL = 2  # Can be overwritten for testing
+# Can be overwritten for testing
+# Note: in PROD there are 16 workers, statistically the jobs will start very fast
+JOB_INTERVAL = 5
 
 
 @app.on_event("startup")

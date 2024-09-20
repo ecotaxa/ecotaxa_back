@@ -4,18 +4,19 @@
 #
 from __future__ import annotations
 
+from enum import Enum
 from typing import List, Iterable
 from typing import TYPE_CHECKING
 
 from sqlalchemy import event, SmallInteger
-from enum import Enum
+
 from BO.helpers.TSVHelpers import none_to_empty
 from data.Countries import countries_by_name
 from .helpers import Session, Result
 from .helpers.DDL import Column, ForeignKey, Sequence, Integer, String, Boolean
 from .helpers.Direct import text, func
 from .helpers.ORM import Model, relationship, Insert
-from .helpers.Postgres import TIMESTAMP, CHAR
+from .helpers.Postgres import TIMESTAMP
 
 if TYPE_CHECKING:
     from .ProjectPrivilege import ProjectPrivilege
@@ -40,7 +41,7 @@ class User(Model):
     status_admin_comment: str = Column(String(255))
     preferences: str = Column(String(40000))
     country: str = Column(String(50))
-
+    orcid: str = Column(String(20), nullable=True)
     usercreationdate = Column(TIMESTAMP, default=func.now())
     usercreationreason = Column(String(1000))
 
@@ -158,6 +159,12 @@ class TempPasswordReset(Model):
     """
 
     __tablename__ = "user_password_reset"
-    user_id = Column(Integer(), ForeignKey("users.id"), primary_key=True)
+    user_id = Column(
+        Integer(),
+        ForeignKey(
+            "users.id", name="user_password_reset_user_id_fkey", ondelete="CASCADE"
+        ),
+        primary_key=True,
+    )
     temp_password = Column(String(255), nullable=False)
-    creation_date = Column(TIMESTAMP, default=func.now())
+    creation_date = Column(TIMESTAMP, default=func.now(), nullable=False)

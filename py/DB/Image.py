@@ -3,32 +3,32 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from enum import Enum
+from typing import Optional, Any
 
 from DB.helpers import Session
 from DB.helpers.DDL import Index, Column, ForeignKey, Sequence
 from DB.helpers.Direct import text
-from DB.helpers.Postgres import CHAR, BIGINT, VARCHAR, INTEGER, BYTEA
+from DB.helpers.Postgres import CHAR, BIGINT, VARCHAR, BYTEA, SMALLINT
 from .helpers import Result
 from .helpers.ORM import Model
+from .helpers.VirtualColumn import VirtualColumnSet, VirtualColumn
+
+MIN_IMGID = 1000  # In prod' it's 1721, this will be used during tests and all-in-one standalone install
 
 
 class Image(Model):
     __tablename__ = "images"
-    imgid = Column(BIGINT, Sequence("seq_images"), primary_key=True)
-    # The Object that this image belongs to
-    # TODO: It looks like we have a relationship cycle Object->Image->Object
-    #  Probably due to the fact that several images can exist for a single Object
-    # Real PK: objid + imgrank or better orig_id + imgrank, unless we can share images b/w objects... WIP
-    objid = Column(BIGINT, ForeignKey("obj_head.objid"))
-    imgrank = Column(INTEGER, nullable=False)
-    file_name = Column(VARCHAR(255), nullable=False)
+    imgid = Column(BIGINT, Sequence("seq_images", start=MIN_IMGID))
+    # The Object that this image belongs to, with its rank inside
+    objid = Column(BIGINT, ForeignKey("obj_head.objid"), primary_key=True)
+    imgrank = Column(SMALLINT, primary_key=True)
+    width = Column(SMALLINT, nullable=False)
+    height = Column(SMALLINT, nullable=False)
+    # file_name = Column(VARCHAR(255), nullable=False) # Now computed
     orig_file_name = Column(VARCHAR(255), nullable=False)
-    width = Column(INTEGER, nullable=False)
-    height = Column(INTEGER, nullable=False)
-
-    thumb_file_name = Column(VARCHAR(255))
-    thumb_width = Column(INTEGER)
-    thumb_height = Column(INTEGER)
+    # thumb_file_name = Column(VARCHAR(255)) # Now computed
+    thumb_width = Column(SMALLINT)
+    thumb_height = Column(SMALLINT)
 
     @staticmethod
     def fetch_existing_images(session: Session, prj_id):
@@ -47,16 +47,67 @@ class Image(Model):
         ret = {img_id for img_id, in res}
         return ret
 
+    def img_to_file(self):
+        """Return the path in vault to the image"""
+        return self.img_from_id_and_orig(self.imgid, self.orig_file_name)
+
+    @staticmethod
+    def img_from_id_and_orig(imgid: int, orig_file_name: str) -> str:
+        # Images are stored in folders of 10K images max, with original one extension
+        ext = orig_file_name[-4:]
+        if ext == "jpeg":
+            ext = orig_file_name[-5:]
+        return "%04d/%04d%s" % (imgid // 10000, imgid % 10000, ext)
+
+    def img_to_thumb_file(self):
+        """Return the path in vault to the reduced image, if exists"""
+        return self.thumb_img_from_id_if_there(self.imgid, self.thumb_height)
+
+    @staticmethod
+    def thumb_img_from_id_if_there(
+        imgid: int, thumb_height: Optional[int]
+    ) -> Optional[str]:
+        # Thumbnails are all .jpg with same naming scheme, if present
+        if thumb_height is None:
+            return None
+        return "%04d/%04d_mini.jpg" % (imgid // 10000, imgid % 10000)
+
     def __lt__(self, other):
         return self.imgid < other.imgid
 
 
-# Covering index with rank
-Index(
-    "is_imageobjrank", Image.__table__.c.objid, Image.__table__.c.imgrank, unique=True
+class FileNameVirtualColumn(VirtualColumn):
+    name = "file_name"
+    filler = Image.img_to_file
+    sql = "(img.imgid,img.orig_file_name)"  # alt: # return "img_to_file(img.*)"
+
+    @staticmethod
+    def result_to_py(from_sel: Any) -> Any:
+        # For some SQLAlchemy reason we select a tuple (row/record) but we get a str
+        imgid, orig_file_name = from_sel[1:-1].split(",", 1)
+        # The name on the right gets enclosed in double quote if it contains a space
+        orig_file_name = orig_file_name.strip('"')
+        imgid = int(imgid)
+        return Image.img_from_id_and_orig(imgid, orig_file_name)
+
+
+class ThumbFileNameVirtualColumn(VirtualColumn):
+    name = "thumb_file_name"
+    filler = Image.img_to_thumb_file
+    sql = "(img.thumb_height,img.imgid)"  # alt: "img_to_thumb_file(img.*)"
+
+    @staticmethod
+    def result_to_py(from_sel: Any) -> Any:
+        # For some SQLAlchemy reason we select a tuple (row) but we get a str
+        if from_sel[1] == ",":
+            return None  # No height, 99% of the cases
+        thumb_height, imgid = [int(n) for n in from_sel[1:-1].split(",", 1)]
+        return Image.thumb_img_from_id_if_there(imgid, thumb_height)
+
+
+IMAGE_VIRTUAL_COLUMNS: VirtualColumnSet = VirtualColumnSet(
+    FileNameVirtualColumn, ThumbFileNameVirtualColumn
 )
-# To track corresponding files
-Index("is_image_file", Image.__table__.c.file_name)
 
 
 class ImageFileStateEnum(Enum):
@@ -73,8 +124,10 @@ class ImageFileStateEnum(Enum):
 class ImageFile(Model):
     # An image on disk. Can be referenced (or not...) from the application
     __tablename__ = "image_file"
-    # Path inside the Vault
-    path: str = Column(VARCHAR, primary_key=True)
+    # No FK as imgid is not anymore a PK or unique in Image
+    imgid = Column(BIGINT, primary_key=True)
+    # Extension shortened
+    ext: str = Column(CHAR(3), default="?", server_default="?", nullable=False)
     # State w/r to the application
     state: str = Column(CHAR, default="?", server_default="?", nullable=False)
     # What can be found in digest column

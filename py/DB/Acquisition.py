@@ -62,4 +62,12 @@ class Acquisition(Model):
 for i in range(1, ACQUISITION_FREE_COLUMNS):
     setattr(Acquisition, "t%02d" % i, Column(VARCHAR(250)))
 
-Index("IS_AcquisOrigId", Acquisition.acq_sample_id, Acquisition.orig_id, unique=True)
+Index(
+    "is_acquis_sample_orig_id",
+    Acquisition.__table__.c.acq_sample_id,
+    Acquisition.__table__.c.orig_id,
+    postgresql_include=[
+        Acquisition.__table__.c.acquisid
+    ],  # For Index Only scans during recursive descent
+    unique=True,
+)

@@ -67,7 +67,7 @@ class _ObjectHeaderModel(DescriptiveModel):
     complement_info = Field(
         title="Complement info", description="", example="Part of ostracoda"
     )
-    random_value = Field(title="random_value", description="")
+    # random_value = Field(title="random_value", description="")
     object_link = Field(
         title="Object link",
         description="Object link.",
@@ -93,16 +93,6 @@ class _ObjectHeaderComplement(BaseModel):
         description="Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification date.",
         example="2021-09-21T14:59:01.007110",
     )
-    # Historical, kept for compat with old interface
-    classif_crossvalidation_id: Optional[int] = Field(
-        title="Classification crossvalidation Id",
-        description="Always NULL in prod.",
-        example="null",
-    )
-
-    similarity: Optional[float] = Field(
-        title="Similarity", description="Always NULL in prod.", example="null"
-    )
 
 
 _ObjectHeaderModelFromDB = combine_models(ObjectHeader, _ObjectHeaderModel)
@@ -120,9 +110,6 @@ class _Image2Model(DescriptiveModel):
         example=376456,
     )
     imgrank = Field(title="Image rank", description="The rank of the image.", example=0)
-    file_name = Field(
-        title="File name", description="The file name.", example="0037/6456.jpg"
-    )
     orig_file_name = Field(
         title="Original file name",
         description="The file name of the original image.",
@@ -130,11 +117,6 @@ class _Image2Model(DescriptiveModel):
     )
     width = Field(title="Width", description="The width of the image.", example=98)
     height = Field(title="Height", description="The height of the image.", example=63)
-    thumb_file_name = Field(
-        title="Thumb file name",
-        description="Generate thumbnail if image is too large. This generated thumbnail file name.",
-        example="null",
-    )
     thumb_width = Field(
         title="Thumb width",
         description="Generate thumbnail if image is too large. This generated thumbnail width.",
@@ -151,7 +133,16 @@ _ImageModelFromDB = combine_models(Image, _Image2Model)
 
 
 class ImageModel(_ImageModelFromDB):
-    pass
+    """Computed inside ObjectBO"""
+
+    file_name: str = Field(
+        title="File name", description="The file name.", example="0037/6456.jpg"
+    )
+    thumb_file_name: Optional[str] = Field(
+        title="Thumb file name",
+        description="If image was too large at import time, the generated thumbnail file name.",
+        example="null",
+    )
 
 
 class ObjectModel(ObjectHeaderModel, _ObjectHeaderComplement):
@@ -199,6 +190,23 @@ class ObjectModel(ObjectHeaderModel, _ObjectHeaderComplement):
         description="Free columns from object mapping in project.",
         example={"area": 49.0, "mean": 232.27, "stddev": 2.129},
         default={},
+    )
+    classif_crossvalidation_id: Optional[int] = Field(
+        title="Classification crossvalidation Id",
+        description="Always NULL, kept for compat.",
+        example="null",
+        default=None,
+    )
+    similarity: Optional[float] = Field(
+        title="Similarity",
+        description="Always NULL, kept for compat.",
+        example="null",
+        default=None,
+    )
+    random_value: int = Field(
+        title="random_value",
+        description="Random value associated to an image",
+        example=1234,
     )
 
 
@@ -282,11 +290,6 @@ class _DBHistoricalLastClassifDescription(DescriptiveModel):
         title="Historical last classification date",
         description="The classification date.",
         example="2021-09-21T14:59:01.007110",
-    )
-    histo_classif_type = Field(
-        title="Historical last classification type",
-        description="The type of classification. Could be **A** for Automatic or **M** for Manual.",
-        example="M",
     )
     histo_classif_id = Field(
         title="Historical last classification Id",
@@ -418,11 +421,6 @@ class _DBHistoricalClassificationDescription(DescriptiveModel):
         title="Classification who",
         description="The user who manualy classify this object.",
         example="null",
-    )
-    classif_type = Field(
-        title="Classification type",
-        description="The type of classification. Could be **A** for Automatic or **M** for Manual.",
-        example="A",
     )
     classif_qual = Field(
         title="Classification qualification",

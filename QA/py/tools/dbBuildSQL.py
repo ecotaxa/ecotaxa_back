@@ -55,11 +55,23 @@ class EcoTaxaExistingDB(object):
         shared: str = "/tmp",
         ftp: str = "/tmp",
         models: str = "/tmp",
+        usersfilesarea="/tmp",
     ):
         with open(str(conf_file), "w") as f:
             f.write(
                 EcoTaxaDBFrom0.CONF
-                % (host, port, host, port, vault, jobs, shared, ftp, models)
+                % (
+                    host,
+                    port,
+                    host,
+                    port,
+                    vault,
+                    jobs,
+                    shared,
+                    ftp,
+                    models,
+                    usersfilesarea,
+                )
             )
         os.environ["APP_CONFIG"] = conf_file.absolute().as_posix()
 
@@ -83,6 +95,7 @@ class EcoTaxaDBFrom0(object):
         self.jobs_dir = TEST_DIR / "temptask"
         self.vault_dir = TEST_DIR / "vault"
         self.models_dir = SHARED_DIR / "models"
+        self.users_files_dir = TEST_DIR / "eco_users_files"
 
     def get_env(self):
         # Return the environment for postgres subprocesses
@@ -221,6 +234,7 @@ JOBS_DIR = %s
 SERVERLOADAREA = %s
 FTPEXPORTAREA = %s
 MODELSAREA = %s
+USERSFILESAREA = %s
 SECURITY_PASSWORD_HASH=sha512_crypt
 SECURITY_PASSWORD_SALT=PePPER
 APPMANAGER_MAIL=someone@somewhere.org
@@ -249,6 +263,7 @@ SERVERURL= http://localhost:8000
                     self.shared_dir,
                     self.ftp_dir,
                     self.models_dir,
+                    self.users_files_dir,
                 )
             )
 

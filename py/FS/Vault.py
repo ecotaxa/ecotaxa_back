@@ -18,7 +18,7 @@ class Vault(object):
 
     def ensure_exists(self, sub_directory: str) -> Path:
         """
-            Ensure the sub-directory exists, i.e. create it, if not there, and return it.
+            Ensure the subdirectory exists, i.e. create it, if not there, and return it.
             If another process asked for the same simultaneously then use it.
         :param sub_directory:
         """
@@ -45,7 +45,7 @@ class Vault(object):
         # Images are stored in folders of 10K images max
         return "%04d" % (img_id // 10000), "%04d" % (img_id % 10000)
 
-    def store_image(self, img_file_path: Path, img_id: int) -> str:
+    def store_image(self, img_file_path: Path, img_id: int, mini: bool = False) -> str:
         """
             Store, i.e. copy, an image having given path, into self, with given ID.
         :return: The image path, relative to root directory.
@@ -54,7 +54,11 @@ class Vault(object):
         folder, ndx_in_folder = self.address_for_id(img_id)
         folder_path: PurePath = self.ensure_exists(folder)
         # Return the path relative to vault, keeping file suffix, e.g. .jpg or .png
-        filename = "%s%s" % (ndx_in_folder, img_file_path.suffix)
+        filename = "%s%s%s" % (
+            ndx_in_folder,
+            "_mini" if mini else "",
+            img_file_path.suffix,
+        )
 
         # Copy image file from source to vault (self)
         # TODO: Move if on same filesystem and unzip was done?
@@ -77,7 +81,8 @@ class Vault(object):
             import tempfile
             from os import unlink
 
-            fout = tempfile.mktemp(suffix=sub_path[-4:])
+            file_end = 9 if "_mini" in sub_path else 5 if ".jpeg" in sub_path else 4
+            fout = tempfile.mktemp(suffix=sub_path[-file_end:])
             r = requests.get(self.BASE_URL % sub_path, stream=True)
             if r.status_code != 200:
                 return False
@@ -85,11 +90,8 @@ class Vault(object):
                 for chunk in r.iter_content(1024):
                     f.write(chunk)
             f.close()
-            if "mini" in sub_path:
-                img_id = int(sub_path[:-9].replace("/", ""))
-            else:
-                img_id = int(sub_path[:-4].replace("/", ""))
-            self.store_image(Path(fout), img_id)
+            img_id = int(sub_path[:-file_end].replace("/", ""))
+            self.store_image(Path(fout), img_id, file_end == 9)
             unlink(fout)
         return is_there
 
@@ -129,8 +131,9 @@ class Vault(object):
         :return:
         """
         full_path = self.path.joinpath(img_sub_path)
-        # For devs.
+        # For devs. DO NOT COMMIT
         # self.ensure_there(full_path, img_sub_path)
+        # self.image_from_bkp(full_path, img_sub_path)
         return full_path.as_posix()
 
     def thumbnail_paths(self, img_id: int) -> Tuple[str, str]:
@@ -141,5 +144,8 @@ class Vault(object):
         """
         folder, ndx_in_folder = self.address_for_id(img_id)
         # We force thumbnail format to JPEG
-        sub_path = "%s/%s_mini%s" % (folder, ndx_in_folder, ".jpg")
+        sub_path = "%s/%s_mini.jpg" % (
+            folder,
+            ndx_in_folder,
+        )  # TODO: Dup with Image.thumb_img_from_id_if_there
         return sub_path, self.path.joinpath(sub_path).as_posix()
