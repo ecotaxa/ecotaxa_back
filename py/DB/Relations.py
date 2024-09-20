@@ -9,7 +9,7 @@ if True:
     # Trick to prevent accidental re-export of the DB Models involved
     # Note: The trick doesn't work :(
     from .Acquisition import Acquisition
-    from .CNNFeature import ObjectCNNFeature
+    from .CNNFeatureVector import ObjectCNNFeatureVector
     from .Collection import (
         Collection,
         CollectionProject,
@@ -126,13 +126,13 @@ if True:
         uselist=False,
     )
 
-    ObjectCNNFeature.object = relationship(
+    ObjectCNNFeatureVector.object = relationship(
         ObjectHeader,
         foreign_keys="ObjectHeader.objid",
-        primaryjoin="ObjectCNNFeature.objcnnid==ObjectHeader.objid",
+        primaryjoin="ObjectCNNFeatureVector.objcnnid==ObjectHeader.objid",
         uselist=False,
     )
-    ObjectHeader.cnn_features = relationship(ObjectCNNFeature, uselist=False)
+    ObjectHeader.cnn_features = relationship(ObjectCNNFeatureVector, uselist=False)
 
     ObjectHeader.all_images = relationship(Image)
 

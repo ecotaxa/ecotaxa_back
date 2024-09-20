@@ -138,6 +138,7 @@ def drop(user: str = "postgres", password: str = "", db_name: str = ""):
 @db_app.command(help="Full DB build, the DB should be usable when done.")
 def build():
     conn = Service.build_connection(app_config)
+    conn.exec_outside_transaction("CREATE EXTENSION IF NOT EXISTS vector;")
     sess = conn.get_session()
     from DB.Project import Project
 
