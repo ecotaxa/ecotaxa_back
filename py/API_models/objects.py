@@ -134,7 +134,6 @@ _ImageModelFromDB = combine_models(Image, _Image2Model)
 
 class ImageModel(_ImageModelFromDB):
     """Computed inside ObjectBO"""
-
     file_name: str = Field(
         title="File name", description="The file name.", example="0037/6456.jpg"
     )

@@ -106,6 +106,7 @@ class Vault(object):
             sub_dir = os.path.dirname(img_maybe)
             subdir: Path = self.path.joinpath(sub_dir)
             if sub_dir not in self.ok_subs:
+
                 try:
                     # ssh with public key user@host
                     if not subdir.exists():

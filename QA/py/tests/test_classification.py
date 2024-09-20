@@ -3,8 +3,6 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import logging
-import pytest
-
 from typing import List
 
 import pytest

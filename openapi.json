@@ -80,6 +80,18 @@
             "example":"1",
             "name":"ids",
             "in":"query"
+          },
+          {
+            "description":"Return users except rights and last_used_projects if set to True. For users list display purpose.",
+            "required":false,
+            "schema":{
+              "title":"Summary",
+              "type":"boolean",
+              "description":"Return users except rights and last_used_projects if set to True. For users list display purpose."
+            },
+            "example":true,
+            "name":"summary",
+            "in":"query"
           }
         ],
         "responses":{
@@ -1403,6 +1415,18 @@
             },
             "example":"instrument",
             "name":"order_field",
+            "in":"query"
+          },
+          {
+            "description":"Return projects except somme fields like bodc_variables if set to True. For projects list display purpose.",
+            "required":false,
+            "schema":{
+              "title":"Summary",
+              "type":"boolean",
+              "description":"Return projects except somme fields like bodc_variables if set to True. For projects list display purpose."
+            },
+            "example":true,
+            "name":"summary",
             "in":"query"
           },
           {
@@ -3720,13 +3744,154 @@
           "objects"
         ],
         "summary":"Export Object Set",
-        "description":"**Start an export job for the given object set and options.**",
+        "description":"⚠️ Deprecated, see general, summary and backup exports for alternatives.\n\nStart an export job for the given object set and options.\n\n🔒 Current user needs *at least Read* right on the requested project.",
         "operationId":"export_object_set",
         "requestBody":{
           "content":{
             "application/json":{
               "schema":{
                 "$ref":"#/components/schemas/Body_export_object_set_object_set_export_post"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/ExportRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/object_set/export/general":{
+      "post":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Export Object Set General",
+        "description":"Start a general-purpose export job for the given object set and options.\n\n🔒 Current user needs *at least Read* right on the requested project.",
+        "operationId":"export_object_set_general",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/Body_export_object_set_general_object_set_export_general_post"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/ExportRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/object_set/export/summary":{
+      "post":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Export Object Set Summary",
+        "description":"Start a summary export job for the given object set and options.\n\n🔒 Current user needs *at least Read* right on the requested project.",
+        "operationId":"export_object_set_summary",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/Body_export_object_set_summary_object_set_export_summary_post"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/ExportRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/object_set/export/backup":{
+      "post":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Export Object Set Backup",
+        "description":"Start a backup export job for the given object set and options.\nIf filters are empty, the produced zip will contain the full project.\n\n🔒 Current user needs *at least Read* right on the requested project.",
+        "operationId":"export_object_set_backup",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/Body_export_object_set_backup_object_set_export_backup_post"
               }
             }
           },
@@ -5001,6 +5166,15 @@
             "example":47445,
             "name":"job_id",
             "in":"path"
+          },
+          {
+            "required":false,
+            "schema":{
+              "title":"Range",
+              "type":"string"
+            },
+            "name":"Range",
+            "in":"header"
           }
         ],
         "responses":{
@@ -5228,6 +5402,247 @@
         ]
       }
     },
+    "/user_files/{sub_path}":{
+      "get":{
+        "tags":[
+          "Myfiles"
+        ],
+        "summary":"List My Files",
+        "description":"**List the private files** from user files directory  which are usable for some file-related operations.\nA sub_path starting with \"/\" is considered relative to user folder.\n\n*e.g. import.*",
+        "operationId":"list_my_files",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Sub Path",
+              "type":"string"
+            },
+            "name":"sub_path",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/DirectoryModel"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/user_files/":{
+      "post":{
+        "tags":[
+          "Myfiles"
+        ],
+        "summary":"Put My File",
+        "description":"**Upload a file for the current user files directory.**\n\nThe returned text will contain a server-side path which is usable for some file-related operations.\n\n*e.g. import.*",
+        "operationId":"post_my_file",
+        "requestBody":{
+          "content":{
+            "multipart/form-data":{
+              "schema":{
+                "$ref":"#/components/schemas/Body_put_my_file_user_files__post"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Put My File User Files  Post",
+                  "type":"string"
+                },
+                "example":"/ftp_plankton/Ecotaxa_Data_to_import/uploadedFile.zip"
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/user_files/mv/":{
+      "post":{
+        "tags":[
+          "Myfiles"
+        ],
+        "summary":"Move File",
+        "description":"**Move (or rename depending on source and dest path) a file or directory in the current user files directory.**\nThe returned text will contain a server-side path which is usable for some file-related operations.",
+        "operationId":"move_my_file",
+        "requestBody":{
+          "content":{
+            "application/x-www-form-urlencoded":{
+              "schema":{
+                "$ref":"#/components/schemas/Body_move_file_user_files_mv__post"
+              }
+            }
+          }
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Move File User Files Mv  Post",
+                  "type":"string"
+                },
+                "example":"/ftp_plankton/Ecotaxa_Data_to_import/uploadedFile.zip"
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/user_files/rm/":{
+      "post":{
+        "tags":[
+          "Myfiles"
+        ],
+        "summary":"Remove File",
+        "description":"**Remove a file, or directory in the current user files directory.**",
+        "operationId":"remove_my_file",
+        "requestBody":{
+          "content":{
+            "application/x-www-form-urlencoded":{
+              "schema":{
+                "$ref":"#/components/schemas/Body_remove_file_user_files_rm__post"
+              }
+            }
+          }
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Remove File User Files Rm  Post",
+                  "type":"integer"
+                },
+                "example":0
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/user_files/create/":{
+      "post":{
+        "tags":[
+          "Myfiles"
+        ],
+        "summary":"Create File",
+        "description":"**Create a new file or directory in the current user files directory.**\nThe returned text will contain a server-side path which is usable for some file-related operations.",
+        "operationId":"create_my_file",
+        "requestBody":{
+          "content":{
+            "application/x-www-form-urlencoded":{
+              "schema":{
+                "$ref":"#/components/schemas/Body_create_file_user_files_create__post"
+              }
+            }
+          }
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Create File User Files Create  Post",
+                  "type":"string"
+                },
+                "example":"/ftp_plankton/Ecotaxa_Data_to_import/uploadedFile.zip"
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
     "/status":{
       "get":{
         "tags":[
@@ -5410,6 +5825,72 @@
           }
         }
       },
+      "BackupExportReq":{
+        "title":"Backup Export request Model",
+        "required":[
+          "project_id"
+        ],
+        "type":"object",
+        "properties":{
+          "project_id":{
+            "title":"Project Id",
+            "type":"integer",
+            "description":"The project to export.",
+            "example":1
+          },
+          "out_to_ftp":{
+            "title":"Out to ftp",
+            "type":"boolean",
+            "description":"Copy result file to FTP area. Original file is still available.",
+            "default":false,
+            "example":false
+          }
+        },
+        "description":"Backup export request."
+      },
+      "Body_create_file_user_files_create__post":{
+        "title":"Body_create_file_user_files_create__post",
+        "type":"object",
+        "properties":{
+          "source_path":{
+            "title":"Source Path",
+            "type":"string",
+            "description":"The client-side full path of the file or directory to be moved."
+          }
+        }
+      },
+      "Body_export_object_set_backup_object_set_export_backup_post":{
+        "title":"Body_export_object_set_backup_object_set_export_backup_post",
+        "required":[
+          "filters",
+          "request"
+        ],
+        "type":"object",
+        "properties":{
+          "filters":{
+            "$ref":"#/components/schemas/ProjectFilters"
+          },
+          "request":{
+            "$ref":"#/components/schemas/BackupExportReq"
+          }
+        }
+      },
+      "Body_export_object_set_general_object_set_export_general_post":{
+        "title":"Body_export_object_set_general_object_set_export_general_post",
+        "required":[
+          "filters",
+          "request"
+        ],
+        "type":"object",
+        "properties":{
+          "filters":{
+            "$ref":"#/components/schemas/ProjectFilters"
+          },
+          "request":{
+            "$ref":"#/components/schemas/GeneralExportReq"
+          }
+        }
+      },
       "Body_export_object_set_object_set_export_post":{
         "title":"Body_export_object_set_object_set_export_post",
         "required":[
@@ -5422,7 +5903,45 @@
             "$ref":"#/components/schemas/ProjectFilters"
           },
           "request":{
-            "$ref":"#/components/schemas/ExportReq"
+            "title":"Request",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/ExportReq"
+              }
+            ],
+            "deprecated":true
+          }
+        }
+      },
+      "Body_export_object_set_summary_object_set_export_summary_post":{
+        "title":"Body_export_object_set_summary_object_set_export_summary_post",
+        "required":[
+          "filters",
+          "request"
+        ],
+        "type":"object",
+        "properties":{
+          "filters":{
+            "$ref":"#/components/schemas/ProjectFilters"
+          },
+          "request":{
+            "$ref":"#/components/schemas/SummaryExportReq"
+          }
+        }
+      },
+      "Body_move_file_user_files_mv__post":{
+        "title":"Body_move_file_user_files_mv__post",
+        "type":"object",
+        "properties":{
+          "source_path":{
+            "title":"Source Path",
+            "type":"string",
+            "description":"The client-side full path of the file or directory to be moved."
+          },
+          "dest_path":{
+            "title":"Destination Path",
+            "type":"string",
+            "description":"The client-side full path of the destination file or directory."
           }
         }
       },
@@ -5439,6 +5958,25 @@
           },
           "request":{
             "$ref":"#/components/schemas/PredictionReq"
+          }
+        }
+      },
+      "Body_put_my_file_user_files__post":{
+        "title":"Body_put_my_file_user_files__post",
+        "required":[
+          "file"
+        ],
+        "type":"object",
+        "properties":{
+          "file":{
+            "title":"File",
+            "type":"string",
+            "format":"binary"
+          },
+          "path":{
+            "title":"Path",
+            "type":"string",
+            "description":"The client-side full path of the file."
           }
         }
       },
@@ -5463,6 +6001,17 @@
             "title":"Tag",
             "type":"string",
             "description":"If a tag is provided, then all files with the same tag are grouped (in a sub-directory). Otherwise, a temp directory with only this file will be created."
+          }
+        }
+      },
+      "Body_remove_file_user_files_rm__post":{
+        "title":"Body_remove_file_user_files_rm__post",
+        "type":"object",
+        "properties":{
+          "source_path":{
+            "title":"Source Path",
+            "type":"string",
+            "description":"The client-side full path of the file  or directory to be removed."
           }
         }
       },
@@ -5884,7 +6433,7 @@
           "password_regexp":{
             "title":"Password regexp",
             "type":"string",
-            "description":"8 char. minimum, at least one uppercase, one lowercase, one number and one special char in '#?!@%^&*-' ",
+            "description":"8 char. minimum, at least one uppercase, one lowercase, one number and one special char in '#?!@%^&*-+' ",
             "default":"^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#?%^&*-+])).{8,20}$"
           },
           "email_verification":{
@@ -6141,20 +6690,21 @@
         },
         "description":"A path + list of entries inside. The path is relative to an implied root."
       },
+      "ExportImagesOptionsEnum":{
+        "title":"ExportImagesOptionsEnum",
+        "enum":[
+          "all",
+          "first",
+          "none"
+        ],
+        "type":"string",
+        "description":"An enumeration."
+      },
       "ExportReq":{
         "title":"Export request Model",
         "required":[
           "project_id",
-          "exp_type",
-          "tsv_entities",
-          "split_by",
-          "coma_as_separator",
-          "format_dates_times",
-          "with_images",
-          "with_internal_ids",
-          "only_first_image",
-          "sum_subtotal",
-          "out_to_ftp"
+          "exp_type"
         ],
         "type":"object",
         "properties":{
@@ -6184,43 +6734,64 @@
           "tsv_entities":{
             "title":"Tsv entities",
             "type":"string",
-            "description":"For 'TSV' type, the entities to export, one letter for each of O(bject), P(rocess), A(cquisition), S(ample), classification H(istory), C(omments).",
+            "description":"For 'TSV' type, the entities to export, one letter for each of O(bject), P(rocess), A(cquisition), S(ample), C(omments).",
+            "default":"",
             "example":"OPAS"
+          },
+          "only_annotations":{
+            "title":"Backup annotations",
+            "type":"boolean",
+            "description":"For 'BAK' type, only save objects' last annotation data in backup.",
+            "default":false,
+            "example":false
           },
           "split_by":{
             "title":"Split by",
             "type":"string",
-            "description":"For 'TSV' type, inside archives, split in one directory per... 'sample', 'taxo' or '' (no split).",
+            "description":"For 'TSV' type, inside archives, split in one directory per... 'sample', 'acquisition', 'taxon' or '' (no split).",
+            "default":"",
             "example":"sample"
           },
           "coma_as_separator":{
             "title":"Coma as separator",
             "type":"boolean",
             "description":"For 'TSV' type, use a , instead of . for decimal separator.",
+            "default":false,
             "example":false
           },
           "format_dates_times":{
             "title":"Format dates times",
             "type":"boolean",
             "description":"For 'TSV' type, format dates and times using - and : respectively.",
+            "default":true,
             "example":false
           },
           "with_images":{
             "title":"With images",
             "type":"boolean",
             "description":"For 'BAK' and 'DOI' types, export images as well.",
+            "default":false,
             "example":false
           },
           "with_internal_ids":{
             "title":"With internal ids",
             "type":"boolean",
-            "description":"For 'BAK' and 'DOI' types, export internal DB IDs.",
+            "description":"For 'TSV' type, export internal DB IDs.",
+            "default":false,
+            "example":false
+          },
+          "with_types_row":{
+            "title":"With types row",
+            "type":"boolean",
+            "description":"Add an EcoTaxa-compatible second line with types.",
+            "default":false,
             "example":false
           },
           "only_first_image":{
             "title":"Only first image",
             "type":"boolean",
             "description":"For 'DOI' type, export only first (displayed) image.",
+            "default":false,
             "example":false
           },
           "sum_subtotal":{
@@ -6231,6 +6802,7 @@
               }
             ],
             "description":"For 'SUM', 'ABO', 'CNC' and 'BIV' types, if computations should be combined. Per A(cquisition) or S(ample) or <Empty>(just taxa).",
+            "default":"",
             "example":"A"
           },
           "pre_mapping":{
@@ -6264,6 +6836,7 @@
             "title":"Out to ftp",
             "type":"boolean",
             "description":"Copy result file to FTP area. Original file is still available.",
+            "default":false,
             "example":false
           }
         },
@@ -6308,6 +6881,17 @@
         },
         "description":"Export response, for all export jobs, either on Project or Collection"
       },
+      "ExportSplitOptionsEnum":{
+        "title":"ExportSplitOptionsEnum",
+        "enum":[
+          "sample",
+          "acquisition",
+          "taxon",
+          "none"
+        ],
+        "type":"string",
+        "description":"An enumeration."
+      },
       "ExportTypeEnum":{
         "title":"ExportTypeEnum",
         "enum":[
@@ -6320,7 +6904,73 @@
           "BIV"
         ],
         "type":"string",
-        "description":"An enumeration."
+        "description":"Externally deprecated"
+      },
+      "GeneralExportReq":{
+        "title":"General Export request Model",
+        "required":[
+          "project_id"
+        ],
+        "type":"object",
+        "properties":{
+          "project_id":{
+            "title":"Project Id",
+            "type":"integer",
+            "description":"The project to export.",
+            "example":1
+          },
+          "split_by":{
+            "title":"Split by",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/ExportSplitOptionsEnum"
+              }
+            ],
+            "description":"If not none, separate (in ZIP sub-directories) output per given field.",
+            "default":"none",
+            "example":"sample"
+          },
+          "with_images":{
+            "title":"With images",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/ExportImagesOptionsEnum"
+              }
+            ],
+            "description":"Add in ZIP first (i.e. visible) image, all images, or no image.⚠️ 'all' means maybe several lines per object in TSVs.",
+            "default":"none",
+            "example":"first"
+          },
+          "with_internal_ids":{
+            "title":"With internal ids",
+            "type":"boolean",
+            "description":"Export internal database IDs.",
+            "default":false,
+            "example":false
+          },
+          "with_types_row":{
+            "title":"With types row",
+            "type":"boolean",
+            "description":"Add an EcoTaxa-compatible second line with types.",
+            "default":false,
+            "example":false
+          },
+          "only_annotations":{
+            "title":"Backup annotations",
+            "type":"boolean",
+            "description":"Only save objects' last annotation data.",
+            "default":false,
+            "example":false
+          },
+          "out_to_ftp":{
+            "title":"Out to ftp",
+            "type":"boolean",
+            "description":"Copy result file to FTP area. Original file is still available.",
+            "default":false,
+            "example":false
+          }
+        },
+        "description":"General purpose export request, produce a zip in a job with many options."
       },
       "GroupDefinitions":{
         "title":"GroupDefinitions",
@@ -6460,12 +7110,12 @@
       "ImageModel":{
         "title":"ImageModel",
         "required":[
-          "imgid",
+          "objid",
           "imgrank",
-          "file_name",
-          "orig_file_name",
           "width",
-          "height"
+          "height",
+          "orig_file_name",
+          "file_name"
         ],
         "type":"object",
         "properties":{
@@ -6487,18 +7137,6 @@
             "description":"The rank of the image.",
             "example":0
           },
-          "file_name":{
-            "title":"File name",
-            "type":"string",
-            "description":"The file name.",
-            "example":"0037/6456.jpg"
-          },
-          "orig_file_name":{
-            "title":"Original file name",
-            "type":"string",
-            "description":"The file name of the original image.",
-            "example":"dewex_leg2_63_689.jpg"
-          },
           "width":{
             "title":"Width",
             "type":"integer",
@@ -6511,11 +7149,11 @@
             "description":"The height of the image.",
             "example":63
           },
-          "thumb_file_name":{
-            "title":"Thumb file name",
+          "orig_file_name":{
+            "title":"Original file name",
             "type":"string",
-            "description":"Generate thumbnail if image is too large. This generated thumbnail file name.",
-            "example":"null"
+            "description":"The file name of the original image.",
+            "example":"dewex_leg2_63_689.jpg"
           },
           "thumb_width":{
             "title":"Thumb width",
@@ -6528,8 +7166,21 @@
             "type":"integer",
             "description":"Generate thumbnail if image is too large. The thumb height of the image.",
             "example":"null"
+          },
+          "file_name":{
+            "title":"File name",
+            "type":"string",
+            "description":"The file name.",
+            "example":"0037/6456.jpg"
+          },
+          "thumb_file_name":{
+            "title":"Thumb file name",
+            "type":"string",
+            "description":"If image was too large at import time, the generated thumbnail file name.",
+            "example":"null"
           }
-        }
+        },
+        "description":"Computed inside ObjectBO"
       },
       "ImportReq":{
         "title":"Import request Model",
@@ -6907,16 +7558,11 @@
             "description":"The parent acquisition Id.",
             "example":144
           },
-          "orig_id":{
-            "title":"Original id",
-            "type":"string",
-            "description":"Original object ID from initial TSV load.",
-            "example":"deex_leg1_48_406"
-          },
-          "objdate":{
-            "title":"Object date",
-            "type":"string",
-            "format":"date"
+          "classif_id":{
+            "title":"Classification Id",
+            "type":"integer",
+            "description":"The classification Id.",
+            "example":82399
           },
           "objtime":{
             "title":"Object time",
@@ -6947,17 +7593,10 @@
             "description":"The min depth.",
             "example":300
           },
-          "sunpos":{
-            "title":"Sun position",
+          "objdate":{
+            "title":"Object date",
             "type":"string",
-            "description":"Sun position, from date, time and coords.",
-            "example":"N"
-          },
-          "classif_id":{
-            "title":"Classification Id",
-            "type":"integer",
-            "description":"The classification Id.",
-            "example":82399
+            "format":"date"
           },
           "classif_qual":{
             "title":"Classification qualification",
@@ -6965,11 +7604,11 @@
             "description":"The classification qualification. Could be **P** for predicted, **V** for validated or **D** for Dubious.",
             "example":"P"
           },
-          "classif_who":{
-            "title":"Classification who",
-            "type":"integer",
-            "description":"The user who manualy classify this object.",
-            "example":"null"
+          "sunpos":{
+            "title":"Sun position",
+            "type":"string",
+            "description":"Sun position, from date, time and coords.",
+            "example":"N"
           },
           "classif_when":{
             "title":"Classification when",
@@ -6997,6 +7636,11 @@
             "type":"string",
             "description":"Object link.",
             "example":"http://www.zooscan.obs-vlfr.fr//"
+          },
+          "complement_info":{
+            "title":"Complement info",
+            "type":"string",
+            "example":"Part of ostracoda"
           }
         }
       },
@@ -7007,7 +7651,8 @@
           "acquisid",
           "orig_id",
           "sample_id",
-          "project_id"
+          "project_id",
+          "random_value"
         ],
         "type":"object",
         "properties":{
@@ -7053,16 +7698,11 @@
             "description":"The parent acquisition Id.",
             "example":144
           },
-          "orig_id":{
-            "title":"Original id",
-            "type":"string",
-            "description":"Original object ID from initial TSV load.",
-            "example":"deex_leg1_48_406"
-          },
-          "objdate":{
-            "title":"Object date",
-            "type":"string",
-            "format":"date"
+          "classif_id":{
+            "title":"Classification Id",
+            "type":"integer",
+            "description":"The classification Id.",
+            "example":82399
           },
           "objtime":{
             "title":"Object time",
@@ -7093,17 +7733,10 @@
             "description":"The min depth.",
             "example":300
           },
-          "sunpos":{
-            "title":"Sun position",
+          "objdate":{
+            "title":"Object date",
             "type":"string",
-            "description":"Sun position, from date, time and coords.",
-            "example":"N"
-          },
-          "classif_id":{
-            "title":"Classification Id",
-            "type":"integer",
-            "description":"The classification Id.",
-            "example":82399
+            "format":"date"
           },
           "classif_qual":{
             "title":"Classification qualification",
@@ -7111,11 +7744,11 @@
             "description":"The classification qualification. Could be **P** for predicted, **V** for validated or **D** for Dubious.",
             "example":"P"
           },
-          "classif_who":{
-            "title":"Classification who",
-            "type":"integer",
-            "description":"The user who manualy classify this object.",
-            "example":"null"
+          "sunpos":{
+            "title":"Sun position",
+            "type":"string",
+            "description":"Sun position, from date, time and coords.",
+            "example":"N"
           },
           "classif_when":{
             "title":"Classification when",
@@ -7143,6 +7776,11 @@
             "type":"string",
             "description":"Object link.",
             "example":"http://www.zooscan.obs-vlfr.fr//"
+          },
+          "complement_info":{
+            "title":"Complement info",
+            "type":"string",
+            "example":"Part of ostracoda"
           },
           "sample_id":{
             "title":"Sample id",
@@ -7189,6 +7827,24 @@
               "mean":232.27,
               "stddev":2.129
             }
+          },
+          "classif_crossvalidation_id":{
+            "title":"Classification crossvalidation Id",
+            "type":"integer",
+            "description":"Always NULL, kept for compat.",
+            "example":"null"
+          },
+          "similarity":{
+            "title":"Similarity",
+            "type":"number",
+            "description":"Always NULL, kept for compat.",
+            "example":"null"
+          },
+          "random_value":{
+            "title":"random_value",
+            "type":"integer",
+            "description":"Random value associated to an image",
+            "example":1234
           }
         }
       },
@@ -8457,6 +9113,99 @@
         "type":"string",
         "description":"It's implied that we minimally group/aggregate by category AKA classification AKA taxon"
       },
+      "SummaryExportQuantitiesOptionsEnum":{
+        "title":"SummaryExportQuantitiesOptionsEnum",
+        "enum":[
+          "abundance",
+          "concentration",
+          "biovolume"
+        ],
+        "type":"string",
+        "description":"An enumeration."
+      },
+      "SummaryExportReq":{
+        "title":"Summary Export request Model",
+        "required":[
+          "project_id"
+        ],
+        "type":"object",
+        "properties":{
+          "project_id":{
+            "title":"Project Id",
+            "type":"integer",
+            "description":"The project to export.",
+            "example":1
+          },
+          "quantity":{
+            "title":"Quantity",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/SummaryExportQuantitiesOptionsEnum"
+              }
+            ],
+            "description":"The quantity to compute. Abundance is always possible.",
+            "default":"abundance",
+            "example":"abundance"
+          },
+          "summarise_by":{
+            "title":"Summarise by",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/SummaryExportSumOptionsEnum"
+              }
+            ],
+            "description":"Computations aggregation level.",
+            "default":"sample",
+            "example":"acquisition"
+          },
+          "taxo_mapping":{
+            "title":"Categories mapping",
+            "type":"object",
+            "additionalProperties":{
+              "type":"integer"
+            },
+            "description":"Mapping from present taxon (key) to output replacement one (value). Use a 0 replacement to _discard_ the present taxon.",
+            "default":{},
+            "example":{
+              "456":956,
+              "2456":213,
+              "7153":0
+            }
+          },
+          "formulae":{
+            "title":"Computation formulas",
+            "type":"object",
+            "additionalProperties":{
+              "type":"string"
+            },
+            "description":"Transitory: How to get values from DB free columns. Python syntax, prefixes are 'sam', 'ssm' and 'obj'.Variables used in computations are 'total_water_volume', 'subsample_coef' and 'individual_volume'",
+            "default":{},
+            "example":{
+              "subsample_coef":"1/ssm.sub_part",
+              "total_water_volume":"sam.tot_vol/1000",
+              "individual_volume":"4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3"
+            }
+          },
+          "out_to_ftp":{
+            "title":"Out to ftp",
+            "type":"boolean",
+            "description":"Copy result file to FTP area. Original file is still available.",
+            "default":false,
+            "example":false
+          }
+        },
+        "description":"Summary export request."
+      },
+      "SummaryExportSumOptionsEnum":{
+        "title":"SummaryExportSumOptionsEnum",
+        "enum":[
+          "none",
+          "sample",
+          "acquisition"
+        ],
+        "type":"string",
+        "description":"An enumeration."
+      },
       "TaxaSearchRsp":{
         "title":"TaxaSearchRsp",
         "required":[
@@ -8887,6 +9636,12 @@
             "type":"string",
             "description":"The country name, as text (but chosen in a consistent list).",
             "example":"France"
+          },
+          "orcid":{
+            "title":"ORCID ID",
+            "type":"string",
+            "description":"The orcid id https://support.orcid.org.",
+            "example":"0000-0001-2345-6789"
           },
           "usercreationdate":{
             "title":"User creation date",
