@@ -21,7 +21,7 @@ class HistoricalLastClassif:
     """
 
     objid: int
-    classif_id: ClassifIDT
+    classif_id: ClassifIDT  # Present classification
     histo_classif_date: datetime.datetime
     histo_classif_id: ClassifIDT
     histo_classif_qual: str

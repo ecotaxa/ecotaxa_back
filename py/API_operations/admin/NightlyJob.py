@@ -208,15 +208,15 @@ class ConsistencyCheckAndFix(object):
 
     def verify_ok(self, session: Session) -> Tuple[bool, Any]:
         res: Result = session.execute(text(self.query))
-        actual = next(res)[0]
+        actual = next(res)[0] if isinstance(self.expected, int) else res.all()
         return actual == self.expected, actual
 
 
 NightlyJobService.IDLE_CHECKS = [
     ConsistencyCheckAndFix(
         "No job is active",
-        "select array_agg(id) from job where state in ('P','R','A')",
-        None,
+        "select id from job where state in ('P','R','A')",
+        [],
         "need investigation",
     ),
 ]
@@ -294,12 +294,12 @@ where classif_qual is null and classif_id is null and
     ),
     ConsistencyCheckAndFix(
         "Only consistent history entries are OK. Auto prediction with a score+training and manual with someone.",
-        """select count(1)
+        """select objid, classif_qual, training_id, classif_who
     from objectsclassifhisto
     where not ((classif_qual = 'P' and training_id is not null and classif_who is null) or
                (classif_qual = 'D' and training_id is null and classif_who is not null) or
                (classif_qual = 'V' and training_id is null and classif_who is not null))""",
-        0,
+        [],
         """
             -- find root cause
             """,

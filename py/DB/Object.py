@@ -302,14 +302,16 @@ class ObjectsClassifHisto(Model):
     objid = Column(
         BIGINT, ForeignKey("obj_head.objid", ondelete="CASCADE"), primary_key=True
     )  # 8 bytes align d
-    # TODO: FK on taxonomy
+    # Date of manual switch to V or D, or training date for P (duplicated from Training)
     classif_date = Column(TIMESTAMP, primary_key=True)  # 8 bytes align d
+    # TODO: FK on taxonomy
     classif_id = Column(INTEGER, nullable=False)  # 4 bytes align i
     # classif_type = Column(
     #     CHAR(1)
     # )  # A : Automatic, M : Manual # 2 bytes (len + content) align c as len < 127
     classif_qual = Column(CHAR(1))  # 2 bytes (len + content) align c as len < 127
     classif_who = Column(Integer, ForeignKey("users.id"))  # 4 bytes align i
+    # The training which caused the last Predicted state
     training_id = Column(
         Integer, ForeignKey(Training.training_id, ondelete="CASCADE")
     )  # The training causing the values # 4 bytes align i

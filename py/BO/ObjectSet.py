@@ -50,10 +50,10 @@ from DB.Object import (
     ObjectFields,
     PREDICTED_CLASSIF_QUAL,
     VALIDATED_CLASSIF_QUAL,
-    DEFAULT_CLASSIF_HISTORY_DATE,
     ObjectHeader,
     ObjectIDT,
     NON_UPDATABLE_VIA_API,
+    DUBIOUS_CLASSIF_QUAL,
 )
 from DB.Prediction import Prediction, ClassifScore
 from DB.Project import ProjectIDListT, Project
@@ -62,7 +62,7 @@ from DB.Training import Training, TrainingIDT
 from DB.helpers import Result
 from DB.helpers.Core import select
 from DB.helpers.Direct import text, func
-from DB.helpers.ORM import Row, Delete, Update, any_, and_, or_, case
+from DB.helpers.ORM import Row, Delete, Update, any_, and_, or_
 from DB.helpers.Postgres import pg_insert, PgInsert
 from DB.helpers.SQL import WhereClause, SQLParamDict, FromClause, OrderClause
 from helpers.DynamicLogs import get_logger
@@ -412,78 +412,51 @@ class EnumeratedObjectSet(MappedTable):
         # Light up a bit the SQLA expressions
         oh = ObjectHeader
         och = ObjectsClassifHisto
+        trn = Training
         #
         # No classif_qual AKA state: Assume there is nothing to log.
         #
-        # 'P' state: both classif_id and classif_auto_id contain the user-visible category,
-        #            except if there was a prediction done after a user-triggered action, i.e. 'V' or 'D',
-        #            as the prediction protects user changes.
-        #            @see auto classification code above.
-        #            This is the case for 20K rows in prod' out of 160M -> negligible
+        # 'P' state: classif_id contains the user-visible category, referenced in the training via predictions.
         #
         # 'V' and 'D' states: classif_id contains the user-chosen category, which can be either the
-        #                     last auto_classif_id, or not if another category was assigned in the UI.
-        #                     There is no specific code for 'accept prediction',
-        #                     but there is some code for 'validate current' (-1 as target_qualif) .
+        #                     last predicted classif_id, or not if another category was assigned in the UI.
+        #                     There is no specific code for 'accept prediction', there is some code convention
+        #                     for 'validate current' (-1 as target_qualif) but it's not visible in DB.
         #
 
         # What's inserted, both cases, into the history table -- all columns
         ins_columns = [
             och.objid,  # <- oh.objid
-            och.classif_date,  # <- oh.classif_when or obh.classif_auto_when
-            # och.classif_type, # Now deduced from classif_qual
-            och.classif_id,  # <- oh.classif_id
             och.classif_qual,  # <- oh.classif_qual
+            och.classif_id,  # <- oh.classif_id
             och.classif_who,  # <- oh.classif_who
+            och.classif_date,  # <- oh.classif_when for manual transition date. For 'P', copy of training start_date
             och.training_id,  # <- oh.training_id
         ]
-        # Conventional defaults for nulls
-        # TODO: when should this field be NULL?
-        classif_when_exp = func.coalesce(
-            oh.classif_when, text(DEFAULT_CLASSIF_HISTORY_DATE)
-        )
-        # classif_auto_when_exp = func.coalesce(
-        #     obh.classif_auto_when, text(DEFAULT_CLASSIF_HISTORY_DATE)
-        # )
         # What we want to historize, as a subquery - The current state
         sel_subqry = select(
             [
                 oh.objid,
-                classif_when_exp,
-                # case(
-                #     [  # TODO: This seems quite redundant. To see in prod' if by chance it's consistent
-                #         (oh.classif_qual.in_(manual_states_text), text("'M'")),
-                #         (oh.classif_qual == predicted_state, text("'A'")),
-                #     ]
-                # ),
-                oh.classif_id,
                 oh.classif_qual,
-                case(
-                    [
-                        (oh.classif_qual.in_(MANUAL_STATES_TEXT), oh.classif_who),
-                        # No 'who' for Predicted state, but a training_id
-                    ]
-                ),
+                oh.classif_id,
+                oh.classif_who,  # Is NULL when 'P' or initial
+                func.coalesce(oh.classif_when, trn.training_start),
                 oh.training_id,
             ]
-        ).filter(
-            oh.classif_id != None
-        )  # Protect from possible inconsistencies via import
+        ).join(trn, isouter=True)
         if only_qual is not None:
-            # Pick only the required states
+            # Pick only the required states # TODO: Unused, to keep?
             qual_cond = oh.classif_qual.in_(only_qual)
         else:
-            pass
-        # Pick any present state
-        qual_cond = oh.classif_qual.isnot(None)
+            # Pick any present state
+            qual_cond = oh.classif_qual.isnot(None)
         sel_subqry = sel_subqry.where(and_(oh.objid == any_(object_ids), qual_cond))
         # Insert into the log table
         ins_qry: PgInsert = pg_insert(och.__table__)
         ins_qry = ins_qry.from_select(ins_columns, sel_subqry)
-        # TODO: Below not clean
+        # TODO: Below not clear nor clean
         ins_qry = ins_qry.on_conflict_do_nothing(constraint="objectsclassifhisto_pkey")
-        # TODO: mypy crashes due to pg_dialect below
-        # logger.info("Histo query: %s", ins_qry.compile(dialect=pg_dialect()))
+        # logger.info("Histo query: %s", ins_qry.compile())
         nb_obj_histos = session.execute(ins_qry).rowcount  # type:ignore  # case1
         return nb_obj_histos
 
@@ -518,8 +491,7 @@ class EnumeratedObjectSet(MappedTable):
         self, from_user_id: Optional[int], but_not_from_user_id: Optional[int]
     ) -> List[HistoricalLastClassif]:
         """
-        Query for last classification history on all objects of self, mixed with present state in order
-        to have restore-able lines.
+        Query for last classification history on all objects of self.
         """
         # Get the historical entries
         subqry = self.session.query(
@@ -564,7 +536,7 @@ class EnumeratedObjectSet(MappedTable):
             isouter=(from_user_id is None),
         )
         if from_user_id is not None:
-            # If taking history from a user, don't apply to the objects he/she classsified
+            # If taking history from a user, don't apply to the objects he/she classified
             # in last already.
             qry = qry.filter(ObjectHeader.classif_who != from_user_id)
             qry = qry.filter(subq_alias.c.rnk == 1)
@@ -587,6 +559,7 @@ class EnumeratedObjectSet(MappedTable):
         :param but_not_from_user_id: If set (!= None), exclude this user from history picking.
         """
         histo = self._get_last_classif_history(from_user_id, but_not_from_user_id)
+        # print("\n".join([str(x) for x in histo]))
         # Bulk update. It's less efficient than a plain update with criteria, but in the future we
         # might be able to do some cherry-picking on the history.
         updates = [
@@ -595,7 +568,9 @@ class EnumeratedObjectSet(MappedTable):
                 ObjectHeader.classif_qual.name: an_histo.histo_classif_qual,
                 ObjectHeader.classif_id.name: an_histo.histo_classif_id,
                 ObjectHeader.classif_who.name: an_histo.histo_classif_who,
-                ObjectHeader.classif_when.name: an_histo.histo_classif_date,
+                ObjectHeader.classif_when.name: an_histo.histo_classif_date
+                if an_histo.histo_classif_qual != PREDICTED_CLASSIF_QUAL
+                else None,  # When restoring Predicted clear the date
                 ObjectHeader.training_id.name: an_histo.histo_training_id,
             }
             for an_histo in histo
@@ -652,11 +627,18 @@ class EnumeratedObjectSet(MappedTable):
         all_changes: OrderedDict[ChangeTupleT, ObjectIDListT] = OrderedDict()
         target_qualif = wanted_qualif
         # A bit of obsessive optimization, and avoid semantically unbound literal
-        classif_id_col, classif_qual_col, classif_who_col, classif_when_col = (
+        (
+            classif_id_col,
+            classif_qual_col,
+            classif_who_col,
+            classif_when_col,
+            training_id_col,
+        ) = (
             ObjectHeader.classif_id.name,
             ObjectHeader.classif_qual.name,
             ObjectHeader.classif_who.name,
             ObjectHeader.classif_when.name,
+            ObjectHeader.training_id.name,
         )
         for obj_id, wanted in zip(self.object_ids, classif_ids):
             # Present state
@@ -678,6 +660,10 @@ class EnumeratedObjectSet(MappedTable):
             if wanted_qualif == "=":  # special value for 'keep current qualification'
                 # Arrange that no change can happen for this field
                 target_qualif = prev_classif_qual
+            assert target_qualif in (
+                VALIDATED_CLASSIF_QUAL,
+                DUBIOUS_CLASSIF_QUAL,
+            ), "Can't (re)classify Predicted objects, use prediction function"
             # Operator change
             prev_operator_id: Optional[int] = prev_obj["classif_who"]
             if (
@@ -712,9 +698,6 @@ class EnumeratedObjectSet(MappedTable):
         # Update of obj_head, grouped by similar operations.
         nb_updated = 0
         for (next_classif_id, new_wanted_qualif), an_obj_set in updates.items():
-            # We can have (new_classif_id, "P") for "forced reclassify" case, but
-            # the simple update below creates an inconsistency as the new_classif_id will
-            # _not_ come from a training. definitely TODO
             # Historize the updated rows (can be a lot!)
             an_obj_set.historize_classification(only_qual=None)
             row_upd = {
@@ -722,6 +705,7 @@ class EnumeratedObjectSet(MappedTable):
                 classif_qual_col: new_wanted_qualif,
                 classif_when_col: log_timestamp,
                 classif_who_col: user_id,
+                training_id_col: None,
             }
             # Do the update itself
             nb_updated += an_obj_set.update_all(row_upd)
