@@ -370,6 +370,7 @@ class TSVFile(object):
                 object_head_to_write["classif_who"] = current_user
             if object_head_to_write.get("classif_when") is None:
                 object_head_to_write["classif_when"] = start_time
+            object_head_to_write["training_id"] = None
         return state
 
     @staticmethod

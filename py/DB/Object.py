@@ -30,7 +30,9 @@ from .Acquisition import Acquisition
 from .Image import Image
 from .Project import Project, ProjectIDT
 from .Sample import Sample
+from .Taxonomy import Taxonomy
 from .Training import Training
+from .User import User
 from .helpers.ORM import Model
 
 # Typings
@@ -40,7 +42,7 @@ if TYPE_CHECKING:
     # from .Image import Image
 
 # Classification qualification
-PREDICTED_CLASSIF_QUAL = "P"  # according to 'training_id' output, the object _might be_ a 'classif_id' with 'score' probability
+PREDICTED_CLASSIF_QUAL = "P"  # according to 'training_id' output, the object _might be_ a 'classif_id'. Details of why in related training/predictions.
 DUBIOUS_CLASSIF_QUAL = "D"  # 'classif_who' said at 'classif_when' moment that the object is _probably not_ a 'classif_id'
 VALIDATED_CLASSIF_QUAL = "V"  # 'classif_who' said at 'classif_when' moment that the object _is_ a 'classif_id'
 DISCARDED_CLASSIF_QUAL = "X"  # 'classif_who' said at 'classif_when' moment that the object _is not_ a 'classif_id'
@@ -78,32 +80,17 @@ class ObjectHeader(Model):
     # _only_ 7018 different values
     objdate = Column(DATE)  # 4 bytes align i
     #
-    # Depending on its value,
-    # - it's the other classif_* columns which reflecting the "last state"
-    # - or the classif_auto_* ones.
+    # One of the *_CLASSIF_QUAL above
     classif_qual = Column(CHAR(1))  # 2 bytes (len + content) align c as len < 127
     #
     sunpos = Column(
         CHAR(1)
     )  # Sun position, from date, time and coords # 2 bytes (len + content) align c as len < 127
     classif_when = Column(TIMESTAMP)  # 8 bytes align d
-    classif_who = Column(Integer, ForeignKey("users.id"))  # 4 bytes align i
+    classif_who = Column(Integer, ForeignKey(User.id))  # 4 bytes align i
 
-    # The following 3 are set if the object was ever predicted, then they remain
-    # forever with these values. They reflect the "last state" only if classif_qual is 'P'.
-    # classif_auto_id = Column(INTEGER)  # 4 bytes align i
-    # # TODO: is sometimes NULL on prod' DB even if classif_qual='P' and other classif_auto_* are set
-    # classif_auto_when = Column(TIMESTAMP)  # 8 bytes align d
-    # classif_auto_score = Column(DOUBLE_PRECISION)  # 8 bytes align d
-
-    # If the object was ever predicted, the last training which produced the predictions
+    # If the object is predicted, the training which produced the prediction(s), current guess is classif_id
     training_id = Column(INTEGER, ForeignKey(Training.training_id))  # 4 bytes align i
-    # classif_crossvalidation_id = Column(INTEGER)  # TODO: Always NULL in prod' # 4 bytes align i
-
-    # similarity = Column(DOUBLE_PRECISION)  # TODO: Always NULL in prod' # 8 bytes align d
-
-    # TODO: Why random? It makes testing a bit more difficult
-    # random_value = Column(INTEGER)  # 4 bytes align i
 
     # User-provided identifier
     orig_id = Column(
@@ -300,21 +287,23 @@ DEFAULT_CLASSIF_HISTORY_DATE = "TO_TIMESTAMP(0)"
 class ObjectsClassifHisto(Model):
     __tablename__ = "objectsclassifhisto"
     objid = Column(
-        BIGINT, ForeignKey("obj_head.objid", ondelete="CASCADE"), primary_key=True
+        BIGINT, ForeignKey(ObjectHeader.objid, ondelete="CASCADE"), primary_key=True
     )  # 8 bytes align d
-    # Date of manual switch to V or D, or training date for P (duplicated from Training)
+    # Date of manual setting of V or D, training date for P (duplicated from Training for convenience)
     classif_date = Column(TIMESTAMP, primary_key=True)  # 8 bytes align d
     # TODO: FK on taxonomy
-    classif_id = Column(INTEGER, nullable=False)  # 4 bytes align i
+    classif_id = Column(
+        INTEGER, ForeignKey(Taxonomy.id, ondelete="CASCADE"), nullable=False
+    )  # 4 bytes align i
     # classif_type = Column(
     #     CHAR(1)
     # )  # A : Automatic, M : Manual # 2 bytes (len + content) align c as len < 127
     classif_qual = Column(CHAR(1))  # 2 bytes (len + content) align c as len < 127
-    classif_who = Column(Integer, ForeignKey("users.id"))  # 4 bytes align i
-    # The training which caused the last Predicted state
+    classif_who = Column(Integer, ForeignKey(User.id))  # 4 bytes align i
+    # The training which caused the P state
     training_id = Column(
         Integer, ForeignKey(Training.training_id, ondelete="CASCADE")
-    )  # The training causing the values # 4 bytes align i
+    )  # 4 bytes align i
     # The relationships are created in Relations.py but the typing here helps the IDE
     object: relationship
 

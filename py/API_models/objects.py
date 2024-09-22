@@ -134,6 +134,7 @@ _ImageModelFromDB = combine_models(Image, _Image2Model)
 
 class ImageModel(_ImageModelFromDB):
     """Computed inside ObjectBO"""
+
     file_name: str = Field(
         title="File name", description="The file name.", example="0037/6456.jpg"
     )
@@ -302,7 +303,7 @@ class _DBHistoricalLastClassifDescription(DescriptiveModel):
     )
     histo_classif_who = Field(
         title="Historical last classification who",
-        description="The user who manualy classify this object.",
+        description="The user who manually classified this object.",
         example=3876,
     )
 

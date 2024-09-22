@@ -570,7 +570,7 @@ class EnumeratedObjectSet(MappedTable):
                 ObjectHeader.classif_who.name: an_histo.histo_classif_who,
                 ObjectHeader.classif_when.name: an_histo.histo_classif_date
                 if an_histo.histo_classif_qual != PREDICTED_CLASSIF_QUAL
-                else None,  # When restoring Predicted clear the date
+                else None,  # When restoring Predicted, do not restore the date which is 'user action date'
                 ObjectHeader.training_id.name: an_histo.histo_training_id,
             }
             for an_histo in histo

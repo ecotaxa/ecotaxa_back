@@ -251,15 +251,22 @@ NightlyJobService.NIGHTLY_CHECKS = [
         """,
     ),
     ConsistencyCheckAndFix(
+        "No training information for manual states",
+        "select objid from obj_head where classif_qual in ('V','D') and training_id is not null",
+        [],
+        """
+        -- find root cause
+        """,
+    ),
+    ConsistencyCheckAndFix(
         "Predicted was set by machine, no trailing traces of previous human action",
         "select count(1) from obj_head where classif_qual = 'P' and (classif_who is not null or classif_when is not null)",
         0,
         """update obj_head
-set classif_who   = NULL,
-classif_when  = NULL
+set classif_who = NULL,
+classif_when = NULL
 where classif_qual = 'P'
-and (classif_who is not null or classif_when is not null)
-and classif_auto_id is not null""",
+and (classif_who is not null or classif_when is not null)""",
     ),
     ConsistencyCheckAndFix(
         "No classif_qual nor classif_id but some prediction info",
@@ -274,15 +281,12 @@ where classif_qual is null and classif_id is null and
 (classif_auto_id is not null and classif_auto_score is not null and classif_auto_when is not null)""",
     ),
     ConsistencyCheckAndFix(
-        "A training is present for 'P', supposed to come from last prediction",
-        "select count(1) as res from obj_head where classif_qual='P' and training_id is null",
-        0,
-        """update obj_head
-    set classif_auto_id = classif_id,
-    classif_auto_score=1,
-    classif_auto_when=coalesce(classif_when, '1970-01-01')
-    where classif_qual = 'P'
-    and classif_auto_id is null""",
+        "A training is present for 'P', coming from last prediction",
+        "select * from obj_head where classif_qual='P' and training_id is null",
+        [],
+        """
+        --- find root cause & repredict
+        """,
     ),
     ConsistencyCheckAndFix(
         "All obj_fields have same acquisid as object",
