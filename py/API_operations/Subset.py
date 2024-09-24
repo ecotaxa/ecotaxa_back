@@ -287,8 +287,10 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             Process.__tablename__: process,
         }
         TSVFile.add_parent_objects(import_how, self.session, obj, dict_of_parents)
-        # Propagate last human operator on the object
+        # Propagate last human operator on the object & classif_id which were wiped out during bean construction
+        # as they are foreign keys
         obj.classif_who = obj_orm.classif_who
+        obj.classif_id = obj_orm.classif_id
         # Write object and children
         new_records = TSVFile.create_or_link_slaves(
             how=import_how,
