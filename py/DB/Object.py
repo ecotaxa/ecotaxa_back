@@ -67,7 +67,7 @@ class ObjectHeader(Model):
         INTEGER, ForeignKey("acquisitions.acquisid", ondelete="CASCADE"), nullable=False
     )  # 4 bytes align i
     # User-visible classification
-    classif_id = Column(INTEGER)  # 4 bytes align i
+    classif_id = Column(INTEGER, ForeignKey(Taxonomy.id))  # 4 bytes align i
 
     # 86400 different values, basically all possible minutes of day
     objtime = Column(TIME)  # 8 bytes align d
@@ -89,7 +89,8 @@ class ObjectHeader(Model):
     classif_when = Column(TIMESTAMP)  # 8 bytes align d
     classif_who = Column(Integer, ForeignKey(User.id))  # 4 bytes align i
 
-    # If the object is predicted, the training which produced the prediction(s), current guess is classif_id
+    # If the object is Predicted, the training which produced the prediction(s), current guess is classif_id
+    # TODO: Rebuild/Re-shuffle for optimal per-tuple space
     training_id = Column(INTEGER, ForeignKey(Training.training_id))  # 4 bytes align i
 
     # User-provided identifier
@@ -101,13 +102,6 @@ class ObjectHeader(Model):
     object_link = Column(VARCHAR(255))
 
     complement_info = Column(VARCHAR)  # e.g. "Part of ostracoda"
-
-    # Below is not true if not Predicted or Validated, left here for reference
-    # ForeignKeyConstraint(
-    #     ["training_id", "objid", "classif_id"],
-    #     ["Prediction.training_id", "Prediction.object_id", "Prediction.classif_id"],
-    #     name="obj2pred",
-    # )
 
     # The relationships are created in Relations.py but the typing here helps the IDE
     fields: ObjectFields
@@ -196,9 +190,6 @@ USED_FIELDS_FOR_CLASSIF = {  # From user point of view, only these can be change
     ObjectHeader.classif_when.name,
 }
 HIDDEN_FIELDS_FOR_CLASSIF = {  # Internally managed
-    # ObjectHeader.classif_auto_id.name,
-    # ObjectHeader.classif_auto_when.name,
-    # ObjectHeader.classif_auto_score.name,
     ObjectHeader.training_id.name,
 }
 NON_UPDATABLE_VIA_API = USED_FIELDS_FOR_CLASSIF.union(HIDDEN_FIELDS_FOR_CLASSIF)
@@ -291,10 +282,9 @@ class ObjectsClassifHisto(Model):
     )  # 8 bytes align d
     # Date of manual setting of V or D, training date for P (duplicated from Training for convenience)
     classif_date = Column(TIMESTAMP, primary_key=True)  # 8 bytes align d
-    # TODO: FK on taxonomy
     classif_id = Column(
         INTEGER, ForeignKey(Taxonomy.id, ondelete="CASCADE"), nullable=False
-    )  # 4 bytes align i
+    )  # 4 bytes align i, dropped. # TODO: Re-shuffle for optimal per-tuple space
     # classif_type = Column(
     #     CHAR(1)
     # )  # A : Automatic, M : Manual # 2 bytes (len + content) align c as len < 127

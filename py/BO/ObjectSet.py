@@ -80,7 +80,8 @@ ObjectSetClassifChangesT = OrderedDictT[ChangeTupleT, ObjectIDListT]
 logger = get_logger(__name__)
 
 # If one of these statuses are required, then the classif_id must be valid
-MEANS_CLASSIF_ID_EXIST = ("V", "PV", "PVD", "NVM", "VM")
+MEANS_CLASSIF_ID_EXIST = ("P", "V", "PV", "PVD", "NVM", "VM")
+MEANS_TRAINING_ID_EXIST = ("P",)
 NO_HISTO = "n"
 
 
@@ -168,11 +169,13 @@ class DescribedObjectSet(object):
                 preds_ref
                 + " ON prd.training_id = obh.training_id AND prd.object_id = obh.objid AND prd.classif_id = obh.classif_id"
             )
-            selected_tables.set_outer(preds_ref)
+            if self.filters.status_filter not in MEANS_TRAINING_ID_EXIST:
+                selected_tables.set_outer(preds_ref)
         if "trn." in column_referencing_sql:
             trainings_ref = Training.__tablename__ + " trn"
             selected_tables += trainings_ref + " ON trn.training_id = obh.training_id"
-            selected_tables.set_outer(trainings_ref)
+            if self.filters.status_filter not in MEANS_TRAINING_ID_EXIST:
+                selected_tables.set_outer(trainings_ref)
         if "ohu." in column_referencing_sql:  # Inline query for annotators in history
             selected_tables += (
                 f"(select 1 as in_annots WHERE EXISTS (select * from {ObjectsClassifHisto.__tablename__} och "

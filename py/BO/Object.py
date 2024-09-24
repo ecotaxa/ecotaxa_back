@@ -61,7 +61,7 @@ CLASSIF_OBJ_FIELDS_IN_PREDICTION = {
 }
 CLASSIF_OBJ_FIELDS_IN_TRAINING = {
     # Presented as -> Physical in Training
-    "classif_auto_when": "training_when"
+    "classif_auto_when": "training_start"
 }
 
 
