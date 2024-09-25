@@ -232,7 +232,7 @@ def upgrade():
     )
     op.execute(
         """
-    -- reconstituted old tasks
+    -- Reconstituted (approximately) old tasks
     create table mig_classif_tasks as
     SELECT projid,
        classif_auto_when as begin_date,
@@ -277,6 +277,8 @@ def upgrade():
       from mig_obj_prj mop
       join training trn on (trn.projid = mop.projid
                         and mop.classif_auto_when between trn.training_start and trn.training_end)
+      -- There are a few duplicates (6K/500M) as the assumption '5 minutes b/w predictions' above in not true
+      on conflict (object_id, training_id, classif_id, score) do nothing
     """
     )
     op.execute(
@@ -291,8 +293,11 @@ def upgrade():
     update obj_head obh
        set training_id = trn.training_id
       from training trn
-      join prediction prd on prd.training_id = trn.training_id and prd.objid = obh.objid
-     where obh.classif_qual = 'P'
+      join prediction prd on prd.training_id = trn.training_id 
+     where prd.object_id = obh.objid
+       and prd.classif_id = obh.classif_auto_id
+       and prd.score = obh.classif_auto_score
+       and obh.classif_qual = 'P'
        and obh.classif_auto_when between trn.training_start and trn.training_end
        """
     )
@@ -303,8 +308,11 @@ def upgrade():
     update objectsclassifhisto och
        set training_id = trn.training_id
       from training trn
-      join prediction prd on prd.training_id = trn.training_id and prd.objid = och.objid
-     where och.classif_qual = 'P'
+      join prediction prd on prd.training_id = trn.training_id
+     where prd.object_id = och.objid
+       and prd.classif_id = och.classif_id
+       and prd.score = och.classif_score
+       and och.classif_qual = 'P'
        and och.classif_date between trn.training_start and trn.training_end
       """
     )
