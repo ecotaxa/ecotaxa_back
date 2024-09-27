@@ -90,7 +90,6 @@ class ObjectHeader(Model):
     classif_who = Column(Integer, ForeignKey(User.id))  # 4 bytes align i
 
     # If the object is Predicted, the training which produced the prediction(s), current guess is classif_id
-    # TODO: Rebuild/Re-shuffle for optimal per-tuple space
     training_id = Column(INTEGER, ForeignKey(Training.training_id))  # 4 bytes align i
 
     # User-provided identifier
@@ -107,12 +106,11 @@ class ObjectHeader(Model):
     fields: ObjectFields
     cnn_features: relationship
     classif: relationship
-    classif_auto: relationship
     classifier: relationship
     all_images: Iterable[Image]
     acquisition: relationship
     history: relationship
-    last_training: relationship
+    training: relationship
 
     @classmethod
     def fetch_existing_objects(
@@ -282,13 +280,13 @@ class ObjectsClassifHisto(Model):
     )  # 8 bytes align d
     # Date of manual setting of V or D, training date for P (duplicated from Training for convenience)
     classif_date = Column(TIMESTAMP, primary_key=True)  # 8 bytes align d
+    classif_qual = Column(
+        CHAR(1), nullable=False
+    )  # 2 bytes (len + content) align c as len < 127
     classif_id = Column(
         INTEGER, ForeignKey(Taxonomy.id, ondelete="CASCADE"), nullable=False
-    )  # 4 bytes align i, dropped. # TODO: Re-shuffle for optimal per-tuple space
-    # classif_type = Column(
-    #     CHAR(1)
-    # )  # A : Automatic, M : Manual # 2 bytes (len + content) align c as len < 127
-    classif_qual = Column(CHAR(1))  # 2 bytes (len + content) align c as len < 127
+    )  # 4 bytes align i
+    # The person who caused the 'D' or 'V' state
     classif_who = Column(Integer, ForeignKey(User.id))  # 4 bytes align i
     # The training which caused the P state
     training_id = Column(
@@ -296,6 +294,8 @@ class ObjectsClassifHisto(Model):
     )  # 4 bytes align i
     # The relationships are created in Relations.py but the typing here helps the IDE
     object: relationship
+    classif: relationship
+    classifier: relationship
 
 
 # For FK checks during deletion

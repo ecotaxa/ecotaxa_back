@@ -142,7 +142,7 @@ if True:
     ObjectHeader.history = relationship(ObjectsClassifHisto, viewonly=True)
     ObjectsClassifHisto.object = relationship(ObjectHeader)
 
-    ObjectHeader.last_training = relationship(
+    ObjectHeader.training = relationship(
         Training,
     )
 
@@ -152,6 +152,9 @@ if True:
     Training.project = relationship(
         Project,
     )
+
+    ObjectsClassifHisto.classif = relationship(Taxonomy)
+    ObjectsClassifHisto.classifier = relationship(User)
 
     # Jobs
     Job.owner = relationship(User)

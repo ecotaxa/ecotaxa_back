@@ -80,6 +80,12 @@ def upgrade():
 
     op.execute(
         """
+    ALTER TABLE objectsclassifhisto SET (autovacuum_enabled = off);
+    vacuum verbose objectsclassifhisto
+    """
+    )
+    op.execute(
+        """
     -- Remove consecutive predictions in history    
     delete from objectsclassifhisto och
     where och.classif_qual = 'P'
@@ -134,24 +140,24 @@ def upgrade():
         """
     -- Some 4007 objects in PROD have an invalid classif_auto_id, for 'P' we need to recreate the fake prediction
     update obj_head
-    set classif_auto_id=classif_id,
-    classif_auto_score=coalesce(classif_auto_score, 1),
-    classif_auto_when=coalesce(classif_auto_when,'01/01/1970')
-    where classif_qual = 'P'
-    and classif_auto_id is not null
-    and classif_auto_id not in (SELECT id from taxonomy)
+       set classif_auto_id=classif_id,
+           classif_auto_score=coalesce(classif_auto_score, 1),
+           classif_auto_when=coalesce(classif_auto_when,'01/01/1970')
+     where classif_qual = 'P'
+       and classif_auto_id is not null
+       and classif_auto_id not in (SELECT id from taxonomy)
     """
     )
     op.execute(
         """
     -- Some 4007 objects in PROD have an invalid classif_auto_id, for 'V'/'D' we can just erase _auto*
     update obj_head
-    set classif_auto_id=null,
-    classif_auto_score=null,
-    classif_auto_when=null
-    where classif_qual in ('V','D')
-    and classif_auto_id is not null
-    and classif_auto_id not in (SELECT id from taxonomy)
+       set classif_auto_id=null,
+           classif_auto_score=null,
+           classif_auto_when=null
+     where classif_qual in ('V','D')
+       and classif_auto_id is not null
+       and classif_auto_id not in (SELECT id from taxonomy)
     """
     )
 
@@ -161,13 +167,13 @@ def upgrade():
     op.execute(
         """
     -- All objects ever predicted, with their project        
-    CREATE TABLE mig_obj_prj as
+    CREATE UNLOGGED TABLE mig_obj_prj as
     SELECT prj.projid, -- optimized column order as we have 500M lines here
-       obh.classif_auto_id,
-       obh.objid,
-       obh.classif_auto_score,
-       obh.classif_auto_when
-    FROM obj_head obh
+           obh.classif_auto_id,
+           obh.objid,
+           obh.classif_auto_score,
+           obh.classif_auto_when
+      FROM obj_head obh
          JOIN acquisitions acq ON obh.acquisid = acq.acquisid
          JOIN samples sam ON acq.acq_sample_id = sam.sampleid
          JOIN projects prj ON sam.projid = prj.projid
@@ -175,11 +181,11 @@ def upgrade():
     UNION
     -- All objects previously predicted (lots were cleaned!), with their project        
     SELECT prj.projid,
-       och.classif_id as classif_auto_id,
-       och.objid,
-       och.classif_score as classif_auto_score,
-       och.classif_date as classif_auto_when
-    FROM objectsclassifhisto och
+           och.classif_id as classif_auto_id,
+           och.objid,
+           och.classif_score as classif_auto_score,
+           och.classif_date as classif_auto_when
+      FROM objectsclassifhisto och
          JOIN obj_head obh ON och.objid = obh.objid
          JOIN acquisitions acq ON obh.acquisid = acq.acquisid
          JOIN samples sam ON acq.acq_sample_id = sam.sampleid
@@ -190,6 +196,7 @@ def upgrade():
     op.execute(
         """
     create index on mig_obj_prj (projid, objid);
+    create index on mig_obj_prj (objid, classif_auto_id, classif_auto_when);
     analyze mig_obj_prj
     """
     )
@@ -197,7 +204,7 @@ def upgrade():
     op.execute(
         """
     -- Grouped writes of previous prediction tasks, per project & date
-    create table mig_unq_classif_per_proj as
+    create UNLOGGED table mig_unq_classif_per_proj as
     SELECT projid, classif_auto_when, count(objid) as nb_objs
     from mig_obj_prj
     group by projid, classif_auto_when
@@ -208,7 +215,7 @@ def upgrade():
         """
     -- Look for start and end dates of prediction tasks
     -- assuming that 5 minutes have elapsed b/w 2 tasks on same project (time for human to read a bit the result)
-    create table mig_classif_chunks_per_proj as
+    create UNLOGGED table mig_classif_chunks_per_proj as
     SELECT case when delta_prev > '5 min' then 'B' end as B,
        case when delta_next > '5 min' then 'E' end as E,
        *
@@ -233,7 +240,7 @@ def upgrade():
     op.execute(
         """
     -- Reconstituted (approximately) old tasks
-    create table mig_classif_tasks as
+    create UNLOGGED table mig_classif_tasks as
     SELECT projid,
        classif_auto_when as begin_date,
        (SELECT classif_auto_when
@@ -263,6 +270,11 @@ def upgrade():
       from mig_classif_tasks mct        
     """
     )
+    # Note: Trainings do not overlap:
+    # select * from training trn
+    #     where exists(select 1 from training trn2 where trn2.projid = trn.projid and trn.training_id != trn2.training_id
+    #                                              and (trn2.training_start between trn.training_start and trn.training_end
+    #                                                  or trn2.training_end between trn.training_start and trn.training_end))
     op.execute(
         """
     analyze training
@@ -271,12 +283,21 @@ def upgrade():
 
     op.execute(
         """
+    alter table mig_obj_prj add column training_id integer;
+    update mig_obj_prj mop
+       set training_id = (select trn.training_id
+                            from training trn
+                           where mop.projid = trn.projid
+                             and mop.classif_auto_when between trn.training_start and trn.training_end);    
+    """
+    )
+
+    op.execute(
+        """
     -- Create predictions for past values
     insert into prediction(training_id, object_id, classif_id, score)
-    select trn.training_id, mop.objid, mop.classif_auto_id, mop.classif_auto_score
+    select mop.training_id, mop.objid, mop.classif_auto_id, mop.classif_auto_score
       from mig_obj_prj mop
-      join training trn on (trn.projid = mop.projid
-                        and mop.classif_auto_when between trn.training_start and trn.training_end)
       -- There are a few duplicates (6K/500M) as the assumption '5 minutes b/w predictions' above in not true
       on conflict (object_id, training_id, classif_id, score) do nothing
     """
@@ -289,35 +310,71 @@ def upgrade():
 
     op.execute(
         """
-    -- Inject training back into predicted objects 
-    update obj_head obh
-       set training_id = trn.training_id
-      from training trn
-      join prediction prd on prd.training_id = trn.training_id 
-     where prd.object_id = obh.objid
-       and prd.classif_id = obh.classif_auto_id
-       and prd.score = obh.classif_auto_score
-       and obh.classif_qual = 'P'
-       and obh.classif_auto_when between trn.training_start and trn.training_end
-       """
+    ALTER TABLE obj_head SET (autovacuum_enabled = off)
+    """
+    )
+    op.execute(
+        """
+do
+$$
+    declare
+        curprj  record;
+        o_count integer;
+        sum_count integer = 0;
+    begin
+        for curprj in (select distinct projid from mig_obj_prj order by projid)
+            loop
+                -- Inject training back into objects
+                update obj_head obh
+                   set training_id = mop.training_id
+                  from mig_obj_prj mop
+                 where obh.classif_qual = 'P'
+                   and mop.objid = obh.objid
+                   and mop.classif_auto_id = obh.classif_auto_id
+                   and mop.classif_auto_score = obh.classif_auto_score
+                   and mop.classif_auto_when = obh.classif_auto_when
+                   and mop.projid = curprj.projid;
+                GET DIAGNOSTICS o_count = ROW_COUNT;
+                sum_count = sum_count + o_count;
+                RAISE NOTICE 'project: % preds % Σ %, time:%', curprj.projid, o_count, sum_count, clock_timestamp();
+            end loop;
+    end;
+$$;
+"""
     )
 
     op.execute(
         """
-    -- Link historical Predicted with reconstituted predictions
-    update objectsclassifhisto och
-       set training_id = trn.training_id
-      from training trn
-      join prediction prd on prd.training_id = trn.training_id
-     where prd.object_id = och.objid
-       and prd.classif_id = och.classif_id
-       and prd.score = och.classif_score
-       and och.classif_qual = 'P'
-       and och.classif_date between trn.training_start and trn.training_end
+do
+$$
+    declare
+        curprj  record;
+        o_count integer;
+        sum_count integer = 0;
+    begin
+        for curprj in (select distinct projid from mig_obj_prj order by projid)
+            loop
+            -- Link historical Predicted with reconstituted predictions
+            update objectsclassifhisto och
+               set training_id = mop.training_id
+              from mig_obj_prj mop
+             where och.classif_qual = 'P'
+               and mop.objid = och.objid
+               and mop.classif_auto_id = och.classif_id
+               and mop.classif_auto_score = och.classif_score
+               and mop.classif_auto_when = och.classif_date
+               and mop.projid = curprj.projid;
+            GET DIAGNOSTICS o_count = ROW_COUNT;
+            sum_count = sum_count + o_count;
+            RAISE NOTICE 'project: % hpreds % Σ %, time:%', curprj.projid, o_count, sum_count, clock_timestamp();
+        end loop;
+    end;
+$$;
       """
     )
 
     # TODO: Check all trainings are used
+    # TODO: Check nightly job verifications are OK
     # TODO: Check values are == b/w object/histo and their fresh predictions
 
     # op.drop_column("objectsclassifhisto", "classif_score")

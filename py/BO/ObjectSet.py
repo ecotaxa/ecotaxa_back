@@ -651,7 +651,7 @@ class EnumeratedObjectSet(MappedTable):
             next_classif_id: Optional[int]
             if wanted == -1:  # special value from "validate as is"
                 # Arrange that no change can happen for this field
-                # Note: prev_classif_id can be None
+                # Note: prev_classif_id can be None, e.g. for fresh imports
                 next_classif_id = prev_classif_id
             else:
                 next_classif_id = wanted
