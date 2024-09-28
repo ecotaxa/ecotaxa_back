@@ -7,11 +7,13 @@
 #
 from __future__ import annotations
 
-from DB.helpers.DDL import Index, Column, ForeignKey
-from DB.helpers.ORM import Model
-from DB.helpers.Postgres import BIGINT, INTEGER, DOUBLE_PRECISION
 from typing import NamedTuple
 
+from sqlalchemy import PrimaryKeyConstraint
+
+from DB.helpers.DDL import Column, ForeignKey
+from DB.helpers.ORM import Model
+from DB.helpers.Postgres import BIGINT, INTEGER, DOUBLE_PRECISION
 from .Object import ObjectHeader
 from .Taxonomy import Taxonomy
 from .Training import Training
@@ -31,21 +33,18 @@ class Prediction(Model):
         BIGINT,
         ForeignKey(ObjectHeader.objid, ondelete="CASCADE"),
         nullable=False,
-        primary_key=True,
     )
     training_id: int = Column(
         INTEGER,
         ForeignKey(Training.training_id, ondelete="CASCADE"),
         nullable=False,
-        primary_key=True,
     )
     classif_id: int = Column(
         INTEGER,
         ForeignKey(Taxonomy.id, ondelete="CASCADE"),
         nullable=False,
-        primary_key=True,
     )
-    score = Column(DOUBLE_PRECISION, nullable=False, primary_key=True)
+    score = Column(DOUBLE_PRECISION, nullable=False)  # payload
 
-
-Index("pred_object_id", Prediction.training_id, Prediction.object_id)
+    # Define the 'normal' PK, from more general to less general, we had to reorder for space
+    __table_args__ = (PrimaryKeyConstraint("training_id", "object_id", "classif_id"),)
