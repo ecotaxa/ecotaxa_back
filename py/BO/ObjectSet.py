@@ -190,7 +190,11 @@ class DescribedObjectSet(object):
             if self.filters.status_filter not in MEANS_CLASSIF_ID_EXIST:
                 selected_tables.set_outer(f"{Taxonomy.__tablename__} txo ")
         if "img." in column_referencing_sql:
-            selected_tables += f"LATERAL (select * from {Image.__tablename__} img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true"
+            selected_tables += (
+                f"{Image.__tablename__} img ON obh.objid = img.objid "
+                if all_images
+                else f"LATERAL (select * from {Image.__tablename__} img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true"
+            )
             #  selected_tables.set_outer("images img ")
         if "usr." in column_referencing_sql:
             selected_tables += f"{User.__tablename__} usr ON obh.classif_who = usr.id"
