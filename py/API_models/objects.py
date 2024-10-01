@@ -52,7 +52,7 @@ class _ObjectHeaderModel(DescriptiveModel):
     )
     classif_who = Field(
         title="Classification who",
-        description="The user who manualy classify this object.",
+        description="The user who manually classified this object.",
         example="null",
     )
     classif_when = Field(

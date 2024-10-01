@@ -190,11 +190,7 @@ class DescribedObjectSet(object):
             if self.filters.status_filter not in MEANS_CLASSIF_ID_EXIST:
                 selected_tables.set_outer(f"{Taxonomy.__tablename__} txo ")
         if "img." in column_referencing_sql:
-            selected_tables += f"{Image.__tablename__} img ON obh.objid = img.objid " + (
-                f"AND img.imgrank = (SELECT MIN(img2.imgrank) FROM {Image.__tablename__} img2 WHERE img2.objid = obh.objid)"
-                if not all_images
-                else ""
-            )
+            selected_tables += f"LATERAL (select * from {Image.__tablename__} img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true"
             #  selected_tables.set_outer("images img ")
         if "usr." in column_referencing_sql:
             selected_tables += f"{User.__tablename__} usr ON obh.classif_who = usr.id"
@@ -1183,7 +1179,7 @@ class ObjectSetFilter(object):
 
         if self.validated_from:
             if self.status_filter == "PVD":
-                # Intepret the date as a 'changed_from' filter
+                # Interpret the date as a 'changed_from' filter
                 where_clause *= "COALESCE(obh.classif_when, obh.classif_auto_when) >= TO_TIMESTAMP(:validfromdate,'YYYY-MM-DD HH24:MI')"
             else:
                 where_clause *= "obh.classif_when >= TO_TIMESTAMP(:validfromdate,'YYYY-MM-DD HH24:MI')"
