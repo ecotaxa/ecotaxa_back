@@ -111,7 +111,6 @@ from API_operations.TaxoManager import TaxonomyChangeService, CentralTaxonomySer
 from API_operations.TaxonomyService import TaxonomyService
 from API_operations.UserFilesFolder import UserFilesFolderService
 from API_operations.UserFolder import UserFolderService, CommonFolderService
-from API_operations.UserFilesFolder import UserFilesFolderService
 from API_operations.admin.Database import DatabaseService
 from API_operations.admin.ImageManager import ImageManagerService
 from API_operations.admin.NightlyJob import NightlyJobService
@@ -167,7 +166,7 @@ api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.38",
+    version="0.0.38.mlp",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -1941,12 +1940,12 @@ latitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value
 
 **Note that the following fields must be prefixed with the header "img."** (for example → img.file_name):
 
-file_name, height, imgid, imgrank, file_name, orig, objid, file_name thumb_file_name, thumb_height, thumb_width, width.
+file_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.
 
 **Note that the following fields must be prefixed with the header "txo."** (for example → txo.display_name):
 
 creation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,
-name, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatus, taxotype.
+name, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.
 
 **All other fields must be prefixed by the header "fre."** (for example → fre.circ.).
                    """,

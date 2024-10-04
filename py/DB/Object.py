@@ -31,7 +31,6 @@ from .Image import Image
 from .Project import Project, ProjectIDT
 from .Sample import Sample
 from .Taxonomy import Taxonomy
-from .Training import Training
 from .User import User
 from .helpers.ORM import Model
 
@@ -42,10 +41,10 @@ if TYPE_CHECKING:
     # from .Image import Image
 
 # Classification qualification
-PREDICTED_CLASSIF_QUAL = "P"  # according to 'training_id' output, the object _might be_ a 'classif_id'. Details of why in related training/predictions.
-DUBIOUS_CLASSIF_QUAL = "D"  # 'classif_who' said at 'classif_when' moment that the object is _probably not_ a 'classif_id'
-VALIDATED_CLASSIF_QUAL = "V"  # 'classif_who' said at 'classif_when' moment that the object _is_ a 'classif_id'
-DISCARDED_CLASSIF_QUAL = "X"  # 'classif_who' said at 'classif_when' moment that the object _is not_ a 'classif_id'
+PREDICTED_CLASSIF_QUAL = "P"  # ML found, during the training starting at 'classif_date' moment, that the object _could be_ a 'classif_id' with 'classif_score' confidence.
+DUBIOUS_CLASSIF_QUAL = "D"  # 'classif_who' said at 'classif_date' moment that the object is _probably not_ a 'classif_id'
+VALIDATED_CLASSIF_QUAL = "V"  # 'classif_who' said at 'classif_date' moment that the object _is_ a 'classif_id'
+DISCARDED_CLASSIF_QUAL = "X"  # 'classif_who' said at 'classif_date' moment that the object _is not_ a 'classif_id'
 classif_qual_labels = {
     PREDICTED_CLASSIF_QUAL: "predicted",
     DUBIOUS_CLASSIF_QUAL: "dubious",
@@ -86,11 +85,12 @@ class ObjectHeader(Model):
     sunpos = Column(
         CHAR(1)
     )  # Sun position, from date, time and coords # 2 bytes (len + content) align c as len < 127
-    classif_when = Column(TIMESTAMP)  # 8 bytes align d
+    # Date of move to present classif_qual+classif_id, see top comment on states for details
+    classif_date = Column(TIMESTAMP)  # 8 bytes align d
+    # If the object is Predicted, its score
+    classif_score = Column(DOUBLE_PRECISION)  # 8 bytes align d
+    # Author of last change in/to 'V' or 'D'
     classif_who = Column(Integer, ForeignKey(User.id))  # 4 bytes align i
-
-    # If the object is Predicted, the training which produced the prediction(s), current guess is classif_id
-    training_id = Column(INTEGER, ForeignKey(Training.training_id))  # 4 bytes align i
 
     # User-provided identifier
     orig_id = Column(
@@ -110,7 +110,6 @@ class ObjectHeader(Model):
     all_images: Iterable[Image]
     acquisition: relationship
     history: relationship
-    training: relationship
 
     @classmethod
     def fetch_existing_objects(
@@ -181,15 +180,14 @@ class ObjectHeader(Model):
         return self.objid < other.objid
 
 
-USED_FIELDS_FOR_CLASSIF = {  # From user point of view, only these can be changed
+USED_FIELDS_FOR_CLASSIF = {  # From Import user point of view, only these can be changed
     ObjectHeader.classif_qual.name,
     ObjectHeader.classif_id.name,
+    ObjectHeader.classif_date.name,
     ObjectHeader.classif_who.name,
-    ObjectHeader.classif_when.name,
+    ObjectHeader.classif_score.name,
 }
-HIDDEN_FIELDS_FOR_CLASSIF = {  # Internally managed
-    ObjectHeader.training_id.name,
-}
+HIDDEN_FIELDS_FOR_CLASSIF = {}  # Internally managed
 NON_UPDATABLE_VIA_API = USED_FIELDS_FOR_CLASSIF.union(HIDDEN_FIELDS_FOR_CLASSIF)
 
 
@@ -267,8 +265,6 @@ Index(
     ObjectHeader.__table__.c.objdate,
     postgresql_include=[ObjectHeader.__table__.c.acquisid],
 )
-# For FK checks during deletion
-Index("is_objecttraining", ObjectHeader.__table__.c.training_id)
 
 DEFAULT_CLASSIF_HISTORY_DATE = "TO_TIMESTAMP(0)"
 
@@ -278,25 +274,19 @@ class ObjectsClassifHisto(Model):
     objid = Column(
         BIGINT, ForeignKey(ObjectHeader.objid, ondelete="CASCADE"), primary_key=True
     )  # 8 bytes align d
-    # Date of manual setting of V or D, training date for P (duplicated from Training for convenience)
+    # Date of manual setting of 'V' or 'D', training date for 'P'
     classif_date = Column(TIMESTAMP, primary_key=True)  # 8 bytes align d
-    classif_qual = Column(
-        CHAR(1), nullable=False
-    )  # 2 bytes (len + content) align c as len < 127
+    # The score associated with 'P' state
+    classif_score = Column(DOUBLE_PRECISION)  # 8 bytes align d
     classif_id = Column(
         INTEGER, ForeignKey(Taxonomy.id, ondelete="CASCADE"), nullable=False
     )  # 4 bytes align i
     # The person who caused the 'D' or 'V' state
     classif_who = Column(Integer, ForeignKey(User.id))  # 4 bytes align i
-    # The training which caused the P state
-    training_id = Column(
-        Integer, ForeignKey(Training.training_id, ondelete="CASCADE")
-    )  # 4 bytes align i
+    classif_qual = Column(
+        CHAR(1), nullable=False
+    )  # 2 bytes (len + content) align c as len < 127
     # The relationships are created in Relations.py but the typing here helps the IDE
     object: relationship
     classif: relationship
     classifier: relationship
-
-
-# For FK checks during deletion
-Index("is_objecthistotraining", ObjectsClassifHisto.__table__.c.training_id)

@@ -142,10 +142,6 @@ if True:
     ObjectHeader.history = relationship(ObjectsClassifHisto, viewonly=True)
     ObjectsClassifHisto.object = relationship(ObjectHeader)
 
-    ObjectHeader.training = relationship(
-        Training,
-    )
-
     Training.predictions = relationship(
         Prediction,
     )

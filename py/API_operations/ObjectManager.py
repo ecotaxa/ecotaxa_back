@@ -38,7 +38,6 @@ from DB.Object import (
     ObjectHeader,
 )
 from DB.Project import ProjectIDT, Project
-from DB.Training import TrainingIDT
 from DB.helpers import Result
 from DB.helpers.Direct import text
 from DB.helpers.Postgres import db_server_now
@@ -170,7 +169,10 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
         order_expr = ObjectBO._field_to_db_col(order_field, mappings)
         if order_expr is None:
             return ret
-        alias, order_col = order_expr.split(".", 1)
+        if " AS " in order_expr:
+            alias, order_col = (None, order_expr.split(" AS ")[1])
+        else:
+            alias, order_col = order_expr.split(".", 1)
         # From PG doc: If NULLS LAST is specified, null values sort after all non-null values;
         # if NULLS FIRST is specified, null values sort before all non-null values.
         # If neither is specified, the default behavior is NULLS LAST when ASC is specified or implied,
@@ -527,7 +529,7 @@ SELECT COUNT(*) nbr"""
     def classify_auto_mult_set(
         self,
         current_user_id: UserIDT,
-        training_id: TrainingIDT,
+        training: Optional[TrainingBO],
         target_ids: ObjectIDListT,
         classif_ids: List[ClassifIDListT],
         scores: List[ClassifScoresListT],
@@ -539,13 +541,12 @@ SELECT COUNT(*) nbr"""
         object_set, project = self._the_project_for(
             current_user_id, target_ids, Action.ANNOTATE
         )
-        # Temporary: create a new training if not set # TODO
-        if training_id is None:
-            trn = TrainingBO.create_one(self.session, current_user_id)
-            training_id = trn.training_id
+        # Temporary: create a new training if not set
+        if training is None:
+            training = TrainingBO.create_one(self.session, current_user_id)
         # Do the raw classification, eventually with history.
         nb_upd, all_changes = object_set.classify_auto_mult(
-            training_id, classif_ids, scores
+            training._training, classif_ids, scores
         )
         # Propagate changes to update projects_taxo_stat
         self.propagate_classif_changes(nb_upd, all_changes, project)

@@ -15,7 +15,6 @@ from BO.Classification import HistoricalClassificationListT, HistoricalClassific
 from BO.Mappings import TableMapping
 from BO.Sample import SampleIDT
 from BO.helpers.MappedEntity import MappedEntity
-from DB import Prediction
 from DB.Acquisition import Acquisition
 from DB.Image import Image, IMAGE_VIRTUAL_COLUMNS
 from DB.Object import (
@@ -28,6 +27,7 @@ from DB.Object import (
     PREDICTED_CLASSIF_QUAL,
     DISCARDED_CLASSIF_QUAL,
 )
+from DB.ObjectVirtual import OBJECT_VIRTUAL_COLUMNS
 from DB.Project import ProjectIDT, Project
 from DB.Sample import Sample
 from DB.Taxonomy import Taxonomy
@@ -39,7 +39,7 @@ from DB.helpers.ORM import (
     Model,
     minimal_model_of,
     text,
-    and_,
+    case,
 )
 from helpers.DynamicLogs import get_logger
 
@@ -53,16 +53,6 @@ MANUAL_STATES_TEXT = text(
     % (VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, DISCARDED_CLASSIF_QUAL)
 )
 PREDICTED_STATE_TEXT = text("'%s'" % PREDICTED_CLASSIF_QUAL)
-
-CLASSIF_OBJ_FIELDS_IN_PREDICTION = {
-    # Presented as -> Physical in Prediction
-    "classif_auto_score": "score",
-    "classif_auto_id": "classif_id",
-}
-CLASSIF_OBJ_FIELDS_IN_TRAINING = {
-    # Presented as -> Physical in Training
-    "classif_auto_when": "training_start"
-}
 
 
 def _get_proj(obj: ObjectHeader) -> Project:
@@ -114,6 +104,8 @@ class ObjectBO(MappedEntity):
         self.similarity = None
         self.classif_crossvalidation_id = None
         self.random_value = 0
+        # Emulate previous behavior
+        OBJECT_VIRTUAL_COLUMNS.add_to_model(self.header)
 
     def get_history(self) -> HistoricalClassificationListT:
         """
@@ -125,27 +117,19 @@ class ObjectBO(MappedEntity):
             och.classif_id,
             och.classif_date,
             och.classif_who,
-            # case(  # och.classif_type,  # Emulate previous value
-            #     [
-            #         (och.classif_qual.in_(MANUAL_STATES_TEXT), "M"),
-            #         (och.classif_qual == PREDICTED_STATE_TEXT, "A"),
-            #     ]
-            # ).label("classif_type"),
+            case(  # Emulate previous value
+                [
+                    (och.classif_qual.in_(MANUAL_STATES_TEXT), "M"),
+                    (och.classif_qual == PREDICTED_STATE_TEXT, "A"),
+                ]
+            ).label("classif_type"),
             och.classif_qual,
-            Prediction.score.label("classif_score"),
+            och.classif_score,
             User.name.label("user_name"),
             Taxonomy.display_name.label("taxon_name"),
         ).filter(ObjectsClassifHisto.objid == self.header.objid)
         qry = qry.outerjoin(User)
         qry = qry.outerjoin(Taxonomy, Taxonomy.id == och.classif_id)
-        qry = qry.outerjoin(
-            Prediction,
-            and_(
-                Prediction.training_id == och.training_id,
-                Prediction.object_id == och.objid,
-                Prediction.classif_id == och.classif_id,
-            ),
-        )
         ret = [HistoricalClassification(**rec._mapping) for rec in qry]
         return ret
 
@@ -157,20 +141,10 @@ class ObjectBO(MappedEntity):
         except ValueError:
             return None
         if prfx == "obj":
-            if (
-                name == "complement_info" and name not in ObjectHeader.__dict__
-            ):  # Prepare removal of this column
-                return "NULL::text"
             if name in ObjectHeader.__dict__:
                 return "obh." + name
-            elif name == "imgcount":
-                return "(SELECT COUNT(img2.imgrank) FROM images img2 WHERE img2.objid = obh.objid) AS imgcount"
-            elif name == "random_value":  # TODO: A VirtualColumn
-                return "HASHTEXT(obh.orig_id) AS random_value"
-            elif name in CLASSIF_OBJ_FIELDS_IN_PREDICTION:
-                return "prd." + CLASSIF_OBJ_FIELDS_IN_PREDICTION[name]
-            elif name in CLASSIF_OBJ_FIELDS_IN_TRAINING:
-                return "trn." + CLASSIF_OBJ_FIELDS_IN_TRAINING[name]
+            elif name in OBJECT_VIRTUAL_COLUMNS:
+                return OBJECT_VIRTUAL_COLUMNS.sql_for(name)
         elif prfx == "fre":
             if name in mapping.tsv_cols_to_real:
                 mpg = mapping.tsv_cols_to_real[name]

@@ -24,9 +24,10 @@ class HistoricalLastClassif:
     classif_id: ClassifIDT  # Present classification
     histo_classif_date: datetime.datetime
     histo_classif_id: ClassifIDT
+    histo_classif_type: str
     histo_classif_qual: str
     histo_classif_who: int
-    histo_training_id: int  # TODO: Mask in output?
+    histo_classif_score: float
 
 
 HistoricalClassificationListT = List["HistoricalClassification"]
@@ -42,6 +43,7 @@ class HistoricalClassification:
     classif_id: ClassifIDT
     classif_date: datetime.datetime
     classif_who: int  # 'UserIDT' makes a circular dependency issue
+    classif_type: str
     classif_qual: str
     classif_score: float
     user_name: str

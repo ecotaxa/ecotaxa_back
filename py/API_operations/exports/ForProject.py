@@ -270,8 +270,19 @@ class ProjectExport(JobServiceBase):
                             ELSE obh.classif_qual 
                          END AS object_annotation_status,                
                          usr.name AS object_annotation_person_name, usr.email AS object_annotation_person_email,
-                         TO_CHAR(obh.classif_when,'{0}') AS object_annotation_date,
-                         TO_CHAR(obh.classif_when,'{1}') AS object_annotation_time,                
+                         """
+            """
+                    CASE WHEN obh.classif_qual IN ('"""
+            + VALIDATED_CLASSIF_QUAL
+            + """','"""
+            + DUBIOUS_CLASSIF_QUAL
+            + """') THEN TO_CHAR(obh.classif_date,'{0}') END AS object_annotation_date,
+                  CASE WHEN obh.classif_qual IN ('"""
+            + VALIDATED_CLASSIF_QUAL
+            + """','"""
+            + DUBIOUS_CLASSIF_QUAL
+            + """') THEN TO_CHAR(obh.classif_date,'{1}') END AS object_annotation_time,"""
+            + """ 
                          txo.display_name AS object_annotation_category 
                     """
         ).format(date_fmt, time_fmt)

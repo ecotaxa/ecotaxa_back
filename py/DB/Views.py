@@ -13,7 +13,8 @@ from sqlalchemy_views import CreateView, DropView  # type:ignore # case6
 OBJECTS_DEF = text(
     """select sam.projid, sam.sampleid, obh.objid, obh.latitude, obh.longitude,
               obh.objdate, obh.objtime, obh.depth_min, obh.depth_max,
-              obh.classif_id, obh.classif_qual, obh.classif_who, obh.classif_when,
+              obh.classif_id, obh.classif_qual, obh.classif_who, 
+              obh.classif_date as classif_when, -- TODO: Not 100% accurate
               -- obh.classif_auto_id, obh.classif_auto_score, obh.classif_auto_when,
               NULL::integer AS classif_crossvalidation_id,
               obh.complement_info,

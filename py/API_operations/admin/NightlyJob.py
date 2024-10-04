@@ -226,14 +226,14 @@ NightlyJobService.NIGHTLY_CHECKS = [
     ConsistencyCheckAndFix(
         "In initial blank state there is no ancillary residual info",
         "select count(1) as res from obj_head where classif_qual is null "
-        "and (classif_id is not null or classif_when is not null or classif_who is not null or training_id is not null)",
+        "and (classif_id is not null or classif_date is not null or classif_who is not null or classif_score is not null)",
         0,
         "need investigation",
     ),
     ConsistencyCheckAndFix(
-        "There is a (user-visible) category for any non-initial state",
-        "select count(1) from obj_head where classif_qual in ('P','V','D') and classif_id is null",
-        0,
+        "There is a (user-visible) category and a date for any non-initial state",
+        "select * from obj_head where classif_qual in ('P','V','D') and (classif_id is null or classif_date is null) limit 10",
+        [],
         "need investigation",
     ),
     ConsistencyCheckAndFix(
@@ -244,15 +244,15 @@ NightlyJobService.NIGHTLY_CHECKS = [
     ),
     ConsistencyCheckAndFix(
         "Validated and Dubious were set by humans, we must know who and when",
-        "select count(1) from obj_head where classif_qual in ('V','D') and (classif_who is null or classif_when is null)",
+        "select count(1) from obj_head where classif_qual in ('V','D') and (classif_who is null or classif_date is null)",
         0,
         """
         -- find root cause
         """,
     ),
     ConsistencyCheckAndFix(
-        "No training information for manual states",
-        "select objid from obj_head where classif_qual in ('V','D') and training_id is not null",
+        "The must be no score information for manual states",
+        "select objid from obj_head where classif_qual in ('V','D') and classif_score is not null",
         [],
         """
         -- find root cause
@@ -260,32 +260,27 @@ NightlyJobService.NIGHTLY_CHECKS = [
     ),
     ConsistencyCheckAndFix(
         "Predicted was set by machine, no trailing traces of previous human action",
-        "select count(1) from obj_head where classif_qual = 'P' and (classif_who is not null or classif_when is not null)",
+        "select count(1) from obj_head where classif_qual = 'P' and (classif_who is not null)",
         0,
         """update obj_head
-set classif_who = NULL,
-classif_when = NULL
+set classif_who = NULL
 where classif_qual = 'P'
-and (classif_who is not null or classif_when is not null)""",
+and (classif_who is not null)""",
     ),
     ConsistencyCheckAndFix(
         "No classif_qual nor classif_id but some prediction info",
-        "select count(1) from obj_head where classif_qual is null and classif_id is null and training_id is not null",
+        "select count(1) from obj_head where classif_qual is null and classif_id is null and classif_score is not null",
         0,
         """update obj_head 
-set classif_qual='P', 
-classif_id=classif_auto_id, 
-classif_who=null, 
-classif_when=null 
-where classif_qual is null and classif_id is null and 
-(classif_auto_id is not null and classif_auto_score is not null and classif_auto_when is not null)""",
+set classif_score=null 
+where classif_qual is null and classif_id is null and classif_score is not null""",
     ),
     ConsistencyCheckAndFix(
-        "A training is present for 'P', coming from last prediction",
-        "select * from obj_head where classif_qual='P' and training_id is null",
+        "A score is present for 'P', coming from last prediction",
+        "select * from obj_head where classif_qual='P' and classif_score is null",
         [],
         """
-        --- find root cause & repredict
+        --- find root cause & re-predict
         """,
     ),
     ConsistencyCheckAndFix(
@@ -297,12 +292,12 @@ where classif_qual is null and classif_id is null and
         """,
     ),
     ConsistencyCheckAndFix(
-        "Only consistent history entries are OK. Auto prediction with a score+training and manual with someone.",
-        """select objid, classif_qual, training_id, classif_who
+        "Only consistent history entries are OK. Auto prediction with a score and manual with someone.",
+        """select objid, classif_qual, classif_who, classif_score
     from objectsclassifhisto
-    where not ((classif_qual = 'P' and training_id is not null and classif_who is null) or
-               (classif_qual = 'D' and training_id is null and classif_who is not null) or
-               (classif_qual = 'V' and training_id is null and classif_who is not null))""",
+    where not ((classif_qual = 'P' and classif_score is not null and classif_who is null) or
+               (classif_qual = 'D' and classif_score is null and classif_who is not null) or
+               (classif_qual = 'V' and classif_score is null and classif_who is not null))""",
         [],
         """
             -- find root cause

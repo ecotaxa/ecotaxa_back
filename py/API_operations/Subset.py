@@ -25,6 +25,7 @@ from DB.Object import (
     ObjectsClassifHisto,
     PREDICTED_CLASSIF_QUAL,
 )
+from DB.Prediction import PSEUDO_TRAINING_SCORE
 from DB.Process import Process
 from DB.Project import Project
 from DB.Sample import Sample
@@ -309,7 +310,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
                 {
                     "training_id": training_provider.get().training_id,
                     "classif_id": obj.classif_id,
-                    "score": 1.0,
+                    "score": PSEUDO_TRAINING_SCORE,
                 }
             )
         writer.add_db_entities(obj, fields, image, prediction_to_write, new_records)

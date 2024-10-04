@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.35.mlp"
+    "version":"0.0.38.mlp"
   },
   "servers":[
     {
@@ -3095,12 +3095,12 @@
             "in":"path"
           },
           {
-            "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, orig, objid, file_name thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
+            "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
             "required":false,
             "schema":{
               "title":"Fields",
               "type":"string",
-              "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, orig, objid, file_name thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
+              "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
             },
             "example":"obj.longitude,fre.feret",
             "name":"fields",
@@ -6465,12 +6465,6 @@
             "type":"boolean",
             "description":"use Google ReCaptcha",
             "default":false
-          },
-          "add_ticket":{
-            "title":"ticket separator",
-            "type":"string",
-            "description":"string separator, permits to add ticket number when asking more information before user validation",
-            "default":""
           }
         },
         "description":"Values which can be considered identical over the lifetime of the back-end."
@@ -7037,8 +7031,10 @@
             "example":"P"
           },
           "classif_score":{
-            "title":"Classif Score",
-            "type":"number"
+            "title":"Classification score",
+            "type":"number",
+            "description":"The classification score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
+            "example":0.085
           },
           "user_name":{
             "title":"User name",
@@ -7077,17 +7073,17 @@
             "format":"date-time",
             "example":"2021-09-21T14:59:01.007110"
           },
-          "histo_classif_type":{
-            "title":"Historical last classification type",
-            "type":"string",
-            "description":"The type of classification. Could be **A** for Automatic or **M** for Manual.",
-            "example":"M"
-          },
           "histo_classif_id":{
             "title":"Historical last classification Id",
             "type":"integer",
             "description":"The classification Id.",
             "example":56
+          },
+          "histo_classif_type":{
+            "title":"Historical last classification type",
+            "type":"string",
+            "description":"The type of classification. Could be **A** for Automatic or **M** for Manual.",
+            "example":"M"
           },
           "histo_classif_qual":{
             "title":"Historical last classification qualification",
@@ -7098,12 +7094,12 @@
           "histo_classif_who":{
             "title":"Historical last classification who",
             "type":"integer",
-            "description":"The user who manualy classify this object.",
+            "description":"The user who manually classified this object.",
             "example":3876
           },
-          "histo_training_id":{
-            "title":"Histo Training Id",
-            "type":"integer"
+          "histo_classif_score":{
+            "title":"Histo Classif Score",
+            "type":"number"
           }
         }
       },
@@ -7516,6 +7512,13 @@
         ],
         "type":"object",
         "properties":{
+          "classif_when":{
+            "title":"Classification when",
+            "type":"string",
+            "description":"The human classification date, if **P** or **V**.",
+            "format":"date-time",
+            "example":"2021-09-21T14:59:01.007110"
+          },
           "classif_auto_id":{
             "title":"Classification auto Id",
             "type":"integer",
@@ -7533,18 +7536,6 @@
             "description":"Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification date.",
             "format":"date-time",
             "example":"2021-09-21T14:59:01.007110"
-          },
-          "classif_crossvalidation_id":{
-            "title":"Classification crossvalidation Id",
-            "type":"integer",
-            "description":"Always NULL in prod.",
-            "example":"null"
-          },
-          "similarity":{
-            "title":"Similarity",
-            "type":"number",
-            "description":"Always NULL in prod.",
-            "example":"null"
           },
           "objid":{
             "title":"Object Id",
@@ -7610,26 +7601,23 @@
             "description":"Sun position, from date, time and coords.",
             "example":"N"
           },
-          "classif_when":{
-            "title":"Classification when",
-            "type":"string",
-            "description":"The classification date.",
-            "format":"date-time",
-            "example":"2021-09-21T14:59:01.007110"
+          "classif_score":{
+            "title":"Classification score",
+            "type":"number",
+            "description":"The ML score for this object, if **P**.",
+            "example":"null"
           },
-          "training_id":{
-            "title":"Training Id",
+          "classif_who":{
+            "title":"Classification who",
             "type":"integer",
-            "description":"If the object was ever predicted, id of the last automatic prediction operation."
+            "description":"The user who manually classified this object, if **V** or **D**.",
+            "example":"null"
           },
-          "complement_info":{
-            "title":"Complement info",
+          "orig_id":{
+            "title":"Original id",
             "type":"string",
-            "example":"Part of ostracoda"
-          },
-          "random_value":{
-            "title":"random_value",
-            "type":"integer"
+            "description":"Original object ID from initial TSV load.",
+            "example":"deex_leg1_48_406"
           },
           "object_link":{
             "title":"Object link",
@@ -7656,6 +7644,13 @@
         ],
         "type":"object",
         "properties":{
+          "classif_when":{
+            "title":"Classification when",
+            "type":"string",
+            "description":"The human classification date, if **P** or **V**.",
+            "format":"date-time",
+            "example":"2021-09-21T14:59:01.007110"
+          },
           "classif_auto_id":{
             "title":"Classification auto Id",
             "type":"integer",
@@ -7673,18 +7668,6 @@
             "description":"Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification date.",
             "format":"date-time",
             "example":"2021-09-21T14:59:01.007110"
-          },
-          "classif_crossvalidation_id":{
-            "title":"Classification crossvalidation Id",
-            "type":"integer",
-            "description":"Always NULL in prod.",
-            "example":"null"
-          },
-          "similarity":{
-            "title":"Similarity",
-            "type":"number",
-            "description":"Always NULL in prod.",
-            "example":"null"
           },
           "objid":{
             "title":"Object Id",
@@ -7750,26 +7733,23 @@
             "description":"Sun position, from date, time and coords.",
             "example":"N"
           },
-          "classif_when":{
-            "title":"Classification when",
-            "type":"string",
-            "description":"The classification date.",
-            "format":"date-time",
-            "example":"2021-09-21T14:59:01.007110"
+          "classif_score":{
+            "title":"Classification score",
+            "type":"number",
+            "description":"The ML score for this object, if **P**.",
+            "example":"null"
           },
-          "training_id":{
-            "title":"Training Id",
+          "classif_who":{
+            "title":"Classification who",
             "type":"integer",
-            "description":"If the object was ever predicted, id of the last automatic prediction operation."
+            "description":"The user who manually classified this object, if **V** or **D**.",
+            "example":"null"
           },
-          "complement_info":{
-            "title":"Complement info",
+          "orig_id":{
+            "title":"Original id",
             "type":"string",
-            "example":"Part of ostracoda"
-          },
-          "random_value":{
-            "title":"random_value",
-            "type":"integer"
+            "description":"Original object ID from initial TSV load.",
+            "example":"deex_leg1_48_406"
           },
           "object_link":{
             "title":"Object link",

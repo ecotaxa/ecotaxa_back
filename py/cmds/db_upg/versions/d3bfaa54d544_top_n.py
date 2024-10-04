@@ -38,6 +38,7 @@ def upgrade():
 
     # Do the cleanups first
 
+    # Self-consistency in objectsclassifhisto
     # Fix taxo FK inconsistencies
     op.execute(
         """
@@ -46,14 +47,15 @@ def upgrade():
     )
     op.execute(
         """
-    -- Wrong classif_id,  8960 lines as of 07/01/2024        
+    -- Wrong classif_id, 8K lines as of 07/01/2024        
     delete from objectsclassifhisto where classif_id not in (SELECT id from taxonomy)"""
     )
 
     # Self-consistency in obj_head
+    # Fix taxo FK inconsistencies
     op.execute(
         """
-    -- Some 4007 objects in PROD have an invalid classif_auto_id, for 'P' we need to recreate the fake prediction
+    -- Some 4K objects in PROD have an invalid classif_auto_id, for 'P' we need to recreate the fake prediction
     update obj_head
        set classif_auto_id=classif_id,
            classif_auto_score=coalesce(classif_auto_score, 1),
@@ -65,7 +67,7 @@ def upgrade():
     )
     op.execute(
         """
-    -- Some 4007 objects in PROD have an invalid classif_auto_id, for 'V'/'D' we can just erase _auto*
+    -- Some 4K objects in PROD have an invalid classif_auto_id, for 'V'/'D' we can just erase _auto*
     update obj_head
        set classif_auto_id=null,
            classif_auto_score=null,
@@ -77,7 +79,7 @@ def upgrade():
     )
     op.execute(
         """
-    -- Some 1870933 objects in PROD have an inconsistent classif_auto_id, as for 'P' it should be classif_id.
+    -- Some 1.8M objects in PROD have an inconsistent classif_auto_id, as for 'P' it should be classif_id.
     -- It's probably the consequence of legacy "revert to predicted' code which did not care about _auto fields
     -- or "import update predicted" before 2024 cleanup.
     update obj_head
@@ -87,11 +89,81 @@ def upgrade():
     """
     )
 
-    # Consistency b/w object and its history
+    # Consistency b/w object and its history, AKA dates hell!
+    # Note: classif_auto_* columns are an embedded history for non-'P' states
+    #       but _current_ values for 'P' state. All has to be consistent before migration.
+
     op.execute(
         """
-    -- Some 47244 objects in PROD have an implied historical P with exact same date as a log with P,
-    -- but different produced classification. Remove the faulty history, it's eventually re-created OK next step.
+    -- Some 'V' or 'D' objects in PROD have an inconsistent classif_auto_when, taking place after human validation.
+    -- Maybe some version of EcoTaxa allowed to re-predict without state move. Delete the user-hidden 'P'.
+    -- 4M objects
+    update obj_head
+       set classif_auto_id=null,
+           classif_auto_score=null,
+           classif_auto_when=null
+     where classif_qual in ('V','D')
+       and classif_auto_when > classif_when
+    """
+    )
+    op.execute(
+        """
+    -- Some 'V' or 'D' objects in PROD have some history after the object.
+    -- History should be strictly 'before the present', so remove history. We still have the data in obj_head.
+    -- 4.8M history
+    delete from objectsclassifhisto och
+     using obj_head obh
+     where och.objid = obh.objid
+       and och.classif_date >= obh.classif_when
+       and obh.classif_qual in ('V','D')
+        """
+    )
+    op.execute(
+        """
+    -- Some 'P' objects in PROD have a prediction date before (or same as) an history.
+    -- e.g. history says 'P' on 23/12, 'V' on 24/12, but in object there is 'P' on 23/12
+    -- probably due to old 'reset to predicted' or 'revert' code. 
+    -- 680K rows
+    -- Warp them a bit in future but don't create too many new dates
+    create temp table bad_p as
+    select distinct obh.objid, obh.acquisid
+      from obj_head obh
+      join objectsclassifhisto och
+           on och.objid = obh.objid 
+           and och.classif_date > obh.classif_auto_when
+     where obh.classif_qual='P';
+    create temp table bad_p_acquis as
+    select distinct acquisid
+      from bad_p;
+    create temp table bad_p_acquis_max as
+    select bpa.acquisid, max(och.classif_date) + interval '1 hour' as acquis_max
+      from bad_p_acquis bpa
+      join obj_head obh on obh.acquisid = bpa.acquisid
+      join objectsclassifhisto och on och.objid = obh.objid
+     group by bpa.acquisid;
+    update obj_head obh
+       set classif_auto_when = bpam.acquis_max
+      from bad_p bap
+      join bad_p_acquis_max bpam on bpam.acquisid = bap.acquisid
+     where obh.objid = bap.objid
+        """
+    )
+    op.execute(
+        """
+    -- 'P' is freshest row, remove duplicate if in history.
+    -- 763K history in PROD, but most should be cured by above fixes    
+    delete from objectsclassifhisto och 
+     using obj_head obh 
+     where obh.objid = och.objid 
+       and obh.classif_auto_when = och.classif_date 
+       and obh.classif_qual = 'P'
+       and och.classif_qual = 'P'
+     """
+    )
+    op.execute(
+        """
+    -- Some 47K objects in PROD have an implied historical P with exact same date as a log with P,
+    -- but different produced classification or score. Remove the faulty history, it's eventually re-created OK next step.
     delete from objectsclassifhisto och
      using obj_head obh
      where och.classif_qual = 'P'
@@ -104,6 +176,7 @@ def upgrade():
     op.execute(
         """
     -- 'P' should have been historized when moving to 'V' or 'D', it was not always the case.
+    -- 68M objects
     insert into objectsclassifhisto (objid, classif_date, classif_id, classif_type, classif_qual, classif_score)
     select obh.objid, obh.classif_auto_when, obh.classif_auto_id, 'A', 'P', obh.classif_auto_score
       from obj_head obh 
@@ -114,27 +187,20 @@ def upgrade():
     """
     )
 
+    # Cleanup useless prediction history. Can't rewind to more than 'last prediction' as of today PROD.
     op.execute(
         """
-    -- Remove consecutive predictions in history    -- 1h41m version
-    -- delete from objectsclassifhisto och
-    --  where och.classif_qual = 'P'
-    --    and (select och2.classif_qual
-    --           from objectsclassifhisto och2
-    --          where och2.objid = och.objid
-    --            and och2.classif_date > och.classif_date
-    --          order by och.classif_date limit 1) = 'P'
-    with curr_and_next as (select objid,
-                                  classif_date,
-                                  classif_qual,
+    -- Remove consecutive predictions in history
+    with curr_and_next as (select objid, classif_date, classif_qual,
                                   lead(classif_qual) over (partition by objid order by classif_date) as next_qual
-                           from objectsclassifhisto och),
-         both_are_p as (select objid, classif_date from curr_and_next where classif_qual = 'P' and next_qual = 'P')
-    delete
-    from objectsclassifhisto och
+                             from objectsclassifhisto och),
+         both_are_p as (select objid, classif_date 
+                          from curr_and_next 
+                         where classif_qual = 'P' and next_qual = 'P')
+    delete from objectsclassifhisto och
         using both_are_p
-    where och.objid = both_are_p.objid
-      and och.classif_date = both_are_p.classif_date             
+     where och.objid = both_are_p.objid
+       and och.classif_date = both_are_p.classif_date             
            """
     )
 
@@ -142,18 +208,20 @@ def upgrade():
         """
     -- Enforce the rule above "not 2 consecutive predictions". Current object is Predicted, and last history as well -> delete histo
     with last_histo as (select objid, max(classif_date) over (partition by objid) as classif_date
-                    from objectsclassifhisto och),
+                          from objectsclassifhisto och),
      pred_in_last as (select lh.*
-                      from last_histo lh
-                               join objectsclassifhisto och
-                                    on och.objid = lh.objid and och.classif_date = lh.classif_date and
-                                       och.classif_qual = 'P'
-                               join obj_head obh on obh.objid = lh.objid and obh.classif_qual = 'P')
-    delete
-    from objectsclassifhisto och
+                        from last_histo lh
+                        join objectsclassifhisto och
+                             on och.objid = lh.objid 
+                             and och.classif_date = lh.classif_date 
+                             and och.classif_qual = 'P'
+                        join obj_head obh 
+                             on obh.objid = lh.objid 
+                             and obh.classif_qual = 'P')
+    delete from objectsclassifhisto och
         using pred_in_last
-    where och.objid = pred_in_last.objid
-      and och.classif_date = pred_in_last.classif_date
+     where och.objid = pred_in_last.objid
+       and och.classif_date = pred_in_last.classif_date
     """
     )
 
@@ -208,6 +276,20 @@ def upgrade():
         sa.ForeignKeyConstraint(
             ["training_id"], ["training.training_id"], ondelete="CASCADE"
         ),
+        sa.PrimaryKeyConstraint("object_id", "classif_id"),
+    )
+
+    op.create_table(
+        "prediction_histo",
+        sa.Column("object_id", sa.BIGINT(), nullable=False),
+        sa.Column("training_id", sa.INTEGER(), nullable=False),
+        sa.Column("classif_id", sa.INTEGER(), nullable=False),
+        sa.Column("score", postgresql.DOUBLE_PRECISION(), nullable=False),
+        sa.ForeignKeyConstraint(["classif_id"], ["taxonomy.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["object_id"], ["obj_head.objid"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["training_id"], ["training.training_id"], ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("training_id", "object_id", "classif_id"),
     )
 
@@ -217,27 +299,6 @@ def upgrade():
     #            existing_type=sa.BIGINT(),
     #            nullable=True)
     # op.create_foreign_key(None, 'images', 'obj_head', ['objid'], ['objid'])
-
-    op.add_column("obj_head", sa.Column("training_id", sa.INTEGER(), nullable=True))
-    op.create_index("is_objecttraining", "obj_head", ["training_id"], unique=False)
-    op.create_foreign_key(
-        None, "obj_head", "training", ["training_id"], ["training_id"]
-    )
-
-    op.add_column(
-        "objectsclassifhisto", sa.Column("training_id", sa.Integer(), nullable=True)
-    )
-    op.create_index(
-        "is_objecthistotraining", "objectsclassifhisto", ["training_id"], unique=False
-    )
-    op.create_foreign_key(
-        None,
-        "objectsclassifhisto",
-        "training",
-        ["training_id"],
-        ["training_id"],
-        ondelete="CASCADE",
-    )
 
     # Migrate the relevant predictions for each object
     # In previous schema, the last prediction is in the object, whatever its classif_qual
@@ -274,6 +335,7 @@ def upgrade():
     op.execute(
         """
     create index on mig_obj_prj (projid, objid);
+    ALTER TABLE mig_obj_prj SET (autovacuum_enabled = off);
     analyze mig_obj_prj
     """
     )
@@ -360,12 +422,6 @@ def upgrade():
 
     op.execute(
         """
-    -- alter table mig_obj_prj add column training_id integer;
-    -- update mig_obj_prj mop   -- 1h40m version
-    --   set training_id = (select trn.training_id
-    --                        from training trn
-    --                       where mop.projid = trn.projid
-    --                         and mop.classif_auto_when between trn.training_start and trn.training_end)
     create UNLOGGED table mig_obj_prj2 as select mop.*, trn.training_id
                     from mig_obj_prj mop
                              join training trn on mop.projid = trn.projid and
@@ -378,6 +434,7 @@ def upgrade():
     with op.get_context().autocommit_block():
         op.execute(
             """
+        ALTER TABLE mig_obj_prj2 SET (autovacuum_enabled = off);
         vacuum full verbose mig_obj_prj2
         """
         )
@@ -389,46 +446,46 @@ $$
     declare
         curprj  record;
         o_count integer;
-        sum_o integer = 0;
         h_count integer;
-        sum_h integer = 0;
+        sum_o integer = 0;
     begin
         for curprj in (select distinct projid from mig_obj_prj2 order by projid)
             loop
-                -- Create predictions for past values
+                -- Active predictions - the objects currently predicted
                 insert into prediction(training_id, object_id, classif_id, score)
                 select mop.training_id, mop.objid, mop.classif_auto_id, mop.classif_auto_score
                   from mig_obj_prj2 mop
+                  join obj_head obh 
+                    on obh.objid = mop.objid
+                       and obh.classif_auto_when = mop.classif_auto_when
+                       -- and obh.classif_auto_id = mop.classif_auto_id
                  where mop.projid = curprj.projid
+                   and obh.classif_qual = 'P'
+                  -- favorable grouping of tuples in blocks
+                  order by 2,3,4;
+                  -- There are a few duplicates (6K/500M) as the assumption '5 minutes b/w predictions' above in not true
+                  -- on conflict (object_id, classif_id) do nothing;                  
+                GET DIAGNOSTICS o_count = ROW_COUNT;
+                sum_o = sum_o + o_count;
+                -- Archived predictions - the history.
+                -- Note: in theory, the last 'P' is not an archive if current state is not 'P'
+                insert into prediction_histo(training_id, object_id, classif_id, score)
+                select mop.training_id, mop.objid, mop.classif_auto_id, mop.classif_auto_score
+                  from mig_obj_prj2 mop
+                  join objectsclassifhisto och 
+                    on och.objid = mop.objid
+                       and och.classif_date = mop.classif_auto_when
+                       -- and och.classif_id = mop.classif_auto_id
+                       -- and och.classif_qual = 'P'
+                       -- and och.classif_score = mop.classif_auto_score
+                 where mop.projid = curprj.projid                   
                   -- favorable grouping of tuples in blocks
                   order by 1,2,3,4
                   -- There are a few duplicates (6K/500M) as the assumption '5 minutes b/w predictions' above in not true
                   on conflict (training_id, object_id, classif_id) do nothing;
-                -- Inject training back into objects
-                update obj_head obh
-                   set training_id = mop.training_id
-                  from mig_obj_prj2 mop
-                 where obh.classif_qual = 'P'
-                   and mop.objid = obh.objid
-                   -- and mop.classif_auto_id = obh.classif_auto_id
-                   -- and mop.classif_auto_score = obh.classif_auto_score
-                   and mop.classif_auto_when = obh.classif_auto_when
-                   and mop.projid = curprj.projid;
-                GET DIAGNOSTICS o_count = ROW_COUNT;
-                sum_o = sum_o + o_count;
-                -- Link historical Predicted with reconstituted predictions
-                update objectsclassifhisto och
-                   set training_id = mop.training_id
-                  from mig_obj_prj2 mop
-                 where och.classif_qual = 'P'
-                   and mop.objid = och.objid
-                   -- and mop.classif_auto_id = och.classif_id
-                   -- and mop.classif_auto_score = och.classif_score
-                   and mop.classif_auto_when = och.classif_date
-                   and mop.projid = curprj.projid;
                 GET DIAGNOSTICS h_count = ROW_COUNT;
-                sum_h = sum_h + h_count;
-                RAISE NOTICE 'project: % objs % Σ %, hist % Σ %, time:%', curprj.projid, o_count, sum_o, h_count, sum_h, clock_timestamp();
+                sum_o = sum_o + h_count;
+                RAISE NOTICE 'project: % preds % hist % Σ %, time:%', curprj.projid, o_count, h_count, sum_o, clock_timestamp();
                 -- COMMIT;
             end loop;
     end;
@@ -438,15 +495,25 @@ $$
 
     op.execute(
         """
-    analyze prediction
+    analyze prediction;
+    analyze prediction_histo
     """
     )
 
+    # ecotaxa4=# alter table obj_head rename column classif_when to classif_date;
+    # ALTER TABLE
+    # Time: 4,159 ms
+    # ecotaxa4=# alter table obj_head rename column classif_auto_score to classif_score;
+    # ALTER TABLE
+    # Time: 28517,791 ms (00:28,518)
+    # ecotaxa4=# update obj_head set classif_date=classif_auto_when where classif_qual='P';
+    # UPDATE 214160148
+    # Time: 6688941,067 ms (01:51:28,941)
+
     # TODO: Check all trainings are used
     # TODO: Check nightly job verifications are OK
-    # TODO: Check values are == b/w object/histo and their fresh predictions
+    # TODO: Check values are == b/w object/histo and their freshest predictions
 
-    # op.drop_column("objectsclassifhisto", "classif_score")
     # op.drop_column("objectsclassifhisto", "classif_type")
     # op.drop_column("obj_head", "classif_auto_id")
     # op.drop_column("obj_head", "classif_auto_score")

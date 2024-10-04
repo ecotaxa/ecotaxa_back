@@ -42,7 +42,7 @@ JSON_FIELDS: Dict[ModelT, JSONDesc] = {
     ObjectHeader: {
         ObjectHeader.orig_id: "oid",
         ObjectHeader.classif_id: "ccat",
-        ObjectHeader.classif_when: "cwhn",
+        ObjectHeader.classif_date: "cdte",
         ObjectHeader.classif_who: "mwho",
         # ObjectHeader.classif_auto_id: "acat",
         ObjectHeader.all_images: "images",  # type:ignore # case2

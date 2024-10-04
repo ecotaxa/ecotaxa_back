@@ -6,16 +6,16 @@ import logging
 from typing import List
 
 import pytest
-from sqlalchemy import and_
-from starlette import status
-
 from API_models.filters import ProjectFiltersDict
 from API_operations.helpers.Service import Service
 from DB import ObjectHeader
-from DB.Prediction import Prediction
+from DB.Prediction import Prediction, PredictionHisto
 from DB.helpers import Result
 from DB.helpers.Core import select
 from DB.helpers.ORM import any_
+from sqlalchemy import and_
+from starlette import status
+
 from tests.credentials import CREATOR_AUTH, ORDINARY_USER2_USER_ID, ADMIN_AUTH
 from tests.test_import import VARIOUS_STATES_DIR
 from tests.test_objectset_query import OBJECT_SET_QUERY_URL
@@ -72,7 +72,11 @@ def get_predictions_stats(obj_ids):
             Prediction.object_id, Prediction.training_id
         )  # TODO: makes sense to update this
         qry = qry.where(Prediction.object_id == any_(obj_ids))
-        res: Result = sce.session.execute(qry)
+        qry2 = select(
+            PredictionHisto.object_id, PredictionHisto.training_id
+        )  # TODO: makes sense to update this
+        qry2 = qry2.where(PredictionHisto.object_id == any_(obj_ids))
+        res: Result = sce.session.execute(qry.union_all(qry2))
         pred_stats = {
             "n_objects_in_predictions": 0,
             "n_predictions": 0,
@@ -403,7 +407,6 @@ def test_classif(database, fastapi, caplog):
         qry = qry.where(
             and_(
                 Prediction.object_id == ObjectHeader.objid,
-                Prediction.training_id == ObjectHeader.training_id,
                 ObjectHeader.objid == obj_ids[1],
             )
         )
@@ -442,6 +445,7 @@ def test_classif(database, fastapi, caplog):
             "classif_date": "now",
             "classif_who": None,
             "classif_qual": "P",
+            "classif_type": "A",
             "classif_score": 0.52,  # Highest score
             "user_name": None,
             "taxon_name": "Crustacea",
@@ -511,6 +515,7 @@ def test_classif(database, fastapi, caplog):
             "classif_id": copepod_id,
             "classif_qual": "V",
             # "classif_score": 0.2, # TODO: show or not?
+            "classif_type": "M",
             "classif_score": None,
             "classif_who": 1,
             "objid": obj_ids[0],
@@ -521,6 +526,7 @@ def test_classif(database, fastapi, caplog):
             "classif_date": "a bit before",
             "classif_id": crustacea_id,
             "classif_qual": "P",
+            "classif_type": "A",
             "classif_score": 0.52,
             "classif_who": None,
             "objid": obj_ids[0],
@@ -594,7 +600,8 @@ def test_classif(database, fastapi, caplog):
                 "histo_classif_id": 25835,
                 "histo_classif_qual": "V",
                 "histo_classif_who": 1,
-                "histo_training_id": None,
+                "histo_classif_score": None,
+                "histo_classif_type": "A",
                 "objid": 9999999,
             },
             {
@@ -603,7 +610,8 @@ def test_classif(database, fastapi, caplog):
                 "histo_classif_id": 25835,
                 "histo_classif_qual": "V",
                 "histo_classif_who": 1,
-                "histo_training_id": None,
+                "histo_classif_score": None,
+                "histo_classif_type": "A",
                 "objid": 9999999,
             },
             {
@@ -612,7 +620,8 @@ def test_classif(database, fastapi, caplog):
                 "histo_classif_id": 25835,
                 "histo_classif_qual": "V",
                 "histo_classif_who": 1,
-                "histo_training_id": None,
+                "histo_classif_score": None,
+                "histo_classif_type": "A",
                 "objid": 9999999,
             },
             {
@@ -621,7 +630,8 @@ def test_classif(database, fastapi, caplog):
                 "histo_classif_id": 25835,
                 "histo_classif_qual": "V",
                 "histo_classif_who": 1,
-                "histo_training_id": None,
+                "histo_classif_score": None,
+                "histo_classif_type": "A",
                 "objid": 9999999,
             },
             {
@@ -630,7 +640,8 @@ def test_classif(database, fastapi, caplog):
                 "histo_classif_id": 25835,
                 "histo_classif_qual": "V",
                 "histo_classif_who": 1,
-                "histo_training_id": None,
+                "histo_classif_score": None,
+                "histo_classif_type": "A",
                 "objid": 9999999,
             },
             {
@@ -639,7 +650,8 @@ def test_classif(database, fastapi, caplog):
                 "histo_classif_id": 25835,
                 "histo_classif_qual": "V",
                 "histo_classif_who": 1,
-                "histo_training_id": None,
+                "histo_classif_score": None,
+                "histo_classif_type": "A",
                 "objid": 9999999,
             },
             {
@@ -648,7 +660,8 @@ def test_classif(database, fastapi, caplog):
                 "histo_classif_id": 25835,
                 "histo_classif_qual": "V",
                 "histo_classif_who": 1,
-                "histo_training_id": None,
+                "histo_classif_score": None,
+                "histo_classif_type": "A",
                 "objid": 9999999,
             },
             {
@@ -657,7 +670,8 @@ def test_classif(database, fastapi, caplog):
                 "histo_classif_id": 25835,
                 "histo_classif_qual": "V",
                 "histo_classif_who": 1,
-                "histo_training_id": None,
+                "histo_classif_score": None,
+                "histo_classif_type": "A",
                 "objid": 9999999,
             },
         ],
