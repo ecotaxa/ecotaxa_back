@@ -116,8 +116,14 @@ def test_all_fields(database, fastapi, caplog):
     for a_det in details:
         assert len(a_det) == len(all_fields)
 
-    # Test all 'order by'
+    # Test all 'order by', all fields present
     for a_field in all_fields:
         objs, details = _prj_query(
             fastapi, CREATOR_AUTH, prj_id, fields=",".join(all_fields), order=a_field
+        )
+
+    # Test all 'order by', single field present
+    for a_field in all_fields:
+        objs, details = _prj_query(
+            fastapi, CREATOR_AUTH, prj_id, fields="objid", order=a_field
         )

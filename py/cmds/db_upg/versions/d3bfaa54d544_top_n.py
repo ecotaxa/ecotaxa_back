@@ -113,14 +113,14 @@ def upgrade():
     -- 4.8M history
     delete from objectsclassifhisto och
      using obj_head obh
-     where och.objid = obh.objid
-       and och.classif_date >= obh.classif_when
+     where obh.objid = och.objid 
+       and obh.classif_when <= och.classif_date 
        and obh.classif_qual in ('V','D')
         """
     )
     op.execute(
         """
-    -- Some 'P' objects in PROD have a prediction date before (or same as) an history.
+    -- Some 'P' objects in PROD have a prediction date before (or same as) a 'V' or 'D' in history.
     -- e.g. history says 'P' on 23/12, 'V' on 24/12, but in object there is 'P' on 23/12
     -- probably due to old 'reset to predicted' or 'revert' code. 
     -- 680K rows
@@ -130,7 +130,8 @@ def upgrade():
       from obj_head obh
       join objectsclassifhisto och
            on och.objid = obh.objid 
-           and och.classif_date > obh.classif_auto_when
+           and och.classif_date >= obh.classif_auto_when
+           and och.classif_qual != 'P'
      where obh.classif_qual='P';
     create temp table bad_p_acquis as
     select distinct acquisid
@@ -150,7 +151,7 @@ def upgrade():
     )
     op.execute(
         """
-    -- 'P' is freshest row, remove duplicate if in history.
+    -- 'P' is freshest row, we have avoided duplicate due to volunteer copy above, cleanup.
     -- 763K history in PROD, but most should be cured by above fixes    
     delete from objectsclassifhisto och 
      using obj_head obh 
@@ -350,13 +351,21 @@ def upgrade():
     """
     )
 
+    # Determined via
+    # with nxt as (select objid, classif_auto_when, lead(classif_auto_when) over (partition by projid,objid order by classif_auto_when) next_same_obj from mig_obj_prj)
+    # select min(next_same_obj-classif_auto_when) from nxt where next_same_obj is not null;
+    #      min
+    # -----------------
+    #  00:00:44.886878
+    interv = "'40 sec'"
+
     op.execute(
-        """
+        f"""
     -- Look for start and end dates of prediction tasks
     -- assuming that 5 minutes have elapsed b/w 2 tasks on same project (time for human to read a bit the result)
     create UNLOGGED table mig_classif_chunks_per_proj as
-    SELECT case when delta_prev > '5 min' then 'B' end as B,
-       case when delta_next > '5 min' then 'E' end as E,
+    SELECT case when delta_prev > {interv} then 'B' end as B,
+       case when delta_next > {interv} then 'E' end as E,
        *
     from (SELECT projid,
              classif_auto_when,
@@ -371,13 +380,13 @@ def upgrade():
                  end as delta_next
       from mig_unq_classif_per_proj
       window paw as (ORDER BY projid, classif_auto_when)) deltas
-    where (delta_next > '5 min'
-    or delta_prev > '5 min')
+    where (delta_next > {interv}
+    or delta_prev > {interv})
     order by projid, classif_auto_when
     """
     )
     op.execute(
-        """
+        f"""
     -- Reconstituted (approximately) old tasks
     create UNLOGGED table mig_classif_tasks as
     SELECT projid,
@@ -386,11 +395,11 @@ def upgrade():
         from mig_classif_chunks_per_proj mcc2
         where mcc2.classif_auto_when >= mcc.classif_auto_when
           and mcc2.projid = mcc.projid
-          and mcc2.delta_next > '5 min'
+          and mcc2.delta_next > {interv}
         order by mcc2.classif_auto_when
         limit 1) as end_date
     from mig_classif_chunks_per_proj mcc
-    where delta_prev > '5 min'
+    where delta_prev > {interv}
     """
     )
     op.execute(
@@ -463,8 +472,6 @@ $$
                    and obh.classif_qual = 'P'
                   -- favorable grouping of tuples in blocks
                   order by 2,3,4;
-                  -- There are a few duplicates (6K/500M) as the assumption '5 minutes b/w predictions' above in not true
-                  -- on conflict (object_id, classif_id) do nothing;                  
                 GET DIAGNOSTICS o_count = ROW_COUNT;
                 sum_o = sum_o + o_count;
                 -- Archived predictions - the history.
@@ -480,9 +487,7 @@ $$
                        -- and och.classif_score = mop.classif_auto_score
                  where mop.projid = curprj.projid                   
                   -- favorable grouping of tuples in blocks
-                  order by 1,2,3,4
-                  -- There are a few duplicates (6K/500M) as the assumption '5 minutes b/w predictions' above in not true
-                  on conflict (training_id, object_id, classif_id) do nothing;
+                  order by 1,2,3,4;
                 GET DIAGNOSTICS h_count = ROW_COUNT;
                 sum_o = sum_o + h_count;
                 RAISE NOTICE 'project: % preds % hist % Σ %, time:%', curprj.projid, o_count, h_count, sum_o, clock_timestamp();
@@ -513,6 +518,20 @@ $$
     # TODO: Check all trainings are used
     # TODO: Check nightly job verifications are OK
     # TODO: Check values are == b/w object/histo and their freshest predictions
+
+    # Check predictions are not in both history and last one:
+    # select * from prediction_histo prh
+    # join prediction prd on prh.training_id = prd.training_id
+    #                 and prh.object_id = prd.object_id
+    #                 and prh.classif_id = prd.classif_id
+    # order by prh.object_id;
+
+    # Check that all logs are after present object:
+    # select distinct obh.objid, obh.acquisid
+    #       from obj_head obh
+    #       join objectsclassifhisto och
+    #            on och.objid = obh.objid
+    #            and och.classif_date >= obh.classif_date;
 
     # op.drop_column("objectsclassifhisto", "classif_type")
     # op.drop_column("obj_head", "classif_auto_id")

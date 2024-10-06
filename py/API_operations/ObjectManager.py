@@ -96,7 +96,9 @@ class ObjectManager(Service):
         free_columns_mappings = object_set.mapping.object_mappings
 
         # The order fields have an impact on the query
-        order_clause = self.cook_order_clause(order_field, free_columns_mappings)
+        order_clause = self.cook_order_clause(
+            order_field, free_columns_mappings, str(return_fields)
+        )
         order_clause.set_window(window_start, window_size)
 
         extra_cols = self.add_return_fields(return_fields, free_columns_mappings)
@@ -153,7 +155,7 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
 
     @staticmethod
     def cook_order_clause(
-        order_field: Optional[str], mappings: TableMapping
+        order_field: Optional[str], mappings: TableMapping, return_fields_str: str
     ) -> OrderClause:
         """
         Prepare a SQL "order by" clause from the required field.
@@ -170,7 +172,12 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
         if order_expr is None:
             return ret
         if " AS " in order_expr:
-            alias, order_col = (None, order_expr.split(" AS ")[1])
+            alias = None
+            order_expr, order_col = order_expr.split(" AS ")
+            if (
+                "." + order_col not in return_fields_str
+            ):  # Uncommon but seen in logs: order by a not-displayed column
+                order_col = order_expr
         else:
             alias, order_col = order_expr.split(".", 1)
         # From PG doc: If NULLS LAST is specified, null values sort after all non-null values;

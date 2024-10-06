@@ -86,7 +86,7 @@ logger = get_logger(__name__)
 
 # If one of these statuses are required, then the classif_id must be valid
 MEANS_CLASSIF_ID_EXIST = ("P", "V", "PV", "PVD", "NVM", "VM")
-MEANS_TRAINING_ID_EXIST = ("P",)
+# MEANS_TRAINING_ID_EXIST = ("P",)
 NO_HISTO = "n"
 
 
@@ -198,8 +198,9 @@ class DescribedObjectSet(object):
             selected_tables += (
                 f"{Image.__tablename__} img ON obh.objid = img.objid "
                 if all_images
-                else f"LATERAL (select * from {Image.__tablename__} img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true"
+                else f"(select * from {Image.__tablename__} img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true"
             )
+            selected_tables.set_lateral(f"(select * from {Image.__tablename__}")
             #  selected_tables.set_outer("images img ")
         if "usr." in column_referencing_sql:
             selected_tables += f"{User.__tablename__} usr ON obh.classif_who = usr.id"
@@ -230,9 +231,7 @@ class DescribedObjectSet(object):
         ret = False
         if ("obf." in order) or ("obf." in where and "obh." not in where):
             ret = True
-        if (
-            "obh.classif_id" in where or "obh.classif_qual" in where
-        ):  # These are included in index
+        if "obh.classif_qual" in where:  # This is included in index TODO: Name it
             ret = False
         return ret
 
@@ -1216,7 +1215,7 @@ class ObjectSetFilter(object):
                 # For some (probably) historical reason, Score is part of free_cols in UI
                 # Assume it's the current prediction which is asked for
                 criteria_col = self.COL_IN_FREE_NUM.get(self.free_num[1:], "?")
-                where_clause *= "prd." + criteria_col + comp_op + ":freenumbnd"
+                where_clause *= "obh." + criteria_col + comp_op + ":freenumbnd"
             params["freenumbnd"] = bound
 
         if self.free_text and self.free_text_val:

@@ -105,7 +105,7 @@ class ObjectBO(MappedEntity):
         self.classif_crossvalidation_id = None
         self.random_value = 0
         # Emulate previous behavior
-        OBJECT_VIRTUAL_COLUMNS.add_to_model(self.header)
+        OBJECT_VIRTUAL_COLUMNS.add_to_model(self)
 
     def get_history(self) -> HistoricalClassificationListT:
         """
