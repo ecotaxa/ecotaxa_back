@@ -6,18 +6,20 @@
 #
 import time
 from os import path as ospath
-from typing import Optional, Union
-from fastapi import UploadFile
 from pathlib import Path
+from typing import Optional, Union
+
+from fastapi import HTTPException
+from fastapi import UploadFile
+
 from API_models.filesystem import DirectoryEntryModel, DirectoryModel
 from BO.Rights import RightsBO, NOT_AUTHORIZED
 from BO.User import UserIDT
 from DB.User import User
-from FS.UserFilesDir import UserFilesDirectory
 from FS.CommonDir import CommonFolder
+from FS.UserFilesDir import UserFilesDirectory
 from helpers.DynamicLogs import get_logger
 from .helpers.Service import Service
-from fastapi import HTTPException
 
 logger = get_logger(__name__)
 

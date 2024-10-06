@@ -9,6 +9,7 @@ from typing import Set, List, Iterable
 # Typings, to be clear that these are not e.g. object IDs
 ClassifIDT = int
 ClassifIDListT = List[int]
+ClassifScoresListT = List[float]
 ClassifIDSetT = Set[int]
 ClassifIDCollT = Iterable[int]
 
@@ -20,12 +21,13 @@ class HistoricalLastClassif:
     """
 
     objid: int
-    classif_id: ClassifIDT
+    classif_id: ClassifIDT  # Present classification
     histo_classif_date: datetime.datetime
-    histo_classif_type: str
     histo_classif_id: ClassifIDT
+    histo_classif_type: str
     histo_classif_qual: str
     histo_classif_who: int
+    histo_classif_score: float
 
 
 HistoricalClassificationListT = List["HistoricalClassification"]

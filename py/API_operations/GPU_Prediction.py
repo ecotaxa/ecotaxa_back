@@ -18,12 +18,15 @@ from BO.Prediction import DeepFeatures
 from BO.Project import ProjectBO
 from BO.ProjectSet import LimitedInCategoriesProjectSet, FeatureConsistentProjectSet
 from BO.Rights import RightsBO, Action
+from BO.Training import TrainingBO
+from BO.User import UserIDT
 from DB.Project import ProjectIDT, Project
 from DB.helpers import Result
 from DB.helpers.Direct import text
 from ML.Deep_features_extractor import DeepFeaturesExtractor
 from ML.Random_forest_classifier import OurRandomForestClassifier
 from helpers.DynamicLogs import get_logger
+
 # TODO: Move somewhere else
 from helpers.Timer import CodeTimer
 from .ObjectManager import ObjectManager
@@ -56,7 +59,7 @@ class GPUPredictForProject(PredictForProject):
         req = self.req
         logger.info("Input Param = %s", self.req.__dict__)
 
-        _user, tgt_prj = RightsBO.user_wants(
+        user, tgt_prj = RightsBO.user_wants(
             self.session, self._get_owner_id(), Action.ANNOTATE, self.req.project_id
         )
 
@@ -82,7 +85,7 @@ class GPUPredictForProject(PredictForProject):
         self.update_progress(25, "Retrieving objects to classify")
         target_result = self.select_target(tgt_prj, used_features)
         nb_rows = self.classify(
-            target_result, classifier, used_features, np_medians_per_feat
+            user.id, target_result, classifier, used_features, np_medians_per_feat
         )
 
         final_message = "New category set on %d objects." % nb_rows
@@ -247,6 +250,7 @@ In second step 'Choice of Learning Set categories and size', where the learning 
 
     def classify(
         self,
+        user_id: UserIDT,
         tgt_res: Result,
         classifier: OurRandomForestClassifier,
         features: List[str],
@@ -258,6 +262,9 @@ In second step 'Choice of Learning Set categories and size', where the learning 
         total_rows = tgt_res.rowcount  # type:ignore # case1
         done_count = 0
         nb_changes = 0
+        training = TrainingBO.create_one(
+            self.session, user_id
+        )  # Where we record the training
         while True:
             obj_ids: ObjectIDListT = []
             unused: ClassifIDListT = []
@@ -270,11 +277,11 @@ In second step 'Choice of Learning Set categories and size', where the learning 
                 )
                 np_chunk = np.concatenate([np_chunk, np_deep_features_chunk], axis=1)
             logger.info("One chunk of %d", len(obj_ids))
-            classif_ids, scores = classifier.predict(np_chunk)
+            list_classif_ids, list_scores = classifier.predict_all(np_chunk)
             target_obj_set = EnumeratedObjectSet(self.session, obj_ids)
             # TODO: Remove the keep_logs flag, once sure the new algo is better
-            nb_upd, all_changes = target_obj_set.classify_auto(
-                classif_ids, scores, keep_logs=True
+            nb_upd, all_changes = target_obj_set.classify_auto_mult(
+                training._training, list_classif_ids, list_scores
             )
             nb_changes += nb_upd
             logger.info("Changes :%s", str(all_changes)[:1000])

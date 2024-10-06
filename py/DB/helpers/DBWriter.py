@@ -9,6 +9,7 @@ from .Bean import Bean
 from .Direct import text
 from .ORM import Session, MetaData, minimal_table_of
 from .Postgres import SequenceCache
+from .. import Prediction
 from ..CNNFeature import ObjectCNNFeature
 from ..Image import Image
 from ..Object import ObjectHeader, ObjectFields, ObjectsClassifHisto
@@ -37,12 +38,14 @@ class DBWriter(object):
         self.img_tbl = Image.__table__
         self.obj_cnn_tbl = ObjectCNNFeature.__table__
         self.obj_history_tbl = ObjectsClassifHisto.__table__
+        self.pred_tbl = Prediction.__table__
         # Data
         self.obj_bulks: List[Bean] = []
         self.obj_fields_bulks: List[Bean] = []
         self.img_bulks: List[Bean] = []
         self.obj_cnn_bulks: List[Bean] = []
         self.obj_history_bulks: List[Bean] = []
+        self.pred_bulks: List[Bean] = []
 
         # Save a bit of time for commit
         self.session.execute(text("SET synchronous_commit TO OFF;"))
@@ -73,6 +76,7 @@ class DBWriter(object):
             self.obj_cnn_tbl.insert(),
             self.img_tbl.insert(),
             self.obj_history_tbl.insert(),
+            self.pred_tbl.insert(),
         ]
         # TODO: SQLAlchemy compiled_cache?
         bulk_sets = [
@@ -81,6 +85,7 @@ class DBWriter(object):
             self.obj_cnn_bulks,
             self.img_bulks,
             self.obj_history_bulks,
+            self.pred_bulks,
         ]
         for a_bulk_set, an_insert in zip(bulk_sets, inserts):
             if not a_bulk_set:
@@ -94,6 +99,7 @@ class DBWriter(object):
         object_head_to_write: Bean,
         object_fields_to_write: Bean,
         image_to_write: Optional[Bean],
+        prediction_to_write: Optional[Bean],
         new_records: int,
     ) -> None:
         # Bulk mode or Core do not create links (using ORM relationship), so we have to do manually
@@ -105,6 +111,9 @@ class DBWriter(object):
             object_head_to_write.objid = self.obj_seq_cache.next()
             object_fields_to_write.objfid = object_head_to_write.objid
             object_fields_to_write.acquis_id = object_head_to_write.acquisid
+            if prediction_to_write:
+                prediction_to_write.object_id = object_head_to_write.objid
+                object_head_to_write.training_id = prediction_to_write.training_id
         if new_records >= 1 and image_to_write:
             # There is (potentially just) a new image
             image_to_write.imgid = self.img_seq_cache.next()
@@ -113,6 +122,8 @@ class DBWriter(object):
             # There is a new image and more
             self.obj_fields_bulks.append(object_fields_to_write)
             self.obj_bulks.append(object_head_to_write)
+            if prediction_to_write:
+                self.pred_bulks.append(prediction_to_write)
         if new_records >= 1 and image_to_write:
             # There is (potentially just) a new image
             self.img_bulks.append(image_to_write)

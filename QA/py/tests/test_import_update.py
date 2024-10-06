@@ -90,7 +90,7 @@ def test_import_update_various(fastapi, caplog, tstlogs):
 
     # Update without classif, 10 cells
     do_import_update(prj_id, caplog, "Yes", str(UPDATE_DIR))
-    print("Import update 1:" + "\n".join(caplog.messages))
+    print("Import update various 1:" + "\n".join(caplog.messages))
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
     # 9 fields + 7 derived sun positions - 3 different objects
     assert nb_upds == 13
@@ -100,7 +100,7 @@ def test_import_update_various(fastapi, caplog, tstlogs):
     # Update classif, 2 cells, one classif ID and one classif quality
     do_import_update(prj_id, caplog, "Cla", str(UPDATE_DIR))
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
-    print("Import update 2:" + "\n".join(caplog.messages))
+    print("Import update various 2:" + "\n".join(caplog.messages))
     assert nb_upds == 4
     nb_notfound = len(
         [msg for msg in caplog.messages if "not found while updating" in msg]
