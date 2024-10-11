@@ -226,16 +226,10 @@ for i in range(1, 21):
 # Nearly-always used index for recursive descent into object tree, e.g. in manual classification page.
 # Also for FK checks during deletion.
 Index(
-    "is_objectsacquisition",
-    ObjectHeader.__table__.c.acquisid,
-)
-
-# Speed up a bit top bar with stats by state.
-Index(
     "is_objectsacqclassifqual",
     ObjectHeader.__table__.c.acquisid,
+    ObjectHeader.__table__.c.classif_qual,
     postgresql_include=[
-        ObjectHeader.__table__.c.classif_qual,
         ObjectHeader.__table__.c.classif_id,
     ],
 )

@@ -192,7 +192,10 @@ class DescribedObjectSet(object):
             selected_tables += (
                 f"{Taxonomy.__tablename__} txo ON txo.id = obh.classif_id"
             )
-            if self.filters.status_filter not in MEANS_CLASSIF_ID_EXIST:
+            if (
+                self.filters.status_filter not in MEANS_CLASSIF_ID_EXIST
+                and not self.filters.taxo  # If some taxo is needed it's a plain join
+            ):
                 selected_tables.set_outer(f"{Taxonomy.__tablename__} txo ")
         if "img." in column_referencing_sql:
             selected_tables += (

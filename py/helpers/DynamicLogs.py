@@ -54,9 +54,9 @@ _the_handler.handler.setFormatter(logging.Formatter(LOGGING_FORMAT))
 
 
 def logger_nullify_after_fork():
-    """ Remove log handlers after a fork.
+    """Remove log handlers after a fork.
     We could replace them with more fresh handler but this is enough
-    to prevent artificial sync b/w forked processes """
+    to prevent artificial sync b/w forked processes"""
     Logger.manager.root.handlers.clear()
     for _name, a_logger in Logger.manager.loggerDict.items():
         if isinstance(a_logger, Logger):
@@ -118,8 +118,8 @@ MONITOR_LOG_PATH = "ecotaxa_api_calls.log"
 
 
 def get_api_logger():
-    """ Return a logger to a dedicated file for knowing what happens in some endpoints """
-    api_logger = logging.getLogger('API')
+    """Return a logger to a dedicated file for knowing what happens in some endpoints"""
+    api_logger = logging.getLogger("API")
     api_logger.setLevel(logging.INFO)
     api_file_handler = logging.FileHandler(MONITOR_LOG_PATH)
     api_file_handler.setLevel(logging.INFO)

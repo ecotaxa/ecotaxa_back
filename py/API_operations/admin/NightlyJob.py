@@ -252,7 +252,7 @@ NightlyJobService.NIGHTLY_CHECKS = [
     ),
     ConsistencyCheckAndFix(
         "The must be no score information for manual states",
-        "select objid from obj_head where classif_qual in ('V','D') and classif_score is not null",
+        "select objid from obj_head where classif_qual in ('V','D') and classif_score is not null limit 100",
         [],
         """
         -- find root cause
@@ -260,8 +260,8 @@ NightlyJobService.NIGHTLY_CHECKS = [
     ),
     ConsistencyCheckAndFix(
         "Predicted was set by machine, no trailing traces of previous human action",
-        "select count(1) from obj_head where classif_qual = 'P' and (classif_who is not null)",
-        0,
+        "select objid from obj_head where classif_qual = 'P' and (classif_who is not null) limit 100",
+        [],
         """update obj_head
 set classif_who = NULL
 where classif_qual = 'P'
@@ -277,7 +277,7 @@ where classif_qual is null and classif_id is null and classif_score is not null"
     ),
     ConsistencyCheckAndFix(
         "A score is present for 'P', coming from last prediction",
-        "select * from obj_head where classif_qual='P' and classif_score is null",
+        "select * from obj_head where classif_qual='P' and classif_score is null limit 100",
         [],
         """
         --- find root cause & re-predict
@@ -297,7 +297,25 @@ where classif_qual is null and classif_id is null and classif_score is not null"
     from objectsclassifhisto
     where not ((classif_qual = 'P' and classif_score is not null and classif_who is null) or
                (classif_qual = 'D' and classif_score is null and classif_who is not null) or
-               (classif_qual = 'V' and classif_score is null and classif_who is not null))""",
+               (classif_qual = 'V' and classif_score is null and classif_who is not null)) limit 100""",
+        [],
+        """
+            -- find root cause
+            """,
+    ),
+    ConsistencyCheckAndFix(
+        "We must know which prediction a predicted object comes from, in order to move to 'next'"
+        "when the prediction is discarded.",
+        """select obh.*
+    from obj_head obh
+    left join prediction prd 
+       on prd.object_id = obh.objid 
+       and prd.classif_id = obh.classif_id
+       and prd.score = obh.classif_score
+    where obh.classif_qual = 'P'
+      and prd.object_id is null
+      limit 100
+        """,
         [],
         """
             -- find root cause

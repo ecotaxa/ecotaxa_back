@@ -41,7 +41,7 @@ def test_import_update(fastapi, caplog, tstlogs):
     # 9 fields + 7 derived sun positions
     assert nb_upds == 16
     saves = [msg for msg in caplog.messages if "Batch save objects" in msg]
-    assert saves == ["Batch save objects of 0/0/0/0/0"] * 3
+    assert saves == ["Batch save objects of 0/0/0/0/0/0"] * 3
 
     # Update classif, 2 cells, one classif ID and one classif quality
     do_import_update(prj_id, caplog, "Cla", str(UPDATE_DIR))
@@ -60,7 +60,7 @@ def test_import_update(fastapi, caplog, tstlogs):
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
     # ecotaxa/ecotaxa_dev#583: Check that no image was added during the update
     saves = [msg for msg in caplog.messages if "Batch save objects" in msg]
-    assert saves == ["Batch save objects of 0/0/0/0/0"] * 3
+    assert saves == ["Batch save objects of 0/0/0/0/0/0"] * 3
 
     # Update classif, no change -> No log line
     do_import_update(prj_id, caplog, "Yes", str(UPDATE_DIR))
@@ -95,7 +95,7 @@ def test_import_update_various(fastapi, caplog, tstlogs):
     # 9 fields + 7 derived sun positions - 3 different objects
     assert nb_upds == 13
     saves = [msg for msg in caplog.messages if "Batch save objects" in msg]
-    assert saves == ["Batch save objects of 0/0/0/0/0"] * 3
+    assert saves == ["Batch save objects of 0/0/0/0/0/0"] * 3
 
     # Update classif, 2 cells, one classif ID and one classif quality
     do_import_update(prj_id, caplog, "Cla", str(UPDATE_DIR))
@@ -113,7 +113,7 @@ def test_import_update_various(fastapi, caplog, tstlogs):
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
     # ecotaxa/ecotaxa_dev#583: Check that no image was added during the update
     saves = [msg for msg in caplog.messages if "Batch save objects" in msg]
-    assert saves == ["Batch save objects of 0/0/0/0/0"] * 3
+    assert saves == ["Batch save objects of 0/0/0/0/0/0"] * 3
 
     # Update classif, no change -> No log line
     do_import_update(prj_id, caplog, "Yes", str(UPDATE_DIR))

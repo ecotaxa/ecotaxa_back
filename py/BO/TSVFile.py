@@ -807,20 +807,16 @@ class TSVFile(object):
                             if obj.classif_qual == PREDICTED_CLASSIF_QUAL:
                                 # TODO: Should we warn this data is unused from TSV?
                                 an_upd.classif_date = obj.classif_date
-                            if (
-                                obj.classif_qual != PREDICTED_CLASSIF_QUAL
-                                and target_state == PREDICTED_CLASSIF_QUAL
-                            ):
+                            if target_state == PREDICTED_CLASSIF_QUAL:
                                 # Need to store a new prediction
                                 assert training_provider is not None
                                 EnumeratedObjectSet(session, [objid]).store_predictions(
                                     training_provider.get().training_id,
                                     [[object_head_to_write["classif_id"]]],
                                     [
-                                        [PSEUDO_TRAINING_SCORE]
+                                        [an_upd.classif_score]
                                     ],  # TODO: Quite inefficient but simple
                                 )
-                                an_upd["classif_score"] = PSEUDO_TRAINING_SCORE
                             # Care for classification historisation
                             if TSVFile.prepare_classif_update(obj, an_upd):
                                 EnumeratedObjectSet.historize_classification_for(

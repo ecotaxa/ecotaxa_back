@@ -62,12 +62,13 @@ class DBWriter(object):
         self.obj_fields_tbl = minimal_table_of(metadata, ObjectFields, target_fields)
 
     def do_bulk_save(self) -> None:
-        nb_bulks = "%d/%d/%d/%d/%d" % (
+        nb_bulks = "%d/%d/%d/%d/%d/%d" % (
             len(self.obj_bulks),
             len(self.obj_fields_bulks),
             len(self.obj_cnn_bulks),
             len(self.img_bulks),
             len(self.obj_history_bulks),
+            len(self.pred_bulks),
         )
         # TODO: Can be reused?
         inserts = [
