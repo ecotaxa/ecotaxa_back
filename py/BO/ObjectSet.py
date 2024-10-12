@@ -63,7 +63,7 @@ from DB.Prediction import (
 )
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
-from DB.Training import Training, TrainingIDT
+from DB.Training import TrainingIDT
 from DB.helpers import Result
 from DB.helpers.Core import select
 from DB.helpers.Direct import func
@@ -370,7 +370,7 @@ class EnumeratedObjectSet(MappedTable):
         # Classify with new training
         self.object_ids = new_objects_ids
         nb_upd, all_changes = self.classify_auto_mult(
-            training._training, classif_id_lists, classif_score_lists, True
+            training, classif_id_lists, classif_score_lists, True
         )
         # obj_upd_qry = obj_upd_qry.values(
         #     classif_qual=PREDICTED_CLASSIF_QUAL,
@@ -735,7 +735,7 @@ class EnumeratedObjectSet(MappedTable):
 
     def classify_auto_mult(
         self,
-        training: Training,
+        training: TrainingBO,
         classif_id_lists: List[ClassifIDListT],
         classif_score_lists: List[ClassifScoresListT],
         force: bool = False,
@@ -743,7 +743,7 @@ class EnumeratedObjectSet(MappedTable):
         """
         Set automatic classifications in self, keeping a history of previous objects' state.
         ⚠️ There is a strong assumption that below lists are in self.object_ids order ⚠️
-        :param training_id: the operation holder for all predictions.
+        :param training: the operation holder for all predictions.
         :param classif_id_lists: all predicted category ids for each of the object ids in self,
                                 from automatic classification algorithm.
         :param classif_score_lists: all predicted confidence scores for each object,
@@ -853,7 +853,7 @@ class EnumeratedObjectSet(MappedTable):
             # len(partial_updates),
         )
         nb_updated = len(updates)  # + len(partial_updates)
-
+        training.advance()
         # Return statuses
         return nb_updated, all_changes
 

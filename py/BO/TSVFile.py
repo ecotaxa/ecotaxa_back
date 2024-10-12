@@ -143,6 +143,7 @@ class TSVFile(object):
         training_provider = TrainingBOProvider(
             session,
             how.user_id,
+            "Import P",
             stats.start_time,
         )
 
@@ -224,16 +225,18 @@ class TSVFile(object):
                             if classif_score is not None
                             else PSEUDO_TRAINING_SCORE
                         )  # TODO: Allow import of it via extra column
+                        training = training_provider.provide()
                         prediction_to_write = Bean(
                             {
-                                "training_id": training_provider.get().training_id,
+                                "training_id": training.training.training_id,
                                 "classif_id": object_head_to_write["classif_id"],
                                 "score": classif_score,
                             }
                         )
                         object_head_to_write[
                             "classif_date"
-                        ] = training_provider.get().training_start
+                        ] = training.training.training_start
+                        training.advance()
 
                     # Attempt to compute sun position
                     self.do_sun_position_field(object_head_to_write)
@@ -810,13 +813,15 @@ class TSVFile(object):
                             if target_state == PREDICTED_CLASSIF_QUAL:
                                 # Need to store a new prediction
                                 assert training_provider is not None
+                                training = training_provider.provide()
                                 EnumeratedObjectSet(session, [objid]).store_predictions(
-                                    training_provider.get().training_id,
+                                    training.training.training_id,
                                     [[object_head_to_write["classif_id"]]],
                                     [
                                         [an_upd.classif_score]
                                     ],  # TODO: Quite inefficient but simple
                                 )
+                                training.advance()
                             # Care for classification historisation
                             if TSVFile.prepare_classif_update(obj, an_upd):
                                 EnumeratedObjectSet.historize_classification_for(

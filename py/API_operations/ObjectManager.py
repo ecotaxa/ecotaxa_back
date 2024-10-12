@@ -2,6 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from datetime import datetime
 from typing import Tuple, List, Optional, Set, Any
 
 from API_models.filters import ProjectFiltersDict
@@ -359,7 +360,9 @@ SELECT COUNT(*) nbr"""
 
         impacted_objs = [r[0] for r in self.query(current_user_id, proj_id, filters)[0]]
 
-        training = TrainingBO.create_one(self.session, current_user_id)
+        training = TrainingBO.create_one(
+            self.session, current_user_id, "Force to P", datetime.now()
+        )
         nb_upd, all_changes = EnumeratedObjectSet(
             self.session, impacted_objs
         ).force_to_predicted(training)
@@ -548,12 +551,14 @@ SELECT COUNT(*) nbr"""
         object_set, project = self._the_project_for(
             current_user_id, target_ids, Action.ANNOTATE
         )
-        # Temporary: create a new training if not set
+        # Create a new training if not set
         if training is None:
-            training = TrainingBO.create_one(self.session, current_user_id)
+            training = TrainingBO.create_one(
+                self.session, current_user_id, "Classify auto", datetime.now()
+            )
         # Do the raw classification, eventually with history.
         nb_upd, all_changes = object_set.classify_auto_mult(
-            training._training, classif_ids, scores
+            training, classif_ids, scores
         )
         # Propagate changes to update projects_taxo_stat
         self.propagate_classif_changes(nb_upd, all_changes, project)

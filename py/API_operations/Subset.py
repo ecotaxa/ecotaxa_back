@@ -25,7 +25,6 @@ from DB.Object import (
     ObjectsClassifHisto,
     PREDICTED_CLASSIF_QUAL,
 )
-from DB.Prediction import PSEUDO_TRAINING_SCORE
 from DB.Process import Process
 from DB.Project import Project
 from DB.Sample import Sample
@@ -208,7 +207,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         nb_objects = 0
         total_objects = len(self.to_clone)
         training_provider = TrainingBOProvider(
-            self.session, import_how.user_id, datetime.now()
+            self.session, import_how.user_id, "Subset", datetime.now()
         )
 
         # Pick chunks of object ids
@@ -304,15 +303,16 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         source_imgid = image.imgid if image is not None else None
         prediction_to_write = None
         if obj.classif_qual == PREDICTED_CLASSIF_QUAL:
-            # Need to store a prediction
-            # TODO: Copy verbatim predictions during subset?
+            # Need to store a prediction, limit to current one.
+            training = training_provider.provide()
             prediction_to_write = Bean(
                 {
-                    "training_id": training_provider.get().training_id,
+                    "training_id": training.training.training_id,
                     "classif_id": obj.classif_id,
-                    "score": PSEUDO_TRAINING_SCORE,
+                    "score": obj.classif_score,
                 }
             )
+            training.advance()
         writer.add_db_entities(obj, fields, image, prediction_to_write, new_records)
         # Keep track of existing objects
         if new_records > 1:  # TODO: This is a cumbersome way of stating "new object",

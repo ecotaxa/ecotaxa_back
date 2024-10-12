@@ -321,4 +321,16 @@ where classif_qual is null and classif_id is null and classif_score is not null"
             -- find root cause
             """,
     ),
+    ConsistencyCheckAndFix(
+        "Trainings must be consistent",
+        """select trn.*
+    from training trn
+    where trn.training_end < trn.training_start
+      limit 100
+        """,
+        [],
+        """
+            -- find root cause
+            """,
+    ),
 ]

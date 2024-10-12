@@ -7,6 +7,7 @@
 # - Use selected features on source projects to train a Random Forest classifier
 # - Use the trained classifier on the target project.
 #
+from datetime import datetime
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -26,7 +27,6 @@ from DB.helpers.Direct import text
 from ML.Deep_features_extractor import DeepFeaturesExtractor
 from ML.Random_forest_classifier import OurRandomForestClassifier
 from helpers.DynamicLogs import get_logger
-
 # TODO: Move somewhere else
 from helpers.Timer import CodeTimer
 from .ObjectManager import ObjectManager
@@ -263,8 +263,8 @@ In second step 'Choice of Learning Set categories and size', where the learning 
         done_count = 0
         nb_changes = 0
         training = TrainingBO.create_one(
-            self.session, user_id
-        )  # Where we record the training
+            self.session, user_id, "Prediction", datetime.now()
+        )
         while True:
             obj_ids: ObjectIDListT = []
             unused: ClassifIDListT = []
@@ -279,12 +279,12 @@ In second step 'Choice of Learning Set categories and size', where the learning 
             logger.info("One chunk of %d", len(obj_ids))
             list_classif_ids, list_scores = classifier.predict_all(np_chunk)
             target_obj_set = EnumeratedObjectSet(self.session, obj_ids)
-            # TODO: Remove the keep_logs flag, once sure the new algo is better
             nb_upd, all_changes = target_obj_set.classify_auto_mult(
-                training._training, list_classif_ids, list_scores
+                training, list_classif_ids, list_scores
             )
             nb_changes += nb_upd
             logger.info("Changes :%s", str(all_changes)[:1000])
+            training.advance()
             self.session.commit()
             if len(obj_ids) < self.CHUNK_SIZE:
                 break

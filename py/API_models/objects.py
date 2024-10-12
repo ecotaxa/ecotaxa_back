@@ -388,11 +388,11 @@ class ClassifyAutoReqMult(BaseModel):
     )
     classifications: List[List[int]] = Field(
         title="Classifications",
-        description="The wanted new classifications, i.e. taxon ID, one for each object.",
+        description="The wanted new classifications, i.e. taxon ID, one list for each object.",
     )
     scores: List[List[float]] = Field(
         title="Scores",
-        description="The classification score is generally between 0 and 1. It indicates the probability that the taxon prediction of this object is correct.",
+        description="The classification scores, between 0 and 1. Each indicates the probability that the taxon prediction of this object for this category is correct.",
     )
     keep_log: bool = Field(
         title="Keep log",
@@ -404,8 +404,8 @@ class ClassifyAutoReqMult(BaseModel):
             "title": "Classify auto request Model",
             "example": {
                 "target_ids": [634509, 6234516, 976544],
-                "classifications": [7546, 3421, 788],
-                "scores": [0.4, 0.56, 0.38],
+                "classifications": [[7546], [3421, 5614], [788]],
+                "scores": [[0.4], [0.56, 0.3333], [0.38]],
                 "keep_log": False,
             },
         }

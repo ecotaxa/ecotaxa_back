@@ -2235,8 +2235,13 @@ def classify_object_set(
 def classify_auto_object_set(
     req: ClassifyAutoReq = Body(...), current_user: int = Depends(get_current_user)
 ) -> int:
-    # TODO, compat with newer primitive
-    return -1
+    req2 = ClassifyAutoReqMult(
+        target_ids=req.target_ids,
+        classifications=[[a_classif] for a_classif in req.classifications],
+        scores=[[a_score] for a_score in req.scores],
+        keep_log=req.keep_log,
+    )
+    return classify_auto_mult_object_set(req2, current_user)
 
 
 @app.post(
