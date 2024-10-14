@@ -11,7 +11,7 @@ from typing import NamedTuple
 
 from sqlalchemy import PrimaryKeyConstraint
 
-from DB.helpers.DDL import Column, ForeignKey
+from DB.helpers.DDL import Column, ForeignKey, Index
 from DB.helpers.ORM import Model
 from DB.helpers.Postgres import BIGINT, INTEGER, DOUBLE_PRECISION
 from .Object import ObjectHeader
@@ -50,6 +50,9 @@ class Prediction(Model):
 
     # Define the 'normal' PK, from more general to less general, we had to reorder for space
     __table_args__ = (PrimaryKeyConstraint("object_id", "classif_id"),)
+
+
+Index("is_prediction_training", Prediction.__table__.c.training_id)
 
 
 class PredictionHisto(Model):

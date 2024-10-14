@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Tuple, List, Optional, Set, Any
 
 from API_models.filters import ProjectFiltersDict
+from API_models.prediction import PredictionInfoRsp
 from BO.Classification import (
     HistoricalLastClassif,
     ClassifIDSetT,
@@ -212,6 +213,21 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
         if len(vals) == 0:
             return ""
         return ",\n" + ", ".join(vals)
+
+    def get_prediction_infos(
+        self, current_user_id: UserIDT, object_ids: ObjectIDListT
+    ) -> PredictionInfoRsp:
+        """
+        Query the given IDs, return last prediction information.
+        """
+        # Security check
+        obj_set = EnumeratedObjectSet(self.ro_session, object_ids)
+        # Get project IDs for the objects and verify rights
+        prj_ids = obj_set.get_projects_ids()
+        for a_prj_id in prj_ids:
+            RightsBO.user_wants(self.session, current_user_id, Action.READ, a_prj_id)
+        infos = obj_set.get_prediction_infos()
+        return PredictionInfoRsp(result=infos)
 
     def parents_by_id(
         self, current_user_id: UserIDT, object_ids: ObjectIDListT

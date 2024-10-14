@@ -8,12 +8,10 @@ from typing import List
 import pytest
 from API_models.filters import ProjectFiltersDict
 from API_operations.helpers.Service import Service
-from DB import ObjectHeader
 from DB.Prediction import Prediction, PredictionHisto
 from DB.helpers import Result
 from DB.helpers.Core import select
 from DB.helpers.ORM import any_
-from sqlalchemy import and_
 from starlette import status
 
 from tests.credentials import CREATOR_AUTH, ORDINARY_USER2_USER_ID, ADMIN_AUTH
@@ -37,6 +35,7 @@ OBJECT_SET_REVERT_URL = (
 )
 OBJECT_SET_RESET_PREDICTED_URL = "/object_set/{project_id}/reset_to_predicted"
 OBJECT_SET_CLASSIFY_URL = "/object_set/classify"
+OBJECT_SET_GET_PREDICTION_INFO_URL = "/object_set/predictions"
 OBJECT_SET_CLASSIFY_AUTO_URL = "/object_set/classify_auto"
 OBJECT_SET_CLASSIFY_AUTO_URL2 = "/object_set/classify_auto_multiple"
 OBJECT_SET_DELETE_URL = "/object_set/"
@@ -95,6 +94,13 @@ def get_predictions_stats(obj_ids):
         # if rec["discarded"]:
         #     pred_stats["n_discarded"] += 1
     return pred_stats
+
+
+def get_prediction_infos(fastapi, obj_ids, who=ADMIN_AUTH):
+    url = OBJECT_SET_GET_PREDICTION_INFO_URL
+    rsp = fastapi.post(url, headers=who, json=obj_ids)
+    assert rsp.status_code == status.HTTP_200_OK
+    return rsp.json()
 
 
 def classify_all(fastapi, obj_ids, classif_id, who=ADMIN_AUTH):
@@ -400,22 +406,14 @@ def test_classif(database, fastapi, caplog):
     }
     assert get_predictions_stats(obj_ids) == pred_stats_after_prediction
 
-    with Service() as sce:
-        # Get _last_ training stored results for second object
-        # TODO: Has to be an API call
-        qry = select(Prediction.classif_id, Prediction.score).join(ObjectHeader)
-        qry = qry.where(
-            and_(
-                Prediction.object_id == ObjectHeader.objid,
-                ObjectHeader.objid == obj_ids[1],
-            )
-        )
-        res: Result = sce.session.execute(qry)
-        assert res.fetchall() == [
-            (crustacea_id, 0.8),
-            (copepod_id, 0.1),
-            (entomobryomorpha_id, 0.05),
+    obj_one = obj_ids[1]
+    assert get_prediction_infos(fastapi, [obj_one]) == {
+        "result": [
+            [obj_one, crustacea_id, 0.8],
+            [obj_one, copepod_id, 0.1],
+            [obj_one, entomobryomorpha_id, 0.05],
         ]
+    }
 
     # Admin (me!) thinks that all is a minidiscus, regardless of ML advices
     classify_all(fastapi, obj_ids, minidiscus_id)

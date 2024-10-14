@@ -81,6 +81,8 @@ ObjectIDWithParentsListT = List[ObjectIDWithParentsT]
 ChangeTupleT = Tuple[Optional[int], str, int, str]
 # Many changes, each of them applied to many objects
 ObjectSetClassifChangesT = OrderedDictT[ChangeTupleT, ObjectIDListT]
+# Present prediction
+PredictionInfoT = Tuple[ObjectIDT, ClassifIDT, float]
 
 logger = get_logger(__name__)
 
@@ -920,6 +922,20 @@ class EnumeratedObjectSet(MappedTable):
                 )
         self.session.bulk_insert_mappings(Prediction, preds_for_bulk)
         return preds_by_object
+
+    def get_prediction_infos(self) -> List[PredictionInfoT]:
+        """
+        Return the predictions, per object in decreasing score.
+        """
+        qry = select(Prediction.object_id, Prediction.classif_id, Prediction.score)
+        qry = qry.join(ObjectHeader)
+        qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))
+        qry = qry.order_by(Prediction.object_id, Prediction.score.desc())
+        with CodeTimer("Preds for %d objs: " % len(self.object_ids), logger):
+            return [
+                (objid, classif_id, score)
+                for (objid, classif_id, score) in self.session.execute(qry)
+            ]
 
     def _fetch_classifs_and_lock(self) -> Dict[ObjectIDT, Row]:
         """

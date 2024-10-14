@@ -76,7 +76,12 @@ from API_models.objects import (
     ClassifyAutoReqMult,
     ObjectHeaderModel,
 )
-from API_models.prediction import PredictionRsp, PredictionReq, MLModel
+from API_models.prediction import (
+    PredictionRsp,
+    PredictionReq,
+    MLModel,
+    PredictionInfoRsp,
+)
 from API_models.subset import SubsetReq, SubsetRsp
 from API_models.taxonomy import (
     TaxaSearchRsp,
@@ -2423,28 +2428,28 @@ def predict_object_set(
     return rsp
 
 
-# Commented out as it's now integrated into prediction task, and cannot be executed in main app server
-# due to TF dependency
-# @app.get("/project/do_cnn/{proj_id}", operation_id="compute_project_cnn", tags=['objects'],
-#          responses={
-#              200: {
-#                  "content": {
-#                      "application/json": {
-#                          "example": "OK, 50 CNN features computed and written"
-#                      }
-#                  }
-#              }
-#          }, response_model=str)
-# def compute_project_cnn(proj_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
-#                         current_user: Optional[int] = Depends(get_optional_current_user)) -> str:
-#     """
-#         **Generate CNN features** for the requested project.
-#
-#         **Returns a string containing the number of generated features.**
-#     """
-#     with CNNForProject() as sce:
-#         rsp = sce.run(current_user, proj_id)
-#     return rsp
+@app.post(
+    "/object_set/predictions",
+    operation_id="predict_object_set",
+    tags=["objects"],
+    response_model=PredictionInfoRsp,
+)
+def query_object_set_predictions(
+    object_ids: ObjectIDListT = Body(
+        ...,
+        title="Object IDs list",
+        description="The list of object ids.",
+        example=[634509, 6234516, 976544],
+    ),
+    current_user: int = Depends(get_current_user),
+) -> PredictionInfoRsp:
+    """
+    ** Return last prediction information for a set of objects, by their IDs.
+    """
+    with ObjectManager() as sce:
+        with RightsThrower():
+            rsp = sce.get_prediction_infos(current_user, object_ids)
+    return rsp
 
 
 @app.delete(
