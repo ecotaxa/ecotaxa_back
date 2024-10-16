@@ -24,6 +24,7 @@ from helpers.httpexception import (
     DETAIL_UNKNOWN_ERROR,
     DETAIL_NOTHING_DONE,
     DETAIL_FILE_PROTECTED,
+    DETAIL_SAME_NAME_IN_TRASH,
 )
 
 logger = get_logger(__name__)
@@ -129,6 +130,11 @@ class UserFilesDirectory(object):
         ) == self._root_path.joinpath(self.TRASH_DIRECTORY):
             raise HTTPException(status_code=422, detail=[DETAIL_FILE_PROTECTED])
 
+    def _is_trash_dir(self, path: str):
+        return self._root_path.joinpath(
+            path.lstrip(os.path.sep)
+        ) == self._root_path.joinpath(self.TRASH_DIRECTORY)
+
     def move(self, source_name: str, dest_name: str) -> str:
         self._is_trash_dir_throw(source_name)
         self._is_trash_dir_throw(dest_name)
@@ -149,7 +155,6 @@ class UserFilesDirectory(object):
         return str(dest_path)
 
     def remove(self, path: str):
-        # return True if moved in trash , False definitly deleted
         self._is_trash_dir_throw(path)
         source_path: Path = self._root_path.joinpath(path.lstrip(os.path.sep))
         # send to trash if not in trash
@@ -157,11 +162,19 @@ class UserFilesDirectory(object):
             path[0 : len(self.TRASH_DIRECTORY + os.path.sep)]
             != self.TRASH_DIRECTORY + os.path.sep
         ):
-            try:
-                self.ensure_exists(self._root_path.joinpath(self.TRASH_DIRECTORY))
-                self.move(path, self.TRASH_DIRECTORY + os.path.sep + path)
-            except Exception as e:
-                _log_exception_throw(e)
+            if os.path.exists(
+                self._root_path.joinpath(self.TRASH_DIRECTORY + os.path.sep + path)
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail=[DETAIL_SAME_NAME_IN_TRASH],
+                )
+            else:
+                try:
+                    self.ensure_exists(self._root_path.joinpath(self.TRASH_DIRECTORY))
+                    self.move(path, self.TRASH_DIRECTORY + os.path.sep + path)
+                except Exception as e:
+                    _log_exception_throw(e)
 
         elif source_path.is_dir():
             try:
@@ -169,7 +182,10 @@ class UserFilesDirectory(object):
             except Exception as e:
                 _log_exception_throw(e)
         else:
-            os.remove(source_path)
+            try:
+                os.remove(source_path)
+            except Exception as e:
+                _log_exception_throw(e)
 
     def create(self, path: str) -> str:
         self._is_trash_dir_throw(path[0 : len(self.TRASH_DIRECTORY + os.path.sep)])
@@ -266,15 +282,14 @@ class UserFilesDirectory(object):
 
     async def recursive_unpack(self, archive_ext: str, path: Path):
         for compressed_f in iglob(
-            str(path.joinpath("**/" + self.COMPRESSED_PATTERN + "." + archive_ext))
+            str(path.joinpath(self.COMPRESSED_PATTERN + "." + archive_ext))
         ):
-            compressed_path = Path(compressed_f)
-            if not compressed_path.is_dir():
+            compressed_path = Path("**/" + compressed_f)
+            if not compressed_path.is_dir() and not self._is_trash_dir(compressed_f):
                 sub_path = compressed_path.parent
                 if zipfile.is_zipfile(compressed_path):
                     await self.unpack_zip(compressed_path, sub_path)
                 elif tarfile.is_tarfile(compressed_path):
-                    print("--------------------------istarfile =", compressed_path)
                     await self.unpack_tar(compressed_path, sub_path)
                 elif self._is_gz(compressed_path.as_posix()):
                     await self.unpack_gz(compressed_path, sub_path)
@@ -296,7 +311,6 @@ def _log_exception_throw(e: Exception):
             detail=[DETAIL_INVALID_LARGE_ZIP_FILE],
         )
     else:
-        print(e)
         raise HTTPException(
             status_code=500,
             detail=[DETAIL_UNKNOWN_ERROR],
