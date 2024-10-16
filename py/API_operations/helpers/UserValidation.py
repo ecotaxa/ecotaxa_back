@@ -4,17 +4,18 @@
 #
 # User Validation Service .
 #
-from typing import Optional, Any, Final, List
 from enum import Enum
-from BO.Rights import NOT_AUTHORIZED
-from BO.User import UserIDT, SHORT_TOKEN_AGE, PROFILE_TOKEN_AGE
-from API_models.crud import UserModelWithRights
-from helpers.AppConfig import Config
-from providers.MailProvider import MailProvider
-from itsdangerous import URLSafeTimedSerializer, BadSignature
-from helpers.DynamicLogs import get_logger
+from typing import Optional, Final, List
+
 from fastapi import HTTPException
+from itsdangerous import URLSafeTimedSerializer, BadSignature
+
+from API_models.crud import UserModelWithRights
+from BO.User import SHORT_TOKEN_AGE, PROFILE_TOKEN_AGE
+from helpers.AppConfig import Config
+from helpers.DynamicLogs import get_logger
 from helpers.httpexception import DETAIL_BAD_INSTANCE, DETAIL_BAD_SIGN_OR_EXP
+from providers.MailProvider import MailProvider
 
 logger = get_logger(__name__)
 
@@ -139,7 +140,6 @@ class UserValidation(object):
         action: ActivationType = ActivationType.create,
         url: Optional[str] = None,
     ) -> None:
-
         # exception user email and id in the same token - for mod after creation and active is False
         token = self._generate_token(
             id=user.id, email=user.email, action=action.value, reason=reason
@@ -178,7 +178,6 @@ class UserValidation(object):
 
     @staticmethod
     def _build_serializer(secret_key: str, salt: str) -> URLSafeTimedSerializer:
-
         from itsdangerous import TimestampSigner
 
         _mailserializer = URLSafeTimedSerializer(
@@ -232,7 +231,7 @@ class UserValidation(object):
             payload = self._build_serializer(
                 self.secret_key, self._mailservice_salt
             ).loads(token, max_age=int(age) * 3600)
-        except (BadSignature):
+        except BadSignature:
             raise HTTPException(
                 status_code=403,
                 detail=[DETAIL_BAD_SIGN_OR_EXP],

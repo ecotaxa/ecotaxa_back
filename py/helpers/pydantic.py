@@ -23,7 +23,9 @@ class DescriptiveModel(BaseModel):
     with various containers to be sent across the wire."""
 
     class Config:
-        arbitrary_types_allowed = True
+        arbitrary_types_allowed = (
+            True  # We don't check that classes inside models are models themselves
+        )
 
 
 PydanticDescriptionT = Type[DescriptiveModel]

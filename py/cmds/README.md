@@ -39,7 +39,9 @@ def downgrade():
 ```
 
 </details>
-- `PATH=../venv38/bin PYTHONPATH=.. APP_CONFIG=../config.ini alembic revision --autogenerate -m "say something"`
+
+`PATH=../venv38/bin PYTHONPATH=.. APP_CONFIG=../config.ini alembic revision --autogenerate -m "say something"
+`
 
 Then check the newly appeared .py script in py/cmds/db_upg/versions which should contain the commands to upgrade the DB. It's often the case that
 some manually generated tables appear there, so adjust manually the content.
@@ -52,6 +54,11 @@ Next step is to generate SQL for DB creation giant SQL in QA directory:
 `
 
 Copy/paste the last section (signalled by "-- Running upgrade...") at the end of `upgrade_prod.sql`.
+
+Alternatively you can generate only the _last_ script, providing the down_revision (previous version, supposed to be in DB), e.g.:
+
+`PATH=../venv38/bin PYTHONPATH=.. APP_CONFIG=../config.ini alembic upgrade --sql 0a3132f436fb:head
+`
 
 Finally upgrade your local DB:
 

@@ -29,11 +29,17 @@ from sqlalchemy import bindparam
 from sqlalchemy.sql import Alias
 
 from API_models.filters import ProjectFiltersDict
-from BO.Classification import HistoricalLastClassif, ClassifIDListT, ClassifIDT
+from BO.Classification import (
+    HistoricalLastClassif,
+    ClassifIDListT,
+    ClassifIDT,
+    ClassifScoresListT,
+)
 from BO.ColumnUpdate import ColUpdateList
 from BO.Mappings import ProjectMapping, TableMapping
-from BO.Object import ObjectIDWithParentsT
+from BO.Object import ObjectIDWithParentsT, MANUAL_STATES_TEXT, PREDICTED_STATE_TEXT
 from BO.Taxonomy import TaxonomyBO
+from BO.Training import TrainingBO
 from BO.User import UserIDT
 from BO.helpers.MappedTable import MappedTable
 from DB import Session, Query, Process, Taxonomy, User
@@ -44,17 +50,23 @@ from DB.Object import (
     ObjectFields,
     PREDICTED_CLASSIF_QUAL,
     VALIDATED_CLASSIF_QUAL,
-    DUBIOUS_CLASSIF_QUAL,
-    DEFAULT_CLASSIF_HISTORY_DATE,
     ObjectHeader,
     ObjectIDT,
     NON_UPDATABLE_VIA_API,
+    DUBIOUS_CLASSIF_QUAL,
+)
+from DB.Prediction import (
+    Prediction,
+    ClassifScore,
+    PSEUDO_TRAINING_SCORE,
+    PredictionHisto,
 )
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
+from DB.Training import TrainingIDT
 from DB.helpers import Result
 from DB.helpers.Core import select
-from DB.helpers.Direct import text, func
+from DB.helpers.Direct import func
 from DB.helpers.ORM import Row, Delete, Update, any_, and_, or_, case
 from DB.helpers.Postgres import pg_insert, PgInsert
 from DB.helpers.SQL import WhereClause, SQLParamDict, FromClause, OrderClause
@@ -69,11 +81,14 @@ ObjectIDWithParentsListT = List[ObjectIDWithParentsT]
 ChangeTupleT = Tuple[Optional[int], str, int, str]
 # Many changes, each of them applied to many objects
 ObjectSetClassifChangesT = OrderedDictT[ChangeTupleT, ObjectIDListT]
+# Present prediction
+PredictionInfoT = Tuple[ObjectIDT, ClassifIDT, float]
 
 logger = get_logger(__name__)
 
 # If one of these statuses are required, then the classif_id must be valid
-MEANS_CLASSIF_ID_EXIST = ("V", "PV", "PVD", "NVM", "VM")
+MEANS_CLASSIF_ID_EXIST = ("P", "V", "PV", "PVD", "NVM", "VM")
+# MEANS_TRAINING_ID_EXIST = ("P",)
 NO_HISTO = "n"
 
 
@@ -155,6 +170,19 @@ class DescribedObjectSet(object):
                 selected_tables += (
                     f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid"
                 )
+        # if "prd." in column_referencing_sql:
+        #     preds_ref = Prediction.__tablename__ + " prd"
+        #     selected_tables += (
+        #         preds_ref
+        #         + " ON prd.object_id = obh.objid AND prd.classif_id = obh.classif_id"
+        #     )
+        #     if self.filters.status_filter not in MEANS_TRAINING_ID_EXIST:
+        #         selected_tables.set_outer(preds_ref)
+        # if "trn." in column_referencing_sql:
+        #     trainings_ref = Training.__tablename__ + " trn"
+        #     selected_tables += trainings_ref + " ON trn.training_id = prd.training_id"
+        #     if self.filters.status_filter not in MEANS_TRAINING_ID_EXIST:
+        #         selected_tables.set_outer(trainings_ref)
         if "ohu." in column_referencing_sql:  # Inline query for annotators in history
             selected_tables += (
                 f"(select 1 as in_annots WHERE EXISTS (select * from {ObjectsClassifHisto.__tablename__} och "
@@ -166,14 +194,18 @@ class DescribedObjectSet(object):
             selected_tables += (
                 f"{Taxonomy.__tablename__} txo ON txo.id = obh.classif_id"
             )
-            if self.filters.status_filter not in MEANS_CLASSIF_ID_EXIST:
+            if (
+                self.filters.status_filter not in MEANS_CLASSIF_ID_EXIST
+                and not self.filters.taxo  # If some taxo is needed it's a plain join
+            ):
                 selected_tables.set_outer(f"{Taxonomy.__tablename__} txo ")
         if "img." in column_referencing_sql:
-            selected_tables += f"{Image.__tablename__} img ON obh.objid = img.objid " + (
-                f"AND img.imgrank = (SELECT MIN(img2.imgrank) FROM {Image.__tablename__} img2 WHERE img2.objid = obh.objid)"
-                if not all_images
-                else ""
+            selected_tables += (
+                f"{Image.__tablename__} img ON obh.objid = img.objid "
+                if all_images
+                else f"(select * from {Image.__tablename__} img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true"
             )
+            selected_tables.set_lateral(f"(select * from {Image.__tablename__}")
             #  selected_tables.set_outer("images img ")
         if "usr." in column_referencing_sql:
             selected_tables += f"{User.__tablename__} usr ON obh.classif_who = usr.id"
@@ -204,9 +236,7 @@ class DescribedObjectSet(object):
         ret = False
         if ("obf." in order) or ("obf." in where and "obh." not in where):
             ret = True
-        if (
-            "obh.classif_id" in where or "obh.classif_qual" in where
-        ):  # These are included in index
+        if "obh.classif_qual" in where:  # This is included in index TODO: Name it
             ret = False
         return ret
 
@@ -313,42 +343,52 @@ class EnumeratedObjectSet(MappedTable):
 
         return nb_objs, nb_img_rows, img_files
 
-    def reset_to_predicted(self) -> None:
+    def force_to_predicted(
+        self, training: TrainingBO
+    ) -> Tuple[int, ObjectSetClassifChangesT]:
         """
-        Reset to Predicted state, keeping log, i.e. history, of previous change. Only Validated
-        and Dubious states are affected.
-        Note: It's really a forced state change, _not_ a "reset to last predicted value". If a user assigned
-        the category manually and triggers this function, the object will be in 'P' state even if
-        no ML algorithm ever set this category.
+        Force to Predicted state, keeping log, i.e. history, of current state.
+        Only Validated and Dubious states are affected, the goal being to bring
+        the whole set of objects to a Predict-able state.
+        A pseudo-training is created with conventional score per object.
         """
-        oh = ObjectHeader
-        self.historize_classification(
-            only_qual=[VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL]
+        classif_id_lists = []
+        classif_score_lists = []
+        # Create pseudo-predictions for the training
+        qry = self.session.query(
+            ObjectHeader.objid,
+            ObjectHeader.classif_id,
         )
+        qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))
+        qry = qry.filter(ObjectHeader.classif_qual.in_(MANUAL_STATES_TEXT))
+        # A bit dirty but fast
+        prev_nb_objs = len(self.object_ids)
+        new_objects_ids = []
+        for rec in qry:
+            new_objects_ids.append(rec["objid"])
+            classif_id_lists.append([rec["classif_id"]])  # Single-elem list
+            classif_score_lists.append([PSEUDO_TRAINING_SCORE])  # Ditto
 
-        # Update objects table
-        obj_upd_qry: Update = oh.__table__.update()
-        obj_upd_qry = obj_upd_qry.where(
-            and_(
-                oh.objid == any_(self.object_ids),
-                (oh.classif_qual.in_([VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL])),
-            )
+        # Classify with new training
+        self.object_ids = new_objects_ids
+        nb_upd, all_changes = self.classify_auto_mult(
+            training, classif_id_lists, classif_score_lists, True
         )
-        obj_upd_qry = obj_upd_qry.values(
-            classif_qual=PREDICTED_CLASSIF_QUAL,
-            classif_who=None,
-            classif_when=None,
-            classif_auto_id=oh.classif_id,
-            classif_auto_score=1,
-            classif_auto_when=text("NOW()"),
-        )
-        nb_objs = self.session.execute(obj_upd_qry).rowcount  # type:ignore  # case1
+        # obj_upd_qry = obj_upd_qry.values(
+        #     classif_qual=PREDICTED_CLASSIF_QUAL,
+        #     classif_who=None,
+        #     classif_when=None,
+        #     classif_auto_id=oh.classif_id,
+        #     classif_auto_score=1,
+        #     classif_auto_when=text("NOW()"),
+        # )
+        # nb_objs = self.session.execute(obj_upd_qry).rowcount  # type:ignore  # case1
         # TODO: Cache upd
         logger.info(
-            " %d out of %d rows reset to predicted", nb_objs, len(self.object_ids)
+            " %d out of %d rows forced to predicted", len(self.object_ids), prev_nb_objs
         )
 
-        self.session.commit()
+        return nb_upd, all_changes
 
     def update_all(self, params: Dict[str, Any]) -> int:
         """
@@ -384,79 +424,38 @@ class EnumeratedObjectSet(MappedTable):
         oh = ObjectHeader
         och = ObjectsClassifHisto
         #
-        # No state: Assume there is nothing to log.
+        # No classif_qual AKA state: Assume there is nothing to log.
         #
-        # 'P' state: both classif_id and classif_auto_id contain the user-visible category,
-        #            except if there was a prediction done after a user-triggered action, i.e. 'V' or 'D',
-        #            as the prediction protects user changes.
-        #            @see auto classification code above.
-        #            This is the case for 20K rows in prod' out of 160M -> negligible
+        # 'P' state: classif_id contains the user-visible category, referenced in the training via predictions.
         #
         # 'V' and 'D' states: classif_id contains the user-chosen category, which can be either the
-        #                     last auto_classif_id, or not if another category was assigned in the UI.
-        #                     There is no specific code for 'accept prediction',
-        #                     but there is some code for 'validate current' (-1 as target_qualif) .
+        #                     last predicted classif_id, or not if another category was assigned in the UI.
+        #                     There is no specific code for 'accept prediction', there is some code convention
+        #                     for 'validate current' (-1 as target_qualif) but it's not visible in DB.
         #
-        manual_states_text = text(
-            "'%s','%s'" % (VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL)
-        )
-        predicted_state = text("'%s'" % PREDICTED_CLASSIF_QUAL)
+
         # What's inserted, both cases, into the history table -- all columns
         ins_columns = [
-            och.objid,
-            och.classif_date,
-            och.classif_type,
-            och.classif_id,
-            och.classif_qual,
-            och.classif_who,
-            och.classif_score,
+            och.objid,  # <- oh.objid
+            och.classif_qual,  # <- oh.classif_qual
+            och.classif_id,  # <- oh.classif_id
+            och.classif_date,  # <- oh.classif_date date of last transition.
+            och.classif_who,  # <- oh.classif_who
+            och.classif_score,  # <- oh.classif_score
         ]
-        # Conventional defaults for nulls
-        classif_when_exp = func.coalesce(
-            oh.classif_when, text(DEFAULT_CLASSIF_HISTORY_DATE)
-        )
-        classif_auto_when_exp = func.coalesce(
-            oh.classif_auto_when, text(DEFAULT_CLASSIF_HISTORY_DATE)
-        )
         # What we want to historize, as a subquery - The current state
         sel_subqry = select(
             [
                 oh.objid,
-                case(
-                    [
-                        (oh.classif_qual.in_(manual_states_text), classif_when_exp),
-                        (oh.classif_qual == predicted_state, classif_auto_when_exp),
-                    ]
-                ),
-                case(
-                    [  # TODO: This seems quite redundant. To see in prod' if by chance it's consistent
-                        (oh.classif_qual.in_(manual_states_text), text("'M'")),
-                        (oh.classif_qual == predicted_state, text("'A'")),
-                    ]
-                ),
-                oh.classif_id,
                 oh.classif_qual,
-                case(
-                    [
-                        (oh.classif_qual.in_(manual_states_text), oh.classif_who),
-                        # No 'who' for Predicted state
-                    ]
-                ),
-                case(
-                    [
-                        # No score for manual states
-                        (
-                            oh.classif_qual == PREDICTED_CLASSIF_QUAL,
-                            oh.classif_auto_score,
-                        ),
-                    ]
-                ),
+                oh.classif_id,
+                oh.classif_date,
+                oh.classif_who,  # Is NULL when 'P' or initial
+                oh.classif_score,  # Is NULL when not 'P'
             ]
-        ).filter(
-            oh.classif_id != None
-        )  # Protect from possible inconsistencies via import
+        )
         if only_qual is not None:
-            # Pick only the required states
+            # Pick only the required states # TODO: Unused, to keep?
             qual_cond = oh.classif_qual.in_(only_qual)
         else:
             # Pick any present state
@@ -465,9 +464,9 @@ class EnumeratedObjectSet(MappedTable):
         # Insert into the log table
         ins_qry: PgInsert = pg_insert(och.__table__)
         ins_qry = ins_qry.from_select(ins_columns, sel_subqry)
+        # TODO: Below not clear nor clean
         ins_qry = ins_qry.on_conflict_do_nothing(constraint="objectsclassifhisto_pkey")
-        # TODO: mypy crashes due to pg_dialect below
-        # logger.info("Histo query: %s", ins_qry.compile(dialect=pg_dialect()))
+        # logger.info("Histo query: %s", ins_qry.compile())
         nb_obj_histos = session.execute(ins_qry).rowcount  # type:ignore  # case1
         return nb_obj_histos
 
@@ -502,10 +501,9 @@ class EnumeratedObjectSet(MappedTable):
         self, from_user_id: Optional[int], but_not_from_user_id: Optional[int]
     ) -> List[HistoricalLastClassif]:
         """
-        Query for last classification history on all objects of self, mixed with present state in order
-        to have restore-able lines.
+        Query for last classification history on all objects of self.
         """
-        # Get the histo entries
+        # Get the historical entries
         subqry = self.session.query(
             ObjectsClassifHisto,
             func.rank()
@@ -518,7 +516,9 @@ class EnumeratedObjectSet(MappedTable):
         if from_user_id:
             subqry = subqry.filter(ObjectsClassifHisto.classif_who == from_user_id)
             # Pick Manual logs from this user
-            subqry = subqry.filter(ObjectsClassifHisto.classif_type == "M")
+            subqry = subqry.filter(
+                ObjectsClassifHisto.classif_qual.in_(MANUAL_STATES_TEXT)
+            )
         if but_not_from_user_id:
             subqry = subqry.filter(
                 ObjectsClassifHisto.classif_who != but_not_from_user_id
@@ -531,23 +531,20 @@ class EnumeratedObjectSet(MappedTable):
         qry = self.session.query(
             ObjectHeader.objid,
             ObjectHeader.classif_id,
-            func.coalesce(
-                subq_alias.c.classif_date, ObjectHeader.classif_auto_when
-            ).label("histo_classif_date"),
-            func.coalesce(
-                subq_alias.c.classif_type.label("histo_classif_type"),
-                NO_HISTO,
+            subq_alias.c.classif_date.label("histo_classif_date"),
+            case(  # Emulate previous value
+                [
+                    (ObjectHeader.classif_qual.in_(MANUAL_STATES_TEXT), "M"),
+                    (ObjectHeader.classif_qual == PREDICTED_STATE_TEXT, "A"),
+                ]
             ).label("histo_classif_type"),
-            func.coalesce(subq_alias.c.classif_id, ObjectHeader.classif_auto_id).label(
-                "histo_classif_id"
-            ),
             func.coalesce(
-                subq_alias.c.classif_qual,  # No classif_qual returned, i.e. no history
-                case(
-                    [(ObjectHeader.classif_auto_id.isnot(None), PREDICTED_CLASSIF_QUAL)]
-                ),
+                subq_alias.c.classif_qual,
+                NO_HISTO,
             ).label("histo_classif_qual"),
+            subq_alias.c.classif_id.label("histo_classif_id"),
             subq_alias.c.classif_who.label("histo_classif_who"),
+            subq_alias.c.classif_score.label("histo_classif_score"),
         )
         qry = qry.join(
             subq_alias,
@@ -555,7 +552,7 @@ class EnumeratedObjectSet(MappedTable):
             isouter=(from_user_id is None),
         )
         if from_user_id is not None:
-            # If taking history from a user, don't apply to the objects he/she classsified
+            # If taking history from a user, don't apply to the objects he/she classified
             # in last already.
             qry = qry.filter(ObjectHeader.classif_who != from_user_id)
             qry = qry.filter(subq_alias.c.rnk == 1)
@@ -578,30 +575,33 @@ class EnumeratedObjectSet(MappedTable):
         :param but_not_from_user_id: If set (!= None), exclude this user from history picking.
         """
         histo = self._get_last_classif_history(from_user_id, but_not_from_user_id)
+        # print("\n".join([str(x) for x in histo]))
         # Bulk update. It's less efficient than a plain update with criteria, but in the future we
-        # might be able to do some cherry picking on the history.
+        # might be able to do some cherry-picking on the history.
         updates = [
             {
                 ObjectHeader.objid.name: an_histo.objid,
+                ObjectHeader.classif_qual.name: an_histo.histo_classif_qual,
                 ObjectHeader.classif_id.name: an_histo.histo_classif_id,
                 ObjectHeader.classif_who.name: an_histo.histo_classif_who,
-                ObjectHeader.classif_when.name: an_histo.histo_classif_date,
-                ObjectHeader.classif_qual.name: an_histo.histo_classif_qual,
+                ObjectHeader.classif_date.name: an_histo.histo_classif_date,
+                ObjectHeader.classif_score.name: an_histo.histo_classif_score,
             }
             for an_histo in histo
-            if an_histo.histo_classif_type != NO_HISTO
+            if an_histo.histo_classif_qual != NO_HISTO
         ]
         updates.extend(
             [
                 {
                     ObjectHeader.objid.name: an_histo.objid,
+                    ObjectHeader.classif_qual.name: None,
                     ObjectHeader.classif_id.name: None,
                     ObjectHeader.classif_who.name: None,
-                    ObjectHeader.classif_when.name: None,
-                    ObjectHeader.classif_qual.name: None,
+                    ObjectHeader.classif_date.name: None,
+                    ObjectHeader.classif_score.name: None,
                 }
                 for an_histo in histo
-                if an_histo.histo_classif_type == NO_HISTO
+                if an_histo.histo_classif_qual == NO_HISTO
             ]
         )
         self.session.bulk_update_mappings(ObjectHeader, updates)
@@ -633,57 +633,71 @@ class EnumeratedObjectSet(MappedTable):
         :returns updated rows and a summary of changes, for MRU and logging.
         """
         # Gather state of classification, for impacted objects, before the change. Keep a lock on rows.
-        present = self._fetch_classifs_and_lock()
+        prev = self._fetch_classifs_and_lock()
 
         # Cook a diff b/w present and wanted values, both for the update of obj_head and preparing the ones on _stat
         # Group the updates as lots of them are identical
         updates: Dict[Tuple[ClassifIDT, str], EnumeratedObjectSet] = {}
         all_changes: OrderedDict[ChangeTupleT, ObjectIDListT] = OrderedDict()
         target_qualif = wanted_qualif
-        # A bit of obsessive optimization
-        classif_id_col = ObjectHeader.classif_id.name
-        classif_auto_id_col = ObjectHeader.classif_auto_id.name
-        classif_qual_col = ObjectHeader.classif_qual.name
-        classif_who_col = ObjectHeader.classif_who.name
-        classif_when_col = ObjectHeader.classif_when.name
-        classif_auto_when_col = ObjectHeader.classif_auto_when.name
-        for obj_id, v in zip(self.object_ids, classif_ids):
-            prev_obj = present[obj_id]
+        # A bit of obsessive optimization, and avoid semantically unbound literal
+        (
+            classif_id_col,
+            classif_qual_col,
+            classif_who_col,
+            classif_when_col,
+            classif_score_col,
+        ) = (
+            ObjectHeader.classif_id.name,
+            ObjectHeader.classif_qual.name,
+            ObjectHeader.classif_who.name,
+            ObjectHeader.classif_date.name,
+            ObjectHeader.classif_score.name,
+        )
+        for obj_id, wanted in zip(self.object_ids, classif_ids):
+            # Present state
+            prev_obj = prev[obj_id]
             # Classification change
             prev_classif_id: Optional[int] = prev_obj["classif_id"]
-            new_classif_id: Optional[int]
-            if v == -1:  # special value from validate all
+            next_classif_id: Optional[int]
+            if wanted == -1:  # special value from "validate as is"
                 # Arrange that no change can happen for this field
-                # Note: prev_classif_id can be None
-                new_classif_id = prev_classif_id
+                # Note: prev_classif_id can be None, e.g. for fresh imports
+                next_classif_id = prev_classif_id
             else:
-                new_classif_id = v
+                next_classif_id = wanted
             # Prevent inconsistency, cannot classify to nothing
-            if new_classif_id is None:
+            if next_classif_id is None:
                 continue
             # Classification quality (state) change
             prev_classif_qual = prev_obj["classif_qual"]
             if wanted_qualif == "=":  # special value for 'keep current qualification'
                 # Arrange that no change can happen for this field
                 target_qualif = prev_classif_qual
+            assert target_qualif in (
+                VALIDATED_CLASSIF_QUAL,
+                DUBIOUS_CLASSIF_QUAL,
+            ), "Can't (re)classify Predicted objects, use prediction function"
             # Operator change
             prev_operator_id: Optional[int] = prev_obj["classif_who"]
             if (
-                prev_classif_id == new_classif_id
+                prev_classif_id == next_classif_id
                 and prev_classif_qual == target_qualif
                 and prev_operator_id == user_id
             ):
                 continue
             # There was at least 1 field change for this object
             an_update = updates.setdefault(
-                (new_classif_id, target_qualif), EnumeratedObjectSet(self.session, [])
+                (next_classif_id, target_qualif),
+                # Below creates a new group if needed
+                EnumeratedObjectSet(self.session, []),
             )
             an_update.add_object(obj_id)
             # Compact changes, grouped by operation
             change_key = (
                 prev_classif_id,
                 prev_classif_qual,
-                new_classif_id,
+                next_classif_id,
                 target_qualif,
             )
             for_this_change = all_changes.setdefault(change_key, [])
@@ -697,27 +711,17 @@ class EnumeratedObjectSet(MappedTable):
 
         # Update of obj_head, grouped by similar operations.
         nb_updated = 0
-        for (new_classif_id, new_wanted_qualif), an_obj_set in updates.items():
+        for (next_classif_id, new_wanted_qualif), an_obj_set in updates.items():
             # Historize the updated rows (can be a lot!)
             an_obj_set.historize_classification(only_qual=None)
             row_upd = {
-                classif_id_col: new_classif_id,
+                classif_id_col: next_classif_id,
                 classif_qual_col: new_wanted_qualif,
+                classif_when_col: log_timestamp,
+                classif_who_col: user_id,
+                classif_score_col: None,
             }
-            if new_wanted_qualif in (VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL):
-                row_upd.update(
-                    {classif_who_col: user_id, classif_when_col: log_timestamp}
-                )
-            else:
-                row_upd.update(
-                    {
-                        classif_auto_id_col: new_classif_id,
-                        classif_auto_when_col: log_timestamp,
-                        classif_who_col: None,
-                        classif_when_col: None,
-                    }
-                )
-            # Do the update itsef
+            # Do the update itself
             nb_updated += an_obj_set.update_all(row_upd)
 
         logger.info("%d rows updated in %d queries", nb_updated, len(updates))
@@ -725,14 +729,28 @@ class EnumeratedObjectSet(MappedTable):
         # Return statuses
         return nb_updated, all_changes
 
-    def classify_auto(
-        self, classif_ids: ClassifIDListT, scores: List[float], keep_logs: bool
+    MAX_PREDICTIONS_PER_OBJECT = 3  # How many (classif_id, score) we keep per object
+    OVERRIDEN_BY_PREDICTION = {
+        None,
+        PREDICTED_CLASSIF_QUAL,
+    }  # Only these states will be overriden
+
+    def classify_auto_mult(
+        self,
+        training: TrainingBO,
+        classif_id_lists: List[ClassifIDListT],
+        classif_score_lists: List[ClassifScoresListT],
+        force: bool = False,
     ) -> Tuple[int, ObjectSetClassifChangesT]:
         """
-        Set automatic classifications in self.
-        :param classif_ids: One category id for each of the object ids in self.
-        :param scores: One confidence score for each object from automatic classification algorithm.
-        :param keep_logs: Self-explained
+        Set automatic classifications in self, keeping a history of previous objects' state.
+        ⚠️ There is a strong assumption that below lists are in self.object_ids order ⚠️
+        :param training: the operation holder for all predictions.
+        :param classif_id_lists: all predicted category ids for each of the object ids in self,
+                                from automatic classification algorithm.
+        :param classif_score_lists: all predicted confidence scores for each object,
+                                from automatic classification algorithm.
+        :param force: do not preserve protected states.
         :returns updated rows and a summary of changes, for stats.
         """
         # Gather state of classification, for impacted objects, before the change. Keep a lock on rows.
@@ -741,94 +759,196 @@ class EnumeratedObjectSet(MappedTable):
         # Cook a diff b/w present and wanted values, both for the update of obj_head and preparing the ones on _stat
         # updates: Dict[Tuple, EnumeratedObjectSet] = {}
         all_changes: ObjectSetClassifChangesT = OrderedDict()
-        # A bit of obsessive optimization
-        classif_auto_id_col = ObjectHeader.classif_auto_id.name
-        classif_auto_score_col = ObjectHeader.classif_auto_score.name
-        classif_id_col = ObjectHeader.classif_id.name
-        classif_qual_col = ObjectHeader.classif_qual.name
-        overriden_by_prediction = {None, PREDICTED_CLASSIF_QUAL}
-        full_updates = []
-        partial_updates = []
-        objid_param = "_objid"
-        for obj_id, classif, score in zip(self.object_ids, classif_ids, scores):
+        # A bit of obsessive optimization, and avoid semantically unbound literal
+        (
+            objid_col,
+            classif_id_col,
+            classif_qual_col,
+            classif_who_col,
+            classif_date_col,
+            classif_score_col,
+        ) = (
+            ObjectHeader.objid.name,
+            ObjectHeader.classif_id.name,
+            ObjectHeader.classif_qual.name,
+            ObjectHeader.classif_who.name,
+            ObjectHeader.classif_date.name,
+            ObjectHeader.classif_score.name,
+        )
+        updates: List[Dict[str, Any]] = []
+
+        preds_by_object = self.store_predictions(
+            training.training_id,
+            classif_id_lists,
+            classif_score_lists,
+        )
+
+        # Prepare updates in the obj_head table
+        for obj_id, preds in preds_by_object.items():
+            # Present state
             prev_obj = prev[obj_id]
             prev_classif_id: Optional[int] = prev_obj["classif_id"]
             prev_classif_qual = prev_obj["classif_qual"]
-            # Whatever, set the auto_* fields, on the object
+            # Wanted possible classifications
+            preds.sort(key=lambda t: -t.score)
+            # Just override what would not spoil human work, except if explicitly required
+            if prev_classif_qual not in self.OVERRIDEN_BY_PREDICTION and not force:
+                continue
+            # Not manually modified, go to Predicted state and set prediction as classification
+            next_classif_id = preds[
+                0
+            ].classif  # Highest score TODO: remove discarded ones
+            next_score = preds[0].score
             an_update: Dict[str, Any] = {
-                objid_param: obj_id,
-                classif_auto_id_col: classif,
-                classif_auto_score_col: score,
+                "_" + objid_col: obj_id,
+                classif_qual_col: PREDICTED_CLASSIF_QUAL,
+                classif_id_col: next_classif_id,
+                classif_who_col: None,
+                classif_date_col: training.training_start,
+                classif_score_col: next_score,
             }
-            if prev_classif_qual in overriden_by_prediction:
-                # If not manually modified, go to Predicted state and set prediction as classification
-                an_update[classif_id_col] = classif
-                an_update[classif_qual_col] = PREDICTED_CLASSIF_QUAL
-                full_updates.append(an_update)
-                # Prepare changes, for stats update, grouped by operation
-                change_key = (
-                    prev_classif_id,
-                    prev_classif_qual,
-                    classif,
-                    PREDICTED_CLASSIF_QUAL,
-                )
-                for_this_change = all_changes.setdefault(change_key, [])
-                for_this_change.append(obj_id)
-            else:
-                # Just store prediction, no change on user-visible data
-                partial_updates.append(an_update)
+            updates.append(an_update)
+            # Prepare changes, for stats update, grouped by operation
+            change_key = (
+                prev_classif_id,
+                prev_classif_qual,
+                next_classif_id,
+                PREDICTED_CLASSIF_QUAL,
+            )
+            for_this_change = all_changes.setdefault(change_key, [])
+            for_this_change.append(obj_id)
 
-        # Historize (auto)
-        if keep_logs:
-            self.historize_classification(only_qual=None)
+        # Historize
+        changed_object_ids = [
+            an_id for chg_ids in all_changes.values() for an_id in chg_ids
+        ]
+        EnumeratedObjectSet(self.session, changed_object_ids).historize_classification(
+            only_qual=None
+        )
 
         # Bulk (or sort of) update of obj_head
-        sql_now = text("now()")
         obj_upd_qry: Update = ObjectHeader.__table__.update()
-        obj_upd_qry = obj_upd_qry.where(ObjectHeader.objid == bindparam(objid_param))
-        if len(full_updates) > 0:
+        obj_upd_qry = obj_upd_qry.where(
+            ObjectHeader.objid == bindparam("_" + objid_col)
+        )
+        if len(updates) > 0:
             full_upd_qry = obj_upd_qry.values(
-                classif_id=bindparam(classif_id_col),
                 classif_qual=bindparam(classif_qual_col),
-                classif_auto_id=bindparam(classif_auto_id_col),
-                classif_auto_score=bindparam(classif_auto_score_col),
-                classif_auto_when=sql_now,
+                classif_id=bindparam(classif_id_col),
+                classif_who=bindparam(classif_who_col),
+                classif_date=bindparam(classif_date_col),
+                classif_score=bindparam(classif_score_col),
             )
-            self.session.execute(full_upd_qry, full_updates)
+            self.session.execute(full_upd_qry, updates)
         # Partial updates
-        if len(partial_updates) > 0:
-            part_upd_qry = obj_upd_qry.values(
-                classif_auto_id=bindparam(classif_auto_id_col),
-                classif_auto_score=bindparam(classif_auto_score_col),
-                classif_auto_when=sql_now,
-            )
-            self.session.execute(part_upd_qry, partial_updates)
+        # if len(partial_updates) > 0:
+        #     part_upd_qry = obj_upd_qry.values(
+        #         pred_id=bindparam(pred_id_col),
+        #         classif_auto_when=sql_now,
+        #     )
+        #     self.session.execute(part_upd_qry, partial_updates)
+
         # TODO: Cache upd
         logger.info(
-            "_auto: %d full updates and %d partial updates ",
-            len(full_updates),
-            len(partial_updates),
+            "_auto: %d updates ",
+            len(updates),
+            # len(partial_updates),
         )
-        nb_updated = len(full_updates) + len(partial_updates)
-
+        nb_updated = len(updates)  # + len(partial_updates)
+        training.advance()
         # Return statuses
         return nb_updated, all_changes
 
-    def _fetch_classifs_and_lock(self) -> Dict[int, Row]:
+    def store_predictions(
+        self,
+        training_id: TrainingIDT,
+        classif_id_lists: List[ClassifIDListT],
+        classif_score_lists: List[ClassifScoresListT],
+    ) -> Dict[ClassifIDT, List[ClassifScore]]:
+        (
+            pred_training_id_col,
+            pred_object_id_col,
+            pred_classif_id_col,
+            pred_score_col,
+        ) = (
+            Prediction.training_id.name,
+            Prediction.object_id.name,
+            Prediction.classif_id.name,
+            Prediction.score.name,
+        )
+        # Bulk insert into the Predictions table, of max_preds (classif_id, score) per object
+        max_preds = self.MAX_PREDICTIONS_PER_OBJECT
+        preds_for_bulk = []
+        preds_by_object: Dict[ObjectIDT, List[ClassifScore]] = {}
+        # Historize if needed by moving Prediction to _histo table
+        # Note: A prediction can be _partly_ historized
+        here_sel = select(
+            Prediction.training_id,
+            Prediction.object_id,
+            Prediction.classif_id,
+            Prediction.score,
+        ).where(Prediction.object_id == any_(self.object_ids))
+        histo_qry = PredictionHisto.__table__.insert().from_select(
+            [
+                pred_training_id_col,
+                pred_object_id_col,
+                pred_classif_id_col,
+                pred_score_col,
+            ],
+            here_sel,
+        )
+        self.session.execute(histo_qry)
+        del_qry: Delete = Prediction.__table__.delete()
+        del_qry = del_qry.where(Prediction.object_id == any_(self.object_ids))
+        self.session.execute(del_qry)
+        for obj_id, list_classifs, list_scores in zip(
+            self.object_ids, classif_id_lists, classif_score_lists
+        ):
+            preds_for_object = [
+                ClassifScore(classif, score)
+                for classif, score in zip(
+                    list_classifs[:max_preds], list_scores[:max_preds]
+                )
+            ]
+            preds_by_object[obj_id] = preds_for_object
+            for pred_classif, pred_score in preds_for_object:
+                preds_for_bulk.append(
+                    {
+                        pred_training_id_col: training_id,
+                        pred_object_id_col: obj_id,
+                        pred_classif_id_col: pred_classif,
+                        pred_score_col: pred_score,
+                    }
+                )
+        self.session.bulk_insert_mappings(Prediction, preds_for_bulk)
+        return preds_by_object
+
+    def get_prediction_infos(self) -> List[PredictionInfoT]:
         """
-            Fetch, and DB lock, self's objects
-        :return:
+        Return the predictions, per object in decreasing score.
+        """
+        qry = select(Prediction.object_id, Prediction.classif_id, Prediction.score)
+        qry = qry.join(ObjectHeader)
+        qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))
+        qry = qry.order_by(Prediction.object_id, Prediction.score.desc())
+        with CodeTimer("Preds for %d objs: " % len(self.object_ids), logger):
+            return [
+                (objid, classif_id, score)
+                for (objid, classif_id, score) in self.session.execute(qry)
+            ]
+
+    def _fetch_classifs_and_lock(self) -> Dict[ObjectIDT, Row]:
+        """
+        Fetch, and DB lock, self's objects
         """
         qry = select(
             [
                 ObjectHeader.objid,
-                ObjectHeader.classif_auto_id,
-                ObjectHeader.classif_auto_when,
-                ObjectHeader.classif_auto_score,
-                ObjectHeader.classif_id,
                 ObjectHeader.classif_qual,
+                ObjectHeader.classif_id,
                 ObjectHeader.classif_who,
-                ObjectHeader.classif_when,
+                ObjectHeader.classif_date,
+                ObjectHeader.classif_score,
             ]
         ).with_for_update(key_share=True)
         qry = qry.where(ObjectHeader.objid == any_(self.object_ids))
@@ -843,7 +963,7 @@ class ObjectSetFilter(object):
     A filter, inside an object set.
     """
 
-    TO_COL: Final = {"score": ObjectHeader.classif_auto_score.name}
+    COL_IN_FREE_NUM: Final = {"score": ObjectHeader.classif_score.name}
     TAXO_KEYS: Final = ["taxo", "taxochild"]
 
     def __init__(self, session: Session, filters: ProjectFiltersDict):
@@ -1084,16 +1204,14 @@ class ObjectSetFilter(object):
                 params["totime"] = self.to_time
 
         if self.validated_from:
-            if self.status_filter == "PVD":
-                # Intepret the date as a 'changed_from' filter
-                where_clause *= "COALESCE(obh.classif_when, obh.classif_auto_when) >= TO_TIMESTAMP(:validfromdate,'YYYY-MM-DD HH24:MI')"
-            else:
-                where_clause *= "obh.classif_when >= TO_TIMESTAMP(:validfromdate,'YYYY-MM-DD HH24:MI')"
+            where_clause *= (  # TODO: not 100% accurate
+                "obh.classif_date >= TO_TIMESTAMP(:validfromdate,'YYYY-MM-DD HH24:MI')"
+            )
             params["validfromdate"] = self.validated_from
 
         if self.validated_to:
             where_clause *= (
-                "obh.classif_when <= TO_TIMESTAMP(:validtodate,'YYYY-MM-DD HH24:MI')"
+                "obh.classif_date <= TO_TIMESTAMP(:validtodate,'YYYY-MM-DD HH24:MI')"
             )
             params["validtodate"] = self.validated_to
 
@@ -1113,7 +1231,9 @@ class ObjectSetFilter(object):
                 col_ref = ("obf" if is_split else "obh") + "." + real_col
                 where_clause *= col_ref + comp_op + ":freenumbnd"
             except ValueError:
-                criteria_col = self.TO_COL.get(self.free_num[1:], "?")
+                # For some (probably) historical reason, Score is part of free_cols in UI
+                # Assume it's the current prediction which is asked for
+                criteria_col = self.COL_IN_FREE_NUM.get(self.free_num[1:], "?")
                 where_clause *= "obh." + criteria_col + comp_op + ":freenumbnd"
             params["freenumbnd"] = bound
 

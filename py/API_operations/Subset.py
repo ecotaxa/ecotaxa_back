@@ -3,6 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple, Dict, Set, Iterable
 
@@ -13,11 +14,17 @@ from BO.ObjectSet import DescribedObjectSet, EnumeratedObjectSet, ObjectIDListT
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from BO.TSVFile import TSVFile
+from BO.Training import TrainingBOProvider
 from BO.helpers.ImportHelpers import ImportHow
 from DB.Acquisition import Acquisition
 from DB.CNNFeature import ObjectCNNFeature
 from DB.Image import Image
-from DB.Object import ObjectHeader, ObjectFields, ObjectsClassifHisto
+from DB.Object import (
+    ObjectHeader,
+    ObjectFields,
+    ObjectsClassifHisto,
+    PREDICTED_CLASSIF_QUAL,
+)
 from DB.Process import Process
 from DB.Project import Project
 from DB.Sample import Sample
@@ -136,7 +143,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             custom_mapping=ProjectMapping(),
             skip_object_duplicates=False,
             loaded_files=[],
-            user_id=self._get_owner_id()
+            user_id=self._get_owner_id(),
         )
         # Get parent (enclosing) Sample, Acquisition. There should be 0 in this context as the project is new.
         (
@@ -199,6 +206,10 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         # Bean counting init
         nb_objects = 0
         total_objects = len(self.to_clone)
+        training_provider = TrainingBOProvider(
+            self.session, import_how.user_id, "Subset", datetime.now()
+        )
+
         # Pick chunks of object ids
         for a_chunk in self.to_clone.get_objectid_chunks(self.CHUNK_SIZE):
             # Fetch them using SQLAlchemy
@@ -211,7 +222,9 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
                 db_histo_dict.setdefault(an_histo.objid, list()).append(an_histo)
             # Send each 'line'
             for a_db_tuple in db_tuples:
-                self._send_to_writer(import_how, writer, a_db_tuple, db_histo_dict)
+                self._send_to_writer(
+                    import_how, writer, a_db_tuple, db_histo_dict, training_provider
+                )
             # Bean counting and reporting
             nb_objects += len(a_chunk)
             # Save
@@ -227,6 +240,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         writer: DBWriter,
         db_tuple: DBObjectTupleT,
         db_histo: Dict[int, List[ObjectsClassifHisto]],
+        training_provider: TrainingBOProvider,
     ) -> None:
         """
             Send a set of tuples from DB to DB
@@ -273,8 +287,10 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             Process.__tablename__: process,
         }
         TSVFile.add_parent_objects(import_how, self.session, obj, dict_of_parents)
-        # Propagate last human operator on the object
+        # Propagate last human operator on the object & classif_id which were wiped out during bean construction
+        # as they are foreign keys
         obj.classif_who = obj_orm.classif_who
+        obj.classif_id = obj_orm.classif_id
         # Write object and children
         new_records = TSVFile.create_or_link_slaves(
             how=import_how,
@@ -285,7 +301,19 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             image_to_write=image,
         )
         source_imgid = image.imgid if image is not None else None
-        writer.add_db_entities(obj, fields, image, new_records)
+        prediction_to_write = None
+        if obj.classif_qual == PREDICTED_CLASSIF_QUAL:
+            # Need to store a prediction, limit to current one.
+            training = training_provider.provide()
+            prediction_to_write = Bean(
+                {
+                    "training_id": training.training.training_id,
+                    "classif_id": obj.classif_id,
+                    "score": obj.classif_score,
+                }
+            )
+            training.advance()
+        writer.add_db_entities(obj, fields, image, prediction_to_write, new_records)
         # Keep track of existing objects
         if new_records > 1:  # TODO: This is a cumbersome way of stating "new object",
             # as an object is obj_head + obj_fields i.e. 2 records
