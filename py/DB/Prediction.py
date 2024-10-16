@@ -29,6 +29,10 @@ class ClassifScore(NamedTuple):
 # pg_table_size: 13851295744 of 230M lines using (training_id,object_id,classif_id,score) -> 60 b/tuple
 # pg_table_size: 11998306304 of 230M lines using (object_id,training_id,classif_id,score) -> 52 b/tuple
 class Prediction(Model):
+    """
+    A Prediction is associated with an object iif the object is in 'P' state.
+    """
+
     __tablename__ = "prediction"
 
     object_id: int = Column(
@@ -56,6 +60,10 @@ Index("is_prediction_training", Prediction.__table__.c.training_id)
 
 
 class PredictionHisto(Model):
+    """
+    A PredictionHisto is associated with an object iif the object _ever was_ in 'P' state.
+    """
+
     __tablename__ = "prediction_histo"
 
     object_id: int = Column(
@@ -77,3 +85,9 @@ class PredictionHisto(Model):
 
     # Define the 'normal' PK, from more general to less general, we had to reorder for space
     __table_args__ = (PrimaryKeyConstraint("training_id", "object_id", "classif_id"),)
+
+
+Index(  # For object deletion FK check
+    "is_prediction_histo_object",
+    PredictionHisto.__table__.c.object_id,
+)

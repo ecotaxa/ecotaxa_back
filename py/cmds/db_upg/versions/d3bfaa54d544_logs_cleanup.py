@@ -195,7 +195,7 @@ def upgrade():
     op.execute(
         """
     -- Remove consecutive predictions in history
-    -- 1200M rows
+    -- 1160M rows
     with curr_and_next as (select objid, classif_date, classif_qual,
                                   lead(classif_qual) over (partition by objid order by classif_date) as next_qual
                              from objectsclassifhisto och),
@@ -205,13 +205,21 @@ def upgrade():
     delete from objectsclassifhisto och
         using both_are_p
      where och.objid = both_are_p.objid
-       and och.classif_date = both_are_p.classif_date             
+       and och.classif_date = both_are_p.classif_date                  
            """
     )
+
+    with op.get_context().autocommit_block():
+        op.execute(
+            """
+        vacuum verbose analyze objectsclassifhisto
+        """
+        )
 
     op.execute(
         """
     -- Enforce the rule above "not 2 consecutive predictions". Current object is Predicted, and last history as well -> delete histo
+    -- 129M rows
     create temp table pred_in_last as 
         (select p_and_last.objid, p_and_last.classif_date
            from (select objid, classif_date,
@@ -222,10 +230,9 @@ def upgrade():
                      on obh.objid = p_and_last.objid
                         and obh.classif_qual = 'P'
                         and p_and_last.next_qual is null);
+    analyze pred_in_last;
     delete from objectsclassifhisto och
-        using pred_in_last
-     where och.objid = pred_in_last.objid
-       and och.classif_date = pred_in_last.classif_date;
+     where (och.objid, och.classif_date) in (select objid, classif_date from pred_in_last);
     drop table pred_in_last
     """
     )
@@ -233,6 +240,13 @@ def upgrade():
     op.create_foreign_key(None, "obj_head", "taxonomy", ["classif_id"], ["id"])
     # This one will be dropped with its column
     op.create_foreign_key(None, "obj_head", "taxonomy", ["classif_auto_id"], ["id"])
+
+    with op.get_context().autocommit_block():
+        op.execute(
+            """
+        vacuum full verbose objectsclassifhisto
+        """
+        )
 
     # FK is now consistent
     op.create_foreign_key(
@@ -244,17 +258,15 @@ def upgrade():
         ondelete="CASCADE",
     )
 
-    with op.get_context().autocommit_block():
-        op.execute(
-            """
-        ALTER TABLE ONLY public.objectsclassifhisto
-            ADD CONSTRAINT objectsclassifhisto_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES public.taxonomy (id) ON DELETE CASCADE,
-            ADD CONSTRAINT objectsclassifhisto_objid_fkey FOREIGN KEY (objid) REFERENCES public.obj_head (objid) ON DELETE CASCADE;
-        vacuum full verbose objectsclassifhisto;
-        ALTER TABLE obj_head SET (autovacuum_enabled = on);
-        ALTER TABLE objectsclassifhisto SET (autovacuum_enabled = on)
+    op.execute(
         """
-        )
+    ALTER TABLE ONLY public.objectsclassifhisto
+        ADD CONSTRAINT objectsclassifhisto_classif_who_fkey FOREIGN KEY (classif_who) REFERENCES public.users (id),
+        ADD CONSTRAINT objectsclassifhisto_objid_fkey FOREIGN KEY (objid) REFERENCES public.obj_head (objid) ON DELETE CASCADE;
+    ALTER TABLE obj_head SET (autovacuum_enabled = on);
+    ALTER TABLE objectsclassifhisto SET (autovacuum_enabled = on)
+    """
+    )
 
 
 # ### end Alembic commands ###

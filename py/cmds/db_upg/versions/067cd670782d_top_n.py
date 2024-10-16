@@ -61,6 +61,9 @@ def upgrade():
         ),
         sa.PrimaryKeyConstraint("object_id", "classif_id"),
     )
+    op.create_index(
+        "is_prediction_training", "prediction", ["training_id"], unique=False
+    )
 
     op.create_table(
         "prediction_histo",
@@ -74,6 +77,9 @@ def upgrade():
             ["training_id"], ["training.training_id"], ondelete="CASCADE"
         ),
         sa.PrimaryKeyConstraint("training_id", "object_id", "classif_id"),
+    )
+    op.create_index(
+        "is_prediction_histo_object", "prediction_histo", ["object_id"], unique=False
     )
 
     # op.create_index('is_phy_image_file', 'image_file', ['digest_type', 'digest'], unique=False)
@@ -304,14 +310,7 @@ $$
     # TODO: Check nightly job verifications are OK
     # TODO: Check values are == b/w object/histo and their freshest predictions
 
-    # Check predictions are not in both history and last one, following should return no row.
-    # select * from prediction_histo prh
-    # join prediction prd on prh.training_id = prd.training_id
-    #                 and prh.object_id = prd.object_id
-    #                 and prh.classif_id = prd.classif_id
-    # order by prh.object_id;
-
-    # Check that all logs are after present object:
+    # Check that all logs are before present object:
     # select distinct obh.objid, obh.acquisid
     #       from obj_head obh
     #       join objectsclassifhisto och
