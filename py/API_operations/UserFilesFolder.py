@@ -41,6 +41,10 @@ class UserFilesFolderService(Service):
             detail=[NOT_AUTHORIZED],
         )
 
+    @staticmethod
+    def _sanitize_file_name(filename: str) -> str:
+        return ospath.basename(filename.rstrip(ospath.sep))
+
     async def store(
         self,
         current_user_id: UserIDT,
@@ -52,7 +56,7 @@ class UserFilesFolderService(Service):
         TODO: Quotas
         """
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
-        file_name = file.filename
+        file_name = self._sanitize_file_name(file.filename)
         assert ".." not in file_name, "Forbidden"
         if path is not None:
             path = self._can_use_dir_throw(path)
