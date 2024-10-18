@@ -26,7 +26,7 @@ from PIL import Image as PIL_Image  # type: ignore
 import BO.Mappings as GlobalMapping
 from BO.Mappings import ProjectMapping, ParentTableClassT
 from BO.SpaceTime import compute_sun_position, USED_FIELDS_FOR_SUNPOS
-from BO.Training import TrainingBOProvider
+from BO.Training import TrainingBOProvider, PredictionBO
 from BO.helpers.ImportHelpers import (
     ImportHow,
     ImportWhere,
@@ -814,21 +814,21 @@ class TSVFile(object):
                                 # Need to store a new prediction
                                 assert training_provider is not None
                                 training = training_provider.provide()
-                                EnumeratedObjectSet(session, [objid]).store_predictions(
+                                PredictionBO(
+                                    session, [objid]
+                                ).historize_predictions().store_predictions(
                                     training.training.training_id,
                                     [[object_head_to_write["classif_id"]]],
-                                    [
-                                        [an_upd.classif_score]
-                                    ],  # TODO: Quite inefficient but simple
-                                )
+                                    [[an_upd.classif_score]],
+                                )  # TODO: Quite inefficient but simple
                                 training.advance()
                             # Care for classification historisation
                             if TSVFile.prepare_classif_update(obj, an_upd):
-                                EnumeratedObjectSet.historize_classification_for(
-                                    session,
-                                    [objid],
-                                    only_qual=None,  # TODO: Quite inefficient but simple
-                                )
+                                EnumeratedObjectSet(
+                                    session, [objid]
+                                ).historize_classification(
+                                    only_qual=None,
+                                )  # TODO: Quite inefficient but simple
                         # Eventually refresh sun position
                         if an_upd.nb_fields_from(USED_FIELDS_FOR_SUNPOS) > 0:
                             # Give the bean enough data for computation

@@ -304,7 +304,7 @@ where classif_qual is null and classif_id is null and classif_score is not null"
             """,
     ),
     ConsistencyCheckAndFix(
-        "We must know which prediction a predicted object comes from, in order to move to 'next'"
+        "We must know which prediction a predicted object comes from, in order to move to 'next' "
         "when the prediction is discarded.",
         """select obh.*
     from obj_head obh
@@ -322,11 +322,55 @@ where classif_qual is null and classif_id is null and classif_score is not null"
             """,
     ),
     ConsistencyCheckAndFix(
-        "Trainings must be consistent",
+        "We must know which training a historical prediction comes from, in order to restore it",
+        """select och.*
+    from objectsclassifhisto och
+    join prediction_histo prh 
+       on prh.object_id = och.objid 
+       and prh.classif_id = och.classif_id
+       and prh.score = och.classif_score
+    left join training trn
+       on trn.training_id = prh.training_id
+    where och.classif_qual = 'P'
+      and trn.training_start is null
+      limit 100
+        """,
+        [],
+        """
+            -- find root cause
+            """,
+    ),
+    ConsistencyCheckAndFix(
+        "An object cannot be in a prediction and historical same prediction",
+        """select * from prediction_histo prh
+     join prediction prd on prh.training_id = prd.training_id
+                     and prh.object_id = prd.object_id
+      limit 100
+        """,
+        [],
+        """
+            -- find root cause
+            """,
+    ),
+    ConsistencyCheckAndFix(
+        "Trainings must be consistent in time",
         """select trn.*
     from training trn
     where trn.training_end < trn.training_start
       limit 100
+        """,
+        [],
+        """
+            -- find root cause
+            """,
+    ),
+    ConsistencyCheckAndFix(
+        "Trainings must not overlap for the same project",
+        """select * from training trn
+             where exists(select 1 from training trn2 where trn2.projid = trn.projid and trn.training_id != trn2.training_id
+                                                  and (trn2.training_start between trn.training_start and trn.training_end
+                                                      or trn2.training_end between trn.training_start and trn.training_end))
+            limit 100
         """,
         [],
         """

@@ -39,7 +39,7 @@ class RandomValueVirtualColumn(VirtualColumn):
 
 class ClassifWhenVirtualColumn(VirtualColumn):
     name = "classif_when"
-    sql = "(CASE WHEN obh.classif_qual in ('V','D') THEN obh.classif_date END)"
+    sql = "CASE WHEN obh.classif_qual in ('V','D') THEN obh.classif_date END"
 
     @staticmethod
     def filler(header: ObjectHeader):
@@ -52,20 +52,16 @@ class ClassifWhenVirtualColumn(VirtualColumn):
 
 class ClassifAutoScoreVirtualColumn(VirtualColumn):
     name = "classif_auto_score"
-    sql = "(CASE WHEN obh.classif_qual='P' THEN obh.classif_score END)"
+    sql = "obh.classif_score"
 
     @staticmethod
     def filler(header: ObjectHeader):
-        return (
-            header.classif_score
-            if header.classif_qual == PREDICTED_CLASSIF_QUAL
-            else None
-        )
+        return header.classif_score
 
 
 class ClassifAutoWhenVirtualColumn(VirtualColumn):
     name = "classif_auto_when"
-    sql = "(CASE WHEN obh.classif_qual='P' THEN obh.classif_date END)"
+    sql = "CASE WHEN obh.classif_qual='P' THEN obh.classif_date END"
 
     @staticmethod
     def filler(header: ObjectHeader):
@@ -78,7 +74,7 @@ class ClassifAutoWhenVirtualColumn(VirtualColumn):
 
 class ClassifAutoIDVirtualColumn(VirtualColumn):
     name = "classif_auto_id"
-    sql = "(CASE WHEN obh.classif_qual='P' THEN obh.classif_id END)"
+    sql = "CASE WHEN obh.classif_qual='P' THEN obh.classif_id END"
 
     @staticmethod
     def filler(header: ObjectHeader):

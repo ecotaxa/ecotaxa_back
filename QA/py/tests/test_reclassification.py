@@ -11,7 +11,7 @@ from tests.test_classification import (
     query_all_objects,
     get_stats,
     entomobryomorpha_id,
-    classif_history,
+    get_classif_history,
     classify_all,
     validate_all,
 )
@@ -81,7 +81,7 @@ def test_reclassif(database, fastapi, caplog):
 
     # Ensure a proper history appeared
     for an_obj in obj_ids:
-        classif2 = classif_history(fastapi, an_obj)
+        classif2 = get_classif_history(fastapi, an_obj)
         assert classif2 is not None
         # Date is not predictable
         classif2[0]["classif_date"] = "hopefully just now"

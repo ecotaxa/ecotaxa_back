@@ -266,6 +266,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             assert bean  # mypy
             bean.classif_date = a_histo.classif_date  # Reconstitute PK
             bean.classif_who = a_histo.classif_who  # Another erased key
+            bean.classif_id = a_histo.classif_id  # Yet another erased key
             histo.append(bean)
         # Transform all to key-less beans so they can be absorbed by DBWriter
         obj, fields, cnn_features, image, sample, acquisition, process = (

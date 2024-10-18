@@ -29,7 +29,7 @@ from BO.Project import ProjectBO, ChangeTypeT
 from BO.ReClassifyLog import ReClassificationBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
-from BO.Training import TrainingBO
+from BO.Training import TrainingBO, PredictionBO
 from BO.User import UserIDT
 from DB.Image import IMAGE_VIRTUAL_COLUMNS
 from DB.Object import (
@@ -226,7 +226,7 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
         prj_ids = obj_set.get_projects_ids()
         for a_prj_id in prj_ids:
             RightsBO.user_wants(self.session, current_user_id, Action.READ, a_prj_id)
-        infos = obj_set.get_prediction_infos()
+        infos = PredictionBO(self.session, obj_set.object_ids).get_prediction_infos()
         return PredictionInfoRsp(result=infos)
 
     def parents_by_id(
@@ -296,21 +296,16 @@ SELECT COUNT(*) nbr"""
         if only_total:
             sql += """, NULL nbr_v, NULL nbr_d, NULL nbr_p"""
         else:
-            # TODO, cleaner: SELECT COUNT(*) nbr,
-            #            COUNT(*) FILTER (WHERE obh.classif_qual = 'V') nbr_v,
-            # ...
-            sql += (
-                """, 
-           COUNT(CASE WHEN obh.classif_qual = '"""
-                + VALIDATED_CLASSIF_QUAL
-                + """' THEN 1 END) nbr_v,
-           COUNT(CASE WHEN obh.classif_qual = '"""
-                + DUBIOUS_CLASSIF_QUAL
-                + """' THEN 1 END) nbr_d, 
-           COUNT(CASE WHEN obh.classif_qual = '"""
-                + PREDICTED_CLASSIF_QUAL
-                + """' THEN 1 END) nbr_p"""
-            )
+            if False:
+                sql += f""",
+                COUNT(*) FILTER (WHERE obh.classif_qual = '{VALIDATED_CLASSIF_QUAL}') nbr_v,
+                COUNT(*) FILTER (WHERE obh.classif_qual = '{DUBIOUS_CLASSIF_QUAL}') nbr_d,
+                COUNT(*) FILTER (WHERE obh.classif_qual = '{PREDICTED_CLASSIF_QUAL}') nbr_p"""
+            else:
+                sql += f""", 
+                COUNT(CASE WHEN obh.classif_qual = '{VALIDATED_CLASSIF_QUAL}' THEN 1 END) nbr_v,
+                COUNT(CASE WHEN obh.classif_qual = '{DUBIOUS_CLASSIF_QUAL}' THEN 1 END) nbr_d, 
+                COUNT(CASE WHEN obh.classif_qual = '{PREDICTED_CLASSIF_QUAL}' THEN 1 END) nbr_p"""
         sql += (
             """
       FROM """

@@ -114,7 +114,6 @@ class DBWriter(object):
             object_fields_to_write.acquis_id = object_head_to_write.acquisid
             if prediction_to_write:
                 prediction_to_write.object_id = object_head_to_write.objid
-                object_head_to_write.training_id = prediction_to_write.training_id
         if new_records >= 1 and image_to_write:
             # There is (potentially just) a new image
             image_to_write.imgid = self.img_seq_cache.next()

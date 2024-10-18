@@ -14,8 +14,10 @@ OBJECTS_DEF = text(
     """select sam.projid, sam.sampleid, obh.objid, obh.latitude, obh.longitude,
               obh.objdate, obh.objtime, obh.depth_min, obh.depth_max,
               obh.classif_id, obh.classif_qual, obh.classif_who, 
-              obh.classif_date as classif_when, -- TODO: Not 100% accurate
-              -- obh.classif_auto_id, obh.classif_auto_score, obh.classif_auto_when,
+              CASE WHEN obh.classif_qual in ('V', 'D') THEN obh.classif_date END AS classif_when,
+              obh.classif_score AS classif_auto_score,
+              CASE WHEN obh.classif_qual = 'P' THEN obh.classif_date END AS classif_auto_when,
+              CASE WHEN obh.classif_qual = 'P' THEN obh.classif_id END AS classif_auto_id,
               NULL::integer AS classif_crossvalidation_id,
               obh.complement_info,
               NULL::double precision AS similarity,

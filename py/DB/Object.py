@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import Dict, Set, Iterable, TYPE_CHECKING
+from typing import Dict, Set, Iterable, TYPE_CHECKING, List
 
 # noinspection PyPackageRequirements
 from sqlalchemy import Index, Column, ForeignKey, Sequence, Integer  # fmt:skip
@@ -36,6 +36,8 @@ from .helpers.ORM import Model
 
 # Typings
 ObjectIDT = int
+ObjectIDListT = List[int]
+
 if TYPE_CHECKING:
     pass
     # from .Image import Image
@@ -203,9 +205,7 @@ class ObjectFields(Model):
 
 
 Index(  # We CLUSTER using this one, object ids tend to be consecutively read
-    "obj_field_acquisid_objfid_idx",
-    ObjectFields.__table__.c.acquis_id,
-    ObjectFields.__table__.c.objfid,
+    "obj_field_acquisid_objfid_idx", ObjectFields.__table__.c.acquis_id
 )
 
 # TODO
@@ -229,9 +229,7 @@ Index(
     "is_objectsacqclassifqual",
     ObjectHeader.__table__.c.acquisid,
     ObjectHeader.__table__.c.classif_qual,
-    postgresql_include=[
-        ObjectHeader.__table__.c.classif_id,
-    ],
+    postgresql_include=[ObjectHeader.classif_id.name],
 )
 
 # For finding globally objects in some depth range
@@ -239,25 +237,25 @@ Index(
     "is_objectsdepth",
     ObjectHeader.__table__.c.depth_max,
     ObjectHeader.__table__.c.depth_min,
-    postgresql_include=[ObjectHeader.__table__.c.acquisid],
+    postgresql_include=[ObjectHeader.acquisid.name],
 )
 # For finding globally objects in some geo range
 Index(
     "is_objectslatlong",
     ObjectHeader.__table__.c.latitude,
     ObjectHeader.__table__.c.longitude,
-    postgresql_include=[ObjectHeader.__table__.c.acquisid],
+    postgresql_include=[ObjectHeader.acquisid.name],
 )
 # For finding globally objects in some time range
 Index(
     "is_objectstime",
     ObjectHeader.__table__.c.objtime,
-    postgresql_include=[ObjectHeader.__table__.c.acquisid],
+    postgresql_include=[ObjectHeader.acquisid.name],
 )
 Index(
     "is_objectsdate",
     ObjectHeader.__table__.c.objdate,
-    postgresql_include=[ObjectHeader.__table__.c.acquisid],
+    postgresql_include=[ObjectHeader.acquisid.name],
 )
 
 DEFAULT_CLASSIF_HISTORY_DATE = "TO_TIMESTAMP(0)"

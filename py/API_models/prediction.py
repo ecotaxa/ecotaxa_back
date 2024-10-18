@@ -4,7 +4,7 @@
 #
 from typing import List, Optional, Dict
 
-from BO.ObjectSet import PredictionInfoT
+from BO.Training import PredictionInfoT
 from helpers.pydantic import BaseModel, Field
 
 
