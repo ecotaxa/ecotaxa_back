@@ -18,7 +18,7 @@ MIN_IMGID = 1000  # In prod' it's 1721, this will be used during tests and all-i
 
 class Image(Model):
     __tablename__ = "images"
-    imgid = Column(BIGINT, Sequence("seq_images", start=MIN_IMGID))
+    imgid = Column(BIGINT, Sequence("seq_images", start=MIN_IMGID), nullable=False)
     # The Object that this image belongs to, with its rank inside
     objid = Column(BIGINT, ForeignKey("obj_head.objid"), primary_key=True)
     imgrank = Column(SMALLINT, primary_key=True)

@@ -2,14 +2,17 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from datetime import datetime
 from typing import Tuple, List, Optional, Set, Any
 
 from API_models.filters import ProjectFiltersDict
+from API_models.prediction import PredictionInfoRsp
 from BO.Classification import (
     HistoricalLastClassif,
     ClassifIDSetT,
     ClassifIDListT,
     ClassifIDT,
+    ClassifScoresListT,
 )
 from BO.ColumnUpdate import ColUpdateList
 from BO.Mappings import TableMapping
@@ -26,6 +29,7 @@ from BO.Project import ProjectBO, ChangeTypeT
 from BO.ReClassifyLog import ReClassificationBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
+from BO.Training import TrainingBO, PredictionBO
 from BO.User import UserIDT
 from DB.Image import IMAGE_VIRTUAL_COLUMNS
 from DB.Object import (
@@ -94,7 +98,9 @@ class ObjectManager(Service):
         free_columns_mappings = object_set.mapping.object_mappings
 
         # The order fields have an impact on the query
-        order_clause = self.cook_order_clause(order_field, free_columns_mappings)
+        order_clause = self.cook_order_clause(
+            order_field, free_columns_mappings, str(return_fields)
+        )
         order_clause.set_window(window_start, window_size)
 
         extra_cols = self.add_return_fields(return_fields, free_columns_mappings)
@@ -151,7 +157,7 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
 
     @staticmethod
     def cook_order_clause(
-        order_field: Optional[str], mappings: TableMapping
+        order_field: Optional[str], mappings: TableMapping, return_fields_str: str
     ) -> OrderClause:
         """
         Prepare a SQL "order by" clause from the required field.
@@ -167,7 +173,15 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
         order_expr = ObjectBO._field_to_db_col(order_field, mappings)
         if order_expr is None:
             return ret
-        alias, order_col = order_expr.split(".", 1)
+        if " AS " in order_expr:
+            alias = None
+            order_expr, order_col = order_expr.split(" AS ")
+            if (
+                "." + order_col not in return_fields_str
+            ):  # Uncommon but seen in logs: order by a not-displayed column
+                order_col = order_expr
+        else:
+            alias, order_col = order_expr.split(".", 1)
         # From PG doc: If NULLS LAST is specified, null values sort after all non-null values;
         # if NULLS FIRST is specified, null values sort before all non-null values.
         # If neither is specified, the default behavior is NULLS LAST when ASC is specified or implied,
@@ -191,7 +205,7 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
     ) -> str:
         """
             From an API-named list of columns, return the real text for the SELECT to return them
-        :param return_fields: The filefs in prefix+name convention
+        :param return_fields: The fields in prefix+name convention
         :param mapping: Mapping to use
         :return:
         """
@@ -199,6 +213,21 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
         if len(vals) == 0:
             return ""
         return ",\n" + ", ".join(vals)
+
+    def get_prediction_infos(
+        self, current_user_id: UserIDT, object_ids: ObjectIDListT
+    ) -> PredictionInfoRsp:
+        """
+        Query the given IDs, return last prediction information.
+        """
+        # Security check
+        obj_set = EnumeratedObjectSet(self.ro_session, object_ids)
+        # Get project IDs for the objects and verify rights
+        prj_ids = obj_set.get_projects_ids()
+        for a_prj_id in prj_ids:
+            RightsBO.user_wants(self.session, current_user_id, Action.READ, a_prj_id)
+        infos = PredictionBO(self.session, obj_set.object_ids).get_prediction_infos()
+        return PredictionInfoRsp(result=infos)
 
     def parents_by_id(
         self, current_user_id: UserIDT, object_ids: ObjectIDListT
@@ -267,21 +296,16 @@ SELECT COUNT(*) nbr"""
         if only_total:
             sql += """, NULL nbr_v, NULL nbr_d, NULL nbr_p"""
         else:
-            # TODO, cleaner: SELECT COUNT(*) nbr,
-            #            COUNT(*) FILTER (WHERE obh.classif_qual = 'V') nbr_v,
-            # ...
-            sql += (
-                """, 
-           COUNT(CASE WHEN obh.classif_qual = '"""
-                + VALIDATED_CLASSIF_QUAL
-                + """' THEN 1 END) nbr_v,
-           COUNT(CASE WHEN obh.classif_qual = '"""
-                + DUBIOUS_CLASSIF_QUAL
-                + """' THEN 1 END) nbr_d, 
-           COUNT(CASE WHEN obh.classif_qual = '"""
-                + PREDICTED_CLASSIF_QUAL
-                + """' THEN 1 END) nbr_p"""
-            )
+            if False:
+                sql += f""",
+                COUNT(*) FILTER (WHERE obh.classif_qual = '{VALIDATED_CLASSIF_QUAL}') nbr_v,
+                COUNT(*) FILTER (WHERE obh.classif_qual = '{DUBIOUS_CLASSIF_QUAL}') nbr_d,
+                COUNT(*) FILTER (WHERE obh.classif_qual = '{PREDICTED_CLASSIF_QUAL}') nbr_p"""
+            else:
+                sql += f""", 
+                COUNT(CASE WHEN obh.classif_qual = '{VALIDATED_CLASSIF_QUAL}' THEN 1 END) nbr_v,
+                COUNT(CASE WHEN obh.classif_qual = '{DUBIOUS_CLASSIF_QUAL}' THEN 1 END) nbr_d, 
+                COUNT(CASE WHEN obh.classif_qual = '{PREDICTED_CLASSIF_QUAL}' THEN 1 END) nbr_p"""
         sql += (
             """
       FROM """
@@ -333,18 +357,29 @@ SELECT COUNT(*) nbr"""
         remover.wait_for_done()
         return nb_objs, 0, nb_img_rows, len(img_files)
 
-    def reset_to_predicted(
+    def force_to_predicted(
         self, current_user_id: UserIDT, proj_id: ProjectIDT, filters: ProjectFiltersDict
     ) -> None:
         """
-        Query the given project with given filters, reset the resulting objects to predicted.
+        Query the given project with given filters, force the resulting objects to Predicted with their
+        current classification and a conventional score.
         """
         # Security check
-        RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, proj_id)
+        _user, project = RightsBO.user_wants(
+            self.session, current_user_id, Action.ADMINISTRATE, proj_id
+        )
 
         impacted_objs = [r[0] for r in self.query(current_user_id, proj_id, filters)[0]]
 
-        EnumeratedObjectSet(self.session, impacted_objs).reset_to_predicted()
+        training = TrainingBO.create_one(
+            self.session, current_user_id, "Force to P", datetime.now()
+        )
+        nb_upd, all_changes = EnumeratedObjectSet(
+            self.session, impacted_objs
+        ).force_to_predicted(training)
+
+        # Propagate changes to update projects_taxo_stat
+        self.propagate_classif_changes(nb_upd, all_changes, project)
 
         # Update stats
         ProjectBO.update_taxo_stats(self.session, proj_id)
@@ -439,6 +474,7 @@ SELECT COUNT(*) nbr"""
     ) -> int:
         """
         Regardless of present classification or state, set the new classification for this object set.
+        This can be used to, e.g. move to another taxonomy system.
         """
         # Security check
         user, project = RightsBO.user_wants(
@@ -457,7 +493,10 @@ SELECT COUNT(*) nbr"""
         classif_ids = [forced_id] * len(obj_set.object_ids)
         now = db_server_now(self.session)
         nb_upd, all_changes = obj_set.classify_validate(
-            current_user_id, classif_ids, "=", now
+            current_user_id,
+            classif_ids,
+            "=",  # TODO bug here? we have to keep consistency
+            now,
         )
 
         if only_taxon is not None:
@@ -492,7 +531,7 @@ SELECT COUNT(*) nbr"""
         wanted_qualif: str,
     ) -> Tuple[int, int, ObjectSetClassifChangesT]:
         """
-        Classify (from human source) or validate/set to dubious a set of objects.
+        Classify (mostly from human source) or validate/set to dubious a set of objects.
         """
         # Get the objects and project, checking rights at the same time.
         object_set, project = self._the_project_for(
@@ -508,13 +547,13 @@ SELECT COUNT(*) nbr"""
         # Return status
         return nb_upd, project.projid, all_changes
 
-    def classify_auto_set(
+    def classify_auto_mult_set(
         self,
         current_user_id: UserIDT,
+        training: Optional[TrainingBO],
         target_ids: ObjectIDListT,
-        classif_ids: ClassifIDListT,
-        scores: List[float],
-        keep_logs: bool,
+        classif_ids: List[ClassifIDListT],
+        scores: List[ClassifScoresListT],
     ) -> Tuple[int, int, ObjectSetClassifChangesT]:
         """
         Classify (from automatic source) a set of objects.
@@ -523,8 +562,15 @@ SELECT COUNT(*) nbr"""
         object_set, project = self._the_project_for(
             current_user_id, target_ids, Action.ANNOTATE
         )
+        # Create a new training if not set
+        if training is None:
+            training = TrainingBO.create_one(
+                self.session, current_user_id, "Classify auto", datetime.now()
+            )
         # Do the raw classification, eventually with history.
-        nb_upd, all_changes = object_set.classify_auto(classif_ids, scores, keep_logs)
+        nb_upd, all_changes = object_set.classify_auto_mult(
+            training, classif_ids, scores
+        )
         # Propagate changes to update projects_taxo_stat
         self.propagate_classif_changes(nb_upd, all_changes, project)
         # Return status

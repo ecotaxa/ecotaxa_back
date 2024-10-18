@@ -4,6 +4,11 @@
 #
 # A job runner dedicated to (even if only sometimes) GPU-needing operations
 #
+import os
+
+# We set this one in env. and anyway TF is not working without it
+os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
+
 import time
 
 from API_operations.GPU_Prediction import GPUPredictForProject
