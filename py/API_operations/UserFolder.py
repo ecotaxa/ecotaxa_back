@@ -31,8 +31,20 @@ class UserFolderService(Service):
         super().__init__()
 
     @staticmethod
-    def _sanitize_file_name(filename: str) -> str:
+    def _sanitize_filename_throw(filename: str) -> str:
+        assert ".." not in filename, "Forbidden"
         return os.path.basename(filename.rstrip(os.path.sep))
+
+    @staticmethod
+    def _sanitize_path_throw(path: str) -> str:
+        assert ".." not in path, "Forbidden"
+        return path.lstrip(os.path.sep)
+
+    @staticmethod
+    def _sanitize_tag_throw(tag: str) -> str:
+        assert ".." not in tag, "Forbidden"
+        assert os.path.sep not in tag, "Forbidden"
+        return tag
 
     async def store(
         self,
@@ -47,8 +59,11 @@ class UserFolderService(Service):
         with only this file will be created.
         TODO: Quotas
         """
-        file_name = self._sanitize_file_name(file.filename)
-        assert ".." not in file_name, "Forbidden"
+        file_name = self._sanitize_filename_throw(file.filename)
+        if path is not None:
+            path = self._sanitize_path_throw(path)
+        if tag is not None:
+            tag = self._sanitize_tag_throw(tag)
         # current_user = self.ro_session.query(User).get(current_user_id)
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         # assert current_user is not None
