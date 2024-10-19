@@ -12,6 +12,7 @@ from typing import Optional, Final, Tuple, Dict, Any
 
 from fastapi import HTTPException
 
+from helpers import DateTime
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
     DETAIL_TEMPLATE_NOT_FOUND,
@@ -397,7 +398,7 @@ class MailProvider(object):
         if "link" in replace:
             token_age = getattr(values, "token_age", token_age)
             if token_age is not None:
-                age = datetime.now() + timedelta(hours=int(token_age))
+                age = DateTime.now_time() + timedelta(hours=int(token_age))
                 ageval = age.strftime("%Y-%m-%d %H:%M:%S")
                 replace["link"] += str(" (valid until %s (UTC))" % ageval)
         for rk in self.REPLACE_KEYS:

@@ -3,7 +3,6 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import time
-from datetime import datetime
 from pathlib import Path
 from typing import List, Set, Dict, Optional, Callable, Tuple, Any
 
@@ -16,6 +15,7 @@ from DB.Acquisition import Acquisition
 from DB.Sample import Sample
 from DB.helpers.DBWriter import DBWriter
 from FS.Vault import Vault
+from helpers import DateTime
 
 
 class ImportDiagnostic(object):
@@ -131,7 +131,7 @@ class ImportStats(object):
     """
 
     def __init__(self, total_rows: int, report_def: Callable):
-        self.start_time = datetime.now()
+        self.start_time = DateTime.now_time()
         self.total_row_count = total_rows
         self.current_row_count = 0
         self.report_def = report_def

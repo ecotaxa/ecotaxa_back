@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from datetime import timedelta
+from datetime import timedelta, timezone
 from typing import Optional, List, Any, Tuple
 
 from fastapi import HTTPException
@@ -944,7 +944,7 @@ class UserService(Service):
         # delay between emails is too short
         token_age = [SHORT_TOKEN_AGE, PROFILE_TOKEN_AGE]
         if user.status_date is not None:
-            datenow = now - user.status_date
+            datenow = now - user.status_date.replace(tzinfo=timezone.utc)
         else:
             datenow = now - (now - timedelta(days=2))
         if token is None and (
