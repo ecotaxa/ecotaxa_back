@@ -27,6 +27,7 @@ from DB.helpers.Direct import text
 from ML.Deep_features_extractor import DeepFeaturesExtractor
 from ML.Random_forest_classifier import OurRandomForestClassifier
 from helpers.DynamicLogs import get_logger
+
 # TODO: Move somewhere else
 from helpers.Timer import CodeTimer
 from .ObjectManager import ObjectManager
@@ -79,13 +80,17 @@ class GPUPredictForProject(PredictForProject):
             self.report_ls_too_large(ls_size)
             return
 
+        training = TrainingBO.create_one(
+            self.session, user.id, f"Prediction in {tgt_prj.projid}"
+        )
+
         self.update_progress(20, "Training the classifier")
         classifier = self.build_classifier(np_feature_vals, classif_ids)
 
         self.update_progress(25, "Retrieving objects to classify")
         target_result = self.select_target(tgt_prj, used_features)
         nb_rows = self.classify(
-            user.id, target_result, classifier, used_features, np_medians_per_feat
+            training, target_result, classifier, used_features, np_medians_per_feat
         )
 
         final_message = "New category set on %d objects." % nb_rows
@@ -250,7 +255,7 @@ In second step 'Choice of Learning Set categories and size', where the learning 
 
     def classify(
         self,
-        user_id: UserIDT,
+        training: TrainingBO,
         tgt_res: Result,
         classifier: OurRandomForestClassifier,
         features: List[str],
@@ -262,9 +267,6 @@ In second step 'Choice of Learning Set categories and size', where the learning 
         total_rows = tgt_res.rowcount  # type:ignore # case1
         done_count = 0
         nb_changes = 0
-        training = TrainingBO.create_one(
-            self.session, user_id, "Prediction", datetime.now()
-        )
         while True:
             obj_ids: ObjectIDListT = []
             unused: ClassifIDListT = []

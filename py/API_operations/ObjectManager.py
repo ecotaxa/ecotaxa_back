@@ -372,7 +372,7 @@ SELECT COUNT(*) nbr"""
         impacted_objs = [r[0] for r in self.query(current_user_id, proj_id, filters)[0]]
 
         training = TrainingBO.create_one(
-            self.session, current_user_id, "Force to P", datetime.now()
+            self.session, current_user_id, f"Force to P in {proj_id}"
         )
         nb_upd, all_changes = EnumeratedObjectSet(
             self.session, impacted_objs
@@ -562,10 +562,10 @@ SELECT COUNT(*) nbr"""
         object_set, project = self._the_project_for(
             current_user_id, target_ids, Action.ANNOTATE
         )
-        # Create a new training if not set
+        # Create a new training if not set (always, so far)
         if training is None:
             training = TrainingBO.create_one(
-                self.session, current_user_id, "Classify auto", datetime.now()
+                self.session, current_user_id, f"Classify auto in {project.projid}"
             )
         # Do the raw classification, eventually with history.
         nb_upd, all_changes = object_set.classify_auto_mult(

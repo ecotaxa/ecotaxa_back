@@ -207,7 +207,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         nb_objects = 0
         total_objects = len(self.to_clone)
         training_provider = TrainingBOProvider(
-            self.session, import_how.user_id, "Subset", datetime.now()
+            self.session, import_how.user_id, f"Subset of {self.prj_id}"
         )
 
         # Pick chunks of object ids

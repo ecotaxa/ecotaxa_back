@@ -141,7 +141,8 @@ ANALYSE obj_head
     )
     op.execute(
         """
-    create or replace view objects as 
+    drop view objects;
+    create view objects as 
        select sam.projid, sam.sampleid, obh.objid, obh.latitude, obh.longitude,
               obh.objdate, obh.objtime, obh.depth_min, obh.depth_max,
               obh.classif_id, obh.classif_qual, obh.classif_who, 
@@ -159,7 +160,10 @@ ANALYSE obj_head
          from obj_head obh
          join acquisitions acq on obh.acquisid = acq.acquisid
          join samples sam on acq.acq_sample_id = sam.sampleid 
-         left join obj_field ofi on obh.objid = ofi.objfid -- allow elimination by planner        """
+         left join obj_field ofi on obh.objid = ofi.objfid; -- allow elimination by planner       
+    grant select on objects to zoo;
+    grant select on objects to readerole
+"""
     )
 
 

@@ -32,6 +32,7 @@ from DB.Prediction import (
 from DB.Training import Training, TrainingIDT
 from DB.helpers.Core import select
 from DB.helpers.ORM import Delete, any_, and_
+from helpers import DateTime
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -64,14 +65,20 @@ class TrainingBO(object):
 
     def advance(self):
         """Mark some progress by updating training_end"""
-        self._training.training_end = datetime.now()
+        self._training.training_end = DateTime.now_time()
 
     @classmethod
     def create_one(
-        cls, session: Session, author: UserIDT, reason: str, training_start: datetime
+        cls,
+        session: Session,
+        author: UserIDT,
+        reason: str,
+        training_start: Optional[datetime] = None,
     ) -> "TrainingBO":
         trn = Training()
-        trn.training_start = training_start
+        trn.training_start = (
+            DateTime.now_time() if training_start is None else training_start
+        )
         trn.training_end = datetime.fromtimestamp(0)  # In progress
         trn.training_author = author
         trn.training_path = reason
@@ -96,15 +103,21 @@ class TrainingBO(object):
 
 
 class TrainingBOProvider(object):
-    """We don't want to create empty trainings, so provide one when we know it will be useful,
+    """We don't want to create empty trainings, so provide one only when we know it will be useful,
     i.e. filled with predictions."""
 
     def __init__(
-        self, session: Session, user_id: UserIDT, reason: str, training_start: datetime
+        self,
+        session: Session,
+        user_id: UserIDT,
+        reason: str,
+        training_start: Optional[datetime] = None,
     ):
         self.session: Session = session
         self.user_id = user_id
-        self.training_start = training_start
+        self.training_start = (
+            DateTime.now_time() if training_start is None else training_start
+        )
         self.path = reason
         self.current_training: Optional[TrainingBO] = None
 

@@ -143,7 +143,7 @@ class TSVFile(object):
         training_provider = TrainingBOProvider(
             session,
             how.user_id,
-            "Import P",
+            f"Import P into {how.prj_id}",
             stats.start_time,
         )
 
