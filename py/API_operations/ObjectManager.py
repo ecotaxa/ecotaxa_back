@@ -2,7 +2,6 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from datetime import datetime
 from typing import Tuple, List, Optional, Set, Any
 
 from API_models.filters import ProjectFiltersDict
@@ -107,13 +106,8 @@ class ObjectManager(Service):
 
         from_, where_clause, params = object_set.get_sql(order_clause, extra_cols)
 
-        if "obf." in where_clause.get_sql():  # TODO: Drop when unused in mapping
-            # If the filter needs obj_field data it's more efficient to count with a window function
-            # than issuing a second query.
-            total_col = "COUNT(obh.objid) OVER() AS total"
-        else:
-            # Otherwise, no need for obj_field in count, less DB buffers
-            total_col = "0 AS total"
+        # Compute the total in a second step (_summarize)
+        total_col = "0 AS total"
 
         sql = """
 SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
@@ -127,7 +121,7 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
         if order_clause is not None:
             sql += order_clause.get_sql()
 
-        with CodeTimer("query: for %d using %s " % (proj_id, sql), logger):
+        with CodeTimer("Query: SQL: %s PARAMS: %s: " % (sql, params), logger, 1):
             res: Result = self.ro_session.execute(text(sql), params)
         ids = []
         details = []
@@ -142,9 +136,10 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
             details.append(extra)
 
         if total == 0:
-            # Total was not computed or left to 0
-            total, _nbr_v, _nbr_d, _nbr_p = self.summary(
-                current_user_id, proj_id, filters, only_total=True
+            # Total was not computed, left to 0, execute again SQL from the same object set, but
+            # without columns in select list, and no limit function.
+            total, _nbr_v, _nbr_d, _nbr_p = self._summarize(
+                object_set, proj_id=proj_id, only_total=True
             )
 
         # If we can, refresh the cache in background, most of the data should be in PG cache
@@ -290,22 +285,24 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
         object_set: DescribedObjectSet = DescribedObjectSet(
             self.ro_session, prj, user_id, filters
         )
+        return self._summarize(object_set, proj_id, only_total)
+
+    def _summarize(
+        self, object_set: DescribedObjectSet, proj_id: ProjectIDT, only_total: bool
+    ):
+        """
+        Compute the summary of given object_set
+        """
         from_, where, params = object_set.get_sql()
         sql = """
 SELECT COUNT(*) nbr"""
         if only_total:
             sql += """, NULL nbr_v, NULL nbr_d, NULL nbr_p"""
         else:
-            if False:
-                sql += f""",
-                COUNT(*) FILTER (WHERE obh.classif_qual = '{VALIDATED_CLASSIF_QUAL}') nbr_v,
-                COUNT(*) FILTER (WHERE obh.classif_qual = '{DUBIOUS_CLASSIF_QUAL}') nbr_d,
-                COUNT(*) FILTER (WHERE obh.classif_qual = '{PREDICTED_CLASSIF_QUAL}') nbr_p"""
-            else:
-                sql += f""", 
-                COUNT(CASE WHEN obh.classif_qual = '{VALIDATED_CLASSIF_QUAL}' THEN 1 END) nbr_v,
-                COUNT(CASE WHEN obh.classif_qual = '{DUBIOUS_CLASSIF_QUAL}' THEN 1 END) nbr_d, 
-                COUNT(CASE WHEN obh.classif_qual = '{PREDICTED_CLASSIF_QUAL}' THEN 1 END) nbr_p"""
+            sql += f""",
+            COUNT(*) FILTER (WHERE obh.classif_qual = '{VALIDATED_CLASSIF_QUAL}') nbr_v,
+            COUNT(*) FILTER (WHERE obh.classif_qual = '{DUBIOUS_CLASSIF_QUAL}') nbr_d,
+            COUNT(*) FILTER (WHERE obh.classif_qual = '{PREDICTED_CLASSIF_QUAL}') nbr_p"""
         sql += (
             """
       FROM """
@@ -313,10 +310,12 @@ SELECT COUNT(*) nbr"""
             + " "
             + where.get_sql()
         )
-
-        with CodeTimer("summary: V/D/P for %d using %s " % (proj_id, sql), logger):
+        with CodeTimer(
+            "summary: V/D/P for %d using %s and %s" % (proj_id, sql, params),
+            logger,
+            0.3,
+        ):
             res: Result = self.ro_session.execute(text(sql), params)
-
         nbr: int
         nbr_v: Optional[int]
         nbr_d: Optional[int]
