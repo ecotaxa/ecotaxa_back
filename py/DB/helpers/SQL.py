@@ -18,6 +18,8 @@ class SelectClause(object):
     List of selected expressions, eventually aliased.
     """
 
+    __slots__ = ("expressions", "aliases", "lateral_joins")
+
     def __init__(self):
         self.expressions = []
         self.aliases = []
@@ -29,7 +31,7 @@ class SelectClause(object):
 
     def get_sql(self) -> str:
         aliased = [
-            expr + (" AS %s" % alias if alias else "")
+            expr + (f" AS {alias}" if alias else "")
             for expr, alias in zip(self.expressions, self.aliases)
         ]
         ret = "SELECT " + ", ".join(aliased)
@@ -40,6 +42,8 @@ class FromClause(object):
     """
     A 'from' clause in SQL. List of joined table expressions.
     """
+
+    __slots__ = ("joins", "left_joins", "lateral_joins")
 
     def __init__(self, first: str):
         self.joins = [first]
@@ -107,6 +111,8 @@ class WhereClause(object):
     A 'where' clause in SQL. List of 'and' clauses.
     """
 
+    __slots__ = ("ands",)
+
     def __init__(self) -> None:
         self.ands: List[str] = []
 
@@ -137,6 +143,8 @@ class OrderClause(object):
     An 'order by' clause in SQL. List of columns/aliases.
     """
 
+    __slots__ = ("expressions", "columns", "window_start", "window_size")
+
     def __init__(self) -> None:
         self.expressions: List[str] = []
         self.columns: List[str] = []
@@ -155,11 +163,11 @@ class OrderClause(object):
             asc_or_desc += " NULLS FIRST" if asc_or_desc == "ASC" else " NULLS LAST"
         if alias is not None:
             # Refer to a table in select list
-            self.expressions.append("%s.%s %s" % (alias, expr, asc_or_desc))
+            self.expressions.append(f"{alias}.{expr} {asc_or_desc}")
             self.columns.append(alias + "." + expr)
         else:
             # Refer to a select expression
-            self.expressions.append("%s %s" % (expr, asc_or_desc))
+            self.expressions.append(f"{expr} {asc_or_desc}")
             self.columns.append(expr)
 
     def referenced_columns(self, with_prefices=True) -> Set[str]:
@@ -177,9 +185,9 @@ class OrderClause(object):
             ("\nORDER BY " + ", ".join(self.expressions)) if self.expressions else "\n"
         )
         if self.window_start is not None:
-            ret += " OFFSET %d" % self.window_start
+            ret += f" OFFSET {self.window_start}"
         if self.window_size is not None:
-            ret += " LIMIT %d" % self.window_size
+            ret += f" LIMIT {self.window_size}"
         return ret
 
     def replace(self, chunk_from, chunk_to):

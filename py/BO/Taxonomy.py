@@ -13,6 +13,7 @@ from DB.Taxonomy import TaxonomyTreeInfo, Taxonomy
 from DB.WoRMs import WoRMS
 from DB.helpers import Result
 from DB.helpers.ORM import Session, any_, case, func, text, select, Label
+from helpers import DateTime
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -364,7 +365,7 @@ class TaxonomyBO(object):
         """
         TaxonomyBO.get_tree_status(
             session
-        ).lastserverversioncheck_datetime = datetime.now()
+        ).lastserverversioncheck_datetime = DateTime.now_time()
         session.commit()
 
     @staticmethod

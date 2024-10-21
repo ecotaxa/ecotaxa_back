@@ -4,14 +4,15 @@
 #
 # Wrapper over various date & time functions, which can be mocked for testing.
 #
-import datetime
+from datetime import datetime, timezone
 
 
 def _now_time():
     # We patch this one during tests.
-    return datetime.datetime.now()
+    return datetime.now(timezone.utc)
 
 
-def now_time() -> datetime.datetime:
-    # During test, sometimes this def is imported before the test, so it cannot be patched.
+def now_time() -> datetime:
+    """Single client-side present time source, returns a UTC datetime.
+    Note: During tests, we can fix the time by overriding _now_time() above."""
     return _now_time()

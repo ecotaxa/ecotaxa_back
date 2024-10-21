@@ -12,7 +12,7 @@ docker run --rm --gpus all --security-opt seccomp=unconfined \
 --mount type=bind,source=${PWD}/../srv_fics,target=/srv_fics \
 --mount type=bind,source=${PWD}/../ftp,target=/ftp \
 --mount type=bind,source=/home/laurent/Devs/ecotaxa/models,target=/home/laurent/Devs/ecotaxa/models \
-ecotaxa/ecotaxa_gpu_back:2.6.2
+ecotaxa/ecotaxa_gpu_back:2.6.3
 # Add this in the end to skip the init
 #bash
 

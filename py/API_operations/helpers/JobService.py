@@ -4,7 +4,6 @@
 #
 import abc
 from abc import ABC
-from datetime import datetime
 from typing import List, Dict, Any, Optional
 
 from BO.Job import JobBO
@@ -12,6 +11,7 @@ from BO.User import UserIDT
 from DB.Job import Job, JobIDT, DBJobStateEnum
 from DB.Project import Project, ProjectIDT
 from FS.TempDirForTasks import TempDirForTasks
+from helpers import DateTime
 from helpers.DynamicLogs import get_logger, LogEmitter, LogsSwitcher
 from helpers.exception import format_exception
 from .Service import Service
@@ -142,7 +142,7 @@ class JobServiceBase(Service, LogEmitter, ABC):
 
     def get_job_for_update(self) -> Job:
         job = self._get_job()
-        job.updated_on = datetime.now()
+        job.updated_on = DateTime.now_time()
         return job
 
     def update_progress(self, percent: int, message: str):

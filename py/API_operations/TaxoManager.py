@@ -24,6 +24,7 @@ from DB.WoRMs import WoRMS
 from DB.helpers.Charset import to_latin1_compat
 from DB.helpers.ORM import any_, Session, Alias
 from DB.helpers.ORM import func, not_, or_, and_, text
+from helpers import DateTime
 from helpers.DynamicLogs import get_logger
 from providers.EcoTaxoServer import EcoTaxoServerClient
 from providers.WoRMS import WoRMSFinder
@@ -504,7 +505,7 @@ class CentralTaxonomyService(Service):
         #                            creation_datetime: str, =
         _user = RightsBO.user_can_add_taxonomy(self.ro_session, current_user_id)
         # Amend params
-        taxon_params["creation_datetime"] = datetime.datetime.utcnow().strftime(
+        taxon_params["creation_datetime"] = DateTime.now_time().strftime(
             "%Y-%m-%d %H:%M:%S"
         )
         taxon_params["taxostatus"] = "N"

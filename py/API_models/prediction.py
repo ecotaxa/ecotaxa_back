@@ -4,6 +4,7 @@
 #
 from typing import List, Optional, Dict
 
+from BO.Training import PredictionInfoT
 from helpers.pydantic import BaseModel, Field
 
 
@@ -84,6 +85,19 @@ class PredictionRsp(BaseModel):
         description="The created job, 0 if there were problems.",
         example=482,
         default=0,
+    )
+
+
+class PredictionInfoRsp(BaseModel):
+    """
+    Prediction information for a set of objects.
+    """
+
+    result: List[PredictionInfoT] = Field(
+        title="Result",
+        description="List of lists [object ID, category ID, score for category].",
+        example=[[23456, 1234, 0.7], [23457, 768, 0.2]],
+        default=[],
     )
 
 
