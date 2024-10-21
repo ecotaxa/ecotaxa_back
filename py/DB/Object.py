@@ -205,7 +205,9 @@ class ObjectFields(Model):
 
 
 Index(  # We CLUSTER using this one, object ids tend to be consecutively read
-    "obj_field_acquisid_objfid_idx", ObjectFields.__table__.c.acquis_id
+    "obj_field_acquisid_objfid_idx",
+    ObjectFields.__table__.c.acquis_id,
+    ObjectFields.__table__.c.objfid,
 )
 
 # TODO
