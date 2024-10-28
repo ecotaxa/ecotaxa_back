@@ -73,7 +73,10 @@ class ProjectFiltersDict(TypedDict, total=False):
     filt_last_annot: Optional[str]
     """ Coma-separated list of annotator, i.e. person who validated the classification
         in last. """
-
+    seed_object_id: Optional[str]
+    """
+    Target objid for similarity search
+    """
 
 class _ProjectFilters2Model(DescriptiveModel):
     taxo = Field(

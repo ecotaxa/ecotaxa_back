@@ -76,6 +76,7 @@ from API_models.objects import (
     ObjectHeaderModel,
 )
 from API_models.prediction import PredictionRsp, PredictionReq, MLModel
+from API_models.simsearch import SimilaritySearchReq, SimilaritySearchRsp
 from API_models.subset import SubsetReq, SubsetRsp
 from API_models.taxonomy import (
     TaxaSearchRsp,
@@ -121,6 +122,7 @@ from API_operations.exports.ForProject import (
 )
 from API_operations.imports.Import import FileImport
 from API_operations.imports.SimpleImport import SimpleImport
+from API_operations.SimilaritySearch import SimilaritySearchForProject
 from BG_operations.JobScheduler import JobScheduler
 from BO.Acquisition import AcquisitionBO
 from BO.Classification import HistoricalClassification, ClassifIDT
@@ -1614,6 +1616,103 @@ def set_project_predict_settings(
 
 
 # ######################## END OF PROJECT
+
+@app.post(
+    "/object_set/{project_id}/similarity_search", # should be similar to ../{}/query
+    operation_id="get_object_set_similarity_search",
+    tags=["objects"],
+    response_model=ObjectSetQueryRsp,
+    response_class=MyORJSONResponse,  # Force the ORJSON encoder
+)
+def object_similarity_search(
+    project_id: int = Path(
+        ..., description="Internal, numeric id of the project.", example=1
+    ),
+    filters: ProjectFilters = Body(...),
+    fields: Optional[str] = Query(
+        title="Fields",
+        description="""
+TODO, deleted while copying same info as os/{pid}/query
+                   """,
+        default=None,
+        example="obj.longitude,fre.feret",
+    ),
+    order_field: Optional[str] = Query(
+        title="Order field",
+        description='Order the result using given field. If prefixed with "-" then it will be reversed.',
+        default=None,
+        example="obj.longitude",
+    ),
+    # TODO: order_field should be a user-visible field name, not nXXX, in case of free field
+    window_start: Optional[int] = Query(
+        default=None,
+        title="Window start",
+        description="""
+Allows to return only a slice of the result, by skipping window_start objects before returning data.
+If no **unique order** is specified, the result can vary for same call and conditions.""",
+        example="10",
+    ),
+    window_size: Optional[int] = Query(
+        default=None,
+        title="Window size",
+        description="""
+Allows to return only a slice of the result, by returning a _maximum_ of window_size lines.
+If no **unique order** is specified, the result can vary for same call and conditions.""",
+        example="100",
+    ),
+    current_user: Optional[int] = Depends(get_optional_current_user),
+) -> MyORJSONResponse:
+    """
+    Returns **filtered object Ids** for the given project.
+    """
+    return_fields = None
+    if fields is not None:
+        return_fields = fields.split(",")
+
+    sim_search_request = SimilaritySearchReq(
+        project_id = project_id,
+        target_id = int(filters.seed_object_id.lstrip("I")) if filters.seed_object_id else None,
+    )
+
+    with SimilaritySearchForProject(sim_search_request, filters.base()) as sce:
+        sim_search_rsp = sce.similarity_search(current_user)
+
+    with ObjectManager() as sce:
+        with RightsThrower():
+
+            rsp = ObjectSetQueryRsp()
+            obj_with_parents, details, total = sce.query(
+                current_user,
+                project_id,
+                filters.base(),
+                return_fields,
+                order_field,
+                window_start=None,
+                window_size=None,
+            )
+
+        object_ids = [with_p[0] for with_p in obj_with_parents]
+        for objid in sim_search_rsp.neighbor_ids:
+            if objid not in object_ids:
+                continue
+            index = object_ids.index(objid)
+            index_ss = sim_search_rsp.neighbor_ids.index(objid) # VR TODO est-ce qu'un zip serait mieux ?
+            rsp.object_ids.append(obj_with_parents[index][0])
+            rsp.acquisition_ids.append(obj_with_parents[index][1])
+            rsp.sample_ids.append(obj_with_parents[index][2])
+            rsp.project_ids.append(obj_with_parents[index][3])
+            rsp.details.append(details[index])
+            sim_search_score_current = sim_search_rsp.sim_scores[index_ss]
+            if len(rsp.details[len(rsp.details) - 1]) > 12:
+                rsp.details[len(rsp.details) - 1][12] = sim_search_score_current
+            elif len(rsp.details[len(rsp.details) - 1]) == 12:
+                rsp.details[len(rsp.details) - 1].append(sim_search_score_current)
+            else :
+                print("Unexpected short details, sim score not send to front : " + str(len(rsp.details[len(rsp.details) - 1])))
+
+
+    # Serialize
+    return MyORJSONResponse(rsp)
 
 
 @app.get(
