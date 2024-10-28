@@ -50,6 +50,9 @@ from .helpers.Service import Service
 
 logger = get_logger(__name__)
 
+# Basic hint preventing FTS on big tables
+HINT = "/*+ IndexOnlyScan(obh) IndexOnlyScan(obf) */"
+
 
 class ObjectManager(Service):
     """
@@ -109,8 +112,8 @@ class ObjectManager(Service):
         # Compute the total in a second step (_summarize)
         total_col = "0 AS total"
 
-        sql = """
-SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
+        sql = f"""
+SELECT {HINT} obh.objid, acq.acquisid, sam.sampleid, %s%s
   FROM """ % (
             total_col,
             extra_cols,
@@ -294,8 +297,8 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
         Compute the summary of given object_set
         """
         from_, where, params = object_set.get_sql()
-        sql = """
-SELECT COUNT(*) nbr"""
+        sql = f"""
+SELECT {HINT} COUNT(*) nbr"""
         if only_total:
             sql += """, NULL nbr_v, NULL nbr_d, NULL nbr_p"""
         else:

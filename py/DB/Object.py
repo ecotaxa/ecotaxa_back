@@ -233,6 +233,11 @@ Index(
     ObjectHeader.__table__.c.classif_qual,
     postgresql_include=[ObjectHeader.classif_id.name],
 )
+Index(  # We CLUSTER on this one # TODO: Any way to declare the cluster here?
+    "is_obj_head_acquisid_objid",
+    ObjectHeader.__table__.c.acquisid,
+    ObjectHeader.__table__.c.objid,
+)
 
 # For finding globally objects in some depth range
 Index(

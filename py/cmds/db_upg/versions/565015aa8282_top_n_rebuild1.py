@@ -112,13 +112,15 @@ ALTER TABLE ONLY public.obj_head
     ADD CONSTRAINT obj_head_classif_who_fkey FOREIGN KEY (classif_who) REFERENCES public.users (id);
 
 CREATE INDEX is_objectsacqclassifqual ON public.obj_head USING btree (acquisid, classif_qual) INCLUDE (classif_id);
+CREATE INDEX is_obj_head_acquisid_objid ON public.obj_head USING btree (acquisid, objid); 
 CREATE INDEX is_objectsdate ON public.obj_head USING btree (objdate) INCLUDE (acquisid);
 CREATE INDEX is_objectsdepth ON public.obj_head USING btree (depth_max, depth_min) INCLUDE (acquisid);
 CREATE INDEX is_objectslatlong ON public.obj_head USING btree (latitude, longitude) INCLUDE (acquisid);
 CREATE INDEX is_objectstime ON public.obj_head USING btree (objtime) INCLUDE (acquisid);
 
+
 ALTER TABLE public.obj_head
-    CLUSTER ON is_objectsacqclassifqual;
+    CLUSTER ON is_obj_head_acquisid_objid;
 
 ALTER TABLE ONLY public.obj_cnn_features
     ADD CONSTRAINT obj_cnn_features_objcnnid_fkey FOREIGN KEY (objcnnid) REFERENCES public.obj_head (objid) ON DELETE CASCADE;

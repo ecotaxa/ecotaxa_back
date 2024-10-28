@@ -212,7 +212,7 @@ def upgrade():
     with op.get_context().autocommit_block():
         op.execute(
             """
-        vacuum verbose analyze objectsclassifhisto
+        vacuum full verbose analyze objectsclassifhisto
         """
         )
 
@@ -244,7 +244,7 @@ def upgrade():
     with op.get_context().autocommit_block():
         op.execute(
             """
-        vacuum full verbose objectsclassifhisto
+        vacuum full verbose analyze objectsclassifhisto
         """
         )
 
