@@ -1117,6 +1117,12 @@ class DarwinCoreExport(JobServiceBase):
         return by_abundance_desc
 
     @staticmethod
+    def round_but_no_zero(number: float, ndigits: int) -> float:
+        while (ret := round(number, ndigits)) == 0:
+            ndigits += 1
+        return ret
+
+    @staticmethod
     def add_eMoFs_for_occurrence(
         arch: DwC_Archive,
         event_id: str,
@@ -1131,13 +1137,13 @@ class DarwinCoreExport(JobServiceBase):
         )
         arch.emofs.add(cnt_emof)
         if values.concentration is not None:
-            value = round(values.concentration, 6)
+            value = DarwinCoreExport.round_but_no_zero(values.concentration, 6)
             emof = AbundancePerUnitVolumeOfTheWaterBody(
                 event_id, occurrence_id, str(value)
             )
             arch.emofs.add(emof)
         if values.biovolume is not None:
-            value = round(values.biovolume, 6)
+            value = DarwinCoreExport.round_but_no_zero(values.biovolume, 6)
             emof2 = BiovolumeOfBiologicalEntity(event_id, occurrence_id, str(value))
             arch.emofs.add(emof2)
 
@@ -1263,7 +1269,8 @@ class DarwinCoreExport(JobServiceBase):
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid.in_(project_ids))
         used_taxa = {an_id for an_id, in taxo_qry}
 
-        # _All_ used taxa will appear in occurrences, recast does not impact this output.
+        # Note: _All_ used taxa will appear in occurrences, recast does not
+        #     impact occurrences output, @see def add_occurrences_for_sample.
         # OTOH, the recast target taxa will (likely) appear in coverage as it comes
         # from computed quantities.
         used_and_recasted_taxa = used_taxa.copy()
