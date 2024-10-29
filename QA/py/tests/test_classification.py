@@ -165,6 +165,36 @@ def validate_all(fastapi, obj_ids, who=ADMIN_AUTH):
     assert rsp.status_code == status.HTTP_200_OK
 
 
+def classify_all_no_change(fastapi, obj_ids):
+    url = OBJECT_SET_CLASSIFY_URL
+    classifications = [-1 for _obj in obj_ids]
+    rsp = fastapi.post(
+        url,
+        headers=ADMIN_AUTH,
+        json={
+            "target_ids": obj_ids,
+            "classifications": classifications,
+            "wanted_qualification": "V",
+        },
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+
+
+def validate_all(fastapi, obj_ids, who=ADMIN_AUTH):
+    url = OBJECT_SET_CLASSIFY_URL
+    classifications = [-1 for _obj in obj_ids]
+    rsp = fastapi.post(
+        url,
+        headers=who,
+        json={
+            "target_ids": obj_ids,
+            "classifications": classifications,
+            "wanted_qualification": "V",
+        },
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+
+
 def classify_auto_mult_all(fastapi, obj_ids, classif_id, scores):
     url = OBJECT_SET_CLASSIFY_AUTO_URL2
     classifications = [classif_id for _obj in obj_ids]
