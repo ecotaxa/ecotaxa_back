@@ -108,8 +108,8 @@ from API_operations.Status import StatusService
 from API_operations.Subset import SubsetServiceOnProject
 from API_operations.TaxoManager import TaxonomyChangeService, CentralTaxonomyService
 from API_operations.TaxonomyService import TaxonomyService
-from API_operations.UserFolder import UserFolderService, CommonFolderService
 from API_operations.UserFilesFolder import UserFilesFolderService
+from API_operations.UserFolder import UserFolderService, CommonFolderService
 from API_operations.admin.Database import DatabaseService
 from API_operations.admin.ImageManager import ImageManagerService
 from API_operations.admin.NightlyJob import NightlyJobService
@@ -1939,12 +1939,12 @@ latitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value
 
 **Note that the following fields must be prefixed with the header "img."** (for example → img.file_name):
 
-file_name, height, imgid, imgrank, file_name, orig, objid, file_name thumb_file_name, thumb_height, thumb_width, width.
+file_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.
 
 **Note that the following fields must be prefixed with the header "txo."** (for example → txo.display_name):
 
 creation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,
-name, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatus, taxotype.
+name, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.
 
 **All other fields must be prefixed by the header "fre."** (for example → fre.circ.).
                    """,
@@ -2397,30 +2397,6 @@ def predict_object_set(
     with PredictForProject(request, filters.base()) as sce:
         rsp = sce.run(current_user)
     return rsp
-
-
-# Commented out as it's now integrated into prediction task, and cannot be executed in main app server
-# due to TF dependency
-# @app.get("/project/do_cnn/{proj_id}", operation_id="compute_project_cnn", tags=['objects'],
-#          responses={
-#              200: {
-#                  "content": {
-#                      "application/json": {
-#                          "example": "OK, 50 CNN features computed and written"
-#                      }
-#                  }
-#              }
-#          }, response_model=str)
-# def compute_project_cnn(proj_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
-#                         current_user: Optional[int] = Depends(get_optional_current_user)) -> str:
-#     """
-#         **Generate CNN features** for the requested project.
-#
-#         **Returns a string containing the number of generated features.**
-#     """
-#     with CNNForProject() as sce:
-#         rsp = sce.run(current_user, proj_id)
-#     return rsp
 
 
 @app.delete(

@@ -48,6 +48,7 @@ from DB.Object import (
     DEFAULT_CLASSIF_HISTORY_DATE,
     ObjectHeader,
     ObjectIDT,
+    ObjectIDListT,
     NON_UPDATABLE_VIA_API,
 )
 from DB.Project import ProjectIDListT, Project
@@ -62,7 +63,6 @@ from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
 # Typings, to be clear that these are not e.g. project IDs
-ObjectIDListT = List[int]
 # Object_id + parents + project
 ObjectIDWithParentsListT = List[ObjectIDWithParentsT]
 # Previous classif, previous qual, next classif, next qual

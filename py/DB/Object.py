@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import Dict, Set, Iterable, TYPE_CHECKING
+from typing import Dict, Set, Iterable, TYPE_CHECKING, List
 
 # noinspection PyPackageRequirements
 from sqlalchemy import Index, Column, ForeignKey, Sequence, Integer  # fmt:skip
@@ -34,6 +34,8 @@ from .helpers.ORM import Model
 
 # Typings
 ObjectIDT = int
+ObjectIDListT = List[int]
+
 if TYPE_CHECKING:
     pass
     # from .Image import Image
