@@ -18,7 +18,7 @@ class SelectClause(object):
     List of selected expressions, eventually aliased.
     """
 
-    __slots__ = ("expressions", "aliases", "lateral_joins")
+    __slots__ = ("expressions", "aliases")
 
     def __init__(self):
         self.expressions = []
