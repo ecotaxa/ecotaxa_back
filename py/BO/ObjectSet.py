@@ -54,6 +54,7 @@ from DB.Object import (
     VALIDATED_CLASSIF_QUAL,
     ObjectHeader,
     ObjectIDT,
+    ObjectIDListT,
     NON_UPDATABLE_VIA_API,
     DUBIOUS_CLASSIF_QUAL,
     ObjectIDListT,
