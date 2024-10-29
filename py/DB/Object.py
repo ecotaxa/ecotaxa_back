@@ -44,14 +44,14 @@ if TYPE_CHECKING:
 PREDICTED_CLASSIF_QUAL = "P"
 DUBIOUS_CLASSIF_QUAL = "D"
 VALIDATED_CLASSIF_QUAL = "V"
-classif_qual = {
+classif_qual_labels = {
     PREDICTED_CLASSIF_QUAL: "predicted",
     DUBIOUS_CLASSIF_QUAL: "dubious",
     VALIDATED_CLASSIF_QUAL: "validated",
 }
-CLASSIF_QUALS = set(classif_qual.keys())
+CLASSIF_QUALS = set(classif_qual_labels.keys())
 classif_qual_revert = {}
-for k, v in classif_qual.items():
+for k, v in classif_qual_labels.items():
     classif_qual_revert[v] = k
 
 

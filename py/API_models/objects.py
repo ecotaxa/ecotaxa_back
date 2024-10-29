@@ -51,7 +51,7 @@ class _ObjectHeaderModel(DescriptiveModel):
     )
     classif_who = Field(
         title="Classification who",
-        description="The user who manualy classify this object.",
+        description="The user who manually classified this object.",
         example="null",
     )
     classif_when = Field(
@@ -61,16 +61,16 @@ class _ObjectHeaderModel(DescriptiveModel):
     )
     classif_auto_id = Field(
         title="Classification auto Id",
-        description="Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. ",
+        description="Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. ",
     )
     classif_auto_score = Field(
         title="Classification auto score",
-        description="Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification auto score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
+        description="Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification auto score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
         example=0.085,
     )
     classif_auto_when = Field(
         title="Classification auto when",
-        description="Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification date.",
+        description="Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification date.",
         example="2021-09-21T14:59:01.007110",
     )
     complement_info = Field(
@@ -292,7 +292,7 @@ class _DBHistoricalLastClassifDescription(DescriptiveModel):
     )
     histo_classif_who = Field(
         title="Historical last classification who",
-        description="The user who manualy classify this object.",
+        description="The user who manually classified this object.",
         example=3876,
     )
 

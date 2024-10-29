@@ -284,7 +284,7 @@ In second step 'Choice of Learning Set categories and size', where the learning 
             done_count += len(obj_ids)
             progress = 25 + (75 * done_count / total_rows)
             self.update_progress(progress, "Classified %d rows" % done_count)
-        # Propagate changes to update projects_taxo_stat
+        # Full update of projects_taxo_stat, we don't do incremental like in the API call
         ProjectBO.update_taxo_stats(self.session, self.req.project_id)
         self.session.commit()
         logger.info("Classify done.")

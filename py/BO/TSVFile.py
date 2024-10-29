@@ -195,7 +195,7 @@ class TSVFile(object):
                     **dicts_to_write[ObjectFields.__tablename__]
                 )
                 image_to_write = Bean(**dicts_to_write["images"])
-                # Parents are created the same way, _when needed_ (i.e. nearly never),
+                # Note: Parents are created the same way, _when needed_ (i.e. nearly never),
                 #  in @see add_parent_objects
 
                 if how.can_update_only:

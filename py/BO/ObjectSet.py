@@ -83,6 +83,8 @@ class DescribedObjectSet(object):
     and filtered by exclusion conditions.
     """
 
+    __slots__ = ("prj", "user_id", "mapping", "filters")
+
     def __init__(
         self,
         session: Session,
@@ -256,7 +258,7 @@ class EnumeratedObjectSet(MappedTable):
     ) -> Tuple[int, int, List[str]]:
         """
         Delete a chunk from self's object list.
-        Technical Note: We use SQLA Core as we don't want to fetch the rows
+        Technical Note: We use SQLA Core as we don't want to fetch the ORM entities
         """
         # Start with physical images, which are not deleted via a CASCADE on DB side
         # This is maybe due to relationship cycle b/w ObjectHeader and Images @See comment in Image class
@@ -573,7 +575,7 @@ class EnumeratedObjectSet(MappedTable):
         self, from_user_id: Optional[int], but_not_from_user_id: Optional[int]
     ) -> List[HistoricalLastClassif]:
         """
-            Update self's objects so that current classification becomes the last one from hist_user_id,
+            Update (some of) self's objects so that current classification becomes the last one from hist_user_id,
         :param from_user_id: If set (!= None), the user_id to copy classification from. If unset then pick any recent.
         :param but_not_from_user_id: If set (!= None), exclude this user from history picking.
         """
@@ -983,6 +985,7 @@ class ObjectSetFilter(object):
         :param user_id: For filtering validators.
         :param where_clause: SQL filtering clauses on objects will be added there.
         :param params: SQL params will be added there.
+        :param mapping: Free field mappings from project.
         :return:
         """
 
@@ -1024,7 +1027,7 @@ class ObjectSetFilter(object):
                 where_clause *= "obh.classif_who = " + str(user_id)
             elif self.status_filter == "U":
                 where_clause *= "obh.classif_qual IS NULL"
-            elif self.status_filter == "UP":  # Updateable by Prediction
+            elif self.status_filter == "UP":  # Updatable by Prediction
                 where_clause *= (
                     "(obh.classif_qual = '%s' OR obh.classif_qual IS NULL)"
                     % PREDICTED_CLASSIF_QUAL
