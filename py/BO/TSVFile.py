@@ -317,13 +317,13 @@ class TSVFile(object):
     @staticmethod
     def ensure_consistent_fields(
         object_head_to_write: Bean,
-        start_time: Optional[float],
+        start_time: Optional[datetime.datetime],
         current_user: Optional[UserIDT],
     ):
         """
         Some fields need defaults to keep consistency.
-        - 'Validated' and 'Dubious' need a category (now blocked during TSV read), an author and a date
-        - 'Predicted' should set same fields as a prediction ran inside EcoTaxa
+        - 'Validated' and 'Dubious' need a category (forced during TSV read), an author and a date
+        - 'Predicted' should set same fields as a prediction which ran inside EcoTaxa
         """
         if start_time is None:
             return  # No time to update the record, is must be that the full one is sent (during Subset)
@@ -333,9 +333,7 @@ class TSVFile(object):
             assert classif_id
             # Provide reasonable default values
             object_head_to_write["classif_auto_id"] = classif_id
-            object_head_to_write["classif_auto_when"] = datetime.datetime.fromtimestamp(
-                start_time
-            )
+            object_head_to_write["classif_auto_when"] = start_time
             object_head_to_write["classif_auto_score"] = 1.0
             # These are for manual states 'V' or 'D, when 'P' we wipe them
             object_head_to_write["classif_who"] = None
@@ -344,9 +342,7 @@ class TSVFile(object):
             if object_head_to_write.get("classif_who") is None:
                 object_head_to_write["classif_who"] = current_user
             if object_head_to_write.get("classif_when") is None:
-                object_head_to_write["classif_when"] = datetime.datetime.fromtimestamp(
-                    start_time
-                )
+                object_head_to_write["classif_when"] = start_time
 
     @staticmethod
     def prepare_classif_update(object_head: ObjectHeader, object_update: Bean) -> bool:
@@ -732,7 +728,7 @@ class TSVFile(object):
     @staticmethod
     def create_or_link_slaves(
         how: ImportHow,
-        start_time: Optional[float],
+        start_time: Optional[datetime.datetime],
         session: Session,
         object_head_to_write,
         object_fields_to_write,
