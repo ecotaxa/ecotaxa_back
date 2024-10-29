@@ -328,8 +328,10 @@ class ProjectExport(JobServiceBase):
                     obh.acquisid AS processid_internal, obh.acquisid AS acq_id_internal, 
                     sam.sampleid AS sample_id_internal, 
                     obh.classif_id, obh.classif_who, 
-                    -- obh.classif_auto_id, txp.name classif_auto_name, 
-                    -- obh.classif_auto_score, obh.classif_auto_when,
+                    CASE WHEN obh.classif_qual = 'P' THEN obh.classif_id END AS classif_auto_id, 
+                    txp.name classif_auto_name, 
+                    obh.classif_score AS classif_auto_score, 
+                    CASE WHEN obh.classif_qual = 'P' THEN obh.classif_date END AS classif_auto_when,
                     HASHTEXT(obh.orig_id) object_random_value, obh.sunpos object_sunpos """
             if "S" in req.tsv_entities:
                 # This is not really an id, it's computed, why not

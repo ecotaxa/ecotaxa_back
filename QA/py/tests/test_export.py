@@ -132,8 +132,7 @@ def test_export_tsv(database, fastapi, caplog):
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
     # Too much randomness inside: IDs, random value
     # TODO: Better comparison ignoring columns
-    # TODO: Decide if we should emulate now missing auto_ fields
-    # download_and_unzip_and_check(fastapi, job_id, "tsv_with_ids", only_hdr=True)
+    download_and_unzip_and_check(fastapi, job_id, "tsv_with_ids", only_hdr=True)
 
     # TSV export by acquisition
     req_and_filters = {
