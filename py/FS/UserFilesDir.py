@@ -2,22 +2,23 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2021  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-import os
-import zipfile
-import tarfile
 import gzip
-from glob import iglob
+import os
 import shutil
-
+import tarfile
+import zipfile
+from glob import iglob
 # import magic
 from pathlib import Path
-from typing import Optional, List, Set, NamedTuple, Any, Dict
-from helpers.DynamicLogs import get_logger
+from typing import Optional, List, NamedTuple, Dict
+
+from fastapi import HTTPException
 from starlette.datastructures import UploadFile
+
 from BO.User import UserIDT
 from FS.CommonDir import CommonFolder, DirEntryT
 from helpers.AppConfig import Config
-from fastapi import HTTPException
+from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
     DETAIL_INVALID_ZIP_FILE,
     DETAIL_INVALID_LARGE_ZIP_FILE,
