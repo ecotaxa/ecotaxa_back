@@ -290,15 +290,15 @@ class _DBHistoricalLastClassifDescription(DescriptiveModel):
         description="The classification date.",
         example="2021-09-21T14:59:01.007110",
     )
-    histo_classif_id = Field(
-        title="Historical last classification Id",
-        description="The classification Id.",
-        example=56,
-    )
     histo_classif_type = Field(
         title="Historical last classification type",
         description="The type of classification. Could be **A** for Automatic or **M** for Manual.",
         example="M",
+    )
+    histo_classif_id = Field(
+        title="Historical last classification Id",
+        description="The classification Id.",
+        example=56,
     )
     histo_classif_qual = Field(
         title="Historical last classification qualification",
