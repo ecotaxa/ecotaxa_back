@@ -314,7 +314,7 @@ SELECT {HINT} COUNT(*) nbr"""
             + where.get_sql()
         )
         with CodeTimer(
-            "summary: V/D/P for %d using %s and %s" % (proj_id, sql, params),
+            "summary: V/D/P for %d SQL %s PARAMS %s and %s" % (proj_id, sql, params),
             logger,
             0.3,
         ):
