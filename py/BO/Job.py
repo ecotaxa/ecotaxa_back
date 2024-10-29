@@ -5,7 +5,6 @@
 # Business object on top of job.
 # The idea is to keep here the DB details, namely the fact that many fields are JSON-encoded.
 #
-from datetime import datetime
 from json import loads as json_loads, dumps as json_dumps, JSONDecodeError
 from typing import Dict, Optional, Any, List, Final
 

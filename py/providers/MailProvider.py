@@ -5,7 +5,7 @@
 # Send Account registration , status information and validation emails
 #
 import smtplib
-from datetime import datetime, timedelta
+from datetime import timedelta
 from email.message import EmailMessage
 from enum import Enum
 from typing import Optional, Final, Tuple, Dict, Any
