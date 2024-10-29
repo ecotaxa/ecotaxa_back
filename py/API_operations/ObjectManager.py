@@ -123,7 +123,7 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
         if order_clause is not None:
             sql += order_clause.get_sql()
 
-        with CodeTimer("query: for %d using %s " % (proj_id, sql), logger):
+        with CodeTimer("Query: SQL: %s PARAMS: %s: " % (sql, params), logger, 1):
             res: Result = self.ro_session.execute(text(sql), params)
         ids = []
         details = []
@@ -138,7 +138,8 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
             details.append(extra)
 
         if total == 0:
-            # Total was not computed or left to 0
+            # Total was not computed, left to 0, execute again SQL from the same object set, but
+            # without columns in select list, and no limit function.
             total, _nbr_v, _nbr_d, _nbr_p = self.summary(
                 current_user_id, proj_id, filters, only_total=True
             )
@@ -288,10 +289,12 @@ SELECT COUNT(*) nbr"""
             + " "
             + where.get_sql()
         )
-
-        with CodeTimer("summary: V/D/P for %d using %s " % (proj_id, sql), logger):
+        with CodeTimer(
+            "summary: V/D/P for %d SQL %s PARAMS %s " % (proj_id, sql, params),
+            logger,
+            0.3,
+        ):
             res: Result = self.ro_session.execute(text(sql), params)
-
         nbr: int
         nbr_v: Optional[int]
         nbr_d: Optional[int]
