@@ -123,10 +123,8 @@ class DescribedSampleSet(object):
         qry = self._session.query(Sample)
         qry = qry.join(Sample, Project.all_samples)
         qry = qry.filter(Project.projid.in_(self.prj_ids))
-        if self.pattern != "%%":
-            qry = qry.filter(Sample.orig_id.ilike(self.pattern))
-        with CodeTimer("Samples for projects %s: " % str(self.prj_ids), logger):
-            return qry.all()
+        qry = qry.filter(Sample.orig_id.ilike(self.pattern))
+        return qry.all()
 
 
 class EnumeratedSampleSet(MappedTable):
