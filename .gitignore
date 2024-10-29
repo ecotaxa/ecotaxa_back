@@ -4,5 +4,5 @@ QA/venv
 docker/pg_data
 *.pyc
 /venv/
-py/.idea
-QA/py/.idea
+py/.idea/
+QA/py/.idea/
