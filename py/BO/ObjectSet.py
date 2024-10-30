@@ -54,7 +54,6 @@ from DB.Object import (
     VALIDATED_CLASSIF_QUAL,
     ObjectHeader,
     ObjectIDT,
-    ObjectIDListT,
     NON_UPDATABLE_VIA_API,
     DUBIOUS_CLASSIF_QUAL,
     ObjectIDListT,
@@ -1065,11 +1064,6 @@ class ObjectSetFilter(object):
                 )
                 params["taxo"] = [int(self.taxo)]
             else:
-                taxa = [int(x) for x in self.taxo.split(",") if x != "None"]
-                if len(taxa) == 1:
-                    where_clause *= "obh.classif_id = :taxo"
-                    params["taxo"] = taxa[0]
-                else:
                 taxa = [int(x) for x in self.taxo.split(",") if x != "None"]
                 if len(taxa) == 1:
                     where_clause *= "obh.classif_id = :taxo"

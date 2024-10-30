@@ -394,7 +394,6 @@ class TSVFile(object):
             if target_state == PREDICTED_CLASSIF_QUAL:
                 if previous_state == PREDICTED_CLASSIF_QUAL:
                     # Assume that the new pseudo-prediction is not new, as it resulted in same category
-                    # object_update.classif_auto_when = object_head.classif_auto_when
                     pass
                 else:
                     return True  # Full state change

@@ -314,7 +314,7 @@ SELECT {HINT} COUNT(*) nbr"""
             + where.get_sql()
         )
         with CodeTimer(
-            "summary: V/D/P for %d SQL %s PARAMS %s" % (proj_id, sql, params),
+            "summary: V/D/P for %d SQL %s PARAMS %s " % (proj_id, sql, params),
             logger,
             0.3,
         ):
@@ -495,10 +495,7 @@ SELECT {HINT} COUNT(*) nbr"""
         classif_ids = [forced_id] * len(obj_set.object_ids)
         now = db_server_now(self.session)
         nb_upd, all_changes = obj_set.classify_validate(
-            current_user_id,
-            classif_ids,
-            "=",  # TODO bug here? we have to keep consistency
-            now,
+            current_user_id, classif_ids, "=", now
         )
 
         if only_taxon is not None:

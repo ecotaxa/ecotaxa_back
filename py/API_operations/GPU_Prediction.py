@@ -7,7 +7,6 @@
 # - Use selected features on source projects to train a Random Forest classifier
 # - Use the trained classifier on the target project.
 #
-from datetime import datetime
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -20,14 +19,12 @@ from BO.Project import ProjectBO
 from BO.ProjectSet import LimitedInCategoriesProjectSet, FeatureConsistentProjectSet
 from BO.Rights import RightsBO, Action
 from BO.Training import TrainingBO
-from BO.User import UserIDT
 from DB.Project import ProjectIDT, Project
 from DB.helpers import Result
 from DB.helpers.Direct import text
 from ML.Deep_features_extractor import DeepFeaturesExtractor
 from ML.Random_forest_classifier import OurRandomForestClassifier
 from helpers.DynamicLogs import get_logger
-
 # TODO: Move somewhere else
 from helpers.Timer import CodeTimer
 from .ObjectManager import ObjectManager

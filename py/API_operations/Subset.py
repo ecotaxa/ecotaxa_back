@@ -3,7 +3,6 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import shutil
-from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple, Dict, Set, Iterable
 
