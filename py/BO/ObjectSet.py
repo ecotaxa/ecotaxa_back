@@ -84,7 +84,7 @@ ObjectSetClassifChangesT = OrderedDictT[ChangeTupleT, ObjectIDListT]
 logger = get_logger(__name__)
 
 # If one of these statuses are required, then the classif_id must be valid
-MEANS_CLASSIF_ID_EXIST = ("P", "V", "PV", "PVD", "NVM", "VM")
+MEANS_CLASSIF_ID_EXIST = ("P", "V", "D", "PV", "PVD", "NVM", "VM")
 # MEANS_TRAINING_ID_EXIST = ("P",)
 NO_HISTO = "n"
 
@@ -210,7 +210,6 @@ class DescribedObjectSet(object):
                 else f"(select * from {Image.__tablename__} img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true"
             )
             selected_tables.set_lateral(f"(select * from {Image.__tablename__}")
-            #  selected_tables.set_outer("images img ")
         if "usr." in column_referencing_sql:
             selected_tables += f"{User.__tablename__} usr ON obh.classif_who = usr.id"
             selected_tables.set_outer(f"{User.__tablename__} usr ")
@@ -1071,15 +1070,22 @@ class ObjectSetFilter(object):
                     where_clause *= "obh.classif_id = :taxo"
                     params["taxo"] = taxa[0]
                 else:
+                taxa = [int(x) for x in self.taxo.split(",") if x != "None"]
+                if len(taxa) == 1:
+                    where_clause *= "obh.classif_id = :taxo"
+                    params["taxo"] = taxa[0]
+                else:
                     where_clause *= "obh.classif_id = ANY (:taxo)"
                     params["taxo"] = taxa
 
         if self.status_filter:
             if self.status_filter == "NV":
+                # Not Validated, better to enumerate the _other_ states
                 cond = f"obh.classif_qual in ('{DUBIOUS_CLASSIF_QUAL}','{PREDICTED_CLASSIF_QUAL}')"
                 if "taxo" not in params:
                     where_clause *= f"({cond} OR obh.classif_qual IS NULL)"
                 else:  # classif_qual cannot be null if a category is present
+                    # E.g. Not Validated Chaetognatha
                     where_clause *= cond
             elif self.status_filter == "PV":
                 where_clause *= "obh.classif_qual IN ('%s','%s')" % (
