@@ -73,7 +73,7 @@ ObjectSetClassifChangesT = OrderedDictT[ChangeTupleT, ObjectIDListT]
 logger = get_logger(__name__)
 
 # If one of these statuses are required, then the classif_id must be valid
-MEANS_CLASSIF_ID_EXIST = ("V", "PV", "PVD", "NVM", "VM")
+MEANS_CLASSIF_ID_EXIST = ("P", "V", "D", "PV", "PVD", "NVM", "VM")
 NO_HISTO = "n"
 
 
@@ -129,8 +129,13 @@ class DescribedObjectSet(object):
         selected_tables = FromClause(
             f"(select (:projid) as projid) prjs"
         )  # Prepare a future _set_ of projects
-        selected_tables += f"{Project.__tablename__} prj ON prj.projid = prjs.projid"
-        selected_tables += f"{Sample.__tablename__} sam ON sam.projid = prj.projid"
+        if "prj." in column_referencing_sql:
+            selected_tables += (
+                f"{Project.__tablename__} prj ON prj.projid = prjs.projid"
+            )
+            selected_tables += f"{Sample.__tablename__} sam ON sam.projid = prj.projid"
+        else:
+            selected_tables += f"{Sample.__tablename__} sam ON sam.projid = prjs.projid"
         selected_tables += (
             f"{Acquisition.__tablename__} acq ON acq.acq_sample_id = sam.sampleid"
         )
@@ -168,15 +173,18 @@ class DescribedObjectSet(object):
             selected_tables += (
                 f"{Taxonomy.__tablename__} txo ON txo.id = obh.classif_id"
             )
-            if self.filters.status_filter not in MEANS_CLASSIF_ID_EXIST:
+            if (
+                self.filters.status_filter not in MEANS_CLASSIF_ID_EXIST
+                and not self.filters.taxo  # If some taxo is needed it's a plain join
+            ):
                 selected_tables.set_outer(f"{Taxonomy.__tablename__} txo ")
         if "img." in column_referencing_sql:
-            selected_tables += f"{Image.__tablename__} img ON obh.objid = img.objid " + (
-                f"AND img.imgrank = (SELECT MIN(img2.imgrank) FROM {Image.__tablename__} img2 WHERE img2.objid = obh.objid)"
-                if not all_images
-                else ""
+            selected_tables += (
+                f"{Image.__tablename__} img ON obh.objid = img.objid "
+                if all_images
+                else f"(select * from {Image.__tablename__} img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true"
             )
-            #  selected_tables.set_outer("images img ")
+            selected_tables.set_lateral(f"(select * from {Image.__tablename__}")
         if "usr." in column_referencing_sql:
             selected_tables += f"{User.__tablename__} usr ON obh.classif_who = usr.id"
             selected_tables.set_outer(f"{User.__tablename__} usr ")
@@ -194,21 +202,26 @@ class DescribedObjectSet(object):
             self.filters.session, self.prj, self.user_id, filters_but_taxo
         )
 
-    @staticmethod
-    def driving_table_is_obj_field(where: str, order: str) -> bool:
+    def driving_table_is_obj_field(self, where: str, order: str) -> bool:
         """Choose the fastest way to find needed objects.
         We mirror acquis_id from obj_head to obj_fields so 2 options are:
         -1 Fetch via acquis_id the big rows in obj_fields and then PK access to obj_head
         -2 Fetch via acquis_id the small rows in obj_head and then PK access to obj_fields
-        1 is faster if we need all rows, 2 is better if some filter eliminates based on obj_head cols.
+        1 is faster if we need the majority of rows, 2 is better if some filter eliminates based on obj_head cols.
         We don't know in advance the selectivity of filters, so there is kind of heuristic here.
         """
         ret = False
         if ("obf." in order) or ("obf." in where and "obh." not in where):
             ret = True
         if (
-            "obh.classif_id" in where or "obh.classif_qual" in where
-        ):  # These are included in index
+            "obh.classif_id" in where
+        ):  # Very discriminating and covered by index 'is_objectsacqclassifqual'
+            ret = False
+        if (
+            "obh.classif_qual" in where  # covered as well by 'is_objectsacqclassifqual'
+            and self.filters.status_filter
+            not in ("NV",)  # This OR-linked condition does not end up in index scan
+        ):
             ret = False
         return ret
 
@@ -507,7 +520,7 @@ class EnumeratedObjectSet(MappedTable):
         Query for last classification history on all objects of self, mixed with present state in order
         to have restore-able lines.
         """
-        # Get the histo entries
+        # Get the historical entries
         subqry = self.session.query(
             ObjectsClassifHisto,
             func.rank()
@@ -557,7 +570,7 @@ class EnumeratedObjectSet(MappedTable):
             isouter=(from_user_id is None),
         )
         if from_user_id is not None:
-            # If taking history from a user, don't apply to the objects he/she classsified
+            # If taking history from a user, don't apply to the objects he/she classified
             # in last already.
             qry = qry.filter(ObjectHeader.classif_who != from_user_id)
             qry = qry.filter(subq_alias.c.rnk == 1)
@@ -845,7 +858,7 @@ class ObjectSetFilter(object):
     A filter, inside an object set.
     """
 
-    TO_COL: Final = {"score": ObjectHeader.classif_auto_score.name}
+    COL_IN_FREE_NUM: Final = {"score": ObjectHeader.classif_auto_score.name}
     TAXO_KEYS: Final = ["taxo", "taxochild"]
 
     def __init__(self, session: Session, filters: ProjectFiltersDict):
@@ -901,10 +914,19 @@ class ObjectSetFilter(object):
         """
         If, and only if, the filter is on a single taxon, return its identifier
         """
-        if self.samples:
+        if self.taxo:
+            cats = [int(x) for x in self.taxo.split(",")]
+            if len(cats) == 1:
+                the_one = cats[0]
+            else:
+                return None
+        else:
             return None
 
         if self.status_filter:
+            return None
+
+        if self.samples:
             return None
 
         if self.MapN or self.MapW or self.MapE or self.MapS:
@@ -952,10 +974,7 @@ class ObjectSetFilter(object):
         if self.taxo_child:
             return None
 
-        if self.taxo:
-            cats = [int(x) for x in self.taxo.split(",")]
-            if len(cats) == 1:
-                return cats[0]
+        return the_one
 
         return None
 
@@ -974,7 +993,7 @@ class ObjectSetFilter(object):
         where_clause: WhereClause,
         params: SQLParamDict,
         user_id: Optional[UserIDT],
-        mapping: TableMapping,
+        object_mappings: TableMapping,
     ) -> None:
         """
             The generated SQL assumes that, in the query:
@@ -985,7 +1004,7 @@ class ObjectSetFilter(object):
         :param user_id: For filtering validators.
         :param where_clause: SQL filtering clauses on objects will be added there.
         :param params: SQL params will be added there.
-        :param mapping: Free field mappings from project.
+        :param object_mappings: Free field mappings from project.
         :return:
         """
 
@@ -1005,15 +1024,23 @@ class ObjectSetFilter(object):
                 )
                 params["taxo"] = [int(self.taxo)]
             else:
-                where_clause *= "obh.classif_id = ANY (:taxo)"
-                params["taxo"] = [int(x) for x in self.taxo.split(",")]
+                taxa = [int(x) for x in self.taxo.split(",") if x != "None"]
+                if len(taxa) == 1:
+                    where_clause *= "obh.classif_id = :taxo"
+                    params["taxo"] = taxa[0]
+                else:
+                    where_clause *= "obh.classif_id = ANY (:taxo)"
+                    params["taxo"] = taxa
 
         if self.status_filter:
             if self.status_filter == "NV":
-                where_clause *= (
-                    "(obh.classif_qual != '%s' OR obh.classif_qual IS NULL)"
-                    % VALIDATED_CLASSIF_QUAL
-                )
+                # Not Validated, better to enumerate the _other_ states
+                cond = f"obh.classif_qual in ('{DUBIOUS_CLASSIF_QUAL}','{PREDICTED_CLASSIF_QUAL}')"
+                if "taxo" not in params:
+                    where_clause *= f"({cond} OR obh.classif_qual IS NULL)"
+                else:  # classif_qual cannot be null if a category is present
+                    # E.g. Not Validated Chaetognatha
+                    where_clause *= cond
             elif self.status_filter == "PV":
                 where_clause *= "obh.classif_qual IN ('%s','%s')" % (
                     VALIDATED_CLASSIF_QUAL,
@@ -1088,7 +1115,7 @@ class ObjectSetFilter(object):
 
         if self.validated_from:
             if self.status_filter == "PVD":
-                # Intepret the date as a 'changed_from' filter
+                # Interpret the date as a 'changed_from' filter
                 where_clause *= "COALESCE(obh.classif_when, obh.classif_auto_when) >= TO_TIMESTAMP(:validfromdate,'YYYY-MM-DD HH24:MI')"
             else:
                 where_clause *= "obh.classif_when >= TO_TIMESTAMP(:validfromdate,'YYYY-MM-DD HH24:MI')"
@@ -1112,11 +1139,11 @@ class ObjectSetFilter(object):
                 bound = self.free_num_end
             try:
                 criteria_col = "n%02d" % int(self.free_num[2:])
-                is_split, real_col = mapping.phy_lookup(criteria_col)
+                is_split, real_col = object_mappings.phy_lookup(criteria_col)
                 col_ref = ("obf" if is_split else "obh") + "." + real_col
                 where_clause *= col_ref + comp_op + ":freenumbnd"
             except ValueError:
-                criteria_col = self.TO_COL.get(self.free_num[1:], "?")
+                criteria_col = self.COL_IN_FREE_NUM.get(self.free_num[1:], "?")
                 where_clause *= "obh." + criteria_col + comp_op + ":freenumbnd"
             params["freenumbnd"] = bound
 
@@ -1124,7 +1151,7 @@ class ObjectSetFilter(object):
             criteria_tbl = self.free_text[0]
             criteria_col = "t%02d" % int(self.free_text[2:])
             if criteria_tbl == "o":
-                is_split, real_col = mapping.phy_lookup(criteria_col)
+                is_split, real_col = object_mappings.phy_lookup(criteria_col)
                 col_ref = ("obf" if is_split else "obh") + "." + real_col
                 where_clause *= col_ref + " ILIKE :freetxtval"
             elif criteria_tbl == "a":
