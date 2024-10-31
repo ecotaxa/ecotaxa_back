@@ -157,6 +157,8 @@ docker stop ecotaxa_tox
 docker rm ecotaxa_tox
 ```
 
+La page swagger <ROOTURL>/docs peut etre utilement utiliser pour tester les endpoints sans trop d'effort de configuration    .
+
 # Import d'un projet de test
 
 Pour commencer à remplir une base de données vide, on peut importer un projet de test à partir d'un export EcoTaxa.
