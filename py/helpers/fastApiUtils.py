@@ -328,8 +328,6 @@ def _get_range_header(range_header: str, file_size: int) -> Tuple[int, int]:
     return start, end
 
 
-def ranged_streaming_response(
-    content: BinaryIO,
 class AutoCloseBinaryIO(object):
     """
     An IO object which closes underlying file pointer when going out of scope.
@@ -358,6 +356,23 @@ class AutoCloseBinaryIO(object):
     def __del__(self):
         if self.fd is not None:
             self.fd.close()
+
+
+last_mem_cleanup = time.time()
+
+
+def regular_mem_cleanup():
+    global last_mem_cleanup
+    if (now := time.time()) - last_mem_cleanup > 60:
+        gc.collect()
+        _trim_memory()
+        last_mem_cleanup = now
+
+
+def _trim_memory() -> int:
+    libc = ctypes.CDLL("libc.so.6")
+    return libc.malloc_trim(0)
+
 
 def adjust_if_ranged(
     range_hdr: Optional[str],
