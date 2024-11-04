@@ -438,8 +438,8 @@ class TSVFile(object):
                 field
                 for field in field_set
                 if how.custom_mapping.search_field(field) is not None
-                   or field in GlobalMapping.PREDEFINED_FIELDS
-                   or field in GlobalMapping.DOUBLED_FIELDS
+                or field in GlobalMapping.PREDEFINED_FIELDS
+                or field in GlobalMapping.DOUBLED_FIELDS
             ]
         )
         # Remove classification fields if updating but not classification
