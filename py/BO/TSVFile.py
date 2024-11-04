@@ -276,9 +276,13 @@ class TSVFile(object):
                             orig_file_name, backup_img_to_write.imgid
                         )
                         # Get original image dimensions
-                        im = PIL_Image.open(where.vault.image_path(sub_path))
-                        backup_img_to_write.width, backup_img_to_write.height = im.size
-                        del im
+                        img_path = where.vault.image_path(sub_path)
+                        with open(img_path, "rb") as img_fd:
+                            im = PIL_Image.open(img_fd)
+                            (
+                                backup_img_to_write.width,
+                                backup_img_to_write.height,
+                            ) = im.size
 
                 if new_records > 0:
                     self.deal_with_images(where, how, image_to_write, instead_image)
@@ -797,7 +801,8 @@ class TSVFile(object):
             if how.can_update_only:
                 # No objects creation while updating
                 logger.info(
-                    "Object %s not found while updating ", object_head_to_write.orig_id
+                    "Object %s not found while updating ",
+                    object_head_to_write.orig_id,
                 )
                 ret = 0
             else:

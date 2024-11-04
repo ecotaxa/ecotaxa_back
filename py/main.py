@@ -5,6 +5,7 @@
 # Based on https://fastapi.tiangolo.com/
 #
 import os
+import sys
 import time
 from logging import INFO
 from typing import Union, Tuple, List, Dict, Any, Optional
@@ -149,7 +150,7 @@ from helpers.fastApiUtils import (
     get_optional_current_user,
     MyORJSONResponse,
     ValidityThrower,
-    ranged_streaming_response,
+    adjust_if_ranged,
 )
 from helpers.login import LoginService
 from helpers.pydantic import sort_and_prune
@@ -3268,18 +3269,16 @@ async def get_job_file(  # async due to StreamingResponse
     """
     with JobCRUDService() as sce:
         with RightsThrower():
-            file_like, length, file_name, media_type = sce.get_file_stream(
-                current_user, job_id
-            )
-        headers = {
-            "content-disposition": 'attachment; filename="' + file_name + '"',
-            "content-length": str(length),
-            "accept-ranges": "bytes",
-        }
-    return ranged_streaming_response(
+            file_like, file_name, media_type = sce.get_file_stream(current_user, job_id)
+    headers = {
+        "content-disposition": 'attachment; filename="' + file_name + '"',
+        "content-length": str(file_like.size()),
+        "accept-ranges": "bytes",
+    }
+    status_code = adjust_if_ranged(range_header, file_like, headers)
+    return StreamingResponse(
         content=file_like,
-        range_hdr=range_header,
-        file_size=length,
+        status_code=status_code,
         headers=headers,
         media_type=media_type,
     )

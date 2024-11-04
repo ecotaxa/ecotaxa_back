@@ -4,12 +4,16 @@
 #
 # Utils for configuring fastApi
 #
+import ctypes
 import decimal
+import gc
 import json
 import logging
 import sys
+import time
 import traceback
 from contextlib import AbstractContextManager
+from os import fstat
 from os.path import dirname
 from typing import Any, Optional, Dict, List, Type, Union, BinaryIO, Tuple
 
@@ -22,7 +26,7 @@ from itsdangerous import URLSafeTimedSerializer, TimestampSigner, SignatureExpir
 from pydantic.main import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
-from starlette.responses import Response, JSONResponse, StreamingResponse
+from starlette.responses import Response, JSONResponse
 from starlette.status import HTTP_403_FORBIDDEN, HTTP_204_NO_CONTENT
 
 from helpers.AppConfig import Config
@@ -326,24 +330,50 @@ def _get_range_header(range_header: str, file_size: int) -> Tuple[int, int]:
 
 def ranged_streaming_response(
     content: BinaryIO,
-    range_hdr: Optional[str],
-    file_size: int,
-    headers: dict,
-    media_type: str,
-) -> StreamingResponse:
-    status_code = status.HTTP_200_OK
+class AutoCloseBinaryIO(object):
+    """
+    An IO object which closes underlying file pointer when going out of scope.
+    """
 
+    def __init__(self, path: str):
+        self.fd: BinaryIO = open(path, "rb")
+
+    def size(self) -> int:
+        return fstat(self.fd.fileno()).st_size
+
+    def seek(self, offset: int):
+        return self.fd.seek(offset)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        try:
+            return self.fd.__next__()
+        except StopIteration:
+            self.fd.close()
+            self.fd = None
+            raise StopIteration()
+
+    def __del__(self):
+        if self.fd is not None:
+            self.fd.close()
+
+def adjust_if_ranged(
+    range_hdr: Optional[str],
+    content: AutoCloseBinaryIO,
+    headers: dict,
+) -> int:
+    status_code = status.HTTP_200_OK
     if range_hdr is not None:
+        file_size = content.size()
         start, end = _get_range_header(range_hdr, file_size)
-        left_size = end - start  # + 1
+        left_size = end - start
         headers["content-length"] = str(left_size)
         headers["content-range"] = f"bytes {start}-{end}/{file_size}"
         content.seek(start)
         status_code = status.HTTP_206_PARTIAL_CONTENT
-
-    return StreamingResponse(
-        content=content, status_code=status_code, headers=headers, media_type=media_type
-    )
+    return status_code
 
 
 class SuppressNoResponseReturnedMiddleware(BaseHTTPMiddleware):
