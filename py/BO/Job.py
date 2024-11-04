@@ -113,7 +113,7 @@ class JobBO(object):
         """
         job = session.query(Job).get(job_id)
         if job is None:
-            raise ValueError
+            raise ValueError(f"Missing job {job_id}")
         job.updated_on = DateTime.now_time()
         ret = JobBO(job)
         ret._session = session

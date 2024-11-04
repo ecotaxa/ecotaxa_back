@@ -156,7 +156,7 @@ from helpers.fastApiUtils import (
     get_optional_current_user,
     MyORJSONResponse,
     ValidityThrower,
-    ranged_streaming_response,
+    adjust_if_ranged,
 )
 from helpers.login import LoginService
 from helpers.pydantic import sort_and_prune
@@ -384,8 +384,9 @@ def get_current_user_prefs(
 
     Available keys are **cwd**, **img_import** and **filters**.
     """
-    with UserService() as sce:
-        return sce.get_preferences_per_project(current_user, project_id, key)
+    with RightsThrower():
+        with UserService() as sce:
+            return sce.get_preferences_per_project(current_user, project_id, key)
 
 
 @app.put(
@@ -3321,18 +3322,16 @@ async def get_job_file(  # async due to StreamingResponse
     """
     with JobCRUDService() as sce:
         with RightsThrower():
-            file_like, length, file_name, media_type = sce.get_file_stream(
-                current_user, job_id
-            )
-        headers = {
-            "content-disposition": 'attachment; filename="' + file_name + '"',
-            "content-length": str(length),
-            "accept-ranges": "bytes",
-        }
-    return ranged_streaming_response(
+            file_like, file_name, media_type = sce.get_file_stream(current_user, job_id)
+    headers = {
+        "content-disposition": 'attachment; filename="' + file_name + '"',
+        "content-length": str(file_like.size()),
+        "accept-ranges": "bytes",
+    }
+    status_code = adjust_if_ranged(range_header, file_like, headers)
+    return StreamingResponse(
         content=file_like,
-        range_hdr=range_header,
-        file_size=length,
+        status_code=status_code,
         headers=headers,
         media_type=media_type,
     )
@@ -3786,6 +3785,9 @@ JOB_INTERVAL = 5
 
 @app.on_event("startup")
 def startup_event() -> None:
+    # Small service call, to ensure the DB is OK
+    with ConstantsService():
+        pass
     # Don't run predictions, they are left to a specialized runner
     JobScheduler.FILTER = [PredictForProject.JOB_TYPE]
     JobScheduler.launch_at_interval(JOB_INTERVAL)

@@ -311,12 +311,13 @@ class TSVFile(object):
                             orig_file_name, backup_img_to_write.imgid
                         )
                         # Get original image dimensions
-                        im = PIL_Image.open(where.vault.image_path(sub_path))
-                        (
-                            backup_img_to_write.width,
-                            backup_img_to_write.height,
-                        ) = im.size
-                        del im
+                        img_path = where.vault.image_path(sub_path)
+                        with open(img_path, "rb") as img_fd:
+                            im = PIL_Image.open(img_fd)
+                            (
+                                backup_img_to_write.width,
+                                backup_img_to_write.height,
+                            ) = im.size
 
                 if new_records > 0:
                     self.deal_with_images(where, how, image_to_write, instead_image)
@@ -437,8 +438,8 @@ class TSVFile(object):
                 field
                 for field in field_set
                 if how.custom_mapping.search_field(field) is not None
-                or field in GlobalMapping.PREDEFINED_FIELDS
-                or field in GlobalMapping.DOUBLED_FIELDS
+                   or field in GlobalMapping.PREDEFINED_FIELDS
+                   or field in GlobalMapping.DOUBLED_FIELDS
             ]
         )
         # Remove classification fields if updating but not classification

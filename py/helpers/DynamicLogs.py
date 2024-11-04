@@ -6,8 +6,9 @@ import abc
 import logging
 import time
 from abc import ABC
-from logging import Logger
+from logging import Logger, Handler
 from threading import get_ident
+from typing import Dict
 
 LOGGING_FORMAT = (
     "%(process)d:%(threadName)s:%(asctime)s:%(name)s:%(levelname)s %(message)s"
@@ -21,16 +22,16 @@ class UTCFormatter(logging.Formatter):
     converter = time.gmtime
 
 
-class PerThreadHandler(logging.Handler):
+class PerThreadHandler(Handler):
     """
     A constant Handler to a switching destination.
     It acts as a simple relay to another handler.
     """
 
-    def __init__(self, handler):
+    def __init__(self, handler: Handler):
         super().__init__()
         self.handler = handler
-        self.alt_handlers = {}
+        self.alt_handlers: Dict[int, Handler] = {}
         self.level = handler.level
 
     def emit(self, record):
@@ -107,8 +108,8 @@ class LogsSwitcher(object):
         self.switch()
         return self
 
-    def switch(self):
-        switch_to = self.emitter.log_file_path()
+    def switch(self) -> None:
+        switch_to: str = self.emitter.log_file_path()
         if switch_to is not None:
             # Log the fact that we switch to a new file, to current log file.
             logging.log(logging.INFO, "Switching logs to %s", switch_to)
