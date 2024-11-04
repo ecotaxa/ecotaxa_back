@@ -122,11 +122,14 @@ mixed_scheme = BearerOrCookieAuth(tokenUrl="/token")
 # used for cases when authentication is optional
 mixed_scheme_nothrow = BearerOrCookieAuth(tokenUrl="/token", auto_error=False)
 
-_credentials_exception = HTTPException(
-    status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="Could not validate credentials",
-    headers={"WWW-Authenticate": "Bearer"},
-)
+
+def _credentials_exception():
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
 
 MAX_TOKEN_AGE = 2678400  # max token age, 31 days
 
@@ -162,13 +165,13 @@ def _get_current_user(token) -> int:  # pragma: no cover
                     ret: int = int(payload[poss_key])
                     break
             else:
-                raise _credentials_exception
+                raise _credentials_exception()
         except ValueError:
-            raise _credentials_exception
+            raise _credentials_exception()
     except (SignatureExpired, BadSignature):
-        raise _credentials_exception
+        raise _credentials_exception()
     if ret < 0:
-        raise _credentials_exception
+        raise _credentials_exception()
     return ret
 
 
@@ -193,9 +196,10 @@ async def get_current_user(token: str = Depends(mixed_scheme)) -> int:
     return _get_current_user(token)
 
 
-_forbidden_exception = HTTPException(
-    status_code=status.HTTP_403_FORBIDDEN, detail="You can't do this."
-)
+def _forbidden_exception():
+    return HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN, detail="You can't do this."
+    )
 
 _not_found_exception = HTTPException(
     status_code=status.HTTP_404_NOT_FOUND, detail="Not found."
@@ -216,9 +220,9 @@ class RightsThrower(AbstractContextManager):
             if exc_type == AssertionError:
                 if exc_val.args:
                     if exc_val.args[0] == "Not authorized":
-                        raise _forbidden_exception
+                        raise _forbidden_exception()
                     elif exc_val.args[0] == "Not found":
-                        raise _not_found_exception
+                        raise _not_found_exception()
             # Re-raise
             return False
 
