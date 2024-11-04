@@ -40,14 +40,13 @@ class ImportServiceBase(JobServiceOnProjectBase, ABC):
 
     def unzip_if_needed(self, owner_id: UserIDT) -> str:
         """
-        If a .zip was sent, unzip it. Otherwise it is assumed that we point to an import directory.
+        If a .zip was sent, unzip it. Otherwise, it is assumed that we point to an import directory.
         """
         source_dir_or_zip = self.req.source_path
         my_files_source_dir = UserFilesDirectory(owner_id)._root_path.joinpath(
             source_dir_or_zip.lstrip(os.path.sep)
         )
         if my_files_source_dir.exists():
-
             return str(my_files_source_dir)
         elif UserDirectory(owner_id).contains(source_dir_or_zip):
             # OK

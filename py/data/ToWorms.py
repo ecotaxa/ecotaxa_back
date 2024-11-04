@@ -25,7 +25,12 @@ from openpyxl.worksheet.worksheet import Worksheet
 from typing_extensions import ParamSpec
 
 from BO.Classification import ClassifIDT, ClassifIDListT
-from BO.Taxonomy import TaxonBO, StrictWoRMSSetFromTaxaSet, TaxonBOSetFromWoRMS, TaxonBOSet
+from BO.Taxonomy import (
+    TaxonBO,
+    StrictWoRMSSetFromTaxaSet,
+    TaxonBOSetFromWoRMS,
+    TaxonBOSet,
+)
 from DB.helpers.ORM import Session
 from data.structs.TaxaTree import TaxaTree
 
@@ -220,6 +225,7 @@ class ToWorms(object):
         # The actions, per eco_id
         self.actions: Dict[int, Action] = {}
         xlsx_path = join(HERE, XLSX)
+        # TODO: Lots of mem taken here and nearly never used
         workbook: Workbook = openpyxl.load_workbook(xlsx_path, read_only=True)
         for a_tab in TABS:
             self.analyze(workbook[a_tab])
@@ -274,7 +280,9 @@ class ToWorms(object):
             ]
         )
         target_or_parents = list(set(target_or_parents))
-        worms_taxo_infos: List[TaxonBO] = TaxonBOSetFromWoRMS(self.session, target_or_parents).as_list()
+        worms_taxo_infos: List[TaxonBO] = TaxonBOSetFromWoRMS(
+            self.session, target_or_parents
+        ).as_list()
         worms_aphia_ids = set([a_taxon.id for a_taxon in worms_taxo_infos])
         # # Commented out for tests
         # assert len(worms_taxo_infos) == len(target_or_parents), "%s missing or extra" % str(
@@ -287,7 +295,9 @@ class ToWorms(object):
     def add_to_unieuk(self, eco_ids: ClassifIDListT) -> None:
         # Add taxo from IDs, if they are not there already
         missing_eco_ids = [an_id for an_id in eco_ids if an_id not in self.unieuk]
-        ecotaxa_taxo_infos: List[TaxonBO] = TaxonBOSet(self.session, missing_eco_ids).as_list()
+        ecotaxa_taxo_infos: List[TaxonBO] = TaxonBOSet(
+            self.session, missing_eco_ids
+        ).as_list()
         # assert len(ecotaxa_taxo_infos) == len(all_eco_ids), "Some categories don't resolve"
         for an_info in ecotaxa_taxo_infos:
             self.unieuk[an_info.id] = an_info
@@ -295,9 +305,7 @@ class ToWorms(object):
             self.unieuk_tree.find_node(an_info.id).add_to_node(an_info.nb_objects)
             # print("E: %d -> %s %s" % (an_info.id, an_info.lineage, len(an_info.children) == 0))
 
-    def add_to_unieuk_with_lineage(
-        self, eco_ids: ClassifIDListT
-    ) -> None:
+    def add_to_unieuk_with_lineage(self, eco_ids: ClassifIDListT) -> None:
         """Add taxo from IDs, if not there, with their lineage"""
         self.add_to_unieuk(eco_ids)
         needed_parents = []
@@ -701,7 +709,9 @@ class ToWorms(object):
         """
         eco_tree = TaxaTree(0, "root")
         all_eco_ids = list(self.unieuk.keys())
-        ecotaxa_taxo_infos: List[TaxonBO] = TaxonBOSet(self.session, all_eco_ids).as_list()
+        ecotaxa_taxo_infos: List[TaxonBO] = TaxonBOSet(
+            self.session, all_eco_ids
+        ).as_list()
         assert len(ecotaxa_taxo_infos) == len(
             all_eco_ids
         ), "In old_way, some categories don't resolve"
@@ -714,7 +724,9 @@ class ToWorms(object):
 
         worms_tree = TaxaTree(0, "worms")
         all_worms_ids = [a_worms_info.aphia_id for a_worms_info in mapping.values()]
-        worms_taxo_infos: List[TaxonBO] = TaxonBOSetFromWoRMS(self.session, all_worms_ids).as_list()
+        worms_taxo_infos: List[TaxonBO] = TaxonBOSetFromWoRMS(
+            self.session, all_worms_ids
+        ).as_list()
         for an_info in worms_taxo_infos:
             worms_tree.add_path(list(zip(an_info.id_lineage, an_info.lineage)))
 
