@@ -5,7 +5,6 @@
 # Based on https://fastapi.tiangolo.com/
 #
 import os
-import sys
 import time
 from logging import INFO
 from typing import Union, Tuple, List, Dict, Any, Optional
@@ -378,8 +377,9 @@ def get_current_user_prefs(
 
     Available keys are **cwd**, **img_import** and **filters**.
     """
-    with UserService() as sce:
-        return sce.get_preferences_per_project(current_user, project_id, key)
+    with RightsThrower():
+        with UserService() as sce:
+            return sce.get_preferences_per_project(current_user, project_id, key)
 
 
 @app.put(
@@ -3732,6 +3732,9 @@ JOB_INTERVAL = 5
 
 @app.on_event("startup")
 def startup_event() -> None:
+    # Small service call, to ensure the DB is OK
+    with ConstantsService():
+        pass
     # Don't run predictions, they are left to a specialized runner
     JobScheduler.FILTER = [PredictForProject.JOB_TYPE]
     JobScheduler.launch_at_interval(JOB_INTERVAL)
