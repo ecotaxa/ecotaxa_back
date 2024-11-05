@@ -150,6 +150,7 @@ from helpers.fastApiUtils import (
     MyORJSONResponse,
     ValidityThrower,
     adjust_if_ranged,
+    regular_mem_cleanup,
 )
 from helpers.login import LoginService
 from helpers.pydantic import sort_and_prune
@@ -3735,6 +3736,8 @@ def startup_event() -> None:
     # Small service call, to ensure the DB is OK
     with ConstantsService():
         pass
+    # Clean memory every minute
+    JobScheduler.todo_on_idle = regular_mem_cleanup
     # Don't run predictions, they are left to a specialized runner
     JobScheduler.FILTER = [PredictForProject.JOB_TYPE]
     JobScheduler.launch_at_interval(JOB_INTERVAL)
