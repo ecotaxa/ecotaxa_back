@@ -6,7 +6,7 @@ import json
 import threading
 import time
 from threading import Thread, Event
-from typing import Any, Optional, List, ClassVar
+from typing import Any, Optional, List, ClassVar, Callable
 
 from API_operations.helpers.JobService import JobServiceBase
 from API_operations.helpers.Service import Service
@@ -14,7 +14,6 @@ from BO.Job import JobBO
 from DB.Job import Job, DBJobStateEnum, JobIDT
 from DB.helpers.ORM import clone_of
 from helpers.DynamicLogs import get_logger
-from helpers.fastApiUtils import regular_mem_cleanup
 
 logger = get_logger(__name__)
 
@@ -70,6 +69,7 @@ class JobScheduler(Service):
         threading.Timer
     ] = None  # First creation by Main, replacements by JobTimer_s_
     do_run: Event = Event()  # R/W by Main & JobTimer
+    todo_on_idle: Optional[Callable] = None
 
     def __init__(self) -> None:
         super().__init__()
@@ -101,7 +101,8 @@ class JobScheduler(Service):
         if the_job is None:
             # Exercise the ro_session for Connection pool cleanup
             self.ro_session.query(Job).filter(Job.id == 0).first()
-            regular_mem_cleanup()
+            if cls.todo_on_idle is not None:
+                cls.todo_on_idle()
             return
         logger.info("Found job to run: %s", str(the_job))
         # Align DB job state
