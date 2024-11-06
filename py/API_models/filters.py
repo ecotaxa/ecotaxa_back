@@ -73,7 +73,7 @@ class ProjectFiltersDict(TypedDict, total=False):
     filt_last_annot: Optional[str]
     """ Coma-separated list of annotator, i.e. person who validated the classification
         in last. """
-    seed_object_id: Optional[str]
+    seed_object_ids: Optional[str]
     """
     Target objid for similarity search
     """
@@ -227,6 +227,11 @@ class _ProjectFilters2Model(DescriptiveModel):
         title="Filter last annotator",
         description="Coma-separated list of annotators, i.e. persons who validated the classification in last.",
         example="34,67",
+    )
+    seed_object_ids = Field(
+        title="Seed object ids",
+        description="Target objid for similarity search, as csv",
+        example="1234,5678",
     )
 
     class Config:

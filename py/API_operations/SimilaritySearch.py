@@ -81,11 +81,17 @@ class SimilaritySearchForProject(Service):
         else:
             where_clause_sql = "WHERE objcnnid = obh.objid"
 
+# VR hack 071124 : j'ai crée cette fonction
+# CREATE OR REPLACE FUNCTION euclidean_distance(a real[], b real[]) RETURNS float AS $$ DECLARE sum float := 0; i int := 1; BEGIN IF array_upper(a, 1) <> array_upper(b, 1) THEN RAISE EXCEPTION 'Les vecteurs doivent avoir la même taille'; END IF; FOR i IN 1..array_upper(a, 1) LOOP sum := sum + (a[i] - b[i]) ^ 2; END LOOP; RETURN sqrt(sum); END; $$ LANGUAGE plpgsql IMMUTABLE;
+#             SELECT objcnnid, euclidean_distance(features, ( SELECT features FROM {ObjectCNNFeatureVector.__tablename__}
+        #              WHERE objcnnid = {target_id} )) AS dist
+
+# ou plutot
+# CREATE EXTENSION cube; CREATE INDEX features_idx ON obj_cnn_features_vector USING GIST (cube(features));
+
         query = f"""
-            SELECT objcnnid, features <-> (
-                SELECT features FROM {ObjectCNNFeatureVector.__tablename__}
-                WHERE objcnnid={target_id}
-            ) AS dist
+        SELECT objcnnid, cube(features) <-> cube((SELECT features FROM {ObjectCNNFeatureVector.__tablename__} 
+        WHERE objcnnid={target_id})) AS dist
             FROM {ObjectCNNFeatureVector.__tablename__}, {from_.get_sql()}
             {where_clause_sql}
             ORDER BY dist LIMIT {limit};

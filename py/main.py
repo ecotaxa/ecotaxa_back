@@ -1671,7 +1671,7 @@ If no **unique order** is specified, the result can vary for same call and condi
 
     sim_search_request = SimilaritySearchReq(
         project_id = project_id,
-        target_id = int(filters.seed_object_id.lstrip("I")) if filters.seed_object_id else None,
+        target_id = int(filters.seed_object_ids.lstrip("I")) if filters.seed_object_ids else None,
     )
 
     with SimilaritySearchForProject(sim_search_request, filters.base()) as sce:
