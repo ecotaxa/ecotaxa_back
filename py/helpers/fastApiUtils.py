@@ -364,8 +364,15 @@ last_mem_cleanup = time.time()
 def regular_mem_cleanup():
     global last_mem_cleanup
     if (now := time.time()) - last_mem_cleanup > 60:
-        gc.collect()
+        unreached = gc.collect()
         _trim_memory()
+        # print(f"gc unreached {unreached}", file=sys.stderr)
+        # import objgraph
+        # objgraph.show_most_common_types(file=sys.stderr)
+        # from sqlalchemy.orm import session
+        # sess = session._sessions
+        # for a_sess in sess.items():
+        #     print(str(a_sess), file=sys.stderr)
         last_mem_cleanup = now
 
 
