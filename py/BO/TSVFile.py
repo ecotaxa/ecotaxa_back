@@ -796,7 +796,7 @@ class TSVFile(object):
                     assert obj is not None
                     if a_cls == ObjectHeader:
                         an_upd.update_from_obj(  # Don't kill hidden but useful field(s)
-                            obj, HIDDEN_FIELDS_FOR_CLASSIF, force=True
+                            obj, set(HIDDEN_FIELDS_FOR_CLASSIF.keys()), force=True
                         )  # TODO: Useless now
                         # Eventually refresh classification
                         if an_upd.nb_fields_from(USED_FIELDS_FOR_CLASSIF) > 0:
