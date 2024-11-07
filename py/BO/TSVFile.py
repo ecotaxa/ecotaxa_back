@@ -50,7 +50,6 @@ from DB.Project import ProjectIDT
 from DB.Sample import Sample
 from DB.helpers import Session
 from DB.helpers.Bean import Bean
-from DB.helpers.Direct import text
 from DB.helpers.ORM import detach_from_session
 from helpers.DynamicLogs import get_logger
 from .Image import ImageBO
@@ -514,7 +513,7 @@ class TSVFile(object):
         else:
             # Acquisition does not exist with this orig_id inside the sample
             dict_to_write["acq_sample_id"] = sample_pk
-            new_acquis = TSVFile.create_parent(
+            new_acquis: Acquisition = TSVFile.create_parent(
                 session, dict_to_write, how.prj_id, Acquisition
             )
             # Store acquisition object for later reference, but detach it from ORM,
@@ -523,7 +522,7 @@ class TSVFile(object):
                 (sample_orig_id, acquis_orig_id)
             ] = detach_from_session(session, new_acquis)
             # Store current PK for following level
-            acquis_pk = new_acquis.pk()
+            acquis_pk = new_acquis.acquisid
             upper_level_created = True
             # Log the appeared parent
             logger.info("++ ID acquisition %s %d", acquis_orig_id, acquis_pk)
@@ -591,20 +590,22 @@ class TSVFile(object):
                 # Look for the parent by its (eventually amended) orig_id
                 if parent_class == Sample:
                     parent = how.existing_samples.get(parent_orig_id)
+                    parent_pk = parent.sampleid if parent else None
                 else:
                     # Acquisition
                     parent = how.existing_acquisitions.get(
                         (upper_level_orig_id, parent_orig_id)
                     )
+                    parent_pk = parent.acquisid if parent else None
                 if parent is None:
                     # No parent found for update, thus we cannot locate children, as there
                     # is an implicit relationship just by the fact that the 3 are on the same line
                     break
                 # Collect the PK for children in case we need to use a __DUMMY
-                upper_level_pk = parent.pk()
+                upper_level_pk = parent_pk
                 upper_level_orig_id = parent_orig_id
             else:
-                # Fetch the process from DB
+                # Fetch the process from DB, it's same PK as Acquisition
                 parent = session.query(Process).get(upper_level_pk)
                 assert parent is not None
 
@@ -768,9 +769,9 @@ class TSVFile(object):
         how: ImportHow,
         start_time: Optional[datetime.datetime],
         session: Session,
-        object_head_to_write,
-        object_fields_to_write,
-        image_to_write,
+        object_head_to_write: Bean,
+        object_fields_to_write: Bean,
+        image_to_write: Optional[Bean],
         training_provider: Optional[TrainingBOProvider] = None,
     ) -> int:
         """
@@ -790,9 +791,8 @@ class TSVFile(object):
                     ["objid", "objfid"],
                     [object_head_to_write, object_fields_to_write],
                 ):
-                    filter_for_id = text("%s=%d" % (its_pk, objid))
-                    # Fetch the record to update
-                    obj = session.query(a_cls).filter(filter_for_id).first()
+                    # Fetch the record to update, .get is cache-friendly
+                    obj = session.query(a_cls).get(objid)
                     assert obj is not None
                     if a_cls == ObjectHeader:
                         an_upd.update_from_obj(  # Don't kill hidden but useful field(s)
@@ -836,7 +836,8 @@ class TSVFile(object):
                             TSVFile.do_sun_position_field(an_upd)
                     updates = TSVFile.update_orm_object(obj, an_upd)
                     if len(updates) > 0:
-                        logger.info("Updating '%s' using %s", filter_for_id, updates)
+                        id_message = f"{its_pk}={objid}"
+                        logger.info("Updating '%s' using %s", id_message, updates)
                         session.flush()
                 ret = 0  # nothing to write
             else:

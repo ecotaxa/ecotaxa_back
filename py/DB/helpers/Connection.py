@@ -124,6 +124,8 @@ class Connection(object):
             execution_options=exec_options,
             connect_args={"application_name": self.APP_NAME},
             future=True,
+            query_cache_size=64,
+            # Default cache_size is up to 500*1.5, but we have big text in queries, e.g. all obj_field columns
         )
         self.session_factory = sessionmaker(bind=engine)
         self._meta: MetaData = sqlalchemy.MetaData(bind=engine)
