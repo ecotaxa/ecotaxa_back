@@ -2,6 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import os
 import zipfile
 from abc import ABC
 from typing import Union
@@ -11,6 +12,7 @@ from API_operations.helpers.JobService import JobServiceOnProjectBase, ArgsDict
 from BO.User import UserIDT
 from FS.CommonDir import CommonFolder
 from FS.UserDir import UserDirectory
+from FS.UserFilesDir import UserFilesDirectory
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger
 
@@ -38,10 +40,15 @@ class ImportServiceBase(JobServiceOnProjectBase, ABC):
 
     def unzip_if_needed(self, owner_id: UserIDT) -> str:
         """
-        If a .zip was sent, unzip it. Otherwise it is assumed that we point to an import directory.
+        If a .zip was sent, unzip it. Otherwise, it is assumed that we point to an import directory.
         """
         source_dir_or_zip = self.req.source_path
-        if UserDirectory(owner_id).contains(source_dir_or_zip):
+        my_files_source_dir = UserFilesDirectory(owner_id)._root_path.joinpath(
+            source_dir_or_zip.lstrip(os.path.sep)
+        )
+        if my_files_source_dir.exists():
+            return str(my_files_source_dir)
+        elif UserDirectory(owner_id).contains(source_dir_or_zip):
             # OK
             pass
         else:

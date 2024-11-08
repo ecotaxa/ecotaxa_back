@@ -9,8 +9,13 @@ import pytest
 from API_models.filters import ProjectFiltersDict
 from starlette import status
 
-from tests.credentials import CREATOR_AUTH, ORDINARY_USER2_USER_ID, ADMIN_AUTH
-from tests.test_import import VARIOUS_STATES_DIR
+from tests.credentials import (
+    CREATOR_AUTH,
+    ORDINARY_USER2_USER_ID,
+    ADMIN_AUTH,
+    CREATOR_USER_ID,
+)
+from tests.test_import import VARIOUS_STATES_DIR, create_project, import_various
 from tests.test_objectset_query import OBJECT_SET_QUERY_URL
 from tests.test_prj_admin import PROJECT_CLASSIF_STATS_URL
 from tests.test_subentities import OBJECT_HISTORY_QUERY_URL
@@ -18,11 +23,11 @@ from tests.test_taxa_query import TAXA_SET_QUERY_URL
 
 
 def query_all_objects(fastapi, auth, prj_id, **kwargs) -> List[int]:
-    """Query using the filters in kwargs,return the full list of object IDs"""
+    """Query using the filters in kwargs,return the full list of object IDs, sorted for stability"""
     url = OBJECT_SET_QUERY_URL.format(project_id=prj_id)
     rsp = fastapi.post(url, headers=auth, json=kwargs)
     obj_ids = rsp.json()["object_ids"]
-    return obj_ids
+    return sorted(obj_ids)
 
 
 OBJECT_SET_REVERT_URL = (
@@ -40,10 +45,10 @@ PROJECT_SET_USER_STATS = "/project_set/user_stats?ids={prj_ids}"
 
 copepod_id = 25828
 entomobryomorpha_id = 25835
-crustacea = 12846
+crustacea_id = 12846
 
 
-def classif_history(fastapi, object_id):
+def get_classif_history(fastapi, object_id):
     url = OBJECT_HISTORY_QUERY_URL.format(object_id=object_id)
     response = fastapi.get(url, headers=ADMIN_AUTH)
     assert response.status_code == status.HTTP_200_OK
@@ -60,6 +65,36 @@ def get_stats(fastapi, prj_id):
 def classify_all(fastapi, obj_ids, classif_id, who=ADMIN_AUTH):
     url = OBJECT_SET_CLASSIFY_URL
     classifications = [classif_id for _obj in obj_ids]
+    rsp = fastapi.post(
+        url,
+        headers=who,
+        json={
+            "target_ids": obj_ids,
+            "classifications": classifications,
+            "wanted_qualification": "V",
+        },
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+
+
+def classify_all_no_change(fastapi, obj_ids):
+    url = OBJECT_SET_CLASSIFY_URL
+    classifications = [-1 for _obj in obj_ids]
+    rsp = fastapi.post(
+        url,
+        headers=ADMIN_AUTH,
+        json={
+            "target_ids": obj_ids,
+            "classifications": classifications,
+            "wanted_qualification": "V",
+        },
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+
+
+def validate_all(fastapi, obj_ids, who=ADMIN_AUTH):
+    url = OBJECT_SET_CLASSIFY_URL
+    classifications = [-1 for _obj in obj_ids]
     rsp = fastapi.post(
         url,
         headers=who,
@@ -146,7 +181,7 @@ def test_classif(database, fastapi, caplog):
     )
 
     obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id)
-    assert len(obj_ids) == 8
+    assert len(obj_ids) == 9
 
     # See if the taxa we are going to use are OK
     rsp = fastapi.get(
@@ -213,10 +248,10 @@ def test_classif(database, fastapi, caplog):
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 1,
         "nb_predicted": 3,
-        "nb_unclassified": 0,
+        "nb_unclassified": 1,
         "nb_validated": 4,
         "projid": prj_id,
-        "used_taxa": [45072, 78418, 84963, 85011, 85012, 85078],
+        "used_taxa": [-1, 45072, 78418, 84963, 85011, 85012, 85078],
     }
 
     # Try a revert on a fresh project
@@ -235,7 +270,7 @@ def test_classif(database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
     stats = rsp.json()
     assert len(stats["classif_info"]) == 6
-    assert len(stats["last_entries"]) == 8
+    assert len(stats["last_entries"]) == 9
     # Working revert, erase all from import
     url = OBJECT_SET_REVERT_URL.format(project_id=prj_id, dry_run=False, tgt_usr="")
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
@@ -247,7 +282,7 @@ def test_classif(database, fastapi, caplog):
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
         "nb_predicted": 0,
-        "nb_unclassified": 8,
+        "nb_unclassified": 9,
         "nb_validated": 0,
         "projid": prj_id,
         "used_taxa": [-1],
@@ -257,7 +292,7 @@ def test_classif(database, fastapi, caplog):
     assert obj_stats == {
         "dubious_objects": 0,
         "predicted_objects": 0,
-        "total_objects": 8,
+        "total_objects": 9,
         "validated_objects": 0,
     }
 
@@ -270,19 +305,19 @@ def test_classif(database, fastapi, caplog):
     classify_auto_incorrect(fastapi, obj_ids[:4])
 
     # Super ML result, 4 first objects are crustacea
-    classify_auto_all(fastapi, obj_ids[:4], crustacea)
+    classify_auto_all(fastapi, obj_ids[:4], crustacea_id)
 
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
         "nb_predicted": 4,
-        "nb_unclassified": 4,
+        "nb_unclassified": 5,
         "nb_validated": 0,
         "projid": prj_id,
-        "used_taxa": [-1, crustacea],
+        "used_taxa": [-1, crustacea_id],
     }
 
     # New ML results with a different score for the second object
-    classify_auto_all(fastapi, [obj_ids[1]], crustacea, [0.8])
+    classify_auto_all(fastapi, [obj_ids[1]], crustacea_id, [0.8])
     url = OBJECT_QUERY_URL.format(object_id=obj_ids[1])
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
@@ -291,10 +326,10 @@ def test_classif(database, fastapi, caplog):
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
         "nb_predicted": 4,
-        "nb_unclassified": 4,
+        "nb_unclassified": 5,
         "nb_validated": 0,
         "projid": prj_id,
-        "used_taxa": [-1, crustacea],
+        "used_taxa": [-1, crustacea_id],
     }
 
     # Admin (me!) thinks that all is a copepod :)
@@ -305,20 +340,20 @@ def test_classif(database, fastapi, caplog):
         "nb_dubious": 0,
         "nb_predicted": 0,
         "nb_unclassified": 0,
-        "nb_validated": 8,
+        "nb_validated": 9,
         "projid": prj_id,
         "used_taxa": [copepod_id],
     }  # No more Unclassified and Copepod is in +
 
     # No history yet as the object was just created
-    classif = classif_history(fastapi, obj_ids[0])
+    classif = get_classif_history(fastapi, obj_ids[0])
     assert len(classif) == 1
     assert classif[0]["classif_date"] is not None  # e.g. 2021-09-12T09:28:03.278626
     classif[0]["classif_date"] = "now"
     assert classif == [
         {
             "objid": obj_ids[0],
-            "classif_id": crustacea,
+            "classif_id": crustacea_id,
             "classif_date": "now",
             "classif_who": None,
             "classif_type": "A",
@@ -338,10 +373,10 @@ def test_classif(database, fastapi, caplog):
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
         "nb_predicted": 4,
-        "nb_unclassified": 4,
+        "nb_unclassified": 5,
         "nb_validated": 0,
         "projid": prj_id,
-        "used_taxa": [-1, crustacea],
+        "used_taxa": [-1, crustacea_id],
     }
 
     # Second revert, should not change since the last record in history is the same
@@ -352,10 +387,10 @@ def test_classif(database, fastapi, caplog):
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
         "nb_predicted": 4,
-        "nb_unclassified": 4,
+        "nb_unclassified": 5,
         "nb_validated": 0,
         "projid": prj_id,
-        "used_taxa": [-1, crustacea],
+        "used_taxa": [-1, crustacea_id],
     }
 
     # Apply validation again after revert
@@ -380,7 +415,7 @@ def test_classif(database, fastapi, caplog):
 
     classify_all_no_change(entomobryomorpha_id)
 
-    classif2 = classif_history(fastapi, obj_ids[0])
+    classif2 = get_classif_history(fastapi, obj_ids[0])
     assert classif2 is not None
     # Date is not predictable
     classif2[0]["classif_date"] = "hopefully just now"
@@ -399,7 +434,7 @@ def test_classif(database, fastapi, caplog):
         },
         {
             "classif_date": "a bit before",
-            "classif_id": crustacea,
+            "classif_id": crustacea_id,
             "classif_qual": "P",
             "classif_score": 0.52,
             "classif_type": "A",
@@ -415,7 +450,7 @@ def test_classif(database, fastapi, caplog):
     assert len(obj_ids) == 0
     # There should be 8 validated
     obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id, statusfilter="V")
-    assert len(obj_ids) == 8
+    assert len(obj_ids) == 9
 
     url = PROJECT_CLASSIF_STATS_URL.format(prj_ids="%s" % prj_id)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
@@ -425,7 +460,7 @@ def test_classif(database, fastapi, caplog):
             "nb_dubious": 0,
             "nb_predicted": 0,
             "nb_unclassified": 0,
-            "nb_validated": 8,
+            "nb_validated": 9,
             "projid": prj_id,
             "used_taxa": [entomobryomorpha_id],
         }
@@ -439,7 +474,7 @@ def test_classif(database, fastapi, caplog):
 
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
-        "nb_predicted": 8,
+        "nb_predicted": 9,
         "nb_unclassified": 0,
         "nb_validated": 0,
         "projid": prj_id,
@@ -456,7 +491,7 @@ def test_classif(database, fastapi, caplog):
         "nb_dubious": 0,
         "nb_predicted": 0,
         "nb_unclassified": 0,
-        "nb_validated": 8,
+        "nb_validated": 9,
         "projid": prj_id,
         "used_taxa": [entomobryomorpha_id],
     }
@@ -469,10 +504,10 @@ def test_classif(database, fastapi, caplog):
     rsp = fastapi.post(OBJECT_SET_PARENTS_URL, headers=ADMIN_AUTH, json=obj_ids)
     assert rsp.status_code == status.HTTP_200_OK
     resp = rsp.json()
-    assert len(resp["acquisition_ids"]) == 4
+    assert len(resp["acquisition_ids"]) == 5
     for prj in resp["project_ids"]:
         assert prj == prj_id
-    assert resp["total_ids"] == 4
+    assert resp["total_ids"] == 5
 
     # Try user stats on the project
     url = PROJECT_SET_USER_STATS.format(prj_ids=str(prj_id))
@@ -484,7 +519,7 @@ def test_classif(database, fastapi, caplog):
             "projid": prj_id,
             "annotators": [{"id": 1, "name": "Application Administrator"}],
             "activities": [
-                {"id": 1, "nb_actions": 12, "last_annot": "2022-05-12T14:21:15"}
+                {"id": 1, "nb_actions": 15, "last_annot": "2022-05-12T14:21:15"}
             ],
         }
     ]
@@ -510,8 +545,124 @@ def test_reset_fresh_import(database, fastapi, caplog):
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
         "nb_predicted": 8,
-        "nb_unclassified": 0,
+        "nb_unclassified": 1,
         "nb_validated": 0,
         "projid": prj_id,
-        "used_taxa": [45072, 78418, 84963, 85011, 85012, 85078],
+        "used_taxa": [-1, 45072, 78418, 84963, 85011, 85012, 85078],
+    }
+
+
+def test_revert_to_predicted(database, fastapi, caplog):
+    caplog.set_level(logging.ERROR)
+    prj_id = create_project(CREATOR_USER_ID, "Test Revert To Predicted")
+
+    import_various(fastapi, prj_id)
+    obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id)
+    assert len(obj_ids) == 9
+
+    assert get_stats(fastapi, prj_id) == {
+        "nb_dubious": 1,
+        "nb_predicted": 3,
+        "nb_unclassified": 1,
+        "nb_validated": 4,
+        "projid": prj_id,
+        "used_taxa": [-1, 45072, 78418, 84963, 85011, 85012, 85078],
+    }
+
+    classify_all(fastapi, obj_ids, copepod_id, CREATOR_AUTH)
+
+    url = OBJECT_SET_REVERT_URL.format(project_id=prj_id, dry_run=False, tgt_usr="")
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
+    assert rsp.status_code == status.HTTP_200_OK
+    stats = rsp.json()
+    min_obj_id = min(obj_ids)
+    for an_entry in stats["last_entries"]:
+        if an_entry["histo_classif_date"] is not None:
+            an_entry["histo_classif_date"] = "JUSTNOW"
+        an_entry["objid"] -= min_obj_id - 1
+    assert stats == {
+        "classif_info": {},
+        "last_entries": [
+            {
+                "classif_id": copepod_id,
+                "histo_classif_date": "JUSTNOW",
+                "histo_classif_id": 85012,
+                "histo_classif_qual": "P",
+                "histo_classif_type": "A",
+                "histo_classif_who": None,
+                "objid": 1,
+            },
+            {
+                "classif_id": copepod_id,
+                "histo_classif_date": "JUSTNOW",
+                "histo_classif_id": 78418,
+                "histo_classif_qual": "V",
+                "histo_classif_type": "M",
+                "histo_classif_who": 1,
+                "objid": 2,
+            },
+            {
+                "classif_id": copepod_id,
+                "histo_classif_date": "JUSTNOW",
+                "histo_classif_id": 45072,
+                "histo_classif_qual": "V",
+                "histo_classif_type": "M",
+                "histo_classif_who": 1,
+                "objid": 3,
+            },
+            {
+                "classif_id": copepod_id,
+                "histo_classif_date": "JUSTNOW",
+                "histo_classif_id": 85011,
+                "histo_classif_qual": "P",
+                "histo_classif_type": "A",
+                "histo_classif_who": None,
+                "objid": 4,
+            },
+            {
+                "classif_id": copepod_id,
+                "histo_classif_date": "JUSTNOW",
+                "histo_classif_id": 78418,
+                "histo_classif_qual": "D",
+                "histo_classif_type": "M",
+                "histo_classif_who": 1,
+                "objid": 5,
+            },
+            {
+                "classif_id": copepod_id,
+                "histo_classif_date": "JUSTNOW",
+                "histo_classif_id": 84963,
+                "histo_classif_qual": "P",
+                "histo_classif_type": "A",
+                "histo_classif_who": None,
+                "objid": 6,
+            },
+            {
+                "classif_id": copepod_id,
+                "histo_classif_date": "JUSTNOW",
+                "histo_classif_id": 84963,
+                "histo_classif_qual": "V",
+                "histo_classif_type": "M",
+                "histo_classif_who": 1,
+                "objid": 7,
+            },
+            {
+                "classif_id": copepod_id,
+                "histo_classif_date": "JUSTNOW",
+                "histo_classif_id": 85078,
+                "histo_classif_qual": "V",
+                "histo_classif_type": "M",
+                "histo_classif_who": 1,
+                "objid": 8,
+            },
+            {
+                "classif_id": copepod_id,
+                "histo_classif_date": None,
+                "histo_classif_id": None,
+                "histo_classif_qual": None,
+                "histo_classif_type": "n",
+                "histo_classif_who": None,
+                "objid": 9,
+            },
+        ],
     }

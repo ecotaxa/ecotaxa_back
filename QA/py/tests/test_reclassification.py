@@ -11,7 +11,7 @@ from tests.test_classification import (
     query_all_objects,
     get_stats,
     entomobryomorpha_id,
-    classif_history,
+    get_classif_history,
 )
 
 OBJECT_SET_RECLASSIFY_URL = (
@@ -29,6 +29,7 @@ def reclassify(fastapi, prj_id, from_id, to_id):
     assert rsp.status_code == status.HTTP_200_OK
 
 
+# Simulate change of taxo system, search&replace taxon ref with another
 def test_reclassif(database, fastapi, caplog):
     caplog.set_level(logging.ERROR)
     from tests.test_import import test_import
@@ -62,7 +63,7 @@ def test_reclassif(database, fastapi, caplog):
     # Reclassify them to entomobryomorpha
     reclassify(fastapi, prj_id, detritus_classif_id, entomobryomorpha_id)
 
-    # Of course stats changed, detritus is gone and entomobryomorpha appeared
+    # Stats changed, detritus is gone and entomobryomorpha appeared
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
         "nb_predicted": 8,
@@ -74,7 +75,7 @@ def test_reclassif(database, fastapi, caplog):
 
     # Ensure a proper history appeared
     for an_obj in obj_ids:
-        classif2 = classif_history(fastapi, an_obj)
+        classif2 = get_classif_history(fastapi, an_obj)
         assert classif2 is not None
         # Date is not predictable
         classif2[0]["classif_date"] = "hopefully just now"

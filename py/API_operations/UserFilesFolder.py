@@ -6,18 +6,20 @@
 #
 import time
 from os import path as ospath
-from typing import Optional, Union
-from fastapi import UploadFile
 from pathlib import Path
+from typing import Optional, Union
+
+from fastapi import HTTPException
+from fastapi import UploadFile
+
 from API_models.filesystem import DirectoryEntryModel, DirectoryModel
 from BO.Rights import RightsBO, NOT_AUTHORIZED
 from BO.User import UserIDT
 from DB.User import User
-from FS.UserFilesDir import UserFilesDirectory
 from FS.CommonDir import CommonFolder
+from FS.UserFilesDir import UserFilesDirectory
 from helpers.DynamicLogs import get_logger
 from .helpers.Service import Service
-from fastapi import HTTPException
 
 logger = get_logger(__name__)
 
@@ -41,6 +43,11 @@ class UserFilesFolderService(Service):
             detail=[NOT_AUTHORIZED],
         )
 
+    @staticmethod
+    def _sanitize_filename_throw(filename: str) -> str:
+        assert ".." not in filename, "Forbidden"
+        return ospath.basename(filename.rstrip(ospath.sep))
+
     async def store(
         self,
         current_user_id: UserIDT,
@@ -52,8 +59,7 @@ class UserFilesFolderService(Service):
         TODO: Quotas
         """
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
-        file_name = file.filename
-        assert ".." not in file_name, "Forbidden"
+        file_name = self._sanitize_filename_throw(file.filename)
         if path is not None:
             path = self._can_use_dir_throw(path)
         logger.info("Adding '%s' ('%s') for '%s'", path, file_name, current_user.name)

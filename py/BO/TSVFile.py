@@ -48,7 +48,6 @@ from DB.Project import ProjectIDT
 from DB.Sample import Sample
 from DB.helpers import Session
 from DB.helpers.Bean import Bean
-from DB.helpers.Direct import text
 from DB.helpers.ORM import detach_from_session
 from helpers.DynamicLogs import get_logger
 from .Image import ImageBO
@@ -195,7 +194,7 @@ class TSVFile(object):
                     **dicts_to_write[ObjectFields.__tablename__]
                 )
                 image_to_write = Bean(**dicts_to_write["images"])
-                # Parents are created the same way, _when needed_ (i.e. nearly never),
+                # Note: Parents are created the same way, _when needed_ (i.e. nearly never),
                 #  in @see add_parent_objects
 
                 if how.can_update_only:
@@ -276,9 +275,13 @@ class TSVFile(object):
                             orig_file_name, backup_img_to_write.imgid
                         )
                         # Get original image dimensions
-                        im = PIL_Image.open(where.vault.image_path(sub_path))
-                        backup_img_to_write.width, backup_img_to_write.height = im.size
-                        del im
+                        img_path = where.vault.image_path(sub_path)
+                        with open(img_path, "rb") as img_fd:
+                            im = PIL_Image.open(img_fd)
+                            (
+                                backup_img_to_write.width,
+                                backup_img_to_write.height,
+                            ) = im.size
 
                 if new_records > 0:
                     self.deal_with_images(where, how, image_to_write, instead_image)
@@ -317,13 +320,14 @@ class TSVFile(object):
     @staticmethod
     def ensure_consistent_fields(
         object_head_to_write: Bean,
-        start_time: Optional[float],
+        start_time: Optional[datetime.datetime],
         current_user: Optional[UserIDT],
     ):
         """
         Some fields need defaults to keep consistency.
-        - 'Validated' and 'Dubious' need a category (now blocked during TSV read), an author and a date
-        - 'Predicted' should set same fields as a prediction ran inside EcoTaxa
+        - 'Validated' and 'Dubious' need a category (forced during TSV read), an author and a date
+        - 'Predicted' should set same fields as a prediction which ran inside EcoTaxa
+        - '' AKA 'To be classified' in UI should have classification-related fields blank
         """
         if start_time is None:
             return  # No time to update the record, is must be that the full one is sent (during Subset)
@@ -333,9 +337,7 @@ class TSVFile(object):
             assert classif_id
             # Provide reasonable default values
             object_head_to_write["classif_auto_id"] = classif_id
-            object_head_to_write["classif_auto_when"] = datetime.datetime.fromtimestamp(
-                start_time
-            )
+            object_head_to_write["classif_auto_when"] = start_time
             object_head_to_write["classif_auto_score"] = 1.0
             # These are for manual states 'V' or 'D, when 'P' we wipe them
             object_head_to_write["classif_who"] = None
@@ -344,9 +346,17 @@ class TSVFile(object):
             if object_head_to_write.get("classif_who") is None:
                 object_head_to_write["classif_who"] = current_user
             if object_head_to_write.get("classif_when") is None:
-                object_head_to_write["classif_when"] = datetime.datetime.fromtimestamp(
-                    start_time
-                )
+                object_head_to_write["classif_when"] = start_time
+        elif state is None:
+            object_head_to_write["classif_id"] = object_head_to_write[
+                "classif_auto_id"
+            ] = object_head_to_write["classif_auto_when"] = object_head_to_write[
+                "classif_auto_score"
+            ] = object_head_to_write[
+                "classif_who"
+            ] = object_head_to_write[
+                "classif_when"
+            ] = None
 
     @staticmethod
     def prepare_classif_update(object_head: ObjectHeader, object_update: Bean) -> bool:
@@ -480,7 +490,7 @@ class TSVFile(object):
         else:
             # Acquisition does not exist with this orig_id inside the sample
             dict_to_write["acq_sample_id"] = sample_pk
-            new_acquis = TSVFile.create_parent(
+            new_acquis: Acquisition = TSVFile.create_parent(
                 session, dict_to_write, how.prj_id, Acquisition
             )
             # Store acquisition object for later reference, but detach it from ORM,
@@ -489,7 +499,7 @@ class TSVFile(object):
                 (sample_orig_id, acquis_orig_id)
             ] = detach_from_session(session, new_acquis)
             # Store current PK for following level
-            acquis_pk = new_acquis.pk()
+            acquis_pk = new_acquis.acquisid
             upper_level_created = True
             # Log the appeared parent
             logger.info("++ ID acquisition %s %d", acquis_orig_id, acquis_pk)
@@ -557,20 +567,22 @@ class TSVFile(object):
                 # Look for the parent by its (eventually amended) orig_id
                 if parent_class == Sample:
                     parent = how.existing_samples.get(parent_orig_id)
+                    parent_pk = parent.sampleid if parent else None
                 else:
                     # Acquisition
                     parent = how.existing_acquisitions.get(
                         (upper_level_orig_id, parent_orig_id)
                     )
+                    parent_pk = parent.acquisid if parent else None
                 if parent is None:
                     # No parent found for update, thus we cannot locate children, as there
                     # is an implicit relationship just by the fact that the 3 are on the same line
                     break
                 # Collect the PK for children in case we need to use a __DUMMY
-                upper_level_pk = parent.pk()
+                upper_level_pk = parent_pk
                 upper_level_orig_id = parent_orig_id
             else:
-                # Fetch the process from DB
+                # Fetch the process from DB, it's same PK as Acquisition
                 parent = session.query(Process).get(upper_level_pk)
                 assert parent is not None
 
@@ -732,11 +744,11 @@ class TSVFile(object):
     @staticmethod
     def create_or_link_slaves(
         how: ImportHow,
-        start_time: Optional[float],
+        start_time: Optional[datetime.datetime],
         session: Session,
-        object_head_to_write,
-        object_fields_to_write,
-        image_to_write,
+        object_head_to_write: Bean,
+        object_fields_to_write: Bean,
+        image_to_write: Optional[Bean],
     ) -> int:
         """
         Create, link or update slave entities, i.e. head, fields, image.
@@ -755,9 +767,8 @@ class TSVFile(object):
                     ["objid", "objfid"],
                     [object_head_to_write, object_fields_to_write],
                 ):
-                    filter_for_id = text("%s=%d" % (its_pk, objid))
-                    # Fetch the record to update
-                    obj = session.query(a_cls).filter(filter_for_id).first()
+                    # Fetch the record to update, .get is cache-friendly
+                    obj = session.query(a_cls).get(objid)
                     assert obj is not None
                     if a_cls == ObjectHeader:
                         # Eventually refresh classification
@@ -786,7 +797,8 @@ class TSVFile(object):
                             TSVFile.do_sun_position_field(an_upd)
                     updates = TSVFile.update_orm_object(obj, an_upd)
                     if len(updates) > 0:
-                        logger.info("Updating '%s' using %s", filter_for_id, updates)
+                        id_message = f"{its_pk}={objid}"
+                        logger.info("Updating '%s' using %s", id_message, updates)
                         session.flush()
                 ret = 0  # nothing to write
             else:
@@ -801,7 +813,8 @@ class TSVFile(object):
             if how.can_update_only:
                 # No objects creation while updating
                 logger.info(
-                    "Object %s not found while updating ", object_head_to_write.orig_id
+                    "Object %s not found while updating ",
+                    object_head_to_write.orig_id,
                 )
                 ret = 0
             else:

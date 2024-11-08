@@ -4,8 +4,9 @@
 #
 import json
 import threading
+import time
 from threading import Thread, Event
-from typing import Any, Optional, List, ClassVar
+from typing import Any, Optional, List, ClassVar, Callable
 
 from API_operations.helpers.JobService import JobServiceBase
 from API_operations.helpers.Service import Service
@@ -68,6 +69,7 @@ class JobScheduler(Service):
         threading.Timer
     ] = None  # First creation by Main, replacements by JobTimer_s_
     do_run: Event = Event()  # R/W by Main & JobTimer
+    todo_on_idle: Optional[Callable] = None
 
     def __init__(self) -> None:
         super().__init__()
@@ -99,6 +101,8 @@ class JobScheduler(Service):
         if the_job is None:
             # Exercise the ro_session for Connection pool cleanup
             self.ro_session.query(Job).filter(Job.id == 0).first()
+            if cls.todo_on_idle is not None:
+                cls.todo_on_idle()
             return
         logger.info("Found job to run: %s", str(the_job))
         # Align DB job state
@@ -177,3 +181,6 @@ class JobScheduler(Service):
         if cls.do_run.is_set():
             # Signal the timer to stop & cancel itself
             cls.do_run.clear()
+            # Wait for it gone
+            while cls.the_timer is not None:
+                time.sleep(1)

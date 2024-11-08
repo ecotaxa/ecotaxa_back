@@ -94,20 +94,17 @@ class ObjectManager(Service):
         free_columns_mappings = object_set.mapping.object_mappings
 
         # The order fields have an impact on the query
-        order_clause = self.cook_order_clause(order_field, free_columns_mappings)
+        order_clause = self.cook_order_clause(
+            order_field, free_columns_mappings, str(return_fields)
+        )
         order_clause.set_window(window_start, window_size)
 
         extra_cols = self.add_return_fields(return_fields, free_columns_mappings)
 
         from_, where_clause, params = object_set.get_sql(order_clause, extra_cols)
 
-        if "obf." in where_clause.get_sql():  # TODO: Drop when unused in mapping
-            # If the filter needs obj_field data it's more efficient to count with a window function
-            # than issuing a second query.
-            total_col = "COUNT(obh.objid) OVER() AS total"
-        else:
-            # Otherwise, no need for obj_field in count, less DB buffers
-            total_col = "0 AS total"
+        # Compute the total in a second step (_summarize)
+        total_col = "0 AS total"
 
         sql = """
 SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
@@ -121,7 +118,7 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
         if order_clause is not None:
             sql += order_clause.get_sql()
 
-        with CodeTimer("query: for %d using %s " % (proj_id, sql), logger):
+        with CodeTimer("Query: SQL: %s PARAMS: %s: " % (sql, params), logger, 1):
             res: Result = self.ro_session.execute(text(sql), params)
         ids = []
         details = []
@@ -136,9 +133,10 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
             details.append(extra)
 
         if total == 0:
-            # Total was not computed or left to 0
-            total, _nbr_v, _nbr_d, _nbr_p = self.summary(
-                current_user_id, proj_id, filters, only_total=True
+            # Total was not computed, left to 0, execute again SQL from the same object set, but
+            # without columns in select list, and no limit function.
+            total, _nbr_v, _nbr_d, _nbr_p = self._summarize(
+                object_set, proj_id=proj_id, only_total=True
             )
 
         # If we can, refresh the cache in background, most of the data should be in PG cache
@@ -151,7 +149,7 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
 
     @staticmethod
     def cook_order_clause(
-        order_field: Optional[str], mappings: TableMapping
+        order_field: Optional[str], mappings: TableMapping, return_fields_str: str
     ) -> OrderClause:
         """
         Prepare a SQL "order by" clause from the required field.
@@ -167,7 +165,15 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
         order_expr = ObjectBO._field_to_db_col(order_field, mappings)
         if order_expr is None:
             return ret
-        alias, order_col = order_expr.split(".", 1)
+        if " AS " in order_expr:
+            alias = None
+            order_expr, order_col = order_expr.split(" AS ")
+            if (
+                "." + order_col not in return_fields_str
+            ):  # Uncommon but seen in logs: order by a not-displayed column
+                order_col = order_expr
+        else:
+            alias, order_col = order_expr.split(".", 1)
         # From PG doc: If NULLS LAST is specified, null values sort after all non-null values;
         # if NULLS FIRST is specified, null values sort before all non-null values.
         # If neither is specified, the default behavior is NULLS LAST when ASC is specified or implied,
@@ -191,7 +197,7 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
     ) -> str:
         """
             From an API-named list of columns, return the real text for the SELECT to return them
-        :param return_fields: The filefs in prefix+name convention
+        :param return_fields: The fields in prefix+name convention
         :param mapping: Mapping to use
         :return:
         """
@@ -261,27 +267,24 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
         object_set: DescribedObjectSet = DescribedObjectSet(
             self.ro_session, prj, user_id, filters
         )
+        return self._summarize(object_set, proj_id, only_total)
+
+    def _summarize(
+        self, object_set: DescribedObjectSet, proj_id: ProjectIDT, only_total: bool
+    ):
+        """
+        Compute the summary of given object_set
+        """
         from_, where, params = object_set.get_sql()
         sql = """
 SELECT COUNT(*) nbr"""
         if only_total:
             sql += """, NULL nbr_v, NULL nbr_d, NULL nbr_p"""
         else:
-            # TODO, cleaner: SELECT COUNT(*) nbr,
-            #            COUNT(*) FILTER (WHERE obh.classif_qual = 'V') nbr_v,
-            # ...
-            sql += (
-                """, 
-           COUNT(CASE WHEN obh.classif_qual = '"""
-                + VALIDATED_CLASSIF_QUAL
-                + """' THEN 1 END) nbr_v,
-           COUNT(CASE WHEN obh.classif_qual = '"""
-                + DUBIOUS_CLASSIF_QUAL
-                + """' THEN 1 END) nbr_d, 
-           COUNT(CASE WHEN obh.classif_qual = '"""
-                + PREDICTED_CLASSIF_QUAL
-                + """' THEN 1 END) nbr_p"""
-            )
+            sql += f""",
+            COUNT(*) FILTER (WHERE obh.classif_qual = '{VALIDATED_CLASSIF_QUAL}') nbr_v,
+            COUNT(*) FILTER (WHERE obh.classif_qual = '{DUBIOUS_CLASSIF_QUAL}') nbr_d,
+            COUNT(*) FILTER (WHERE obh.classif_qual = '{PREDICTED_CLASSIF_QUAL}') nbr_p"""
         sql += (
             """
       FROM """
@@ -289,10 +292,12 @@ SELECT COUNT(*) nbr"""
             + " "
             + where.get_sql()
         )
-
-        with CodeTimer("summary: V/D/P for %d using %s " % (proj_id, sql), logger):
+        with CodeTimer(
+            "summary: V/D/P for %d SQL %s PARAMS %s " % (proj_id, sql, params),
+            logger,
+            0.3,
+        ):
             res: Result = self.ro_session.execute(text(sql), params)
-
         nbr: int
         nbr_v: Optional[int]
         nbr_d: Optional[int]
@@ -439,6 +444,7 @@ SELECT COUNT(*) nbr"""
     ) -> int:
         """
         Regardless of present classification or state, set the new classification for this object set.
+        This can be used to, e.g. move to another taxonomy system.
         """
         # Security check
         user, project = RightsBO.user_wants(
@@ -492,7 +498,7 @@ SELECT COUNT(*) nbr"""
         wanted_qualif: str,
     ) -> Tuple[int, int, ObjectSetClassifChangesT]:
         """
-        Classify (from human source) or validate/set to dubious a set of objects.
+        Classify (mostly from human source) or validate/set to dubious a set of objects.
         """
         # Get the objects and project, checking rights at the same time.
         object_set, project = self._the_project_for(

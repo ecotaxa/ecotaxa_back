@@ -18,6 +18,7 @@ from BO.helpers.MappedEntity import MappedEntity
 from DB.Acquisition import Acquisition
 from DB.Image import Image, IMAGE_VIRTUAL_COLUMNS
 from DB.Object import ObjectHeader, ObjectFields, ObjectsClassifHisto, ObjectIDT
+from DB.ObjectVirtual import OBJECT_VIRTUAL_COLUMNS
 from DB.Project import ProjectIDT, Project
 from DB.Sample import Sample
 from DB.Taxonomy import Taxonomy
@@ -80,6 +81,8 @@ class ObjectBO(MappedEntity):
         self.similarity = None
         self.classif_crossvalidation_id = None
         self.random_value = 0
+        # Emulate previous behavior
+        OBJECT_VIRTUAL_COLUMNS.add_to_model(self)
 
     def get_history(self) -> HistoricalClassificationListT:
         """
@@ -110,16 +113,10 @@ class ObjectBO(MappedEntity):
         except ValueError:
             return None
         if prfx == "obj":
-            if (
-                name == "complement_info" and name not in ObjectHeader.__dict__
-            ):  # Prepare removal of this column
-                return "NULL::text"
             if name in ObjectHeader.__dict__:
                 return "obh." + name
-            elif name == "imgcount":
-                return "(SELECT COUNT(img2.imgrank) FROM images img2 WHERE img2.objid = obh.objid) AS imgcount"
-            elif name == "random_value":  # TODO: A VirtualColumn
-                return "HASHTEXT(obh.orig_id) AS random_value"
+            elif name in OBJECT_VIRTUAL_COLUMNS:
+                return OBJECT_VIRTUAL_COLUMNS.sql_for(name)
         elif prfx == "fre":
             if name in mapping.tsv_cols_to_real:
                 mpg = mapping.tsv_cols_to_real[name]

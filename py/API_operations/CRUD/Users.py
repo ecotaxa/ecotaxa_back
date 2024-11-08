@@ -2,6 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from datetime import timedelta, timezone
 from typing import Optional, List, Any, Tuple
 
 from fastapi import HTTPException
@@ -26,7 +27,6 @@ from BO.User import (
 from DB.Project import ProjectIDT
 from DB.User import User, Role, UserRole, TempPasswordReset, UserStatus
 from helpers import DateTime
-from datetime import timedelta
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
     DETAIL_VALIDATION_NOT_ACTIVE,
@@ -41,7 +41,7 @@ from helpers.httpexception import (
     DETAIL_NOT_FOUND,
 )
 from helpers.login import LoginService
-from helpers.pydantic import BaseModel, Field, sort_and_prune
+from helpers.pydantic import BaseModel, Field
 from providers.HomeCaptcha import HomeCaptcha
 from ..helpers.Service import Service
 from ..helpers.UserValidation import UserValidation, ActivationType
@@ -944,7 +944,7 @@ class UserService(Service):
         # delay between emails is too short
         token_age = [SHORT_TOKEN_AGE, PROFILE_TOKEN_AGE]
         if user.status_date is not None:
-            datenow = now - user.status_date
+            datenow = now - user.status_date.replace(tzinfo=timezone.utc)
         else:
             datenow = now - (now - timedelta(days=2))
         if token is None and (

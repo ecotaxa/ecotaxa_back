@@ -5,17 +5,17 @@
 # Clients to Google API services, so far just one.
 #
 from typing import Optional, List
-from fastapi import HTTPException
-from helpers.AppConfig import Config
+
 import requests
-from BO.Rights import NOT_AUTHORIZED
+from fastapi import HTTPException
+
+from helpers.AppConfig import Config
 
 
 class HomeCaptcha(object):
     """ """
 
     def __init__(self, homecaptcha_secret: str):
-
         self.secret = homecaptcha_secret
 
         config = Config()
