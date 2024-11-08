@@ -176,7 +176,7 @@ def test_classif(database, fastapi, caplog):
     )
 
     obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id)
-    assert len(obj_ids) == 8
+    assert len(obj_ids) == 9
 
     # See if the taxa we are going to use are OK
     rsp = fastapi.get(
@@ -243,10 +243,10 @@ def test_classif(database, fastapi, caplog):
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 1,
         "nb_predicted": 3,
-        "nb_unclassified": 0,
+        "nb_unclassified": 1,
         "nb_validated": 4,
         "projid": prj_id,
-        "used_taxa": [45072, 78418, 84963, 85011, 85012, 85078],
+        "used_taxa": [-1, 45072, 78418, 84963, 85011, 85012, 85078],
     }
 
     # Try a revert on a fresh project
@@ -265,7 +265,7 @@ def test_classif(database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_200_OK
     stats = rsp.json()
     assert len(stats["classif_info"]) == 6
-    assert len(stats["last_entries"]) == 8
+    assert len(stats["last_entries"]) == 9
     # Working revert, erase all from import
     url = OBJECT_SET_REVERT_URL.format(project_id=prj_id, dry_run=False, tgt_usr="")
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
@@ -277,7 +277,7 @@ def test_classif(database, fastapi, caplog):
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
         "nb_predicted": 0,
-        "nb_unclassified": 8,
+        "nb_unclassified": 9,
         "nb_validated": 0,
         "projid": prj_id,
         "used_taxa": [-1],
@@ -287,7 +287,7 @@ def test_classif(database, fastapi, caplog):
     assert obj_stats == {
         "dubious_objects": 0,
         "predicted_objects": 0,
-        "total_objects": 8,
+        "total_objects": 9,
         "validated_objects": 0,
     }
 
@@ -305,7 +305,7 @@ def test_classif(database, fastapi, caplog):
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
         "nb_predicted": 4,
-        "nb_unclassified": 4,
+        "nb_unclassified": 5,
         "nb_validated": 0,
         "projid": prj_id,
         "used_taxa": [-1, crustacea_id],
@@ -321,7 +321,7 @@ def test_classif(database, fastapi, caplog):
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
         "nb_predicted": 4,
-        "nb_unclassified": 4,
+        "nb_unclassified": 5,
         "nb_validated": 0,
         "projid": prj_id,
         "used_taxa": [-1, crustacea_id],
@@ -335,7 +335,7 @@ def test_classif(database, fastapi, caplog):
         "nb_dubious": 0,
         "nb_predicted": 0,
         "nb_unclassified": 0,
-        "nb_validated": 8,
+        "nb_validated": 9,
         "projid": prj_id,
         "used_taxa": [copepod_id],
     }  # No more Unclassified and Copepod is in +
@@ -368,7 +368,7 @@ def test_classif(database, fastapi, caplog):
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
         "nb_predicted": 4,
-        "nb_unclassified": 4,
+        "nb_unclassified": 5,
         "nb_validated": 0,
         "projid": prj_id,
         "used_taxa": [-1, crustacea_id],
@@ -382,7 +382,7 @@ def test_classif(database, fastapi, caplog):
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
         "nb_predicted": 4,
-        "nb_unclassified": 4,
+        "nb_unclassified": 5,
         "nb_validated": 0,
         "projid": prj_id,
         "used_taxa": [-1, crustacea_id],
@@ -445,7 +445,7 @@ def test_classif(database, fastapi, caplog):
     assert len(obj_ids) == 0
     # There should be 8 validated
     obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id, statusfilter="V")
-    assert len(obj_ids) == 8
+    assert len(obj_ids) == 9
 
     url = PROJECT_CLASSIF_STATS_URL.format(prj_ids="%s" % prj_id)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
@@ -455,7 +455,7 @@ def test_classif(database, fastapi, caplog):
             "nb_dubious": 0,
             "nb_predicted": 0,
             "nb_unclassified": 0,
-            "nb_validated": 8,
+            "nb_validated": 9,
             "projid": prj_id,
             "used_taxa": [entomobryomorpha_id],
         }
@@ -469,7 +469,7 @@ def test_classif(database, fastapi, caplog):
 
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
-        "nb_predicted": 8,
+        "nb_predicted": 9,
         "nb_unclassified": 0,
         "nb_validated": 0,
         "projid": prj_id,
@@ -486,7 +486,7 @@ def test_classif(database, fastapi, caplog):
         "nb_dubious": 0,
         "nb_predicted": 0,
         "nb_unclassified": 0,
-        "nb_validated": 8,
+        "nb_validated": 9,
         "projid": prj_id,
         "used_taxa": [entomobryomorpha_id],
     }
@@ -499,10 +499,10 @@ def test_classif(database, fastapi, caplog):
     rsp = fastapi.post(OBJECT_SET_PARENTS_URL, headers=ADMIN_AUTH, json=obj_ids)
     assert rsp.status_code == status.HTTP_200_OK
     resp = rsp.json()
-    assert len(resp["acquisition_ids"]) == 4
+    assert len(resp["acquisition_ids"]) == 5
     for prj in resp["project_ids"]:
         assert prj == prj_id
-    assert resp["total_ids"] == 4
+    assert resp["total_ids"] == 5
 
     # Try user stats on the project
     url = PROJECT_SET_USER_STATS.format(prj_ids=str(prj_id))
@@ -514,7 +514,7 @@ def test_classif(database, fastapi, caplog):
             "projid": prj_id,
             "annotators": [{"id": 1, "name": "Application Administrator"}],
             "activities": [
-                {"id": 1, "nb_actions": 12, "last_annot": "2022-05-12T14:21:15"}
+                {"id": 1, "nb_actions": 15, "last_annot": "2022-05-12T14:21:15"}
             ],
         }
     ]
@@ -540,8 +540,8 @@ def test_reset_fresh_import(database, fastapi, caplog):
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
         "nb_predicted": 8,
-        "nb_unclassified": 0,
+        "nb_unclassified": 1,
         "nb_validated": 0,
         "projid": prj_id,
-        "used_taxa": [45072, 78418, 84963, 85011, 85012, 85078],
+        "used_taxa": [-1, 45072, 78418, 84963, 85011, 85012, 85078],
     }

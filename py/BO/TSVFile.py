@@ -327,6 +327,7 @@ class TSVFile(object):
         Some fields need defaults to keep consistency.
         - 'Validated' and 'Dubious' need a category (forced during TSV read), an author and a date
         - 'Predicted' should set same fields as a prediction which ran inside EcoTaxa
+        - '' AKA 'To be classified' in UI should have classification-related fields blank
         """
         if start_time is None:
             return  # No time to update the record, is must be that the full one is sent (during Subset)
@@ -346,6 +347,16 @@ class TSVFile(object):
                 object_head_to_write["classif_who"] = current_user
             if object_head_to_write.get("classif_when") is None:
                 object_head_to_write["classif_when"] = start_time
+        elif state is None:
+            object_head_to_write["classif_id"] = object_head_to_write[
+                "classif_auto_id"
+            ] = object_head_to_write["classif_auto_when"] = object_head_to_write[
+                "classif_auto_score"
+            ] = object_head_to_write[
+                "classif_who"
+            ] = object_head_to_write[
+                "classif_when"
+            ] = None
 
     @staticmethod
     def prepare_classif_update(object_head: ObjectHeader, object_update: Bean) -> bool:
