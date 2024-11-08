@@ -9,8 +9,13 @@ import pytest
 from API_models.filters import ProjectFiltersDict
 from starlette import status
 
-from tests.credentials import CREATOR_AUTH, ORDINARY_USER2_USER_ID, ADMIN_AUTH
-from tests.test_import import VARIOUS_STATES_DIR
+from tests.credentials import (
+    CREATOR_AUTH,
+    ORDINARY_USER2_USER_ID,
+    ADMIN_AUTH,
+    CREATOR_USER_ID,
+)
+from tests.test_import import VARIOUS_STATES_DIR, create_project, import_various
 from tests.test_objectset_query import OBJECT_SET_QUERY_URL
 from tests.test_prj_admin import PROJECT_CLASSIF_STATS_URL
 from tests.test_subentities import OBJECT_HISTORY_QUERY_URL
@@ -544,4 +549,120 @@ def test_reset_fresh_import(database, fastapi, caplog):
         "nb_validated": 0,
         "projid": prj_id,
         "used_taxa": [-1, 45072, 78418, 84963, 85011, 85012, 85078],
+    }
+
+
+def test_revert_to_predicted(database, fastapi, caplog):
+    caplog.set_level(logging.ERROR)
+    prj_id = create_project(CREATOR_USER_ID, "Test Revert To Predicted")
+
+    import_various(fastapi, prj_id)
+    obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id)
+    assert len(obj_ids) == 9
+
+    assert get_stats(fastapi, prj_id) == {
+        "nb_dubious": 1,
+        "nb_predicted": 3,
+        "nb_unclassified": 1,
+        "nb_validated": 4,
+        "projid": prj_id,
+        "used_taxa": [-1, 45072, 78418, 84963, 85011, 85012, 85078],
+    }
+
+    classify_all(fastapi, obj_ids, copepod_id, CREATOR_AUTH)
+
+    url = OBJECT_SET_REVERT_URL.format(project_id=prj_id, dry_run=False, tgt_usr="")
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
+    assert rsp.status_code == status.HTTP_200_OK
+    stats = rsp.json()
+    min_obj_id = min(obj_ids)
+    for an_entry in stats["last_entries"]:
+        if an_entry["histo_classif_date"] is not None:
+            an_entry["histo_classif_date"] = "JUSTNOW"
+        an_entry["objid"] -= min_obj_id - 1
+    assert stats == {
+        "classif_info": {},
+        "last_entries": [
+            {
+                "classif_id": copepod_id,
+                "histo_classif_date": "JUSTNOW",
+                "histo_classif_id": 85012,
+                "histo_classif_qual": "P",
+                "histo_classif_type": "A",
+                "histo_classif_who": None,
+                "objid": 1,
+            },
+            {
+                "classif_id": copepod_id,
+                "histo_classif_date": "JUSTNOW",
+                "histo_classif_id": 78418,
+                "histo_classif_qual": "V",
+                "histo_classif_type": "M",
+                "histo_classif_who": 1,
+                "objid": 2,
+            },
+            {
+                "classif_id": copepod_id,
+                "histo_classif_date": "JUSTNOW",
+                "histo_classif_id": 45072,
+                "histo_classif_qual": "V",
+                "histo_classif_type": "M",
+                "histo_classif_who": 1,
+                "objid": 3,
+            },
+            {
+                "classif_id": copepod_id,
+                "histo_classif_date": "JUSTNOW",
+                "histo_classif_id": 85011,
+                "histo_classif_qual": "P",
+                "histo_classif_type": "A",
+                "histo_classif_who": None,
+                "objid": 4,
+            },
+            {
+                "classif_id": copepod_id,
+                "histo_classif_date": "JUSTNOW",
+                "histo_classif_id": 78418,
+                "histo_classif_qual": "D",
+                "histo_classif_type": "M",
+                "histo_classif_who": 1,
+                "objid": 5,
+            },
+            {
+                "classif_id": copepod_id,
+                "histo_classif_date": "JUSTNOW",
+                "histo_classif_id": 84963,
+                "histo_classif_qual": "P",
+                "histo_classif_type": "A",
+                "histo_classif_who": None,
+                "objid": 6,
+            },
+            {
+                "classif_id": copepod_id,
+                "histo_classif_date": "JUSTNOW",
+                "histo_classif_id": 84963,
+                "histo_classif_qual": "V",
+                "histo_classif_type": "M",
+                "histo_classif_who": 1,
+                "objid": 7,
+            },
+            {
+                "classif_id": copepod_id,
+                "histo_classif_date": "JUSTNOW",
+                "histo_classif_id": 85078,
+                "histo_classif_qual": "V",
+                "histo_classif_type": "M",
+                "histo_classif_who": 1,
+                "objid": 8,
+            },
+            {
+                "classif_id": copepod_id,
+                "histo_classif_date": None,
+                "histo_classif_id": None,
+                "histo_classif_qual": None,
+                "histo_classif_type": "n",
+                "histo_classif_who": None,
+                "objid": 9,
+            },
+        ],
     }

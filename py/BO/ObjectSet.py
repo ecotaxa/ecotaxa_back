@@ -602,10 +602,31 @@ class EnumeratedObjectSet(MappedTable):
                 ObjectHeader.classif_who.name: an_histo.histo_classif_who,
                 ObjectHeader.classif_when.name: an_histo.histo_classif_date,
                 ObjectHeader.classif_qual.name: an_histo.histo_classif_qual,
+                ObjectHeader.classif_auto_id.name: None,
+                ObjectHeader.classif_auto_score.name: None,
+                ObjectHeader.classif_auto_when.name: None,
             }
             for an_histo in histo
-            if an_histo.histo_classif_type != NO_HISTO
+            if an_histo.histo_classif_qual
+            in (VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL)
         ]
+        updates.extend(
+            [
+                {
+                    ObjectHeader.objid.name: an_histo.objid,
+                    ObjectHeader.classif_id.name: an_histo.histo_classif_id,
+                    ObjectHeader.classif_who.name: None,
+                    ObjectHeader.classif_when.name: None,
+                    ObjectHeader.classif_qual.name: an_histo.histo_classif_qual,
+                    # Restore-ish the hidden history
+                    ObjectHeader.classif_auto_id.name: an_histo.histo_classif_id,
+                    ObjectHeader.classif_auto_score.name: 1.0,
+                    ObjectHeader.classif_auto_when.name: an_histo.histo_classif_date,
+                }
+                for an_histo in histo
+                if an_histo.histo_classif_qual == PREDICTED_CLASSIF_QUAL
+            ]
+        )
         updates.extend(
             [
                 {
@@ -614,6 +635,10 @@ class EnumeratedObjectSet(MappedTable):
                     ObjectHeader.classif_who.name: None,
                     ObjectHeader.classif_when.name: None,
                     ObjectHeader.classif_qual.name: None,
+                    # Consider that back to initial state means 'never predicted'
+                    ObjectHeader.classif_auto_id.name: None,
+                    ObjectHeader.classif_auto_score.name: None,
+                    ObjectHeader.classif_auto_when.name: None,
                 }
                 for an_histo in histo
                 if an_histo.histo_classif_type == NO_HISTO
