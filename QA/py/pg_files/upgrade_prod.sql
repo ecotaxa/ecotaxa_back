@@ -2236,6 +2236,10 @@ INSERT INTO obj_cnn_features_vector (objcnnid, features)
         cnn41, cnn42, cnn43, cnn44, cnn45, cnn46, cnn47, cnn48, cnn49, cnn50]::vector
         FROM obj_cnn_features;
 
+GRANT SELECT ON obj_cnn_features_vector TO readerole;
+
+DROP TABLE obj_cnn_features;
+
 UPDATE alembic_version SET version_num='a9dd3c62b7b0' WHERE alembic_version.version_num = '0a3132f436fb';
 
 COMMIT;
