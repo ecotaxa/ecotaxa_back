@@ -102,7 +102,7 @@ class SimilarityVirtualColumn(VirtualColumn):
 
 
 OBJECT_VIRTUAL_COLUMNS: VirtualColumnSet = VirtualColumnSet(
-    ComplementInfoVirtualColumn,
+    # ComplementInfoVirtualColumn,
     ImageCountVirtualColumn,
     RandomValueVirtualColumn,
     ClassifWhenVirtualColumn,

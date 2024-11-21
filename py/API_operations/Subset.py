@@ -16,7 +16,7 @@ from BO.TSVFile import TSVFile
 from BO.Training import TrainingBOProvider
 from BO.helpers.ImportHelpers import ImportHow
 from DB.Acquisition import Acquisition
-from DB.CNNFeature import ObjectCNNFeature
+from DB.CNNFeatureVector import ObjectCNNFeatureVector
 from DB.Image import Image
 from DB.Object import (
     ObjectHeader,
@@ -41,7 +41,7 @@ logger = get_logger(__name__)
 # Useful typings
 # TODO: Put somewhere else if reused in other classes
 DBObjectTupleT = Tuple[
-    ObjectHeader, ObjectFields, ObjectCNNFeature, Image, Sample, Acquisition, Process
+    ObjectHeader, ObjectFields, ObjectCNNFeatureVector, Image, Sample, Acquisition, Process
 ]
 DBObjectTupleListT = List[DBObjectTupleT]
 
@@ -170,7 +170,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         )
         ret = (
             ret.outerjoin(Image, ObjectHeader.all_images)
-            .outerjoin(ObjectCNNFeature)
+            .outerjoin(ObjectCNNFeatureVector)
             .join(ObjectFields)
         )
         ret = ret.filter(ObjectHeader.objid == any_(object_ids))
@@ -178,7 +178,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         ret = ret.with_entities(
             ObjectHeader,
             ObjectFields,
-            ObjectCNNFeature,
+            ObjectCNNFeatureVector,
             Image,
             Sample,
             Acquisition,

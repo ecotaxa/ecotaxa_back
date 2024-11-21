@@ -584,6 +584,9 @@ class EnumeratedObjectSet(MappedTable):
                 ObjectHeader.classif_who.name: an_histo.histo_classif_who,
                 ObjectHeader.classif_date.name: an_histo.histo_classif_date,
                 ObjectHeader.classif_score.name: an_histo.histo_classif_score,
+                ObjectHeader.classif_auto_id.name: None,
+                ObjectHeader.classif_auto_score.name: None,
+                ObjectHeader.classif_auto_when.name: None,
             }
             for an_histo in histo
             if an_histo.histo_classif_qual != NO_HISTO
@@ -597,6 +600,10 @@ class EnumeratedObjectSet(MappedTable):
                     ObjectHeader.classif_who.name: None,
                     ObjectHeader.classif_date.name: None,
                     ObjectHeader.classif_score.name: None,
+                    # Consider that back to initial state means 'never predicted'
+                    ObjectHeader.classif_auto_id.name: None,
+                    ObjectHeader.classif_auto_score.name: None,
+                    ObjectHeader.classif_auto_when.name: None,
                 }
                 for an_histo in histo
                 if an_histo.histo_classif_qual == NO_HISTO

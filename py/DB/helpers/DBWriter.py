@@ -2,15 +2,15 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List, Optional, ClassVar
+from typing import Dict, Tuple, List, Type, Optional, ClassVar
 
 from helpers.DynamicLogs import get_logger
 from .Bean import Bean
 from .Direct import text
-from .ORM import Session, MetaData, minimal_table_of
+from .ORM import Session, Table, MetaData, minimal_table_of
 from .Postgres import SequenceCache
 from .. import Prediction
-from ..CNNFeature import ObjectCNNFeature
+from ..CNNFeatureVector import ObjectCNNFeatureVector
 from ..Image import Image
 from ..Object import ObjectHeader, ObjectFields, ObjectsClassifHisto
 
@@ -36,7 +36,7 @@ class DBWriter(object):
         self.obj_tbl = ObjectHeader.__table__
         self.obj_fields_tbl = ObjectFields.__table__  # Slow by default @see narrow_to
         self.img_tbl = Image.__table__
-        self.obj_cnn_tbl = ObjectCNNFeature.__table__
+        self.obj_cnn_vector_tbl = ObjectCNNFeatureVector.__table__
         self.obj_history_tbl = ObjectsClassifHisto.__table__
         self.pred_tbl = Prediction.__table__
         # Data
@@ -74,7 +74,7 @@ class DBWriter(object):
         inserts = [
             self.obj_tbl.insert(),
             self.obj_fields_tbl.insert(),
-            self.obj_cnn_tbl.insert(),
+            self.obj_cnn_vector_tbl.insert(),
             self.img_tbl.insert(),
             self.obj_history_tbl.insert(),
             self.pred_tbl.insert(),
