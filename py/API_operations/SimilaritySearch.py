@@ -97,6 +97,15 @@ class SimilaritySearchForProject(Service):
             ORDER BY dist LIMIT {limit};
         """
 
+        query = f"""
+        SET LOCAL ivvflat.probes = 10;
+        SELECT objcnnid, features::vector(50)<->(SELECT features::vector(50) FROM {ObjectCNNFeatureVector.__tablename__}
+        WHERE objcnnid={target_id}) AS dist
+        FROM {ObjectCNNFeatureVector.__tablename__}, {from_.get_sql()}
+            {where_clause_sql}
+        ORDER BY dist LIMIT 50
+        """
+
         result = self.ro_session.execute(text(query), params).fetchall()
         neighbors = [res["objcnnid"] for res in result]
         distances = [res["dist"] for res in result]
