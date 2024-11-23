@@ -15,16 +15,13 @@ from DB.helpers.ORM import any_
 from sqlalchemy import text
 from starlette import status
 
+from tests.credentials import CREATOR_AUTH, ORDINARY_USER2_USER_ID, ADMIN_AUTH
 from tests.credentials import (
-    CREATOR_AUTH,
-    ORDINARY_USER2_USER_ID,
-    ADMIN_AUTH,
     CREATOR_USER_ID,
 )
-from tests.test_import import VARIOUS_STATES_DIR, create_project, import_various
-from tests.credentials import CREATOR_AUTH, ORDINARY_USER2_USER_ID, ADMIN_AUTH
 from tests.prj_utils import sce_check_consistency
 from tests.test_import import VARIOUS_STATES_DIR
+from tests.test_import import create_project, import_various
 from tests.test_objectset_query import OBJECT_SET_QUERY_URL
 from tests.test_prj_admin import PROJECT_CLASSIF_STATS_URL
 from tests.test_subentities import OBJECT_HISTORY_QUERY_URL
@@ -488,7 +485,7 @@ def test_classif(database, fastapi, caplog, tstlogs):
     obj_stats_after_second_prediction = {
         "nb_dubious": 0,
         "nb_predicted": 4,
-        "nb_unclassified": 4,
+        "nb_unclassified": 5,
         "nb_validated": 0,
         "projid": prj_id,
         "used_taxa": [-1, crustacea_id],
@@ -562,7 +559,7 @@ def test_classif(database, fastapi, caplog, tstlogs):
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
         "nb_predicted": 1,  # 3 predicted objects lost their whole history, 1 remains as it was predicted twice
-        "nb_unclassified": 7,
+        "nb_unclassified": 8,
         "nb_validated": 0,
         "projid": prj_id,
         "used_taxa": [-1, 12846],
@@ -585,7 +582,7 @@ def test_classif(database, fastapi, caplog, tstlogs):
         "nb_dubious": 0,
         "nb_predicted": 0,
         "nb_unclassified": 0,
-        "nb_validated": 8,
+        "nb_validated": 9,
         "projid": prj_id,
         "used_taxa": [copepod_id],
     }
@@ -684,8 +681,8 @@ def test_classif(database, fastapi, caplog, tstlogs):
 
     assert get_predictions_stats(obj_ids) == {
         "n_trainings": 2,  # new pseudo-training
-        "n_objects_in_predictions": 8,  # all of them
-        "n_predictions": 8,  # 8 new (single score, single prediction line)
+        "n_objects_in_predictions": 9,  # all of them
+        "n_predictions": 9,  # 9 new (single score, single prediction line)
         "n_predictions_h": 3,  # the one with 3 scores remains in archive
         "n_discarded": 0,
     }
@@ -786,6 +783,16 @@ def test_classif(database, fastapi, caplog, tstlogs):
                 "histo_classif_type": "M",
                 "objid": 9999999,
             },
+            {
+                "classif_id": 25835,
+                "histo_classif_date": "now",
+                "histo_classif_id": 25835,
+                "histo_classif_qual": "V",
+                "histo_classif_score": None,
+                "histo_classif_type": "M",
+                "histo_classif_who": 1,
+                "objid": 9999999,
+            },
         ],
     }
 
@@ -836,7 +843,7 @@ def test_classif(database, fastapi, caplog, tstlogs):
             "projid": prj_id,
             "annotators": [{"id": 1, "name": "Application Administrator"}],
             "activities": [
-                {"id": 1, "nb_actions": 8, "last_annot": "2022-05-12T14:21:15"}
+                {"id": 1, "nb_actions": 10, "last_annot": "2022-05-12T14:21:15"}
             ],
         }
     ]
@@ -915,6 +922,7 @@ def test_revert_to_predicted(database, fastapi, caplog):
                 "histo_classif_date": "JUSTNOW",
                 "histo_classif_id": 85012,
                 "histo_classif_qual": "P",
+                "histo_classif_score": 1.0,
                 "histo_classif_type": "A",
                 "histo_classif_who": None,
                 "objid": 1,
@@ -924,6 +932,7 @@ def test_revert_to_predicted(database, fastapi, caplog):
                 "histo_classif_date": "JUSTNOW",
                 "histo_classif_id": 78418,
                 "histo_classif_qual": "V",
+                "histo_classif_score": None,
                 "histo_classif_type": "M",
                 "histo_classif_who": 1,
                 "objid": 2,
@@ -933,6 +942,7 @@ def test_revert_to_predicted(database, fastapi, caplog):
                 "histo_classif_date": "JUSTNOW",
                 "histo_classif_id": 45072,
                 "histo_classif_qual": "V",
+                "histo_classif_score": None,
                 "histo_classif_type": "M",
                 "histo_classif_who": 1,
                 "objid": 3,
@@ -942,6 +952,7 @@ def test_revert_to_predicted(database, fastapi, caplog):
                 "histo_classif_date": "JUSTNOW",
                 "histo_classif_id": 85011,
                 "histo_classif_qual": "P",
+                "histo_classif_score": 1.0,
                 "histo_classif_type": "A",
                 "histo_classif_who": None,
                 "objid": 4,
@@ -951,6 +962,7 @@ def test_revert_to_predicted(database, fastapi, caplog):
                 "histo_classif_date": "JUSTNOW",
                 "histo_classif_id": 78418,
                 "histo_classif_qual": "D",
+                "histo_classif_score": None,
                 "histo_classif_type": "M",
                 "histo_classif_who": 1,
                 "objid": 5,
@@ -960,6 +972,7 @@ def test_revert_to_predicted(database, fastapi, caplog):
                 "histo_classif_date": "JUSTNOW",
                 "histo_classif_id": 84963,
                 "histo_classif_qual": "P",
+                "histo_classif_score": 1.0,
                 "histo_classif_type": "A",
                 "histo_classif_who": None,
                 "objid": 6,
@@ -969,6 +982,7 @@ def test_revert_to_predicted(database, fastapi, caplog):
                 "histo_classif_date": "JUSTNOW",
                 "histo_classif_id": 84963,
                 "histo_classif_qual": "V",
+                "histo_classif_score": None,
                 "histo_classif_type": "M",
                 "histo_classif_who": 1,
                 "objid": 7,
@@ -978,6 +992,7 @@ def test_revert_to_predicted(database, fastapi, caplog):
                 "histo_classif_date": "JUSTNOW",
                 "histo_classif_id": 85078,
                 "histo_classif_qual": "V",
+                "histo_classif_score": None,
                 "histo_classif_type": "M",
                 "histo_classif_who": 1,
                 "objid": 8,
@@ -986,8 +1001,9 @@ def test_revert_to_predicted(database, fastapi, caplog):
                 "classif_id": copepod_id,
                 "histo_classif_date": None,
                 "histo_classif_id": None,
-                "histo_classif_qual": None,
-                "histo_classif_type": "n",
+                "histo_classif_qual": "n",
+                "histo_classif_score": None,
+                "histo_classif_type": None,
                 "histo_classif_who": None,
                 "objid": 9,
             },

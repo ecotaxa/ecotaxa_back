@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION=2.7.6.3
+VERSION=2.7.7
 # In case of doubt on the image sanity or if you have time, uncomment below
 #NO_CACHE=--no-cache
 # Preliminary, log using ecotaxa docker account

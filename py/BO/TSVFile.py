@@ -20,9 +20,6 @@ from typing import (
     TextIO,
 )
 
-# noinspection PyPackageRequirements
-from PIL import Image as PIL_Image  # type: ignore
-
 import BO.Mappings as GlobalMapping
 from BO.Mappings import ProjectMapping, ParentTableClassT
 from BO.SpaceTime import compute_sun_position, USED_FIELDS_FOR_SUNPOS
@@ -51,7 +48,11 @@ from DB.Sample import Sample
 from DB.helpers import Session
 from DB.helpers.Bean import Bean
 from DB.helpers.ORM import detach_from_session
+
+# noinspection PyPackageRequirements
+from PIL import Image as PIL_Image  # type: ignore
 from helpers.DynamicLogs import get_logger
+
 from .Image import ImageBO
 from .ObjectSet import EnumeratedObjectSet
 from .User import UserIDT
@@ -377,18 +378,16 @@ class TSVFile(object):
         elif state in (VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL):
             if object_head_to_write.get("classif_who") is None:
                 object_head_to_write["classif_who"] = current_user
-            if object_head_to_write.get("classif_when") is None:
-                object_head_to_write["classif_when"] = start_time
+            if object_head_to_write.get("classif_date") is None:
+                object_head_to_write["classif_date"] = start_time
+            object_head_to_write["classif_score"] = None
         elif state is None:
             object_head_to_write["classif_id"] = object_head_to_write[
-                "classif_auto_id"
-            ] = object_head_to_write["classif_auto_when"] = object_head_to_write[
-                "classif_auto_score"
-            ] = object_head_to_write[
                 "classif_who"
-            ] = object_head_to_write[
-                "classif_when"
+            ] = object_head_to_write["classif_date"] = object_head_to_write[
+                "classif_score"
             ] = None
+        return state
 
     @staticmethod
     def prepare_classif_update(object_head: ObjectHeader, object_update: Bean) -> bool:

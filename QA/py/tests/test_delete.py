@@ -28,7 +28,7 @@ def test_api_project_delete(fastapi, caplog):
     assert rsp.status_code == status.HTTP_403_FORBIDDEN
     rsp = fastapi.delete(url, headers=CREATOR_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
-    # Test emptyness
+    # Test emptiness
     with io.StringIO() as fd:
         dump_project(CREATOR_AUTH, prj_id, fd)
         buff = fd.getvalue()

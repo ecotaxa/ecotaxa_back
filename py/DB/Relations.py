@@ -125,12 +125,6 @@ if True:
     )
     User.classified_objects = relationship(ObjectHeader)
 
-    ObjectHeader.classif_auto = relationship(
-        Taxonomy,
-        primaryjoin="Taxonomy.id==foreign(ObjectHeader.classif_auto_id)",
-        uselist=False,
-    )
-
     ObjectCNNFeatureVector.object = relationship(
         ObjectHeader,
         foreign_keys="ObjectHeader.objid",
