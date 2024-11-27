@@ -44,13 +44,15 @@ jobs:
     - run: apt-get update
     # - run: apt-get install -y curl
     # - run: curl -fsSL https://deb.nodesource.com/setup_16.x | bash -
-    # - run: apt-get install -y nodejs
+    # - run: apt-get install -y nodejs    
     # git is needed by codecov
     - run: apt-get install -y git
+    # old version of python from this ppa
+    - run: add-apt-repository ppa:deadsnakes/ppa
     # python & psql (for the test DB) from repo, same as prod docker
     - run: apt-get install
         python3.8 python3-venv python3.8-dev python3.8-venv
-        postgresql-client-10 libpq-dev
+        postgresql-client-14 libpq-dev
         gcc make file cython3
         --no-install-recommends --yes
     - run: python3.8 -m venv /venv
