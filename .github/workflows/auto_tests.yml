@@ -43,7 +43,7 @@ jobs:
     # node (or a lib of) is needed by codecov (or GH)
     # old version of python from this ppa
     - run: apt-get update
-    - run: apt-get install software-properties-common --no-install-recommends --yes
+    - run: apt-get install software-properties-common gpg-agent --no-install-recommends --yes
     - run: apt-get update
     - run: add-apt-repository ppa:deadsnakes/ppa
     - run: apt-get update
