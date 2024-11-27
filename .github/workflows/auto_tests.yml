@@ -15,13 +15,7 @@ jobs:
     # The type of runner that the job will run on
     runs-on: [ubuntu-latest]
     # Virgin container
-    container: ubuntu:18.04
-
-    # https://github.com/actions/setup-node/issues/922
-    # https://github.com/actions/runner/issues/2906
-    # Due to: https://github.blog/changelog/2024-03-07-github-actions-all-actions-will-run-on-node20-instead-of-node16-by-default/
-    env:
-        ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
+    container: ubuntu:22.04
 
     # Service containers to run with `container-job`
     services:
@@ -41,22 +35,25 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
     # node (or a lib of) is needed by codecov (or GH)
+    # old version of python from this ppa
     - run: apt-get update
-    - run: apt-get install -y curl
-    - run: curl -fsSL https://deb.nodesource.com/setup_16.x | bash -
-    - run: apt-get install -y nodejs
+    - run: apt-get install software-properties-common gpg-agent --no-install-recommends --yes
+    # - run: apt-get update
+    - run: TZ=Etc/UTC ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+    - run: add-apt-repository ppa:deadsnakes/ppa
+    - run: apt-get update
     # git is needed by codecov
     - run: apt-get install -y git
     # python & psql (for the test DB) from repo, same as prod docker
     - run: apt-get install
         python3.8 python3-venv python3.8-dev python3.8-venv
-        postgresql-client-10 libpq-dev
+        postgresql-client-14 libpq-dev
         gcc make file cython3
         --no-install-recommends --yes
     - run: python3.8 -m venv /venv
     - run: PATH=/venv/bin pip3 install --upgrade pip wheel
-    # Checkout. note: @v3 or @v4 need node20 which is NOK on ubuntu 18, hack of env above does a workaround
-    - uses: actions/checkout@v2
+    # Checkout. 
+    - uses: actions/checkout@v4
     # Run both tests and coverage
     - run: PATH=/venv/bin:$PATH pip3 install tox==3.24.3
     - name: Run tox in QA
@@ -69,8 +66,8 @@ jobs:
         # The default PostgreSQL port
         POSTGRES_PORT: 5432
     - name: Upload coverage report
-      # Code coverage. note: @v4 needs node20 which is NOK on ubuntu 18
-      uses: codecov/codecov-action@v3
+      # Code coverage.
+      uses: codecov/codecov-action@v4
       with:
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true # optional (default = false)
