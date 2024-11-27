@@ -47,6 +47,7 @@ jobs:
     - run: apt-get update
     - run: apt-get install software-properties-common gpg-agent --no-install-recommends --yes
     - run: apt-get update
+    - run: TZ=Asia/Dubai ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
     - run: add-apt-repository ppa:deadsnakes/ppa
     - run: apt-get update
     # - run: apt-get install -y curl
