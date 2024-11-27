@@ -1,13 +1,13 @@
 """ Logs Cleanup
 
 Revision ID: d3bfaa54d544
-Revises: 0a3132f436fb
+Revises: a9dd3c62b7b0
 Create Date: 2024-10-10 07:14:48.871263
 """
 
 # revision identifiers, used by Alembic.
 revision = "d3bfaa54d544"
-down_revision = "0a3132f436fb"
+down_revision = "a9dd3c62b7b0"
 
 from alembic import op
 

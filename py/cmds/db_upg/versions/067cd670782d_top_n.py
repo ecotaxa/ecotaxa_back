@@ -225,13 +225,13 @@ def upgrade():
                                                   mop.classif_auto_when between trn.training_start and trn.training_end;
     create index on mig_obj_prj2 (projid, objid);
     create unique index on mig_obj_prj2 (objid, classif_auto_when); -- An object could not be moved state twice at same time
-    analyze mig_obj_prj2 
+    analyze mig_obj_prj2; 
+    ALTER TABLE mig_obj_prj2 SET (autovacuum_enabled = off)
     """
     )
     with op.get_context().autocommit_block():
         op.execute(
             """
-        ALTER TABLE mig_obj_prj2 SET (autovacuum_enabled = off);
         vacuum full verbose mig_obj_prj2
         """
         )
@@ -293,34 +293,12 @@ $$
     """
     )
 
-    # ecotaxa4=# alter table obj_head rename column classif_when to classif_date;
-    # ALTER TABLE
-    # Time: 4,159 ms
-    # ecotaxa4=# alter table obj_head rename column classif_auto_score to classif_score;
-    # ALTER TABLE
-    # Time: 28517,791 ms (00:28,518)
-    # ecotaxa4=# update obj_head set classif_date=classif_auto_when where classif_qual='P';
-    # UPDATE 214160148
-    # Time: 6688941,067 ms (01:51:28,941)
-
     # TODO: Check all trainings are used
     # create temp table trainings_used as select distinct training_id from prediction union select distinct training_id from prediction_histo;
     # select count(1) from training; select count(1) from trainings_used;
 
     # TODO: Check nightly job verifications are OK
     # TODO: Check values are == b/w object/histo and their freshest predictions
-
-    # Check that all logs are before present object:
-    # select distinct obh.objid, obh.acquisid
-    #       from obj_head obh
-    #       join objectsclassifhisto och
-    #            on och.objid = obh.objid
-    #            and och.classif_date >= obh.classif_date;
-
-    # op.drop_column("objectsclassifhisto", "classif_type")
-    # op.drop_column("obj_head", "classif_auto_id")
-    # op.drop_column("obj_head", "classif_auto_score")
-    # op.drop_column("obj_head", "classif_auto_when")
 
     op.execute("GRANT SELECT ON ALL TABLES IN SCHEMA public TO readerole")
 

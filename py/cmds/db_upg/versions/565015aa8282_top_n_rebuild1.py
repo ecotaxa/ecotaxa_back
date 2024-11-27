@@ -35,8 +35,8 @@ ALTER TABLE ONLY public.obj_head
 ALTER TABLE ONLY public.obj_head
     RENAME CONSTRAINT obj_head_classif_who_fkey TO obj_head_classif_who_fkey_old;
 -- Referenced by:
-ALTER TABLE ONLY public.obj_cnn_features
-    DROP CONSTRAINT obj_cnn_features_objcnnid_fkey;
+ALTER TABLE ONLY public.obj_cnn_features_vector
+    DROP CONSTRAINT obj_cnn_features_vector_objcnnid_fkey;
 ALTER TABLE ONLY public.obj_field
     DROP CONSTRAINT obj_field_objfid_fkey;
 ALTER TABLE ONLY public.objectsclassifhisto
@@ -122,8 +122,8 @@ CREATE INDEX is_objectstime ON public.obj_head USING btree (objtime) INCLUDE (ac
 ALTER TABLE public.obj_head
     CLUSTER ON is_obj_head_acquisid_objid;
 
-ALTER TABLE ONLY public.obj_cnn_features
-    ADD CONSTRAINT obj_cnn_features_objcnnid_fkey FOREIGN KEY (objcnnid) REFERENCES public.obj_head (objid) ON DELETE CASCADE;
+ALTER TABLE ONLY public.obj_cnn_features_vector
+    ADD CONSTRAINT obj_cnn_features_vector_objcnnid_fkey FOREIGN KEY (objcnnid) REFERENCES public.obj_head (objid) ON DELETE CASCADE;
 ALTER TABLE ONLY public.obj_field
     ADD CONSTRAINT obj_field_objfid_fkey FOREIGN KEY (objfid) REFERENCES public.obj_head (objid) ON DELETE CASCADE;
 -- Done later during repack of objectsclassifhisto
