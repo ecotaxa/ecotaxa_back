@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.38.mlp"
+    "version":"0.0.39"
   },
   "servers":[
     {
@@ -3973,6 +3973,63 @@
         ]
       }
     },
+    "/object_set/predictions":{
+      "post":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Query Object Set Predictions",
+        "description":"** Return last prediction information for a set of objects, by their IDs.",
+        "operationId":"predict_object_set",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "title":"Object IDs list",
+                "type":"array",
+                "items":{
+                  "type":"integer"
+                },
+                "description":"The list of object ids."
+              },
+              "example":[
+                634509,
+                6234516,
+                976544
+              ]
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/PredictionInfoRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
     "/object_set/":{
       "delete":{
         "tags":[
@@ -6120,7 +6177,7 @@
                 "type":"integer"
               }
             },
-            "description":"The wanted new classifications, i.e. taxon ID, one for each object."
+            "description":"The wanted new classifications, i.e. taxon ID, one list for each object."
           },
           "scores":{
             "title":"Scores",
@@ -6131,7 +6188,7 @@
                 "type":"number"
               }
             },
-            "description":"The classification score is generally between 0 and 1. It indicates the probability that the taxon prediction of this object is correct."
+            "description":"The classification scores, between 0 and 1. Each indicates the probability that the taxon prediction of this object for this category is correct."
           },
           "keep_log":{
             "title":"Keep log",
@@ -6146,14 +6203,28 @@
             976544
           ],
           "classifications":[
-            7546,
-            3421,
-            788
+            [
+              7546
+            ],
+            [
+              3421,
+              5614
+            ],
+            [
+              788
+            ]
           ],
           "scores":[
-            0.4,
-            0.56,
-            0.38
+            [
+              0.4
+            ],
+            [
+              0.56,
+              0.3333
+            ],
+            [
+              0.38
+            ]
           ],
           "keep_log":false
         }
@@ -7106,6 +7177,7 @@
       "ImageModel":{
         "title":"ImageModel",
         "required":[
+          "imgid",
           "objid",
           "imgrank",
           "width",
@@ -7988,6 +8060,47 @@
           }
         },
         "description":"Classification summary from object set."
+      },
+      "PredictionInfoRsp":{
+        "title":"PredictionInfoRsp",
+        "type":"object",
+        "properties":{
+          "result":{
+            "title":"Result",
+            "type":"array",
+            "items":{
+              "maxItems":3,
+              "minItems":3,
+              "type":"array",
+              "items":[
+                {
+                  "type":"integer"
+                },
+                {
+                  "type":"integer"
+                },
+                {
+                  "type":"number"
+                }
+              ]
+            },
+            "description":"List of lists [object ID, category ID, score for category].",
+            "default":[],
+            "example":[
+              [
+                23456,
+                1234,
+                0.7
+              ],
+              [
+                23457,
+                768,
+                0.2
+              ]
+            ]
+          }
+        },
+        "description":"Prediction information for a set of objects."
       },
       "PredictionReq":{
         "title":"Prediction Request",
