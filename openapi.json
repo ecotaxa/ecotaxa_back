@@ -3590,6 +3590,7 @@
           "objects"
         ],
         "summary":"Classify Auto Object Set",
+        "description":"**Set automatic classification** of a set of objects.\n\n**Returns the number of updated entities.**",
         "operationId":"classify_auto_object_set",
         "requestBody":{
           "content":{

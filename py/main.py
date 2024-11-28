@@ -2242,6 +2242,11 @@ def classify_object_set(
 def classify_auto_object_set(
     req: ClassifyAutoReq = Body(...), current_user: int = Depends(get_current_user)
 ) -> int:
+    """
+    **Set automatic classification** of a set of objects.
+
+    **Returns the number of updated entities.**
+    """
     req2 = ClassifyAutoReqMult(
         target_ids=req.target_ids,
         classifications=[[a_classif] for a_classif in req.classifications],
