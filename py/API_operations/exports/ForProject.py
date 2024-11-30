@@ -933,7 +933,7 @@ class GeneralProjectExport(SpecializedProjectExport):
             with_types_row=req.with_types_row,
             only_first_image=req.with_images == ExportImagesOptionsEnum.first,
             split_by=old_split,
-            tsv_entities="OPASC",
+            tsv_entities="OPAS" if req.with_types_row else "OPASC",
             only_annotations=req.only_annotations,
             out_to_ftp=req.out_to_ftp,
         )
