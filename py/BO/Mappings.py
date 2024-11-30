@@ -103,6 +103,11 @@ PREDEFINED_FIELDS: Final = {
         "field": "depth_max",
         "type": "n",
     },
+    "complement_info": {
+        "table": ObjectHeader.__tablename__,
+        "field": "complement_info",
+        "type": "t",
+    },
     "img_rank": {"table": Image.__tablename__, "field": "imgrank", "type": "n"},
     "img_file_name": {
         "table": Image.__tablename__,
