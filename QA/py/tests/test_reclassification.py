@@ -12,6 +12,8 @@ from tests.test_classification import (
     get_stats,
     entomobryomorpha_id,
     get_classif_history,
+    classify_all,
+    validate_all,
 )
 
 OBJECT_SET_RECLASSIFY_URL = (
@@ -49,6 +51,10 @@ def test_reclassif(database, fastapi, caplog):
         "used_taxa": [45072, 78418, detritus_classif_id, 85011, 85012, 85078],
     }
 
+    # Validate all as Predicted state cannot mutate
+    obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id)
+    validate_all(fastapi, obj_ids, ADMIN_AUTH)
+
     # We have 2 detritus, see original dataset
     obj_ids = query_all_objects(
         fastapi, CREATOR_AUTH, prj_id, taxo=str(detritus_classif_id)
@@ -66,9 +72,9 @@ def test_reclassif(database, fastapi, caplog):
     # Stats changed, detritus is gone and entomobryomorpha appeared
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
-        "nb_predicted": 8,
+        "nb_predicted": 0,
         "nb_unclassified": 0,
-        "nb_validated": 0,
+        "nb_validated": 8,
         "projid": prj_id,
         "used_taxa": [entomobryomorpha_id, 45072, 78418, 85011, 85012, 85078],
     }
@@ -87,7 +93,6 @@ def test_reclassif(database, fastapi, caplog):
                 "classif_id": detritus_classif_id,
                 "classif_qual": "P",
                 "classif_score": None,
-                "classif_type": "M",
                 "classif_who": 1,
                 "objid": 1,
                 "taxon_name": "detritus",

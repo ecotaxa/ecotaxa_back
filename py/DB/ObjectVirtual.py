@@ -4,6 +4,7 @@
 #
 # The virtual columns for Object
 from . import ObjectHeader
+from .Object import PREDICTED_CLASSIF_QUAL, VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL
 from .helpers.VirtualColumn import VirtualColumnSet, VirtualColumn
 
 
@@ -36,6 +37,52 @@ class RandomValueVirtualColumn(VirtualColumn):
         return hash(header.orig_id)
 
 
+class ClassifWhenVirtualColumn(VirtualColumn):
+    name = "classif_when"
+    sql = "CASE WHEN obh.classif_qual in ('V','D') THEN obh.classif_date END"
+
+    @staticmethod
+    def filler(header: ObjectHeader):
+        return (
+            header.classif_date
+            if header.classif_qual in (VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL)
+            else None
+        )
+
+
+class ClassifAutoScoreVirtualColumn(VirtualColumn):
+    name = "classif_auto_score"
+    sql = "obh.classif_score"
+
+    @staticmethod
+    def filler(header: ObjectHeader):
+        return header.classif_score
+
+
+class ClassifAutoWhenVirtualColumn(VirtualColumn):
+    name = "classif_auto_when"
+    sql = "CASE WHEN obh.classif_qual='P' THEN obh.classif_date END"
+
+    @staticmethod
+    def filler(header: ObjectHeader):
+        return (
+            header.classif_date
+            if header.classif_qual == PREDICTED_CLASSIF_QUAL
+            else None
+        )
+
+
+class ClassifAutoIDVirtualColumn(VirtualColumn):
+    name = "classif_auto_id"
+    sql = "CASE WHEN obh.classif_qual='P' THEN obh.classif_id END"
+
+    @staticmethod
+    def filler(header: ObjectHeader):
+        return (
+            header.classif_id if header.classif_qual == PREDICTED_CLASSIF_QUAL else None
+        )
+
+
 class ClassifCrossValidationIDVirtualColumn(VirtualColumn):
     name = "classif_crossvalidation_id"
     sql = "NULL::integer"
@@ -58,6 +105,10 @@ OBJECT_VIRTUAL_COLUMNS: VirtualColumnSet = VirtualColumnSet(
     # ComplementInfoVirtualColumn,
     ImageCountVirtualColumn,
     RandomValueVirtualColumn,
+    ClassifWhenVirtualColumn,
+    ClassifAutoWhenVirtualColumn,
+    ClassifAutoScoreVirtualColumn,
+    ClassifAutoIDVirtualColumn,
     ClassifCrossValidationIDVirtualColumn,
     SimilarityVirtualColumn,
 )

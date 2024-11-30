@@ -33,7 +33,7 @@ ANNOTATION_FIELDS: Final = {
     },
     "object_annotation_date": {
         "table": ObjectHeader.__tablename__,
-        "field": "classif_when",
+        "field": "classif_date",
         "type": "t",
     },
     "object_annotation_person_name": {
@@ -51,7 +51,7 @@ DOUBLED_FIELDS: Final = {
     # Added to object_annotation_date
     "object_annotation_time": {
         "table": ObjectHeader.__tablename__,
-        "field": "classif_when",
+        "field": "classif_date",
         "type": "t",
     },
     # Either this one or object_annotation_person_name

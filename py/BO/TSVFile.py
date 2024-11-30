@@ -20,12 +20,10 @@ from typing import (
     TextIO,
 )
 
-# noinspection PyPackageRequirements
-from PIL import Image as PIL_Image  # type: ignore
-
 import BO.Mappings as GlobalMapping
 from BO.Mappings import ProjectMapping, ParentTableClassT
 from BO.SpaceTime import compute_sun_position, USED_FIELDS_FOR_SUNPOS
+from BO.Training import TrainingBOProvider, PredictionBO
 from BO.helpers.ImportHelpers import (
     ImportHow,
     ImportWhere,
@@ -43,13 +41,18 @@ from DB.Object import (
     VALIDATED_CLASSIF_QUAL,
     DUBIOUS_CLASSIF_QUAL,
 )
+from DB.Prediction import PSEUDO_TRAINING_SCORE
 from DB.Process import Process
 from DB.Project import ProjectIDT
 from DB.Sample import Sample
 from DB.helpers import Session
 from DB.helpers.Bean import Bean
 from DB.helpers.ORM import detach_from_session
+
+# noinspection PyPackageRequirements
+from PIL import Image as PIL_Image  # type: ignore
 from helpers.DynamicLogs import get_logger
+
 from .Image import ImageBO
 from .ObjectSet import EnumeratedObjectSet
 from .User import UserIDT
@@ -137,6 +140,13 @@ class TSVFile(object):
         """
         session = where.db_writer.session
         counter = stats.current_row_count
+        training_provider = TrainingBOProvider(
+            session,
+            how.user_id,
+            f"Import P into {how.prj_id}",
+            stats.start_time,
+        )
+
         with self.open():
             # Only keep the fields we can persist, the ones ignored at first step would be signalled here as well
             # if we didn't prohibit the move to 2nd step in this case.
@@ -185,25 +195,49 @@ class TSVFile(object):
                 # Create SQLAlchemy mappers of the object itself and slaves (1<->1)
                 object_head_to_write = Bean(
                     **dicts_to_write[ObjectHeader.__tablename__]
-                ).with_columns(
-                    ObjectHeader.classif_auto_id.name,
-                    ObjectHeader.classif_auto_when.name,
-                    ObjectHeader.classif_auto_score.name,
-                )  # These columns _might_ be populated, but DBWriter needs them all the time for bulk insert
+                )
+                # .with_columns(
+                #     # ObjectHeader.classif_auto_id.name,
+                #     # ObjectHeader.classif_auto_when.name,
+                #     # ObjectHeader.classif_auto_score.name,
+                #     ObjectHeader.classif_score.name,
+                # )  # These columns _might_ be populated, but DBWriter needs them all the time for bulk insert
                 object_fields_to_write = Bean(
                     **dicts_to_write[ObjectFields.__tablename__]
                 )
                 image_to_write = Bean(**dicts_to_write["images"])
                 # Note: Parents are created the same way, _when needed_ (i.e. nearly never),
                 #  in @see add_parent_objects
+                prediction_to_write: Optional[Bean] = None
 
                 if how.can_update_only:
                     self.update_parent_objects(how, session, dicts_to_write)
                 else:
                     # Initial load
-                    self.ensure_consistent_fields(
+                    state = self.ensure_consistent_fields(
                         object_head_to_write, stats.start_time, how.user_id
                     )
+                    if state == PREDICTED_CLASSIF_QUAL:
+                        # Need to store a prediction
+                        classif_score = object_head_to_write["classif_score"]
+                        classif_score = (
+                            classif_score
+                            if classif_score is not None
+                            else PSEUDO_TRAINING_SCORE
+                        )  # TODO: Allow import of it via extra column
+                        training = training_provider.provide()
+                        prediction_to_write = Bean(
+                            {
+                                "training_id": training.training.training_id,
+                                "classif_id": object_head_to_write["classif_id"],
+                                "score": classif_score,
+                            }
+                        )
+                        object_head_to_write[
+                            "classif_date"
+                        ] = training.training.training_start
+                        training.advance()
+
                     # Attempt to compute sun position
                     self.do_sun_position_field(object_head_to_write)
                     # Add parents
@@ -230,12 +264,14 @@ class TSVFile(object):
                     object_head_to_write,
                     object_fields_to_write,
                     image_to_write,
+                    training_provider,
                 )
 
                 where.db_writer.add_db_entities(
                     object_head_to_write,
                     object_fields_to_write,
                     image_to_write,
+                    prediction_to_write,
                     new_records,
                 )
 
@@ -321,42 +357,37 @@ class TSVFile(object):
     def ensure_consistent_fields(
         object_head_to_write: Bean,
         start_time: Optional[datetime.datetime],
-        current_user: Optional[UserIDT],
-    ):
+        current_user: UserIDT,
+    ) -> Optional[str]:
         """
         Some fields need defaults to keep consistency.
         - 'Validated' and 'Dubious' need a category (forced during TSV read), an author and a date
         - 'Predicted' should set same fields as a prediction which ran inside EcoTaxa
         - '' AKA 'To be classified' in UI should have classification-related fields blank
         """
-        if start_time is None:
-            return  # No time to update the record, is must be that the full one is sent (during Subset)
         state = object_head_to_write.get("classif_qual")
+        if start_time is None:
+            return state  # No time provided to update the record, is must be that the full one is sent (during Subset)
         if state == PREDICTED_CLASSIF_QUAL:
             classif_id = object_head_to_write.get("classif_id")
             assert classif_id
-            # Provide reasonable default values
-            object_head_to_write["classif_auto_id"] = classif_id
-            object_head_to_write["classif_auto_when"] = start_time
-            object_head_to_write["classif_auto_score"] = 1.0
-            # These are for manual states 'V' or 'D, when 'P' we wipe them
+            # This field is for manual states 'V' or 'D'. When 'P' we wipe it
             object_head_to_write["classif_who"] = None
-            object_head_to_write["classif_when"] = None
+            if object_head_to_write.get("classif_score") is None:
+                object_head_to_write["classif_score"] = PSEUDO_TRAINING_SCORE
         elif state in (VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL):
             if object_head_to_write.get("classif_who") is None:
                 object_head_to_write["classif_who"] = current_user
-            if object_head_to_write.get("classif_when") is None:
-                object_head_to_write["classif_when"] = start_time
+            if object_head_to_write.get("classif_date") is None:
+                object_head_to_write["classif_date"] = start_time
+            object_head_to_write["classif_score"] = None
         elif state is None:
             object_head_to_write["classif_id"] = object_head_to_write[
-                "classif_auto_id"
-            ] = object_head_to_write["classif_auto_when"] = object_head_to_write[
-                "classif_auto_score"
-            ] = object_head_to_write[
                 "classif_who"
-            ] = object_head_to_write[
-                "classif_when"
+            ] = object_head_to_write["classif_date"] = object_head_to_write[
+                "classif_score"
             ] = None
+        return state
 
     @staticmethod
     def prepare_classif_update(object_head: ObjectHeader, object_update: Bean) -> bool:
@@ -371,7 +402,7 @@ class TSVFile(object):
             if target_state == PREDICTED_CLASSIF_QUAL:
                 if previous_state == PREDICTED_CLASSIF_QUAL:
                     # Assume that the new pseudo-prediction is not new, as it resulted in same category
-                    object_update.classif_auto_when = object_head.classif_auto_when
+                    pass
                 else:
                     return True  # Full state change
             else:
@@ -379,16 +410,16 @@ class TSVFile(object):
                 if object_head.classif_who != object_update.classif_who:
                     return True  # Same classification, different author, update if relevant
                 else:
-                    upd_when = object_update.classif_when
+                    upd_when = object_update.classif_date
                     # Just a date update, could be due to precision difference
                     if (
-                        object_head.classif_when is not None
+                        object_head.classif_date is not None
                         and upd_when is not None
-                        and object_head.classif_when > upd_when
-                        and object_head.classif_when - upd_when
+                        and object_head.classif_date > upd_when
+                        and object_head.classif_date - upd_when
                         < ABSORBED_DIFF_CLASSIF_WHEN
                     ):
-                        object_update.classif_when = object_head.classif_when
+                        object_update.classif_date = object_head.classif_date
                     else:
                         return True
         return False
@@ -690,7 +721,7 @@ class TSVFile(object):
                     cached_field_value = ObjectHeader.date_from_txt(csv_val)
                 elif a_field == "object_time":
                     cached_field_value = ObjectHeader.time_from_txt(csv_val)
-                elif db_col == "classif_when":
+                elif db_col == "classif_date":
                     date = ObjectHeader.date_from_txt(csv_val)
                     csv_val_time = clean_value(
                         lig.get("object_annotation_time", "00:00:00")
@@ -749,6 +780,7 @@ class TSVFile(object):
         object_head_to_write: Bean,
         object_fields_to_write: Bean,
         image_to_write: Optional[Bean],
+        training_provider: Optional[TrainingBOProvider] = None,
     ) -> int:
         """
         Create, link or update slave entities, i.e. head, fields, image.
@@ -771,25 +803,40 @@ class TSVFile(object):
                     obj = session.query(a_cls).get(objid)
                     assert obj is not None
                     if a_cls == ObjectHeader:
+                        an_upd.update_from_obj(  # Don't kill hidden but useful field(s)
+                            obj, set(HIDDEN_FIELDS_FOR_CLASSIF.keys()), force=True
+                        )  # TODO: Useless now
                         # Eventually refresh classification
                         if an_upd.nb_fields_from(USED_FIELDS_FOR_CLASSIF) > 0:
-                            # Give the bean enough data for computation
+                            # Give the bean enough data, as the update could be partial, implying 'keep present value'.
                             an_upd.update_from_obj(obj, USED_FIELDS_FOR_CLASSIF)
-                            TSVFile.ensure_consistent_fields(
-                                an_upd, start_time=start_time, current_user=how.user_id
+                            target_state = TSVFile.ensure_consistent_fields(
+                                an_upd,
+                                start_time=start_time,
+                                current_user=how.user_id,
                             )
-                            # Care for classification historization
+                            if obj.classif_qual == PREDICTED_CLASSIF_QUAL:
+                                # TODO: Should we warn this data is unused from TSV?
+                                an_upd.classif_date = obj.classif_date
+                            if target_state == PREDICTED_CLASSIF_QUAL:
+                                # Need to store a new prediction
+                                assert training_provider is not None
+                                training = training_provider.provide()
+                                PredictionBO(
+                                    session, [objid]
+                                ).historize_predictions().store_predictions(
+                                    training.training.training_id,
+                                    [[object_head_to_write["classif_id"]]],
+                                    [[an_upd.classif_score]],
+                                )  # TODO: Quite inefficient but simple
+                                training.advance()
+                            # Care for classification historisation
                             if TSVFile.prepare_classif_update(obj, an_upd):
-                                EnumeratedObjectSet.historize_classification_for(
-                                    session,
-                                    [objid],
-                                    only_qual=None,  # TODO: Quite inefficient but simple
-                                )
-                        else:
-                            # Hidden fields must not trigger an update
-                            an_upd.update_from_obj(
-                                obj, HIDDEN_FIELDS_FOR_CLASSIF, force=True
-                            )
+                                EnumeratedObjectSet(
+                                    session, [objid]
+                                ).historize_classification(
+                                    only_qual=None,
+                                )  # TODO: Quite inefficient but simple
                         # Eventually refresh sun position
                         if an_upd.nb_fields_from(USED_FIELDS_FOR_SUNPOS) > 0:
                             # Give the bean enough data for computation

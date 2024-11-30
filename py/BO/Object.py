@@ -17,19 +17,42 @@ from BO.Sample import SampleIDT
 from BO.helpers.MappedEntity import MappedEntity
 from DB.Acquisition import Acquisition
 from DB.Image import Image, IMAGE_VIRTUAL_COLUMNS
-from DB.Object import ObjectHeader, ObjectFields, ObjectsClassifHisto, ObjectIDT
+from DB.Object import (
+    ObjectHeader,
+    ObjectFields,
+    ObjectsClassifHisto,
+    ObjectIDT,
+    VALIDATED_CLASSIF_QUAL,
+    DUBIOUS_CLASSIF_QUAL,
+    PREDICTED_CLASSIF_QUAL,
+    DISCARDED_CLASSIF_QUAL,
+)
 from DB.ObjectVirtual import OBJECT_VIRTUAL_COLUMNS
 from DB.Project import ProjectIDT, Project
 from DB.Sample import Sample
 from DB.Taxonomy import Taxonomy
 from DB.User import User
-from DB.helpers.ORM import Session, joinedload, subqueryload, Model, minimal_model_of
+from DB.helpers.ORM import (
+    Session,
+    joinedload,
+    subqueryload,
+    Model,
+    minimal_model_of,
+    text,
+    case,
+)
 from helpers.DynamicLogs import get_logger
 
 # Typings, to be clear that these are not e.g. project IDs
 ObjectIDWithParentsT = Tuple[ObjectIDT, AcquisitionIDT, SampleIDT, ProjectIDT]
 
 logger = get_logger(__name__)
+
+MANUAL_STATES_TEXT = text(
+    "'%s','%s','%s'"
+    % (VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL, DISCARDED_CLASSIF_QUAL)
+)
+PREDICTED_STATE_TEXT = text("'%s'" % PREDICTED_CLASSIF_QUAL)
 
 
 def _get_proj(obj: ObjectHeader) -> Project:
@@ -94,7 +117,12 @@ class ObjectBO(MappedEntity):
             och.classif_id,
             och.classif_date,
             och.classif_who,
-            och.classif_type,
+            case(  # Emulate previous value
+                [
+                    (och.classif_qual.in_(MANUAL_STATES_TEXT), "M"),
+                    (och.classif_qual == PREDICTED_STATE_TEXT, "A"),
+                ]
+            ).label("classif_type"),
             och.classif_qual,
             och.classif_score,
             User.name.label("user_name"),

@@ -73,9 +73,15 @@ from API_models.objects import (
     HistoricalClassificationModel,
     ObjectSetSummaryRsp,
     ClassifyAutoReq,
+    ClassifyAutoReqMult,
     ObjectHeaderModel,
 )
-from API_models.prediction import PredictionRsp, PredictionReq, MLModel
+from API_models.prediction import (
+    PredictionRsp,
+    PredictionReq,
+    MLModel,
+    PredictionInfoRsp,
+)
 from API_models.subset import SubsetReq, SubsetRsp
 from API_models.taxonomy import (
     TaxaSearchRsp,
@@ -136,6 +142,7 @@ from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleBO, SampleTaxoStats
 from BO.Taxonomy import TaxonBO
 from BO.User import UserIDT
+from DB import Sample
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.User import User
@@ -166,7 +173,7 @@ api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.38",
+    version="0.0.39",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -926,6 +933,7 @@ MyORJSONResponse.register(User, UserModelWithRights)
 MyORJSONResponse.register(User, MinUserModel)
 MyORJSONResponse.register(TaxonBO, TaxonModel)
 MyORJSONResponse.register(ObjectSetQueryRsp, ObjectSetQueryRsp)
+MyORJSONResponse.register(Sample, SampleModel)
 
 project_model_columns = plain_columns(ProjectModel)
 
@@ -2066,7 +2074,7 @@ def get_object_set_summary(
     response_model=None,
     responses={200: {"content": {"application/json": {"example": null}}}},
 )
-def reset_object_set_to_predicted(
+def force_object_set_to_predicted(
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", example=1
     ),
@@ -2074,13 +2082,13 @@ def reset_object_set_to_predicted(
     current_user: int = Depends(get_current_user),
 ) -> None:
     """
-    **Reset to Predicted** all objects for the given project with the filters.
+    **Force to Predicted** all objects for the given project with the filters.
 
     Return **NULL upon success.**
     """
     with ObjectManager() as sce:
         with RightsThrower():
-            return sce.reset_to_predicted(current_user, project_id, filters.base())
+            return sce.force_to_predicted(current_user, project_id, filters.base())
 
 
 @app.post(
@@ -2239,20 +2247,46 @@ def classify_auto_object_set(
 
     **Returns the number of updated entities.**
     """
+    req2 = ClassifyAutoReqMult(
+        target_ids=req.target_ids,
+        classifications=[[a_classif] for a_classif in req.classifications],
+        scores=[[a_score] for a_score in req.scores],
+        keep_log=req.keep_log,
+    )
+    return classify_auto_mult_object_set(req2, current_user)
+
+
+@app.post(
+    "/object_set/classify_auto_multiple",
+    operation_id="classify_auto_mult_object_set",
+    tags=["objects"],
+    responses={200: {"content": {"application/json": {"example": 3}}}},
+    response_model=int,
+)
+def classify_auto_mult_object_set(
+    req: ClassifyAutoReqMult = Body(...), current_user: int = Depends(get_current_user)
+) -> int:
+    """
+    **Set automatic classification** of a set of objects.
+
+    **Returns the number of updated entities.**
+    """
     assert (
         len(req.target_ids) == len(req.classifications) == len(req.scores)
     ), "Need the same number of objects, classifications and scores"
     assert all(
-        isinstance(score, float) and 0 <= score <= 1 for score in req.scores
+        isinstance(score, float) and 0 <= score <= 1
+        for scores in req.scores
+        for score in scores
     ), "Scores should be floats between 0 and 1"
     with ObjectManager() as sce:
         with RightsThrower():
-            ret, prj_id, changes = sce.classify_auto_set(
+            ret, prj_id, changes = sce.classify_auto_mult_set(
                 current_user,
+                None,
                 req.target_ids,
                 req.classifications,
                 req.scores,
-                req.keep_log,
             )
         with DBSyncService(ProjectTaxoStat, ProjectTaxoStat.projid, prj_id) as ssce:
             ssce.wait()
@@ -2398,6 +2432,30 @@ def predict_object_set(
     """
     with PredictForProject(request, filters.base()) as sce:
         rsp = sce.run(current_user)
+    return rsp
+
+
+@app.post(
+    "/object_set/predictions",
+    operation_id="predict_object_set",
+    tags=["objects"],
+    response_model=PredictionInfoRsp,
+)
+def query_object_set_predictions(
+    object_ids: ObjectIDListT = Body(
+        ...,
+        title="Object IDs list",
+        description="The list of object ids.",
+        example=[634509, 6234516, 976544],
+    ),
+    current_user: int = Depends(get_current_user),
+) -> PredictionInfoRsp:
+    """
+    ** Return last prediction information for a set of objects, by their IDs.
+    """
+    with ObjectManager() as sce:
+        with RightsThrower():
+            rsp = sce.get_prediction_infos(current_user, object_ids)
     return rsp
 
 

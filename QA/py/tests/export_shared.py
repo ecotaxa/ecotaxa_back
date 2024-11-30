@@ -67,29 +67,30 @@ def one_tsv_check(content_bin, name, only_hdr, ref_dir_path):
     except UnicodeDecodeError as e:
         raise e
     print("".join(file_content))
-    ref_content = open(ref_dir_path / name).readlines()
-    assert len(file_content) == len(
-        ref_content
-    ), "For %s and %s, not same number of lines %s vs %s" % (
-        name,
-        ref_dir_path,
-        len(ref_content),
-        len(file_content),
-    )
-    if ref_content[0][0] == "\ufeff":  # Remove BOM, in case
-        ref_content[0] = ref_content[0][1:]
-    num_line = 1
-    for act, ref in zip(file_content, ref_content):
-        assert act == ref, "diff A'%s'E'%s' in %s/%s line %d" % (
-            act,
-            ref,
-            ref_dir_path,
+    with open(ref_dir_path / name) as fd:
+        ref_content = fd.readlines()
+        assert len(file_content) == len(
+            ref_content
+        ), "For %s and %s, not same number of lines %s vs %s" % (
             name,
-            num_line,
+            ref_dir_path,
+            len(ref_content),
+            len(file_content),
         )
-        if only_hdr:
-            break
-        num_line += 1
+        if ref_content[0][0] == "\ufeff":  # Remove BOM, in case
+            ref_content[0] = ref_content[0][1:]
+        num_line = 1
+        for act, ref in zip(file_content, ref_content):
+            assert act == ref, "diff A'%s'E'%s' in %s/%s line %d" % (
+                act,
+                ref,
+                ref_dir_path,
+                name,
+                num_line,
+            )
+            if only_hdr:
+                break
+            num_line += 1
 
 
 EXPORT_ROOT_REF_DIR = "ref_exports"

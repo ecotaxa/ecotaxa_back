@@ -125,5 +125,5 @@ def test_all_fields(database, fastapi, caplog):
     # Test all 'order by', single field present
     for a_field in all_fields:
         objs, details = _prj_query(
-            fastapi, CREATOR_AUTH, prj_id, fields="objid", order=a_field
+            fastapi, CREATOR_AUTH, prj_id, fields="obj.objid", order=a_field
         )

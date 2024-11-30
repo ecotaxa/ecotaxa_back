@@ -208,15 +208,15 @@ class ConsistencyCheckAndFix(object):
 
     def verify_ok(self, session: Session) -> Tuple[bool, Any]:
         res: Result = session.execute(text(self.query))
-        actual = next(res)[0]
+        actual = next(res)[0] if isinstance(self.expected, int) else res.all()
         return actual == self.expected, actual
 
 
 NightlyJobService.IDLE_CHECKS = [
     ConsistencyCheckAndFix(
         "No job is active",
-        "select array_agg(id) from job where state in ('P','R','A')",
-        None,
+        "select id from job where state in ('P','R','A')",
+        [],
         "need investigation",
     ),
 ]
@@ -224,17 +224,16 @@ NightlyJobService.IDLE_CHECKS = [
 # So far just focus on Predicted state as we need consistent data to move to a new system.
 NightlyJobService.NIGHTLY_CHECKS = [
     ConsistencyCheckAndFix(
-        "In initial state there is no ancillary residual info",
+        "In initial blank state there is no ancillary residual info",
         "select count(1) as res from obj_head where classif_qual is null "
-        "and (classif_id is not null or classif_when is not null or classif_who is not null  "
-        "or classif_auto_id is not null or classif_auto_score is not null or classif_auto_when is not null)",
+        "and (classif_id is not null or classif_date is not null or classif_who is not null or classif_score is not null)",
         0,
         "need investigation",
     ),
     ConsistencyCheckAndFix(
-        "There is a (user-visible) category for any non-initial state",
-        "select count(1) from obj_head where classif_qual in ('P','V','D') and classif_id is null",
-        0,
+        "There is a (user-visible) category and a date for any non-initial state",
+        "select * from obj_head where classif_qual in ('P','V','D') and (classif_id is null or classif_date is null) limit 10",
+        [],
         "need investigation",
     ),
     ConsistencyCheckAndFix(
@@ -245,45 +244,44 @@ NightlyJobService.NIGHTLY_CHECKS = [
     ),
     ConsistencyCheckAndFix(
         "Validated and Dubious were set by humans, we must know who and when",
-        "select count(1) from obj_head where classif_qual in ('V','D') and (classif_who is null or classif_when is null)",
+        "select count(1) from obj_head where classif_qual in ('V','D') and (classif_who is null or classif_date is null)",
         0,
         """
         -- find root cause
         """,
     ),
     ConsistencyCheckAndFix(
-        "Predicted was set by machine, no trailing traces of previous human action",
-        "select count(1) from obj_head where classif_qual = 'P' and (classif_who is not null or classif_when is not null)",
-        0,
-        """update obj_head
-set classif_who   = NULL,
-classif_when  = NULL
-where classif_qual = 'P'
-and (classif_who is not null or classif_when is not null)
-and classif_auto_id is not null""",
+        "The must be no score information for manual states",
+        "select objid from obj_head where classif_qual in ('V','D') and classif_score is not null limit 100",
+        [],
+        """
+        -- find root cause
+        """,
     ),
     ConsistencyCheckAndFix(
-        "No classif_qual nor classif_id but full prediction info",
-        "select count(1) from obj_head where classif_qual is null and classif_id is null and (classif_auto_id is not null and classif_auto_score is not null and classif_auto_when is not null)",
+        "Predicted was set by machine, no trailing traces of previous human action",
+        "select objid from obj_head where classif_qual = 'P' and (classif_who is not null) limit 100",
+        [],
+        """update obj_head
+set classif_who = NULL
+where classif_qual = 'P'
+and (classif_who is not null)""",
+    ),
+    ConsistencyCheckAndFix(
+        "No classif_qual nor classif_id but some prediction info",
+        "select count(1) from obj_head where classif_qual is null and classif_id is null and classif_score is not null",
         0,
         """update obj_head 
-set classif_qual='P', 
-classif_id=classif_auto_id, 
-classif_who=null, 
-classif_when=null 
-where classif_qual is null and classif_id is null and 
-(classif_auto_id is not null and classif_auto_score is not null and classif_auto_when is not null)""",
+set classif_score=null 
+where classif_qual is null and classif_id is null and classif_score is not null""",
     ),
     ConsistencyCheckAndFix(
-        "Columns classif_auto_id and classif_auto_when are present for 'P', supposed to come from last prediction",
-        "select count(1) as res from obj_head where classif_qual='P' and classif_auto_id is null",
-        0,
-        """update obj_head
-set classif_auto_id = classif_id,
-classif_auto_score=1,
-classif_auto_when=coalesce(classif_when, '1970-01-01')
-where classif_qual = 'P'
-and classif_auto_id is null""",
+        "A score is present for 'P', coming from last prediction",
+        "select * from obj_head where classif_qual='P' and classif_score is null limit 100",
+        [],
+        """
+        --- find root cause & re-predict
+        """,
     ),
     ConsistencyCheckAndFix(
         "All obj_fields have same acquisid as object",
@@ -295,14 +293,88 @@ and classif_auto_id is null""",
     ),
     ConsistencyCheckAndFix(
         "Only consistent history entries are OK. Auto prediction with a score and manual with someone.",
-        """select count(1)
-from objectsclassifhisto
-where not ((classif_type = 'A' and classif_qual = 'P' and classif_score is not null and classif_who is null) or
-           (classif_type = 'M' and classif_qual = 'D' and classif_score is null and classif_who is not null) or
-           (classif_type = 'M' and classif_qual = 'V' and classif_score is null and classif_who is not null))""",
-        0,
+        """select objid, classif_qual, classif_who, classif_score
+    from objectsclassifhisto
+    where not ((classif_qual = 'P' and classif_score is not null and classif_who is null) or
+               (classif_qual = 'D' and classif_score is null and classif_who is not null) or
+               (classif_qual = 'V' and classif_score is null and classif_who is not null)) limit 100""",
+        [],
         """
-        -- find root cause
+            -- find root cause
+            """,
+    ),
+    ConsistencyCheckAndFix(
+        "We must know which prediction a predicted object comes from, in order to move to 'next' "
+        "when the prediction is discarded.",
+        """select obh.*
+    from obj_head obh
+    left join prediction prd 
+       on prd.object_id = obh.objid 
+       and prd.classif_id = obh.classif_id
+       and prd.score = obh.classif_score
+    where obh.classif_qual = 'P'
+      and prd.object_id is null
+      limit 100
         """,
+        [],
+        """
+            -- find root cause
+            """,
+    ),
+    ConsistencyCheckAndFix(
+        "We must know which training a historical prediction comes from, in order to restore it",
+        """select och.*
+    from objectsclassifhisto och
+    join prediction_histo prh 
+       on prh.object_id = och.objid 
+       and prh.classif_id = och.classif_id
+       and prh.score = och.classif_score
+    left join training trn
+       on trn.training_id = prh.training_id
+    where och.classif_qual = 'P'
+      and trn.training_start is null
+      limit 100
+        """,
+        [],
+        """
+            -- find root cause
+            """,
+    ),
+    ConsistencyCheckAndFix(
+        "An object cannot be in a prediction and historical same prediction",
+        """select * from prediction_histo prh
+     join prediction prd on prh.training_id = prd.training_id
+                     and prh.object_id = prd.object_id
+      limit 100
+        """,
+        [],
+        """
+            -- find root cause
+            """,
+    ),
+    ConsistencyCheckAndFix(
+        "Trainings must be consistent in time",
+        """select trn.*
+    from training trn
+    where trn.training_end < trn.training_start
+      limit 100
+        """,
+        [],
+        """
+            -- find root cause
+            """,
+    ),
+    ConsistencyCheckAndFix(
+        "Trainings must not overlap for the same project",
+        """select * from training trn
+             where exists(select 1 from training trn2 where trn2.projid = trn.projid and trn.training_id != trn2.training_id
+                                                  and (trn2.training_start between trn.training_start and trn.training_end
+                                                      or trn2.training_end between trn.training_start and trn.training_end))
+            limit 100
+        """,
+        [],
+        """
+            -- find root cause
+            """,
     ),
 ]

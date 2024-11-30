@@ -458,7 +458,9 @@ class ProjectBO(object):
             User.id,
             User.name,
             func.count(ObjectHeader.objid),
-            func.max(ObjectHeader.classif_when),
+            func.max(
+                ObjectHeader.classif_date
+            ),  # OK we filter manual action via user id below
         )
         pqry = pqry.join(Sample).join(Acquisition).join(ObjectHeader)
         pqry = pqry.join(User, User.id == ObjectHeader.classif_who)

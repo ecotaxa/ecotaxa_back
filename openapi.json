@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.38"
+    "version":"0.0.39"
   },
   "servers":[
     {
@@ -3095,12 +3095,12 @@
             "in":"path"
           },
           {
-            "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, orig, objid, file_name thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
+            "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
             "required":false,
             "schema":{
               "title":"Fields",
               "type":"string",
-              "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, orig, objid, file_name thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
+              "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
             },
             "example":"obj.longitude,fre.feret",
             "name":"fields",
@@ -3259,8 +3259,8 @@
         "tags":[
           "objects"
         ],
-        "summary":"Reset Object Set To Predicted",
-        "description":"**Reset to Predicted** all objects for the given project with the filters.\n\nReturn **NULL upon success.**",
+        "summary":"Force Object Set To Predicted",
+        "description":"**Force to Predicted** all objects for the given project with the filters.\n\nReturn **NULL upon success.**",
         "operationId":"reset_object_set_to_predicted",
         "parameters":[
           {
@@ -3633,6 +3633,55 @@
         ]
       }
     },
+    "/object_set/classify_auto_multiple":{
+      "post":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Classify Auto Mult Object Set",
+        "description":"**Set automatic classification** of a set of objects.\n\n**Returns the number of updated entities.**",
+        "operationId":"classify_auto_mult_object_set",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/ClassifyAutoReqMult"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Classify Auto Mult Object Set Object Set Classify Auto Multiple Post",
+                  "type":"integer"
+                },
+                "example":3
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
     "/object_set/parents":{
       "post":{
         "tags":[
@@ -3903,6 +3952,63 @@
               "application/json":{
                 "schema":{
                   "$ref":"#/components/schemas/PredictionRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/object_set/predictions":{
+      "post":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Query Object Set Predictions",
+        "description":"** Return last prediction information for a set of objects, by their IDs.",
+        "operationId":"predict_object_set",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "title":"Object IDs list",
+                "type":"array",
+                "items":{
+                  "type":"integer"
+                },
+                "description":"The list of object ids."
+              },
+              "example":[
+                634509,
+                6234516,
+                976544
+              ]
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/PredictionInfoRsp"
                 }
               }
             }
@@ -6005,7 +6111,7 @@
         }
       },
       "ClassifyAutoReq":{
-        "title":"Classify auto request Model",
+        "title":"ClassifyAutoReq",
         "required":[
           "target_ids",
           "classifications",
@@ -6043,6 +6149,53 @@
             "type":"boolean",
             "description":"Set if former automatic classification history is needed."
           }
+        }
+      },
+      "ClassifyAutoReqMult":{
+        "title":"Classify auto request Model",
+        "required":[
+          "target_ids",
+          "classifications",
+          "scores",
+          "keep_log"
+        ],
+        "type":"object",
+        "properties":{
+          "target_ids":{
+            "title":"Target Ids",
+            "type":"array",
+            "items":{
+              "type":"integer"
+            },
+            "description":"The IDs of the target objects."
+          },
+          "classifications":{
+            "title":"Classifications",
+            "type":"array",
+            "items":{
+              "type":"array",
+              "items":{
+                "type":"integer"
+              }
+            },
+            "description":"The wanted new classifications, i.e. taxon ID, one list for each object."
+          },
+          "scores":{
+            "title":"Scores",
+            "type":"array",
+            "items":{
+              "type":"array",
+              "items":{
+                "type":"number"
+              }
+            },
+            "description":"The classification scores, between 0 and 1. Each indicates the probability that the taxon prediction of this object for this category is correct."
+          },
+          "keep_log":{
+            "title":"Keep log",
+            "type":"boolean",
+            "description":"Set if former automatic classification history is needed. Deprecated, always True."
+          }
         },
         "example":{
           "target_ids":[
@@ -6051,14 +6204,28 @@
             976544
           ],
           "classifications":[
-            7546,
-            3421,
-            788
+            [
+              7546
+            ],
+            [
+              3421,
+              5614
+            ],
+            [
+              788
+            ]
           ],
           "scores":[
-            0.4,
-            0.56,
-            0.38
+            [
+              0.4
+            ],
+            [
+              0.56,
+              0.3333
+            ],
+            [
+              0.38
+            ]
           ],
           "keep_log":false
         }
@@ -6978,17 +7145,17 @@
             "format":"date-time",
             "example":"2021-09-21T14:59:01.007110"
           },
-          "histo_classif_type":{
-            "title":"Historical last classification type",
-            "type":"string",
-            "description":"The type of classification. Could be **A** for Automatic or **M** for Manual.",
-            "example":"M"
-          },
           "histo_classif_id":{
             "title":"Historical last classification Id",
             "type":"integer",
             "description":"The classification Id.",
             "example":56
+          },
+          "histo_classif_type":{
+            "title":"Historical last classification type",
+            "type":"string",
+            "description":"The type of classification. Could be **A** for Automatic or **M** for Manual.",
+            "example":"M"
           },
           "histo_classif_qual":{
             "title":"Historical last classification qualification",
@@ -6999,14 +7166,19 @@
           "histo_classif_who":{
             "title":"Historical last classification who",
             "type":"integer",
-            "description":"The user who manualy classify this object.",
+            "description":"The user who manually classified this object.",
             "example":3876
+          },
+          "histo_classif_score":{
+            "title":"Histo Classif Score",
+            "type":"number"
           }
         }
       },
       "ImageModel":{
         "title":"ImageModel",
         "required":[
+          "imgid",
           "objid",
           "imgrank",
           "width",
@@ -7413,6 +7585,31 @@
         ],
         "type":"object",
         "properties":{
+          "classif_when":{
+            "title":"Classification when",
+            "type":"string",
+            "description":"The human classification date, if **P** or **V**.",
+            "format":"date-time",
+            "example":"2021-09-21T14:59:01.007110"
+          },
+          "classif_auto_id":{
+            "title":"Classification auto Id",
+            "type":"integer",
+            "description":"Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. "
+          },
+          "classif_auto_score":{
+            "title":"Classification auto score",
+            "type":"number",
+            "description":"Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification auto score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
+            "example":0.085
+          },
+          "classif_auto_when":{
+            "title":"Classification auto when",
+            "type":"string",
+            "description":"Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification date.",
+            "format":"date-time",
+            "example":"2021-09-21T14:59:01.007110"
+          },
           "objid":{
             "title":"Object Id",
             "type":"integer",
@@ -7477,36 +7674,17 @@
             "description":"Sun position, from date, time and coords.",
             "example":"N"
           },
-          "classif_when":{
-            "title":"Classification when",
-            "type":"string",
-            "description":"The classification date.",
-            "format":"date-time",
-            "example":"2021-09-21T14:59:01.007110"
+          "classif_score":{
+            "title":"Classification score",
+            "type":"number",
+            "description":"The ML score for this object, if **P**.",
+            "example":"null"
           },
           "classif_who":{
             "title":"Classification who",
             "type":"integer",
-            "description":"The user who manualy classify this object.",
+            "description":"The user who manually classified this object, if **V** or **D**.",
             "example":"null"
-          },
-          "classif_auto_id":{
-            "title":"Classification auto Id",
-            "type":"integer",
-            "description":"Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. "
-          },
-          "classif_auto_when":{
-            "title":"Classification auto when",
-            "type":"string",
-            "description":"Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification date.",
-            "format":"date-time",
-            "example":"2021-09-21T14:59:01.007110"
-          },
-          "classif_auto_score":{
-            "title":"Classification auto score",
-            "type":"number",
-            "description":"Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification auto score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
-            "example":0.085
           },
           "orig_id":{
             "title":"Original id",
@@ -7539,6 +7717,31 @@
         ],
         "type":"object",
         "properties":{
+          "classif_when":{
+            "title":"Classification when",
+            "type":"string",
+            "description":"The human classification date, if **P** or **V**.",
+            "format":"date-time",
+            "example":"2021-09-21T14:59:01.007110"
+          },
+          "classif_auto_id":{
+            "title":"Classification auto Id",
+            "type":"integer",
+            "description":"Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. "
+          },
+          "classif_auto_score":{
+            "title":"Classification auto score",
+            "type":"number",
+            "description":"Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification auto score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
+            "example":0.085
+          },
+          "classif_auto_when":{
+            "title":"Classification auto when",
+            "type":"string",
+            "description":"Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification date.",
+            "format":"date-time",
+            "example":"2021-09-21T14:59:01.007110"
+          },
           "objid":{
             "title":"Object Id",
             "type":"integer",
@@ -7603,36 +7806,17 @@
             "description":"Sun position, from date, time and coords.",
             "example":"N"
           },
-          "classif_when":{
-            "title":"Classification when",
-            "type":"string",
-            "description":"The classification date.",
-            "format":"date-time",
-            "example":"2021-09-21T14:59:01.007110"
+          "classif_score":{
+            "title":"Classification score",
+            "type":"number",
+            "description":"The ML score for this object, if **P**.",
+            "example":"null"
           },
           "classif_who":{
             "title":"Classification who",
             "type":"integer",
-            "description":"The user who manualy classify this object.",
+            "description":"The user who manually classified this object, if **V** or **D**.",
             "example":"null"
-          },
-          "classif_auto_id":{
-            "title":"Classification auto Id",
-            "type":"integer",
-            "description":"Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. "
-          },
-          "classif_auto_when":{
-            "title":"Classification auto when",
-            "type":"string",
-            "description":"Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification date.",
-            "format":"date-time",
-            "example":"2021-09-21T14:59:01.007110"
-          },
-          "classif_auto_score":{
-            "title":"Classification auto score",
-            "type":"number",
-            "description":"Set if the object was ever predicted, remain forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification auto score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
-            "example":0.085
           },
           "orig_id":{
             "title":"Original id",
@@ -7877,6 +8061,47 @@
           }
         },
         "description":"Classification summary from object set."
+      },
+      "PredictionInfoRsp":{
+        "title":"PredictionInfoRsp",
+        "type":"object",
+        "properties":{
+          "result":{
+            "title":"Result",
+            "type":"array",
+            "items":{
+              "maxItems":3,
+              "minItems":3,
+              "type":"array",
+              "items":[
+                {
+                  "type":"integer"
+                },
+                {
+                  "type":"integer"
+                },
+                {
+                  "type":"number"
+                }
+              ]
+            },
+            "description":"List of lists [object ID, category ID, score for category].",
+            "default":[],
+            "example":[
+              [
+                23456,
+                1234,
+                0.7
+              ],
+              [
+                23457,
+                768,
+                0.2
+              ]
+            ]
+          }
+        },
+        "description":"Prediction information for a set of objects."
       },
       "PredictionReq":{
         "title":"Prediction Request",

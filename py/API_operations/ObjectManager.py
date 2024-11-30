@@ -5,11 +5,13 @@
 from typing import Tuple, List, Optional, Set, Any
 
 from API_models.filters import ProjectFiltersDict
+from API_models.prediction import PredictionInfoRsp
 from BO.Classification import (
     HistoricalLastClassif,
     ClassifIDSetT,
     ClassifIDListT,
     ClassifIDT,
+    ClassifScoresListT,
 )
 from BO.ColumnUpdate import ColUpdateList
 from BO.Mappings import TableMapping
@@ -26,6 +28,7 @@ from BO.Project import ProjectBO, ChangeTypeT
 from BO.ReClassifyLog import ReClassificationBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
+from BO.Training import TrainingBO, PredictionBO
 from BO.User import UserIDT
 from DB.Image import IMAGE_VIRTUAL_COLUMNS
 from DB.Object import (
@@ -46,6 +49,9 @@ from helpers.Timer import CodeTimer
 from .helpers.Service import Service
 
 logger = get_logger(__name__)
+
+# Basic hint preventing FTS on big tables
+HINT = "/*+ IndexOnlyScan(obh) IndexOnlyScan(obf) */"
 
 
 class ObjectManager(Service):
@@ -106,8 +112,8 @@ class ObjectManager(Service):
         # Compute the total in a second step (_summarize)
         total_col = "0 AS total"
 
-        sql = """
-SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
+        sql = f"""
+SELECT {HINT} obh.objid, acq.acquisid, sam.sampleid, %s%s
   FROM """ % (
             total_col,
             extra_cols,
@@ -206,6 +212,21 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
             return ""
         return ",\n" + ", ".join(vals)
 
+    def get_prediction_infos(
+        self, current_user_id: UserIDT, object_ids: ObjectIDListT
+    ) -> PredictionInfoRsp:
+        """
+        Query the given IDs, return last prediction information.
+        """
+        # Security check
+        obj_set = EnumeratedObjectSet(self.ro_session, object_ids)
+        # Get project IDs for the objects and verify rights
+        prj_ids = obj_set.get_projects_ids()
+        for a_prj_id in prj_ids:
+            RightsBO.user_wants(self.session, current_user_id, Action.READ, a_prj_id)
+        infos = PredictionBO(self.session, obj_set.object_ids).get_prediction_infos()
+        return PredictionInfoRsp(result=infos)
+
     def parents_by_id(
         self, current_user_id: UserIDT, object_ids: ObjectIDListT
     ) -> ObjectIDWithParentsListT:
@@ -276,8 +297,8 @@ SELECT obh.objid, acq.acquisid, sam.sampleid, %s%s
         Compute the summary of given object_set
         """
         from_, where, params = object_set.get_sql()
-        sql = """
-SELECT COUNT(*) nbr"""
+        sql = f"""
+SELECT {HINT} COUNT(*) nbr"""
         if only_total:
             sql += """, NULL nbr_v, NULL nbr_d, NULL nbr_p"""
         else:
@@ -338,18 +359,29 @@ SELECT COUNT(*) nbr"""
         remover.wait_for_done()
         return nb_objs, 0, nb_img_rows, len(img_files)
 
-    def reset_to_predicted(
+    def force_to_predicted(
         self, current_user_id: UserIDT, proj_id: ProjectIDT, filters: ProjectFiltersDict
     ) -> None:
         """
-        Query the given project with given filters, reset the resulting objects to predicted.
+        Query the given project with given filters, force the resulting objects to Predicted with their
+        current classification and a conventional score.
         """
         # Security check
-        RightsBO.user_wants(self.session, current_user_id, Action.ADMINISTRATE, proj_id)
+        _user, project = RightsBO.user_wants(
+            self.session, current_user_id, Action.ADMINISTRATE, proj_id
+        )
 
         impacted_objs = [r[0] for r in self.query(current_user_id, proj_id, filters)[0]]
 
-        EnumeratedObjectSet(self.session, impacted_objs).reset_to_predicted()
+        training = TrainingBO.create_one(
+            self.session, current_user_id, f"Force to P in {proj_id}"
+        )
+        nb_upd, all_changes = EnumeratedObjectSet(
+            self.session, impacted_objs
+        ).force_to_predicted(training)
+
+        # Propagate changes to update projects_taxo_stat
+        self.propagate_classif_changes(nb_upd, all_changes, project)
 
         # Update stats
         ProjectBO.update_taxo_stats(self.session, proj_id)
@@ -514,13 +546,13 @@ SELECT COUNT(*) nbr"""
         # Return status
         return nb_upd, project.projid, all_changes
 
-    def classify_auto_set(
+    def classify_auto_mult_set(
         self,
         current_user_id: UserIDT,
+        training: Optional[TrainingBO],
         target_ids: ObjectIDListT,
-        classif_ids: ClassifIDListT,
-        scores: List[float],
-        keep_logs: bool,
+        classif_ids: List[ClassifIDListT],
+        scores: List[ClassifScoresListT],
     ) -> Tuple[int, int, ObjectSetClassifChangesT]:
         """
         Classify (from automatic source) a set of objects.
@@ -529,8 +561,15 @@ SELECT COUNT(*) nbr"""
         object_set, project = self._the_project_for(
             current_user_id, target_ids, Action.ANNOTATE
         )
+        # Create a new training if not set (always, so far)
+        if training is None:
+            training = TrainingBO.create_one(
+                self.session, current_user_id, f"Classify auto in {project.projid}"
+            )
         # Do the raw classification, eventually with history.
-        nb_upd, all_changes = object_set.classify_auto(classif_ids, scores, keep_logs)
+        nb_upd, all_changes = object_set.classify_auto_mult(
+            training, classif_ids, scores
+        )
         # Propagate changes to update projects_taxo_stat
         self.propagate_classif_changes(nb_upd, all_changes, project)
         # Return status
