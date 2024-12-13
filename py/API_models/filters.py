@@ -78,6 +78,7 @@ class ProjectFiltersDict(TypedDict, total=False):
     Target objid for similarity search
     """
 
+
 class _ProjectFilters2Model(DescriptiveModel):
     taxo = Field(
         title="Taxo",

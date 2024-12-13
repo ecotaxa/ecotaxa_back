@@ -7,7 +7,6 @@
 
 from API_models.filters import ProjectFiltersDict
 from API_models.simsearch import SimilaritySearchReq, SimilaritySearchRsp
-from API_operations.FeatureExtraction import FeatureExtractionForProject
 from BO.ObjectSet import DescribedObjectSet
 from BO.Prediction import DeepFeatures
 from BO.Rights import RightsBO, Action
@@ -44,17 +43,17 @@ class SimilaritySearchForProject(Service):
         if len(ids_and_images) != 0:
             # Launch a feature extraction job
             feature_extractor_selected = (
-                project.cnn_network_id != None and project.cnn_network_id != ""
+                project.cnn_network_id is not None and project.cnn_network_id != ""
             )
             if feature_extractor_selected:
-                with FeatureExtractionForProject(self.req.project_id) as sce:
-                    #                    sce.run(current_user)
-                    sce.run_in_background()
+                # with FeatureExtractionForProject(self.req.project_id) as sce:
+                #     #                    sce.run(current_user)
+                #     sce.run_in_background()
 
                 rsp: SimilaritySearchRsp = SimilaritySearchRsp(
                     neighbor_ids=[],
                     sim_scores=[],
-                    message="Missing CNN features, feature extraction job launched",
+                    message="Project has a feature extractor, but no feature. Predict once to generate features.",
                 )
                 return rsp
 
@@ -63,7 +62,7 @@ class SimilaritySearchForProject(Service):
                 rsp = SimilaritySearchRsp(
                     neighbor_ids=[],
                     sim_scores=[],
-                    message="Missing CNN features, please select a feature extractor",
+                    message="Project has no feature extractor, choose one in project settings.",
                 )
                 return rsp
 
@@ -81,29 +80,29 @@ class SimilaritySearchForProject(Service):
         else:
             where_clause_sql = "WHERE objcnnid = obh.objid"
 
-# VR hack 071124 : j'ai crée cette fonction
-# CREATE OR REPLACE FUNCTION euclidean_distance(a real[], b real[]) RETURNS float AS $$ DECLARE sum float := 0; i int := 1; BEGIN IF array_upper(a, 1) <> array_upper(b, 1) THEN RAISE EXCEPTION 'Les vecteurs doivent avoir la même taille'; END IF; FOR i IN 1..array_upper(a, 1) LOOP sum := sum + (a[i] - b[i]) ^ 2; END LOOP; RETURN sqrt(sum); END; $$ LANGUAGE plpgsql IMMUTABLE;
-#             SELECT objcnnid, euclidean_distance(features, ( SELECT features FROM {ObjectCNNFeatureVector.__tablename__}
+        # VR hack 071124 : j'ai crée cette fonction
+        # CREATE OR REPLACE FUNCTION euclidean_distance(a real[], b real[]) RETURNS float AS $$ DECLARE sum float := 0; i int := 1; BEGIN IF array_upper(a, 1) <> array_upper(b, 1) THEN RAISE EXCEPTION 'Les vecteurs doivent avoir la même taille'; END IF; FOR i IN 1..array_upper(a, 1) LOOP sum := sum + (a[i] - b[i]) ^ 2; END LOOP; RETURN sqrt(sum); END; $$ LANGUAGE plpgsql IMMUTABLE;
+        #             SELECT objcnnid, euclidean_distance(features, ( SELECT features FROM {ObjectCNNFeatureVector.__tablename__}
         #              WHERE objcnnid = {target_id} )) AS dist
 
-# ou plutot
-# CREATE EXTENSION cube; CREATE INDEX features_idx ON obj_cnn_features_vector USING GIST (cube(features));
+        # ou plutot
+        # CREATE EXTENSION cube; CREATE INDEX features_idx ON obj_cnn_features_vector USING GIST (cube(features));
 
-        query = f"""
-        SELECT objcnnid, cube(features) <-> cube((SELECT features FROM {ObjectCNNFeatureVector.__tablename__} 
-        WHERE objcnnid={target_id})) AS dist
-            FROM {ObjectCNNFeatureVector.__tablename__}, {from_.get_sql()}
-            {where_clause_sql}
-            ORDER BY dist LIMIT {limit};
-        """
+        # query = f"""
+        # SELECT objcnnid, cube(features) <-> cube((SELECT features FROM {ObjectCNNFeatureVector.__tablename__}
+        # WHERE objcnnid={target_id})) AS dist
+        #     FROM {ObjectCNNFeatureVector.__tablename__}, {from_.get_sql()}
+        #     {where_clause_sql}
+        #     ORDER BY dist LIMIT {limit};
+        # """
 
         query = f"""
         SET LOCAL ivvflat.probes = 10;
-        SELECT objcnnid, features::vector(50)<->(SELECT features::vector(50) FROM {ObjectCNNFeatureVector.__tablename__}
+        SELECT objcnnid, features<->(SELECT features FROM {ObjectCNNFeatureVector.__tablename__}
         WHERE objcnnid={target_id}) AS dist
         FROM {ObjectCNNFeatureVector.__tablename__}, {from_.get_sql()}
             {where_clause_sql}
-        ORDER BY dist LIMIT 50
+        ORDER BY dist LIMIT {limit}
         """
 
         result = self.ro_session.execute(text(query), params).fetchall()

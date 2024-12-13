@@ -2,9 +2,10 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List, Optional, Dict
+from typing import List, Optional
 
 from helpers.pydantic import BaseModel, Field
+
 
 class SimilaritySearchReq(BaseModel):
     """
@@ -39,7 +40,7 @@ class SimilaritySearchRsp(BaseModel):
 
     neighbor_ids: List[int] = Field(
         title="Neighbor IDs",
-        description="The list of similar objects.",
+        description="The list of similar objects IDs.",
     )
 
     sim_scores: List[float] = Field(

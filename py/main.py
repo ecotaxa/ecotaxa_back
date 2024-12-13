@@ -82,6 +82,7 @@ from API_models.prediction import (
     MLModel,
     PredictionInfoRsp,
 )
+from API_models.simsearch import SimilaritySearchReq, SimilaritySearchRsp
 from API_models.subset import SubsetReq, SubsetRsp
 from API_models.taxonomy import (
     TaxaSearchRsp,
@@ -109,6 +110,7 @@ from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
 from API_operations.ObjectManager import ObjectManager
 from API_operations.Prediction import PredictForProject, PredictionDataService
+from API_operations.SimilaritySearch import SimilaritySearchForProject
 from API_operations.Stats import ProjectStatsFetcher
 from API_operations.Status import StatusService
 from API_operations.Subset import SubsetServiceOnProject
@@ -128,7 +130,6 @@ from API_operations.exports.ForProject import (
 )
 from API_operations.imports.Import import FileImport
 from API_operations.imports.SimpleImport import SimpleImport
-from API_operations.SimilaritySearch import SimilaritySearchForProject
 from BG_operations.JobScheduler import JobScheduler
 from BO.Acquisition import AcquisitionBO
 from BO.Classification import HistoricalClassification, ClassifIDT
@@ -1627,16 +1628,20 @@ def set_project_predict_settings(
 
 # ######################## END OF PROJECT
 
+
 @app.post(
-    "/object_set/{project_id}/similarity_search", # should be similar to ../{}/query
+    "/object_set/{project_id}/similarity_search/{object_id}",  # should be similar to ../{}/query
     operation_id="get_object_set_similarity_search",
     tags=["objects"],
-    response_model=ObjectSetQueryRsp,
-    response_class=MyORJSONResponse,  # Force the ORJSON encoder
+    response_model=SimilaritySearchRsp,
+    # response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
 def object_similarity_search(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project to search in.", example=1
+    ),
+    object_id: int = Path(
+        ..., description="Object ID to search similar for.", example=1
     ),
     filters: ProjectFilters = Body(...),
     fields: Optional[str] = Query(
@@ -1671,58 +1676,61 @@ If no **unique order** is specified, the result can vary for same call and condi
         example="100",
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
-) -> MyORJSONResponse:
+) -> SimilaritySearchRsp:
     """
-    Returns **filtered object Ids** for the given project.
+    Returns, in given project, the objects similar to the queried one.
     """
-    return_fields = None
-    if fields is not None:
-        return_fields = fields.split(",")
+    # return_fields = None
+    # if fields is not None:
+    #     return_fields = fields.split(",")
 
+    # TODO: Can the req be exposed thru the API? Here it's internal data structure
     sim_search_request = SimilaritySearchReq(
-        project_id = project_id,
-        target_id = int(filters.seed_object_ids.lstrip("I")) if filters.seed_object_ids else None,
+        project_id=project_id,
+        target_id=object_id,
     )
 
     with SimilaritySearchForProject(sim_search_request, filters.base()) as sce:
         sim_search_rsp = sce.similarity_search(current_user)
 
-    with ObjectManager() as sce:
-        with RightsThrower():
+    # with ObjectManager() as sce:
+    #     with RightsThrower():
+    #         rsp = ObjectSetQueryRsp()
+    #         obj_with_parents, details, total = sce.query(
+    #             current_user,
+    #             project_id,
+    #             filters.base(),
+    #             return_fields,
+    #             order_field,
+    #             window_start=None,
+    #             window_size=None,
+    #         )
+    #
+    #     object_ids = [with_p[0] for with_p in obj_with_parents]
+    #     for objid in sim_search_rsp.neighbor_ids:
+    #         if objid not in object_ids:
+    #             continue
+    #         index = object_ids.index(objid)
+    #         index_ss = sim_search_rsp.neighbor_ids.index(
+    #             objid
+    #         )  # VR TODO est-ce qu'un zip serait mieux ?
+    #         rsp.object_ids.append(obj_with_parents[index][0])
+    #         rsp.acquisition_ids.append(obj_with_parents[index][1])
+    #         rsp.sample_ids.append(obj_with_parents[index][2])
+    #         rsp.project_ids.append(obj_with_parents[index][3])
+    #         rsp.details.append(details[index])
+    #         sim_search_score_current = sim_search_rsp.sim_scores[index_ss]
+    #         if len(rsp.details[len(rsp.details) - 1]) > 12:
+    #             rsp.details[len(rsp.details) - 1][12] = sim_search_score_current
+    #         elif len(rsp.details[len(rsp.details) - 1]) == 12:
+    #             rsp.details[len(rsp.details) - 1].append(sim_search_score_current)
+    #         else:
+    #             print(
+    #                 "Unexpected short details, sim score not send to front : "
+    #                 + str(len(rsp.details[len(rsp.details) - 1]))
+    #             )
 
-            rsp = ObjectSetQueryRsp()
-            obj_with_parents, details, total = sce.query(
-                current_user,
-                project_id,
-                filters.base(),
-                return_fields,
-                order_field,
-                window_start=None,
-                window_size=None,
-            )
-
-        object_ids = [with_p[0] for with_p in obj_with_parents]
-        for objid in sim_search_rsp.neighbor_ids:
-            if objid not in object_ids:
-                continue
-            index = object_ids.index(objid)
-            index_ss = sim_search_rsp.neighbor_ids.index(objid) # VR TODO est-ce qu'un zip serait mieux ?
-            rsp.object_ids.append(obj_with_parents[index][0])
-            rsp.acquisition_ids.append(obj_with_parents[index][1])
-            rsp.sample_ids.append(obj_with_parents[index][2])
-            rsp.project_ids.append(obj_with_parents[index][3])
-            rsp.details.append(details[index])
-            sim_search_score_current = sim_search_rsp.sim_scores[index_ss]
-            if len(rsp.details[len(rsp.details) - 1]) > 12:
-                rsp.details[len(rsp.details) - 1][12] = sim_search_score_current
-            elif len(rsp.details[len(rsp.details) - 1]) == 12:
-                rsp.details[len(rsp.details) - 1].append(sim_search_score_current)
-            else :
-                print("Unexpected short details, sim score not send to front : " + str(len(rsp.details[len(rsp.details) - 1])))
-
-
-    # Serialize
-    return MyORJSONResponse(rsp)
+    return sim_search_rsp
 
 
 @app.get(
