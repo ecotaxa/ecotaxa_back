@@ -73,10 +73,15 @@ from API_models.objects import (
     HistoricalClassificationModel,
     ObjectSetSummaryRsp,
     ClassifyAutoReq,
+    ClassifyAutoReqMult,
     ObjectHeaderModel,
 )
-from API_models.prediction import PredictionRsp, PredictionReq, MLModel
-from API_models.simsearch import SimilaritySearchReq, SimilaritySearchRsp
+from API_models.prediction import (
+    PredictionRsp,
+    PredictionReq,
+    MLModel,
+    PredictionInfoRsp,
+)
 from API_models.subset import SubsetReq, SubsetRsp
 from API_models.taxonomy import (
     TaxaSearchRsp,
@@ -109,6 +114,7 @@ from API_operations.Status import StatusService
 from API_operations.Subset import SubsetServiceOnProject
 from API_operations.TaxoManager import TaxonomyChangeService, CentralTaxonomyService
 from API_operations.TaxonomyService import TaxonomyService
+from API_operations.UserFilesFolder import UserFilesFolderService
 from API_operations.UserFolder import UserFolderService, CommonFolderService
 from API_operations.admin.Database import DatabaseService
 from API_operations.admin.ImageManager import ImageManagerService
@@ -137,6 +143,7 @@ from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleBO, SampleTaxoStats
 from BO.Taxonomy import TaxonBO
 from BO.User import UserIDT
+from DB import Sample
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.User import User
@@ -150,7 +157,8 @@ from helpers.fastApiUtils import (
     get_optional_current_user,
     MyORJSONResponse,
     ValidityThrower,
-    ranged_streaming_response,
+    adjust_if_ranged,
+    regular_mem_cleanup,
 )
 from helpers.login import LoginService
 from helpers.pydantic import sort_and_prune
@@ -166,7 +174,7 @@ api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.37",
+    version="0.0.40",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -378,8 +386,9 @@ def get_current_user_prefs(
 
     Available keys are **cwd**, **img_import** and **filters**.
     """
-    with UserService() as sce:
-        return sce.get_preferences_per_project(current_user, project_id, key)
+    with RightsThrower():
+        with UserService() as sce:
+            return sce.get_preferences_per_project(current_user, project_id, key)
 
 
 @app.put(
@@ -925,6 +934,7 @@ MyORJSONResponse.register(User, UserModelWithRights)
 MyORJSONResponse.register(User, MinUserModel)
 MyORJSONResponse.register(TaxonBO, TaxonModel)
 MyORJSONResponse.register(ObjectSetQueryRsp, ObjectSetQueryRsp)
+MyORJSONResponse.register(Sample, SampleModel)
 
 project_model_columns = plain_columns(ProjectModel)
 
@@ -2037,12 +2047,12 @@ latitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value
 
 **Note that the following fields must be prefixed with the header "img."** (for example → img.file_name):
 
-file_name, height, imgid, imgrank, file_name, orig, objid, file_name thumb_file_name, thumb_height, thumb_width, width.
+file_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.
 
 **Note that the following fields must be prefixed with the header "txo."** (for example → txo.display_name):
 
 creation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,
-name, nbrobj, nbrobjcum, parent_id, rename_to source_desc, source_url, taxostatus, taxotype.
+name, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.
 
 **All other fields must be prefixed by the header "fre."** (for example → fre.circ.).
                    """,
@@ -2162,7 +2172,7 @@ def get_object_set_summary(
     response_model=None,
     responses={200: {"content": {"application/json": {"example": null}}}},
 )
-def reset_object_set_to_predicted(
+def force_object_set_to_predicted(
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", example=1
     ),
@@ -2170,13 +2180,13 @@ def reset_object_set_to_predicted(
     current_user: int = Depends(get_current_user),
 ) -> None:
     """
-    **Reset to Predicted** all objects for the given project with the filters.
+    **Force to Predicted** all objects for the given project with the filters.
 
     Return **NULL upon success.**
     """
     with ObjectManager() as sce:
         with RightsThrower():
-            return sce.reset_to_predicted(current_user, project_id, filters.base())
+            return sce.force_to_predicted(current_user, project_id, filters.base())
 
 
 @app.post(
@@ -2335,20 +2345,46 @@ def classify_auto_object_set(
 
     **Returns the number of updated entities.**
     """
+    req2 = ClassifyAutoReqMult(
+        target_ids=req.target_ids,
+        classifications=[[a_classif] for a_classif in req.classifications],
+        scores=[[a_score] for a_score in req.scores],
+        keep_log=req.keep_log,
+    )
+    return classify_auto_mult_object_set(req2, current_user)
+
+
+@app.post(
+    "/object_set/classify_auto_multiple",
+    operation_id="classify_auto_mult_object_set",
+    tags=["objects"],
+    responses={200: {"content": {"application/json": {"example": 3}}}},
+    response_model=int,
+)
+def classify_auto_mult_object_set(
+    req: ClassifyAutoReqMult = Body(...), current_user: int = Depends(get_current_user)
+) -> int:
+    """
+    **Set automatic classification** of a set of objects.
+
+    **Returns the number of updated entities.**
+    """
     assert (
         len(req.target_ids) == len(req.classifications) == len(req.scores)
     ), "Need the same number of objects, classifications and scores"
     assert all(
-        isinstance(score, float) and 0 <= score <= 1 for score in req.scores
+        isinstance(score, float) and 0 <= score <= 1
+        for scores in req.scores
+        for score in scores
     ), "Scores should be floats between 0 and 1"
     with ObjectManager() as sce:
         with RightsThrower():
-            ret, prj_id, changes = sce.classify_auto_set(
+            ret, prj_id, changes = sce.classify_auto_mult_set(
                 current_user,
+                None,
                 req.target_ids,
                 req.classifications,
                 req.scores,
-                req.keep_log,
             )
         with DBSyncService(ProjectTaxoStat, ProjectTaxoStat.projid, prj_id) as ssce:
             ssce.wait()
@@ -2497,28 +2533,28 @@ def predict_object_set(
     return rsp
 
 
-# Commented out as it's now integrated into prediction task, and cannot be executed in main app server
-# due to TF dependency
-# @app.get("/project/do_cnn/{proj_id}", operation_id="compute_project_cnn", tags=['objects'],
-#          responses={
-#              200: {
-#                  "content": {
-#                      "application/json": {
-#                          "example": "OK, 50 CNN features computed and written"
-#                      }
-#                  }
-#              }
-#          }, response_model=str)
-# def compute_project_cnn(proj_id: int = Path(..., description="Internal, numeric id of the project.", example=1),
-#                         current_user: Optional[int] = Depends(get_optional_current_user)) -> str:
-#     """
-#         **Generate CNN features** for the requested project.
-#
-#         **Returns a string containing the number of generated features.**
-#     """
-#     with CNNForProject() as sce:
-#         rsp = sce.run(current_user, proj_id)
-#     return rsp
+@app.post(
+    "/object_set/predictions",
+    operation_id="predict_object_set",
+    tags=["objects"],
+    response_model=PredictionInfoRsp,
+)
+def query_object_set_predictions(
+    object_ids: ObjectIDListT = Body(
+        ...,
+        title="Object IDs list",
+        description="The list of object ids.",
+        example=[634509, 6234516, 976544],
+    ),
+    current_user: int = Depends(get_current_user),
+) -> PredictionInfoRsp:
+    """
+    ** Return last prediction information for a set of objects, by their IDs.
+    """
+    with ObjectManager() as sce:
+        with RightsThrower():
+            rsp = sce.get_prediction_infos(current_user, object_ids)
+    return rsp
 
 
 @app.delete(
@@ -3390,18 +3426,16 @@ async def get_job_file(  # async due to StreamingResponse
     """
     with JobCRUDService() as sce:
         with RightsThrower():
-            file_like, length, file_name, media_type = sce.get_file_stream(
-                current_user, job_id
-            )
-        headers = {
-            "content-disposition": 'attachment; filename="' + file_name + '"',
-            "content-length": str(length),
-            "accept-ranges": "bytes",
-        }
-    return ranged_streaming_response(
+            file_like, file_name, media_type = sce.get_file_stream(current_user, job_id)
+    headers = {
+        "content-disposition": 'attachment; filename="' + file_name + '"',
+        "content-length": str(file_like.size()),
+        "accept-ranges": "bytes",
+    }
+    status_code = adjust_if_ranged(range_header, file_like, headers)
+    return StreamingResponse(
         content=file_like,
-        range_hdr=range_header,
-        file_size=length,
+        status_code=status_code,
         headers=headers,
         media_type=media_type,
     )
@@ -3522,6 +3556,165 @@ def list_common_files(
 
 
 # ######################## END OF FILES
+# ######################## START OF USERS FILES
+@app.get(
+    "/user_files/{sub_path:path}",
+    operation_id="list_my_files",
+    tags=["Myfiles"],
+    response_model=DirectoryModel,
+)
+def list_my_files(
+    sub_path: str,  # = Query(..., title="Sub path", description="", example=""),
+    current_user: int = Depends(get_current_user),
+) -> DirectoryModel:
+    """
+    **List the private files** from user files directory  which are usable for some file-related operations.
+    A sub_path starting with "/" is considered relative to user folder.
+
+    *e.g. import.*
+    """
+    with UserFilesFolderService() as sce:
+        with RightsThrower():
+            file_list = sce.list(sub_path, current_user)
+    return file_list
+
+
+@app.post(
+    "/user_files/",
+    operation_id="post_my_file",
+    tags=["Myfiles"],
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": "/ftp_plankton/Ecotaxa_Data_to_import/uploadedFile.zip"
+                }
+            }
+        }
+    },
+    response_model=str,
+)
+async def put_my_file(  # async due to await file store
+    file: UploadFile = File(..., title="File", description=""),
+    path: Optional[str] = Form(
+        title="Path", description="The client-side full path of the file.", default=None
+    ),
+    current_user: int = Depends(get_current_user),
+) -> str:
+    """
+    **Upload a file for the current user files directory.**
+
+    The returned text will contain a server-side path which is usable for some file-related operations.
+
+    *e.g. import.*
+    """
+    with UserFilesFolderService() as sce:
+        with ValidityThrower(), RightsThrower():
+            assert ".." not in str(path), "Forbidden"
+            file_name = await sce.store(current_user, file, path)
+    return file_name
+
+
+@app.post(
+    "/user_files/mv/",
+    operation_id="move_my_file",
+    tags=["Myfiles"],
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": "/ftp_plankton/Ecotaxa_Data_to_import/uploadedFile.zip"
+                }
+            }
+        }
+    },
+    response_model=str,
+)
+def move_file(  # async due to await file move
+    source_path: str = Form(
+        title="Source Path",
+        description="The client-side full path of the file or directory to be moved.",
+        default=None,
+    ),
+    dest_path: str = Form(
+        title="Destination Path",
+        description="The client-side full path of the destination file or directory.",
+        default=None,
+    ),
+    current_user: int = Depends(get_current_user),
+) -> str:
+    """
+    **Move (or rename depending on source and dest path) a file or directory in the current user files directory.**
+    The returned text will contain a server-side path which is usable for some file-related operations.
+    """
+    with UserFilesFolderService() as sce:
+        with ValidityThrower(), RightsThrower():
+            assert ".." not in str(source_path), "Forbidden"
+            assert ".." not in str(dest_path), "Forbidden"
+            dest_path = sce.move(source_path, dest_path, current_user)
+    return dest_path
+
+
+@app.post(
+    "/user_files/rm/",
+    operation_id="remove_my_file",
+    tags=["Myfiles"],
+    responses={200: {"content": {"application/json": {"example": 0}}}},
+    response_model=int,
+)
+def remove_file(
+    source_path: str = Form(
+        title="Source Path",
+        description="The client-side full path of the file  or directory to be removed.",
+        default=None,
+    ),
+    current_user: int = Depends(get_current_user),
+) -> int:
+    """
+    **Remove a file, or directory in the current user files directory.**
+    """
+    with UserFilesFolderService() as sce:
+        with ValidityThrower(), RightsThrower():
+            assert ".." not in str(source_path), "Forbidden"
+            sce.remove(source_path, current_user)
+    return 1
+
+
+@app.post(
+    "/user_files/create/",
+    operation_id="create_my_file",
+    tags=["Myfiles"],
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": "/ftp_plankton/Ecotaxa_Data_to_import/uploadedFile.zip"
+                }
+            }
+        }
+    },
+    response_model=str,
+)
+async def create_file(  # async due to await file store
+    source_path: str = Form(
+        title="Source Path",
+        description="The client-side full path of the file or directory to be moved.",
+        default=None,
+    ),
+    current_user: int = Depends(get_current_user),
+) -> str:
+    """
+    **Create a new file or directory in the current user files directory.**
+    The returned text will contain a server-side path which is usable for some file-related operations.
+    """
+    with UserFilesFolderService() as sce:
+        with ValidityThrower(), RightsThrower():
+            assert ".." not in str(source_path), "Forbidden"
+            new_path = sce.create(source_path, current_user)
+    return new_path
+
+
+# ######################## END OF USERS FILES
 
 system_status_resp = """Config dump:
   secret_key: *************
@@ -3696,6 +3889,11 @@ JOB_INTERVAL = 5
 
 @app.on_event("startup")
 def startup_event() -> None:
+    # Small service call, to ensure the DB is OK
+    with ConstantsService():
+        pass
+    # Clean memory every minute
+    JobScheduler.todo_on_idle = regular_mem_cleanup
     # Don't run predictions, they are left to a specialized runner
     JobScheduler.FILTER = [PredictForProject.JOB_TYPE]
     JobScheduler.launch_at_interval(JOB_INTERVAL)

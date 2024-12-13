@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import Dict, Set, Iterable, TYPE_CHECKING
+from typing import Dict, Set, Iterable, TYPE_CHECKING, List
 
 # noinspection PyPackageRequirements
 from sqlalchemy import Index, Column, ForeignKey, Sequence, Integer  # fmt:skip
@@ -30,26 +30,32 @@ from .Acquisition import Acquisition
 from .Image import Image
 from .Project import Project, ProjectIDT
 from .Sample import Sample
+from .Taxonomy import Taxonomy
+from .User import User
 from .helpers.ORM import Model
 
 # Typings
 ObjectIDT = int
+ObjectIDListT = List[int]
+
 if TYPE_CHECKING:
     pass
     # from .Image import Image
 
 # Classification qualification
-PREDICTED_CLASSIF_QUAL = "P"
-DUBIOUS_CLASSIF_QUAL = "D"
-VALIDATED_CLASSIF_QUAL = "V"
-classif_qual = {
+PREDICTED_CLASSIF_QUAL = "P"  # ML found, during the training starting at 'classif_date' moment, that the object _could be_ a 'classif_id' with 'classif_score' confidence.
+DUBIOUS_CLASSIF_QUAL = "D"  # 'classif_who' said at 'classif_date' moment that the object is _probably not_ a 'classif_id'
+VALIDATED_CLASSIF_QUAL = "V"  # 'classif_who' said at 'classif_date' moment that the object _is_ a 'classif_id'
+DISCARDED_CLASSIF_QUAL = "X"  # 'classif_who' said at 'classif_date' moment that the object _is not_ a 'classif_id'
+classif_qual_labels = {
     PREDICTED_CLASSIF_QUAL: "predicted",
     DUBIOUS_CLASSIF_QUAL: "dubious",
     VALIDATED_CLASSIF_QUAL: "validated",
+    DISCARDED_CLASSIF_QUAL: "discarded",
 }
-CLASSIF_QUALS = set(classif_qual.keys())
+CLASSIF_QUALS = set(classif_qual_labels.keys())
 classif_qual_revert = {}
-for k, v in classif_qual.items():
+for k, v in classif_qual_labels.items():
     classif_qual_revert[v] = k
 
 
@@ -62,7 +68,7 @@ class ObjectHeader(Model):
         INTEGER, ForeignKey("acquisitions.acquisid", ondelete="CASCADE"), nullable=False
     )  # 4 bytes align i
     # User-visible classification
-    classif_id = Column(INTEGER)  # 4 bytes align i
+    classif_id = Column(INTEGER, ForeignKey(Taxonomy.id))  # 4 bytes align i
 
     # 86400 different values, basically all possible minutes of day
     objtime = Column(TIME)  # 8 bytes align d
@@ -75,30 +81,18 @@ class ObjectHeader(Model):
     # _only_ 7018 different values
     objdate = Column(DATE)  # 4 bytes align i
     #
-    # Depending on its value,
-    # - it's the other classif_* columns which reflecting the "last state"
-    # - or the classif_auto_* ones.
+    # One of the *_CLASSIF_QUAL above
     classif_qual = Column(CHAR(1))  # 2 bytes (len + content) align c as len < 127
     #
     sunpos = Column(
         CHAR(1)
     )  # Sun position, from date, time and coords # 2 bytes (len + content) align c as len < 127
-    classif_when = Column(TIMESTAMP)  # 8 bytes align d
-    classif_who = Column(Integer, ForeignKey("users.id"))  # 4 bytes align i
-
-    # The following 3 are set if the object was ever predicted, then they remain
-    # forever with these values. They reflect the "last state" only if classif_qual is 'P'.
-    classif_auto_id = Column(INTEGER)  # 4 bytes align i
-    # TODO: is sometimes NULL on prod' DB even if classif_qual='P' and other classif_auto_* are set
-    classif_auto_when = Column(TIMESTAMP)  # 8 bytes align d
-    classif_auto_score = Column(DOUBLE_PRECISION)  # 8 bytes align d
-
-    # classif_crossvalidation_id = Column(INTEGER)  # TODO: Always NULL in prod' # 4 bytes align i
-
-    # similarity = Column(DOUBLE_PRECISION)  # TODO: Always NULL in prod' # 8 bytes align d
-
-    # TODO: Why random? It makes testing a bit more difficult
-    # random_value = Column(INTEGER)  # 4 bytes align i
+    # Date of move to present classif_qual+classif_id, see top comment on states for details
+    classif_date = Column(TIMESTAMP)  # 8 bytes align d
+    # If the object is Predicted, its score
+    classif_score = Column(DOUBLE_PRECISION)  # 8 bytes align d
+    # Author of last change in/to 'V' or 'D'
+    classif_who = Column(Integer, ForeignKey(User.id))  # 4 bytes align i
 
     # User-provided identifier
     orig_id = Column(
@@ -114,7 +108,6 @@ class ObjectHeader(Model):
     fields: ObjectFields
     cnn_features: relationship
     classif: relationship
-    classif_auto: relationship
     classifier: relationship
     all_images: Iterable[Image]
     acquisition: relationship
@@ -189,17 +182,14 @@ class ObjectHeader(Model):
         return self.objid < other.objid
 
 
-USED_FIELDS_FOR_CLASSIF = {  # From user point of view, only these can be changed
+USED_FIELDS_FOR_CLASSIF = {  # From Import user point of view, only these can be changed
     ObjectHeader.classif_qual.name,
     ObjectHeader.classif_id.name,
+    ObjectHeader.classif_date.name,
     ObjectHeader.classif_who.name,
-    ObjectHeader.classif_when.name,
+    ObjectHeader.classif_score.name,
 }
-HIDDEN_FIELDS_FOR_CLASSIF = {  # Internally managed
-    ObjectHeader.classif_auto_id.name,
-    ObjectHeader.classif_auto_when.name,
-    ObjectHeader.classif_auto_score.name,
-}
+HIDDEN_FIELDS_FOR_CLASSIF = {}  # Internally managed
 NON_UPDATABLE_VIA_API = USED_FIELDS_FOR_CLASSIF.union(HIDDEN_FIELDS_FOR_CLASSIF)
 
 
@@ -238,18 +228,15 @@ for i in range(1, 21):
 # Nearly-always used index for recursive descent into object tree, e.g. in manual classification page.
 # Also for FK checks during deletion.
 Index(
-    "is_objectsacquisition",
-    ObjectHeader.__table__.c.acquisid,
-)
-
-# Speed up a bit top bar with stats by state.
-Index(
     "is_objectsacqclassifqual",
     ObjectHeader.__table__.c.acquisid,
-    postgresql_include=[
-        ObjectHeader.__table__.c.classif_qual,
-        ObjectHeader.__table__.c.classif_id,
-    ],
+    ObjectHeader.__table__.c.classif_qual,
+    postgresql_include=[ObjectHeader.classif_id.name],
+)
+Index(  # We CLUSTER on this one # TODO: Any way to declare the cluster here?
+    "is_obj_head_acquisid_objid",
+    ObjectHeader.__table__.c.acquisid,
+    ObjectHeader.__table__.c.objid,
 )
 
 # For finding globally objects in some depth range
@@ -257,25 +244,25 @@ Index(
     "is_objectsdepth",
     ObjectHeader.__table__.c.depth_max,
     ObjectHeader.__table__.c.depth_min,
-    postgresql_include=[ObjectHeader.__table__.c.acquisid],
+    postgresql_include=[ObjectHeader.acquisid.name],
 )
 # For finding globally objects in some geo range
 Index(
     "is_objectslatlong",
     ObjectHeader.__table__.c.latitude,
     ObjectHeader.__table__.c.longitude,
-    postgresql_include=[ObjectHeader.__table__.c.acquisid],
+    postgresql_include=[ObjectHeader.acquisid.name],
 )
 # For finding globally objects in some time range
 Index(
     "is_objectstime",
     ObjectHeader.__table__.c.objtime,
-    postgresql_include=[ObjectHeader.__table__.c.acquisid],
+    postgresql_include=[ObjectHeader.acquisid.name],
 )
 Index(
     "is_objectsdate",
     ObjectHeader.__table__.c.objdate,
-    postgresql_include=[ObjectHeader.__table__.c.acquisid],
+    postgresql_include=[ObjectHeader.acquisid.name],
 )
 
 DEFAULT_CLASSIF_HISTORY_DATE = "TO_TIMESTAMP(0)"
@@ -284,17 +271,21 @@ DEFAULT_CLASSIF_HISTORY_DATE = "TO_TIMESTAMP(0)"
 class ObjectsClassifHisto(Model):
     __tablename__ = "objectsclassifhisto"
     objid = Column(
-        BIGINT, ForeignKey("obj_head.objid", ondelete="CASCADE"), primary_key=True
+        BIGINT, ForeignKey(ObjectHeader.objid, ondelete="CASCADE"), primary_key=True
     )  # 8 bytes align d
-    # TODO: FK on taxonomy
+    # Date of manual setting of 'V' or 'D', training date for 'P'
     classif_date = Column(TIMESTAMP, primary_key=True)  # 8 bytes align d
-    classif_id = Column(INTEGER, nullable=False)  # 4 bytes align i
-    classif_type = Column(
-        CHAR(1)
-    )  # A : Automatic, M : Manual # 2 bytes (len + content) align c as len < 127
-    classif_qual = Column(CHAR(1))  # 2 bytes (len + content) align c as len < 127
+    # The score associated with 'P' state
     classif_score = Column(DOUBLE_PRECISION)  # 8 bytes align d
-    classif_who = Column(Integer, ForeignKey("users.id"))  # 4 bytes align i
-
+    classif_id = Column(
+        INTEGER, ForeignKey(Taxonomy.id, ondelete="CASCADE"), nullable=False
+    )  # 4 bytes align i
+    # The person who caused the 'D' or 'V' state
+    classif_who = Column(Integer, ForeignKey(User.id))  # 4 bytes align i
+    classif_qual = Column(
+        CHAR(1), nullable=False
+    )  # 2 bytes (len + content) align c as len < 127
     # The relationships are created in Relations.py but the typing here helps the IDE
     object: relationship
+    classif: relationship
+    classifier: relationship

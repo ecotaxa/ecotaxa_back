@@ -12,7 +12,7 @@ from BO.Mappings import ProjectMapping
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from BO.helpers.ImportHelpers import ImportWhere, ImportHow
-from DB.Object import ObjectHeader, classif_qual
+from DB.Object import ObjectHeader, classif_qual_labels
 from DB.helpers.DBWriter import DBWriter
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 from .ImportBase import ImportServiceBase
@@ -100,7 +100,7 @@ class SimpleImport(ImportServiceBase):
             }
             req_values[SimpleImportFields.userlb] = "user"
         if req_values.get(SimpleImportFields.status, ""):
-            req_values[SimpleImportFields.status] = classif_qual.get(
+            req_values[SimpleImportFields.status] = classif_qual_labels.get(
                 req_values[SimpleImportFields.status], ""
             )
         self.make_tsv(source_bundle, images)

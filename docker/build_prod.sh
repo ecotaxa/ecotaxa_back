@@ -1,7 +1,9 @@
 #!/bin/bash
-VERSION=2.7.3.9
+VERSION=2.7.8
 # In case of doubt on the image sanity or if you have time, uncomment below
 #NO_CACHE=--no-cache
+# In case you need full output of commands, e.g. for ensuring python packages version, uncomment below
+#export BUILDKIT_PROGRESS=plain
 # Preliminary, log using ecotaxa docker account
 #docker login -u ecotaxa
 # Copy all sources

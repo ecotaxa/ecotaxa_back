@@ -43,6 +43,7 @@ from tests.jobs import (
     api_check_job_errors,
 )
 from tests.prj_utils import check_project
+from tests.test_classification import validate_all, query_all_objects
 from tests.test_fastapi import PRJ_CREATE_URL, ADMIN_AUTH, PROJECT_QUERY_URL
 from tests.test_import import (
     ADMIN_USER_ID,
@@ -1586,6 +1587,9 @@ def test_subset_consistency(database, fastapi, caplog, tstlogs):
     # Plain import first
     import_plain(fastapi, prj_id)
     check_project(tstlogs, prj_id)
+    # Create some history to clone, while keeping state diversity
+    obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id)
+    validate_all(fastapi, obj_ids[: int(len(obj_ids) / 2)], ADMIN_AUTH)
     # Dump the project
     caplog.set_level(logging.DEBUG)
     with open(tstlogs / OUT_JSON, "w") as fd:

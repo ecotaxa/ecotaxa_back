@@ -270,8 +270,19 @@ class ProjectExport(JobServiceBase):
                             ELSE obh.classif_qual 
                          END AS object_annotation_status,                
                          usr.name AS object_annotation_person_name, usr.email AS object_annotation_person_email,
-                         TO_CHAR(obh.classif_when,'{0}') AS object_annotation_date,
-                         TO_CHAR(obh.classif_when,'{1}') AS object_annotation_time,                
+                         """
+            """
+                    CASE WHEN obh.classif_qual IN ('"""
+            + VALIDATED_CLASSIF_QUAL
+            + """','"""
+            + DUBIOUS_CLASSIF_QUAL
+            + """') THEN TO_CHAR(obh.classif_date,'{0}') END AS object_annotation_date,
+                  CASE WHEN obh.classif_qual IN ('"""
+            + VALIDATED_CLASSIF_QUAL
+            + """','"""
+            + DUBIOUS_CLASSIF_QUAL
+            + """') THEN TO_CHAR(obh.classif_date,'{1}') END AS object_annotation_time,"""
+            + """ 
                          txo.display_name AS object_annotation_category 
                     """
         ).format(date_fmt, time_fmt)
@@ -316,8 +327,11 @@ class ProjectExport(JobServiceBase):
             select_clause += """\n, obh.objid, 
                     obh.acquisid AS processid_internal, obh.acquisid AS acq_id_internal, 
                     sam.sampleid AS sample_id_internal, 
-                    obh.classif_id, obh.classif_who, obh.classif_auto_id, txp.name classif_auto_name, 
-                    obh.classif_auto_score, obh.classif_auto_when,
+                    obh.classif_id, obh.classif_who, 
+                    CASE WHEN obh.classif_qual = 'P' THEN obh.classif_id END AS classif_auto_id, 
+                    txp.name classif_auto_name, 
+                    obh.classif_score AS classif_auto_score, 
+                    CASE WHEN obh.classif_qual = 'P' THEN obh.classif_date END AS classif_auto_when,
                     HASHTEXT(obh.orig_id) object_random_value, obh.sunpos object_sunpos """
             if "S" in req.tsv_entities:
                 # This is not really an id, it's computed, why not
@@ -933,7 +947,7 @@ class GeneralProjectExport(SpecializedProjectExport):
             with_types_row=req.with_types_row,
             only_first_image=req.with_images == ExportImagesOptionsEnum.first,
             split_by=old_split,
-            tsv_entities="OPASC",
+            tsv_entities="OPAS" if req.with_types_row else "OPASC",
             only_annotations=req.only_annotations,
             out_to_ftp=req.out_to_ftp,
         )

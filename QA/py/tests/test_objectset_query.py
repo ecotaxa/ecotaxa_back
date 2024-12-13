@@ -87,3 +87,43 @@ def test_queries(database, fastapi, caplog):
             there_was_a_mini = True
             assert file_name[:9] == thumb_file_name[:9]
     assert there_was_a_mini
+
+
+def test_all_fields(database, fastapi, caplog):
+    # Ensure that all API-documented fields work
+    caplog.set_level(logging.ERROR)
+
+    # Admin imports the project
+    from tests.test_import import test_import, test_import_a_bit_more_skipping
+
+    prj_id = test_import(database, caplog, "Full Queries test project")
+    # Add a sample spanning 2 days
+    test_import_a_bit_more_skipping(database, caplog, "Full Queries test project")
+
+    # Copy/paste from redoc API
+    obj_fields = "classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id, classif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min, latitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos"
+    img_fields = "file_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width"
+    txo_fields = "creation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime, name, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype"
+    all_fields = (
+        ["obj." + fld.strip() for fld in obj_fields.split(",")]
+        + ["img." + fld.strip() for fld in img_fields.split(",")]
+        + ["txo." + fld.strip() for fld in txo_fields.split(",")]
+    )
+
+    objs, details = _prj_query(
+        fastapi, CREATOR_AUTH, prj_id, fields=",".join(all_fields)
+    )
+    for a_det in details:
+        assert len(a_det) == len(all_fields)
+
+    # Test all 'order by', all fields present
+    for a_field in all_fields:
+        objs, details = _prj_query(
+            fastapi, CREATOR_AUTH, prj_id, fields=",".join(all_fields), order=a_field
+        )
+
+    # Test all 'order by', single field present
+    for a_field in all_fields:
+        objs, details = _prj_query(
+            fastapi, CREATOR_AUTH, prj_id, fields="obj.objid", order=a_field
+        )

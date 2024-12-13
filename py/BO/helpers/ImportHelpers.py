@@ -15,6 +15,7 @@ from DB.Acquisition import Acquisition
 from DB.Sample import Sample
 from DB.helpers.DBWriter import DBWriter
 from FS.Vault import Vault
+from helpers import DateTime
 
 
 class ImportDiagnostic(object):
@@ -130,7 +131,7 @@ class ImportStats(object):
     """
 
     def __init__(self, total_rows: int, report_def: Callable):
-        self.start_time = time.time()
+        self.start_time = DateTime.now_time()
         self.total_row_count = total_rows
         self.current_row_count = 0
         self.report_def = report_def
@@ -139,7 +140,7 @@ class ImportStats(object):
         self.current_row_count += nb_rows
 
     def so_far(self) -> Tuple[float, int]:
-        elapsed = time.time() - self.start_time
+        elapsed = time.time() - self.start_time.timestamp()
         rows_per_sec = int(self.current_row_count / elapsed)
         return elapsed, rows_per_sec
 

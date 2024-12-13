@@ -4,9 +4,11 @@
 #
 import abc
 import logging
+import time
 from abc import ABC
-from logging import Logger
+from logging import Logger, Handler
 from threading import get_ident
+from typing import Dict
 
 LOGGING_FORMAT = (
     "%(process)d:%(threadName)s:%(asctime)s:%(name)s:%(levelname)s %(message)s"
@@ -16,16 +18,20 @@ LOG_FILE_TEMPLATE = "ecotaxa_back_%d.log"
 LOG_FILE = LOG_FILE_TEMPLATE % 0  # os.getpid()
 
 
-class PerThreadHandler(logging.Handler):
+class UTCFormatter(logging.Formatter):
+    converter = time.gmtime
+
+
+class PerThreadHandler(Handler):
     """
     A constant Handler to a switching destination.
     It acts as a simple relay to another handler.
     """
 
-    def __init__(self, handler):
+    def __init__(self, handler: Handler):
         super().__init__()
         self.handler = handler
-        self.alt_handlers = {}
+        self.alt_handlers: Dict[int, Handler] = {}
         self.level = handler.level
 
     def emit(self, record):
@@ -38,7 +44,7 @@ class PerThreadHandler(logging.Handler):
     def switch_to(self, new_filename_or_stream):
         alt_handler = logging.FileHandler(new_filename_or_stream)
         alt_handler.setLevel(self.level)
-        alt_handler.setFormatter(logging.Formatter(ALT_LOGGING_FORMAT))
+        alt_handler.setFormatter(UTCFormatter(ALT_LOGGING_FORMAT))
         self.alt_handlers[get_ident()] = alt_handler
 
     def stop_switch(self):
@@ -50,13 +56,13 @@ class PerThreadHandler(logging.Handler):
 
 # Singleton handler per process
 _the_handler = PerThreadHandler(logging.FileHandler(LOG_FILE))
-_the_handler.handler.setFormatter(logging.Formatter(LOGGING_FORMAT))
+_the_handler.handler.setFormatter(UTCFormatter(LOGGING_FORMAT))
 
 
 def logger_nullify_after_fork():
-    """ Remove log handlers after a fork.
+    """Remove log handlers after a fork.
     We could replace them with more fresh handler but this is enough
-    to prevent artificial sync b/w forked processes """
+    to prevent artificial sync b/w forked processes"""
     Logger.manager.root.handlers.clear()
     for _name, a_logger in Logger.manager.loggerDict.items():
         if isinstance(a_logger, Logger):
@@ -66,7 +72,7 @@ def logger_nullify_after_fork():
             a_logger.loggerMap.clear()
     global _the_handler
     _the_handler = PerThreadHandler(logging.FileHandler(LOG_FILE))
-    _the_handler.handler.setFormatter(logging.Formatter(LOGGING_FORMAT))
+    _the_handler.handler.setFormatter(UTCFormatter(LOGGING_FORMAT))
 
 
 def get_logger(name) -> logging.Logger:
@@ -102,8 +108,8 @@ class LogsSwitcher(object):
         self.switch()
         return self
 
-    def switch(self):
-        switch_to = self.emitter.log_file_path()
+    def switch(self) -> None:
+        switch_to: str = self.emitter.log_file_path()
         if switch_to is not None:
             # Log the fact that we switch to a new file, to current log file.
             logging.log(logging.INFO, "Switching logs to %s", switch_to)
@@ -118,11 +124,11 @@ MONITOR_LOG_PATH = "ecotaxa_api_calls.log"
 
 
 def get_api_logger():
-    """ Return a logger to a dedicated file for knowing what happens in some endpoints """
-    api_logger = logging.getLogger('API')
+    """Return a logger to a dedicated file for knowing what happens in some endpoints"""
+    api_logger = logging.getLogger("API")
     api_logger.setLevel(logging.INFO)
     api_file_handler = logging.FileHandler(MONITOR_LOG_PATH)
     api_file_handler.setLevel(logging.INFO)
-    api_file_handler.setFormatter(logging.Formatter("%(message)s #AT %(asctime)-15s"))
+    api_file_handler.setFormatter(UTCFormatter("%(message)s #AT %(asctime)-15s"))
     api_logger.addHandler(api_file_handler)
     return api_logger

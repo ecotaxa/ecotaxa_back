@@ -2236,7 +2236,669 @@ INSERT INTO obj_cnn_features_vector (objcnnid, features)
         cnn41, cnn42, cnn43, cnn44, cnn45, cnn46, cnn47, cnn48, cnn49, cnn50]::vector
         FROM obj_cnn_features;
 
+GRANT SELECT ON obj_cnn_features_vector TO readerole;
+
+DROP TABLE obj_cnn_features;
+
 UPDATE alembic_version SET version_num='a9dd3c62b7b0' WHERE alembic_version.version_num = '0a3132f436fb';
+
+COMMIT;
+
+BEGIN;
+
+-- Running upgrade a9dd3c62b7b0 -> d3bfaa54d544
+
+ALTER TABLE obj_head SET (autovacuum_enabled = off);
+    ALTER TABLE objectsclassifhisto SET (autovacuum_enabled = off);
+    -- Save some time on inserts
+    ALTER TABLE ONLY public.objectsclassifhisto
+        DROP CONSTRAINT objectsclassifhisto_classif_who_fkey,
+        DROP CONSTRAINT objectsclassifhisto_objid_fkey;
+
+-- No classif_id, 777 lines as of 07/01/2024
+    delete from objectsclassifhisto where classif_id is null;
+
+-- Wrong classif_id, 8K lines as of 07/01/2024
+    delete from objectsclassifhisto where classif_id not in (SELECT id from taxonomy);
+
+-- Some 4K objects in PROD have an invalid classif_auto_id, for 'P' we need to recreate the fake prediction
+    update obj_head
+       set classif_auto_id=classif_id,
+           classif_auto_score=coalesce(classif_auto_score, 1),
+           classif_auto_when=coalesce(classif_auto_when,'01/01/1970')
+     where classif_qual = 'P'
+       and classif_auto_id is not null
+       and classif_auto_id not in (SELECT id from taxonomy);
+
+-- Some 4K objects in PROD have an invalid classif_auto_id, for 'V'/'D' we can just erase _auto*
+    update obj_head
+       set classif_auto_id=null,
+           classif_auto_score=null,
+           classif_auto_when=null
+     where classif_qual in ('V','D')
+       and classif_auto_id is not null
+       and classif_auto_id not in (SELECT id from taxonomy);
+
+-- Some 1.8M objects in PROD have an inconsistent classif_auto_id, as for 'P' it should be classif_id.
+    -- It's probably the consequence of legacy "revert to predicted' code which did not care about _auto fields
+    -- or "import update predicted" before 2024 cleanup.
+    update obj_head
+       set classif_auto_id=classif_id
+     where classif_qual = 'P'
+       and classif_auto_id != classif_id;
+
+-- Some 'V' or 'D' objects in PROD have an inconsistent classif_auto_when, taking place after human validation.
+    -- Maybe some version of EcoTaxa allowed to re-predict without state move. Delete the user-hidden 'P'.
+    -- 4M objects
+    update obj_head
+       set classif_auto_id=null,
+           classif_auto_score=null,
+           classif_auto_when=null
+     where classif_qual in ('V','D')
+       and classif_auto_when > classif_when;
+
+-- Some 'V' or 'D' objects in PROD have some history after the object.
+    -- History should be strictly 'before the present', so remove history. We still have the data in obj_head.
+    -- 4.8M history
+    delete from objectsclassifhisto och
+     using obj_head obh
+     where obh.objid = och.objid
+       and obh.classif_when <= och.classif_date
+       and obh.classif_qual in ('V','D');
+
+-- Some 'P' objects in PROD have a prediction date before (or same as) a 'V' or 'D' in history.
+    -- e.g. history says 'P' on 23/12, 'V' on 24/12, but in object there is 'P' on 23/12
+    -- probably due to old 'reset to predicted' or 'revert' code.
+    -- 680K rows
+    -- Warp them a bit in future but don't create too many new dates
+    create temp table bad_p as
+    select distinct obh.objid, obh.acquisid
+      from obj_head obh
+      join objectsclassifhisto och
+           on och.objid = obh.objid
+           and och.classif_date >= obh.classif_auto_when
+           and och.classif_qual != 'P'
+     where obh.classif_qual='P';
+    create temp table bad_p_acquis as
+    select distinct acquisid
+      from bad_p;
+    create temp table bad_p_acquis_max as
+    select bpa.acquisid, max(och.classif_date) + interval '1 hour' as acquis_max
+      from bad_p_acquis bpa
+      join obj_head obh on obh.acquisid = bpa.acquisid
+      join objectsclassifhisto och on och.objid = obh.objid
+     group by bpa.acquisid;
+    update obj_head obh
+       set classif_auto_when = bpam.acquis_max
+      from bad_p bap
+      join bad_p_acquis_max bpam on bpam.acquisid = bap.acquisid
+     where obh.objid = bap.objid;
+
+-- 'P' is freshest row, we have avoided duplicate due to volunteer copy above, cleanup.
+    -- 763K history in PROD, some should be cured by above fixes
+    delete from objectsclassifhisto och
+     using obj_head obh
+     where obh.objid = och.objid
+       and obh.classif_auto_when = och.classif_date
+       and obh.classif_qual = 'P'
+       and och.classif_qual = 'P';
+
+-- Some 47K objects in PROD have an implied historical P with exact same date as a log with P,
+    -- but different produced classification or score. Remove the faulty history, it's eventually re-created OK next step.
+    delete from objectsclassifhisto och
+     using obj_head obh
+     where och.classif_qual = 'P'
+       and och.objid = obh.objid
+       and och.classif_date = obh.classif_auto_when
+       and (och.classif_id != obh.classif_auto_id
+            or och.classif_score != obh.classif_auto_score);
+
+-- 'P' should have been historized when moving to 'V' or 'D', it was not always the case.
+    -- 68M objects
+    -- Note: We use a temp table as insert...select does not go parallel
+    create temp table missing_ps as
+    select obh.objid, obh.classif_auto_when, obh.classif_auto_id, 'A' as classif_type, 'P' as classif_qual, obh.classif_auto_score
+      from obj_head obh
+      left join objectsclassifhisto och on och.objid=obh.objid and och.classif_date=obh.classif_auto_when
+     where obh.classif_qual in ('V','D')
+       and obh.classif_auto_when is not null
+       and och.objid is null;
+    insert into objectsclassifhisto (objid, classif_date, classif_id, classif_type, classif_qual, classif_score)
+    select * from missing_ps;
+    drop table missing_ps;
+
+-- Remove consecutive predictions in history
+    -- 1160M rows
+    with curr_and_next as (select objid, classif_date, classif_qual,
+                                  lead(classif_qual) over (partition by objid order by classif_date) as next_qual
+                             from objectsclassifhisto och),
+         both_are_p as (select objid, classif_date
+                          from curr_and_next
+                         where classif_qual = 'P' and next_qual = 'P')
+    delete from objectsclassifhisto och
+        using both_are_p
+     where och.objid = both_are_p.objid
+       and och.classif_date = both_are_p.classif_date;
+
+COMMIT;
+
+vacuum full verbose analyze objectsclassifhisto;
+
+BEGIN;
+
+-- Enforce the rule above "not 2 consecutive predictions". Current object is Predicted, and last history as well -> delete histo
+    -- 129M rows
+    create temp table pred_in_last as
+        (select p_and_last.objid, p_and_last.classif_date
+           from (select objid, classif_date,
+                        lead(classif_qual) over (partition by objid order by classif_date) as next_qual
+                   from objectsclassifhisto och
+                  where och.classif_qual = 'P') p_and_last
+                   join obj_head obh
+                     on obh.objid = p_and_last.objid
+                        and obh.classif_qual = 'P'
+                        and p_and_last.next_qual is null);
+    analyze pred_in_last;
+    delete from objectsclassifhisto och
+     where (och.objid, och.classif_date) in (select objid, classif_date from pred_in_last);
+    drop table pred_in_last;
+
+ALTER TABLE obj_head ADD FOREIGN KEY(classif_id) REFERENCES taxonomy (id);
+
+ALTER TABLE obj_head ADD FOREIGN KEY(classif_auto_id) REFERENCES taxonomy (id);
+
+COMMIT;
+
+vacuum full verbose analyze objectsclassifhisto;
+
+BEGIN;
+
+ALTER TABLE objectsclassifhisto ADD FOREIGN KEY(classif_id) REFERENCES taxonomy (id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.objectsclassifhisto
+        ADD CONSTRAINT objectsclassifhisto_classif_who_fkey FOREIGN KEY (classif_who) REFERENCES public.users (id),
+        ADD CONSTRAINT objectsclassifhisto_objid_fkey FOREIGN KEY (objid) REFERENCES public.obj_head (objid) ON DELETE CASCADE;
+    ALTER TABLE obj_head SET (autovacuum_enabled = on);
+    ALTER TABLE objectsclassifhisto SET (autovacuum_enabled = on);
+
+UPDATE alembic_version SET version_num='d3bfaa54d544' WHERE alembic_version.version_num = 'a9dd3c62b7b0';
+
+COMMIT;
+
+BEGIN;
+
+-- Running upgrade d3bfaa54d544 -> 067cd670782d
+
+CREATE TABLE training (
+    training_id SERIAL NOT NULL,
+    projid INTEGER,
+    training_author INTEGER NOT NULL,
+    training_start TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    training_end TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    training_path VARCHAR(80) NOT NULL,
+    PRIMARY KEY (training_id),
+    FOREIGN KEY(training_author) REFERENCES users (id),
+    FOREIGN KEY(projid) REFERENCES projects (projid) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX trn_projid_start ON training (projid, training_start);
+
+CREATE TABLE prediction (
+    object_id BIGINT NOT NULL,
+    training_id INTEGER NOT NULL,
+    classif_id INTEGER NOT NULL,
+    score DOUBLE PRECISION NOT NULL,
+    PRIMARY KEY (object_id, classif_id),
+    FOREIGN KEY(classif_id) REFERENCES taxonomy (id) ON DELETE CASCADE,
+    FOREIGN KEY(object_id) REFERENCES obj_head (objid) ON DELETE CASCADE,
+    FOREIGN KEY(training_id) REFERENCES training (training_id) ON DELETE CASCADE
+);
+
+CREATE INDEX is_prediction_training ON prediction (training_id);
+
+CREATE TABLE prediction_histo (
+    object_id BIGINT NOT NULL,
+    training_id INTEGER NOT NULL,
+    classif_id INTEGER NOT NULL,
+    score DOUBLE PRECISION NOT NULL,
+    PRIMARY KEY (training_id, object_id, classif_id),
+    FOREIGN KEY(classif_id) REFERENCES taxonomy (id) ON DELETE CASCADE,
+    FOREIGN KEY(object_id) REFERENCES obj_head (objid) ON DELETE CASCADE,
+    FOREIGN KEY(training_id) REFERENCES training (training_id) ON DELETE CASCADE
+);
+
+CREATE INDEX is_prediction_histo_object ON prediction_histo (object_id);
+
+-- All objects ever predicted, with their project
+    CREATE UNLOGGED TABLE mig_obj_prj as
+    SELECT prj.projid, -- optimized column order as we have 500M lines here
+           obh.classif_auto_id,
+           obh.objid,
+           obh.classif_auto_score,
+           obh.classif_auto_when
+      FROM obj_head obh
+         JOIN acquisitions acq ON obh.acquisid = acq.acquisid
+         JOIN samples sam ON acq.acq_sample_id = sam.sampleid
+         JOIN projects prj ON sam.projid = prj.projid
+    WHERE obh.classif_auto_when IS NOT NULL
+    UNION
+    -- All objects previously predicted (lots were cleaned!), with their project
+    SELECT prj.projid,
+           och.classif_id as classif_auto_id,
+           och.objid,
+           och.classif_score as classif_auto_score,
+           och.classif_date as classif_auto_when
+      FROM objectsclassifhisto och
+         JOIN obj_head obh ON och.objid = obh.objid
+         JOIN acquisitions acq ON obh.acquisid = acq.acquisid
+         JOIN samples sam ON acq.acq_sample_id = sam.sampleid
+         JOIN projects prj ON sam.projid = prj.projid
+    WHERE och.classif_qual = 'P';
+
+create index on mig_obj_prj (projid, objid);
+    ALTER TABLE mig_obj_prj SET (autovacuum_enabled = off);
+    analyze mig_obj_prj;
+
+-- Grouped writes of previous prediction tasks, per project & date
+    create UNLOGGED table mig_unq_classif_per_proj as
+    SELECT projid, classif_auto_when, count(objid) as nb_objs
+    from mig_obj_prj
+    group by projid, classif_auto_when;
+
+-- Look for start and end dates of prediction tasks
+    -- assuming that 5 minutes have elapsed b/w 2 tasks on same project (time for human to read a bit the result)
+    create UNLOGGED table mig_classif_chunks_per_proj as
+    SELECT case when delta_prev > '44 sec' then 'B' end as B,
+       case when delta_next > '44 sec' then 'E' end as E,
+       *
+    from (SELECT projid,
+             classif_auto_when,
+             nb_objs,
+             case -- no previous line or different project -> yesterday -> kept in filter
+                 when (lead(projid, -1, -1) OVER paw) != projid then '1 day'::interval
+                 else classif_auto_when - lead(classif_auto_when, -1) OVER paw
+                 end as delta_prev,
+             case -- no next line or different project -> tomorrow -> kept in filter
+                 when (lead(projid, 1, -1) OVER paw) != projid then '1 day'::interval
+                 else lead(classif_auto_when, 1) OVER paw - classif_auto_when
+                 end as delta_next
+      from mig_unq_classif_per_proj
+      window paw as (ORDER BY projid, classif_auto_when)) deltas
+    where (delta_next > '44 sec'
+    or delta_prev > '44 sec')
+    order by projid, classif_auto_when;
+
+-- Reconstituted (approximately) old tasks
+    create UNLOGGED table mig_classif_tasks as
+    SELECT projid,
+       classif_auto_when as begin_date,
+       (SELECT classif_auto_when
+        from mig_classif_chunks_per_proj mcc2
+        where mcc2.classif_auto_when >= mcc.classif_auto_when
+          and mcc2.projid = mcc.projid
+          and mcc2.delta_next > '44 sec'
+        order by mcc2.classif_auto_when
+        limit 1) as end_date
+    from mig_classif_chunks_per_proj mcc
+    where delta_prev > '44 sec';
+
+create unique index on mig_classif_tasks (projid, begin_date, end_date);
+    analyze mig_classif_tasks;
+
+-- Each task becomes a training.
+    -- Note that some old tasks have the _same_ begin_date for different projects.
+    insert into training (projid, training_author, training_start, training_end, training_path)
+    select mct.projid, 1, mct.begin_date, mct.end_date, 'Migrated ' || current_date
+      from mig_classif_tasks mct;
+
+analyze training;
+
+create UNLOGGED table mig_obj_prj2 as select mop.*, trn.training_id
+                    from mig_obj_prj mop
+                             join training trn on mop.projid = trn.projid and
+                                                  mop.classif_auto_when between trn.training_start and trn.training_end;
+    create index on mig_obj_prj2 (projid, objid);
+    create unique index on mig_obj_prj2 (objid, classif_auto_when); -- An object could not be moved state twice at same time
+    analyze mig_obj_prj2;
+    ALTER TABLE mig_obj_prj2 SET (autovacuum_enabled = off);
+
+COMMIT;
+
+vacuum full verbose mig_obj_prj2;
+
+BEGIN;
+
+do
+$$
+    declare
+        curprj  record;
+        o_count integer;
+        h_count integer;
+        sum_o integer = 0;
+    begin
+        for curprj in (select distinct projid from mig_obj_prj2 order by projid)
+            loop
+                -- Active predictions - the objects currently predicted
+                insert into prediction(training_id, object_id, classif_id, score)
+                select mop.training_id, mop.objid, mop.classif_auto_id, mop.classif_auto_score
+                  from mig_obj_prj2 mop
+                  join obj_head obh
+                    on obh.objid = mop.objid
+                       and obh.classif_auto_when = mop.classif_auto_when
+                       -- and obh.classif_auto_id = mop.classif_auto_id
+                 where mop.projid = curprj.projid
+                   and obh.classif_qual = 'P'
+                  -- favorable grouping of tuples in blocks
+                  order by 2,3,4;
+                GET DIAGNOSTICS o_count = ROW_COUNT;
+                sum_o = sum_o + o_count;
+                -- Archived predictions - the history.
+                -- Note: in theory, the last 'P' is not an archive if current state is not 'P'
+                insert into prediction_histo(training_id, object_id, classif_id, score)
+                select mop.training_id, mop.objid, mop.classif_auto_id, mop.classif_auto_score
+                  from mig_obj_prj2 mop
+                  join objectsclassifhisto och
+                    on och.objid = mop.objid
+                       and och.classif_date = mop.classif_auto_when
+                       -- and och.classif_id = mop.classif_auto_id
+                       -- and och.classif_qual = 'P'
+                       -- and och.classif_score = mop.classif_auto_score
+                 where mop.projid = curprj.projid
+                  -- favorable grouping of tuples in blocks
+                  order by 1,2,3,4;
+                GET DIAGNOSTICS h_count = ROW_COUNT;
+                sum_o = sum_o + h_count;
+                RAISE NOTICE 'project: % preds % hist % Σ %, time:%', curprj.projid, o_count, h_count, sum_o, clock_timestamp();
+                -- COMMIT;
+            end loop;
+    end;
+$$;
+
+analyze prediction;
+    analyze prediction_histo;
+
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO readerole;
+
+UPDATE alembic_version SET version_num='067cd670782d' WHERE alembic_version.version_num = 'd3bfaa54d544';
+
+COMMIT;
+
+BEGIN;
+
+-- Running upgrade 067cd670782d -> 565015aa8282
+
+-- Make space in the old table namespace
+ALTER TABLE ONLY public.obj_head
+    RENAME CONSTRAINT obj_head_pkey TO obj_head_pkey_old;
+-- Indexes:
+ALTER INDEX is_objectsacqclassifqual RENAME TO is_objectsacqclassifqual_old;
+ALTER INDEX is_objectsacquisition RENAME TO is_objectsacquisition_old;
+ALTER INDEX is_objectsdate RENAME TO is_objectsdate_old;
+ALTER INDEX is_objectsdepth RENAME TO is_objectsdepth_old;
+ALTER INDEX is_objectslatlong RENAME TO is_objectslatlong_old;
+ALTER INDEX is_objectstime RENAME TO is_objectstime_old;
+-- Foreign-key constraints:
+ALTER TABLE ONLY public.obj_head
+    RENAME CONSTRAINT obj_head_acquisid_fkey TO obj_head_acquisid_fkey_old;
+ALTER TABLE ONLY public.obj_head
+    RENAME CONSTRAINT obj_head_classif_id_fkey TO obj_head_classif_id_fkey_old;
+ALTER TABLE ONLY public.obj_head
+    RENAME CONSTRAINT obj_head_classif_who_fkey TO obj_head_classif_who_fkey_old;
+-- Referenced by:
+ALTER TABLE ONLY public.obj_cnn_features_vector
+    DROP CONSTRAINT obj_cnn_features_vector_objcnnid_fkey;
+ALTER TABLE ONLY public.obj_field
+    DROP CONSTRAINT obj_field_objfid_fkey;
+ALTER TABLE ONLY public.objectsclassifhisto
+    DROP CONSTRAINT objectsclassifhisto_objid_fkey;
+ALTER TABLE ONLY public.prediction
+    DROP CONSTRAINT prediction_object_id_fkey;
+ALTER TABLE ONLY public.prediction_histo
+    DROP CONSTRAINT prediction_histo_object_id_fkey;
+
+ALTER TABLE public.obj_head
+    RENAME TO obj_head_old;
+
+--
+-- Based on pg_dump -s -t obj_head
+--
+
+CREATE TABLE public.obj_head
+(
+    objid              bigint                 NOT NULL,
+    acquisid           integer                NOT NULL,
+    classif_id         integer,
+    objtime            time without time zone,
+    latitude           double precision,
+    longitude          double precision,
+    depth_min          double precision,
+    depth_max          double precision,
+    objdate            date,
+    classif_qual       character(1),
+    sunpos             character(1),
+    classif_date       timestamp without time zone,
+    classif_score      double precision,
+    classif_who        integer,
+    orig_id            character varying(255) NOT NULL,
+    object_link        character varying(255),
+    complement_info    character varying
+)
+    WITH (autovacuum_vacuum_scale_factor = '0.01', fillfactor = '90');
+ALTER TABLE ONLY public.obj_head
+    ALTER COLUMN acquisid SET STATISTICS 10000;
+
+ALTER TABLE public.obj_head
+    OWNER TO postgres;
+GRANT SELECT ON TABLE public.obj_head TO zoo;
+GRANT SELECT ON TABLE public.obj_head TO readerole;
+
+INSERT INTO public.obj_head(objid, acquisid, classif_id, objtime, latitude, longitude, depth_min, depth_max, objdate,
+                            classif_qual, sunpos, classif_date, classif_who, classif_score, orig_id, object_link,
+                            complement_info)
+SELECT objid,
+       acquisid,
+       classif_id,
+       objtime,
+       latitude,
+       longitude,
+       depth_min,
+       depth_max,
+       objdate,
+       classif_qual,
+       sunpos,
+       case when classif_qual = 'P' then classif_auto_when else classif_when end,
+       classif_who,
+       case when classif_qual = 'P' then classif_auto_score end,
+       orig_id,
+       object_link,
+       complement_info
+FROM obj_head_old
+ORDER BY acquisid, classif_qual;
+
+ALTER TABLE ONLY public.obj_head
+    ADD CONSTRAINT obj_head_pkey PRIMARY KEY (objid),
+    ADD CONSTRAINT obj_head_acquisid_fkey FOREIGN KEY (acquisid) REFERENCES public.acquisitions (acquisid) ON DELETE CASCADE,
+    ADD CONSTRAINT obj_head_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES public.taxonomy (id),
+    ADD CONSTRAINT obj_head_classif_who_fkey FOREIGN KEY (classif_who) REFERENCES public.users (id);
+
+CREATE INDEX is_objectsacqclassifqual ON public.obj_head USING btree (acquisid, classif_qual) INCLUDE (classif_id);
+CREATE INDEX is_obj_head_acquisid_objid ON public.obj_head USING btree (acquisid, objid);
+CREATE INDEX is_objectsdate ON public.obj_head USING btree (objdate) INCLUDE (acquisid);
+CREATE INDEX is_objectsdepth ON public.obj_head USING btree (depth_max, depth_min) INCLUDE (acquisid);
+CREATE INDEX is_objectslatlong ON public.obj_head USING btree (latitude, longitude) INCLUDE (acquisid);
+CREATE INDEX is_objectstime ON public.obj_head USING btree (objtime) INCLUDE (acquisid);
+
+
+ALTER TABLE public.obj_head
+    CLUSTER ON is_obj_head_acquisid_objid;
+
+ALTER TABLE ONLY public.obj_cnn_features_vector
+    ADD CONSTRAINT obj_cnn_features_vector_objcnnid_fkey FOREIGN KEY (objcnnid) REFERENCES public.obj_head (objid) ON DELETE CASCADE;
+ALTER TABLE ONLY public.obj_field
+    ADD CONSTRAINT obj_field_objfid_fkey FOREIGN KEY (objfid) REFERENCES public.obj_head (objid) ON DELETE CASCADE;
+-- Done later during repack of objectsclassifhisto
+-- ALTER TABLE ONLY public.objectsclassifhisto
+--     ADD CONSTRAINT objectsclassifhisto_objid_fkey FOREIGN KEY (objid) REFERENCES public.obj_head (objid) ON DELETE CASCADE;
+ALTER TABLE ONLY public.prediction
+    ADD CONSTRAINT prediction_object_id_fkey FOREIGN KEY (object_id) REFERENCES public.obj_head (objid) ON DELETE CASCADE;
+ALTER TABLE ONLY public.prediction_histo
+    ADD CONSTRAINT prediction_histo_object_id_fkey FOREIGN KEY (object_id) REFERENCES public.obj_head (objid) ON DELETE CASCADE;
+
+CREATE STATISTICS obj_head_score_if_p ON classif_qual, classif_score FROM obj_head;
+CREATE STATISTICS obj_head_user_if_v_d ON classif_qual, classif_who FROM obj_head;
+CREATE STATISTICS obj_head_classif_if_qual ON classif_qual, classif_id FROM obj_head;
+
+ANALYSE obj_head;
+
+drop view objects;
+    create view objects as
+       select sam.projid, sam.sampleid, obh.objid, obh.latitude, obh.longitude,
+              obh.objdate, obh.objtime, obh.depth_min, obh.depth_max,
+              obh.classif_id, obh.classif_qual, obh.classif_who,
+              CASE WHEN obh.classif_qual in ('V', 'D') THEN obh.classif_date END AS classif_when,
+              obh.classif_score AS classif_auto_score,
+              CASE WHEN obh.classif_qual = 'P' THEN obh.classif_date END AS classif_auto_when,
+              CASE WHEN obh.classif_qual = 'P' THEN obh.classif_id END AS classif_auto_id,
+              NULL::integer AS classif_crossvalidation_id,
+              obh.complement_info,
+              NULL::double precision AS similarity,
+              obh.sunpos,
+              HASHTEXT(obh.orig_id) AS random_value,
+              obh.acquisid, obh.object_link, obh.orig_id, obh.acquisid AS processid,
+              ofi.*
+         from obj_head obh
+         join acquisitions acq on obh.acquisid = acq.acquisid
+         join samples sam on acq.acq_sample_id = sam.sampleid
+         left join obj_field ofi on obh.objid = ofi.objfid; -- allow elimination by planner
+    grant select on objects to zoo;
+    grant select on objects to readerole;
+
+UPDATE alembic_version SET version_num='565015aa8282' WHERE alembic_version.version_num = '067cd670782d';
+
+COMMIT;
+
+BEGIN;
+
+-- Running upgrade 565015aa8282 -> dac2d438e6b5
+
+-- Make space in the old table namespace
+ALTER TABLE ONLY public.objectsclassifhisto
+    RENAME CONSTRAINT objectsclassifhisto_pkey TO objectsclassifhisto_pkey_old;
+-- Foreign-key constraints:
+ALTER TABLE ONLY public.objectsclassifhisto
+    RENAME CONSTRAINT objectsclassifhisto_classif_id_fkey TO objectsclassifhisto_classif_id_fkey_old;
+ALTER TABLE ONLY public.objectsclassifhisto
+    RENAME CONSTRAINT objectsclassifhisto_classif_who_fkey TO objectsclassifhisto_classif_who_fkey_old;
+-- Dropped during obj_head rebuild
+-- ALTER TABLE ONLY public.objectsclassifhisto
+--     RENAME CONSTRAINT objectsclassifhisto_objid_fkey TO objectsclassifhisto_objid_fkey_old;
+ALTER TABLE public.objectsclassifhisto
+    RENAME TO objectsclassifhisto_old;
+
+--
+-- Based on pg_dump -s -t objectsclassifhisto as of 26 sep 2024
+--
+CREATE TABLE public.objectsclassifhisto
+(
+    objid         bigint                      NOT NULL,
+    classif_date  timestamp without time zone NOT NULL,
+    classif_score double precision,
+    classif_id    integer                     NOT NULL,
+    classif_who   integer,
+    classif_qual  character(1)                NOT NULL
+);
+ALTER TABLE ONLY public.objectsclassifhisto
+    ALTER COLUMN classif_date SET STATISTICS 10000;
+
+INSERT INTO objectsclassifhisto (objid, classif_date, classif_qual, classif_id, classif_who, classif_score)
+SELECT objid, classif_date, classif_qual, classif_id, classif_who, classif_score
+FROM objectsclassifhisto_old;
+
+ALTER TABLE ONLY public.objectsclassifhisto
+    ADD CONSTRAINT objectsclassifhisto_pkey PRIMARY KEY (objid, classif_date),
+    ADD CONSTRAINT objectsclassifhisto_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES public.taxonomy (id) ON DELETE CASCADE,
+    ADD CONSTRAINT objectsclassifhisto_classif_who_fkey FOREIGN KEY (classif_who) REFERENCES public.users (id),
+    ADD CONSTRAINT objectsclassifhisto_objid_fkey FOREIGN KEY (objid) REFERENCES public.obj_head (objid) ON DELETE CASCADE;
+
+ALTER TABLE public.objectsclassifhisto
+    OWNER TO postgres;
+GRANT SELECT ON TABLE public.objectsclassifhisto TO zoo;
+GRANT SELECT ON TABLE public.objectsclassifhisto TO readerole;
+
+-- drop table objectsclassifhisto_old
+ANALYSE objectsclassifhisto;
+
+UPDATE alembic_version SET version_num='dac2d438e6b5' WHERE alembic_version.version_num = '565015aa8282';
+
+COMMIT;
+
+BEGIN;
+
+-- Running upgrade dac2d438e6b5 -> 4045b161563b
+
+delete from images
+     where objid in (select images.objid
+                       from images
+                       left join obj_head on images.objid = obj_head.objid
+                      where obj_head.objid is null);;
+
+CREATE INDEX is_phy_image_file ON image_file (digest_type, digest);
+
+ALTER TABLE images ADD FOREIGN KEY(objid) REFERENCES obj_head (objid);
+
+UPDATE alembic_version SET version_num='4045b161563b' WHERE alembic_version.version_num = 'dac2d438e6b5';
+
+COMMIT;
+
+BEGIN;
+
+-- Running upgrade 4045b161563b -> 032dfb7159d5
+
+DROP TABLE dropped_process_26032024;
+
+DROP TABLE objectsclassifhisto_old;
+
+DROP TABLE proj_with_incon;
+
+DROP INDEX mig_obj_prj2_objid_classif_auto_when_idx;
+
+DROP INDEX mig_obj_prj2_projid_objid_idx;
+
+DROP TABLE mig_obj_prj2;
+
+DROP INDEX is_objectsacqclassifqual_old;
+
+DROP INDEX is_objectsacquisition_old;
+
+DROP INDEX is_objectsdate_old;
+
+DROP INDEX is_objectsdepth_old;
+
+DROP INDEX is_objectslatlong_old;
+
+DROP INDEX is_objectstime_old;
+
+DROP TABLE obj_head_old;
+
+DROP INDEX mig_obj_prj_projid_objid_idx;
+
+DROP TABLE mig_obj_prj;
+
+DROP INDEX mig_classif_tasks_projid_begin_date_end_date_idx;
+
+DROP TABLE mig_classif_tasks;
+
+DROP TABLE dropped_samples_26032024;
+
+DROP TABLE dropped_acquisitions_26032024;
+
+DROP TABLE mig_states_04_10_2024;
+
+DROP TABLE mig_classif_chunks_per_proj;
+
+DROP TABLE mig_unq_classif_per_proj;
+
+UPDATE alembic_version SET version_num='032dfb7159d5' WHERE alembic_version.version_num = '4045b161563b';
 
 COMMIT;
 

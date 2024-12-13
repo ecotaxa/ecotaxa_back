@@ -18,6 +18,7 @@ from BO.Prediction import DeepFeatures
 from BO.Project import ProjectBO
 from BO.ProjectSet import LimitedInCategoriesProjectSet, FeatureConsistentProjectSet
 from BO.Rights import RightsBO, Action
+from BO.Training import TrainingBO
 from DB.Project import ProjectIDT, Project
 from DB.helpers import Result
 from DB.helpers.Direct import text
@@ -56,7 +57,7 @@ class GPUPredictForProject(PredictForProject):
         req = self.req
         logger.info("Input Param = %s", self.req.__dict__)
 
-        _user, tgt_prj = RightsBO.user_wants(
+        user, tgt_prj = RightsBO.user_wants(
             self.session, self._get_owner_id(), Action.ANNOTATE, self.req.project_id
         )
 
@@ -76,13 +77,17 @@ class GPUPredictForProject(PredictForProject):
             self.report_ls_too_large(ls_size)
             return
 
+        training = TrainingBO.create_one(
+            self.session, user.id, f"Prediction in {tgt_prj.projid}"
+        )
+
         self.update_progress(20, "Training the classifier")
         classifier = self.build_classifier(np_feature_vals, classif_ids)
 
         self.update_progress(25, "Retrieving objects to classify")
         target_result = self.select_target(tgt_prj, used_features)
         nb_rows = self.classify(
-            target_result, classifier, used_features, np_medians_per_feat
+            training, target_result, classifier, used_features, np_medians_per_feat
         )
 
         final_message = "New category set on %d objects." % nb_rows
@@ -247,6 +252,7 @@ In second step 'Choice of Learning Set categories and size', where the learning 
 
     def classify(
         self,
+        training: TrainingBO,
         tgt_res: Result,
         classifier: OurRandomForestClassifier,
         features: List[str],
@@ -270,21 +276,21 @@ In second step 'Choice of Learning Set categories and size', where the learning 
                 )
                 np_chunk = np.concatenate([np_chunk, np_deep_features_chunk], axis=1)
             logger.info("One chunk of %d", len(obj_ids))
-            classif_ids, scores = classifier.predict(np_chunk)
+            list_classif_ids, list_scores = classifier.predict_all(np_chunk)
             target_obj_set = EnumeratedObjectSet(self.session, obj_ids)
-            # TODO: Remove the keep_logs flag, once sure the new algo is better
-            nb_upd, all_changes = target_obj_set.classify_auto(
-                classif_ids, scores, keep_logs=True
+            nb_upd, all_changes = target_obj_set.classify_auto_mult(
+                training, list_classif_ids, list_scores
             )
             nb_changes += nb_upd
             logger.info("Changes :%s", str(all_changes)[:1000])
+            training.advance()
             self.session.commit()
             if len(obj_ids) < self.CHUNK_SIZE:
                 break
             done_count += len(obj_ids)
             progress = 25 + (75 * done_count / total_rows)
             self.update_progress(progress, "Classified %d rows" % done_count)
-        # Propagate changes to update projects_taxo_stat
+        # Full update of projects_taxo_stat, we don't do incremental like in the API call
         ProjectBO.update_taxo_stats(self.session, self.req.project_id)
         self.session.commit()
         logger.info("Classify done.")

@@ -5,13 +5,13 @@
 # Business object on top of job.
 # The idea is to keep here the DB details, namely the fact that many fields are JSON-encoded.
 #
-from datetime import datetime
 from json import loads as json_loads, dumps as json_dumps, JSONDecodeError
 from typing import Dict, Optional, Any, List, Final
 
 from BO.User import UserIDT
 from DB import Session
 from DB.Job import Job, JobIDT, DBJobStateEnum
+from helpers import DateTime
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -113,8 +113,8 @@ class JobBO(object):
         """
         job = session.query(Job).get(job_id)
         if job is None:
-            raise ValueError
-        job.updated_on = datetime.now()
+            raise ValueError(f"Missing job {job_id}")
+        job.updated_on = DateTime.now_time()
         ret = JobBO(job)
         ret._session = session
         return ret
@@ -143,7 +143,7 @@ class JobBO(object):
         job = Job()
         job.state = DBJobStateEnum.Pending
         job.progress_msg = cls.PENDING_MESSAGE
-        job.creation_date = job.updated_on = datetime.now()
+        job.creation_date = job.updated_on = DateTime.now_time()
         job.type = job_type
         job.owner_id = user_id
         job.params = json_dumps(args)

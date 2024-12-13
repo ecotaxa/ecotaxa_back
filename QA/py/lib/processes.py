@@ -12,7 +12,9 @@ class SyncSubProcess(object):
 
     def __init__(self, args, env=None, cwd=None, out_file=None):
         if out_file:
-            out_file = open(out_file, "w")
+            out_file_fd = open(out_file, "w")
+        else:
+            out_file_fd = None
         self.pid = subprocess.call(
             args=args,
             env=env,
@@ -20,6 +22,8 @@ class SyncSubProcess(object):
             cwd=cwd,
             timeout=20,
             universal_newlines=True,
-            stdout=out_file,
+            stdout=out_file_fd,
             stderr=subprocess.STDOUT,
         )
+        if out_file_fd:
+            out_file_fd.close()

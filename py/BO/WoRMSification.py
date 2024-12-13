@@ -4,7 +4,7 @@
 #
 # A description of transformation to the WoRMS taxonomic system.
 #
-from typing import Dict, Set, Iterable, List
+from typing import Dict, Set, Iterable, List, Optional
 
 from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.ObjectSetQueryPlus import TaxoRemappingT
@@ -63,28 +63,35 @@ class WoRMSifier(object):
         """Sanity check: no mapped P taxon is present anymore in the transformation to WoRMS"""
         assert set(self.phylo2worms.keys()).isdisjoint(set(self.morpho2phylo.keys()))
 
-    def apply_recast(self, recast: TaxoRemappingT):
+    def apply_recast(self, recast: TaxoRemappingT) -> None:
         recast = recast.copy()  # We destroy it, protect the arg
-        full_recast: TaxoRemappingT = {}
-        for from_, to_ in self.morpho2phylo.items():
+
+        def end_of_chain(recast_idx: ClassifIDT) -> Optional[ClassifIDT]:
+            ret = recast[recast_idx]
+            if ret in recast:
+                ret = end_of_chain(ret)  # Infinite loop ->stack issue
+            return ret
+
+        # e.g. m2p: { 84974: 83278, 84975: 83278 }
+        # recast: { 83278: 72398 }
+        present_morpho2phylo: TaxoRemappingT = self.morpho2phylo.copy()
+        for from_, to_ in present_morpho2phylo.items():
+            if from_ in recast:
+                # The _source_ (morpho) is a recast source e.g. 84975 -> 83278 but 84975 -> 72398
+                # Override with recast so become e.g. 84975 -> 72398
+                present_morpho2phylo[from_] = end_of_chain(from_)
+                # Note: if new_to None then drop it's OK
+                continue
             if to_ in recast:
-                # The target phylo is a recast source
-                new_to = recast[to_]
-                if new_to is None:
-                    pass  # Just to signal that it might be None, meaning "to drop"
-                del recast[to_]
-            elif from_ in recast:
-                # The source morpho is a recast source
-                # Override with provided recast, if None then drop it's OK
-                new_to = recast[from_]
-                del recast[from_]
-            else:
-                # No impact on this entry from provided recast
-                new_to = to_
-            full_recast[from_] = new_to
-        # Re-inject what's left
-        full_recast.update(recast)
-        self.morpho2phylo = full_recast
+                # The _target_ (phylo) is a recast source e.g. 92012 -> 83278 and 83278 -> 72398
+                # Compose the recast so become e.g. 92012 -> 72398
+                present_morpho2phylo[from_] = end_of_chain(to_)
+                # Note: new_to might be None, so the taxon is dropped
+        # Inject recasts but don't override rules applications
+        for from_ in set(recast.keys()).intersection(present_morpho2phylo.keys()):
+            del recast[from_]
+        present_morpho2phylo.update(recast)
+        self.morpho2phylo = present_morpho2phylo
 
     def unreferenced_ids(self, ids: Iterable[ClassifIDT]) -> ClassifIDListT:
         """Return the taxa from ids, not known in self"""

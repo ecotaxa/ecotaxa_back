@@ -16,12 +16,13 @@ class VirtualColumn(object):
     """For SQL statements, replace a former normal column in a SELECT with a computation"""
 
     name: str = ""  # How it should appear client_side
-    filler: Callable  # How to fill it from SQLA model
+    filler: Callable  # How to compute the value from full SQLA model, is a @staticmethod in the model
     sql: str = ""
 
     @staticmethod
     def result_to_py(from_sel: Any) -> Any:
-        ...
+        """Convert output from SELECT into python equivalent. Default to 'what does DBAPI is fine'"""
+        return from_sel
 
 
 # TODO: Remove when py3.9+
