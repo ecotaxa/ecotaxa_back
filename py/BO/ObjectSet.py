@@ -44,7 +44,7 @@ from BO.Taxonomy import TaxonomyBO
 from BO.Training import TrainingBO, PredictionBO
 from BO.User import UserIDT
 from BO.helpers.MappedTable import MappedTable
-from DB import Session, Query, Process, Taxonomy, User
+from DB import Session, Query, Process, Taxonomy, User, ObjectCNNFeatureVector
 from DB.Acquisition import Acquisition
 from DB.Image import Image
 from DB.Object import (
@@ -173,6 +173,9 @@ class DescribedObjectSet(object):
                 selected_tables += (
                     f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid"
                 )
+        if "cnn." in column_referencing_sql:
+            selected_tables += f"{ObjectCNNFeatureVector.__tablename__} cnn ON cnn.objcnnid = obh.objid"
+            selected_tables.set_outer(f"{Taxonomy.__tablename__} txp ")
         # if "prd." in column_referencing_sql:
         #     preds_ref = Prediction.__tablename__ + " prd"
         #     selected_tables += (

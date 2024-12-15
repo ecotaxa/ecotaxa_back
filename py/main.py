@@ -1630,11 +1630,10 @@ def set_project_predict_settings(
 
 
 @app.post(
-    "/object_set/{project_id}/similarity_search/{object_id}",  # should be similar to ../{}/query
+    "/object_set/{project_id}/similarity_search/{object_id}",
     operation_id="get_object_set_similarity_search",
     tags=["objects"],
     response_model=SimilaritySearchRsp,
-    # response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
 def object_similarity_search(
     project_id: int = Path(
@@ -1678,7 +1677,7 @@ If no **unique order** is specified, the result can vary for same call and condi
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> SimilaritySearchRsp:
     """
-    Returns, in given project, the objects similar to the queried one.
+    Returns, in given project, the objects, matching the filter and similar to the queried one.
     """
     # return_fields = None
     # if fields is not None:
@@ -2098,6 +2097,7 @@ If no **unique order** is specified, the result can vary for same call and condi
     return_fields = None
     if fields is not None:
         return_fields = fields.split(",")
+
     before = time.time()
     with ObjectManager() as sce:
         with RightsThrower():

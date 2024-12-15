@@ -39,13 +39,15 @@ class SimilaritySearchForProject(Service):
         )
 
         # Check that deep features are present for given project.
-        ids_and_images = DeepFeatures.find_missing(self.ro_session, self.req.project_id)
+        ids_and_images = DeepFeatures.find_missing(
+            self.ro_session, self.req.project_id, True
+        )
         if len(ids_and_images) != 0:
-            # Launch a feature extraction job
             feature_extractor_selected = (
                 project.cnn_network_id is not None and project.cnn_network_id != ""
             )
             if feature_extractor_selected:
+                # Launch a feature extraction job
                 # with FeatureExtractionForProject(self.req.project_id) as sce:
                 #     #                    sce.run(current_user)
                 #     sce.run_in_background()
@@ -80,22 +82,6 @@ class SimilaritySearchForProject(Service):
         else:
             where_clause_sql = "WHERE objcnnid = obh.objid"
 
-        # VR hack 071124 : j'ai crée cette fonction
-        # CREATE OR REPLACE FUNCTION euclidean_distance(a real[], b real[]) RETURNS float AS $$ DECLARE sum float := 0; i int := 1; BEGIN IF array_upper(a, 1) <> array_upper(b, 1) THEN RAISE EXCEPTION 'Les vecteurs doivent avoir la même taille'; END IF; FOR i IN 1..array_upper(a, 1) LOOP sum := sum + (a[i] - b[i]) ^ 2; END LOOP; RETURN sqrt(sum); END; $$ LANGUAGE plpgsql IMMUTABLE;
-        #             SELECT objcnnid, euclidean_distance(features, ( SELECT features FROM {ObjectCNNFeatureVector.__tablename__}
-        #              WHERE objcnnid = {target_id} )) AS dist
-
-        # ou plutot
-        # CREATE EXTENSION cube; CREATE INDEX features_idx ON obj_cnn_features_vector USING GIST (cube(features));
-
-        # query = f"""
-        # SELECT objcnnid, cube(features) <-> cube((SELECT features FROM {ObjectCNNFeatureVector.__tablename__}
-        # WHERE objcnnid={target_id})) AS dist
-        #     FROM {ObjectCNNFeatureVector.__tablename__}, {from_.get_sql()}
-        #     {where_clause_sql}
-        #     ORDER BY dist LIMIT {limit};
-        # """
-
         query = f"""
         SET LOCAL ivvflat.probes = 10;
         SELECT objcnnid, features<->(SELECT features FROM {ObjectCNNFeatureVector.__tablename__}
@@ -108,7 +94,8 @@ class SimilaritySearchForProject(Service):
         result = self.ro_session.execute(text(query), params).fetchall()
         neighbors = [res["objcnnid"] for res in result]
         distances = [res["dist"] for res in result]
-        scores = [round(1 - (dist / distances[-1]), 4) for dist in distances]
+        scale = distances[-1]
+        scores = [round(1 - (dist / scale), 4) for dist in distances]
 
         rsp = SimilaritySearchRsp(
             neighbor_ids=neighbors, sim_scores=scores, message="Success"

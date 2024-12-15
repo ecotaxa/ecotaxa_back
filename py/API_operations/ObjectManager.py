@@ -30,6 +30,7 @@ from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
 from BO.Training import TrainingBO, PredictionBO
 from BO.User import UserIDT
+from DB import ObjectCNNFeatureVector
 from DB.Image import IMAGE_VIRTUAL_COLUMNS
 from DB.Object import (
     VALIDATED_CLASSIF_QUAL,
@@ -93,6 +94,11 @@ class ObjectManager(Service):
             )
             user_id = user.id
 
+        sim_search_seed = None
+        if filters is not None and filters.get("seed_object_id") != "":
+            # e.g. I6295511
+            sim_search_seed = int(filters.get("seed_object_id")[1:])
+
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(
             self.ro_session, prj, user_id, filters
@@ -104,8 +110,18 @@ class ObjectManager(Service):
             order_field, free_columns_mappings, str(return_fields)
         )
         order_clause.set_window(window_start, window_size)
+        if sim_search_seed is not None:
+            order_clause = OrderClause()  # Wipe out any required order in this context
+            order_clause.add_expression(None, "dist")
+            order_clause.set_window(window_start, window_size)
 
         extra_cols = self.add_return_fields(return_fields, free_columns_mappings)
+        if sim_search_seed is not None:
+            extra_cols = (
+                extra_cols
+                + f""", cnn.features<->(SELECT features FROM {ObjectCNNFeatureVector.__tablename__}
+        WHERE objcnnid={sim_search_seed}) AS dist"""
+            )
 
         from_, where_clause, params = object_set.get_sql(order_clause, extra_cols)
 
@@ -144,6 +160,9 @@ SELECT {HINT} obh.objid, acq.acquisid, sam.sampleid, %s%s
             total, _nbr_v, _nbr_d, _nbr_p = self._summarize(
                 object_set, proj_id=proj_id, only_total=True
             )
+            # Some hard-coded values for similarity searches
+            if sim_search_seed is not None:
+                total, _nbr_v, _nbr_d, _nbr_p = min(total, 100), 0, 0, 0
 
         # If we can, refresh the cache in background, most of the data should be in PG cache
         # if cache.should_refresh():
