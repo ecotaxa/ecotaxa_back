@@ -95,9 +95,10 @@ class ObjectManager(Service):
             user_id = user.id
 
         sim_search_seed = None
-        if filters is not None and filters.get("seed_object_id") != "":
+        if (seed_object_id := filters.get("seed_object_id", "")) != "":
             # e.g. I6295511
-            sim_search_seed = int(filters.get("seed_object_id")[1:])
+            assert seed_object_id  # mypy
+            sim_search_seed = int(seed_object_id[1:])
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(
