@@ -160,9 +160,6 @@ SELECT {HINT} obh.objid, acq.acquisid, sam.sampleid, %s%s
             total, _nbr_v, _nbr_d, _nbr_p = self._summarize(
                 object_set, proj_id=proj_id, only_total=True
             )
-            # Some hard-coded values for similarity searches
-            if sim_search_seed is not None:
-                total, _nbr_v, _nbr_d, _nbr_p = min(total, 100), 0, 0, 0
 
         # If we can, refresh the cache in background, most of the data should be in PG cache
         # if cache.should_refresh():
