@@ -45,12 +45,12 @@ class SimilaritySearchRsp(BaseModel):
 
     sim_scores: List[float] = Field(
         title="Similarity Scores",
-        description="The list of similarity scores.",
+        description="The list of similarity scores, between 0 and 1. The higher the closer, e.g. 1 for the target_id itself.",
     )
 
     message: Optional[str] = Field(
         title="Message",
-        description="A message to the user.",
+        description="A message to the user. If not 'Success' then some condition prevented the computation.",
     )
 
     class Config:

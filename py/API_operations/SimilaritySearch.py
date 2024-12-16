@@ -85,15 +85,15 @@ class SimilaritySearchForProject(Service):
         query = f"""
         SET LOCAL ivvflat.probes = 10;
         SELECT objcnnid, features<->(SELECT features FROM {ObjectCNNFeatureVector.__tablename__}
-        WHERE objcnnid={target_id}) AS dist
+        WHERE objcnnid={target_id}) AS l2_dist
         FROM {ObjectCNNFeatureVector.__tablename__}, {from_.get_sql()}
             {where_clause_sql}
-        ORDER BY dist LIMIT {limit}
+        ORDER BY l2_dist LIMIT {limit}
         """
 
         result = self.ro_session.execute(text(query), params).fetchall()
         neighbors = [res["objcnnid"] for res in result]
-        distances = [res["dist"] for res in result]
+        distances = [res["l2_dist"] for res in result]
         scale = distances[-1]
         scores = [round(1 - (dist / scale), 4) for dist in distances]
 

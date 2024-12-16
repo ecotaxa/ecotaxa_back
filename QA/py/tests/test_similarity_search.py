@@ -8,7 +8,7 @@ from starlette import status
 
 from tests.credentials import ADMIN_AUTH
 from tests.test_classification import classify_all
-from tests.test_objectset_query import _prj_query
+from tests.test_objectset_query import _prj_query, OBJECT_SET_QUERY_URL
 
 copepod_id = 25828
 entomobryomorpha_id = 25835
@@ -64,20 +64,15 @@ def test_similarity_search(database, fastapi, caplog):
         assert n_inserts == 8
         sce.session.commit()
 
-    # Test similarity search with features
-    url = f"/object_set/{prj_id}/similarity_search/{target_id}"
-    req = {
-        "project_id": prj_id,
-        "target_id": target_id,
-    }
-    filters = {}
-    req_and_filters = {"filters": filters, "request": req}
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+    # Test object search with similarity
+    url = OBJECT_SET_QUERY_URL.format(project_id=prj_id)
+    filters = {"seed_object_id": "I%d" % target_id}
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=filters)
 
     assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json()["message"] == "Success"
-    assert rsp.json()["neighbor_ids"] == obj_ids
-    assert rsp.json()["sim_scores"] == similarity_scores(distances_to_target)
+    rsp_obj_ids = rsp.json()["object_ids"]
+    assert rsp_obj_ids == obj_ids
+    # assert rsp.json()["sim_scores"] == similarity_scores(distances_to_target)
 
     # Set different taxo ids
     classify_all(fastapi, obj_ids[0:3], copepod_id)
@@ -85,20 +80,14 @@ def test_similarity_search(database, fastapi, caplog):
     classify_all(fastapi, obj_ids[5:8], crustacea)
     taxo_ids_to_filter = [copepod_id, entomobryomorpha_id]
 
-    # Test similarity search with filters on taxo
-    url = f"/object_set/{prj_id}/similarity_search/{target_id}"
-    req = {
-        "project_id": prj_id,
-        "target_id": target_id,
-    }
-    filters = {"taxo": ",".join([str(taxo_id) for taxo_id in taxo_ids_to_filter])}
-    req_and_filters = {"filters": filters, "request": req}
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+    # Test object search with similarity and filters on taxo
+    filters["taxo"] = ",".join([str(taxo_id) for taxo_id in taxo_ids_to_filter])
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=filters)
 
     assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json()["message"] == "Success"
-    # TODO restore. Only the 2 selected categories should appear here.
-    # assert rsp.json()["neighbor_ids"] == obj_ids[0:5]
-    # assert rsp.json()["sim_scores"] == similarity_scores(
-    #     distances_to_target[0:5]
-    # )
+    json_rsp = rsp.json()
+    rsp_obj_ids = json_rsp["object_ids"]
+    assert rsp_obj_ids == obj_ids[0:5]
+    # TODO: We have a distance not a similarity
+    # scores = [e[0] for e in json_rsp["details"]]
+    # assert scores == similarity_scores(distances_to_target[0:5])

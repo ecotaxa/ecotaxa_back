@@ -95,9 +95,8 @@ class ObjectManager(Service):
             user_id = user.id
 
         sim_search_seed = None
-        if (seed_object_id := filters.get("seed_object_id", "")) != "":
+        if seed_object_id := filters.get("seed_object_id", ""):
             # e.g. I6295511
-            assert seed_object_id  # mypy
             sim_search_seed = int(seed_object_id[1:])
 
         # Prepare a where clause and parameters from filter
@@ -111,18 +110,18 @@ class ObjectManager(Service):
             order_field, free_columns_mappings, str(return_fields)
         )
         order_clause.set_window(window_start, window_size)
-        if sim_search_seed is not None:
-            order_clause = OrderClause()  # Wipe out any required order in this context
-            order_clause.add_expression(None, "dist")
-            order_clause.set_window(window_start, window_size)
 
         extra_cols = self.add_return_fields(return_fields, free_columns_mappings)
+
         if sim_search_seed is not None:
             extra_cols = (
                 extra_cols
                 + f""", cnn.features<->(SELECT features FROM {ObjectCNNFeatureVector.__tablename__}
-        WHERE objcnnid={sim_search_seed}) AS dist"""
+        WHERE objcnnid={sim_search_seed}) AS l2_dist"""
             )
+            order_clause = OrderClause()  # Wipe out any required order in this context
+            order_clause.add_expression(None, "l2_dist")
+            order_clause.set_window(window_start, window_size)
 
         from_, where_clause, params = object_set.get_sql(order_clause, extra_cols)
 

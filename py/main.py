@@ -1643,47 +1643,11 @@ def object_similarity_search(
         ..., description="Object ID to search similar for.", example=1
     ),
     filters: ProjectFilters = Body(...),
-    fields: Optional[str] = Query(
-        title="Fields",
-        description="""
-TODO, deleted while copying same info as os/{pid}/query
-                   """,
-        default=None,
-        example="obj.longitude,fre.feret",
-    ),
-    order_field: Optional[str] = Query(
-        title="Order field",
-        description='Order the result using given field. If prefixed with "-" then it will be reversed.',
-        default=None,
-        example="obj.longitude",
-    ),
-    # TODO: order_field should be a user-visible field name, not nXXX, in case of free field
-    window_start: Optional[int] = Query(
-        default=None,
-        title="Window start",
-        description="""
-Allows to return only a slice of the result, by skipping window_start objects before returning data.
-If no **unique order** is specified, the result can vary for same call and conditions.""",
-        example="10",
-    ),
-    window_size: Optional[int] = Query(
-        default=None,
-        title="Window size",
-        description="""
-Allows to return only a slice of the result, by returning a _maximum_ of window_size lines.
-If no **unique order** is specified, the result can vary for same call and conditions.""",
-        example="100",
-    ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> SimilaritySearchRsp:
     """
     Returns, in given project, the objects, matching the filter and similar to the queried one.
     """
-    # return_fields = None
-    # if fields is not None:
-    #     return_fields = fields.split(",")
-
-    # TODO: Can the req be exposed thru the API? Here it's internal data structure
     sim_search_request = SimilaritySearchReq(
         project_id=project_id,
         target_id=object_id,
@@ -1691,43 +1655,6 @@ If no **unique order** is specified, the result can vary for same call and condi
 
     with SimilaritySearchForProject(sim_search_request, filters.base()) as sce:
         sim_search_rsp = sce.similarity_search(current_user)
-
-    # with ObjectManager() as sce:
-    #     with RightsThrower():
-    #         rsp = ObjectSetQueryRsp()
-    #         obj_with_parents, details, total = sce.query(
-    #             current_user,
-    #             project_id,
-    #             filters.base(),
-    #             return_fields,
-    #             order_field,
-    #             window_start=None,
-    #             window_size=None,
-    #         )
-    #
-    #     object_ids = [with_p[0] for with_p in obj_with_parents]
-    #     for objid in sim_search_rsp.neighbor_ids:
-    #         if objid not in object_ids:
-    #             continue
-    #         index = object_ids.index(objid)
-    #         index_ss = sim_search_rsp.neighbor_ids.index(
-    #             objid
-    #         )  # VR TODO est-ce qu'un zip serait mieux ?
-    #         rsp.object_ids.append(obj_with_parents[index][0])
-    #         rsp.acquisition_ids.append(obj_with_parents[index][1])
-    #         rsp.sample_ids.append(obj_with_parents[index][2])
-    #         rsp.project_ids.append(obj_with_parents[index][3])
-    #         rsp.details.append(details[index])
-    #         sim_search_score_current = sim_search_rsp.sim_scores[index_ss]
-    #         if len(rsp.details[len(rsp.details) - 1]) > 12:
-    #             rsp.details[len(rsp.details) - 1][12] = sim_search_score_current
-    #         elif len(rsp.details[len(rsp.details) - 1]) == 12:
-    #             rsp.details[len(rsp.details) - 1].append(sim_search_score_current)
-    #         else:
-    #             print(
-    #                 "Unexpected short details, sim score not send to front : "
-    #                 + str(len(rsp.details[len(rsp.details) - 1]))
-    #             )
 
     return sim_search_rsp
 
