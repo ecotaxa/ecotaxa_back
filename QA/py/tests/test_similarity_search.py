@@ -64,6 +64,32 @@ def test_similarity_search(database, fastapi, caplog):
         assert n_inserts == 8
         sce.session.commit()
 
+    # Test similarity search with a limit
+    url += "?size=3"
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json()["message"] == "Success"
+    assert len(rsp.json()["neighbor_ids"]) == 3
+
+    # Limit of 1 should return only the seed
+    url = url.replace("size=3", "size=1")
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json()["message"] == "Success"
+    assert rsp.json()["neighbor_ids"] == [target_id]
+    assert rsp.json()["sim_scores"] == [1]
+
+    # Limit of 0 should return nothing
+    url = url.replace("size=1", "size=0")
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req_and_filters)
+
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json()["message"] == "Success"
+    assert rsp.json()["neighbor_ids"] == []
+    assert rsp.json()["sim_scores"] == []
+
     # Test object search with similarity
     url = OBJECT_SET_QUERY_URL.format(project_id=prj_id)
     filters = {"seed_object_id": "I%d" % target_id}

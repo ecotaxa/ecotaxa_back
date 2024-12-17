@@ -69,6 +69,7 @@ class DeepFeatures(object):
         """
         Find missing cnn features for this project.
         :param fast: If set, do a fast check that some are absent, not listing them all.
+                    Note: It _still_ takes a few seconds for millions of objects
         """
         qry = session.query(ObjectHeader.objid, Image.imgid, Image.orig_file_name)
         qry = qry.join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)

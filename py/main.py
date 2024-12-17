@@ -1642,18 +1642,23 @@ def object_similarity_search(
     object_id: int = Path(
         ..., description="Object ID to search similar for.", example=1
     ),
+    size: int = Query(
+        100,
+        description="Return at maximum this number of objects, by default 100.",
+        example="120",
+    ),
     filters: ProjectFilters = Body(...),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> SimilaritySearchRsp:
     """
-    Returns, in given project, the objects, matching the filter and similar to the queried one.
+    Returns, in given project, the objects matching the filter and similar to the queried one.
     """
     sim_search_request = SimilaritySearchReq(
         project_id=project_id,
         target_id=object_id,
     )
 
-    with SimilaritySearchForProject(sim_search_request, filters.base()) as sce:
+    with SimilaritySearchForProject(sim_search_request, filters.base(), size) as sce:
         sim_search_rsp = sce.similarity_search(current_user)
 
     return sim_search_rsp

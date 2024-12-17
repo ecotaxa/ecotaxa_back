@@ -23,12 +23,13 @@ logger = get_logger(__name__)
 class SimilaritySearchForProject(Service):
     """ """
 
-    NUM_NEIGHBORS = 100
-
-    def __init__(self, req: SimilaritySearchReq, filters: ProjectFiltersDict) -> None:
+    def __init__(
+        self, req: SimilaritySearchReq, filters: ProjectFiltersDict, size: int
+    ) -> None:
         super().__init__()
         self.req = req
         self.filters = filters
+        self.limit = size
 
     def similarity_search(self, current_user) -> SimilaritySearchRsp:
         """
@@ -69,7 +70,6 @@ class SimilaritySearchForProject(Service):
                 return rsp
 
         target_id = self.req.target_id
-        limit = self.NUM_NEIGHBORS
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(
@@ -88,14 +88,21 @@ class SimilaritySearchForProject(Service):
         WHERE objcnnid={target_id}) AS l2_dist
         FROM {ObjectCNNFeatureVector.__tablename__}, {from_.get_sql()}
             {where_clause_sql}
-        ORDER BY l2_dist LIMIT {limit}
+        ORDER BY l2_dist LIMIT {self.limit}
         """
 
         result = self.ro_session.execute(text(query), params).fetchall()
         neighbors = [res["objcnnid"] for res in result]
         distances = [res["l2_dist"] for res in result]
-        scale = distances[-1]
-        scores = [round(1 - (dist / scale), 4) for dist in distances]
+        if len(distances) >= 1:
+            # Scale scores based on largest distance, and compute a similarity, ~ inverse of distance
+            scale = distances[-1]
+            if scale == 0:
+                scores = [1 for _dist in distances]
+            else:
+                scores = [round(1 - (dist / scale), 4) for dist in distances]
+        else:
+            scores = []
 
         rsp = SimilaritySearchRsp(
             neighbor_ids=neighbors, sim_scores=scores, message="Success"
