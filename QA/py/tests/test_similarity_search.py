@@ -91,8 +91,10 @@ def test_similarity_search(database, fastapi, caplog):
     assert rsp.json()["sim_scores"] == []
 
     # Test object search with similarity
-    url = OBJECT_SET_QUERY_URL.format(project_id=prj_id)
-    filters = {"seed_object_id": "I%d" % target_id}
+    url = (
+        OBJECT_SET_QUERY_URL.format(project_id=prj_id) + f"?order_field=ss-I{target_id}"
+    )
+    filters = {}
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=filters)
 
     assert rsp.status_code == status.HTTP_200_OK

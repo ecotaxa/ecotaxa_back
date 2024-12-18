@@ -1644,7 +1644,7 @@ def object_similarity_search(
     ),
     size: int = Query(
         100,
-        description="Return at maximum this number of objects, by default 100.",
+        description="Return at maximum this number of object IDs, by default 100.",
         example="120",
     ),
     filters: ProjectFilters = Body(...),
@@ -2000,7 +2000,8 @@ name, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostat
     ),
     order_field: Optional[str] = Query(
         title="Order field",
-        description='Order the result using given field. If prefixed with "-" then it will be reversed.',
+        description='Order the result using given field. If prefixed with "-" then it will be reversed. '
+        "When using *special syntax ss-Innnn*, the order is similarity with given (by its ID) object.",
         default=None,
         example="obj.longitude",
     ),

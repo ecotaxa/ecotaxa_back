@@ -95,9 +95,9 @@ class ObjectManager(Service):
             user_id = user.id
 
         sim_search_seed = None
-        if seed_object_id := filters.get("seed_object_id", ""):
-            # e.g. I6295511
-            sim_search_seed = int(seed_object_id[1:])
+        if order_field is not None and order_field.startswith("ss-I"):
+            # e.g. ss-I6295511
+            sim_search_seed = int(order_field[4:])
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(

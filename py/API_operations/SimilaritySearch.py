@@ -49,6 +49,7 @@ class SimilaritySearchForProject(Service):
             )
             if feature_extractor_selected:
                 # Launch a feature extraction job
+                # TODO: Better do a transparent dependency management objects+extractor <-> features
                 # with FeatureExtractionForProject(self.req.project_id) as sce:
                 #     #                    sce.run(current_user)
                 #     sce.run_in_background()
@@ -56,7 +57,7 @@ class SimilaritySearchForProject(Service):
                 rsp: SimilaritySearchRsp = SimilaritySearchRsp(
                     neighbor_ids=[],
                     sim_scores=[],
-                    message="Project has a feature extractor, but no feature. Predict once to generate features.",
+                    message="Some or all features are missing. Predict to generate features.",
                 )
                 return rsp
 
