@@ -6,12 +6,15 @@
 #
 
 from API_models.filters import ProjectFiltersDict
-from API_models.simsearch import SimilaritySearchReq, SimilaritySearchRsp
+from API_models.simsearch import SimilaritySearchRsp
 from BO.ObjectSet import DescribedObjectSet
 from BO.Prediction import DeepFeatures
 from BO.Rights import RightsBO, Action
 from DB.CNNFeatureVector import ObjectCNNFeatureVector
+from DB.Object import ObjectIDT
+from DB.Project import ProjectIDT
 from DB.helpers.Direct import text
+from DB.helpers.SQL import OrderClause
 from helpers.DynamicLogs import get_logger
 
 # TODO: Move somewhere else
@@ -24,10 +27,15 @@ class SimilaritySearchForProject(Service):
     """ """
 
     def __init__(
-        self, req: SimilaritySearchReq, filters: ProjectFiltersDict, size: int
+        self,
+        project_id: ProjectIDT,
+        target_id: ObjectIDT,
+        filters: ProjectFiltersDict,
+        size: int,
     ) -> None:
         super().__init__()
-        self.req = req
+        self.project_id = project_id
+        self.target_id = target_id
         self.filters = filters
         self.limit = size
 
@@ -36,12 +44,12 @@ class SimilaritySearchForProject(Service):
         Similarity search on a project.
         """
         _user, project = RightsBO.user_wants(
-            self.session, current_user, Action.ANNOTATE, self.req.project_id
+            self.session, current_user, Action.ANNOTATE, self.project_id
         )
 
         # Check that deep features are present for given project.
         ids_and_images = DeepFeatures.find_missing(
-            self.ro_session, self.req.project_id, True
+            self.ro_session, self.project_id, True
         )
         if len(ids_and_images) != 0:
             feature_extractor_selected = (
@@ -70,26 +78,21 @@ class SimilaritySearchForProject(Service):
                 )
                 return rsp
 
-        target_id = self.req.target_id
-
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(
             self.ro_session, project, current_user, self.filters
         )
-        from_, where_clause, params = object_set.get_sql()
-        where_clause_sql = where_clause.get_sql()
-        if where_clause_sql != " ":
-            where_clause_sql += " AND objcnnid = obh.objid"
-        else:
-            where_clause_sql = "WHERE objcnnid = obh.objid"
+        order_clause = OrderClause()
+        order_clause.add_expression(None, "l2_dist")
+        order_clause.set_window(None, self.limit)
+        dist_exp = f"""cnn.objcnnid, cnn.features<->(SELECT features FROM {ObjectCNNFeatureVector.__tablename__}
+        WHERE objcnnid={self.target_id}) AS l2_dist"""
+        from_, where_clause, params = object_set.get_sql(order_clause, dist_exp)
 
         query = f"""
         SET LOCAL ivvflat.probes = 10;
-        SELECT objcnnid, features<->(SELECT features FROM {ObjectCNNFeatureVector.__tablename__}
-        WHERE objcnnid={target_id}) AS l2_dist
-        FROM {ObjectCNNFeatureVector.__tablename__}, {from_.get_sql()}
-            {where_clause_sql}
-        ORDER BY l2_dist LIMIT {self.limit}
+        SELECT {dist_exp}
+        FROM {from_.get_sql()} {where_clause.get_sql()} {order_clause.get_sql()}
         """
 
         result = self.ro_session.execute(text(query), params).fetchall()

@@ -109,7 +109,6 @@ class ObjectManager(Service):
         order_clause = self.cook_order_clause(
             order_field, free_columns_mappings, str(return_fields)
         )
-        order_clause.set_window(window_start, window_size)
 
         extra_cols = self.add_return_fields(return_fields, free_columns_mappings)
 
@@ -119,9 +118,10 @@ class ObjectManager(Service):
                 + f""", cnn.features<->(SELECT features FROM {ObjectCNNFeatureVector.__tablename__}
         WHERE objcnnid={sim_search_seed}) AS l2_dist"""
             )
-            order_clause = OrderClause()  # Wipe out any required order in this context
+            order_clause = OrderClause()
             order_clause.add_expression(None, "l2_dist")
-            order_clause.set_window(window_start, window_size)
+
+        order_clause.set_window(window_start, window_size)
 
         from_, where_clause, params = object_set.get_sql(order_clause, extra_cols)
 

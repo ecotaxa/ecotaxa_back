@@ -82,7 +82,7 @@ from API_models.prediction import (
     MLModel,
     PredictionInfoRsp,
 )
-from API_models.simsearch import SimilaritySearchReq, SimilaritySearchRsp
+from API_models.simsearch import SimilaritySearchRsp
 from API_models.subset import SubsetReq, SubsetRsp
 from API_models.taxonomy import (
     TaxaSearchRsp,
@@ -1637,10 +1637,12 @@ def set_project_predict_settings(
 )
 def object_similarity_search(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project to search in.", example=1
+        ...,
+        description="Internal, numeric id of the project to search in.",
+        example=3426,
     ),
     object_id: int = Path(
-        ..., description="Object ID to search similar for.", example=1
+        ..., description="Object ID to search similar for.", example=1040
     ),
     size: int = Query(
         100,
@@ -1653,12 +1655,7 @@ def object_similarity_search(
     """
     Returns, in given project, the objects matching the filter and similar to the queried one.
     """
-    sim_search_request = SimilaritySearchReq(
-        project_id=project_id,
-        target_id=object_id,
-    )
-
-    with SimilaritySearchForProject(sim_search_request, filters.base(), size) as sce:
+    with SimilaritySearchForProject(project_id, object_id, filters.base(), size) as sce:
         sim_search_rsp = sce.similarity_search(current_user)
 
     return sim_search_rsp
