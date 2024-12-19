@@ -82,15 +82,16 @@
             "in":"query"
           },
           {
-            "description":"Return users except rights and last_used_projects if set to True. For users list display purpose.",
+            "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
             "required":false,
             "schema":{
-              "title":"Summary",
-              "type":"boolean",
-              "description":"Return users except rights and last_used_projects if set to True. For users list display purpose."
+              "title":"Fields",
+              "type":"string",
+              "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+              "default":"*default"
             },
-            "example":true,
-            "name":"summary",
+            "example":"*default,fieldlist",
+            "name":"fields",
             "in":"query"
           }
         ],
@@ -816,6 +817,20 @@
         "summary":"Create Collection",
         "description":"**Create a collection** with at least one project inside.\n\nReturns the created collection Id.\n\nNote: 'manage' right is required on all underlying projects.",
         "operationId":"create_collection",
+        "parameters":[
+          {
+            "description":"If set, then only a diagnostic of doability will be done. In this case, plain value check. If no dry_run, this call will create a background job.",
+            "required":true,
+            "schema":{
+              "title":"Dry run",
+              "type":"boolean",
+              "description":"If set, then only a diagnostic of doability will be done. In this case, plain value check. If no dry_run, this call will create a background job."
+            },
+            "example":true,
+            "name":"dry_run",
+            "in":"query"
+          }
+        ],
         "requestBody":{
           "content":{
             "application/json":{
@@ -857,6 +872,74 @@
         ]
       }
     },
+    "/collections":{
+      "get":{
+        "tags":[
+          "collections"
+        ],
+        "summary":"List Collections",
+        "description":"**Search for collections.**\n\nNote: Only manageable collections are returned.",
+        "operationId":"list_collections",
+        "parameters":[
+          {
+            "description":"limit the list to a set of ids.",
+            "required":false,
+            "schema":{
+              "title":"Collection Ids",
+              "type":"string",
+              "description":"limit the list to a set of ids."
+            },
+            "example":"123,45",
+            "name":"collection_ids",
+            "in":"query"
+          },
+          {
+            "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+            "required":false,
+            "schema":{
+              "title":"Fields",
+              "type":"string",
+              "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+              "default":"*default"
+            },
+            "example":"*default,fieldlist",
+            "name":"fields",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response List Collections Collections Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/CollectionModel"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
     "/collections/search":{
       "get":{
         "tags":[
@@ -876,6 +959,19 @@
             },
             "example":"%coll%",
             "name":"title",
+            "in":"query"
+          },
+          {
+            "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+            "required":false,
+            "schema":{
+              "title":"Fields",
+              "type":"string",
+              "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+              "default":"*default"
+            },
+            "example":"*default,fieldlist",
+            "name":"fields",
             "in":"query"
           }
         ],
@@ -1002,6 +1098,63 @@
             }
           }
         }
+      }
+    },
+    "/collections/aggregated_projects_properties":{
+      "get":{
+        "tags":[
+          "collections"
+        ],
+        "summary":"Collection Aggregated Projects Properties",
+        "description":"**returns projectset calculated selected fields values  projects and list of rejected projects id.\nNote: 'manage' right is required on all underlying projects.",
+        "operationId":"collection_aggregated_projects_properties",
+        "parameters":[
+          {
+            "description":"String containing the list of one or more project id separated by non-num char. \n .",
+            "required":true,
+            "schema":{
+              "title":"Project Ids",
+              "type":"string",
+              "description":"String containing the list of one or more project id separated by non-num char. \n ."
+            },
+            "example":"1",
+            "name":"project_ids",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Collection Aggregated Projects Properties Collections Aggregated Projects Properties Get"
+                },
+                "example":[
+                  {},
+                  {
+                    "test":[]
+                  }
+                ]
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
       }
     },
     "/collections/{collection_id}":{
@@ -1319,6 +1472,136 @@
         ]
       }
     },
+    "/projects":{
+      "get":{
+        "tags":[
+          "projects"
+        ],
+        "summary":"List Projects",
+        "description":"Returns **projects which the current user has explicit permission to access, with fields options.**\n\nNote that, for performance reasons, in returned ProjectModels, field 'highest_rank' is NOT valued\n(unlike in simple query). The same information can be found in 'managers', 'annotators' and 'viewers' lists.",
+        "operationId":"list_projects",
+        "parameters":[
+          {
+            "description":"Limit the list to a set of ids.",
+            "required":false,
+            "schema":{
+              "title":"Project Ids",
+              "type":"string",
+              "description":"Limit the list to a set of ids."
+            },
+            "example":"123,45",
+            "name":"project_ids",
+            "in":"query"
+          },
+          {
+            "description":"Return projects on which the current user has _no permission_, but visible to him/her.",
+            "required":false,
+            "schema":{
+              "title":"Not granted",
+              "type":"boolean",
+              "description":"Return projects on which the current user has _no permission_, but visible to him/her.",
+              "default":false
+            },
+            "example":false,
+            "name":"not_granted",
+            "in":"query"
+          },
+          {
+            "description":"Return projects that can be written to (including erased) by the current user.",
+            "required":false,
+            "schema":{
+              "title":"For managing",
+              "type":"boolean",
+              "description":"Return projects that can be written to (including erased) by the current user.",
+              "default":false
+            },
+            "example":false,
+            "name":"for_managing",
+            "in":"query"
+          },
+          {
+            "description":"One of ['instrument', 'instrument_url', 'highest_right', 'projid', 'title', 'visible', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id']",
+            "required":false,
+            "schema":{
+              "title":"Order field",
+              "type":"string",
+              "description":"One of ['instrument', 'instrument_url', 'highest_right', 'projid', 'title', 'visible', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id']"
+            },
+            "example":"instrument",
+            "name":"order_field",
+            "in":"query"
+          },
+          {
+            "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+            "required":false,
+            "schema":{
+              "title":"Fields",
+              "type":"string",
+              "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+              "default":"*default"
+            },
+            "example":"*default,fieldlist",
+            "name":"fields",
+            "in":"query"
+          },
+          {
+            "description":"Skip `window_start` before returning data.",
+            "required":false,
+            "schema":{
+              "title":"Window start",
+              "type":"integer",
+              "description":"Skip `window_start` before returning data."
+            },
+            "example":"0",
+            "name":"window_start",
+            "in":"query"
+          },
+          {
+            "description":"Return only `window_size` lines.",
+            "required":false,
+            "schema":{
+              "title":"Window size",
+              "type":"integer",
+              "description":"Return only `window_size` lines."
+            },
+            "example":"100",
+            "name":"window_size",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response List Projects Projects Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/ProjectModel"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
     "/projects/search":{
       "get":{
         "tags":[
@@ -1418,15 +1701,16 @@
             "in":"query"
           },
           {
-            "description":"Return projects except somme fields like bodc_variables if set to True. For projects list display purpose.",
+            "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
             "required":false,
             "schema":{
-              "title":"Summary",
-              "type":"boolean",
-              "description":"Return projects except somme fields like bodc_variables if set to True. For projects list display purpose."
+              "title":"Fields",
+              "type":"string",
+              "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+              "default":"*default"
             },
-            "example":true,
-            "name":"summary",
+            "example":"*default,fieldlist",
+            "name":"fields",
             "in":"query"
           },
           {
@@ -1785,6 +2069,129 @@
         ]
       }
     },
+    "/projects/{project_id}/collections":{
+      "get":{
+        "tags":[
+          "projects"
+        ],
+        "summary":"Project Collections",
+        "description":"**Returns project collections list of id, title",
+        "operationId":"project_collections",
+        "parameters":[
+          {
+            "description":"Internal, numeric id of the project.",
+            "required":true,
+            "schema":{
+              "title":"Project Id",
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
+            },
+            "example":1,
+            "name":"project_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Project Collections Projects  Project Id  Collections Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/MinimalCollectionBO"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/project_set/projects":{
+      "get":{
+        "tags":[
+          "projects"
+        ],
+        "summary":"Project Set Get Projects",
+        "description":"**Returns projects statistics**, i.e. used taxa and classification states.",
+        "operationId":"project_set_get_projects",
+        "parameters":[
+          {
+            "description":"String containing the list of one or more project id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
+            "required":true,
+            "schema":{
+              "title":"Ids",
+              "type":"string",
+              "description":"String containing the list of one or more project id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project."
+            },
+            "example":"1",
+            "name":"ids",
+            "in":"query"
+          },
+          {
+            "description":"Return the default fields (typically used in conjunction with an additional field list). To return selected fields.",
+            "required":false,
+            "schema":{
+              "title":"Fields",
+              "type":"string",
+              "description":"Return the default fields (typically used in conjunction with an additional field list). To return selected fields.",
+              "default":"*default"
+            },
+            "example":"*default,fieldlist",
+            "name":"fields",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Project Set Get Projects Project Set Projects Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/ProjectColumnsModel"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
     "/project_set/taxo_stats":{
       "get":{
         "tags":[
@@ -1999,7 +2406,7 @@
                   ],
                   "total":54169,
                   "columns":[
-                    "fre.area",
+                    "calssif",
                     "obj.depth_min"
                   ],
                   "counts":[
@@ -3095,12 +3502,12 @@
             "in":"path"
           },
           {
-            "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
+            "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\n���� More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
             "required":false,
             "schema":{
               "title":"Fields",
               "type":"string",
-              "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
+              "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\n���� More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
             },
             "example":"obj.longitude,fre.feret",
             "name":"fields",
@@ -5890,10 +6297,23 @@
         ],
         "type":"object",
         "properties":{
+          "collection_id":{
+            "title":"Collection Id",
+            "type":"integer",
+            "description":"The Collection to export if requested.",
+            "example":1
+          },
           "project_id":{
             "title":"Project Id",
-            "type":"integer",
-            "description":"The project to export.",
+            "anyOf":[
+              {
+                "type":"integer"
+              },
+              {
+                "type":"string"
+              }
+            ],
+            "description":"The project(int) or projects (str, project ids list) to export.",
             "example":1
           },
           "out_to_ftp":{
@@ -6451,6 +6871,46 @@
               "":"Not chosen"
             }
           },
+          "license_restrictions":{
+            "title":"License restrictions",
+            "type":"object",
+            "additionalProperties":{
+              "type":"string"
+            },
+            "description":"License sorted by restriction.",
+            "default":{
+              "0":"CC0 1.0",
+              "1":"CC BY 4.0",
+              "3":"CC BY-NC 4.0",
+              "7":"Copyright",
+              "8":""
+            },
+            "example":{
+              "0":"CC0 1.0",
+              "1":"CC BY 4.0",
+              "3":"CC BY-NC 4.0",
+              "7":"Copyright",
+              "8":""
+            }
+          },
+          "access":{
+            "title":"Projects access",
+            "type":"object",
+            "additionalProperties":{
+              "type":"string"
+            },
+            "description":"Projects access levels.",
+            "default":{
+              "PUBLIC":"1",
+              "OPEN":"2",
+              "PRIVATE":"0"
+            },
+            "example":{
+              "public":"",
+              "open":"O",
+              "private":"P"
+            }
+          },
           "app_manager":{
             "title":"Application manager",
             "maxItems":2,
@@ -6774,10 +7234,23 @@
         ],
         "type":"object",
         "properties":{
+          "collection_id":{
+            "title":"Collection Id",
+            "type":"integer",
+            "description":"The Collection to export if requested.",
+            "example":1
+          },
           "project_id":{
             "title":"Project Id",
-            "type":"integer",
-            "description":"The project to export.",
+            "anyOf":[
+              {
+                "type":"integer"
+              },
+              {
+                "type":"string"
+              }
+            ],
+            "description":"The project(int) or projects (str, project ids list) to export.",
             "example":1
           },
           "exp_type":{
@@ -6945,7 +7418,7 @@
             "example":12376
           }
         },
-        "description":"Export response, for all export jobs, either on Project or Collection"
+        "description":"Export response, for all export jobs, either on Project or Collection."
       },
       "ExportSplitOptionsEnum":{
         "title":"ExportSplitOptionsEnum",
@@ -6979,10 +7452,23 @@
         ],
         "type":"object",
         "properties":{
+          "collection_id":{
+            "title":"Collection Id",
+            "type":"integer",
+            "description":"The Collection to export if requested.",
+            "example":1
+          },
           "project_id":{
             "title":"Project Id",
-            "type":"integer",
-            "description":"The project to export.",
+            "anyOf":[
+              {
+                "type":"integer"
+              },
+              {
+                "type":"string"
+              }
+            ],
+            "description":"The project(int) or projects (str, project ids list) to export.",
             "example":1
           },
           "split_by":{
@@ -7559,6 +8045,52 @@
             "type":"string",
             "description":"User's full name, as text.",
             "example":"userName"
+          }
+        }
+      },
+      "MinimalCollectionBO":{
+        "title":"MinimalCollectionBO",
+        "required":[
+          "id",
+          "external_id",
+          "title",
+          "short_title",
+          "provider_user_id",
+          "contact_user",
+          "project_ids"
+        ],
+        "type":"object",
+        "properties":{
+          "id":{
+            "title":"Id",
+            "type":"integer"
+          },
+          "external_id":{
+            "title":"External Id",
+            "type":"string"
+          },
+          "title":{
+            "title":"Title",
+            "type":"string"
+          },
+          "short_title":{
+            "title":"Short Title",
+            "type":"string"
+          },
+          "provider_user_id":{
+            "title":"Provider User Id",
+            "type":"integer"
+          },
+          "contact_user":{
+            "title":"Contact User",
+            "type":"object"
+          },
+          "project_ids":{
+            "title":"Project Ids",
+            "type":"array",
+            "items":{
+              "type":"integer"
+            }
           }
         }
       },
@@ -8245,6 +8777,33 @@
               "software":"zooprocess_pid_to_ecotaxa_7.26_2017/12/19",
               "pressure_gain":"10"
             }
+          }
+        }
+      },
+      "ProjectColumnsModel":{
+        "title":"ProjectColumnsModel",
+        "type":"object",
+        "properties":{
+          "projid":{
+            "title":"Project ID",
+            "type":"integer",
+            "description":"Project ID from the call."
+          },
+          "columns":{
+            "title":"Columns",
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "description":"Column names from the call."
+          },
+          "values":{
+            "title":"All rows",
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "description":"All rows regardless of emptiness."
           }
         }
       },
@@ -9224,10 +9783,23 @@
         ],
         "type":"object",
         "properties":{
+          "collection_id":{
+            "title":"Collection Id",
+            "type":"integer",
+            "description":"The Collection to export if requested.",
+            "example":1
+          },
           "project_id":{
             "title":"Project Id",
-            "type":"integer",
-            "description":"The project to export.",
+            "anyOf":[
+              {
+                "type":"integer"
+              },
+              {
+                "type":"string"
+              }
+            ],
+            "description":"The project(int) or projects (str, project ids list) to export.",
             "example":1
           },
           "quantity":{

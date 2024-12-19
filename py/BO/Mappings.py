@@ -191,6 +191,163 @@ if False:  # !!! NO COMMIT if True !!!
     PHY_COL_TO_EXPERIMENT_COL = lambda col: "free_n[" + col[1:] + "]"
 
 
+class ProjectSetMapping(object):
+    """
+    In some DB tables, free fields are present at the end of the table. Their names are constant
+    e.g. n01 to n100.
+    During import, some TSV _columns_ are mapped to free fields. The values in each line are then
+    copied to DB columns of corresponding DB table line.
+    In order to remember the original TSV column names, the mappings are stored at project level.
+    So e.g. TSV column object_x become object_fields.n01 and we have an object mapping "n01=x"
+
+    By convention, numerical columns have 'n' as first column name, text ones have 't'.
+
+    """
+
+    __slots__ = [
+        "object_mappings",
+        "sample_mappings",
+        "acquisition_mappings",
+        "process_mappings",
+        "all",
+        "by_table_name",
+        "by_table",
+        "was_empty",
+    ]
+
+    def __init__(self) -> None:
+        self.object_mappings: TableMapping = TableMapping(
+            ObjectFields, FREE_COLS_ARE_ELSEWHERE
+        )
+        self.sample_mappings: TableMapping = TableMapping(Sample)
+        self.acquisition_mappings: TableMapping = TableMapping(Acquisition)
+        self.process_mappings: TableMapping = TableMapping(Process)
+        # store for iteration
+        self.all: List[TableMapping] = [
+            self.object_mappings,
+            self.sample_mappings,
+            self.acquisition_mappings,
+            self.process_mappings,
+        ]
+        # for 'generic' access to mappings
+        self.by_table_name: Dict[str, TableMapping] = {
+            a_mapping.table_name: a_mapping for a_mapping in self.all
+        }
+        self.by_table: Dict[MappedTableTypeT, TableMapping] = {
+            a_mapping.table: a_mapping for a_mapping in self.all
+        }
+        # to track emptiness after load
+        self.was_empty = False
+
+    def write_to_projects(self, prjs: List[Project]) -> None:
+        """
+        Write the mappings into given Projects, new form.
+        """
+        # not in use for now
+        for prj in prjs:
+            prj.mappingobj = self.object_mappings.as_json()
+            prj.mappingsample = self.sample_mappings.as_json()
+            prj.mappingacq = self.acquisition_mappings.as_json()
+            prj.mappingprocess = self.process_mappings.as_json()
+
+    def load_from_projects(self, prjs: List[Project]) -> "ProjectSetMapping":
+        """
+        Load self from Project fields serialization.
+        """
+        columns = {
+            "object_mappings": "obj_field",
+            "sample_mappings": "samples",
+            "process_mappings": "process",
+            "acquisition_mappings": "acquisitions",
+        }
+
+        commoncols: Dict = {}
+        for prj in prjs:
+            prjmapping = ProjectMapping().load_from_project(prj)
+            tabmappings = prjmapping.as_dict()
+            for key, tabmapping in tabmappings.items():
+                if key not in commoncols.keys():
+                    commoncols[key] = tabmapping
+                else:
+                    commoncols[key] = {
+                        x: commoncols[key][x]
+                        for x in commoncols[key]
+                        if x in tabmapping
+                    }
+        for key, val in columns.items():
+            prop = getattr(self, key)
+            prop.load_from_dict(commoncols[val])
+        self.was_empty = self.is_empty()
+        return self
+
+    def as_dict(self) -> Dict[str, Dict[str, str]]:
+        """
+        Return the mapping as a serializable object for messaging.
+        """
+        out_dict = {
+            mapping.table_name: mapping.real_cols_to_tsv for mapping in self.all
+        }
+        return out_dict
+
+    def load_from_dict(
+        self, in_dict: Dict
+    ) -> Union["ProjectMapping", "ProjectSetMapping"]:
+        """
+        Use data produced by @as_dict previous for loading self.
+        """
+        for a_mapping in self.all:
+            a_mapping.load_from_dict(in_dict[a_mapping.table_name])
+        self.was_empty = self.is_empty()
+        return self
+
+    def add_column(
+        self, target_table: str, tsv_table: str, tsv_field: str, sel_type
+    ) -> Tuple[bool, str]:
+        """
+        A new custom column was found, add it into the right bucket.
+        :return: True if the target column exists in target table, i.e. if addition was possible.
+        """
+        for_table: TableMapping = self.by_table_name[target_table]
+        ok_exists = for_table.add_column_for_table(tsv_field, sel_type)
+        real_col = for_table.tsv_cols_to_real[tsv_field]
+        return ok_exists, real_col
+
+    def search_field(self, full_tsv_field: str) -> Optional[Dict]:
+        """
+        Return the storage (i.e. target of mapping) for a custom field in given table.
+        e.g. acq_operator -> {'acquisition', 't02', 't'}
+        """
+        try:
+            prfx, tsv_col = full_tsv_field.split("_", 1)
+        except ValueError:
+            return None  # Not the expected separator
+        table_name = PREFIX_TO_TABLE.get(prfx)
+        if table_name is None:
+            return None  # Not a known prefix
+        mping = self.by_table_name[table_name]
+        real_col = mping.tsv_cols_to_real.get(tsv_col)
+        if real_col is None:
+            return None  # Not a known column for this prefix
+        return {"table": table_name, "field": real_col, "type": real_col[0]}
+
+    def all_field_names(self) -> Set[str]:
+        """
+        Return all mapped field names.
+        """
+        ret = set()
+        for a_mapping in self.all:
+            tbl = a_mapping.table_name
+            prfx = TABLE_TO_PREFIX.get(tbl, tbl)
+            ret.update(a_mapping.tsv_cols_prefixed(prfx))
+        return ret
+
+    def is_empty(self):
+        for a_mapping in self.all:
+            if len(a_mapping.tsv_cols_to_real) > 0:
+                return False
+        return True
+
+
 class ProjectMapping(object):
     """
     In some DB tables, free fields are present at the end of the table. Their names are constant
@@ -363,13 +520,13 @@ class TableMapping(object):
             return self
         if str_mapping.startswith("{"):
             self.tsv_cols_to_real = json.loads(str_mapping)
+            tsv_cols_to_real = self.tsv_cols_to_real
             self.real_cols_to_tsv = {
-                v: k
-                for k, v in sorted(self.tsv_cols_to_real.items(), key=lambda kv: kv[1])
+                v: k for k, v in sorted(tsv_cols_to_real.items(), key=lambda kv: kv[1])
             }  # Paranoid re-sort
             return self
-        real_cols_to_tsv = self.real_cols_to_tsv
-        tsv_cols_to_real = self.tsv_cols_to_real
+        tsv_cols_to_real = {}
+        real_cols_to_tsv = {}
         for a_map in str_mapping.splitlines():
             if not a_map:
                 # Empty lines are tolerated
@@ -379,6 +536,8 @@ class TableMapping(object):
             # Above is too slow for many (all!) projects, below is an equivalent rewrite
             real_cols_to_tsv[db_col] = tsv_col_no_prfx
             tsv_cols_to_real[tsv_col_no_prfx] = db_col
+        self.real_cols_to_tsv = real_cols_to_tsv
+        self.tsv_cols_to_real = tsv_cols_to_real
         return self
 
     def load_from_dict(self, dict_mapping: dict) -> None:

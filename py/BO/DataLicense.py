@@ -6,6 +6,12 @@ from enum import Enum
 from typing import Final
 
 
+class AccessLevelEnum(str, Enum):
+    PUBLIC: Final = "1"
+    OPEN: Final = "2"
+    PRIVATE: Final = "0"
+
+
 class LicenseEnum(str, Enum):
     CC0 = "CC0 1.0"
     CC_BY = "CC BY 4.0"

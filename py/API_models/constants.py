@@ -6,7 +6,8 @@
 #
 from typing import Dict, List
 
-from BO.DataLicense import DataLicense
+from BO.DataLicense import DataLicense, AccessLevelEnum
+from DB.User import UserStatus
 from BO.User import (
     USER_PWD_REGEXP,
     USER_PWD_REGEXP_DESCRIPTION,
@@ -31,6 +32,24 @@ class Constants(BaseModel):
             "Copyright": "<strong>Copyright</strong>: only contributors to this project have rights on this data. This prevents its distribution in any kind of database.",
             "": "Not chosen",
         },
+    )
+    license_restrictions: Dict[str, str] = Field(
+        title="License restrictions",
+        description="License sorted by restriction.",
+        default={lev: lic for lic, lev in DataLicense.RESTRICTION.items()},
+        example={
+            "0": "CC0 1.0",
+            "1": "CC BY 4.0",
+            "3": "CC BY-NC 4.0",
+            "7": "Copyright",
+            "8": "",
+        },
+    )
+    access: Dict[str, str] = Field(
+        title="Projects access",
+        description="Projects access levels.",
+        default={st.name: st.value for st in AccessLevelEnum},
+        example={"public": "", "open": "O", "private": "P"},
     )
     app_manager: List[str] = Field(
         title="Application manager",

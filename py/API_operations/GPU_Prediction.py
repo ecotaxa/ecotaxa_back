@@ -25,6 +25,7 @@ from DB.helpers.Direct import text
 from ML.Deep_features_extractor import DeepFeaturesExtractor
 from ML.Random_forest_classifier import OurRandomForestClassifier
 from helpers.DynamicLogs import get_logger
+
 # TODO: Move somewhere else
 from helpers.Timer import CodeTimer
 from .ObjectManager import ObjectManager
@@ -104,9 +105,9 @@ class GPUPredictForProject(PredictForProject):
         logger.info(
             """
 To correct the situation, you might:
-In first step 'Choice of Learning Set data source', use fewer example projects.  
+In first step 'Choice of Learning Set data source', use fewer example projects.
 In second step 'Choice of Learning Set categories and size', where the learning set size is displayed:
-    - lower the number of objects per category (currently set at {}). 
+    - lower the number of objects per category (currently set at {}).
     - unselect some categories by clicking in '# source' column.""".format(
                 self.req.learning_limit
             )

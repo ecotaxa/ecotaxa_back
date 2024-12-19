@@ -382,7 +382,7 @@ class UserService(Service):
         self,
         current_user_id: UserIDT,
         user_ids: UserIDListT,
-        summary: bool = False,
+        fields: str = "*summary",
     ) -> List[UserModelWithRights]:
         """
         List all users, or some of them by their ids, if requester is admin.
@@ -392,7 +392,7 @@ class UserService(Service):
         if self._current_is_admin(current_user):
             # for faster display in test
             # get_user_details = self._get_full_user
-            if summary == False:
+            if fields == "*summary":
                 get_user_details = self._get_user_with_rights
             else:
                 get_user_details = self._get_user_profile

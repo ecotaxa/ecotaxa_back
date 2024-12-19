@@ -4,20 +4,21 @@
 #
 #  Models used in CRUD API_operations.
 #
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Tuple
 
 from BO.ColumnUpdate import ColUpdate
-from BO.DataLicense import LicenseEnum
+from BO.DataLicense import LicenseEnum, AccessLevelEnum
 from BO.Job import DBJobStateEnum
-from BO.Project import ProjectUserStats
+from BO.Project import ProjectUserStats, ProjectColumns
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
+from BO.User import UserIDT, UserIDListT, ContactUserBO
 from DB.Acquisition import Acquisition
 from DB.Collection import Collection
 from DB.Instrument import UNKNOWN_INSTRUMENT
 from DB.Job import Job
 from DB.Process import Process
-from DB.Project import Project
+from DB.Project import Project, ProjectIDListT
 from DB.Sample import Sample
 from DB.User import User
 from helpers.pydantic import BaseModel, Field, DescriptiveModel
@@ -41,8 +42,24 @@ class _MinUserModel(DescriptiveModel):
     )
 
 
+# Minimal user information
+class _UserCollectionModel(DescriptiveModel):
+    id = Field(title="Id", description="The unique numeric id of this user.", example=1)
+    email = Field(
+        title="Email",
+        description="User's email address, as text, used during registration.",
+        example="ecotaxa.api.user@gmail.com",
+    )
+    name = Field(
+        title="Name", description="User's full name, as text.", example="userName"
+    )
+    orcid = Field(title="ORCID", description="Orcid")
+    organisation = Field(title="organisation", description="Organisation")
+
+
 MinUserModel = combine_models(User, _MinUserModel)
 
+UserCollectionModel = combine_models(User, _UserCollectionModel)
 
 # Direct mirror of DB models, i.e. the minimal + the rest we want
 class _FullUserModel(_MinUserModel):
@@ -373,6 +390,74 @@ class ProjectModel(_ProjectModelFromDB, _AddedToProject):
     """
 
 
+class CollectionAggregatedModel(BaseModel):
+    """
+    collection model extended with computed informations about the collection projects
+    """
+
+    can_be_administered: bool = Field(
+        title="Can be administered",
+        description="Whether the current user is manager of all collection projects",
+        default=False,
+    )
+    instrument: str = Field(
+        title="Instrument",
+        description="The collection instrument from projects.",
+        default=UNKNOWN_INSTRUMENT,
+        example="UVP5",
+    )
+    access: str = Field(
+        title="Access",
+        description="The restricted access for collection projects.",
+        example=AccessLevelEnum.OPEN,
+    )
+    initclassiflist: str = Field(
+        title="Initial categories",
+        description=" Aggregated categories from the collection projects.",
+    )
+    classiffieldlist: str = Field(
+        title="Sorting fields",
+        description=" Aggregated sorting and displaying fields from the collection projects.",
+    )
+    cnn_network_id: str = Field(
+        title="Deep Features",
+        description=" Common deep features for the collection projects. Can be None (???)",
+    )
+    status: str = Field(
+        title="Status",
+        description=" the restricted collection status calculated from projects.",
+    )
+    creator_users: List[UserCollectionModel] = Field(
+        title="Creator users",
+        description="""Annotators extracted from history.""",
+        default=[],
+    )
+    privileges: Dict[str, List[UserCollectionModel]] = Field(
+        title="privileges",
+        description="Aggregated user privileges of projects with user minimal right on projects",
+    )
+    freecols: Dict[str, Dict[str, str]] = Field(
+        title="freecols",
+        description="Common free cols of projects.",
+        example={
+            "mappingobj": [("n01", "annotation_confidencepmax"), ...],
+            "mappingsample": [
+                ("t01", "cruise"),
+                ("t02", "vessel"),
+                ("t03", "barcode"),
+                ...,
+            ],
+            "mappingprocess": [...],
+            "mappingacq": [...],
+        },
+    )
+
+
+# workaround for bug in tox aggregated : argument "response_model" to "get" of "FastAPI" has incompatible type "object"; expected "Optional[Type[Any]]
+class RespAggregatedModel(BaseModel):
+    __root__: Tuple[CollectionAggregatedModel, Optional[Dict[str, ProjectIDListT]]]
+
+
 class SampleModel(_SampleModelFromDB):
     free_columns: Dict[str, Any] = Field(
         title="Free columns",
@@ -544,6 +629,17 @@ class _DBProjectSetColumnStatDescription(DescriptiveModel):
 
 ProjectSetColumnStatsModel = dataclass_to_model_with_suffix(
     ProjectSetColumnStats, _DBProjectSetColumnStatDescription
+)
+
+
+class _ProjectColumnsDescription(DescriptiveModel):
+    projid = Field(title="Project ID", description="Project ID from the call.")
+    columns = Field(title="Columns", description="Column names from the call.")
+    values = Field(title="All rows", description="All rows regardless of emptiness.")
+
+
+ProjectColumnsModel = dataclass_to_model_with_suffix(
+    ProjectColumns, _ProjectColumnsDescription
 )
 
 

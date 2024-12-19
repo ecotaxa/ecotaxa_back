@@ -38,7 +38,13 @@ from BO.Classification import (
     ClassifScoresListT,
 )
 from BO.ColumnUpdate import ColUpdateList
-from BO.Mappings import ProjectMapping, TableMapping
+from BO.Mappings import (
+    ProjectMapping,
+    ProjectSetMapping,
+    TableMapping,
+    TABLE_TO_PREFIX,
+    FREE_COLS_ARE_ELSEWHERE,
+)
 from BO.Object import ObjectIDWithParentsT, MANUAL_STATES_TEXT, PREDICTED_STATE_TEXT
 from BO.Taxonomy import TaxonomyBO
 from BO.Training import TrainingBO, PredictionBO
@@ -61,6 +67,7 @@ from DB.Object import (
 from DB.Prediction import (
     PSEUDO_TRAINING_SCORE,
 )
+from BO.Project import ProjectBOSet, ProjectBO
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
 from DB.helpers import Result
@@ -136,7 +143,6 @@ class DescribedObjectSet(object):
         column_referencing_sql = (
             select_list + obj_where.get_sql() + order_clause.get_sql()
         )
-
         selected_tables = FromClause(
             f"(select (:projid) as projid) prjs"
         )  # Prepare a future _set_ of projects
@@ -1226,3 +1232,193 @@ class ObjectSetFilter(object):
         for a_key in self.TAXO_KEYS:
             less_filtered.pop(a_key, "")  # type:ignore
         return less_filtered
+
+
+class DescribedObjectBOSet(object):
+    """
+    A (potentially large) set of objects, described by a base rule (all objects in projects XXX)
+    and filtered by exclusion conditions.
+    """
+
+    __slots__ = ("project_ids", "user_id", "mapping", "filters")
+
+    def __init__(
+        self,
+        session: Session,
+        project_ids: ProjectIDListT,
+        user_id: Optional[UserIDT],
+        filters: ProjectFiltersDict,
+    ):
+        """
+        :param user_id: The 'current' user, in case the filter refers to him/her.
+        """
+        self.project_ids = project_ids
+        self.user_id = user_id
+        object_mappings: TableMapping = TableMapping(
+            ObjectFields, FREE_COLS_ARE_ELSEWHERE
+        )
+        sample_mappings: TableMapping = TableMapping(Sample)
+        acquisition_mappings: TableMapping = TableMapping(Acquisition)
+        process_mappings: TableMapping = TableMapping(Process)
+        # store for iteration
+        src_projects: List[Project] = (
+            session.query(Project).filter(Project.projid.in_(self.project_ids)).all()
+        )
+        self.mapping: ProjectSetMapping = ProjectSetMapping().load_from_projects(
+            src_projects
+        )
+        self.filters = ObjectSetFilter(session, filters)
+
+    def get_sql(
+        self,
+        order_clause: Optional[OrderClause] = None,
+        select_list: str = "",
+        all_images: bool = False,
+    ) -> Tuple[FromClause, WhereClause, SQLParamDict]:
+        """
+        Construct SQL parts for getting per-object information.
+        :param order_clause: The required order by clause, possibly containing a resultset window.
+        :param select_list: Used for hinting the builder that some specific table will be needed in join.
+                major tables obj_head, samples and acquisitions are always joined.
+        :param all_images: If not set (default), only return the lowest rank, i.e. visible, image
+        :return:
+        """
+        if order_clause is None:
+            order_clause = OrderClause()
+        # The filters on objects
+        obj_where = WhereClause()
+        import json
+
+        params: SQLParamDict = {
+            "projid": ",".join([str(project_id) for project_id in self.project_ids])
+        }
+
+        self.filters.get_sql_filter(
+            obj_where, params, self.user_id, self.mapping.object_mappings
+        )
+        column_referencing_sql = (
+            select_list + obj_where.get_sql() + order_clause.get_sql()
+        )
+        selected_tables = FromClause(
+            f"(select :projid as projid) prjs"
+        )  # Prepare a future _set_ of projects
+        if "prj." in column_referencing_sql:
+            selected_tables += (
+                f"{Project.__tablename__} prj ON prj.projid = prjs.projid"
+            )
+            selected_tables += f"{Sample.__tablename__} sam ON sam.projid = prj.projid"
+        else:
+            selected_tables += f"{Sample.__tablename__} sam ON sam.projid = prjs.projid"
+        selected_tables += (
+            f"{Acquisition.__tablename__} acq ON acq.acq_sample_id = sam.sampleid"
+        )
+        if "prc." in column_referencing_sql:
+            selected_tables += (
+                f"{Process.__tablename__} prc ON prc.processid = acq.acquisid"
+            )
+        obj_field_joined = "obf." in column_referencing_sql
+        if obj_field_joined and self.driving_table_is_obj_field(
+            obj_where.get_sql(),
+            order_clause.get_sql(),
+        ):
+            selected_tables += (
+                f"{ObjectFields.__tablename__} obf ON obf.acquis_id = acq.acquisid"
+            )
+            selected_tables += (
+                f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid"
+            )
+        else:
+            selected_tables += (
+                f"{ObjectHeader.__tablename__} obh ON obh.acquisid = acq.acquisid"
+            )
+            if obj_field_joined:
+                selected_tables += (
+                    f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid"
+                )
+        # if "prd." in column_referencing_sql:
+        #     preds_ref = Prediction.__tablename__ + " prd"
+        #     selected_tables += (
+        #         preds_ref
+        #         + " ON prd.object_id = obh.objid AND prd.classif_id = obh.classif_id"
+        #     )
+        #     if self.filters.status_filter not in MEANS_TRAINING_ID_EXIST:
+        #         selected_tables.set_outer(preds_ref)
+        # if "trn." in column_referencing_sql:
+        #     trainings_ref = Training.__tablename__ + " trn"
+        #     selected_tables += trainings_ref + " ON trn.training_id = prd.training_id"
+        #     if self.filters.status_filter not in MEANS_TRAINING_ID_EXIST:
+        #         selected_tables.set_outer(trainings_ref)
+        if "ohu." in column_referencing_sql:  # Inline query for annotators in history
+            selected_tables += (
+                f"(select 1 as in_annots WHERE EXISTS (select * from {ObjectsClassifHisto.__tablename__} och "
+                "WHERE och.objid = obh.objid AND och.classif_who = ANY (:filt_annot) ) ) ohu ON True"
+            )
+            selected_tables.set_outer("(select 1 as in_annots ")
+            selected_tables.set_lateral("(select 1 as in_annots ")
+        if "txo." in column_referencing_sql or "txp." in column_referencing_sql:
+            selected_tables += (
+                f"{Taxonomy.__tablename__} txo ON txo.id = obh.classif_id"
+            )
+            if (
+                self.filters.status_filter not in MEANS_CLASSIF_ID_EXIST
+                and not self.filters.taxo  # If some taxo is needed it's a plain join
+            ):
+                selected_tables.set_outer(f"{Taxonomy.__tablename__} txo ")
+        if "img." in column_referencing_sql:
+            selected_tables += (
+                f"{Image.__tablename__} img ON obh.objid = img.objid "
+                if all_images
+                else f"(select * from {Image.__tablename__} img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true"
+            )
+            selected_tables.set_lateral(f"(select * from {Image.__tablename__}")
+        if "usr." in column_referencing_sql:
+            selected_tables += f"{User.__tablename__} usr ON obh.classif_who = usr.id"
+            selected_tables.set_outer(f"{User.__tablename__} usr ")
+        if "txp." in column_referencing_sql:
+            selected_tables += f"{Taxonomy.__tablename__} txp ON txp.id = txo.parent_id"
+            selected_tables.set_outer(f"{Taxonomy.__tablename__} txp ")
+        return selected_tables, obj_where, params
+
+    def without_filtering_taxo(self):
+        """
+        Return a clone of self, but without any Taxonomy related filter.
+        """
+        filters_but_taxo = self.filters.filters_without_taxo()
+        return DescribedObjectSetBO(
+            self.filters.session, self.project_ids, self.user_id, filters_but_taxo
+        )
+
+    def driving_table_is_obj_field(self, where: str, order: str) -> bool:
+        """Choose the fastest way to find needed objects.
+        We mirror acquis_id from obj_head to obj_fields so 2 options are:
+        -1 Fetch via acquis_id the big rows in obj_fields and then PK access to obj_head
+        -2 Fetch via acquis_id the small rows in obj_head and then PK access to obj_fields
+        1 is faster if we need the majority of rows, 2 is better if some filter eliminates based on obj_head cols.
+        We don't know in advance the selectivity of filters, so there is kind of heuristic here.
+        """
+        ret = False
+        if ("obf." in order) or ("obf." in where and "obh." not in where):
+            ret = True
+        if (
+            "obh.classif_id" in where
+        ):  # Very discriminating and covered by index 'is_objectsacqclassifqual'
+            ret = False
+        if (
+            "obh.classif_qual" in where  # covered as well by 'is_objectsacqclassifqual'
+            and self.filters.status_filter
+            not in ("NV",)  # This OR-linked condition does not end up in index scan
+        ):
+            ret = False
+        return ret
+
+    def as_select_list(
+        self, alias: str, table_name: str, mappingcols: Dict[str, str]
+    ) -> str:
+        """
+        Return a SQL select list for given alias. col = name of db column mapping , name= name of tsv column
+        """
+        sels = []
+        tsv_table_name = TABLE_TO_PREFIX[table_name]
+        for name, col in mappingcols.items():
+            sels.append('%s.%s AS "%s_%s"' % (alias, col, tsv_table_name, name))
+        return ", " + ", ".join(sels) if sels else ""

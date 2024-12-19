@@ -3,8 +3,9 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import re
+import functools
 from typing import List, Any, Optional, Set, cast
-
+from dataclasses import dataclass
 from BO.DataLicense import DataLicense, LicenseEnum
 from BO.Sample import SampleOrigIDT
 from DB import Session
@@ -20,8 +21,10 @@ from DB.Collection import (
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
 from DB.User import User
+from BO.User import UserIDT, ContactUserBO
 from DB.helpers.ORM import contains_eager, func, any_
 from helpers.DynamicLogs import get_logger
+from helpers.FieldListType import FieldListType
 
 logger = get_logger(__name__)
 
@@ -113,6 +116,7 @@ class CollectionBO(object):
         )
         self._collection.license = DataLicense.BY_RESTRICTION[max_restrict]
         # TODO: Default creators using classification history in DB. Knowing that it's partial.
+
         # Report (brutally) problems
         assert len(problems) == 0, "\n".join(problems)
 
@@ -136,7 +140,7 @@ class CollectionBO(object):
         # TODO: projects update using given list
         assert project_ids == self.project_ids, "Cannot update composing projects yet"
         # Redo sanity check & aggregation as underlying projects might have changed (or not as stated just above. lol)
-        self._add_composing_projects(session, project_ids)
+        self.set_composing_projects(session, project_ids)
         coll_id = self._collection.id
         # Simple fields update
         self._collection.title = title
@@ -234,7 +238,7 @@ class CollectionBO(object):
         session.add(db_coll)
         session.flush()  # to get the collection ID
         bo_coll = CollectionBO(db_coll)
-        bo_coll.set_composing_projects(session, project_ids)
+        bo_coll._add_composing_projects(session, project_ids)
         session.commit()
         return bo_coll.id
 
@@ -294,3 +298,14 @@ class CollectionBO(object):
         qry = qry.group_by(Sample.orig_id)
         qry = qry.having(func.count(Sample.orig_id) > 1)
         return set([an_id for an_id, in qry])
+
+
+@dataclass()
+class MinimalCollectionBO:
+    id: CollectionIDT
+    external_id: str
+    title: str
+    short_title: str
+    provider_user_id: UserIDT
+    contact_user: dict
+    project_ids: ProjectIDListT

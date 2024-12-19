@@ -2245,6 +2245,11 @@ UPDATE alembic_version SET version_num='a9dd3c62b7b0' WHERE alembic_version.vers
 COMMIT;
 
 BEGIN;
+------------Running upgrade a9dd3c62b7b0->647290b6c4fc
+ALTER TABLE projects ADD COLUMN access VARCHAR(1) NOT NULL DEFAULT '';
+ALTER TABLE projects ADD COLUMN formulae VARCHAR(1000) DEFAULT NULL;
+UPDATE alembic_version SET version_num='647290b6c4fc'; WHERE alembic_version.version_num = 'a9dd3c62b7b0';
+
 
 -- Running upgrade a9dd3c62b7b0 -> d3bfaa54d544
 
@@ -2899,6 +2904,19 @@ DROP TABLE mig_classif_chunks_per_proj;
 DROP TABLE mig_unq_classif_per_proj;
 
 UPDATE alembic_version SET version_num='032dfb7159d5' WHERE alembic_version.version_num = '4045b161563b';
+-- Running upgrade 032dfb7159d5 -> 78b24e7ba52b
+
+ALTER TABLE projects ADD COLUMN access VARCHAR(1) NOT NULL;
+-- PUBLIC ="1" when visible=True and no license
+UPDATE projects SET access = "1" WHERE visible=true AND license="";
+-- OPEN="2" when visible=True and license = CC
+UPDATE projects SET access = "2" WHERE visible=true AND license!="" AND license!="copyright";
+-- private when copyright or visible=False
+UPDATE projects SET set access = "0" WHERE visible=false OR license="copyright";
+
+ALTER TABLE projects ADD COLUMN formulae VARCHAR;
+
+UPDATE alembic_version SET version_num='78b24e7ba52b' WHERE alembic_version.version_num = '032dfb7159d5';
 
 COMMIT;
 

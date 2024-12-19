@@ -15,13 +15,14 @@ from tests.test_import import SHARED_DIR, FTP_DIR, TEST_DIR
 
 psql_bin = "psql"
 # If we already have a server don't create one, e.g. in GitHub action
-PG_HOST = environ.get("POSTGRES_HOST")
-PG_PORT = environ.get("POSTGRES_PORT")
-
+# PG_HOST = environ.get("POSTGRES_HOST")
+# PG_PORT = environ.get("POSTGRES_PORT")
+PG_HOST = "localhost"
+PG_PORT = 5432
 if PG_HOST and PG_PORT:
     PG_PORT = int(PG_PORT)
 else:
-    pg_lib = "/usr/lib/postgresql/135/bin/"  # ============ 124 passed, 1 skipped, 4 warnings in 223.88s (0:03:43) ============
+    # pg_lib = "/usr/lib/postgresql/135/bin/"  # ============ 124 passed, 1 skipped, 4 warnings in 223.88s (0:03:43) ============
     pg_lib = "/usr/lib/postgresql/14/bin/"  # ============ 124 passed, 1 skipped, 4 warnings in 221.91s (0:03:41) ============
     pgctl_bin = join(pg_lib, "pg_ctl")
     initdb_bin = join(pg_lib, "initdb")

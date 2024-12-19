@@ -5,14 +5,16 @@
 
 import json
 from dataclasses import dataclass
-from typing import Any, Final, List
+from typing import Any, Final, List, Optional
 
 from BO.Classification import ClassifIDListT
 from BO.Rights import RightsBO
 from DB import Session
-from DB.User import User
+from DB.User import User, UserStatus
 from DB.UserPreferences import UserPreferences
 from helpers.DynamicLogs import get_logger
+from helpers.Timer import CodeTimer
+from DB.helpers.ORM import any_
 
 # Typings, to be clear that these are not e.g. object IDs
 UserIDT = int
@@ -194,3 +196,36 @@ class UserActivity:
 
 
 UserActivityListT = List[UserActivity]
+
+
+@dataclass()
+class ContactUserBO:
+    id: UserIDT
+    name: str
+    email: str
+    orcid: str
+    organisation: str
+
+
+class CollectionUserBOSet(object):
+    """
+    Many users for collection needs ( creator_users, associate_users)...
+    """
+
+    def __init__(
+        self, session: Session, ids: UserIDListT, status: Optional[UserStatus] = None
+    ):
+        qry = session.query(
+            User.id, User.name, User.email, User.orcid, User.organisation
+        ).filter(User.id == any_(ids))
+        if status is not None:
+            qry = qry.filter(User.status == status)
+        self.users: List[ContactUserBO] = []
+        users: List[ContactUserBO] = []
+        with CodeTimer("%s BO users query:" % len(ids), logger):
+            for u in qry:
+                usr = ContactUserBO(u.id, u.name, u.email, u.orcid, u.organisation)
+                self.users.append(usr)
+
+    def as_list(self) -> List[ContactUserBO]:
+        return self.users

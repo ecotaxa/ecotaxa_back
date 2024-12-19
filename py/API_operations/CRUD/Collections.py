@@ -2,14 +2,16 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Tuple, Dict, Any
 
-from API_models.crud import CreateCollectionReq
+from API_models.crud import CreateCollectionReq, CollectionAggregatedModel
 from API_models.exports import TaxonomyRecast
 from BO.Collection import CollectionBO, CollectionIDT
 from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Rights import NOT_FOUND
 from BO.User import UserIDT
+from BO.Project import CollectionProjectBOSet, MappingColumnEnum
+from DB.Project import ProjectIDListT
 from DB.Collection import Collection
 from DB.TaxoRecast import DWCA_EXPORT_OPERATION
 from DB.TaxoRecast import TaxoRecast
@@ -44,21 +46,42 @@ class CollectionsService(Service):
         """
         try:
             PermissionConsistentProjectSet(
-                self.session,
+                self.ro_session,
                 a_coll.project_ids,  # Need the R/W session here, as the projects MRU is written to. TODO
-            ).can_be_administered_by(user_id)
+            ).can_be_administered_by(user_id, update_preference=False)
         except AssertionError:
             return None
         return a_coll
+
+    def list(
+        self, current_user_id: UserIDT, collection_ids: Optional[str] = None
+    ) -> List[CollectionBO]:
+        qry = self.ro_session.query(Collection)
+        if collection_ids is not None:
+            ids = collection_ids.split(",")
+            if len(ids) > 0:
+                qry = qry.where(Collection.id.in_(ids))
+        ret = []
+        for a_rec in qry:
+            coll_bo = CollectionBO(a_rec)
+            coll_bo._read_composing_projects()
+            checked = self._check_access(coll_bo, current_user_id)
+            if checked is None:
+                continue
+            checked.enrich()
+            ret.append(checked)
+        return ret
 
     def search(self, current_user_id: UserIDT, title: str) -> List[CollectionBO]:
         qry = self.ro_session.query(Collection).filter(Collection.title.ilike(title))
         ret = []
         for a_rec in qry:
-            coll_bo = CollectionBO(a_rec).enrich()
+            coll_bo = CollectionBO(a_rec)
+            coll_bo._read_composing_projects()
             checked = self._check_access(coll_bo, current_user_id)
             if checked is None:
                 continue
+            checked.enrich()
             ret.append(checked)
         return ret
 
@@ -127,3 +150,42 @@ class CollectionsService(Service):
             .filter(TaxoRecast.operation == DWCA_EXPORT_OPERATION)
         )
         return qry
+
+    def aggregated_from_projects(
+        self,
+        current_user_id: UserIDT,
+        project_ids: ProjectIDListT,
+    ) -> Tuple[CollectionAggregatedModel, Optional[Dict[str, ProjectIDListT]]]:
+
+        excluded = {}
+        projectset = CollectionProjectBOSet(self.ro_session, project_ids)
+        can_be_administered = projectset.can_be_administered_by(
+            self.ro_session, current_user_id
+        )
+        initclassiflist = projectset.get_initclassiflist_from_projects()
+        classiffieldlist = projectset.get_classiffieldlist_from_projects()
+        creators = projectset.get_annotators_from_histo(self.ro_session)
+        privileges = projectset.get_privileges_from_projects()
+        datas: Dict[str, Any] = {}
+        datas["access"] = projectset.get_access_from_projects()
+        for column in ["cnn_network_id", "instrument", "status"]:
+            datas[column] = projectset.get_common_from_projects(column)
+            excluded[column] = datas[column][1]
+            datas[column] = datas[column][0]
+        datas["freecols"] = {}
+        for col in MappingColumnEnum:
+            column = col.value
+            datas["freecols"][col.value] = projectset.get_mapping_from_projects(col)
+        aggregated = CollectionAggregatedModel(
+            initclassiflist=initclassiflist,
+            classiffieldlist=classiffieldlist,
+            cnn_network_id=datas["cnn_network_id"] or "",
+            instrument=datas["instrument"] or "",
+            status=datas["status"] or "",
+            access=str(datas["access"]),
+            can_be_administered=can_be_administered,
+            creator_users=creators,
+            privileges=privileges,
+            freecols=datas["freecols"],
+        )
+        return (aggregated, excluded)
