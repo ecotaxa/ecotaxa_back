@@ -6,11 +6,11 @@ from typing import List, Union, Optional, Tuple, Dict, Any
 
 from API_models.crud import CreateCollectionReq, CollectionAggregatedModel
 from API_models.exports import TaxonomyRecast
-from BO.Collection import CollectionBO, CollectionIDT
+from BO.Collection import CollectionBO, CollectionIDT, CollectionAggregatedBO
 from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Rights import NOT_FOUND
 from BO.User import UserIDT
-from BO.Project import CollectionProjectBOSet, MappingColumnEnum
+from BO.Project import MappingColumnEnum, CollectionProjectBOSet
 from DB.Project import ProjectIDListT
 from DB.Collection import Collection
 from DB.TaxoRecast import DWCA_EXPORT_OPERATION
@@ -155,37 +155,46 @@ class CollectionsService(Service):
         self,
         current_user_id: UserIDT,
         project_ids: ProjectIDListT,
-    ) -> Tuple[CollectionAggregatedModel, Optional[Dict[str, ProjectIDListT]]]:
+    ) -> CollectionAggregatedBO:
 
-        excluded = {}
-        projectset = CollectionProjectBOSet(self.ro_session, project_ids)
-        can_be_administered = projectset.can_be_administered_by(
-            self.ro_session, current_user_id
+        projectset = CollectionProjectBOSet(
+            session=self.ro_session, prj_ids=project_ids
         )
+        excluded: Dict[str, ProjectIDListT] = {}
+        can_be_administered = False
+        try:
+            PermissionConsistentProjectSet(
+                self.ro_session,
+                project_ids,
+            ).can_be_administered_by(current_user_id, update_preference=False)
+            can_be_administered = True
+        except AssertionError:
+            pass
         initclassiflist = projectset.get_initclassiflist_from_projects()
         classiffieldlist = projectset.get_classiffieldlist_from_projects()
-        creators = projectset.get_annotators_from_histo(self.ro_session)
+        creator_users = projectset.get_annotators_from_histo(self.ro_session)
         privileges = projectset.get_privileges_from_projects()
+
         datas: Dict[str, Any] = {}
         datas["access"] = projectset.get_access_from_projects()
+        excluded["access"] = datas["access"][1]
+        datas["access"] = datas["access"][0]
         for column in ["cnn_network_id", "instrument", "status"]:
             datas[column] = projectset.get_common_from_projects(column)
             excluded[column] = datas[column][1]
             datas[column] = datas[column][0]
-        datas["freecols"] = {}
-        for col in MappingColumnEnum:
-            column = col.value
-            datas["freecols"][col.value] = projectset.get_mapping_from_projects(col)
-        aggregated = CollectionAggregatedModel(
+        datas["freecols"] = projectset.get_mapping_from_projects()
+        aggregated: CollectionAggregatedBO = CollectionAggregatedBO(
+            can_be_administered=can_be_administered,
             initclassiflist=initclassiflist,
             classiffieldlist=classiffieldlist,
+            creator_users=creator_users,
+            privileges=privileges,
+            access=datas["access"],
             cnn_network_id=datas["cnn_network_id"] or "",
             instrument=datas["instrument"] or "",
             status=datas["status"] or "",
-            access=str(datas["access"]),
-            can_be_administered=can_be_administered,
-            creator_users=creators,
-            privileges=privileges,
             freecols=datas["freecols"],
+            excluded=excluded,
         )
-        return (aggregated, excluded)
+        return aggregated

@@ -162,6 +162,7 @@ class ProjectExport(JobServiceBase):
         logger.info("Input Param = %s" % (self.req.__dict__,))
         # A bit of forward-thinking... Leave 5% of progress bar for final copy
         progress_before_copy = 100
+        out_file_name = None
         if req.out_to_ftp:
             progress_before_copy = 95
         # Force some implied (in UI) options.
@@ -217,8 +218,6 @@ class ProjectExport(JobServiceBase):
                 out_file_name = self.build_collection_zip()
                 done_infos.update({"out_file": out_file_name})
                 logger.info("End collection zip here.")
-            else:
-                out_file_name = None
         else:
             nb_rows = self.do_export_projects(
                 [int(project_id) for project_id in project_ids], progress_before_copy
@@ -241,8 +240,9 @@ class ProjectExport(JobServiceBase):
             final_message = "Export successful"
 
         self.update_progress(100, final_message)
+        if out_file_name is not None:
+            self.out_file_name = out_file_name
         done_infos.update({"rowcount": nb_rows, "out_file": self.out_file_name})
-        print("____________done_infos", done_infos)
         self.set_job_result(errors=[], infos=done_infos)
 
     def append_log_to_zip(self) -> None:
@@ -279,9 +279,7 @@ class ProjectExport(JobServiceBase):
         obj_count = self._get_fast_count(project_ids)
         # Prepare a where clause and parameters from filter
         src_projects = (
-            self.ro_session.query(Project.projid)
-            .where(Project.projid.in_(project_ids))
-            .all()
+            self.ro_session.query(Project).where(Project.projid.in_(project_ids)).all()
         )
         assert src_projects is not None and len(src_projects) == len(project_ids)
 

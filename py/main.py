@@ -47,7 +47,7 @@ from API_models.crud import (
     ProjectUserStatsModel,
     ProjectSetColumnStatsModel,
     ProjectColumnsModel,
-    RespAggregatedModel,
+    CollectionAggregatedModel,
     SampleTaxoStatsModel,
     ResetPasswordReq,
     UserActivateReq,
@@ -133,7 +133,12 @@ from API_operations.imports.SimpleImport import SimpleImport
 from BG_operations.JobScheduler import JobScheduler
 from BO.Acquisition import AcquisitionBO
 from BO.Classification import HistoricalClassification, ClassifIDT
-from BO.Collection import CollectionBO, MinimalCollectionBO, CollectionIDT
+from BO.Collection import (
+    CollectionBO,
+    MinimalCollectionBO,
+    CollectionIDT,
+    CollectionAggregatedBO,
+)
 from BO.ColumnUpdate import ColUpdateList
 from BO.Job import JobBO
 from BO.Object import ObjectBO
@@ -789,8 +794,8 @@ def collection_by_short_title(
     "/collections/aggregated_projects_properties",
     operation_id="collection_aggregated_projects_properties",
     tags=["collections"],
-    responses={200: {"content": {"application/json": {"model": RespAggregatedModel}}}},
-    response_model=RespAggregatedModel,
+    responses={200: {"content": {"application/json": {"example": {}}}}},
+    response_model=CollectionAggregatedBO,
 )
 def collection_aggregated_projects_properties(
     project_ids: str = Query(
@@ -800,7 +805,7 @@ def collection_aggregated_projects_properties(
         example="1",
     ),
     current_user: int = Depends(get_current_user),
-) -> RespAggregatedModel:
+) -> MyORJSONResponse:
     """
     **returns projectset calculated selected fields values  projects and list of rejected projects id.
     Note: 'manage' right is required on all underlying projects.
@@ -1010,6 +1015,7 @@ MyORJSONResponse.register(User, MinUserModel)
 MyORJSONResponse.register(TaxonBO, TaxonModel)
 MyORJSONResponse.register(ObjectSetQueryRsp, ObjectSetQueryRsp)
 MyORJSONResponse.register(Sample, SampleModel)
+MyORJSONResponse.register(CollectionAggregatedBO, CollectionAggregatedModel)
 project_model_columns = plain_columns(ProjectModel)
 
 

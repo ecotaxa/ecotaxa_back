@@ -22,7 +22,13 @@ from typing import (
 )
 
 from BO.Classification import ClassifIDListT
-from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping, TableMapping
+from BO.Mappings import (
+    RemapOp,
+    MappedTableTypeT,
+    ProjectMapping,
+    TableMapping,
+    ProjectSetMapping,
+)
 from BO.Prediction import DeepFeatures
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.DataLicense import DataLicense, LicenseEnum, AccessLevelEnum
@@ -1067,8 +1073,6 @@ class CollectionProjectBOSet(ProjectBOSet):
     Operations on the collection projects .
     """
 
-    projects: List[ProjectBO] = []
-
     def __init__(
         self,
         session: Session,
@@ -1217,33 +1221,13 @@ class CollectionProjectBOSet(ProjectBOSet):
 
         return linesep.join(ret)
 
-    def get_mapping_from_projects(self, column: MappingColumnEnum) -> List:
+    def get_mapping_from_projects(self) -> Dict[str, Dict[str, str]]:
         """
         Read common freecols for these projects. return List of common free cols names .
         """
-        values = [
-            (project.projid, getattr(project, column, None))
-            for project in self.projects
-        ]
-        commoncols: List = []
-        column2obj: Dict[str, str] = {
-            "mappingobj": "obj",
-            "mappingsample": "sample",
-            "mappingprocess": "process",
-            "mappingacq": "acquisition",
-        }
-        typ: Dict = {"n": 10000, "t": 0}
-        for i, value in enumerate(values):
-            mapping = getattr(self.projects[i], column2obj[column] + "_free_cols")
-            cols = sorted(
-                [(k, v) for k, v in mapping.items()],
-                key=lambda x: typ[x[1][0:1]] + int(x[1][1:]),
-            )
-            if len(commoncols):
-                commoncols = list(set(commoncols).intersection(set(cols)))
-            else:
-                commoncols = cols
-        return commoncols
+        projects = [project._project for project in self.projects]
+        mappings: ProjectSetMapping = ProjectSetMapping().load_from_projects(projects)
+        return mappings.as_dict()
 
     def get_common_from_projects(
         self,

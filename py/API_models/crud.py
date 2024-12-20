@@ -4,8 +4,7 @@
 #
 #  Models used in CRUD API_operations.
 #
-from typing import Optional, Dict, List, Any, Tuple
-
+from typing import Optional, Dict, List, Any, Tuple, OrderedDict
 from BO.ColumnUpdate import ColUpdate
 from BO.DataLicense import LicenseEnum, AccessLevelEnum
 from BO.Job import DBJobStateEnum
@@ -390,7 +389,7 @@ class ProjectModel(_ProjectModelFromDB, _AddedToProject):
     """
 
 
-class CollectionAggregatedModel(BaseModel):
+class CollectionAggregatedModel(DescriptiveModel):
     """
     collection model extended with computed informations about the collection projects
     """
@@ -451,11 +450,16 @@ class CollectionAggregatedModel(BaseModel):
             "mappingacq": [...],
         },
     )
+    excluded: Dict[str, ProjectIDListT] = Field(
+        title="excluded",
+        description="Excluded projects for common values ",
+        example={"status": [1, 5, 12], "access": [1]},
+    )
 
 
 # workaround for bug in tox aggregated : argument "response_model" to "get" of "FastAPI" has incompatible type "object"; expected "Optional[Type[Any]]
-class RespAggregatedModel(BaseModel):
-    __root__: Tuple[CollectionAggregatedModel, Optional[Dict[str, ProjectIDListT]]]
+# class RespAggregatedModel(BaseModel):
+#    __root__: Tuple[CollectionAggregatedModel, Optional[Dict[str, ProjectIDListT]]]
 
 
 class SampleModel(_SampleModelFromDB):

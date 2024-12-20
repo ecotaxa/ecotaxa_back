@@ -4,7 +4,7 @@
 #
 import re
 import functools
-from typing import List, Any, Optional, Set, cast
+from typing import List, Any, Optional, Set, cast, Dict, OrderedDict
 from dataclasses import dataclass
 from BO.DataLicense import DataLicense, LicenseEnum
 from BO.Sample import SampleOrigIDT
@@ -21,7 +21,7 @@ from DB.Collection import (
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
 from DB.User import User
-from BO.User import UserIDT, ContactUserBO
+from BO.User import UserIDT, UserIDListT, ContactUserBO
 from DB.helpers.ORM import contains_eager, func, any_
 from helpers.DynamicLogs import get_logger
 from helpers.FieldListType import FieldListType
@@ -34,6 +34,25 @@ CollectionIDListT = List[int]
 
 # Temporary until a proper entity appears
 OrganisationIDT = str
+
+
+@dataclass()
+class CollectionAggregatedBO:
+    """
+    collection computed informations about the collection projects
+    """
+
+    can_be_administered: bool
+    instrument: str
+    access: str
+    initclassiflist: str
+    classiffieldlist: str
+    cnn_network_id: str
+    status: str
+    creator_users: List[ContactUserBO]
+    privileges: Dict[str, UserIDListT]
+    freecols: Dict[str, Dict[str, str]]
+    excluded: Dict[str, ProjectIDListT]
 
 
 class CollectionBO(object):
