@@ -222,6 +222,7 @@ class ProjectExport(JobServiceBase):
             nb_rows = self.do_export_projects(
                 [int(project_id) for project_id in project_ids], progress_before_copy
             )
+            done_infos.update({"rowcount": nb_rows, "out_file": self.out_file_name})
         # Final copy
         if req.out_to_ftp:
             self.update_progress(progress_before_copy, "Copying file to FTP")
@@ -240,9 +241,9 @@ class ProjectExport(JobServiceBase):
             final_message = "Export successful"
 
         self.update_progress(100, final_message)
-        if out_file_name is not None:
+        if out_file_name is not None and "out_file" not in done_infos:
             self.out_file_name = out_file_name
-        done_infos.update({"rowcount": nb_rows, "out_file": self.out_file_name})
+            done_infos.update({"out_file": self.out_file_name})
         self.set_job_result(errors=[], infos=done_infos)
 
     def append_log_to_zip(self) -> None:
