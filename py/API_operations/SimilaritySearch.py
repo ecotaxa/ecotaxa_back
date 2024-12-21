@@ -85,7 +85,7 @@ class SimilaritySearchForProject(Service):
         order_clause = OrderClause()
         order_clause.add_expression(None, "l2_dist")
         order_clause.set_window(None, self.limit)
-        dist_exp = f"""cnn.objcnnid, cnn.features<->(SELECT features FROM {ObjectCNNFeatureVector.__tablename__}
+        dist_exp = f"""cnn.objcnnid, cnn.features::halfvec(50)<->(SELECT features::halfvec(50) FROM {ObjectCNNFeatureVector.__tablename__}
         WHERE objcnnid={self.target_id}) AS l2_dist"""
         from_, where_clause, params = object_set.get_sql(order_clause, dist_exp)
 

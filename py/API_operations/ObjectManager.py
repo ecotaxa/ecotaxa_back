@@ -115,7 +115,7 @@ class ObjectManager(Service):
         if sim_search_seed is not None:
             extra_cols = (
                 extra_cols
-                + f""", cnn.features<->(SELECT features FROM {ObjectCNNFeatureVector.__tablename__}
+                + f""", cnn.features::halfvec(50)<->(SELECT features::halfvec(50) FROM {ObjectCNNFeatureVector.__tablename__}
         WHERE objcnnid={sim_search_seed}) AS l2_dist"""
             )
             order_clause = OrderClause()
