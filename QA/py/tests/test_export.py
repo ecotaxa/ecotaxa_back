@@ -481,7 +481,7 @@ def export_project_to_ftp(fastapi, prj_id, just_annots):
     req_and_filters = {  # Common param to both entry points
         "filters": {},
         "request": {
-            "project_id": prj_id,
+            "project_id": str(prj_id),
             "out_to_ftp": True,
         },
     }
@@ -499,5 +499,6 @@ def export_project_to_ftp(fastapi, prj_id, just_annots):
     url = JOB_QUERY_URL.format(job_id=export_job_id)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     job_dict = rsp.json()
+    print("___________________job_dictr", job_dict["result"])
     file_in_ftp = job_dict["result"]["out_file"]
     return export_job_id, file_in_ftp

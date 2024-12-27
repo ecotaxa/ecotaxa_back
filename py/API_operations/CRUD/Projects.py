@@ -298,7 +298,7 @@ class ProjectsService(Service):
                 if hasattr(project, column):
                     values.append(getattr(project, column))
                 elif column == "userstats":
-                    annotators = ProjectBO.read_user_stats(self.ro_session, project_ids)
+                    annotators = ProjectBO.read_user_stats(self.session, project_ids)
                     creators = []
                     for annotator in annotators[1].annotators:
                         creators.append(annotator.id)

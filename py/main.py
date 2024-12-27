@@ -37,7 +37,9 @@ from API_models.crud import (
     ProjectModel,
     UserModelWithRights,
     MinUserModel,
+    UserCollectionModel,
     CollectionModel,
+    CollectionAggregatedRsp,
     CreateCollectionReq,
     SampleModel,
     JobModel,
@@ -47,7 +49,6 @@ from API_models.crud import (
     ProjectUserStatsModel,
     ProjectSetColumnStatsModel,
     ProjectColumnsModel,
-    CollectionAggregatedModel,
     SampleTaxoStatsModel,
     ResetPasswordReq,
     UserActivateReq,
@@ -137,7 +138,6 @@ from BO.Collection import (
     CollectionBO,
     MinimalCollectionBO,
     CollectionIDT,
-    CollectionAggregatedBO,
 )
 from BO.ColumnUpdate import ColUpdateList
 from BO.Job import JobBO
@@ -795,7 +795,8 @@ def collection_by_short_title(
     operation_id="collection_aggregated_projects_properties",
     tags=["collections"],
     responses={200: {"content": {"application/json": {"example": {}}}}},
-    response_model=CollectionAggregatedBO,
+    response_model=CollectionAggregatedRsp,
+    response_class=MyORJSONResponse,
 )
 def collection_aggregated_projects_properties(
     project_ids: str = Query(
@@ -1012,10 +1013,11 @@ def erase_collection(
 MyORJSONResponse.register(ProjectBO, ProjectModel)
 MyORJSONResponse.register(User, UserModelWithRights)
 MyORJSONResponse.register(User, MinUserModel)
+MyORJSONResponse.register(User, UserCollectionModel)
 MyORJSONResponse.register(TaxonBO, TaxonModel)
 MyORJSONResponse.register(ObjectSetQueryRsp, ObjectSetQueryRsp)
+MyORJSONResponse.register(CollectionAggregatedRsp, CollectionAggregatedRsp)
 MyORJSONResponse.register(Sample, SampleModel)
-MyORJSONResponse.register(CollectionAggregatedBO, CollectionAggregatedModel)
 project_model_columns = plain_columns(ProjectModel)
 
 

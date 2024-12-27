@@ -8,6 +8,7 @@ from typing import Optional, Dict, List, Any, Tuple, OrderedDict
 from BO.ColumnUpdate import ColUpdate
 from BO.DataLicense import LicenseEnum, AccessLevelEnum
 from BO.Job import DBJobStateEnum
+
 from BO.Project import ProjectUserStats, ProjectColumns
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
@@ -42,24 +43,13 @@ class _MinUserModel(DescriptiveModel):
 
 
 # Minimal user information
-class _UserCollectionModel(DescriptiveModel):
-    id = Field(title="Id", description="The unique numeric id of this user.", example=1)
-    email = Field(
-        title="Email",
-        description="User's email address, as text, used during registration.",
-        example="ecotaxa.api.user@gmail.com",
-    )
-    name = Field(
-        title="Name", description="User's full name, as text.", example="userName"
-    )
-    orcid = Field(title="ORCID", description="Orcid")
+class _UserCollectionDescription(_MinUserModel):
+    orcid = Field(title="ORCID", description="Orcid", example="12345")
     organisation = Field(title="organisation", description="Organisation")
 
 
 MinUserModel = combine_models(User, _MinUserModel)
-
-UserCollectionModel = combine_models(User, _UserCollectionModel)
-
+UserCollectionModel = combine_models(User, _UserCollectionDescription)
 # Direct mirror of DB models, i.e. the minimal + the rest we want
 class _FullUserModel(_MinUserModel):
     organisation = Field(
@@ -389,7 +379,7 @@ class ProjectModel(_ProjectModelFromDB, _AddedToProject):
     """
 
 
-class CollectionAggregatedModel(DescriptiveModel):
+class CollectionAggregatedRsp(BaseModel):
     """
     collection model extended with computed informations about the collection projects
     """
@@ -409,6 +399,7 @@ class CollectionAggregatedModel(DescriptiveModel):
         title="Access",
         description="The restricted access for collection projects.",
         example=AccessLevelEnum.OPEN,
+        default=AccessLevelEnum.OPEN,
     )
     initclassiflist: str = Field(
         title="Initial categories",
@@ -434,32 +425,30 @@ class CollectionAggregatedModel(DescriptiveModel):
     privileges: Dict[str, List[UserCollectionModel]] = Field(
         title="privileges",
         description="Aggregated user privileges of projects with user minimal right on projects",
+        example={
+            "managers": [],
+            "annotators": [],
+            "viewers": [],
+        },
+        default={"managers": [], "annotators": [], "viewers": []},
     )
     freecols: Dict[str, Dict[str, str]] = Field(
         title="freecols",
         description="Common free cols of projects.",
+        default={},
         example={
-            "mappingobj": [("n01", "annotation_confidencepmax"), ...],
-            "mappingsample": [
-                ("t01", "cruise"),
-                ("t02", "vessel"),
-                ("t03", "barcode"),
-                ...,
-            ],
-            "mappingprocess": [...],
-            "mappingacq": [...],
+            "mappingobj": {"n01": "annotation_confidencepmax"},
+            "mappingsample": {"t01": "cruise", "t02": "vessel", "t03": "barcode"},
+            "mappingprocess": {},
+            "mappingacq": {},
         },
     )
     excluded: Dict[str, ProjectIDListT] = Field(
         title="excluded",
+        default={},
         description="Excluded projects for common values ",
         example={"status": [1, 5, 12], "access": [1]},
     )
-
-
-# workaround for bug in tox aggregated : argument "response_model" to "get" of "FastAPI" has incompatible type "object"; expected "Optional[Type[Any]]
-# class RespAggregatedModel(BaseModel):
-#    __root__: Tuple[CollectionAggregatedModel, Optional[Dict[str, ProjectIDListT]]]
 
 
 class SampleModel(_SampleModelFromDB):

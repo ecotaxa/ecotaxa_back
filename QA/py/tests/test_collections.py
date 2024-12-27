@@ -72,6 +72,7 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
 
     # And creates a collection with it
     url = COLLECTION_CREATE_URL
+
     rsp = fastapi.post(
         url,
         headers=who,

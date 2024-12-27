@@ -4,9 +4,9 @@
 #
 from typing import List, Union, Optional, Tuple, Dict, Any
 
-from API_models.crud import CreateCollectionReq, CollectionAggregatedModel
+from API_models.crud import CreateCollectionReq, CollectionAggregatedRsp
 from API_models.exports import TaxonomyRecast
-from BO.Collection import CollectionBO, CollectionIDT, CollectionAggregatedBO
+from BO.Collection import CollectionBO, CollectionIDT
 from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Rights import NOT_FOUND
 from BO.User import UserIDT
@@ -36,6 +36,7 @@ class CollectionsService(Service):
             self.session, req.project_ids
         ).can_be_administered_by(current_user_id)
         coll_id = CollectionBO.create(self.session, req.title, req.project_ids)
+
         return coll_id
 
     def _check_access(
@@ -155,7 +156,7 @@ class CollectionsService(Service):
         self,
         current_user_id: UserIDT,
         project_ids: ProjectIDListT,
-    ) -> CollectionAggregatedBO:
+    ) -> CollectionAggregatedRsp:
 
         projectset = CollectionProjectBOSet(
             session=self.ro_session, prj_ids=project_ids
@@ -183,8 +184,9 @@ class CollectionsService(Service):
             datas[column] = projectset.get_common_from_projects(column)
             excluded[column] = datas[column][1]
             datas[column] = datas[column][0]
+
         datas["freecols"] = projectset.get_mapping_from_projects()
-        aggregated: CollectionAggregatedBO = CollectionAggregatedBO(
+        aggregated: CollectionAggregatedRsp = CollectionAggregatedRsp(
             can_be_administered=can_be_administered,
             initclassiflist=initclassiflist,
             classiffieldlist=classiffieldlist,

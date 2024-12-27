@@ -38,10 +38,10 @@ from BO.SpaceTime import USED_FIELDS_FOR_SUNPOS, compute_sun_position
 from BO.User import (
     MinimalUserBO,
     ContactUserBO,
+    ContactUserListT,
     UserActivity,
     MinimalUserBOListT,
     UserActivityListT,
-    CollectionUserBOSet,
 )
 from DB.Acquisition import Acquisition
 from DB.Object import (
@@ -512,10 +512,12 @@ class ProjectBO(object):
             logger,
         ):
             last_prj: Optional[int] = None
+            prj_stat = ProjectUserStats(0, [], [])
             for projid, user_id, user_name, cnt, last_date in pqry:
                 if last_date is None:
                     continue
                 last_date_str = last_date.replace(microsecond=0).isoformat()
+
                 if projid != last_prj:
                     last_prj = projid
                     prj_stat = ProjectUserStats(projid, [], [])
@@ -705,7 +707,11 @@ class ProjectBO(object):
         for r in qry:
             if r.name:
                 contact = ContactUserBO(
-                    r.contact_user_id, r.name, r.email, r.orcid, r.organisation
+                    r.contact_user_id,
+                    r.email,
+                    r.name,
+                    r.orcid or "None",
+                    r.organisation,
                 )
             else:
                 contact = ContactUserBO(0, "None", "None", "None", "None")
@@ -1122,14 +1128,28 @@ class CollectionProjectBOSet(ProjectBOSet):
                 noaccesses.append(project.projid)
         return (restricted_access, noaccesses)
 
-    def get_annotators_from_histo(self, session) -> List[ContactUserBO]:
+    def get_annotators_from_histo(
+        self, session, status: Optional[int] = None
+    ) -> ContactUserListT:
         project_ids: ProjectIDListT = [project.projid for project in self.projects]
         stats = ProjectBO.read_user_stats(session, project_ids)
         ids: UserIDListT = []
         for stat in stats:
             ids = ids + [annotator.id for annotator in stat.annotators]
-        ret = CollectionUserBOSet(session, ids).as_list()
-        return ret
+        qry = session.query(
+            User.id, User.email, User.name, User.orcid, User.organisation
+        ).filter(User.id == any_(ids))
+        if status is not None:
+            qry = qry.filter(User.status == status)
+        users: ContactUserListT = []
+        with CodeTimer("%s BO users query:" % len(ids), logger):
+            for u in qry:
+                usr = ContactUserBO(
+                    u.id, u.name, u.email, u.orcid or "None", u.organisation
+                )
+                users.append(usr)
+
+        return users
 
     def get_initclassiflist_from_projects(
         self,
@@ -1149,16 +1169,18 @@ class CollectionProjectBOSet(ProjectBOSet):
 
     @staticmethod
     def _check_user_privilege(
-        user: User, privlist: List[ContactUserBO]
-    ) -> List[ContactUserBO]:
-        u = ContactUserBO(user.id, user.name, user.email, user.orcid, user.organisation)
+        user: User, privlist: ContactUserListT
+    ) -> ContactUserListT:
+        u = ContactUserBO(
+            user.id, user.name, user.email, user.orcid or "None", user.organisation
+        )
         if u not in privlist:
             privlist.append(u)
         return privlist
 
     def get_privileges_from_projects(
         self,
-    ) -> Dict[str, UserIDListT]:
+    ) -> Dict[str, ContactUserListT]:
         """
         Read aggregated Initial list of categories for these projects.
         """
@@ -1227,7 +1249,8 @@ class CollectionProjectBOSet(ProjectBOSet):
         """
         projects = [project._project for project in self.projects]
         mappings: ProjectSetMapping = ProjectSetMapping().load_from_projects(projects)
-        return mappings.as_dict()
+        dictmap = mappings.as_dict()
+        return dictmap
 
     def get_common_from_projects(
         self,
