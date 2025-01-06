@@ -36,7 +36,6 @@ class CollectionsService(Service):
             self.session, req.project_ids
         ).can_be_administered_by(current_user_id)
         coll_id = CollectionBO.create(self.session, req.title, req.project_ids)
-
         return coll_id
 
     def _check_access(
@@ -184,8 +183,10 @@ class CollectionsService(Service):
             datas[column] = projectset.get_common_from_projects(column)
             excluded[column] = datas[column][1]
             datas[column] = datas[column][0]
-
-        datas["freecols"] = projectset.get_mapping_from_projects()
+        freecols = projectset.get_mapping_from_projects()
+        datas["freecols"] = {}
+        for key, cols in freecols.items():
+            datas["freecols"][key] = dict(freecols[key])
         aggregated: CollectionAggregatedRsp = CollectionAggregatedRsp(
             can_be_administered=can_be_administered,
             initclassiflist=initclassiflist,

@@ -12,7 +12,7 @@ from BO.Job import DBJobStateEnum
 from BO.Project import ProjectUserStats, ProjectColumns
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
-from BO.User import UserIDT, UserIDListT, ContactUserBO
+from BO.User import UserIDT, UserIDListT, ContactUserListT
 from DB.Acquisition import Acquisition
 from DB.Collection import Collection
 from DB.Instrument import UNKNOWN_INSTRUMENT
@@ -417,12 +417,12 @@ class CollectionAggregatedRsp(BaseModel):
         title="Status",
         description=" the restricted collection status calculated from projects.",
     )
-    creator_users: List[UserCollectionModel] = Field(
+    creator_users: ContactUserListT = Field(
         title="Creator users",
         description="""Annotators extracted from history.""",
         default=[],
     )
-    privileges: Dict[str, List[UserCollectionModel]] = Field(
+    privileges: Dict[str, ContactUserListT] = Field(
         title="privileges",
         description="Aggregated user privileges of projects with user minimal right on projects",
         example={

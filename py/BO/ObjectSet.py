@@ -1384,7 +1384,7 @@ class DescribedObjectBOSet(object):
         Return a clone of self, but without any Taxonomy related filter.
         """
         filters_but_taxo = self.filters.filters_without_taxo()
-        return DescribedObjectSetBO(
+        return DescribedObjectBOSet(
             self.filters.session, self.project_ids, self.user_id, filters_but_taxo
         )
 
