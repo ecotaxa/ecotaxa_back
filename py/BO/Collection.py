@@ -21,10 +21,7 @@ from DB.Collection import (
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
 from DB.User import User
-from BO.User import (
-    UserIDT,
-    UserIDListT,
-)
+from BO.User import UserIDT, UserIDListT, ContactUserBO
 from DB.helpers.ORM import contains_eager, func, any_
 from helpers.DynamicLogs import get_logger
 from helpers.FieldListType import FieldListType
@@ -114,9 +111,8 @@ class CollectionBO(object):
             self._collection.projects.append(a_db_project)
             prj_licenses.add(cast(LicenseEnum, a_db_project.license))
         # Set self to most restrictive of all licenses
-        max_restrict = max(
-            [DataLicense.RESTRICTION[a_prj_lic] for a_prj_lic in prj_licenses]
-        )
+        arr_lic = [DataLicense.RESTRICTION[a_prj_lic] for a_prj_lic in prj_licenses]
+        max_restrict = max(arr_lic)
         self._collection.license = DataLicense.BY_RESTRICTION[max_restrict]
         # TODO: Default creators using classification history in DB. Knowing that it's partial.
 
@@ -219,7 +215,8 @@ class CollectionBO(object):
             if a_prj_id not in self.project_ids
         ]
         assert len(to_remove) == 0, "No removal in collection composition yet"
-        self._add_composing_projects(session, to_add)
+        if len(to_add):
+            self._add_composing_projects(session, to_add)
 
     def __getattr__(self, item):
         """Fallback for 'not found' field after the C getattr() call.
@@ -310,5 +307,5 @@ class MinimalCollectionBO:
     title: str
     short_title: str
     provider_user_id: UserIDT
-    contact_user: dict
+    contact_user: Optional[ContactUserBO]
     project_ids: ProjectIDListT

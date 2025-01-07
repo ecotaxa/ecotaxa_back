@@ -499,6 +499,5 @@ def export_project_to_ftp(fastapi, prj_id, just_annots):
     url = JOB_QUERY_URL.format(job_id=export_job_id)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     job_dict = rsp.json()
-    print("___________________job_dictr", job_dict["result"])
     file_in_ftp = job_dict["result"]["out_file"]
     return export_job_id, file_in_ftp

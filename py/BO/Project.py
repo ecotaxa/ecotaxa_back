@@ -57,7 +57,7 @@ from DB.Process import Process
 from DB.Project import ProjectIDT, ProjectIDListT, Project
 from DB.Collection import CollectionProject, Collection
 from BO.Collection import MinimalCollectionBO
-from BO.User import UserIDT, UserIDListT
+from BO.User import UserIDT, UserIDListT, ContactUserBO
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.ProjectVariables import KNOWN_PROJECT_VARS
 from DB.ProjectVariables import ProjectVariables
@@ -705,16 +705,16 @@ class ProjectBO(object):
         )
         ret = []
         for r in qry:
-            if r.name:
+            if r.contact_user_id:
                 contact = ContactUserBO(
-                    r.contact_user_id,
-                    r.email,
-                    r.name,
-                    r.orcid or "None",
-                    r.organisation,
+                    id=r.contact_user_id,
+                    email=r.email,
+                    name=r.name,
+                    orcid=r.orcid or "None",
+                    organisation=r.organisation,
                 )
             else:
-                contact = ContactUserBO(0, "None", "None", "None", "None")
+                contact = None
             qry_proj = session.query(CollectionProject.project_id).where(
                 CollectionProject.collection_id == r.id
             )
@@ -726,7 +726,7 @@ class ProjectBO(object):
                     r.title,
                     r.short_title,
                     r.provider_user_id,
-                    asdict(contact),
+                    contact,
                     project_ids,
                 )
             )
@@ -1130,7 +1130,7 @@ class CollectionProjectBOSet(ProjectBOSet):
 
     def get_annotators_from_histo(
         self, session, status: Optional[int] = None
-    ) -> ContactUserListT:
+    ) -> List[User]:
         project_ids: ProjectIDListT = [project.projid for project in self.projects]
         stats = ProjectBO.read_user_stats(session, project_ids)
         ids: UserIDListT = []
@@ -1141,13 +1141,13 @@ class CollectionProjectBOSet(ProjectBOSet):
         ).filter(User.id == any_(ids))
         if status is not None:
             qry = qry.filter(User.status == status)
-        users: ContactUserListT = []
+        users: List[User] = []
         with CodeTimer("%s BO users query:" % len(ids), logger):
             for u in qry:
-                usr = ContactUserBO(
-                    u.id, u.name, u.email, u.orcid or "None", u.organisation
-                )
-                users.append(usr)
+                # usr = ContactUserBO(
+                #    u.id, u.email, u.name, u.orcid or "None", u.organisation
+                # )
+                users.append(u)
 
         return users
 
@@ -1171,8 +1171,8 @@ class CollectionProjectBOSet(ProjectBOSet):
     def _check_user_privilege(
         user: User, privlist: ContactUserListT
     ) -> ContactUserListT:
-        u = ContactUserBO(
-            user.id, user.name, user.email, user.orcid or "None", user.organisation
+        u: ContactUserBO = ContactUserBO(
+            user.id, user.email, user.name, user.orcid or "None", user.organisation
         )
         if u not in privlist:
             privlist.append(u)
@@ -1190,20 +1190,20 @@ class CollectionProjectBOSet(ProjectBOSet):
             ProjectPrivilegeBO.MANAGE: "managers",
         }
         projects = self.projects
-        privileges: Dict = {
+        privileges: Dict[str, List[User]] = {
             keys[ProjectPrivilegeBO.MANAGE]: [],
             keys[ProjectPrivilegeBO.ANNOTATE]: [],
             keys[ProjectPrivilegeBO.VIEW]: [],
         }
         for project in self.projects:
+            key = keys[ProjectPrivilegeBO.VIEW]
             for v in project.viewers:
-                key = keys[ProjectPrivilegeBO.VIEW]
                 privileges[key] = self._check_user_privilege(v, privileges[key])
+            key = keys[ProjectPrivilegeBO.ANNOTATE]
             for v in project.annotators:
-                key = keys[ProjectPrivilegeBO.ANNOTATE]
                 privileges[key] = self._check_user_privilege(v, privileges[key])
+            key = keys[ProjectPrivilegeBO.MANAGE]
             for v in project.managers:
-                key = keys[ProjectPrivilegeBO.MANAGE]
                 privileges[key] = self._check_user_privilege(v, privileges[key])
         for v in privileges[keys[ProjectPrivilegeBO.VIEW]]:
             for k in [

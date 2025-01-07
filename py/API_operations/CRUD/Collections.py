@@ -174,7 +174,6 @@ class CollectionsService(Service):
         classiffieldlist = projectset.get_classiffieldlist_from_projects()
         creator_users = projectset.get_annotators_from_histo(self.ro_session)
         privileges = projectset.get_privileges_from_projects()
-
         datas: Dict[str, Any] = {}
         datas["access"] = projectset.get_access_from_projects()
         excluded["access"] = datas["access"][1]

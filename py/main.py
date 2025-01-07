@@ -37,7 +37,6 @@ from API_models.crud import (
     ProjectModel,
     UserModelWithRights,
     MinUserModel,
-    UserCollectionModel,
     CollectionModel,
     CollectionAggregatedRsp,
     CreateCollectionReq,
@@ -648,12 +647,6 @@ def search_organizations(
 )
 def create_collection(
     params: CreateCollectionReq = Body(...),
-    dry_run: bool = Query(
-        ...,
-        title="Dry run",
-        description="If set, then only a diagnostic of doability will be done. In this case, plain value check. If no dry_run, this call will create a background job.",
-        example=True,
-    ),
     current_user: int = Depends(get_current_user),
 ) -> Union[int, str]:
     """
@@ -1013,7 +1006,6 @@ def erase_collection(
 MyORJSONResponse.register(ProjectBO, ProjectModel)
 MyORJSONResponse.register(User, UserModelWithRights)
 MyORJSONResponse.register(User, MinUserModel)
-MyORJSONResponse.register(User, UserCollectionModel)
 MyORJSONResponse.register(TaxonBO, TaxonModel)
 MyORJSONResponse.register(ObjectSetQueryRsp, ObjectSetQueryRsp)
 MyORJSONResponse.register(CollectionAggregatedRsp, CollectionAggregatedRsp)

@@ -12,7 +12,7 @@ from BO.Job import DBJobStateEnum
 from BO.Project import ProjectUserStats, ProjectColumns
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
-from BO.User import UserIDT, UserIDListT, ContactUserListT
+from BO.User import UserIDT, UserIDListT
 from DB.Acquisition import Acquisition
 from DB.Collection import Collection
 from DB.Instrument import UNKNOWN_INSTRUMENT
@@ -42,14 +42,13 @@ class _MinUserModel(DescriptiveModel):
     )
 
 
-# Minimal user information
-class _UserCollectionDescription(_MinUserModel):
-    orcid = Field(title="ORCID", description="Orcid", example="12345")
-    organisation = Field(title="organisation", description="Organisation")
+class _UserCollectionModel(_MinUserModel):
+    orcid = Field(title="orcid", description="orcid unique identifier for this user")
+    organisation = Field(title="Organisation", description="Organisation title")
 
 
 MinUserModel = combine_models(User, _MinUserModel)
-UserCollectionModel = combine_models(User, _UserCollectionDescription)
+UserCollectionModel = combine_models(User, _UserCollectionModel)
 # Direct mirror of DB models, i.e. the minimal + the rest we want
 class _FullUserModel(_MinUserModel):
     organisation = Field(
@@ -417,12 +416,12 @@ class CollectionAggregatedRsp(BaseModel):
         title="Status",
         description=" the restricted collection status calculated from projects.",
     )
-    creator_users: ContactUserListT = Field(
+    creator_users: List[UserCollectionModel] = Field(
         title="Creator users",
         description="""Annotators extracted from history.""",
         default=[],
     )
-    privileges: Dict[str, ContactUserListT] = Field(
+    privileges: Dict[str, List[UserCollectionModel]] = Field(
         title="privileges",
         description="Aggregated user privileges of projects with user minimal right on projects",
         example={
