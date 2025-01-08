@@ -1190,7 +1190,7 @@ class CollectionProjectBOSet(ProjectBOSet):
             ProjectPrivilegeBO.MANAGE: "managers",
         }
         projects = self.projects
-        privileges: Dict[str, List[User]] = {
+        privileges: Dict[str, ContactUserListT] = {
             keys[ProjectPrivilegeBO.MANAGE]: [],
             keys[ProjectPrivilegeBO.ANNOTATE]: [],
             keys[ProjectPrivilegeBO.VIEW]: [],
@@ -1205,16 +1205,16 @@ class CollectionProjectBOSet(ProjectBOSet):
             key = keys[ProjectPrivilegeBO.MANAGE]
             for v in project.managers:
                 privileges[key] = self._check_user_privilege(v, privileges[key])
-        for v in privileges[keys[ProjectPrivilegeBO.VIEW]]:
+        for u in privileges[keys[ProjectPrivilegeBO.VIEW]]:
             for k in [
                 keys[ProjectPrivilegeBO.ANNOTATE],
                 keys[ProjectPrivilegeBO.MANAGE],
             ]:
-                if v in privileges[k]:
-                    privileges[k].remove(v)
-        for v in privileges[keys[ProjectPrivilegeBO.ANNOTATE]]:
-            if v in privileges[keys[ProjectPrivilegeBO.MANAGE]]:
-                privileges[keys[ProjectPrivilegeBO.MANAGE]].remove(v)
+                if u in privileges[k]:
+                    privileges[k].remove(u)
+        for u in privileges[keys[ProjectPrivilegeBO.ANNOTATE]]:
+            if u in privileges[keys[ProjectPrivilegeBO.MANAGE]]:
+                privileges[keys[ProjectPrivilegeBO.MANAGE]].remove(u)
         return privileges
 
     def get_classiffieldlist_from_projects(

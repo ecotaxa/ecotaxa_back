@@ -19,6 +19,7 @@ from DB.Collection import (
     COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER,
 )
 from DB.Project import ProjectIDListT, Project
+from DB.Object import ObjectHeader
 from DB.Sample import Sample
 from DB.User import User
 from BO.User import UserIDT, UserIDListT, ContactUserBO
@@ -93,7 +94,11 @@ class CollectionBO(object):
     def _read_composing_projects(self):
         self.project_ids = sorted([a_rec.projid for a_rec in self._collection.projects])
 
-    def _add_composing_projects(self, session: Session, project_ids: ProjectIDListT):
+    def _add_composing_projects(
+        self,
+        session: Session,
+        project_ids: ProjectIDListT,
+    ):
         """
         Add the given projects into DB, doing sanity checks.
         """
@@ -109,15 +114,64 @@ class CollectionBO(object):
         a_db_project: Project
         for a_db_project in db_projects:
             self._collection.projects.append(a_db_project)
-            prj_licenses.add(cast(LicenseEnum, a_db_project.license))
-        # Set self to most restrictive of all licenses
-        arr_lic = [DataLicense.RESTRICTION[a_prj_lic] for a_prj_lic in prj_licenses]
-        max_restrict = max(arr_lic)
-        self._collection.license = DataLicense.BY_RESTRICTION[max_restrict]
+
         # TODO: Default creators using classification history in DB. Knowing that it's partial.
 
+        creator_user, creator_org = self._get_annotators_from_histo(
+            session, project_ids
+        )
+        by_role_user = {
+            COLLECTION_ROLE_DATA_CREATOR: creator_user,
+        }
+        # Dispatch orgs by role
+        by_role_org = {
+            COLLECTION_ROLE_DATA_CREATOR: creator_org,
+        }
+        self._add_collection_users(session, self.id, by_role_user, by_role_org)
         # Report (brutally) problems
         assert len(problems) == 0, "\n".join(problems)
+
+    # static methods  get aggregated data from projects
+    def get_classiffieldlist_from_projects(
+        self,
+    ) -> str:
+        """
+        Read aggregated Fields available on sort & displayed field of Manual classif screen for these projects.
+        """
+        obj: Dict = {}
+        ret: List = []
+        linesep = "\n"
+        projects = self.projects
+        for project in projects:
+            if project.classiffieldlist is None:
+                fields = []
+            else:
+                fields = project.classiffieldlist.split(linesep)
+            for field in fields:
+                arrfield = field.split("=")
+                key = arrfield[0].strip()
+                if len(arrfield) == 2 and key != "" and key not in obj.keys():
+                    # for same var name add only the first
+                    obj[key] = arrfield[1].strip()
+        for k, v in obj.items():
+            ret.append(k + "=" + v)
+
+        return linesep.join(ret)
+
+    @staticmethod
+    def _get_annotators_from_histo(
+        session, project_ids: ProjectIDListT, status: Optional[int] = None
+    ) -> List[User]:
+        pqry = session.query(User.id, User.organisation)
+        pqry.join(User, User.id == ObjectHeader.classif_who)
+        pqry.filter(Project.projid == any_(project_ids))
+        pqry.filter(ObjectHeader.classif_who == User.id)
+        if status is not None:
+            pqry.filter(User.status == status)
+        users: List[Any] = pqry.all()
+        creator_user = [u.id for u in users]
+        creator_org = [u.organisation for u in users]
+        return creator_user, creator_org
 
     def update(
         self,
@@ -155,16 +209,36 @@ class CollectionBO(object):
             self._collection.contact_user_id = contact_user.id
 
         # Dispatch members by role
-        by_role = {
+        by_role_user = {
             COLLECTION_ROLE_DATA_CREATOR: creator_users,
             COLLECTION_ROLE_ASSOCIATED_PERSON: associate_users,
         }
-        # Remove all to avoid diff-ing
-        session.query(CollectionUserRole).filter(
+        # Dispatch orgs by role
+        by_role_org = {
+            COLLECTION_ROLE_DATA_CREATOR: creator_orgs,
+            COLLECTION_ROLE_ASSOCIATED_PERSON: associate_orgs,
+        }
+        self._add_collection_users(session, coll_id, by_role_user, by_role_org)
+        session.commit()
+
+    def _add_collection_users(
+        self,
+        session: Session,
+        coll_id: int,
+        by_role_user: Dict[str, List[Any]],
+        by_role_org: Dict[str, List[Any]],
+    ):
+        """Dispatch members and org by role"""
+
+        #  diff-ing
+        qry = session.query(CollectionUserRole).filter(
             CollectionUserRole.collection_id == coll_id
-        ).delete()
+        )
+        role_users = qry.all()
+        print("________role_user", role_users)
+        qry.delete()
         # Add all
-        for a_role, a_user_list in by_role.items():
+        for a_role, a_user_list in by_role_user.items():
             for a_user in a_user_list:
                 session.add(
                     CollectionUserRole(
@@ -173,14 +247,13 @@ class CollectionBO(object):
                 )
 
         # Dispatch orgs by role
-        by_role_org = {
-            COLLECTION_ROLE_DATA_CREATOR: creator_orgs,
-            COLLECTION_ROLE_ASSOCIATED_PERSON: associate_orgs,
-        }
         # Remove all to avoid diff-ing
-        session.query(CollectionOrgaRole).filter(
+        qry = session.query(CollectionOrgaRole).filter(
             CollectionOrgaRole.collection_id == coll_id
-        ).delete()
+        )
+        role_org = qry.all()
+        print("________role_org", role_org)
+        qry.delete()
         # Add all
         for a_role, an_org_list in by_role_org.items():
             for an_org in an_org_list:
@@ -190,14 +263,14 @@ class CollectionBO(object):
                     )
                 )
         # First org is the institutionCode provider
+        inst_code_provider = by_role_org[COLLECTION_ROLE_DATA_CREATOR][0]
         session.add(
             CollectionOrgaRole(
                 collection_id=coll_id,
-                organisation=creator_orgs[0],
+                organisation=inst_code_provider,
                 role=COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER,
             )
         )
-        session.commit()
 
     def set_composing_projects(self, session: Session, project_ids: ProjectIDListT):
         """
@@ -235,6 +308,7 @@ class CollectionBO(object):
         db_coll.title = title
         db_coll.external_id = "?"
         db_coll.external_id_system = "?"
+        db_coll.license = LicenseEnum.NO_LICENSE.value
         session.add(db_coll)
         session.flush()  # to get the collection ID
         bo_coll = CollectionBO(db_coll)
