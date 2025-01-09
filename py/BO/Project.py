@@ -1120,7 +1120,7 @@ class CollectionProjectBOSet(ProjectBOSet):
         return list of projects id validating the restricted_access.
         """
         noaccesses: ProjectIDListT = []
-        restricted_access = min(
+        restricted_access = max(
             [cast(AccessLevelEnum, project.access) for project in self.projects]
         )
         for project in self.projects:
@@ -1171,11 +1171,12 @@ class CollectionProjectBOSet(ProjectBOSet):
     def _check_user_privilege(
         user: User, privlist: ContactUserListT
     ) -> ContactUserListT:
-        u: ContactUserBO = ContactUserBO(
-            user.id, user.email, user.name, user.orcid or "None", user.organisation
-        )
-        if u not in privlist:
-            privlist.append(u)
+        if user.status == UserStatus.active.value:
+            u: ContactUserBO = ContactUserBO(
+                user.id, user.email, user.name, user.orcid or "None", user.organisation
+            )
+            if u not in privlist:
+                privlist.append(u)
         return privlist
 
     def get_privileges_from_projects(
@@ -1196,15 +1197,10 @@ class CollectionProjectBOSet(ProjectBOSet):
             keys[ProjectPrivilegeBO.VIEW]: [],
         }
         for project in self.projects:
-            key = keys[ProjectPrivilegeBO.VIEW]
-            for v in project.viewers:
-                privileges[key] = self._check_user_privilege(v, privileges[key])
-            key = keys[ProjectPrivilegeBO.ANNOTATE]
-            for v in project.annotators:
-                privileges[key] = self._check_user_privilege(v, privileges[key])
-            key = keys[ProjectPrivilegeBO.MANAGE]
-            for v in project.managers:
-                privileges[key] = self._check_user_privilege(v, privileges[key])
+            for key in keys.values():
+                for v in getattr(project, key):
+                    privileges[key] = self._check_user_privilege(v, privileges[key])
+        # aggregate from projects
         for u in privileges[keys[ProjectPrivilegeBO.VIEW]]:
             for k in [
                 keys[ProjectPrivilegeBO.ANNOTATE],

@@ -4,11 +4,11 @@
 #
 #  Models used in CRUD API_operations.
 #
-from typing import Optional, Dict, List, Any, Tuple, OrderedDict
+from typing import Optional, Dict, List, Any, Tuple, OrderedDict, Union
 from BO.ColumnUpdate import ColUpdate
 from BO.DataLicense import LicenseEnum, AccessLevelEnum
 from BO.Job import DBJobStateEnum
-
+from BO.Collection import OrganisationIDT
 from BO.Project import ProjectUserStats, ProjectColumns
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
@@ -707,6 +707,77 @@ class CollectionModel(_CollectionModelFromDB, _AddedToCollection):
 
     class Config:
         schema_extra = {"title": "Collection Model"}
+
+
+class CollectionReq(BaseModel):
+    """
+    update full or partial collection Request model
+    """
+
+    external_id: Union[str, None] = Field(
+        title="External Id", description="The external Id.", example=""
+    )
+    title: Union[str, None] = Field(
+        title="Title", description="The collection title.", example="My collection"
+    )
+    short_title: Union[str, None] = Field(
+        title="Short title",
+        description="The collection short title.",
+        example="My coll",
+    )
+    provider_user_id: Union[UserIDT, None] = Field(
+        title="Provider user Id",
+        description="""Id of the person who
+        is responsible for the content of this metadata record. Writer of the title and abstract.""",
+    )
+    contact_user_id: Union[UserIDT, None] = Field(
+        title="Contact user Id",
+        description="""Id of the person who
+        should be contacted in cases of questions regarding the content of the dataset or any data restrictions.
+        This is also the person who is most likely to stay involved in the dataset the longest.""",
+    )
+    project_ids: Union[ProjectIDListT, None] = Field(
+        title="Project ids",
+        description="The list of composing project IDs.",
+        example=[1],
+        min_items=1,
+    )
+    license: Union[LicenseEnum, None] = Field(
+        title="License",
+        description="The collection license.",
+        example=LicenseEnum.CC_BY,
+    )
+    citation: Union[str, None] = Field(
+        title="Citation", description="The collection citation.", example=""
+    )
+    abstract: Union[str, None] = Field(
+        title="Abstract", description="The collection abstract.", example=""
+    )
+    description: Union[str, None] = Field(
+        title="Description", description="The collection description.", example=""
+    )
+    creator_users: Union[List[Union[UserIDT, Any]], None] = Field(
+        title="Creator users Ids",
+        description="""List of users id's or dict with name, organization for external persons.""",
+    )
+    associate_users: Union[List[Union[UserIDT, Any]], None] = Field(
+        title="Associate users",
+        description="""List of users id's or dict with name, organization for external persons.""",
+    )
+    creator_organisations: Union[List[Union[OrganisationIDT, Any]], None] = Field(
+        title="Creator organisations Ids or names",
+        description="""All
+        organisations who are responsible for the creation of the collection. Data creators should
+        receive credit for their work and should therefore be included in the citation.""",
+    )
+    associate_organisations: Union[List[Union[OrganisationIDT, Any]], None] = Field(
+        title="Associate organisations",
+        description="""Other
+        organisation(s) Ids or names associated with the collection.""",
+    )
+
+    class Config:
+        schema_extra = {"title": "Update full or partial Collection Model"}
 
 
 class _Job2Model(DescriptiveModel):

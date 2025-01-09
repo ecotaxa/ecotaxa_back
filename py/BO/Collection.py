@@ -4,7 +4,7 @@
 #
 import re
 import functools
-from typing import List, Any, Optional, Set, cast, Dict, OrderedDict
+from typing import List, Any, Optional, Set, cast, Dict, OrderedDict, Union
 from dataclasses import dataclass
 from BO.DataLicense import DataLicense, LicenseEnum
 from BO.Sample import SampleOrigIDT
@@ -26,6 +26,7 @@ from BO.User import UserIDT, UserIDListT, ContactUserBO
 from DB.helpers.ORM import contains_eager, func, any_
 from helpers.DynamicLogs import get_logger
 from helpers.FieldListType import FieldListType
+from pydantic import BaseModel
 
 logger = get_logger(__name__)
 
@@ -109,54 +110,13 @@ class CollectionBO(object):
         db_projects = qry.all()
         assert len(db_projects) == len(project_ids)
         # Loop on projects, adding them and collecting aggregated data
-        prj_licenses: Set[LicenseEnum] = set()
         problems: List[str] = []
         a_db_project: Project
         for a_db_project in db_projects:
             self._collection.projects.append(a_db_project)
 
-        # TODO: Default creators using classification history in DB. Knowing that it's partial.
-
-        creator_user, creator_org = self._get_annotators_from_histo(
-            session, project_ids
-        )
-        by_role_user = {
-            COLLECTION_ROLE_DATA_CREATOR: creator_user,
-        }
-        # Dispatch orgs by role
-        by_role_org = {
-            COLLECTION_ROLE_DATA_CREATOR: creator_org,
-        }
-        self._add_collection_users(session, self.id, by_role_user, by_role_org)
         # Report (brutally) problems
         assert len(problems) == 0, "\n".join(problems)
-
-    # static methods  get aggregated data from projects
-    def get_classiffieldlist_from_projects(
-        self,
-    ) -> str:
-        """
-        Read aggregated Fields available on sort & displayed field of Manual classif screen for these projects.
-        """
-        obj: Dict = {}
-        ret: List = []
-        linesep = "\n"
-        projects = self.projects
-        for project in projects:
-            if project.classiffieldlist is None:
-                fields = []
-            else:
-                fields = project.classiffieldlist.split(linesep)
-            for field in fields:
-                arrfield = field.split("=")
-                key = arrfield[0].strip()
-                if len(arrfield) == 2 and key != "" and key not in obj.keys():
-                    # for same var name add only the first
-                    obj[key] = arrfield[1].strip()
-        for k, v in obj.items():
-            ret.append(k + "=" + v)
-
-        return linesep.join(ret)
 
     @staticmethod
     def _get_annotators_from_histo(
@@ -176,101 +136,92 @@ class CollectionBO(object):
     def update(
         self,
         session: Session,
-        title: str,
-        short_title: Optional[str],
-        project_ids: ProjectIDListT,
-        provider_user: Any,
-        contact_user: Any,
-        citation: Optional[str],
-        abstract: Optional[str],
-        description: Optional[str],
-        creator_users: List[Any],
-        associate_users: List[Any],
-        creator_orgs: List[Any],
-        associate_orgs: List[Any],
+        collection_update: Dict[str, Any],
     ):
-        project_ids.sort()
-        # TODO: projects update using given list
-        assert project_ids == self.project_ids, "Cannot update composing projects yet"
-        # Redo sanity check & aggregation as underlying projects might have changed (or not as stated just above. lol)
-        self.set_composing_projects(session, project_ids)
-        coll_id = self._collection.id
-        # Simple fields update
-        self._collection.title = title
-        self._collection.short_title = short_title
-        self._collection.citation = citation
-        self._collection.abstract = abstract
-        self._collection.description = description
-        # Copy provider user id
-        if provider_user is not None:
-            self._collection.provider_user_id = provider_user.id
-        # Copy contact user id
-        if contact_user is not None:
-            self._collection.contact_user_id = contact_user.id
-
-        # Dispatch members by role
-        by_role_user = {
-            COLLECTION_ROLE_DATA_CREATOR: creator_users,
-            COLLECTION_ROLE_ASSOCIATED_PERSON: associate_users,
+        by_role_schema = {
+            "user": {
+                COLLECTION_ROLE_DATA_CREATOR: "creator_users",
+                COLLECTION_ROLE_ASSOCIATED_PERSON: "associate_users",
+            },
+            "org": {
+                COLLECTION_ROLE_DATA_CREATOR: "creator_organisations",
+                COLLECTION_ROLE_ASSOCIATED_PERSON: "associate_organisations",
+            },
         }
-        # Dispatch orgs by role
-        by_role_org = {
-            COLLECTION_ROLE_DATA_CREATOR: creator_orgs,
-            COLLECTION_ROLE_ASSOCIATED_PERSON: associate_orgs,
-        }
-        self._add_collection_users(session, coll_id, by_role_user, by_role_org)
+        by_role = {}
+        print("____coll_udpate", collection_update)
+        for key, value in collection_update.items():
+            if key == "project_ids":
+                value.sort()
+                # projects update using given list
+                # Redo sanity check & aggregation as underlying projects might have changed (or not as stated just above. lol)
+                self.set_composing_projects(session, value)
+            # Simple fields update
+            if key in ["title", "short_title", "citation", "abstract", "description"]:
+                setattr(self._collection, key, value)
+            if key in ["provider_user", "contact_user"] and value is not None:
+                # Copy provider user id contact user id
+                setattr(self._collection, key + "_id", value.id)
+            for k, val in by_role_schema.items():
+                if key in val.values():
+                    by_role[k] = {}
+                    for v in val.keys():
+                        by_role[k][v] = value
+        print("_____________by_role lenkey=" + str(len(by_role.keys())), by_role)
+        if len(by_role.keys()) > 0:
+            coll_id = self._collection.id
+            self.add_collection_users(session, by_role)
         session.commit()
 
-    def _add_collection_users(
+    def add_collection_users(
         self,
         session: Session,
-        coll_id: int,
-        by_role_user: Dict[str, List[Any]],
-        by_role_org: Dict[str, List[Any]],
+        by_role: Dict[str, Dict[str, List[Any]]],
     ):
-        """Dispatch members and org by role"""
-
+        coll_id = self._collection.id
         #  diff-ing
-        qry = session.query(CollectionUserRole).filter(
-            CollectionUserRole.collection_id == coll_id
-        )
-        role_users = qry.all()
-        print("________role_user", role_users)
-        qry.delete()
-        # Add all
-        for a_role, a_user_list in by_role_user.items():
-            for a_user in a_user_list:
-                session.add(
-                    CollectionUserRole(
-                        collection_id=coll_id, user_id=a_user.id, role=a_role
+        if "user" in by_role:
+            qry = session.query(CollectionUserRole).filter(
+                CollectionUserRole.collection_id == coll_id
+            )
+            role_users = qry.all()
+            print("________role_user", role_users)
+            qry.delete()
+            # Add all
+            for a_role, a_user_list in by_role["user"].items():
+                for a_user in a_user_list:
+                    session.add(
+                        CollectionUserRole(
+                            collection_id=coll_id, user_id=a_user.id, role=a_role
+                        )
                     )
-                )
 
         # Dispatch orgs by role
-        # Remove all to avoid diff-ing
-        qry = session.query(CollectionOrgaRole).filter(
-            CollectionOrgaRole.collection_id == coll_id
-        )
-        role_org = qry.all()
-        print("________role_org", role_org)
-        qry.delete()
-        # Add all
-        for a_role, an_org_list in by_role_org.items():
-            for an_org in an_org_list:
-                session.add(
-                    CollectionOrgaRole(
-                        collection_id=coll_id, organisation=an_org, role=a_role
-                    )
-                )
-        # First org is the institutionCode provider
-        inst_code_provider = by_role_org[COLLECTION_ROLE_DATA_CREATOR][0]
-        session.add(
-            CollectionOrgaRole(
-                collection_id=coll_id,
-                organisation=inst_code_provider,
-                role=COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER,
+        if "org" in by_role:
+            # Remove all to avoid diff-ing
+            qry = session.query(CollectionOrgaRole).filter(
+                CollectionOrgaRole.collection_id == coll_id
             )
-        )
+            role_org = qry.all()
+            print("________role_org", role_org)
+            qry.delete()
+            # Add all
+            for a_role, an_org_list in by_role["org"].items():
+                for an_org in an_org_list:
+                    session.add(
+                        CollectionOrgaRole(
+                            collection_id=coll_id, organisation=an_org, role=a_role
+                        )
+                    )
+            # First org is the institutionCode provider
+            inst_code_provider = by_role["org"][COLLECTION_ROLE_DATA_CREATOR][0]
+            session.add(
+                CollectionOrgaRole(
+                    collection_id=coll_id,
+                    organisation=inst_code_provider,
+                    role=COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER,
+                )
+            )
 
     def set_composing_projects(self, session: Session, project_ids: ProjectIDListT):
         """
@@ -287,7 +238,10 @@ class CollectionBO(object):
             for a_prj_id in self.project_ids
             if a_prj_id not in self.project_ids
         ]
-        assert len(to_remove) == 0, "No removal in collection composition yet"
+        if len(to_remove) > 0:
+            session.query(CollectionProject).filter(
+                CollectionProject.project_id.in_(to_remove)
+            ).delete()
         if len(to_add):
             self._add_composing_projects(session, to_add)
 
@@ -374,12 +328,11 @@ class CollectionBO(object):
         return set([an_id for an_id, in qry])
 
 
-@dataclass()
-class MinimalCollectionBO:
+class MinimalCollectionBO(BaseModel):
     id: CollectionIDT
-    external_id: str
+    external_id: Union[str, None] = None
     title: str
-    short_title: str
+    short_title: Union[str, None] = None
     provider_user_id: UserIDT
-    contact_user: Optional[ContactUserBO]
+    contact_user: Union[ContactUserBO, None] = None
     project_ids: ProjectIDListT

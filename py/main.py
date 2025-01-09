@@ -40,6 +40,7 @@ from API_models.crud import (
     CollectionModel,
     CollectionAggregatedRsp,
     CreateCollectionReq,
+    CollectionReq,
     SampleModel,
     JobModel,
     BulkUpdateReq,
@@ -850,7 +851,7 @@ def get_collection(
     responses={200: {"content": {"application/json": {"example": null}}}},
 )
 def update_collection(
-    collection: CollectionModel = Body(...),
+    collection: CollectionReq = Body(...),
     collection_id: int = Path(
         ...,
         description="Internal, the unique numeric id of this collection.",
@@ -871,20 +872,9 @@ def update_collection(
             present_collection = sce.query(current_user, collection_id, for_update=True)
         if present_collection is None:
             raise HTTPException(status_code=404, detail="Collection not found")
+        collection_update = collection.dict(exclude_unset=True)
         present_collection.update(
-            session=sce.session,
-            title=collection.title,
-            short_title=collection.short_title,
-            project_ids=collection.project_ids,
-            provider_user=collection.provider_user,
-            contact_user=collection.contact_user,
-            citation=collection.citation,
-            abstract=collection.abstract,
-            description=collection.description,
-            creator_users=collection.creator_users,
-            associate_users=collection.associate_users,
-            creator_orgs=collection.creator_organisations,
-            associate_orgs=collection.associate_organisations,
+            session=sce.session, collection_update=collection_update
         )
 
 
@@ -1008,6 +998,7 @@ MyORJSONResponse.register(User, UserModelWithRights)
 MyORJSONResponse.register(User, MinUserModel)
 MyORJSONResponse.register(TaxonBO, TaxonModel)
 MyORJSONResponse.register(ObjectSetQueryRsp, ObjectSetQueryRsp)
+MyORJSONResponse.register(CollectionBO, CollectionModel)
 MyORJSONResponse.register(CollectionAggregatedRsp, CollectionAggregatedRsp)
 MyORJSONResponse.register(Sample, SampleModel)
 project_model_columns = plain_columns(ProjectModel)
