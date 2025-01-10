@@ -121,7 +121,7 @@ class CollectionBO(object):
     @staticmethod
     def _get_annotators_from_histo(
         session, project_ids: ProjectIDListT, status: Optional[int] = None
-    ) -> List[User]:
+    ) -> List[UserIDT]:
         pqry = session.query(User.id, User.organisation)
         pqry.join(User, User.id == ObjectHeader.classif_who)
         pqry.filter(Project.projid == any_(project_ids))
@@ -130,8 +130,7 @@ class CollectionBO(object):
             pqry.filter(User.status == status)
         users: List[Any] = pqry.all()
         creator_user = [u.id for u in users]
-        creator_org = [u.organisation for u in users]
-        return creator_user, creator_org
+        return creator_user
 
     def update(
         self,
@@ -148,7 +147,7 @@ class CollectionBO(object):
                 COLLECTION_ROLE_ASSOCIATED_PERSON: "associate_organisations",
             },
         }
-        by_role = {}
+        by_role: Dict[str, Any] = {}
         print("____coll_udpate", collection_update)
         for key, value in collection_update.items():
             if key == "project_ids":
@@ -157,7 +156,14 @@ class CollectionBO(object):
                 # Redo sanity check & aggregation as underlying projects might have changed (or not as stated just above. lol)
                 self.set_composing_projects(session, value)
             # Simple fields update
-            if key in ["title", "short_title", "citation", "abstract", "description"]:
+            if key in [
+                "title",
+                "short_title",
+                "citation",
+                "abstract",
+                "description",
+                "license",
+            ]:
                 setattr(self._collection, key, value)
             if key in ["provider_user", "contact_user"] and value is not None:
                 # Copy provider user id contact user id
@@ -333,6 +339,6 @@ class MinimalCollectionBO(BaseModel):
     external_id: Union[str, None] = None
     title: str
     short_title: Union[str, None] = None
-    provider_user_id: UserIDT
-    contact_user: Union[ContactUserBO, None] = None
+    provider_user: UserIDT
+    contact_user: Union[UserIDT, None] = None
     project_ids: ProjectIDListT

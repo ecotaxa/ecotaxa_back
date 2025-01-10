@@ -69,6 +69,19 @@ COLLECTION_ROLE_ASSOCIATED_PERSON = "A"
 COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER = "P"
 
 
+class CollectionRole(Model):
+    __tablename__ = "collection_role"
+    """ n<->n valued (with role) relationship b/w collection and users """
+    collection_id: int = Column(INTEGER, ForeignKey("collection.id"), primary_key=True)
+    identity: str = Column(VARCHAR(1000), nullable=False)
+    role: str = Column(VARCHAR(1), nullable=False, primary_key=True)
+    # The relationships are created in Relations.py but the typing here helps IDE
+    collection: relationship
+
+    def __str__(self) -> str:
+        return "{0},{1}:{2}".format(self.collection_id, self.identity, self.role)
+
+
 class CollectionUserRole(Model):
     __tablename__ = "collection_user_role"
     """ n<->n valued (with role) relationship b/w collection and users """

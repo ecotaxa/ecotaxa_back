@@ -719,15 +719,16 @@ class ProjectBO(object):
                 CollectionProject.collection_id == r.id
             )
             project_ids = [p.project_id for p in qry_proj]
+
             ret.append(
                 MinimalCollectionBO(
-                    r.id,
-                    r.external_id,
-                    r.title,
-                    r.short_title,
-                    r.provider_user_id,
-                    contact,
-                    project_ids,
+                    id=r.id,
+                    external_id=r.external_id or None,
+                    title=r.title,
+                    short_title=r.short_title or None,
+                    provider_user=r.provider_user_id,
+                    contact_user=r.contact_user_id or None,
+                    project_ids=project_ids,
                 )
             )
         return ret

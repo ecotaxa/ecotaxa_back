@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from typing import List, Union, Optional, Tuple, Dict, Any
-
+from fastapi import HTTPException
 from API_models.crud import CreateCollectionReq, CollectionAggregatedRsp
 from API_models.exports import TaxonomyRecast
 from BO.Collection import CollectionBO, CollectionIDT
@@ -38,20 +38,23 @@ class CollectionsService(Service):
         coll_id = CollectionBO.create(self.session, req.title, req.project_ids)
         return coll_id
 
-    def _check_access(
-        self, a_coll: CollectionBO, user_id: UserIDT
-    ) -> Optional[CollectionBO]:
+    def update(
+        self,
+        current_user_id: UserIDT,
+        collection_id: CollectionIDT,
+        req: Dict[str, Any],
+    ):
         """
-        Quick & dirty access check by catching the exception.
+        Update a collection.
         """
-        try:
+        if "project_ids" in req:
             PermissionConsistentProjectSet(
-                self.ro_session,
-                a_coll.project_ids,  # Need the R/W session here, as the projects MRU is written to. TODO
-            ).can_be_administered_by(user_id, update_preference=False)
-        except AssertionError:
-            return None
-        return a_coll
+                self.session, req["project_ids"]
+            ).can_be_administered_by(current_user_id)
+        present_collection = self.query(current_user_id, collection_id, for_update=True)
+        if present_collection is None:
+            raise HTTPException(status_code=404, detail="Collection not found")
+        present_collection.update(session=self.session, collection_update=req)
 
     def list(
         self, current_user_id: UserIDT, collection_ids: Optional[str] = None
@@ -65,11 +68,11 @@ class CollectionsService(Service):
         for a_rec in qry:
             coll_bo = CollectionBO(a_rec)
             coll_bo._read_composing_projects()
-            checked = self._check_access(coll_bo, current_user_id)
+            checked = self._check_access(current_user_id, coll_bo.project_ids)
             if checked is None:
                 continue
-            checked.enrich()
-            ret.append(checked)
+            coll_bo.enrich()
+            ret.append(coll_bo)
         return ret
 
     def search(self, current_user_id: UserIDT, title: str) -> List[CollectionBO]:
@@ -78,11 +81,11 @@ class CollectionsService(Service):
         for a_rec in qry:
             coll_bo = CollectionBO(a_rec)
             coll_bo._read_composing_projects()
-            checked = self._check_access(coll_bo, current_user_id)
+            checked = self._check_access(current_user_id, coll_bo.project_ids)
             if checked is None:
                 continue
-            checked.enrich()
-            ret.append(checked)
+            coll_bo.enrich()
+            ret.append(coll_bo)
         return ret
 
     def query(
@@ -93,7 +96,10 @@ class CollectionsService(Service):
         )
         if ret is None:
             return ret
-        return self._check_access(ret, current_user_id)
+        check = self._check_access(current_user_id, ret.project_ids)
+        if check is None:
+            return None
+        return ret
 
     def query_by_title(self, title: str) -> CollectionBO:
         # Return a unique collection from its title
@@ -150,6 +156,21 @@ class CollectionsService(Service):
             .filter(TaxoRecast.operation == DWCA_EXPORT_OPERATION)
         )
         return qry
+
+    def _check_access(
+        self, user_id: UserIDT, project_ids: ProjectIDListT
+    ) -> Optional[ProjectIDListT]:
+        """
+        Quick & dirty access check by catching the exception.
+        """
+        try:
+            PermissionConsistentProjectSet(
+                self.ro_session,
+                project_ids,  # Need the R/W session here, as the projects MRU is written to. TODO
+            ).can_be_administered_by(user_id, update_preference=False)
+        except AssertionError:
+            return None
+        return project_ids
 
     def aggregated_from_projects(
         self,

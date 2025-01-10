@@ -851,7 +851,7 @@ def get_collection(
     responses={200: {"content": {"application/json": {"example": null}}}},
 )
 def update_collection(
-    collection: CollectionReq = Body(...),
+    collection: CollectionModel = Body(...),
     collection_id: int = Path(
         ...,
         description="Internal, the unique numeric id of this collection.",
@@ -867,15 +867,39 @@ def update_collection(
 
      Note: The collection is updated only if manageable.
     """
+    collection_update = collection.dict()
     with CollectionsService() as sce:
         with RightsThrower():
-            present_collection = sce.query(current_user, collection_id, for_update=True)
-        if present_collection is None:
-            raise HTTPException(status_code=404, detail="Collection not found")
-        collection_update = collection.dict(exclude_unset=True)
-        present_collection.update(
-            session=sce.session, collection_update=collection_update
-        )
+            sce.update(current_user, collection_id, collection_update)
+
+
+@app.patch(
+    "/collections/{collection_id}",
+    operation_id="patch_collection",
+    tags=["collections"],
+    responses={200: {"content": {"application/json": {"example": null}}}},
+)
+def patch_collection(
+    collection: CollectionReq = Body(...),
+    collection_id: int = Path(
+        ...,
+        description="Internal, the unique numeric id of this collection.",
+        example=1,
+    ),
+    current_user: int = Depends(get_current_user),
+) -> None:
+    """
+    **Partial Update of the collection**. Note that some updates are silently failing when not compatible
+     with the composing projects.
+
+     **Returns NULL upon success.**
+
+     Note: The collection is partiallly updated only if manageable.
+    """
+    collection_update = collection.dict(exclude_unset=True)
+    with CollectionsService() as sce:
+        with RightsThrower():
+            sce.update(current_user, collection_id, collection_update)
 
 
 @app.put(
