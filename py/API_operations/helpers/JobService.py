@@ -159,7 +159,6 @@ class JobServiceBase(Service, LogEmitter, ABC):
         """
         Set job detailed result and final status, then does a DB commit on session.
         """
-        print("________infos", infos)
         with JobBO.get_for_update(self.session, self.job_id) as job_bo:
             job_bo.set_result(infos)
             # Limit storage to 1000 first errors

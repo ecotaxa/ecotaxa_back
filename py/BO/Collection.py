@@ -139,16 +139,15 @@ class CollectionBO(object):
     ):
         by_role_schema = {
             "user": {
-                COLLECTION_ROLE_DATA_CREATOR: "creator_users",
-                COLLECTION_ROLE_ASSOCIATED_PERSON: "associate_users",
+                "creator_users": COLLECTION_ROLE_DATA_CREATOR,
+                "associate_users": COLLECTION_ROLE_ASSOCIATED_PERSON,
             },
             "org": {
-                COLLECTION_ROLE_DATA_CREATOR: "creator_organisations",
-                COLLECTION_ROLE_ASSOCIATED_PERSON: "associate_organisations",
+                "creator_organisations": COLLECTION_ROLE_DATA_CREATOR,
+                "associate_organisations": COLLECTION_ROLE_ASSOCIATED_PERSON,
             },
         }
         by_role: Dict[str, Any] = {}
-        print("____coll_udpate", collection_update)
         for key, value in collection_update.items():
             if key == "project_ids":
                 value.sort()
@@ -167,15 +166,14 @@ class CollectionBO(object):
                 setattr(self._collection, key, value)
             if key in ["provider_user", "contact_user"] and value is not None:
                 # Copy provider user id contact user id
-                setattr(self._collection, key + "_id", value.id)
+                setattr(self._collection, key + "_id", value["id"])
             for k, val in by_role_schema.items():
-                if key in val.values():
-                    by_role[k] = {}
-                    for v in val.keys():
-                        by_role[k][v] = value
-        print("_____________by_role lenkey=" + str(len(by_role.keys())), by_role)
+                if key in val.keys():
+                    if k not in by_role:
+                        by_role[k] = {}
+                    v = val[key]
+                    by_role[k][v] = value
         if len(by_role.keys()) > 0:
-            coll_id = self._collection.id
             self.add_collection_users(session, by_role)
         session.commit()
 
@@ -191,14 +189,14 @@ class CollectionBO(object):
                 CollectionUserRole.collection_id == coll_id
             )
             role_users = qry.all()
-            print("________role_user", role_users)
             qry.delete()
             # Add all
             for a_role, a_user_list in by_role["user"].items():
+
                 for a_user in a_user_list:
                     session.add(
                         CollectionUserRole(
-                            collection_id=coll_id, user_id=a_user.id, role=a_role
+                            collection_id=coll_id, user_id=a_user["id"], role=a_role
                         )
                     )
 
@@ -209,7 +207,6 @@ class CollectionBO(object):
                 CollectionOrgaRole.collection_id == coll_id
             )
             role_org = qry.all()
-            print("________role_org", role_org)
             qry.delete()
             # Add all
             for a_role, an_org_list in by_role["org"].items():

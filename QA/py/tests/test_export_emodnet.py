@@ -201,6 +201,7 @@ def test_emodnet_export(fastapi, exportable_collection, admin_or_creator, fixed_
     job_id = rsp.json()["job_id"]
     wait_for_stable(job_id)
     job_status = api_check_job_ok(fastapi, job_id)
+
     warns = job_status["result"]["wrns"]
     ref_warns = [
         "Could not extract sampling net name and features from sample 'm106_mn01_n1_sml' (in #%d): at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent."
@@ -243,7 +244,6 @@ def test_emodnet_export(fastapi, exportable_collection, admin_or_creator, fixed_
         "No occurrence added for sample 'm106_mn04_n4_sml' (in #%d)" % prj_id2,
         "Stats: predicted:2 validated:19 produced to zip:9 not produced (M):12 not produced (P):0",
     ]
-    print("result________ response", job_status["result"])
     assert warns == ref_warns
     assert rsp.json()["errors"] == []
     # job_id = rsp.json()["job_id"]
@@ -425,7 +425,7 @@ def create_test_collection(database, fastapi, caplog, suffix, who=ADMIN_AUTH):
     assert rsp.status_code == status.HTTP_200_OK
     coll_id = rsp.json()
     url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
-    rsp = fastapi.patch(url, headers=who, json={"license": "CC BY 4.0"})
+    rsp = fastapi.patch(url, headers=who, json={"license": ""})
     assert rsp.status_code == status.HTTP_200_OK
 
     return coll_id, coll_title, prj_id

@@ -126,9 +126,10 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
     assert rsp.status_code == status.HTTP_200_OK
 
     # Fail updating the project list
-    the_coll["project_ids"] = [1, 5, 1236]
+    the_coll = {"project_ids": [prj_id, 1236]}
     # with pytest.raises(Exception):
-    rsp = fastapi.put(url, headers=who, json=the_coll)
+    url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
+    rsp = fastapi.patch(url, headers=who, json=the_coll)
     assert rsp.status_code == status.HTTP_404_NOT_FOUND
 
     # Search for it
@@ -157,9 +158,16 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
             "short_title": "my-tiny-title",
         }
     ]
+
     # update the project_ids
     url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
-    the_coll["project_ids"] = [1, 5, 6]
+    the_coll = {"project_ids": [6, prj_id]}
+    rsp = fastapi.patch(url, headers=who, json=the_coll)
+    assert rsp.status_code == status.HTTP_200_OK
+    # reset to previous for compatibility with other tests
+    url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
+    the_coll = {"project_ids": [prj_id]}
+    rsp = fastapi.patch(url, headers=who, json=the_coll)
     assert rsp.status_code == status.HTTP_200_OK
     # Search by short title
     url = COLLECTION_EXACT_QUERY_URL.format(short_title="my-tiny-title")
