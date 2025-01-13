@@ -2904,6 +2904,8 @@ DROP TABLE mig_classif_chunks_per_proj;
 DROP TABLE mig_unq_classif_per_proj;
 
 UPDATE alembic_version SET version_num='032dfb7159d5' WHERE alembic_version.version_num = '4045b161563b';
+COMMIT;
+BEGIN;
 -- Running upgrade 032dfb7159d5 -> 78b24e7ba52b
 
 ALTER TABLE projects ADD COLUMN access VARCHAR(1) NOT NULL;
