@@ -36,7 +36,7 @@ from BO.Sample import SampleBO, SampleAggregForTaxon
 from BO.TaxonomySwitch import TaxonomyMapper
 from BO.Vocabulary import Vocabulary, Units
 from BO.WoRMSification import WoRMSifier
-from DB.Collection import Collection
+from DB.Collection import Collection, PeopleOrganizationDirectory
 from DB.Project import ProjectTaxoStat, Project
 from DB.Sample import Sample
 from DB.Taxonomy import Taxonomy
@@ -86,6 +86,7 @@ AbundancePerAcquisitionT = Dict[AcquisitionIDT, Dict[ClassifIDT, int]]
 LsidT = str  # Life Science Identifier @see https://en.wikipedia.org/wiki/LSID
 OccIDT = str  # An occurenceId, sampleid+taxon ID
 WoRMSAggregT = Dict[LsidT, Tuple[OccIDT, SampleAggregForTaxon, WoRMS]]
+ROLE_FOR_ASSOCIATE = "originator"
 
 
 class DarwinCoreExport(JobServiceBase):
@@ -427,11 +428,11 @@ class DarwinCoreExport(JobServiceBase):
             else:
                 assert person is not None
                 associates.append(
-                    self.eml_person_to_associated_person(person, "originator")
+                    self.eml_person_to_associated_person(person, ROLE_FOR_ASSOCIATE)
                 )
         for an_org in the_collection.associate_organisations:
             person_from_org = self.organisation_to_eml_person(an_org)
-            role = "originator"
+            role = ROLE_FOR_ASSOCIATE
             if an_org == the_collection.code_provider_org:
                 role = "custody"
             associates.append(

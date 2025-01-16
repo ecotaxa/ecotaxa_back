@@ -7,6 +7,7 @@
 from typing import Dict, List
 
 from BO.DataLicense import DataLicense, AccessLevelEnum
+from DB.Collection import PeopleOrganizationDirectory
 from DB.User import UserStatus
 from BO.User import (
     USER_PWD_REGEXP,
@@ -14,7 +15,6 @@ from BO.User import (
     SHORT_TOKEN_AGE,
     PROFILE_TOKEN_AGE,
 )
-from DB.User import UserStatus
 from helpers.pydantic import BaseModel, Field
 
 
@@ -31,18 +31,6 @@ class Constants(BaseModel):
             "CC BY-NC 4.0": '<a href="https://creativecommons.org/licenses/by-nc/4.0/" rel="nofollow"><strong>CC-BY-NC</strong></a>: all registered EcoTaxa users are free to download, redistribute, modify, and build upon the data, as long as they cite the dataset and its authors, and do not use it for commercial purpose ("primarily intended for or directed toward commercial advantage or monetary compensation"). Other databases can index the data.',
             "Copyright": "<strong>Copyright</strong>: only contributors to this project have rights on this data. This prevents its distribution in any kind of database.",
             "": "Not chosen",
-        },
-    )
-    license_restrictions: Dict[str, str] = Field(
-        title="License restrictions",
-        description="License sorted by restriction.",
-        default={lev: lic for lic, lev in DataLicense.RESTRICTION.items()},
-        example={
-            "0": "CC0 1.0",
-            "1": "CC BY 4.0",
-            "3": "CC BY-NC 4.0",
-            "7": "Copyright",
-            "8": "",
         },
     )
     access: Dict[str, str] = Field(
@@ -65,6 +53,12 @@ class Constants(BaseModel):
         default=[],
         min_items=1,
         example=["France"],
+    )
+    people_organization_directories: Dict[str, str] = Field(
+        title="People and organizations directories",
+        description="Available directories to identify people and organizations in collections settings",
+        default={st.name: st.value for st in PeopleOrganizationDirectory},
+        example={"https://edmo.seadatanet.org/": "edmo", "https://orcid.org/": "orcid"},
     )
     user_status: Dict[str, int] = Field(
         title="User status",

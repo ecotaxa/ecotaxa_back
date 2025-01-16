@@ -1104,18 +1104,6 @@ class CollectionProjectBOSet(ProjectBOSet):
         except (Exception):
             return False
 
-    def get_restricted_license(self) -> LicenseEnum:
-        """
-        return the projectset restricted_license.
-        """
-        max_restrict = max(
-            [
-                DataLicense.RESTRICTION[cast(LicenseEnum, project.license)]
-                for project in self.projects
-            ]
-        )
-        return DataLicense.BY_RESTRICTION[max_restrict]
-
     def get_access_from_projects(self) -> Tuple[AccessLevelEnum, ProjectIDListT]:
         """
         return list of projects id validating the restricted_access.
@@ -1192,16 +1180,15 @@ class CollectionProjectBOSet(ProjectBOSet):
             ProjectPrivilegeBO.MANAGE: "managers",
         }
         projects = self.projects
-        privileges: Dict[str, ContactUserListT] = {
-            keys[ProjectPrivilegeBO.MANAGE]: [],
-            keys[ProjectPrivilegeBO.ANNOTATE]: [],
-            keys[ProjectPrivilegeBO.VIEW]: [],
-        }
-        for project in self.projects:
-            for key in keys.values():
-                for v in getattr(project, key):
-                    privileges[key] = self._check_user_privilege(v, privileges[key])
-        # aggregate from projects
+        privileges: Dict[str, ContactUserListT] = {}
+        # set common priv for users in all projects
+        for key, value in keys.items():
+            privileges[value] = list(
+                set.intersection(
+                    *[set(getattr(project, value)) for project in projects]
+                )
+            )
+        # aggregate and remove anomalies from projects
         for u in privileges[keys[ProjectPrivilegeBO.VIEW]]:
             for k in [
                 keys[ProjectPrivilegeBO.ANNOTATE],

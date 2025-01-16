@@ -7,8 +7,8 @@
 #
 from __future__ import annotations
 
-from typing import Optional, TYPE_CHECKING, Iterable, Sequence as SequenceT, List
-
+from typing import Optional, TYPE_CHECKING, Iterable, Sequence as SequenceT, List, Final
+from enum import Enum
 from DB.helpers.ORM import Model
 from .helpers.DDL import Column, Sequence, ForeignKey, Index
 from .helpers.ORM import relationship
@@ -69,17 +69,9 @@ COLLECTION_ROLE_ASSOCIATED_PERSON = "A"
 COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER = "P"
 
 
-class CollectionRole(Model):
-    __tablename__ = "collection_role"
-    """ n<->n valued (with role) relationship b/w collection and users """
-    collection_id: int = Column(INTEGER, ForeignKey("collection.id"), primary_key=True)
-    identity: str = Column(VARCHAR(1000), nullable=False)
-    role: str = Column(VARCHAR(1), nullable=False, primary_key=True)
-    # The relationships are created in Relations.py but the typing here helps IDE
-    collection: relationship
-
-    def __str__(self) -> str:
-        return "{0},{1}:{2}".format(self.collection_id, self.identity, self.role)
+class PeopleOrganizationDirectory(str, Enum):
+    orcid: Final = "https://orcid.org/"
+    edmo: Final = "https://edmo.seadatanet.org/"
 
 
 class CollectionUserRole(Model):

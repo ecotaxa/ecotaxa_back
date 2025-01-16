@@ -5,8 +5,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Iterable
-from typing import TYPE_CHECKING
+from typing import List, Iterable, TYPE_CHECKING
 
 from sqlalchemy import event, SmallInteger
 
@@ -29,6 +28,41 @@ class UserStatus(int, Enum):
     pending: Final = 2
 
 
+class Organization(Model):
+    __tablename__ = "organizations"
+    id: int = Column(Integer, primary_key=True)
+    name: str = Column(String(255), nullable=False)
+    directory: str = Column(String(20), nullable=True)
+    reference: str = Column(String(40), nullable=True)
+
+    @staticmethod
+    def find_organizations(
+        session: Session, names: List[str], found_organizations: dict
+    ):
+        """
+        Find the organizations in DB, by name.
+        :param session:
+        :param names:
+        :param found_organizations: A dict in
+        """
+        sql = text(
+            "SELECT id, name, directory , reference"
+            "  FROM organizations "
+            " WHERE LOWER(name) = ANY(:nms)  "
+        )
+        res: Result = session.execute(sql, {"nms": names})
+        for rec in res:
+            for u in found_organzations:
+                if (
+                    u == rec[1]
+                    or none_to_empty(found_users[u].get("email")).lower() == rec[2]
+                ):
+                    found_users[u]["id"] = rec[0]
+
+    def __str__(self):
+        return "{0} ({1} {2})".format(self.name, self.directory, self.reference)
+
+
 class User(Model):
     __tablename__ = "users"
     id: int = Column(Integer, Sequence("seq_users"), primary_key=True)
@@ -49,7 +83,6 @@ class User(Model):
     mail_status: bool = Column(Boolean(), nullable=True)
     # Date the mail status was set
     mail_status_date = Column(TIMESTAMP)
-
     # The relationships are created in Relations.py but the typing here helps the IDE
     roles: relationship
     # The projects that user has rights in, so he/she can participate at various levels.
