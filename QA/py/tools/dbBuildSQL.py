@@ -15,10 +15,8 @@ from tests.test_import import SHARED_DIR, FTP_DIR, TEST_DIR
 
 psql_bin = "psql"
 # If we already have a server don't create one, e.g. in GitHub action
-# PG_HOST = environ.get("POSTGRES_HOST")
-# PG_PORT = environ.get("POSTGRES_PORT")
-PG_HOST = "localhost"
-PG_PORT = 5432
+PG_HOST = environ.get("POSTGRES_HOST")
+PG_PORT = environ.get("POSTGRES_PORT")
 if PG_HOST and PG_PORT:
     PG_PORT = int(PG_PORT)
 else:
