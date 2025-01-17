@@ -15,7 +15,7 @@ from passlib.context import CryptContext  # type: ignore
 
 from API_operations.helpers.Service import Service
 from BO.Rights import NOT_AUTHORIZED
-from DB.User import User, UserStatus
+from DB.User import User, UserStatus, UserType
 from helpers.fastApiUtils import build_serializer
 
 NOT_AUTHORIZED_MAIL = "__id____" + NOT_AUTHORIZED
@@ -58,7 +58,7 @@ class LoginService(Service):
                 func.lower(User.email) == func.lower(username),
                 User.status == UserStatus.active.value,
             )
-        db_users = user_qry.all()
+        db_users = user_qry.filter(User.type == UserType.user.value).all()
         assert len(db_users) == 1, NOT_AUTHORIZED
         the_user: User = db_users[0]
         # verif even user is not active , in order to let modify email only if mail_status is False

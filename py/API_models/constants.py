@@ -8,7 +8,7 @@ from typing import Dict, List
 
 from BO.DataLicense import DataLicense, AccessLevelEnum
 from DB.Collection import PeopleOrganizationDirectory
-from DB.User import UserStatus
+from DB.User import UserStatus, UserType
 from BO.User import (
     USER_PWD_REGEXP,
     USER_PWD_REGEXP_DESCRIPTION,
@@ -65,6 +65,12 @@ class Constants(BaseModel):
         description="Application User status values",
         default={st.name: st.value for st in UserStatus},
         example={"blocked": -1, "inactive": 0, "active": 1, "pending": 2},
+    )
+    user_type: Dict[str, int] = Field(
+        title="User status",
+        description="Application User type values",
+        default={st.name: st.value for st in UserType},
+        example={"guest": 0},
     )
     password_regexp: str = Field(
         title="Password regexp",

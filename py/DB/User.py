@@ -7,12 +7,19 @@ from __future__ import annotations
 from enum import Enum
 from typing import List, Iterable, TYPE_CHECKING
 
-from sqlalchemy import event, SmallInteger
-
+from sqlalchemy import event, SmallInteger, CheckConstraint
+from sqlalchemy.dialects.postgresql import ARRAY
 from BO.helpers.TSVHelpers import none_to_empty
 from data.Countries import countries_by_name
 from .helpers import Session, Result
-from .helpers.DDL import Column, ForeignKey, Sequence, Integer, String, Boolean
+from .helpers.DDL import (
+    Column,
+    ForeignKey,
+    Sequence,
+    Integer,
+    String,
+    Boolean,
+)
 from .helpers.Direct import text, func
 from .helpers.ORM import Model, relationship, Insert
 from .helpers.Postgres import TIMESTAMP
@@ -28,12 +35,15 @@ class UserStatus(int, Enum):
     pending: Final = 2
 
 
+class UserType(int, Enum):
+    guest: Final = 0
+    user: Final = 1
+
+
 class Organization(Model):
     __tablename__ = "organizations"
-    id: int = Column(Integer, primary_key=True)
-    name: str = Column(String(255), nullable=False)
-    directory: str = Column(String(20), nullable=True)
-    reference: str = Column(String(40), nullable=True)
+    name: str = Column(String(255), unique=True, primary_key=True)
+    directories: list = Column(ARRAY(String), nullable=True)
 
     @staticmethod
     def find_organizations(
@@ -46,21 +56,24 @@ class Organization(Model):
         :param found_organizations: A dict in
         """
         sql = text(
-            "SELECT id, name, directory , reference"
+            "SELECT name, directories"
             "  FROM organizations "
             " WHERE LOWER(name) = ANY(:nms)  "
         )
         res: Result = session.execute(sql, {"nms": names})
         for rec in res:
             for u in found_organzations:
-                if (
-                    u == rec[1]
-                    or none_to_empty(found_users[u].get("email")).lower() == rec[2]
-                ):
-                    found_users[u]["id"] = rec[0]
+                if u == rec[0]:
+                    found_organizations[u]["name"] = rec[0]
 
     def __str__(self):
-        return "{0} ({1} {2})".format(self.name, self.directory, self.reference)
+        return "{0} ({1})".format(self.name, self.directories)
+
+
+CHK_STATUS = "status = ANY(ARRAY{0}::int[])".format([st.value for st in UserStatus])
+CHK_TYPE = "type= {0} OR (type={1} AND status={2})".format(
+    UserType.user.value, UserType.guest.value, UserStatus.inactive.value
+)
 
 
 class User(Model):
@@ -69,16 +82,22 @@ class User(Model):
     email: str = Column(String(255), unique=True, nullable=False)
     password: str = Column(String(255))
     name: str = Column(String(255), nullable=False)
-    organisation: str = Column(String(255))
+    organisation: str = Column(
+        String(255), ForeignKey("organizations.name"), nullable=True
+    )
     status: int = Column(SmallInteger(), default=1)
     status_date = Column(TIMESTAMP)
     status_admin_comment: str = Column(String(255))
     preferences: str = Column(String(40000))
     country: str = Column(String(50))
     orcid: str = Column(String(20), nullable=True)
+    type: int = Column(SmallInteger(), default=1)
     usercreationdate = Column(TIMESTAMP, default=func.now())
     usercreationreason = Column(String(1000))
 
+    checktype = CheckConstraint(CHK_TYPE)
+    # table level CHECK constraint. type guest must have inactive status .
+    checkstatus = CheckConstraint(CHK_STATUS)
     # Mail status: True for verified, default NULL
     mail_status: bool = Column(Boolean(), nullable=True)
     # Date the mail status was set
@@ -123,6 +142,16 @@ class User(Model):
 
     def __str__(self):
         return "{0} ({1})".format(self.name, self.email)
+
+
+def insert_new_organization(sess, **kwargs):
+    """
+    Add new organization if missing on user inser or update
+    """
+    print(" oninsert ", **kwargs)
+    # if organisation :
+    #    ins = Insert(Organization.name).values((organisation))
+    #    sess.execute(ins)
 
 
 class Role(Model):
