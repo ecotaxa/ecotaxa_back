@@ -44,7 +44,6 @@ class _MinUserModel(DescriptiveModel):
 
 class _UserCollectionModel(_MinUserModel):
     orcid = Field(title="orcid", description="orcid unique identifier for this user")
-    organisation = Field(title="Organisation", description="Organisation title")
 
 
 MinUserModel = combine_models(User, _MinUserModel)
@@ -110,7 +109,6 @@ class _FullUserModel(_MinUserModel):
 
 
 _UserModelFromDB = combine_models(User, _FullUserModel)
-UserModelProfile = combine_models(User, _FullUserModel)
 
 # TODO JCE - description example
 class _Project2Model(DescriptiveModel):

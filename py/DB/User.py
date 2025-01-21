@@ -6,9 +6,12 @@ from __future__ import annotations
 
 from enum import Enum
 from typing import List, Iterable, TYPE_CHECKING
-
+from fastapi import HTTPException
 from sqlalchemy import event, SmallInteger, CheckConstraint
 from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.exc import NoResultFound
+from sqlalchemy.inspection import inspect
+from sqlalchemy.orm import declared_attr
 from BO.helpers.TSVHelpers import none_to_empty
 from data.Countries import countries_by_name
 from .helpers import Session, Result
@@ -23,6 +26,7 @@ from .helpers.DDL import (
 from .helpers.Direct import text, func
 from .helpers.ORM import Model, relationship, Insert
 from .helpers.Postgres import TIMESTAMP
+from helpers.httpexception import DETAIL_NO_ORGANIZATION_ADDED
 
 if TYPE_CHECKING:
     from .ProjectPrivilege import ProjectPrivilege
@@ -35,74 +39,68 @@ class UserStatus(int, Enum):
     pending: Final = 2
 
 
-class UserType(int, Enum):
-    guest: Final = 0
-    user: Final = 1
+class UserType(str, Enum):
+    guest: Final = "guest"
+    user: Final = "user"
 
 
 class Organization(Model):
     __tablename__ = "organizations"
-    name: str = Column(String(255), unique=True, primary_key=True)
+    name: str = Column(String(512), unique=True, primary_key=True)
     directories: list = Column(ARRAY(String), nullable=True)
-
-    @staticmethod
-    def find_organizations(
-        session: Session, names: List[str], found_organizations: dict
-    ):
-        """
-        Find the organizations in DB, by name.
-        :param session:
-        :param names:
-        :param found_organizations: A dict in
-        """
-        sql = text(
-            "SELECT name, directories"
-            "  FROM organizations "
-            " WHERE LOWER(name) = ANY(:nms)  "
-        )
-        res: Result = session.execute(sql, {"nms": names})
-        for rec in res:
-            for u in found_organzations:
-                if u == rec[0]:
-                    found_organizations[u]["name"] = rec[0]
+    persons = relationship("Person")
 
     def __str__(self):
         return "{0} ({1})".format(self.name, self.directories)
 
 
-CHK_STATUS = "status = ANY(ARRAY{0}::int[])".format([st.value for st in UserStatus])
-CHK_TYPE = "type= {0} OR (type={1} AND status={2})".format(
-    UserType.user.value, UserType.guest.value, UserStatus.inactive.value
-)
-
-
-class User(Model):
+class Person(Model):
     __tablename__ = "users"
     id: int = Column(Integer, Sequence("seq_users"), primary_key=True)
     email: str = Column(String(255), unique=True, nullable=False)
-    password: str = Column(String(255))
     name: str = Column(String(255), nullable=False)
-    organisation: str = Column(
-        String(255), ForeignKey("organizations.name"), nullable=True
-    )
+    country: str = Column(String(50))
+    orcid: str = Column(String(20), nullable=True)
+    type = Column(String(10))
+    usercreationdate = Column(TIMESTAMP, default=func.now())
+    organisation = Column(ForeignKey("organizations.name", onupdate="cascade"))
+    __mapper_args__ = {
+        "polymorphic_on": type,
+        "polymorphic_identity": "person",
+    }
+
+    def __str__(self):
+        return "{0} ({1})".format(self.name, self.email)
+
+
+class Organisation:
+    @declared_attr
+    def get_organisation(cls):
+        return cls.__table__.c.get(
+            "organisation", Column(ForeignKey("organizations.name", onupdate="cascade"))
+        )
+
+
+class Guest(Organisation, Person):
+    __mapper_args__ = {
+        "polymorphic_identity": "guest",
+    }
+
+
+class User(Organisation, Person):
+    password: str = Column(String(255))
     status: int = Column(SmallInteger(), default=1)
     status_date = Column(TIMESTAMP)
     status_admin_comment: str = Column(String(255))
     preferences: str = Column(String(40000))
-    country: str = Column(String(50))
-    orcid: str = Column(String(20), nullable=True)
-    type: int = Column(SmallInteger(), default=1)
-    usercreationdate = Column(TIMESTAMP, default=func.now())
     usercreationreason = Column(String(1000))
-
-    checktype = CheckConstraint(CHK_TYPE)
-    # table level CHECK constraint. type guest must have inactive status .
-    checkstatus = CheckConstraint(CHK_STATUS)
     # Mail status: True for verified, default NULL
     mail_status: bool = Column(Boolean(), nullable=True)
     # Date the mail status was set
-    mail_status_date = Column(TIMESTAMP)
-    # The relationships are created in Relations.py but the typing here helps the IDE
+    mail_status_date = Column(
+        TIMESTAMP
+    )  # The relationships are created in Relations.py but the typing here helps the IDE
+
     roles: relationship
     # The projects that user has rights in, so he/she can participate at various levels.
     privs_on_projects: Iterable[ProjectPrivilege]
@@ -110,48 +108,30 @@ class User(Model):
     classified_objects: relationship
     # Preferences, per project, the global ones kept in field above.
     preferences_for_projects: relationship
-
-    @staticmethod
-    def find_users(
-        session: Session, names: List[str], emails: List[str], found_users: dict
-    ):
-        """
-        Find the users in DB, by name or email.
-        :param session:
-        :param emails:
-        :param names:
-        :param found_users: A dict in
-        """
-        sql = text(
-            "SELECT id, LOWER(name), LOWER(email) "
-            "  FROM users "
-            " WHERE LOWER(name) = ANY(:nms) or email = ANY(:ems) "
-        )
-        res: Result = session.execute(sql, {"nms": names, "ems": emails})
-        for rec in res:
-            for u in found_users:
-                if (
-                    u == rec[1]
-                    or none_to_empty(found_users[u].get("email")).lower() == rec[2]
-                ):
-                    found_users[u]["id"] = rec[0]
+    __mapper_args__ = {
+        "polymorphic_identity": "user",
+    }
 
     def has_role(self, role: str) -> bool:
         # TODO: Cache a bit. All roles are just python objects due to SQLAlchemy magic.
         return role in [r.name for r in list(self.roles)]
 
-    def __str__(self):
-        return "{0} ({1})".format(self.name, self.email)
 
-
-def insert_new_organization(sess, **kwargs):
-    """
-    Add new organization if missing on user inser or update
-    """
-    print(" oninsert ", **kwargs)
-    # if organisation :
-    #    ins = Insert(Organization.name).values((organisation))
-    #    sess.execute(ins)
+@event.listens_for(Person.organisation, "set", raw=True, propagate=True)
+def before_person_update(target, value, oldvalue, initiator):
+    # execute a stored procedure upon INSERT,
+    # apply the value to the row to be inserted
+    value = value.strip().lower()
+    try:
+        org = (
+            target.session.query(Organization)
+            .filter(func.lower(Organization.name) == value)
+            .one()
+        )
+    except NoResultFound:
+        ins = target.session.add(Organization(name=value))
+    except Exception:
+        raise HTTPException(status_code=422, detail=[DETAIL_NO_ORGANIZATION_ADDED])
 
 
 class Role(Model):

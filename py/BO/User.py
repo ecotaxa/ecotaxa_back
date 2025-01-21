@@ -6,15 +6,15 @@
 import json
 from dataclasses import dataclass
 from typing import Any, Final, List, Optional
-
 from BO.Classification import ClassifIDListT
 from BO.Rights import RightsBO
 from DB import Session
-from DB.User import User, UserStatus
+from DB.User import User, UserStatus, UserType, Person, Guest, Organization
 from DB.UserPreferences import UserPreferences
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
-from DB.helpers.ORM import any_
+from DB.helpers.ORM import any_, or_, func
+from BO.helpers.TSVHelpers import none_to_empty
 
 # Typings, to be clear that these are not e.g. object IDs
 UserIDT = int
@@ -30,10 +30,140 @@ SHORT_TOKEN_AGE = 1
 PROFILE_TOKEN_AGE = 24
 
 
+class OrganizationBO(object):
+    @staticmethod
+    def find_organizations(
+        session: Session, names: List[str], found_organizations: dict
+    ):
+        """
+        Find the organizations in DB, by name.
+        :param session:
+        :param names:
+        :param found_organizations: A dict in
+        """
+        qry = session.query(Organization.name, Organization.directories).filter(
+            func.lower(Organization.name) == any_(names)
+        )
+        res = qry.all()
+        for rec in res:
+            for u in found_organizations:
+                if u == rec[0]:
+                    found_organizations[u]["name"] = rec[0]
+
+
+class PersonBO(object):
+    """
+    Holder for user-related functions.
+    """
+
+    def __init__(self, person: Person):
+        self._person = person
+
+    @staticmethod
+    def find_persons(
+        session: Session, names: List[str], emails: List[str], found_persons: dict
+    ):
+        """
+        Find the persons in DB, by name or email.
+        :param session:
+        :param emails:
+        :param names:
+        :param found_persons: A dict in
+        """
+        qry = session.query(Person.id, Person.name, Person.email).filter(
+            or_(
+                func.lower(Person.name) == any_(names),
+                func.lower(Person.email) == any_(emails),
+            )
+        )
+        res = qry.all()
+        print("___res___", res)
+        for rec in res:
+            for u in found_persons:
+                if (
+                    u == rec[1]
+                    or none_to_empty(found_persons[u].get("email")).lower() == rec[2]
+                ):
+                    found_persons[u]["id"] = rec[0]
+        print("___found_persons", found_persons)
+
+
+class GuestBO(object):
+    """
+    Holder for user-related functions.
+    """
+
+    def __init__(self, guest: Guest):
+        self._guest = guest
+
+    @staticmethod
+    def find_guests(
+        session: Session, names: List[str], emails: List[str], found_guests: dict
+    ):
+        """
+        Find the persons in DB, by name or email.
+        :param session:
+        :param emails:
+        :param names:
+        :param found_guests: A dict in
+        """
+        qry = session.query(Guest.id, Guest.name, Guest.email).filter(
+            or_(
+                func.lower(Guest.name) == any_(names),
+                func.lower(Guest.email) == any_(emails),
+            )
+        )
+        res = qry.all()
+        print("___res___", res)
+        for rec in res:
+            for u in found_guests:
+                if (
+                    u == rec[1]
+                    or none_to_empty(found_guests[u].get("email")).lower() == rec[2]
+                ):
+                    found_guests[u]["id"] = rec[0]
+        print("___found_guests", found_guests)
+
+
 class UserBO(object):
     """
     Holder for user-related functions.
     """
+
+    def __init__(self, user: User):
+        self._user = user
+
+    @staticmethod
+    def find_users(
+        session: Session, names: List[str], emails: List[str], found_users: dict
+    ):
+        """
+        Find the users in DB, by name or email.
+        :param session:
+        :param emails:
+        :param names:
+        :param found_users: A dict in
+        """
+        qry = (
+            session.query(User.id, User.name, User.email)
+            .filter(
+                or_(
+                    func.lower(User.name) == any_(names),
+                    func.lower(User.email) == any_(emails),
+                )
+            )
+            .filter(User.type == UserType.user.value)
+        )
+        res = qry.all()
+        print("___res___", res)
+        for rec in res:
+            for u in found_users:
+                if (
+                    u == rec[1]
+                    or none_to_empty(found_users[u].get("email")).lower() == rec[2]
+                ):
+                    found_users[u]["id"] = rec[0]
+        print("___found_users", found_users)
 
     @staticmethod
     def get_preferences_per_project(

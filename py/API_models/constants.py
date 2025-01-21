@@ -66,11 +66,11 @@ class Constants(BaseModel):
         default={st.name: st.value for st in UserStatus},
         example={"blocked": -1, "inactive": 0, "active": 1, "pending": 2},
     )
-    user_type: Dict[str, int] = Field(
+    user_type: Dict[str, str] = Field(
         title="User status",
         description="Application User type values",
         default={st.name: st.value for st in UserType},
-        example={"guest": 0},
+        example={"guest": "guest"},
     )
     password_regexp: str = Field(
         title="Password regexp",

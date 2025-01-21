@@ -1424,7 +1424,7 @@ def project_set_get_user_stats(
                     "example": {
                         "proj_ids": [1040, 4702],
                         "total": 54169,
-                        "columns": ["calssif", "obj.depth_min"],
+                        "columns": ["classif", "obj.depth_min"],
                         "counts": [54169, 54169],
                         "variances": [1895031198.64, 0.000258],
                     }
@@ -2152,7 +2152,7 @@ The column obj.imgcount contains the total count of images for the object.
 
 Use a comma to separate fields.
 
-���� More help :
+More help :
 
 You can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.
 

@@ -16,11 +16,10 @@ from BO.Mappings import ProjectMapping
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
-from BO.User import UserIDT
+from BO.User import UserIDT, User
 from BO.helpers.ImportHelpers import ImportHow, ImportDiagnostic, ImportWhere
 from BO.helpers.TSVHelpers import none_to_empty
 from DB.Image import Image
-from DB.User import User
 from DB.helpers import Session
 from DB.helpers.DBWriter import DBWriter
 from helpers.DynamicLogs import get_logger, LogsSwitcher
