@@ -47,11 +47,14 @@ def _db_model_2_pydantic_class_maker_callback(ctx: DynamicClassDefContext) -> No
     db_model_type_info, pydantic_model_type_info = _get_2_call_args(ctx)
 
     col_types: ColTypesT = {}
-    for a_col, a_type in db_model_type_info.names.items():
-        if "Mapped" in str(a_type.type):
-            # e.g. sqlalchemy.orm.attributes.Mapped[Union[builtins.int, None]]
-            col_types[a_col] = a_type.type.args[0]  # type:ignore
-
+    # Do present class & ancestors (non recursively)
+    for a_class in [db_model_type_info] + [
+        a_base.type for a_base in db_model_type_info.bases
+    ]:
+        for a_col, a_type in a_class.names.items():
+            if "Mapped" in str(a_type.type):
+                # e.g. sqlalchemy.orm.attributes.Mapped[Union[builtins.int, None]]
+                col_types[a_col] = a_type.type.args[0]  # type:ignore
     class_name = ctx.name
     _add_pydantic_clone(
         ctx, class_name, pydantic_model_type_info, col_types, from_orm=True
