@@ -2922,6 +2922,7 @@ UPDATE alembic_version SET version_num='78b24e7ba52b' WHERE alembic_version.vers
 
 COMMIT;
 BEGIN;
+
 -- Running upgrade 78b24e7ba52b -> e6dda08ff48b
 
 CREATE TABLE organizations (
@@ -2931,34 +2932,17 @@ CREATE TABLE organizations (
     PRIMARY KEY (id)
 );
 
-ALTER TABLE users ADD COLUMN type SMALLINT;
+ALTER TABLE users ADD COLUMN type VARCHAR(10) NOT NULL;
 
-ALTER TABLE users ADD CONSTRAINT checktype CHECK (type= 1 OR (type=0 AND status=0));
+UPDATE users SET type=user;
 
-ALTER TABLE users ADD CONSTRAINT checkstatus CHECK (status ANY(array[-1, 0, 1, 2]::int[]));
+INSERT INTO organizations (name) SELECT DISTINCT organisation FROM users WHERE organisation IS NOT NULL;
 
-UPDATE users SET type=1;
+ALTER TABLE users ADD CONSTRAINT users_organization FOREIGN KEY(organisation) REFERENCES organizations (name);
 
 UPDATE alembic_version SET version_num='e6dda08ff48b' WHERE alembic_version.version_num = '78b24e7ba52b';
 
 COMMIT;
-BEGIN;
--- Running upgrade e6dda08ff48b -> 5b706c64bae0
-
-ALTER TABLE organizations ADD CONSTRAINT orgname UNIQUE (name);
-
-ALTER TABLE organizations DROP COLUMN id;
-
-INSERT INTO organizations (name) SELECT DISTINCT organisation FROM users;
-
-ALTER TABLE users ADD CONSTRAINT org FOREIGN KEY(organisation) REFERENCES organizations (name);
-
-ALTER TABLE users ADD CONSTRAINT orgname FOREIGN KEY(organisation) REFERENCES organizations (name);
-
-UPDATE alembic_version SET version_num='5b706c64bae0' WHERE alembic_version.version_num = 'e6dda08ff48b';
-
-COMMIT;
-
 
 
 
