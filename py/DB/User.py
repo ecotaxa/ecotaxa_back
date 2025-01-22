@@ -116,21 +116,30 @@ class User(Person):
         return role in [r.name for r in list(self.roles)]
 
 
-@event.listens_for(Person.organisation, "set", raw=True, propagate=True)
-def before_person_update(target, value, oldvalue, initiator):
+# associate the listener function with SomeClass,
+# to execute during the "before_insert" hook
+@event.listens_for(User, "before_insert")
+@event.listens_for(Guest, "before_insert")
+@event.listens_for(User, "before_update")
+@event.listens_for(Guest, "before_update")
+def my_before_person_organisation(mapper, connection, target):
     # execute a stored procedure upon INSERT,
     # apply the value to the row to be inserted
-    value = value.strip().lower()
+    value = target.organisation.strip()
     try:
-        org = (
-            target.session.query(Organization)
-            .filter(func.lower(Organization.name) == value)
-            .one()
-        )
-    except NoResultFound:
-        neworg = Organization(name=value)
-        target.session.add(neworg)
-        org = neworg.name
+        org = connection.execute(
+            text("select name from organizations WHERE name ilike '%s' " % value)
+        ).scalar()
+        if org is None:
+            org = connection.execute(
+                text(
+                    "insert into organizations(name) values('%s')  RETURNING name"
+                    % value
+                )
+            ).scalar()
+
+    except:
+        pass
     assert org is not None, NO_ORGANIZATION_ADDED
 
 
