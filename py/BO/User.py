@@ -281,14 +281,13 @@ class UserBO(object):
         """
         # name & email are mandatory by DB constraints and therefore made so by pydantic model
         errors: List[str] = []
-        for a_field in (User.name, User.email, User.organisation, User.country):
-            field_name = a_field.name
-            val = getattr(user_model, field_name)
+        for a_field in ("name", "email", "organisation", "country"):
+            val = getattr(user_model, a_field)
             if val is None:
                 continue
             val = val.strip()
             if len(val) <= 3:
-                errors.append("%s is too short, 3 chars minimum" % field_name)
+                errors.append("%s is too short, 3 chars minimum" % a_field)
         # can check is password is strong  if password not None
         if verify_password == True:
             from helpers.httpexception import DETAIL_PASSWORD_STRENGTH_ERROR
