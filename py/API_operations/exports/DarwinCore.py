@@ -36,11 +36,11 @@ from BO.Sample import SampleBO, SampleAggregForTaxon
 from BO.TaxonomySwitch import TaxonomyMapper
 from BO.Vocabulary import Vocabulary, Units
 from BO.WoRMSification import WoRMSifier
-from DB.Collection import Collection, PeopleOrganizationDirectory
+from DB.Collection import Collection
 from DB.Project import ProjectTaxoStat, Project
 from DB.Sample import Sample
 from DB.Taxonomy import Taxonomy
-from DB.User import User
+from DB.User import User, Person, Guest, Organization, PeopleOrganizationDirectory
 from DB.WoRMs import WoRMS
 from DB.helpers import Session
 from DB.helpers.Direct import text

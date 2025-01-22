@@ -7,8 +7,7 @@
 from typing import Dict, List
 
 from BO.DataLicense import DataLicense, AccessLevelEnum
-from DB.Collection import PeopleOrganizationDirectory
-from DB.User import UserStatus, UserType
+from DB.User import UserStatus, UserType, PeopleOrganizationDirectory
 from BO.User import (
     USER_PWD_REGEXP,
     USER_PWD_REGEXP_DESCRIPTION,

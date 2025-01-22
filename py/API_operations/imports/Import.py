@@ -16,7 +16,7 @@ from BO.Mappings import ProjectMapping
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
-from BO.User import UserIDT, User
+from BO.User import UserIDT, UserBO
 from BO.helpers.ImportHelpers import ImportHow, ImportDiagnostic, ImportWhere
 from BO.helpers.TSVHelpers import none_to_empty
 from DB.Image import Image
@@ -238,7 +238,7 @@ class FileImport(ImportServiceBase):
         emails = [
             cast(str, x.get("email")) for x in users_found.values() if x.get("email")
         ]
-        User.find_users(session, names, emails, users_found)
+        UserBO.find_users(session, names, emails, users_found)
         logger.info("Users Found for all TSVs = %s", users_found)
 
     @staticmethod

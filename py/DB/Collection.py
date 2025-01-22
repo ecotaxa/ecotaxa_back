@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 from typing import Optional, TYPE_CHECKING, Iterable, Sequence as SequenceT, List, Final
-from enum import Enum
 from DB.helpers.ORM import Model
 from .helpers.DDL import Column, Sequence, ForeignKey, Index
 from .helpers.ORM import relationship
@@ -67,11 +66,6 @@ class CollectionProject(Model):
 COLLECTION_ROLE_DATA_CREATOR = "C"
 COLLECTION_ROLE_ASSOCIATED_PERSON = "A"
 COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER = "P"
-
-
-class PeopleOrganizationDirectory(str, Enum):
-    orcid: Final = "https://orcid.org/"
-    edmo: Final = "https://edmo.seadatanet.org/"
 
 
 class CollectionUserRole(Model):

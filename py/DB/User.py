@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from enum import Enum
 from typing import List, Iterable, TYPE_CHECKING
-from fastapi import HTTPException
 from sqlalchemy import event, SmallInteger, CheckConstraint
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.exc import NoResultFound
@@ -25,8 +24,9 @@ from .helpers.DDL import (
 )
 from .helpers.Direct import text, func
 from .helpers.ORM import Model, relationship, Insert
-from .helpers.Postgres import TIMESTAMP
-from helpers.httpexception import DETAIL_NO_ORGANIZATION_ADDED
+from .helpers.Postgres import TIMESTAMP, VARCHAR
+
+NO_ORGANIZATION_ADDED = "Error adding organization name"
 
 if TYPE_CHECKING:
     from .ProjectPrivilege import ProjectPrivilege
@@ -44,11 +44,18 @@ class UserType(str, Enum):
     user: Final = "user"
 
 
+class PeopleOrganizationDirectory(str, Enum):
+    orcid: Final = "https://orcid.org/"
+    edmo: Final = "https://edmo.seadatanet.org/"
+
+
 class Organization(Model):
     __tablename__ = "organizations"
     name: str = Column(String(512), unique=True, primary_key=True)
     directories: list = Column(ARRAY(String), nullable=True)
     persons = relationship("Person")
+    users = relationship("User", viewonly=True, overlaps="persons")
+    guests = relationship("Guest", viewonly=True, overlaps="persons")
 
     def __str__(self):
         return "{0} ({1})".format(self.name, self.directories)
@@ -63,7 +70,7 @@ class Person(Model):
     orcid: str = Column(String(20), nullable=True)
     type = Column(String(10))
     usercreationdate = Column(TIMESTAMP, default=func.now())
-    organisation = Column(ForeignKey("organizations.name", onupdate="cascade"))
+    organisation = Column(VARCHAR, ForeignKey("organizations.name"), nullable=False)
     __mapper_args__ = {
         "polymorphic_on": type,
         "polymorphic_identity": "person",
@@ -73,21 +80,13 @@ class Person(Model):
         return "{0} ({1})".format(self.name, self.email)
 
 
-class Organisation:
-    @declared_attr
-    def get_organisation(cls):
-        return cls.__table__.c.get(
-            "organisation", Column(ForeignKey("organizations.name", onupdate="cascade"))
-        )
-
-
-class Guest(Organisation, Person):
+class Guest(Person):
     __mapper_args__ = {
         "polymorphic_identity": "guest",
     }
 
 
-class User(Organisation, Person):
+class User(Person):
     password: str = Column(String(255))
     status: int = Column(SmallInteger(), default=1)
     status_date = Column(TIMESTAMP)
@@ -129,9 +128,10 @@ def before_person_update(target, value, oldvalue, initiator):
             .one()
         )
     except NoResultFound:
-        ins = target.session.add(Organization(name=value))
-    except Exception:
-        raise HTTPException(status_code=422, detail=[DETAIL_NO_ORGANIZATION_ADDED])
+        neworg = Organization(name=value)
+        target.session.add(neworg)
+        org = neworg.name
+    assert org is not None, NO_ORGANIZATION_ADDED
 
 
 class Role(Model):

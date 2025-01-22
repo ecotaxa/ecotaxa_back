@@ -1162,7 +1162,11 @@ class CollectionProjectBOSet(ProjectBOSet):
     ) -> ContactUserListT:
         if user.status == UserStatus.active.value:
             u: ContactUserBO = ContactUserBO(
-                user.id, user.email, user.name, user.orcid or "None", user.organisation
+                user.id,
+                user.email,
+                user.name,
+                user.orcid or "None",
+                user.organisation or "(Independent)",
             )
             if u not in privlist:
                 privlist.append(u)
