@@ -150,6 +150,7 @@ def test_user_create_with_confirmation(monkeypatch, fastapi, caplog):
         "id": None,
         "email": email,
         "name": "bypass confirmation",
+        "organisation": "Test Org",
     }
     url = USER_CREATE_URL
     params = {"no_bot": ["193.4.123.4", "sdfgdqsg"]}
@@ -177,7 +178,12 @@ def test_user_create_with_confirmation(monkeypatch, fastapi, caplog):
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == 200
     read_json = rsp.json()
-    ref_json = {"email": "user", "id": ORDINARY_USER_USER_ID, "name": "Ordinary User"}
+    ref_json = {
+        "email": "user",
+        "id": ORDINARY_USER_USER_ID,
+        "name": "Ordinary User",
+        "organisation": "Homework",
+    }
     assert read_json == ref_json
     res_user = {"status": UserStatus.active.value, "mail_status": None}
     err = verify_user(fastapi, ORDINARY_USER_USER_ID, ADMIN_AUTH, res_user)

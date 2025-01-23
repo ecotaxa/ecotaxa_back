@@ -21,7 +21,12 @@ def test_user_update(fastapi, caplog):
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == 200
     read_json = rsp.json()
-    ref_json = {"email": "user", "id": 2, "name": "Ordinary User"}
+    ref_json = {
+        "email": "user",
+        "id": 2,
+        "name": "Ordinary User",
+        "organisation": "Homework",
+    }
     assert read_json == ref_json
 
     # Failing update
@@ -53,9 +58,11 @@ def test_user_create(fastapi, caplog):
         "email": "user",
         "id": None,
         "name": "Ordinary User",
+        "organisation": "OrgTest",
     }
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=usr_json)
     assert rsp.status_code == 422
+    print("rspjson==", rsp.json())
     assert rsp.json() == {"detail": [DETAIL_EMAIL_OWNED_BY_OTHER]}
     url = USER_CREATE_URL
     usr_json = {

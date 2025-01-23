@@ -53,13 +53,19 @@ def test_update_prj(database, fastapi, caplog):
             "email": "administrator",
             "id": 1,
             "name": "Application Administrator",
+            "organisation": "Institut de la Mer de Villefranche - IMEV",
         },
         "instrument": "UVP6",
         "instrument_url": "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/",
         "init_classif_list": [],
         "license": "",
         "managers": [
-            {"email": "administrator", "id": 1, "name": "Application Administrator"}
+            {
+                "email": "administrator",
+                "id": 1,
+                "name": "Application Administrator",
+                "organisation": "Institut de la Mer de Villefranche - IMEV",
+            }
         ],
         "obj_free_cols": {
             "%area": "n23",
@@ -216,6 +222,7 @@ def test_update_prj(database, fastapi, caplog):
         "id": ORDINARY_USER2_USER_ID,
         "name": "name",
         "email": "toto@titi.com",
+        "organisation": "OrgTest",
     }
     url = PROJECT_UPDATE_URL.format(project_id=prj_id)
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=wrong_contact_upd)
@@ -246,8 +253,18 @@ def test_update_prj_pred_settings(database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_403_FORBIDDEN
 
     # Grant an ordinary user the annotator right
-    usr = {"id": ORDINARY_USER_USER_ID, "email": "ignored", "name": "see email"}
-    mgr = {"id": ORDINARY_USER2_USER_ID, "email": "ignored", "name": "see email"}
+    usr = {
+        "id": ORDINARY_USER_USER_ID,
+        "email": "ignored",
+        "name": "see email",
+        "organisation": "OrgTest",
+    }
+    mgr = {
+        "id": ORDINARY_USER2_USER_ID,
+        "email": "ignored",
+        "name": "see email",
+        "organisation": "OrgTest",
+    }
     read_json["annotators"].append(usr)
     read_json["managers"].append(mgr)
     read_json["contact"] = mgr  # Setting a manager and a contact is mandatory
