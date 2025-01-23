@@ -8,7 +8,7 @@ import typer
 from API_operations.helpers.Service import Service
 from BO.Rights import RightsBO, Action
 from DB.Instrument import Instrument
-from DB.User import Role, User, Country, Organization
+from DB.User import Role, User, Country
 from DB.Views import views_creation_queries, views_deletion_queries
 from cmds.db_upg.db_conn import app_config  # type:ignore
 from data.Countries import countries_by_name
@@ -44,9 +44,6 @@ def _init_security(sess):
     the_admin = sess.query(User).filter(User.email == THE_ADMIN).all()
     if len(the_admin) == 0:
         typer.echo("Adding user '%s'" % THE_ADMIN)
-        # create organization - became not null in User
-        org = Organization(name="Institut de la Mer de Villefranche - IMEV")
-        sess.add(org)
         # noinspection PyArgumentList
         adm_user = User(
             email=THE_ADMIN,

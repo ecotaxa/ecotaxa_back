@@ -5,15 +5,13 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Iterable, TYPE_CHECKING
-from sqlalchemy import event, SmallInteger, CheckConstraint
+from typing import Iterable, TYPE_CHECKING
+
+from sqlalchemy import event, SmallInteger
 from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy.exc import NoResultFound
-from sqlalchemy.inspection import inspect
-from sqlalchemy.orm import declared_attr
-from BO.helpers.TSVHelpers import none_to_empty
+from sqlalchemy.engine import Connection
+
 from data.Countries import countries_by_name
-from .helpers import Session, Result
 from .helpers.DDL import (
     Column,
     ForeignKey,
@@ -122,20 +120,18 @@ class User(Person):
 @event.listens_for(Guest, "before_insert")
 @event.listens_for(User, "before_update")
 @event.listens_for(Guest, "before_update")
-def my_before_person_organisation(mapper, connection, target):
-    # execute a stored procedure upon INSERT,
-    # apply the value to the row to be inserted
+def my_before_person_organisation(mapper, connection: Connection, target):
+    # Ensure there is always an org for any Person
     value = target.organisation.strip()
     try:
         org = connection.execute(
-            text("select name from organizations WHERE name ilike '%s' " % value)
+            text("select name from organizations WHERE name ilike :nam "),
+            {"nam": value},
         ).scalar()
         if org is None:
             org = connection.execute(
-                text(
-                    "insert into organizations(name) values('%s')  RETURNING name"
-                    % value
-                )
+                text("insert into organizations(name) values(:nam) RETURNING name"),
+                {"nam": value},
             ).scalar()
 
     except:
