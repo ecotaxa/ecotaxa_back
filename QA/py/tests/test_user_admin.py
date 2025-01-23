@@ -49,7 +49,11 @@ def test_user_create(fastapi, caplog):
 
     # Create as an admin
     url = USER_CREATE_URL
-    usr_json = {"email": "user", "id": None, "name": "Ordinary User"}
+    usr_json = {
+        "email": "user",
+        "id": None,
+        "name": "Ordinary User",
+    }
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=usr_json)
     assert rsp.status_code == 422
     assert rsp.json() == {"detail": [DETAIL_EMAIL_OWNED_BY_OTHER]}
@@ -58,6 +62,7 @@ def test_user_create(fastapi, caplog):
         "id": None,
         "email": "ddduser5",
         "name": "Application Administrator Now Retired",
+        "organisation": "OrgTest",
     }
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=usr_json)
     assert rsp.status_code == 200

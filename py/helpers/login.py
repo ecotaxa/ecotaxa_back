@@ -58,7 +58,7 @@ class LoginService(Service):
                 func.lower(User.email) == func.lower(username),
                 User.status == UserStatus.active.value,
             )
-        db_users = user_qry.filter(User.type == UserType.user.value).all()
+        db_users = user_qry.all()
         assert len(db_users) == 1, NOT_AUTHORIZED
         the_user: User = db_users[0]
         # verif even user is not active , in order to let modify email only if mail_status is False

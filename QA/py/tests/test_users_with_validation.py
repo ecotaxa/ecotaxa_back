@@ -151,6 +151,18 @@ def test_user_create_with_confirmation(monkeypatch, fastapi, caplog):
         "email": email,
         "name": "bypass confirmation",
     }
+    url = USER_CREATE_URL
+    params = {"no_bot": ["193.4.123.4", "sdfgdqsg"]}
+    urlparams = url + "?" + urllib.parse.urlencode(params, doseq=True)
+    rsp = fastapi.post(urlparams, json=usr_json)
+    # organisation needed
+    assert rsp.status_code == 422
+    usr_json = {
+        "id": None,
+        "email": email,
+        "name": "bypass confirmation",
+        "organisation": "Test Org",
+    }
 
     url = USER_CREATE_URL
     params = {"no_bot": ["193.4.123.4", "sdfgdqsg"]}
@@ -374,7 +386,12 @@ def test_user_create_with_validation(monkeypatch, fastapi, caplog):
     set_config_on(monkeypatch)
     # Create user email no bot
     url = USER_CREATE_URL
-    usr_json = {"email": "user@test.mailtest.com", "id": None, "name": "Ordinary User"}
+    usr_json = {
+        "email": "user@test.mailtest.com",
+        "id": None,
+        "name": "Ordinary User",
+        "organisation": "My Org",
+    }
     params = {"no_bot": ["193.4.123.4", "sdfgdqsg"]}
     urlparams = url + "?" + urllib.parse.urlencode(params, doseq=True)
     rsp = fastapi.post(urlparams, json=usr_json)
@@ -387,6 +404,7 @@ def test_user_create_with_validation(monkeypatch, fastapi, caplog):
         "id": None,
         "email": "ddduser56w_validation",
         "name": "not good email_validation",
+        "organisation": "My Org",
     }
     # note should check password
     rsp = fastapi.post(urlparams, json=usr_json)
@@ -397,6 +415,7 @@ def test_user_create_with_validation(monkeypatch, fastapi, caplog):
         "id": None,
         "email": email,
         "name": "",
+        "organisation": "My Org",
     }
     rsp = fastapi.post(urlparams, json=usr_json)
 
