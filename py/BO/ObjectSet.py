@@ -520,7 +520,10 @@ class EnumeratedObjectSet(MappedTable):
             )
         if but_not_from_user_id:
             subqry = subqry.filter(
-                ObjectsClassifHisto.classif_who != but_not_from_user_id
+                or_(
+                    ObjectsClassifHisto.classif_who != but_not_from_user_id,
+                    ObjectsClassifHisto.classif_who == None,
+                )
             )
         subq_alias: Alias = subqry.filter(
             ObjectsClassifHisto.objid == any_(self.object_ids)

@@ -130,6 +130,7 @@ class ObjectBO(MappedEntity):
         ).filter(ObjectsClassifHisto.objid == self.header.objid)
         qry = qry.outerjoin(User)
         qry = qry.outerjoin(Taxonomy, Taxonomy.id == och.classif_id)
+        qry = qry.order_by(och.classif_date.desc())
         ret = [HistoricalClassification(**rec._mapping) for rec in qry]
         return ret
 
