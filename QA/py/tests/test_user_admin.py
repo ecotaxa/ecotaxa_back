@@ -25,7 +25,7 @@ def test_user_update(fastapi, caplog):
         "email": "user",
         "id": 2,
         "name": "Ordinary User",
-        "organisation": "Homework",
+        "organisation": "org2",
     }
     assert read_json == ref_json
 

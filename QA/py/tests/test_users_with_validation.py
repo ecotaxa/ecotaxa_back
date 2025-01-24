@@ -181,7 +181,7 @@ def test_user_create_with_confirmation(monkeypatch, fastapi, caplog):
         "email": "user",
         "id": ORDINARY_USER_USER_ID,
         "name": "Ordinary User",
-        "organisation": "Homework",
+        "organisation": "org2",
     }
     assert read_json == ref_json
     res_user = {"status": UserStatus.active.value, "mail_status": None}
