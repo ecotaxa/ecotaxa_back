@@ -22,13 +22,13 @@ Double Dash - Institute - DDORG
 \.
 
 COPY public.users (id, type, email, password, name, organisation, status, preferences, country, usercreationdate, usercreationreason) FROM stdin;
-2	users	user	zero6	Ordinary User	org2	1	{}	\N	2020-05-13 08:59:48.70106	\N
-3	users	creator	$6$rounds=656000$iPCU2dUnIQjcUnuW$JxMguozUT9nTun/N19yx.ugzTlUL4bZTRB9eOqECLx83kNSarP6uAMze1qu1ULjJ/OugQAMyAYxFI4EHy0yn9/	User Creating Projects	org3	1	{}	\N	2020-05-13 08:59:48.70106	\N
-4	users	user2	$6$	Ordinary User 2	org4	1	{}	\N	2020-09-27 06:39:48.70106	\N
-5	users	old_admin	nimda_dlo	Application Administrator Now Retired	org5	0	{"1": {"sortby": "", "ts": 1589266843.5535243, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}, "2": {"sortby": "", "ts": 1589267270.5538993, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}}	\N	2020-05-12 08:59:48.70106	\N
-6	users	real@users.com	fake_pwd	Real User	Institut de la Mer de Villefranche - IMEV	0	{"1": {"sortby": "", "ts": 1589266843.5535243, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}}	France	2020-10-26 08:59:48.70106	\N
-7	users	ucrank4@gllmmlgdfggloupgov.uk	fake_pwd	Udale Crank	Institut de la Mer de Villefranche - IMEV	1	{"1": {"sortby": "", "ts": 1589266843.5535243, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}}	UK	2020-10-26 08:59:48.70106	\N
-8	users	real2@users.com	fake_pwd	Real User 3	Double Dash - Institute - DDORG	0	{}	Chile	2023-01-01 08:59:48.70106	\N
+2	user	user	zero6	Ordinary User	org2	1	{}	\N	2020-05-13 08:59:48.70106	\N
+3	user	creator	$6$rounds=656000$iPCU2dUnIQjcUnuW$JxMguozUT9nTun/N19yx.ugzTlUL4bZTRB9eOqECLx83kNSarP6uAMze1qu1ULjJ/OugQAMyAYxFI4EHy0yn9/	User Creating Projects	org3	1	{}	\N	2020-05-13 08:59:48.70106	\N
+4	user	user2	$6$	Ordinary User 2	org4	1	{}	\N	2020-09-27 06:39:48.70106	\N
+5	user	old_admin	nimda_dlo	Application Administrator Now Retired	org5	0	{"1": {"sortby": "", "ts": 1589266843.5535243, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}, "2": {"sortby": "", "ts": 1589267270.5538993, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}}	\N	2020-05-12 08:59:48.70106	\N
+6	user	real@users.com	fake_pwd	Real User	Institut de la Mer de Villefranche - IMEV	0	{"1": {"sortby": "", "ts": 1589266843.5535243, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}}	France	2020-10-26 08:59:48.70106	\N
+7	user	ucrank4@gllmmlgdfggloupgov.uk	fake_pwd	Udale Crank	Institut de la Mer de Villefranche - IMEV	1	{"1": {"sortby": "", "ts": 1589266843.5535243, "sortorder": "asc", "dispfield": "", "statusfilter": "", "ipp": "100", "zoom": "100", "magenabled": "0", "popupenabled": "0"}}	UK	2020-10-26 08:59:48.70106	\N
+8	user	real2@users.com	fake_pwd	Real User 3	Double Dash - Institute - DDORG	0	{}	Chile	2023-01-01 08:59:48.70106	\N
 \.
 
 SELECT setval('seq_users', (SELECT max(id) FROM public.users), true);
