@@ -1,4 +1,4 @@
-# These correspond to the rights in schema_prod.sql
+# These correspond to the rights in data_load.sql
 
 ADMIN_USER_ID = 1  # From default build
 ORDINARY_USER_USER_ID = 2
