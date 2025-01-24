@@ -133,6 +133,11 @@ class UserBO(object):
     def __init__(self, user: User):
         self._user = user
 
+    def __getattr__(self, item):
+        """Fallback for 'not found' field after the C getattr() call.
+        If we did not enrich a Project field somehow then return it"""
+        return getattr(self._user, item)
+
     @staticmethod
     def find_users(
         session: Session, names: List[str], emails: List[str], found_users: dict

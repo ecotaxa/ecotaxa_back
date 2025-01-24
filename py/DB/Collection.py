@@ -7,7 +7,15 @@
 #
 from __future__ import annotations
 
-from typing import Optional, TYPE_CHECKING, Iterable, Sequence as SequenceT, List, Final
+from typing import (
+    Optional,
+    TYPE_CHECKING,
+    Iterable,
+    Sequence as SequenceT,
+    List,
+    Final,
+    Union,
+)
 from DB.helpers.ORM import Model
 from .helpers.DDL import Column, Sequence, ForeignKey, Index
 from .helpers.ORM import relationship
@@ -74,7 +82,6 @@ class CollectionUserRole(Model):
     collection_id: int = Column(INTEGER, ForeignKey("collection.id"), primary_key=True)
     user_id: int = Column(INTEGER, ForeignKey("users.id"), primary_key=True)
     role: str = Column(VARCHAR(1), nullable=False, primary_key=True)
-
     # The relationships are created in Relations.py but the typing here helps IDE
     collection: relationship
     user: User
@@ -87,7 +94,9 @@ class CollectionOrgaRole(Model):
     __tablename__ = "collection_orga_role"
     """ n<->n valued relationship b/w collection and organisations """
     collection_id: int = Column(INTEGER, ForeignKey("collection.id"), primary_key=True)
-    organisation: str = Column(VARCHAR(255), primary_key=True)
+    organisation: str = Column(
+        VARCHAR(255), ForeignKey("organizations.name"), primary_key=True
+    )
     role: str = Column(
         VARCHAR(1),  # 'C' for data Creator, 'A' for Associated 'person'
         nullable=False,

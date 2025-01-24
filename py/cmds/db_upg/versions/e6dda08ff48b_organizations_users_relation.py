@@ -27,7 +27,7 @@ def upgrade():
         sa.PrimaryKeyConstraint("id"),
     )
     op.add_column("users", sa.Column("type", sa.String(length=10), nullable=False))
-    op.execute("UPDATE users SET type={0}".format(UserType.user.value))
+    op.execute("UPDATE users SET type='{0}'".format(UserType.user.value))
 
     op.execute(
         "INSERT INTO organizations (name) SELECT DISTINCT organisation FROM users WHERE organisation IS NOT NULL"

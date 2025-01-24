@@ -40,6 +40,11 @@ class _MinUserModel(DescriptiveModel):
     name = Field(
         title="Name", description="User's full name, as text.", example="userName"
     )
+    organisation = Field(
+        title="Organisation",
+        description="User's organisation name, as text.",
+        example="Oceanographic Laboratory of Villefranche sur Mer - LOV",
+    )
 
 
 class _UserCollectionModel(_MinUserModel):
@@ -50,11 +55,6 @@ MinUserModel = combine_models(User, _MinUserModel)
 UserCollectionModel = combine_models(User, _UserCollectionModel)
 # Direct mirror of DB models, i.e. the minimal + the rest we want
 class _FullUserModel(_MinUserModel):
-    organisation = Field(
-        title="Organisation",
-        description="User's organisation name, as text.",
-        example="Oceanographic Laboratory of Villefranche sur Mer - LOV",
-    )
     status = Field(
         default=1,
         title="Account status",

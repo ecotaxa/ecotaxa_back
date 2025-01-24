@@ -160,6 +160,7 @@ This series is part of the long term planktonic monitoring of
         # TODO: below is redundant with ID and ignored, but fails validation (http 422) if not set
         "email": "creator",
         "name": "User Creating Projects",
+        "organisation": "OrgTest",
     }
     the_coll["creator_users"] = [user_doing_all]
     the_coll["creator_organisations"] = ["Institut de la Mer de Villefranche (IMEV)"]
@@ -168,6 +169,7 @@ This series is part of the long term planktonic monitoring of
         # TODO: below is redundant with ID and ignored, but fails validation (http 422) if not set
         "email": "?",
         "name": ".",
+        "organisation": "OrgTest",
     }
     the_coll["provider_user"] = user_doing_all
     rsp = fastapi.put(url, headers=admin_or_creator, json=the_coll)

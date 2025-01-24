@@ -325,6 +325,7 @@ class UserService(Service):
             raise HTTPException(status_code=404, detail=DETAIL_NOT_FOUND)
         else:
             ret = self._get_full_user(db_usr)
+        ret.password = "?"
         return ret
 
     def _get_full_user(self, db_usr: User) -> UserModelWithRights:
@@ -340,7 +341,6 @@ class UserService(Service):
 
     def _get_user_with_rights(self, db_usr: User) -> UserModelWithRights:
         ret = UserModelWithRights.from_orm(db_usr)
-        print("orgnaisation------", ret.organisation)
         ret.can_do = [act.value for act in RightsBO.get_allowed_actions(db_usr)]
         ret.password = "?"
         return ret
