@@ -20,7 +20,9 @@ from DB.helpers.ORM import Model
 from .helpers.DDL import Column, Sequence, ForeignKey, Index
 from .helpers.ORM import relationship
 from .helpers.Postgres import VARCHAR, INTEGER
+from sqlalchemy import event
 
+NO_ORGANIZATION_ADDED = "Error adding organization name"
 if TYPE_CHECKING:
     from .User import User
 
@@ -95,7 +97,7 @@ class CollectionOrgaRole(Model):
     """ n<->n valued relationship b/w collection and organisations """
     collection_id: int = Column(INTEGER, ForeignKey("collection.id"), primary_key=True)
     organisation: str = Column(
-        VARCHAR(255), ForeignKey("organizations.name"), primary_key=True
+        VARCHAR, ForeignKey("organizations.name"), nullable=False
     )
     role: str = Column(
         VARCHAR(1),  # 'C' for data Creator, 'A' for Associated 'person'
@@ -105,3 +107,24 @@ class CollectionOrgaRole(Model):
 
     def __str__(self):
         return "{0},{1}:{2}".format(self.collection_id, self.organisation, self.role)
+
+
+@event.listens_for(CollectionOrgaRole, "before_insert")
+@event.listens_for(CollectionOrgaRole, "before_update")
+def my_before_orga_role(mapper, connection: Connection, target):
+    # Ensure there is always an org for any Person
+    value = target.organisation.strip()
+    try:
+        org = connection.execute(
+            text("select name from organizations WHERE name ilike :nam "),
+            {"nam": value},
+        ).scalar()
+        if org is None:
+            org = connection.execute(
+                text("insert into organizations(name) values(:nam) RETURNING name"),
+                {"nam": value},
+            ).scalar()
+    except Exception as e:
+        pass
+    target.organisation = target.organisation.strip()
+    assert org is not None, NO_ORGANIZATION_ADDED

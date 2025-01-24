@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Iterable, TYPE_CHECKING
+from typing import Iterable, TYPE_CHECKING, Union
 
 from sqlalchemy import event, SmallInteger
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -123,6 +123,7 @@ class User(Person):
 def my_before_person_organisation(mapper, connection: Connection, target):
     # Ensure there is always an org for any Person
     value = target.organisation.strip()
+    org: Union[str, None]
     try:
         org = connection.execute(
             text("select name from organizations WHERE name ilike :nam "),
@@ -133,9 +134,9 @@ def my_before_person_organisation(mapper, connection: Connection, target):
                 text("insert into organizations(name) values(:nam) RETURNING name"),
                 {"nam": value},
             ).scalar()
-
-    except:
+    except Exception as e:
         pass
+    target.organisation = target.organisation.strip()
     assert org is not None, NO_ORGANIZATION_ADDED
 
 

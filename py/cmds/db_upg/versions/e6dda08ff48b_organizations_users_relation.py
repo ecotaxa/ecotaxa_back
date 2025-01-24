@@ -28,10 +28,13 @@ def upgrade():
     )
     op.add_column("users", sa.Column("type", sa.String(length=10), nullable=False))
     op.execute("UPDATE users SET type='{0}'".format(UserType.user.value))
-
+    op.execute(
+        "UPDATE users SET organisation = (SELECT TRIM(organisation) from users as u1 WHERE u1.id=users.id) "
+    )
     op.execute(
         "INSERT INTO organizations (name) SELECT DISTINCT organisation FROM users WHERE organisation IS NOT NULL"
     )
+
     op.create_foreign_key(
         "users_organization", "users", "organizations", ["organisation"], ["name"]
     )

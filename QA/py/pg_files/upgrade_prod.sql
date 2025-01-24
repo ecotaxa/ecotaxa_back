@@ -2934,10 +2934,10 @@ CREATE TABLE organizations (
 
 ALTER TABLE users ADD COLUMN type VARCHAR(10) NOT NULL;
 
-UPDATE users SET type=user;
+UPDATE users SET type='user';
 
+UPDATE users SET organisation = (SELECT TRIM(organisation) from users as u1 WHERE u1.id=users.id) ;
 INSERT INTO organizations (name) SELECT DISTINCT organisation FROM users WHERE organisation IS NOT NULL;
-
 ALTER TABLE users ADD CONSTRAINT users_organization FOREIGN KEY(organisation) REFERENCES organizations (name);
 
 UPDATE alembic_version SET version_num='e6dda08ff48b' WHERE alembic_version.version_num = '78b24e7ba52b';

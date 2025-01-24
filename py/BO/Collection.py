@@ -21,7 +21,7 @@ from DB.Collection import (
 from DB.Project import ProjectIDListT, Project
 from DB.Object import ObjectHeader
 from DB.Sample import Sample
-from DB.User import User
+from DB.User import User, Organization
 from BO.User import UserIDT, UserIDListT, ContactUserBO
 from DB.helpers.ORM import contains_eager, func, any_
 from helpers.DynamicLogs import get_logger
@@ -211,6 +211,7 @@ class CollectionBO(object):
             # Add all
             for a_role, an_org_list in by_role["org"].items():
                 for an_org in an_org_list:
+                    an_org = an_org.strip()
                     session.add(
                         CollectionOrgaRole(
                             collection_id=coll_id, organisation=an_org, role=a_role
@@ -218,6 +219,7 @@ class CollectionBO(object):
                     )
             # First org is the institutionCode provider
             inst_code_provider = by_role["org"][COLLECTION_ROLE_DATA_CREATOR][0]
+            inst_code_provider = inst_code_provider.strip()
             session.add(
                 CollectionOrgaRole(
                     collection_id=coll_id,

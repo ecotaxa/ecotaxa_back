@@ -150,7 +150,6 @@ def test_user_create_with_confirmation(monkeypatch, fastapi, caplog):
         "id": None,
         "email": email,
         "name": "bypass confirmation",
-        "organisation": "Test Org",
     }
     url = USER_CREATE_URL
     params = {"no_bot": ["193.4.123.4", "sdfgdqsg"]}
@@ -276,16 +275,17 @@ def test_user_create_with_confirmation(monkeypatch, fastapi, caplog):
     url = USER_CREATE_URL
     email = "itisagoodmailfortestcreate@tesmailfortest1.com"
     password = "Zzzz?a123"
-    ref_json = {"email": email, "id": None, "name": ""}
+    ref_json = {"email": email, "id": None, "name": "", "organisation": ""}
     rsp = fastapi.post(urlparams, json=ref_json)
     # mail sent to user - request verify email by click on link
+
     assert rsp.json() == None
     assert rsp.status_code == 200
     ref_json = {
         "email": email,
         "id": None,
         "name": "test create with confirmationonly11",
-        "organisation": " test my university",
+        "organisation": "test my university",
         "password": password,
     }
 
@@ -431,7 +431,12 @@ def test_user_create_with_validation(monkeypatch, fastapi, caplog):
     # create user with email verification
     url = USER_CREATE_URL
     email = "goodmailfortestcreate@tesmailfortest.com"
-    ref_json = {"email": email, "id": None, "name": ""}
+    ref_json = {
+        "email": email,
+        "id": None,
+        "name": "",
+        "organisation": "My Org",
+    }
     rsp = fastapi.post(urlparams, json=ref_json)
     # mail sent to user - request verify email by click on link
     assert rsp.json() == None
@@ -440,7 +445,7 @@ def test_user_create_with_validation(monkeypatch, fastapi, caplog):
         "email": email,
         "id": None,
         "name": "test create with validation",
-        "organisation": " test my university",
+        "organisation": "test my university",
         "password": "zzzza123",
     }
     # fake token - received in mail  - user cand post a create request but password is not good
@@ -538,6 +543,7 @@ def test_user_create_with_validation(monkeypatch, fastapi, caplog):
         "email": "itisagoodmailfortestcreate@tesmailfortest2.com",
         "id": ORDINARY_USER_USER_ID,
         "name": "Ordinary User",
+        "organisation": "test modif no mail confirm organisation",
     }
     assert read_json == ref_json
     email_ordinary_user = ref_json["email"]

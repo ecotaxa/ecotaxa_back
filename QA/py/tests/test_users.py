@@ -113,6 +113,7 @@ def test_user_create_ordinary(monkeypatch, fastapi, caplog):
         "id": None,
         "email": "ddduser56",
         "name": "not good email",
+        "organisation": "Homework",
     }
     rsp = fastapi.post(urlparams, json=usr_json)
     assert rsp.json() == None

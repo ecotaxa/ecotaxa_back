@@ -160,7 +160,6 @@ class UserBO(object):
             .filter(User.type == UserType.user.value)
         )
         res = qry.all()
-        print("___res___", res)
         for rec in res:
             for u in found_users:
                 if (
