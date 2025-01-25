@@ -2652,7 +2652,7 @@ def predict_object_set(
 
 @app.post(
     "/object_set/predictions",
-    operation_id="predict_object_set",
+    operation_id="object_set_predictions",
     tags=["objects"],
     response_model=PredictionInfoRsp,
 )

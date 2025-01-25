@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional, List, Tuple, Dict
+from typing import Optional, List, Dict, NamedTuple
 
 from sqlalchemy import tuple_
 
@@ -38,8 +38,12 @@ from helpers.Timer import CodeTimer
 
 logger = get_logger(__name__)
 
+
 # Present prediction
-PredictionInfoT = Tuple[ObjectIDT, ClassifIDT, float]
+class PredictionInfoT(NamedTuple):
+    object_id: ObjectIDT
+    classif_id: ClassifIDT
+    score: float
 
 
 class TrainingBO(object):
@@ -153,7 +157,7 @@ class PredictionBO(object):
         qry = qry.order_by(Prediction.object_id, Prediction.score.desc())
         with CodeTimer("Preds for %d objs: " % len(self.object_ids), logger):
             return [
-                (objid, classif_id, score)
+                PredictionInfoT(objid, classif_id, score)
                 for (objid, classif_id, score) in self.session.execute(qry)
             ]
 
