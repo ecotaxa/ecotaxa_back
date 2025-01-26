@@ -5,6 +5,7 @@ from typing import List, Dict
 from API_operations.CRUD.Jobs import JobCRUDService
 from BG_operations.JobScheduler import JobScheduler
 from DB.Job import DBJobStateEnum
+from sqlalchemy import text
 
 from tests.credentials import ADMIN_USER_ID, ADMIN_AUTH
 
@@ -130,3 +131,9 @@ def get_job_and_wait_until_ok(fastapi, rsp):
     wait_for_stable(job_id)
     api_check_job_ok(fastapi, job_id)
     return job_id
+
+
+def clear_all_jobs():
+    with JobCRUDService() as sce:
+        sce.session.execute(text("DELETE FROM job"))
+        sce.session.commit()
