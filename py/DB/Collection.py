@@ -16,11 +16,13 @@ from typing import (
     Final,
     Union,
 )
+
 from DB.helpers.ORM import Model
+from sqlalchemy import event
+
 from .helpers.DDL import Column, Sequence, ForeignKey, Index
 from .helpers.ORM import relationship
-from .helpers.Postgres import VARCHAR, INTEGER
-from sqlalchemy import event
+from .helpers.Postgres import VARCHAR, INTEGER, text
 
 NO_ORGANIZATION_ADDED = "Error adding organization name"
 if TYPE_CHECKING:
@@ -124,7 +126,7 @@ def my_before_orga_role(mapper, connection: Connection, target):
                 text("insert into organizations(name) values(:nam) RETURNING name"),
                 {"nam": value},
             ).scalar()
-    except Exception as e:
+    except Exception as e:  # TODO: This is bad
         pass
     target.organisation = target.organisation.strip()
     assert org is not None, NO_ORGANIZATION_ADDED

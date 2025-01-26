@@ -234,7 +234,7 @@ class DarwinCoreExport(JobServiceBase):
             # Produce the zip
             arch.build()
             self.log_stats()
-        logger.info("------------ produce zip --------------", self.DWC_ZIP_NAME)
+        logger.info("------------ produce zip -------------- %s", self.DWC_ZIP_NAME)
         done_infos = {
             "collection_id": self.collection.id,
             "out_file": self.DWC_ZIP_NAME,

@@ -6,15 +6,16 @@
 import json
 from dataclasses import dataclass
 from typing import Any, Final, List, Optional
+
 from BO.Classification import ClassifIDListT
 from BO.Rights import RightsBO
+from BO.helpers.TSVHelpers import none_to_empty
 from DB import Session
 from DB.User import User, UserStatus, UserType, Person, Guest, Organization
 from DB.UserPreferences import UserPreferences
+from DB.helpers.ORM import any_, or_, func
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
-from DB.helpers.ORM import any_, or_, func
-from BO.helpers.TSVHelpers import none_to_empty
 
 # Typings, to be clear that these are not e.g. object IDs
 UserIDT = int
@@ -150,7 +151,7 @@ class UserBO(object):
         :param found_users: A dict in
         """
         qry = (
-            session.query(User.id, User.name, User.email)
+            session.query(User.id, func.lower(User.name), func.lower(User.email))
             .filter(
                 or_(
                     func.lower(User.name) == any_(names),
