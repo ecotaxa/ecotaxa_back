@@ -6,6 +6,7 @@ import pytest
 from BG_operations.JobScheduler import JobScheduler
 from fastapi.testclient import TestClient
 
+from tests.jobs import clear_all_jobs
 from tests.prj_utils import sce_check_consistency
 
 client = TestClient(main.app)
@@ -26,6 +27,13 @@ def fastapi(config, database, tstlogs) -> TestClient:
     with client:  # Trigger the fastapi 'startup' event -> launches the JobScheduler
         yield client
     # Teardown, once per module
-    sce_check_consistency("fastapi fx")
+    consistency_exception = None
+    try:
+        sce_check_consistency("fastapi fx")
+    except AssertionError as e:
+        consistency_exception = e
     fastApiUtils._serializer.loads = sav_loads
     JobScheduler.shutdown()
+    if consistency_exception is not None:
+        clear_all_jobs()  # Don't leak failed/unfinished jobs to next tests
+        raise consistency_exception
