@@ -123,7 +123,9 @@ class ObjectManager(Service):
         WHERE objcnnid={sim_search_seed}) AS l2_dist"""
             )
             order_clause = OrderClause()
-            asc_desc = "DESC" if order_field[0] == "-" else "ASC"
+            asc_desc = (
+                "DESC" if order_field is not None and order_field[0] == "-" else "ASC"
+            )
             order_clause.add_expression(None, "l2_dist", asc_desc)
 
         order_clause.set_window(window_start, window_size)
