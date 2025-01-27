@@ -95,9 +95,13 @@ class ObjectManager(Service):
             user_id = user.id
 
         sim_search_seed = None
-        if order_field is not None and order_field.startswith("ss-I"):
+        if order_field is not None and (
+            order_field.startswith("ss-I") or order_field.startswith("-ss-I")
+        ):
             # e.g. ss-I6295511
-            sim_search_seed = int(order_field[4:])
+            sim_search_seed = int(
+                order_field[4 if order_field.startswith("ss-I") else 5 :]
+            )
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(
@@ -119,7 +123,8 @@ class ObjectManager(Service):
         WHERE objcnnid={sim_search_seed}) AS l2_dist"""
             )
             order_clause = OrderClause()
-            order_clause.add_expression(None, "l2_dist")
+            asc_desc = "DESC" if order_field[0] == "-" else "ASC"
+            order_clause.add_expression(None, "l2_dist", asc_desc)
 
         order_clause.set_window(window_start, window_size)
 

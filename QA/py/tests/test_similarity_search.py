@@ -94,8 +94,7 @@ def test_similarity_search(database, fastapi, caplog):
     url = (
         OBJECT_SET_QUERY_URL.format(project_id=prj_id) + f"?order_field=ss-I{target_id}"
     )
-    filters = {}
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=filters)
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
 
     assert rsp.status_code == status.HTTP_200_OK
     rsp_obj_ids = rsp.json()["object_ids"]
@@ -119,3 +118,14 @@ def test_similarity_search(database, fastapi, caplog):
     # TODO: We have a distance not a similarity
     # scores = [e[0] for e in json_rsp["details"]]
     # assert scores == similarity_scores(distances_to_target[0:5])
+
+    # Test object search with inverse similarity
+    url = (
+        OBJECT_SET_QUERY_URL.format(project_id=prj_id)
+        + f"?order_field=-ss-I{target_id}"
+    )
+    rsp = fastapi.post(url, headers=ADMIN_AUTH, json={})
+
+    assert rsp.status_code == status.HTTP_200_OK
+    rsp_obj_ids = rsp.json()["object_ids"]
+    assert rsp_obj_ids == list(reversed(obj_ids))
