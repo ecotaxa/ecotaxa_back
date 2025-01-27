@@ -8,7 +8,6 @@ from enum import Enum
 from typing import Iterable, TYPE_CHECKING, Union
 
 from sqlalchemy import event, SmallInteger
-from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.engine import Connection
 
 from data.Countries import countries_by_name
@@ -20,11 +19,10 @@ from .helpers.DDL import (
     String,
     Boolean,
 )
-from .helpers.Direct import text, func
+from .helpers.Direct import func
 from .helpers.ORM import Model, relationship, Insert
 from .helpers.Postgres import TIMESTAMP, VARCHAR
-
-NO_ORGANIZATION_ADDED = "Error adding organization name"
+from DB.Organization import my_before_organization
 
 if TYPE_CHECKING:
     from .ProjectPrivilege import ProjectPrivilege
@@ -40,23 +38,6 @@ class UserStatus(int, Enum):
 class UserType(str, Enum):
     guest: Final = "guest"
     user: Final = "user"
-
-
-class PeopleOrganizationDirectory(str, Enum):
-    orcid: Final = "https://orcid.org/"
-    edmo: Final = "https://edmo.seadatanet.org/"
-
-
-class Organization(Model):
-    __tablename__ = "organizations"
-    name: str = Column(String(512), unique=True, primary_key=True)
-    directories: list = Column(ARRAY(String), nullable=True)
-    persons = relationship("Person")
-    users = relationship("User", viewonly=True, overlaps="persons")
-    guests = relationship("Guest", viewonly=True, overlaps="persons")
-
-    def __str__(self):
-        return "{0} ({1})".format(self.name, self.directories)
 
 
 class Person(Model):
@@ -121,23 +102,7 @@ class User(Person):
 @event.listens_for(User, "before_update")
 @event.listens_for(Guest, "before_update")
 def my_before_person_organisation(mapper, connection: Connection, target):
-    # Ensure there is always an org for any Person
-    value = target.organisation.strip()
-    org: Union[str, None]
-    try:
-        org = connection.execute(
-            text("select name from organizations WHERE name ilike :nam "),
-            {"nam": value},
-        ).scalar()
-        if org is None:
-            org = connection.execute(
-                text("insert into organizations(name) values(:nam) RETURNING name"),
-                {"nam": value},
-            ).scalar()
-    except Exception as e:
-        pass
-    target.organisation = target.organisation.strip()
-    assert org is not None, NO_ORGANIZATION_ADDED
+    my_before_organization(mapper, connection, target)
 
 
 class Role(Model):

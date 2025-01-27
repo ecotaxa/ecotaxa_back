@@ -40,7 +40,8 @@ from DB.Collection import Collection
 from DB.Project import ProjectTaxoStat, Project
 from DB.Sample import Sample
 from DB.Taxonomy import Taxonomy
-from DB.User import User, Person, Guest, Organization, PeopleOrganizationDirectory
+from DB.User import User, Person, Guest
+from DB.Organization import Organization, PeopleOrganizationDirectory
 from DB.WoRMs import WoRMS
 from DB.helpers import Session
 from DB.helpers.Direct import text

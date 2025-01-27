@@ -21,7 +21,8 @@ from DB.Collection import (
 from DB.Project import ProjectIDListT, Project
 from DB.Object import ObjectHeader
 from DB.Sample import Sample
-from DB.User import User, Organization
+from DB.User import User
+from DB.Organization import Organization
 from BO.User import UserIDT, UserIDListT, ContactUserBO
 from DB.helpers.ORM import contains_eager, func, any_
 from helpers.DynamicLogs import get_logger

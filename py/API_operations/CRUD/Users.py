@@ -26,6 +26,7 @@ from BO.User import (
 )
 from DB.Project import ProjectIDT
 from DB.User import User, Role, UserRole, TempPasswordReset, UserStatus
+from DB.Organization import Organization
 from helpers import DateTime
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
@@ -490,8 +491,8 @@ class UserService(Service):
         """
         Return the already-used org names with given pattern.
         """
-        qry = self.ro_session.query(User.organisation).distinct()
-        qry = qry.filter(User.organisation.ilike(name))
+        qry = self.ro_session.query(Organization.name)
+        qry = qry.filter(Organization.name.ilike(name))
         return [r for r, in qry if r is not None]
 
     def _has_ident_user_throw(

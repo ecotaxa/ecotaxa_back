@@ -23,8 +23,8 @@ from sqlalchemy import event
 from .helpers.DDL import Column, Sequence, ForeignKey, Index
 from .helpers.ORM import relationship
 from .helpers.Postgres import VARCHAR, INTEGER, text
+from DB.Organization import my_before_organization
 
-NO_ORGANIZATION_ADDED = "Error adding organization name"
 if TYPE_CHECKING:
     from .User import User
 
@@ -114,19 +114,4 @@ class CollectionOrgaRole(Model):
 @event.listens_for(CollectionOrgaRole, "before_insert")
 @event.listens_for(CollectionOrgaRole, "before_update")
 def my_before_orga_role(mapper, connection: Connection, target):
-    # Ensure there is always an org for any Person
-    value = target.organisation.strip()
-    try:
-        org = connection.execute(
-            text("select name from organizations WHERE name ilike :nam "),
-            {"nam": value},
-        ).scalar()
-        if org is None:
-            org = connection.execute(
-                text("insert into organizations(name) values(:nam) RETURNING name"),
-                {"nam": value},
-            ).scalar()
-    except Exception as e:  # TODO: This is bad
-        pass
-    target.organisation = target.organisation.strip()
-    assert org is not None, NO_ORGANIZATION_ADDED
+    my_before_organization(mapper, connection, target)
