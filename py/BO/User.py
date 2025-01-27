@@ -72,14 +72,15 @@ class PersonBO(object):
         :param names:
         :param found_persons: A dict in
         """
-        qry = session.query(Person.id, Person.name, Person.email).filter(
+        qry = session.query(
+            Person.id, func.lower(Person.name), func.lower(Person.email)
+        ).filter(
             or_(
                 func.lower(Person.name) == any_(names),
                 func.lower(Person.email) == any_(emails),
             )
         )
         res = qry.all()
-        print("___res___", res)
         for rec in res:
             for u in found_persons:
                 if (
@@ -87,7 +88,6 @@ class PersonBO(object):
                     or none_to_empty(found_persons[u].get("email")).lower() == rec[2]
                 ):
                     found_persons[u]["id"] = rec[0]
-        print("___found_persons", found_persons)
 
 
 class GuestBO(object):
