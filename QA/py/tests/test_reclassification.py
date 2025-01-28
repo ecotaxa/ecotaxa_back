@@ -12,7 +12,6 @@ from tests.test_classification import (
     get_stats,
     entomobryomorpha_id,
     get_classif_history,
-    classify_all,
     validate_all,
 )
 
@@ -41,19 +40,18 @@ def test_reclassif(database, fastapi, caplog):
     obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id)
     assert len(obj_ids) == 8
 
-    # All is predicted, see source archive
+    # All is predicted, see source archive. Objects 6 and 7 are detritus.
+    # Validate object 6 so we have a mix of states
+    obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id)
+    validate_all(fastapi, obj_ids[6:7], ADMIN_AUTH)
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
-        "nb_predicted": 8,
+        "nb_predicted": 7,
         "nb_unclassified": 0,
-        "nb_validated": 0,
+        "nb_validated": 1,
         "projid": prj_id,
         "used_taxa": [45072, 78418, detritus_classif_id, 85011, 85012, 85078],
     }
-
-    # Validate all as Predicted state cannot mutate
-    obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id)
-    validate_all(fastapi, obj_ids, ADMIN_AUTH)
 
     # We have 2 detritus, see original dataset
     obj_ids = query_all_objects(
@@ -66,17 +64,24 @@ def test_reclassif(database, fastapi, caplog):
     )
     assert len(obj_ids) == 0
 
-    # Reclassify them to entomobryomorpha
+    # Reclassify project from detritus to entomobryomorpha
     reclassify(fastapi, prj_id, detritus_classif_id, entomobryomorpha_id)
 
     # Stats changed, detritus is gone and entomobryomorpha appeared
     assert get_stats(fastapi, prj_id) == {
         "nb_dubious": 0,
-        "nb_predicted": 0,
+        "nb_predicted": 7,
         "nb_unclassified": 0,
-        "nb_validated": 8,
+        "nb_validated": 1,
         "projid": prj_id,
-        "used_taxa": [entomobryomorpha_id, 45072, 78418, 85011, 85012, 85078],
+        "used_taxa": [
+            entomobryomorpha_id,
+            45072,
+            78418,
+            85011,
+            85012,
+            85078,
+        ],
     }
 
     # Ensure a proper history appeared

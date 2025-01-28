@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional, List, Dict, NamedTuple
+from typing import Optional, List, Dict, NamedTuple, Tuple
 
 from sqlalchemy import tuple_
 
@@ -160,6 +160,29 @@ class PredictionBO(object):
                 PredictionInfoT(objid, classif_id, score)
                 for (objid, classif_id, score) in self.session.execute(qry)
             ]
+
+    def get_storable_predictions(
+        self,
+    ) -> Tuple[List[ClassifIDListT], List[ClassifScoresListT]]:
+        """
+        Return the predictions, in the format for creating them.
+        """
+        predictions = self.get_prediction_infos()
+        curr_objid = -1
+        classif_ids_list = []
+        classif_scores_list = []
+        classif_ids: ClassifIDListT = []
+        classif_scores: ClassifScoresListT = []
+        for a_prediction in predictions:
+            if a_prediction.object_id != curr_objid:
+                curr_objid = a_prediction.object_id
+                classif_ids = []
+                classif_scores = []
+                classif_ids_list.append(classif_ids)
+                classif_scores_list.append(classif_scores)
+            classif_ids.append(a_prediction.classif_id)
+            classif_scores.append(a_prediction.score)
+        return classif_ids_list, classif_scores_list
 
     MAX_PREDICTIONS_PER_OBJECT = 3  # How many (classif_id, score) we keep per object
 
