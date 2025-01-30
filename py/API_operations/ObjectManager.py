@@ -30,6 +30,7 @@ from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
 from BO.Training import TrainingBO, PredictionBO
 from BO.User import UserIDT
+from DB import ObjectCNNFeatureVector
 from DB.Image import IMAGE_VIRTUAL_COLUMNS
 from DB.Object import (
     VALIDATED_CLASSIF_QUAL,
@@ -93,6 +94,15 @@ class ObjectManager(Service):
             )
             user_id = user.id
 
+        sim_search_seed = None
+        if order_field is not None and (
+            order_field.startswith("ss-I") or order_field.startswith("-ss-I")
+        ):
+            # e.g. ss-I6295511
+            sim_search_seed = int(
+                order_field[4 if order_field.startswith("ss-I") else 5 :]
+            )
+
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(
             self.ro_session, prj, user_id, filters
@@ -103,9 +113,22 @@ class ObjectManager(Service):
         order_clause = self.cook_order_clause(
             order_field, free_columns_mappings, str(return_fields)
         )
-        order_clause.set_window(window_start, window_size)
 
         extra_cols = self.add_return_fields(return_fields, free_columns_mappings)
+
+        if sim_search_seed is not None:
+            extra_cols = (
+                extra_cols
+                + f""", cnn.features::halfvec(50)<->(SELECT features::halfvec(50) FROM {ObjectCNNFeatureVector.__tablename__}
+        WHERE objcnnid={sim_search_seed}) AS l2_dist"""
+            )
+            order_clause = OrderClause()
+            asc_desc = (
+                "DESC" if order_field is not None and order_field[0] == "-" else "ASC"
+            )
+            order_clause.add_expression(None, "l2_dist", asc_desc)
+
+        order_clause.set_window(window_start, window_size)
 
         from_, where_clause, params = object_set.get_sql(order_clause, extra_cols)
 

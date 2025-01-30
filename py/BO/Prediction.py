@@ -13,7 +13,11 @@ import numpy as np  # type: ignore
 from numpy import ndarray
 
 from DB.Acquisition import Acquisition
-from DB.CNNFeatureVector import N_DEEP_FEATURES, ObjectCNNFeaturesVectorBean, ObjectCNNFeatureVector
+from DB.CNNFeatureVector import (
+    N_DEEP_FEATURES,
+    ObjectCNNFeaturesVectorBean,
+    ObjectCNNFeatureVector,
+)
 from DB.Image import Image
 from DB.Object import ObjectHeader, ObjectIDT
 from DB.Project import ProjectIDT
@@ -59,9 +63,13 @@ class DeepFeatures(object):
         return nb_deleted
 
     @staticmethod
-    def find_missing(session: Session, proj_id: ProjectIDT) -> Dict[ObjectIDT, str]:
+    def find_missing(
+        session: Session, proj_id: ProjectIDT, fast: bool = False
+    ) -> Dict[ObjectIDT, str]:
         """
         Find missing cnn features for this project.
+        :param fast: If set, do a fast check that some are absent, not listing them all.
+                    Note: It _still_ takes a few seconds for millions of objects
         """
         qry = session.query(ObjectHeader.objid, Image.imgid, Image.orig_file_name)
         qry = qry.join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
@@ -72,10 +80,14 @@ class DeepFeatures(object):
             ),
         )
         qry = qry.outerjoin(Image)  # For detecting missing images
-        qry = qry.outerjoin((ObjectCNNFeatureVector))  # For detecting missing features
+        qry = qry.outerjoin(ObjectCNNFeatureVector)  # For detecting missing features
         # noinspection PyComparisonWithNone
         qry = qry.filter(ObjectCNNFeatureVector.objcnnid == None)  # SQLAlchemy
-        qry = qry.order_by(ObjectHeader.objid, Image.imgrank)
+        if not fast:
+            qry = qry.order_by(ObjectHeader.objid, Image.imgrank)
+        if fast:
+            # We don't need the whole list to check that some are missing
+            qry = qry.limit(10)
         ret = {}
         for a_res in session.execute(qry):
             objid, imgid, orig_file_name = a_res
@@ -131,7 +143,11 @@ class DeepFeatures(object):
         ret = np.ndarray(shape=(len(oid_lst), N_DEEP_FEATURES), dtype=np.float32)
         ndx = 0
         for a_row in res:
-            all_feats = a_row["features"].strip("[]").split(",") if type(a_row["features"]) == str else a_row["features"]            
+            all_feats = (
+                a_row["features"].strip("[]").split(",")
+                if type(a_row["features"]) == str
+                else a_row["features"]
+            )
             ret[ndx] = [float(x) for x in all_feats]
             ndx += 1
         assert ndx == len(

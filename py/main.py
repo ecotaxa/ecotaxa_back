@@ -82,6 +82,7 @@ from API_models.prediction import (
     MLModel,
     PredictionInfoRsp,
 )
+from API_models.simsearch import SimilaritySearchRsp
 from API_models.subset import SubsetReq, SubsetRsp
 from API_models.taxonomy import (
     TaxaSearchRsp,
@@ -109,6 +110,7 @@ from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
 from API_operations.ObjectManager import ObjectManager
 from API_operations.Prediction import PredictForProject, PredictionDataService
+from API_operations.SimilaritySearch import SimilaritySearchForProject
 from API_operations.Stats import ProjectStatsFetcher
 from API_operations.Status import StatusService
 from API_operations.Subset import SubsetServiceOnProject
@@ -173,7 +175,7 @@ api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.39",
+    version="0.0.40",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -1627,6 +1629,38 @@ def set_project_predict_settings(
 # ######################## END OF PROJECT
 
 
+@app.post(
+    "/object_set/{project_id}/similarity_search/{object_id}",
+    operation_id="get_object_set_similarity_search",
+    tags=["objects"],
+    response_model=SimilaritySearchRsp,
+)
+def object_similarity_search(
+    project_id: int = Path(
+        ...,
+        description="Internal, numeric id of the project to search in.",
+        example=3426,
+    ),
+    object_id: int = Path(
+        ..., description="Object ID to search similar for.", example=1040
+    ),
+    size: int = Query(
+        100,
+        description="Return at maximum this number of object IDs, by default 100.",
+        example="120",
+    ),
+    filters: ProjectFilters = Body(...),
+    current_user: Optional[int] = Depends(get_optional_current_user),
+) -> SimilaritySearchRsp:
+    """
+    Returns, in given project, the objects matching the filter and similar to the queried one.
+    """
+    with SimilaritySearchForProject(project_id, object_id, filters.base(), size) as sce:
+        sim_search_rsp = sce.similarity_search(current_user)
+
+    return sim_search_rsp
+
+
 @app.get(
     "/samples/search",
     operation_id="samples_search",
@@ -1963,7 +1997,8 @@ name, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostat
     ),
     order_field: Optional[str] = Query(
         title="Order field",
-        description='Order the result using given field. If prefixed with "-" then it will be reversed.',
+        description='Order the result using given field. If prefixed with "-" then it will be reversed. '
+        "When using *special syntax ss-Innnn*, the order is similarity with given (by its ID) object.",
         default=None,
         example="obj.longitude",
     ),
@@ -1992,6 +2027,7 @@ If no **unique order** is specified, the result can vary for same call and condi
     return_fields = None
     if fields is not None:
         return_fields = fields.split(",")
+
     before = time.time()
     with ObjectManager() as sce:
         with RightsThrower():
