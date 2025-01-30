@@ -506,30 +506,61 @@ SELECT {HINT} COUNT(*) nbr"""
             self.session, current_user_id, Action.ANNOTATE, proj_id
         )
 
-        # Determine if it's the use case 'global search & replace a single category with another'
+        # Force the use case 'global search & replace a single category with another'
         filter_set = ObjectSetFilter(self.ro_session, filters)
         only_taxon = filter_set.category_id_only()
+        assert (
+            only_taxon is not None
+        ), "You can only reclassify one taxon for a whole project"
 
-        # Get target objects
-        impacted_objs = [r[0] for r in self.query(current_user_id, proj_id, filters)[0]]
-        obj_set = EnumeratedObjectSet(self.session, impacted_objs)
-
-        # Do the raw classification with history.
-        classif_ids = [forced_id] * len(obj_set.object_ids)
         now = db_server_now(self.session)
-        nb_upd, all_changes = obj_set.classify_validate(
-            current_user_id, classif_ids, "=", now
+        # Get directly classify-able target objects
+        filters["statusfilter"] = "V"
+        v_or_d_object_ids = [
+            r[0] for r in self.query(current_user_id, proj_id, filters)[0]
+        ]
+        filters["statusfilter"] = "D"
+        v_or_d_object_ids += [
+            r[0] for r in self.query(current_user_id, proj_id, filters)[0]
+        ]
+        if len(v_or_d_object_ids) > 0:
+            obj_set = EnumeratedObjectSet(self.session, v_or_d_object_ids)
+
+            # Do the V/D classification with history.
+            classif_ids = [forced_id] * len(obj_set.object_ids)
+            nb_upd, all_changes = obj_set.classify_validate(
+                current_user_id, classif_ids, "=", now
+            )
+            # Propagate changes to update projects_taxo_stat
+            self.propagate_classif_changes(nb_upd, all_changes, project)
+
+        filters["statusfilter"] = "P"
+        p_object_ids = [r[0] for r in self.query(current_user_id, proj_id, filters)[0]]
+        if len(p_object_ids) > 0:
+            training = TrainingBO.create_one(
+                self.session,
+                current_user_id,
+                f"Reclassify predicted {only_taxon} to {forced_id} in {proj_id}",
+            )
+            classif_ids_list, classif_scores_list = PredictionBO(
+                self.session, p_object_ids
+            ).get_storable_predictions()
+            for a_list in classif_ids_list:  # Apply the change
+                a_list[a_list.index(only_taxon)] = forced_id
+            obj_set = EnumeratedObjectSet(self.session, p_object_ids)
+            nb_pred_upd, all_pred_changes = obj_set.classify_auto_mult(
+                training, classif_ids_list, classif_scores_list
+            )
+            self.propagate_classif_changes(nb_pred_upd, all_pred_changes, project)
+
+        nb_upd = len(v_or_d_object_ids) + len(p_object_ids)
+        # Log & commit
+        ReClassificationBO.add_log(
+            self.session, only_taxon, forced_id, proj_id, reason, nb_upd, now
         )
 
-        if only_taxon is not None:
-            ReClassificationBO.add_log(
-                self.session, only_taxon, forced_id, proj_id, reason, nb_upd, now
-            )
-
-        # Propagate changes to update projects_taxo_stat and commit
-        self.propagate_classif_changes(nb_upd, all_changes, project)
-
-        return len(obj_set)
+        self.session.commit()
+        return nb_upd
 
     @staticmethod
     def collect_classif(histo: List[HistoricalLastClassif]) -> ClassifIDSetT:
@@ -566,6 +597,7 @@ SELECT {HINT} COUNT(*) nbr"""
         )
         # Propagate changes to update projects_taxo_stat
         self.propagate_classif_changes(nb_upd, all_changes, project)
+        self.session.commit()
         # Return status
         return nb_upd, project.projid, all_changes
 
@@ -595,6 +627,7 @@ SELECT {HINT} COUNT(*) nbr"""
         )
         # Propagate changes to update projects_taxo_stat
         self.propagate_classif_changes(nb_upd, all_changes, project)
+        self.session.commit()
         # Return status
         return nb_upd, project.projid, all_changes
 
@@ -626,9 +659,6 @@ SELECT {HINT} COUNT(*) nbr"""
             ProjectBO.incremental_update_taxo_stats(
                 self.session, project.projid, collated_changes
             )
-            self.session.commit()
-        else:
-            self.session.rollback()
 
     @staticmethod
     def count_in_and_out(

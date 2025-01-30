@@ -1021,8 +1021,6 @@ class ObjectSetFilter(object):
 
         return the_one
 
-        return None
-
     @staticmethod
     def _str_to_decimal(a_dict: ProjectFiltersDict, a_key: str) -> Optional[Decimal]:
         # noinspection PyTypedDict
