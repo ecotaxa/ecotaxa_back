@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.39"
+    "version":"0.0.40"
   },
   "servers":[
     {
@@ -2525,6 +2525,92 @@
         ]
       }
     },
+    "/object_set/{project_id}/similarity_search/{object_id}":{
+      "post":{
+        "tags":[
+          "objects"
+        ],
+        "summary":"Object Similarity Search",
+        "description":"Returns, in given project, the objects matching the filter and similar to the queried one.",
+        "operationId":"get_object_set_similarity_search",
+        "parameters":[
+          {
+            "description":"Internal, numeric id of the project to search in.",
+            "required":true,
+            "schema":{
+              "title":"Project Id",
+              "type":"integer",
+              "description":"Internal, numeric id of the project to search in."
+            },
+            "example":3426,
+            "name":"project_id",
+            "in":"path"
+          },
+          {
+            "description":"Object ID to search similar for.",
+            "required":true,
+            "schema":{
+              "title":"Object Id",
+              "type":"integer",
+              "description":"Object ID to search similar for."
+            },
+            "example":1040,
+            "name":"object_id",
+            "in":"path"
+          },
+          {
+            "description":"Return at maximum this number of object IDs, by default 100.",
+            "required":false,
+            "schema":{
+              "title":"Size",
+              "type":"integer",
+              "description":"Return at maximum this number of object IDs, by default 100.",
+              "default":100
+            },
+            "example":"120",
+            "name":"size",
+            "in":"query"
+          }
+        ],
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/ProjectFilters"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/SimilaritySearchRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
     "/samples/search":{
       "get":{
         "tags":[
@@ -3107,12 +3193,12 @@
             "in":"query"
           },
           {
-            "description":"Order the result using given field. If prefixed with \"-\" then it will be reversed.",
+            "description":"Order the result using given field. If prefixed with \"-\" then it will be reversed. When using *special syntax ss-Innnn*, the order is similarity with given (by its ID) object.",
             "required":false,
             "schema":{
               "title":"Order field",
               "type":"string",
-              "description":"Order the result using given field. If prefixed with \"-\" then it will be reversed."
+              "description":"Order the result using given field. If prefixed with \"-\" then it will be reversed. When using *special syntax ss-Innnn*, the order is similarity with given (by its ID) object."
             },
             "example":"obj.longitude",
             "name":"order_field",
@@ -3981,7 +4067,7 @@
         ],
         "summary":"Query Object Set Predictions",
         "description":"** Return last prediction information for a set of objects, by their IDs.",
-        "operationId":"predict_object_set",
+        "operationId":"object_set_predictions",
         "requestBody":{
           "content":{
             "application/json":{
@@ -8073,17 +8159,9 @@
               "maxItems":3,
               "minItems":3,
               "type":"array",
-              "items":[
-                {
-                  "type":"integer"
-                },
-                {
-                  "type":"integer"
-                },
-                {
-                  "type":"number"
-                }
-              ]
+              "items":{
+                "title":"type"
+              }
             },
             "description":"List of lists [object ID, category ID, score for category].",
             "default":[],
@@ -8102,6 +8180,29 @@
           }
         },
         "description":"Prediction information for a set of objects."
+      },
+      "PredictionInfoT":{
+        "title":"PredictionInfoT",
+        "required":[
+          "object_id",
+          "classif_id",
+          "score"
+        ],
+        "type":"object",
+        "properties":{
+          "object_id":{
+            "title":"Object Id",
+            "type":"integer"
+          },
+          "classif_id":{
+            "title":"Classif Id",
+            "type":"integer"
+          },
+          "score":{
+            "title":"Score",
+            "type":"number"
+          }
+        }
       },
       "PredictionReq":{
         "title":"Prediction Request",
@@ -9043,6 +9144,61 @@
         ],
         "type":"string",
         "description":"Computed export quantities"
+      },
+      "SimilaritySearchRsp":{
+        "title":"Similarity Search Response",
+        "required":[
+          "neighbor_ids",
+          "sim_scores"
+        ],
+        "type":"object",
+        "properties":{
+          "neighbor_ids":{
+            "title":"Neighbor IDs",
+            "type":"array",
+            "items":{
+              "type":"integer"
+            },
+            "description":"The list of similar objects IDs."
+          },
+          "sim_scores":{
+            "title":"Similarity Scores",
+            "type":"array",
+            "items":{
+              "type":"number"
+            },
+            "description":"The list of similarity scores, between 0 and 1. The higher the closer, e.g. 1 for the target_id itself."
+          },
+          "message":{
+            "title":"Message",
+            "type":"string",
+            "description":"A message to the user. If not 'Success' then some condition prevented the computation."
+          }
+        },
+        "description":"The list of similar objects.",
+        "example":{
+          "neighbor_ids":[
+            1040,
+            1041,
+            1042,
+            1043,
+            1044,
+            1045,
+            1046,
+            1047
+          ],
+          "sim_scores":[
+            1.0,
+            0.9,
+            0.8,
+            0.7,
+            0.6,
+            0.5,
+            0.4,
+            0.3
+          ],
+          "message":"Success"
+        }
       },
       "SimpleImportReq":{
         "title":"Simple import request Model",
