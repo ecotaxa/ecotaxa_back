@@ -35,7 +35,7 @@ WORKDIR /app/
 COPY py ./
 
 # Get starting script
-COPY prod_image/start.sh /app
+COPY docker/prod_image/start.sh /app
 
 
 ##### Switch to target #####
