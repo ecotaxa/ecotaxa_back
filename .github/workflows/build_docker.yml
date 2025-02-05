@@ -4,7 +4,7 @@ on:
   push:
 
 jobs:
-  docker:
+  docker_back:
     runs-on: ubuntu-latest
     steps:
       -
@@ -25,3 +25,4 @@ jobs:
         with:
           push: true
           tags: user/app:latest
+          file: docker/prod_image/Dockerfile
