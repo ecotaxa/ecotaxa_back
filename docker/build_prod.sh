@@ -9,6 +9,10 @@ VERSION=2.7.8
 # Copy all sources
 (cd .. && git status py --porcelain | grep "??" | sed -e "s/.. py\///g" > docker/not_in_git.lst)
 rsync -avr --delete --exclude-from=not_to_copy.lst --exclude-from=not_in_git.lst ../py/ py/
+mkdir -p docker/prod_image
+rsync prod_image/start.sh  docker/prod_image/
+mkdir -p docker/gpu_prod_image
+rsync gpu_prod_image/start.sh  docker/gpu_prod_image/
 # Build
 docker build $NO_CACHE -t ecotaxa/ecotaxa_back -f prod_image/Dockerfile .
 docker build $NO_CACHE -t ecotaxa/ecotaxa_gpu_back -f gpu_prod_image/Dockerfile .
