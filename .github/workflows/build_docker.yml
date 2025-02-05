@@ -29,5 +29,5 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: true
-          tags: grololo06/ecotaxagpuback:latest
+          tags: grololo06/ecotaxagpuback:${{github.ref_name}}
           file: ./docker/gpu_prod_image/Dockerfile          
