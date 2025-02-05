@@ -13,7 +13,7 @@ psycopg2-binary==2.9.3
 pgvector==0.2.4
 # Pillow needs manual testing
 # mac: brew install libjpeg
-Pillow==8.1.0
+Pillow==10.3.0
 # astral needs pytz
 astral==2.2
 pytz==2021.1
