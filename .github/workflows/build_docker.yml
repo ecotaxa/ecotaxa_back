@@ -26,4 +26,3 @@ jobs:
           push: true
           tags: user/app:latest
           file: ./docker/prod_image/Dockerfile
-          context: ./docker
