@@ -182,11 +182,7 @@ class RightsBO(object):
         """Set roles so that list of actions is possible"""
         roles = set()
         for an_action in actions:
-            if an_action == Action.CREATE_TAXON:
-                pass
-            elif an_action == Action.CREATE_PROJECT:
-                pass
-            elif an_action == Action.ADMINISTRATE_USERS:
+            if an_action == Action.ADMINISTRATE_USERS:
                 roles.add(all_roles[Role.USERS_ADMINISTRATOR])
             elif an_action == Action.ADMINISTRATE_APP:
                 roles.add(all_roles[Role.APP_ADMINISTRATOR])

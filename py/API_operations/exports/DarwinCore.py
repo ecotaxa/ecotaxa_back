@@ -57,6 +57,7 @@ from formats.DarwinCore.MoF import (
     SamplingInstrumentName,
     CountOfBiologicalEntity,
     ImagingInstrumentName,
+    #TODO replace ImagingInstrumentName par AnalyticalInstrumentName but keep the value
 )
 from formats.DarwinCore.models import (
     DwC_Event,
@@ -454,7 +455,7 @@ class DarwinCoreExport(JobServiceBase):
                 % (len(abstract), self.MIN_ABSTRACT_CHARS)
             )
 
-        additional_info = None  # Just to see if it goes thru QC
+        additional_info = None  # Just to see if it goes through QC
         # additional_info = """  marine, harvested by iOBIS.
         # The OOV supported the financial effort of the survey.
         # We are grateful to the crew of the research boat at OOV that collected plankton during the temporal survey."""
@@ -675,7 +676,7 @@ class DarwinCoreExport(JobServiceBase):
                     sample=a_sample, arch=arch, event_id=event_id, predicted=False
                 )
                 if self.include_predicted:
-                    added_emofs_for_predicted = self.add_occurrence_eMoFs_for_sample(
+                   _ = self.add_occurrence_eMoFs_for_sample(
                         sample=a_sample, arch=arch, event_id=event_id, predicted=True
                     )
                 # Ensure EMOFs (in recast space) are also covered in occurrences (so far in raw space)

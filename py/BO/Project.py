@@ -5,7 +5,7 @@
 import typing
 from enum import Enum
 from collections import OrderedDict
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import datetime
 from typing import (
     List,
@@ -31,13 +31,12 @@ from BO.Mappings import (
 )
 from BO.Prediction import DeepFeatures
 from BO.ProjectPrivilege import ProjectPrivilegeBO
-from BO.DataLicense import DataLicense, LicenseEnum, AccessLevelEnum
+from BO.DataLicense import AccessLevelEnum
 from BO.ProjectVars import ProjectVar
 from BO.Rights import RightsBO, Action
 from BO.SpaceTime import USED_FIELDS_FOR_SUNPOS, compute_sun_position
 from BO.User import (
     MinimalUserBO,
-    ContactUserBO,
     ContactUserListT,
     UserActivity,
     MinimalUserBOListT,
@@ -52,7 +51,6 @@ from DB.Object import (
     ObjectHeader,
     ObjectFields,
 )
-from DB.Instrument import InstrumentIDT
 from DB.Process import Process
 from DB.Project import ProjectIDT, ProjectIDListT, Project
 from DB.Collection import CollectionProject, Collection
@@ -266,7 +264,7 @@ class ProjectBO(object):
                 a_var in KNOWN_PROJECT_VARS
             ), "Invalid project variable key: {}".format(a_var)
             try:
-                var_def = ProjectVar.from_project(a_var, its_def)
+                _ = ProjectVar.from_project(a_var, its_def)
             except TypeError as e:
                 errors.append("Error {} in formula '{}': ".format(str(e), its_def))
         assert len(errors) == 0, "There are formula errors: " + str(errors)
@@ -311,11 +309,12 @@ class ProjectBO(object):
                 if a_user.id == contact.id and a_right == ProjectPrivilegeBO.MANAGE:
                     extra = "C"
                     contact_used = True
-                session.add(
-                    ProjectPrivilege(
-                        projid=proj_id, member=a_user.id, privilege=a_right, extra=extra
-                    )
-                )
+                projectpriv=ProjectPrivilege()
+                projectpriv.projid=proj_id
+                projectpriv.member=a_user.id
+                projectpriv.privilege=a_right
+                projectpriv.extra=extra
+                session.add(projectpriv)
         # Sanity check
         assert (
             contact_used
@@ -517,7 +516,6 @@ class ProjectBO(object):
                 if last_date is None:
                     continue
                 last_date_str = last_date.replace(microsecond=0).isoformat()
-
                 if projid != last_prj:
                     last_prj = projid
                     prj_stat = ProjectUserStats(projid, [], [])
@@ -681,11 +679,9 @@ class ProjectBO(object):
     def in_collections(session: Session, projid: int) -> List[MinimalCollectionBO]:
         """
         :param session:
+        :param projid:
         :return: The collection IDs the project belongs to.
         """
-        subquery = (
-            session.query(CollectionProject.project_id).join(Collection.id).subquery()
-        )
         qry = (
             session.query(
                 Collection.id,
@@ -705,16 +701,10 @@ class ProjectBO(object):
         )
         ret = []
         for r in qry:
-            if r.contact_user_id:
-                contact = ContactUserBO(
-                    id=r.contact_user_id,
-                    email=r.email,
-                    name=r.name,
-                    orcid=r.orcid or "None",
-                    organisation=r.organisation,
-                )
-            else:
-                contact = None
+            #if r.contact_user_id:
+                #contact = ContactUserBO(id=r.contact_user_id,email=r.email,name=r.name, orcid=r.orcid or "None",organisation=r.organisation)
+            #else:
+               #contact = None
             qry_proj = session.query(CollectionProject.project_id).where(
                 CollectionProject.collection_id == r.id
             )
@@ -1101,8 +1091,9 @@ class CollectionProjectBOSet(ProjectBOSet):
                     update_preference=False,
                 )
             return True
-        except (Exception):
+        except AssertionError:
             return False
+
 
     def get_access_from_projects(self) -> Tuple[AccessLevelEnum, ProjectIDListT]:
         """
@@ -1115,7 +1106,7 @@ class CollectionProjectBOSet(ProjectBOSet):
         for project in self.projects:
             if project.access > restricted_access:
                 noaccesses.append(project.projid)
-        return (restricted_access, noaccesses)
+        return restricted_access, noaccesses
 
     def get_annotators_from_histo(
         self, session, status: Optional[int] = None
@@ -1148,7 +1139,6 @@ class CollectionProjectBOSet(ProjectBOSet):
         """
         ret: List = []
         sep: str = ","
-        projects = self.projects
         for project in self.projects:
             initclassif = project.initclassiflist
             if initclassif is not None:
@@ -1258,4 +1248,4 @@ class CollectionProjectBOSet(ProjectBOSet):
                 projerr.append(value[0])
         if len(projerr) == 0:
             commonvalue = values[0][1]
-        return (commonvalue, projerr)
+        return commonvalue, projerr

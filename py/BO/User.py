@@ -5,22 +5,24 @@
 
 import json
 from dataclasses import dataclass
-from typing import Any, Final, List, Optional
+from typing import Any, Final, List, Optional, Union, Dict,Type
 
 from BO.Classification import ClassifIDListT
 from BO.Rights import RightsBO
 from BO.helpers.TSVHelpers import none_to_empty
 from DB import Session
-from DB.User import User, UserStatus, UserType, Person, Guest
+from DB.User import User, UserStatus, UserType, Person, Guest,Role
 from DB.Organization import Organization
 from DB.UserPreferences import UserPreferences
 from DB.helpers.ORM import any_, or_, func
 from helpers.DynamicLogs import get_logger
-from helpers.Timer import CodeTimer
+
 
 # Typings, to be clear that these are not e.g. object IDs
 UserIDT = int
 UserIDListT = List[int]
+GuestIDT = int
+GuestIDListT = List[int]
 
 logger = get_logger(__name__)
 
@@ -55,121 +57,109 @@ class OrganizationBO(object):
 
 class PersonBO(object):
     """
-    Holder for user-related functions.
+    Holder for guest and user-related functions.
     """
 
-    def __init__(self, person: Person):
-        self._person = person
-
-    @staticmethod
-    def find_persons(
-        session: Session, names: List[str], emails: List[str], found_persons: dict
-    ):
-        """
-        Find the persons in DB, by name or email.
-        :param session:
-        :param emails:
-        :param names:
-        :param found_persons: A dict in
-        """
-        qry = session.query(
-            Person.id, func.lower(Person.name), func.lower(Person.email)
-        ).filter(
-            or_(
-                func.lower(Person.name) == any_(names),
-                func.lower(Person.email) == any_(emails),
-            )
-        )
-        res = qry.all()
-        for rec in res:
-            for u in found_persons:
-                if (
-                    u == rec[1]
-                    or none_to_empty(found_persons[u].get("email")).lower() == rec[2]
-                ):
-                    found_persons[u]["id"] = rec[0]
-
-
-class GuestBO(object):
-    """
-    Holder for user-related functions.
-    """
-
-    def __init__(self, guest: Guest):
-        self._guest = guest
-
-    @staticmethod
-    def find_guests(
-        session: Session, names: List[str], emails: List[str], found_guests: dict
-    ):
-        """
-        Find the persons in DB, by name or email.
-        :param session:
-        :param emails:
-        :param names:
-        :param found_guests: A dict in
-        """
-        qry = session.query(Guest.id, Guest.name, Guest.email).filter(
-            or_(
-                func.lower(Guest.name) == any_(names),
-                func.lower(Guest.email) == any_(emails),
-            )
-        )
-        res = qry.all()
-        print("___res___", res)
-        for rec in res:
-            for u in found_guests:
-                if (
-                    u == rec[1]
-                    or none_to_empty(found_guests[u].get("email")).lower() == rec[2]
-                ):
-                    found_guests[u]["id"] = rec[0]
-        print("___found_guests", found_guests)
-
-
-class UserBO(object):
-    """
-    Holder for user-related functions.
-    """
-
-    def __init__(self, user: User):
-        self._user = user
+    _slots = ["name", "email", "organisation", "orcid", "country", "usercreationdate"]
+    to_check = ["name", "email", "organisation", "country"]
+    def __init__(self, dbitem: Union[Guest, User]):
+        self._dbitem = dbitem
 
     def __getattr__(self, item):
         """Fallback for 'not found' field after the C getattr() call.
         If we did not enrich a Project field somehow then return it"""
-        return getattr(self._user, item)
+        return getattr(self._dbitem, item)
 
     @staticmethod
-    def find_users(
-        session: Session, names: List[str], emails: List[str], found_users: dict
+    def check_fields(to_check_model:Dict, to_check: List[str]) -> List[str]:
+        errors: List[str] = []
+        for a_field in to_check:
+            val = to_check_model[a_field]
+            if val is None:
+                continue
+            val = val.strip()
+            if len(val) <= 3:
+                errors.append("%s is too short, 3 chars minimum" % a_field)
+        return errors
+
+    @staticmethod
+    def find_items(cls:Union[Type[User],Type[Guest]],session:Session,names: List[str], emails: List[str], found_items: dict
     ):
         """
-        Find the users in DB, by name or email.
+        Find the persons in DB, by name or email.
+        :param cls:
         :param session:
         :param emails:
         :param names:
-        :param found_users: A dict in
+        :param found_items: A dict in
         """
-        qry = (
-            session.query(User.id, func.lower(User.name), func.lower(User.email))
-            .filter(
-                or_(
-                    func.lower(User.name) == any_(names),
-                    func.lower(User.email) == any_(emails),
-                )
+        qry = session.query(cls.id, func.lower(cls.name), func.lower(cls.email)).filter(
+            or_(
+                func.lower(cls.name) == any_(names),
+                func.lower(cls.email) == any_(emails),
             )
-            .filter(User.type == UserType.user.value)
         )
         res = qry.all()
         for rec in res:
-            for u in found_users:
+            for u in found_items:
                 if (
                     u == rec[1]
-                    or none_to_empty(found_users[u].get("email")).lower() == rec[2]
+                    or none_to_empty(found_items[u].get("email")).lower() == rec[2]
                 ):
-                    found_users[u]["id"] = rec[0]
-        print("___found_users", found_users)
+                    found_items[u]["id"] = rec[0]
+
+    @staticmethod
+    def has_ident_person(
+        session: Session, person_data: dict, _id: Optional[int] = -1
+    ) -> Optional[Person]:
+        """
+        check if a person exists
+        """
+        qry = session.query(Person)
+        if "id" in person_data.keys() and _id != person_data["id"]:
+            _id = person_data["id"]
+        if _id != -1:
+            qry = qry.filter(Person.id != _id)
+        qry= qry.filter( func.lower(Person.email) == func.lower(str(person_data["email"] or "")))
+        return qry.scalar()
+
+
+
+class GuestBO(PersonBO):
+    """
+    Holder for user-related functions.
+    """
+
+    _slots = ["name", "email", "organisation", "orcid", "country", "usercreationdate"]
+    to_check = ["name", "email", "organisation", "country"]
+
+    def __init__(self, guest: Guest):
+        super().__init__(dbitem=guest)
+
+
+class UserBO(PersonBO):
+    """
+    Holder for user-related functions.
+    """
+
+    _slots = [
+        "name",
+        "email",
+        "organisation",
+        "orcid",
+        "country",
+        "usercreationdate",
+        "usercreationreason",
+        "password",
+        "status",
+        "mail_status",
+        "status_date",
+        "mail_status_date",
+        "status_admin_comment",
+    ]
+
+    def __init__(self, user: User):
+        super().__init__(dbitem=user)
 
     @staticmethod
     def get_preferences_per_project(
@@ -277,34 +267,27 @@ class UserBO(object):
             session, user_id, project_id, cls.CLASSIF_MRU_KEY, mru
         )
 
-    @classmethod
+    @staticmethod
     def validate_usr(
-        cls, session: Session, user_model: Any, verify_password: bool = False
+         user_model: Any, verify_password: bool = False
     ) -> None:
         """
         Validate basic rules on a user model before setting it into DB.
         TODO: Not done in pydantic, as there are non-complying values in the DB and that would prevent reading them.
         """
         # name & email are mandatory by DB constraints and therefore made so by pydantic model
-        errors: List[str] = []
-        for a_field in ("name", "email", "organisation", "country"):
-            val = getattr(user_model, a_field)
-            if val is None:
-                continue
-            val = val.strip()
-            if len(val) <= 3:
-                errors.append("%s is too short, 3 chars minimum" % a_field)
+        errors: List[str] = UserBO.check_fields(user_model.__dict__, UserBO.to_check)
         # can check is password is strong  if password not None
-        if verify_password == True:
+        if verify_password:
             from helpers.httpexception import DETAIL_PASSWORD_STRENGTH_ERROR
 
             new_password = getattr(user_model, User.password.name)
-            if new_password not in ("", None) and not cls.is_strong_password(
+            if not(new_password in ("", None) or UserBO.is_strong_password(
                 new_password
-            ):
+            )):
                 errors.append(DETAIL_PASSWORD_STRENGTH_ERROR)
 
-        assert not errors, errors
+        assert len(errors)==0, errors
 
     @staticmethod
     def is_strong_password(password: str) -> bool:

@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Iterable, TYPE_CHECKING, Union
+from typing import Iterable, TYPE_CHECKING,Final
 
 from sqlalchemy import event, SmallInteger
 from sqlalchemy.engine import Connection
@@ -64,6 +64,17 @@ class Guest(Person):
         "polymorphic_identity": "guest",
     }
 
+    def to_user(self) -> User:
+        user = User()
+        user.id=self.id
+        user.name=self.name
+        user.email=self.email
+        user.country=self.country
+        user.orcid=self.orcid
+        user.usercreationdate=self.usercreationdate
+        user.organisation=self.organisation
+        return user
+
 
 class User(Person):
     password: str = Column(String(255))
@@ -90,9 +101,25 @@ class User(Person):
         "polymorphic_identity": "user",
     }
 
+    def to_guest(self) -> Guest:
+        guest = Guest()
+        guest.id=self.id
+        guest.name=self.name
+        guest.email=self.email
+        guest.country= self.country
+        guest.orcid=self.orcid
+        guest.usercreationdate=self.usercreationdate
+        guest.organisation=self.organisation
+        return guest
+
     def has_role(self, role: str) -> bool:
         # TODO: Cache a bit. All roles are just python objects due to SQLAlchemy magic.
-        return role in [r.name for r in list(self.roles)]
+        roles=self.roles
+        return role in [r.name for r in roles]
+    def is_manager(self)->bool:
+        return (self.has_role(Role.APP_ADMINISTRATOR) or self.has_role(
+            Role.USERS_ADMINISTRATOR
+        ))
 
 
 # associate the listener function with SomeClass,

@@ -34,7 +34,7 @@ class LoginService(Service):
         assert pw_hash is not None, "SECURITY_PASSWORD_HASH not set!"
         schemes = [pw_hash, "plaintext"]
         deprecated = ["auto"]
-        self._pwd_context = CryptContext(
+        self.pwd_context = CryptContext(
             schemes=schemes, default=pw_hash, deprecated=deprecated
         )
         # Hashing config
@@ -84,12 +84,12 @@ class LoginService(Service):
         """
         if self.use_double_hash(user.password):
             # Core of the job: comparing DB user.password with same-method encoding of the given password
-            verified = self._pwd_context.verify(self.get_hmac(password), user.password)
+            verified = self.pwd_context.verify(self.get_hmac(password), user.password)
         else:
             # Try with plaintext password.
-            verified = self._pwd_context.verify(password, user.password)
+            verified = self.pwd_context.verify(password, user.password)
 
-        if verified and self._pwd_context.needs_update(user.password):
+        if verified and self.pwd_context.needs_update(user.password):
             # Write a more secure version
             user.password = self.hash_password(password)
             self.session.commit()
@@ -107,7 +107,7 @@ class LoginService(Service):
         if self.use_double_hash():
             password = self.get_hmac(password).decode("ascii")
 
-        return self._pwd_context.hash(password)
+        return self.pwd_context.hash(password)
         #     **self.config.get_cnf('PASSWORD_HASH_OPTIONS', default={}).get(
         #         self.password_hash, {})
         # )
@@ -155,7 +155,7 @@ class LoginService(Service):
         if password_hash is None:
             is_plaintext = self.password_hash == "plaintext"
         else:
-            is_plaintext = self._pwd_context.identify(password_hash) == "plaintext"
+            is_plaintext = self.pwd_context.identify(password_hash) == "plaintext"
 
         return not (is_plaintext or single_hash)
 

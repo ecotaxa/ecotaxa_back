@@ -10,9 +10,8 @@ from typing import List, Optional, Dict, Any
 from API_models.helpers.DBtoModel import combine_models
 from API_models.helpers.DataclassToModel import dataclass_to_model
 from BO.Classification import HistoricalLastClassif, HistoricalClassification
-from BO.ObjectSet import ObjectIDListT
 from DB.Image import Image
-from DB.Object import ObjectHeader
+from DB.Object import ObjectHeader, ObjectIDListT
 from helpers.pydantic import BaseModel, Field, DescriptiveModel
 
 

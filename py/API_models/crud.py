@@ -4,7 +4,7 @@
 #
 #  Models used in CRUD API_operations.
 #
-from typing import Optional, Dict, List, Any, Tuple, OrderedDict, Union
+from typing import Optional, Dict, List, Any, Union
 from BO.ColumnUpdate import ColUpdate
 from BO.DataLicense import LicenseEnum, AccessLevelEnum
 from BO.Job import DBJobStateEnum
@@ -20,14 +20,13 @@ from DB.Job import Job
 from DB.Process import Process
 from DB.Project import Project, ProjectIDListT
 from DB.Sample import Sample
-from DB.User import User
+from DB.User import User, Guest
 from helpers.pydantic import BaseModel, Field, DescriptiveModel
 from .helpers.DBtoModel import combine_models
 from .helpers.DataclassToModel import dataclass_to_model_with_suffix
 
 # Enriched model
 FreeColT = Dict[str, str]
-
 
 # Minimal user information
 class _MinUserModel(DescriptiveModel):
@@ -53,6 +52,18 @@ class _UserCollectionModel(_MinUserModel):
 
 MinUserModel = combine_models(User, _MinUserModel)
 UserCollectionModel = combine_models(User, _UserCollectionModel)
+
+
+class _GuestModel(_UserCollectionModel):
+    country = Field(
+        title="Country",
+        description="The country name, as text (but chosen in a consistent list).",
+        example="France",
+    )
+
+
+GuestModel = combine_models(Guest, _GuestModel)
+
 # Direct mirror of DB models, i.e. the minimal + the rest we want
 class _FullUserModel(_MinUserModel):
     status = Field(

@@ -37,6 +37,7 @@ from API_models.crud import (
     ProjectModel,
     UserModelWithRights,
     MinUserModel,
+    GuestModel,
     CollectionModel,
     CollectionAggregatedRsp,
     CreateCollectionReq,
@@ -106,6 +107,7 @@ from API_operations.CRUD.ObjectParents import (
 )
 from API_operations.CRUD.Projects import ProjectsService
 from API_operations.CRUD.Users import UserService
+from API_operations.CRUD.Guests import GuestService
 from API_operations.Consistency import ProjectConsistencyChecker
 from API_operations.DBSyncService import DBSyncService
 from API_operations.JsonDumper import JsonDumper
@@ -137,22 +139,21 @@ from BO.Classification import HistoricalClassification, ClassifIDT
 from BO.Collection import (
     CollectionBO,
     MinimalCollectionBO,
-    CollectionIDT,
 )
 from BO.ColumnUpdate import ColUpdateList
 from BO.Job import JobBO
 from BO.Object import ObjectBO
-from BO.ObjectSet import ObjectIDListT
 from BO.Process import ProcessBO
-from BO.Project import ProjectBO, ProjectUserStats, CollectionProjectBOSet
+from BO.Project import ProjectBO, ProjectUserStats
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleBO, SampleTaxoStats
 from BO.Taxonomy import TaxonBO
 from BO.User import UserIDT
 from DB import Sample
-from DB.Project import ProjectTaxoStat, Project, ProjectIDListT
+from DB.Object import ObjectIDListT
+from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
-from DB.User import User
+from DB.User import User, Guest
 from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
@@ -237,7 +238,7 @@ def login(params: LoginReq = Body(...)) -> str:
     """
     **Login barrier,**
 
-    If successful, the login will returns a **JWT** which will have to be used
+    If successful, the login will return a **JWT** which will have to be used
     in bearer authentication scheme for subsequent calls.
     """
     with LoginService() as sce:
@@ -482,7 +483,7 @@ def get_admin_users(current_user: int = Depends(get_current_user)) -> List[User]
     🔒 Any authenticated user can access the list.
     """
     with UserService() as sce:
-        ret = sce.get_admin_users(current_user)
+        ret = sce.get_admin_users()
     return ret
 
 
@@ -502,7 +503,7 @@ def get_user(
     Returns **information about the user** corresponding to the given id.
     """
     with UserService() as sce:
-        ret = sce.search_by_id(current_user, user_id)
+        ret = sce.search_by_id(user_id)
     if ret is None:
         raise HTTPException(status_code=404, detail="User not found")
     return ret
@@ -637,6 +638,114 @@ def search_organizations(
 
 
 # ######################## END OF ORGANIZATIONS
+
+
+@app.get(
+    "/guests",
+    operation_id="get_guests",
+    tags=["guests"],
+    response_model=List[GuestModel],
+)
+def get_guests(
+    ids: str = Query(
+        "",
+        title="Ids",
+        description="String containing the list of one or more id separated by non-num char. \n"
+        " \n **If several ids are provided**, one full info is returned per user.",
+        example="1",
+    ),
+    fields: Optional[str] = Query(
+        default="*default",
+        title="Fields",
+        description="Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+        example="*default,fieldlist",
+    ),
+    current_user: int = Depends(get_current_user),
+) -> List[GuestModel]:
+    """
+    Returns the list of **all guests** with their full information, or just some of them if their ids
+    are provided.
+
+    🔒 *For admins and managers only.*
+    """
+    with GuestService() as sce:
+        guest_ids = _split_num_list(ids)
+        return sce.list(current_user, guest_ids, fields=fields)
+
+
+@app.post(
+    "/guests/create",
+    operation_id="create_guest",
+    tags=["guests"],
+    responses={200: {"content": {"application/json": {"example": null}}}},
+)
+def create_guest(
+    guest: GuestModel = Body(...),
+    current_user: Optional[int] = Depends(get_optional_current_user),
+) -> None:
+    """
+    **Create a new guest**, return **NULL upon success.**
+
+    🔒 Depending on logged user, different authorizations apply:
+    - An administrator or user administrator or logged project manager can create a guest.
+    - An ordinary logged user cannot create another guest.
+
+    If back-end configuration for self-creation check is Google reCAPTCHA,
+    then no_bot is a pair [remote IP, reCAPTCHA response].
+    """
+    with GuestService() as sce:
+        with ValidityThrower(), RightsThrower():
+            _: UserIDT = sce.create_guest(current_user, guest)
+
+
+@app.put(
+    "/guests/{guest_id}",
+    operation_id="update_guest",
+    tags=["guests"],
+    responses={200: {"content": {"application/json": {"example": null}}}},
+)
+def update_guests(
+    guest: GuestModel,
+    guest_id: int = Path(
+        ..., description="Internal, numeric id of the guest.", example=760
+    ),
+    current_user: int = Depends(get_current_user),
+) -> None:
+    """
+    **Update the guest**, return **NULL upon success.**
+
+    🔒 Depending on logged user, different authorizations apply:
+    - An administrator or user administrator or manager user can change any field with respect of consistency.
+    """
+    with GuestService() as sce:
+        with ValidityThrower(), RightsThrower():
+            sce.update_guest(current_user, guest_id, guest)
+
+
+@app.get(
+    "/guests/search",
+    operation_id="search_guest",
+    tags=["guests"],
+    response_model=List[GuestModel],
+)
+def search_guest(
+    current_user: int = Depends(get_current_user),
+    by_name: Optional[str] = Query(
+        default=None,
+        title="search by name",
+        description="Search by name, use % for searching with 'any char'.",
+        example="%userNa%",
+    ),
+) -> List[Guest]:
+    """
+    **Search guests using various criteria**, search is case-insensitive and might contain % chars.
+    """
+    with GuestService() as sce:
+        ret = sce.search(current_user, by_name)
+    return ret
+
+
+# ######################## END OF PERSONS
 
 
 @app.post(

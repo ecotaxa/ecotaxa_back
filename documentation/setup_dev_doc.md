@@ -77,10 +77,9 @@ docker exec -it ecotaxa_db /bin/bash
 apt-get update
 apt-get install vim  
 cd /var/lib/postgresql/data
-vi pg_hba.conf  remplacer par md5
-vi postgresql.conf remplacer passowrd_encryption par md5
+vi pg_hba.conf  #remplacer scram-sha-256 par md5
+vi postgresql.conf #remplacer password_encryption scram-sha-256 par md5
 installer pgvector
-apt-get update
 apt-get install postgresql-14-pgvector 
 - Création d'une base de données vide (utilise `config.ini`)
 ```shell
@@ -155,7 +154,23 @@ L'application est accessible à l'adresse qui est donnée dans les logs du scrip
 
 - Création d'une base de données temporaire pour les tests
 ```shell
-docker run --name ecotaxa_tox -p 5440:5432 -d -e POSTGRES_PASSWORD=postgres12 -e POSTGRES_DB=ecotaxa4 postgres:13.6
+# if no postgresql installed 
+sudo apt-get update
+sudo apt-get install -y postgresql-client
+# docker image synchronized with the production version of postgresql
+docker run --name ecotaxa_tox -p 5440:5432 -d -e POSTGRES_PASSWORD=yourpassword -e POSTGRES_DB=ecotaxa postgres:14.5
+- modification de pg_hba.conf
+installer vim
+docker exec -it ecotaxa_tox /bin/bash
+apt-get update
+apt-get install vim  
+cd /var/lib/postgresql/data
+vi pg_hba.conf  #remplacer scram-sha-256 par md5
+vi postgresql.conf #remplacer password_encryption scram-sha-256 par md5
+installer pgvector
+apt-get install postgresql-14-pgvector 
+# or if postgresql image is sync. 
+docker start ecotaxa_tox
 ```
 - Lancement des tests avec tox
 ```shell
@@ -165,10 +180,10 @@ PYTHONPATH=. POSTGRES_HOST=localhost POSTGRES_PORT=5440 tox
 Une fois les tests terminés, il faut supprimer la base de données temporaire
 ```shell
 docker stop ecotaxa_tox
-docker rm ecotaxa_tox
+#docker rm ecotaxa_tox
 ```
 
-La page swagger <ROOTURL>/docs peut etre utilement utiliser pour tester les endpoints sans trop d'effort de configuration    .
+La page swagger <ROOTURL>/docs peut être utilement utiliser pour tester les endpoints sans trop d'effort de configuration    .
 
 # Import d'un projet de test
 

@@ -20,6 +20,7 @@ from BO.User import UserIDT, UserBO
 from BO.helpers.ImportHelpers import ImportHow, ImportDiagnostic, ImportWhere
 from BO.helpers.TSVHelpers import none_to_empty
 from DB.Image import Image
+from DB.User import User
 from DB.helpers import Session
 from DB.helpers.DBWriter import DBWriter
 from helpers.DynamicLogs import get_logger, LogsSwitcher
@@ -238,7 +239,7 @@ class FileImport(ImportServiceBase):
         emails = [
             cast(str, x.get("email")) for x in users_found.values() if x.get("email")
         ]
-        UserBO.find_users(session, names, emails, users_found)
+        UserBO.find_items(User,session, names, emails, users_found)
         logger.info("Users Found for all TSVs = %s", users_found)
 
     @staticmethod

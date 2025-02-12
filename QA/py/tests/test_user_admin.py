@@ -62,7 +62,6 @@ def test_user_create(fastapi, caplog):
     }
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=usr_json)
     assert rsp.status_code == 422
-    print("rspjson==", rsp.json())
     assert rsp.json() == {"detail": [DETAIL_EMAIL_OWNED_BY_OTHER]}
     url = USER_CREATE_URL
     usr_json = {

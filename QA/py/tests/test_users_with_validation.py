@@ -3,9 +3,6 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import logging
-
-import pytest
-from API_operations.CRUD.Users import UserService
 from helpers.httpexception import (
     DETAIL_PASSWORD_STRENGTH_ERROR,
     DETAIL_INVALID_EMAIL,
@@ -20,7 +17,6 @@ from tests.test_user_admin import (
     USER_GET_URL,
 )
 from helpers.AppConfig import Config
-from fastapi import HTTPException
 from tests.credentials import (
     ADMIN_AUTH,
     USER_AUTH,
@@ -30,7 +26,6 @@ from tests.credentials import (
     USERS_ADMIN_AUTH,
 )
 from API_operations.helpers.UserValidation import UserValidation, ActivationType
-from helpers.login import NOT_AUTHORIZED_MAIL
 import urllib.parse
 from tests.test_users import config_captcha
 
@@ -106,7 +101,6 @@ def user_confirm_email(
         params["token"] = token
 
     urlparams = url + "?" + urllib.parse.urlencode(params, doseq=True)
-
     rsp = fastapi.post(urlparams, json=ref_json)
     # user confirm
     if rsp.status_code == 422:
@@ -169,7 +163,7 @@ def test_user_create_with_confirmation(monkeypatch, fastapi, caplog):
     urlparams = url + "?" + urllib.parse.urlencode(params, doseq=True)
     rsp = fastapi.post(urlparams, json=usr_json)
     # verification mail is  always sent if email_verification is on in config
-    assert rsp.json() == None
+    assert rsp.json() is None
     assert rsp.status_code == 200
 
     # admin find a user and modify his email
@@ -187,20 +181,20 @@ def test_user_create_with_confirmation(monkeypatch, fastapi, caplog):
     res_user = {"status": UserStatus.active.value, "mail_status": None}
     err = verify_user(fastapi, ORDINARY_USER_USER_ID, ADMIN_AUTH, res_user)
     assert err == []
-    #  no  confirmation email as the update is made by admineven  when email_verification is "on" - keep in that order as the status must be 1 for a normal user and is None in db test data
+    #  no  confirmation email as the update is made by admin even when email_verification is "on" - keep in that order as the status must be 1 for a normal user and is None in db test data
     email = "myemail123@mailtestprovider1.net"
     ref_json["email"] = email
     url = USER_UPDATE_URL.format(user_id=ORDINARY_USER_USER_ID)
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=ref_json)
     # user status should stay to 1
-    assert rsp.json() == None
+    assert rsp.json() is None
     assert rsp.status_code == 200
     # so change the user status to inactive to continue the tests
     ref_json["status"] = UserStatus.inactive.value
     url = USER_UPDATE_URL.format(user_id=ORDINARY_USER_USER_ID)
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=ref_json)
     assert rsp.status_code == 200
-    assert rsp.json() == None
+    assert rsp.json() is None
     res_user = {"email": email, "status": UserStatus.inactive.value}
     err = verify_user(fastapi, ORDINARY_USER_USER_ID, ADMIN_AUTH, res_user)
     assert err == []
@@ -247,7 +241,7 @@ def test_user_create_with_confirmation(monkeypatch, fastapi, caplog):
     url = USER_UPDATE_URL.format(user_id=ORDINARY_USER_USER_ID)
     rsp = fastapi.put(url, headers=USER_AUTH, json=ref_json)
     assert rsp.status_code == 200
-    assert rsp.json() == None
+    assert rsp.json() is None
     res_user = {
         "email": email,
         "mail_status": False,
@@ -279,7 +273,7 @@ def test_user_create_with_confirmation(monkeypatch, fastapi, caplog):
     rsp = fastapi.post(urlparams, json=ref_json)
     # mail sent to user - request verify email by click on link
 
-    assert rsp.json() == None
+    assert rsp.json() is None
     assert rsp.status_code == 200
     ref_json = {
         "email": email,
@@ -315,13 +309,14 @@ def test_user_create_with_confirmation(monkeypatch, fastapi, caplog):
     url = USER_UPDATE_URL.format(user_id=ORDINARY_USER_USER_ID)
     params = {"no_bot": ["193.4.123.4", "sdfgdqsg"]}
     urlparams = url + "?" + urllib.parse.urlencode(params, doseq=True)
+
     rsp = fastapi.put(url, headers=USER_AUTH, json=ref_json)
     assert rsp.json() == {"detail": [DETAIL_INVALID_EMAIL]}
     assert rsp.status_code == 422
     email = "itisagoodmailfortestcreate@tesmailfortest2.com"
     ref_json["email"] = email
     rsp = fastapi.put(url, headers=USER_AUTH, json=ref_json)
-    assert rsp.json() == None
+    assert rsp.json() is None
     assert rsp.status_code == 200
     res_user = {
         "email": email,
@@ -403,7 +398,7 @@ def test_user_create_with_validation(monkeypatch, fastapi, caplog):
     rsp = fastapi.post(urlparams, json=usr_json)
     # same name is ok - this test becomes useless but ...
     assert rsp.status_code == 200
-    assert rsp.json() == None
+    assert rsp.json() is None
     # assert rsp.status_code == 422
     # assert rsp.json() == {"detail": [DETAIL_NAME_OWNED_BY_OTHER]}
     usr_json = {
@@ -425,7 +420,7 @@ def test_user_create_with_validation(monkeypatch, fastapi, caplog):
     }
     rsp = fastapi.post(urlparams, json=usr_json)
 
-    assert rsp.json() == None
+    assert rsp.json() is None
     assert rsp.status_code == 200
 
     # create user with email verification
@@ -439,7 +434,7 @@ def test_user_create_with_validation(monkeypatch, fastapi, caplog):
     }
     rsp = fastapi.post(urlparams, json=ref_json)
     # mail sent to user - request verify email by click on link
-    assert rsp.json() == None
+    assert rsp.json() is None
     assert rsp.status_code == 200
     ref_json = {
         "email": email,
@@ -498,7 +493,7 @@ def test_user_create_with_validation(monkeypatch, fastapi, caplog):
         headers=USERS_ADMIN_AUTH,
         json=admin_json,
     )
-    assert rsp.json() == None
+    assert rsp.json() is None
     assert rsp.status_code == 200
     res_user = {"email": email, "mail_status": True, "status": UserStatus.pending.value}
     err = verify_user(fastapi, NEW_USER_WITH_VALIDATION_ID, ADMIN_AUTH, res_user)
@@ -528,7 +523,7 @@ def test_user_create_with_validation(monkeypatch, fastapi, caplog):
         json={},
     )
 
-    assert rsp.json() == None
+    assert rsp.json() is None
     assert rsp.status_code == 200
     res_user = {"id": NEW_USER_WITH_VALIDATION_ID, "status": UserStatus.blocked.value}
     err = verify_user(fastapi, NEW_USER_WITH_VALIDATION_ID, ADMIN_AUTH, res_user)
@@ -592,7 +587,7 @@ def test_user_create_with_validation(monkeypatch, fastapi, caplog):
     # user can now  modify email
     rsp = fastapi.put(url, headers=USER_AUTH, json=ref_json)
     assert rsp.status_code == 200
-    assert rsp.json() == None
+    assert rsp.json() is None
     email_ordinary_user = ref_json["email"]
     # status is 0 waiting for account validation
 
@@ -637,7 +632,7 @@ def test_user_create_with_validation(monkeypatch, fastapi, caplog):
     # user can now  modify email
     rsp = fastapi.put(url, headers=USER_AUTH, json=ref_json)
     assert rsp.status_code == 200
-    assert rsp.json() == None
+    assert rsp.json() is None
     ### rest password test
     # user is blocked  ask to reset pwd
     url = URL_RESET_PWD
@@ -655,12 +650,12 @@ def test_user_create_with_validation(monkeypatch, fastapi, caplog):
         headers=USERS_ADMIN_AUTH,
         json={},
     )
-    assert rsp.json() == None
+    assert rsp.json() is None
     assert rsp.status_code == 200
     # ask reset pwd again -
     rsp = fastapi.post(urlparams, json=req_json)
     assert rsp.status_code == 200
-    assert rsp.json() == None
+    assert rsp.json() is None
     # fake token to test user reset password
     # has to monkeypatch the hash_password from LoginService to have a 200 response status_code
     temp_password = "temp_password"

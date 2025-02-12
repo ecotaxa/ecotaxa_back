@@ -13,12 +13,13 @@ import numpy as np
 
 from API_models.prediction import PredictionReq
 from BO.Classification import ClassifIDListT
-from BO.ObjectSet import DescribedObjectSet, EnumeratedObjectSet, ObjectIDListT
+from BO.ObjectSet import DescribedObjectSet, EnumeratedObjectSet
 from BO.Prediction import DeepFeatures
 from BO.Project import ProjectBO
 from BO.ProjectSet import LimitedInCategoriesProjectSet, FeatureConsistentProjectSet
 from BO.Rights import RightsBO, Action
 from BO.Training import TrainingBO
+from DB.Object import ObjectIDListT
 from DB.Project import ProjectIDT, Project
 from DB.helpers import Result
 from DB.helpers.Direct import text
