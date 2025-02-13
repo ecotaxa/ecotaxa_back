@@ -72,4 +72,4 @@ def test_user_create(fastapi, caplog):
     }
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=usr_json)
     assert rsp.status_code == 200
-    assert rsp.json() == None
+    assert rsp.json() is None

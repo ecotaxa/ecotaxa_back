@@ -321,7 +321,7 @@ class UserService(Service):
             self._set_user_status(
                 current_user=current_user,
                 user_id=user_id,
-                status=status,
+                status=UserStatus(status),
                 comment=comment,
             )
 
@@ -853,7 +853,7 @@ class UserService(Service):
         """
         admin modify user status, status_admin_comment and  status_date
         """
-        if UserStatus(status) is None:
+        if status is None:
             raise HTTPException(
                 status_code=422,
                 detail=[DETAIL_INVALID_STATUS],
@@ -1135,9 +1135,9 @@ class UserService(Service):
                         TempPasswordReset
                     ).get(user_ask_reset.id)
                 if temp_rs is None:
-                    temp_rs = TempPasswordReset(
-                        user_id=user_ask_reset.id, temp_password=hash_temp_password
-                    )
+                    temp_rs=TempPasswordReset()
+                    temp_rs.user_id=user_ask_reset.id
+                    temp_rs.temp_password=hash_temp_password
                     self.session.add(temp_rs)
                 else:
                     temp_rs.temp_password = hash_temp_password

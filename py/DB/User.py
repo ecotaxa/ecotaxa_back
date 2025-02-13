@@ -114,8 +114,7 @@ class User(Person):
 
     def has_role(self, role: str) -> bool:
         # TODO: Cache a bit. All roles are just python objects due to SQLAlchemy magic.
-        roles=self.roles
-        return role in [r.name for r in roles]
+        return role in [r.name for r in self.roles]
     def is_manager(self)->bool:
         return (self.has_role(Role.APP_ADMINISTRATOR) or self.has_role(
             Role.USERS_ADMINISTRATOR

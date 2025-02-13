@@ -11,7 +11,7 @@ GUEST_UPDATE_URL = "/guests/{guest_id}"
 
 GUEST_CREATE_URL = "/guests/create"
 
-GUEST_GET_URL = "/guests/{ids}"
+GUEST_GET_URL = "/guests"
 
 #WARNING must run after all test_user
 def test_guest_create(fastapi, caplog):
@@ -37,27 +37,27 @@ def test_guest_create(fastapi, caplog):
     }
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=usr_json)
     assert rsp.status_code == 200
-    assert rsp.json() == None
+    assert rsp.json() is None
 
 def test_guest_update(fastapi, caplog):
     caplog.set_level(logging.FATAL)
 
     url = GUEST_GET_URL.format(ids=ORDINARY_GUEST_GUEST_ID)
-    print('url==',url)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == 200
     read_json = rsp.json()
-    ref_json = {
+    ref_json = [{
         "id": ORDINARY_GUEST_GUEST_ID,
         "email": "newdddguest5@mailguest.com",
         "name": "Ordinary Guest",
         "organisation": "OrgTest",
-    }
-    print('rsp_____________', rsp.json())
+   'country': None, 'orcid': None
+    }]
+
     assert read_json == ref_json
 
     # Failing update
-    upd_json = {"email": "guest@testmail.guest", "id": ORDINARY_GUEST_GUEST_ID, "organisation": "e", "name": "S"}
+    upd_json = {"email": "guest@testmail.guest", "id": ORDINARY_GUEST_GUEST_ID, "organisation": "e", "name": "S",'country': None, 'orcid': None}
     url = GUEST_UPDATE_URL.format(guest_id=ORDINARY_GUEST_GUEST_ID)
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
     assert rsp.status_code == 422
