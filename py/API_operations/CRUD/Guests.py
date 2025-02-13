@@ -116,11 +116,17 @@ class GuestService(Service):
     def _get_guest_profile(db_guest: Guest) -> GuestModel:
         ret = GuestModel.from_orm(db_guest)
         return ret
+    def _limit_qry(self,current_user:User,qry):
+        if not current_user.is_manager():
+            collection_ids=self._projects_managed_by(current_user)
+            qry = qry.join(CollectionUserRole).filter(CollectionUserRole.collection_id.in_(collection_ids))
+        return qry
 
     def search(self, current_user_id: UserIDT, by_name: Optional[str]) -> List[Guest]:
         current_user = RightsBO.get_user_throw(self.ro_session, current_user_id)
         self._is_manager_throw(current_user)
         qry = self.ro_session.query(Guest)
+        qry=self._limit_qry(current_user,qry)
         if by_name is not None:
             qry = qry.filter(Guest.name.ilike(by_name))
         else:
@@ -143,6 +149,7 @@ class GuestService(Service):
         # for faster display in test
         #TODO query with a join on collection manager and current user plus collectionusersroles
         qry = self.ro_session.query(Guest)
+        qry = self._limit_qry(current_user, qry)
         if len(guest_ids) > 0:
             qry = qry.filter(Guest.id.in_(guest_ids))
         for db_guest in qry:
@@ -180,7 +187,11 @@ class GuestService(Service):
         if len(cols_to_upd) == 0:
             return None
         errors: List[str] = GuestBO.check_fields(update_src.__dict__, GuestBO.to_check)
-        assert len(errors) == 0, errors
+        if len(errors) > 0:
+            raise HTTPException(
+                status_code=422,
+                detail=errors,
+            )
         for col in cols_to_upd:
             if update_src.id == -1 and col.name == Guest.usercreationdate.name:
                 value = DateTime.now_time()
@@ -228,9 +239,8 @@ class GuestService(Service):
 
 
     def _projects_managed_by(self,user:User)->CollectionIDListT:
-       qry=self.ro_session.query(CollectionProject.collection_id.projid).join(CollectionProject,CollectionProject.project_id == ProjectPrivilege.projid).filter(ProjectPrivilege.member == user.id).filter(ProjectPrivilege.privilege==ProjectPrivilegeBO)
-       print('qry ppall============', qry.statement)
-       collection_ids = qry.all()
+       qry=self.ro_session.query(CollectionProject.collection_id).join(ProjectPrivilege,CollectionProject.project_id == ProjectPrivilege.projid).filter(ProjectPrivilege.member == user.id).filter(ProjectPrivilege.privilege==ProjectPrivilegeBO.MANAGE)
+       collection_ids =qry.all()
        return collection_ids
 
     def _can_manage_guest_throw(self,user:User,guest_id:GuestIDT):

@@ -57,7 +57,7 @@ def test_guest_update(fastapi, caplog):
     assert read_json == ref_json
 
     # Failing update
-    upd_json = {"email": "guest@testmail.guest", "id": ORDINARY_GUEST_GUEST_ID, "organisation": "e", "name": "S",'country': None, 'orcid': None}
+    upd_json = {"email": "guest@testmail.guest", "id": ORDINARY_GUEST_GUEST_ID, "organisation": "e", "name": "S"}
     url = GUEST_UPDATE_URL.format(guest_id=ORDINARY_GUEST_GUEST_ID)
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
     assert rsp.status_code == 422
@@ -69,8 +69,12 @@ def test_guest_update(fastapi, caplog):
     }
 
     # Self update
+    upd_json.update({"country":"France","name":"Ordinary Guest","organisation":"OrgTest"})
     url = GUEST_UPDATE_URL.format(guest_id=ORDINARY_GUEST_GUEST_ID)
-    rsp = fastapi.put(url, headers=USER_AUTH, json=read_json)
+    # not manager of projects in collections where the guest is registered
+    rsp = fastapi.put(url, headers=USER_AUTH, json=upd_json)
+    assert rsp.status_code == 403
+    rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
     assert rsp.status_code == 200
     # actual = rsp.json()
     # assert actual == expected

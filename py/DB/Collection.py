@@ -11,20 +11,17 @@ from typing import (
     Optional,
     TYPE_CHECKING,
     Iterable,
-    Sequence as SequenceT,
-    List,
-    Final,
-    Union,
+    List
 )
 
 from DB.helpers.ORM import Model
 from sqlalchemy import event
-
+from sqlalchemy.engine import Connection
 from .helpers.DDL import Column, Sequence, ForeignKey, Index
 from .helpers.ORM import relationship
-from .helpers.Postgres import VARCHAR, INTEGER, text
+from .helpers.Postgres import VARCHAR, INTEGER
 from DB.Organization import my_before_organization
-
+from DB.Project import Project
 if TYPE_CHECKING:
     from .User import User
 

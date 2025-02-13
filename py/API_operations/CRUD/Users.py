@@ -480,7 +480,11 @@ class UserService(Service):
         if len(cols_to_upd) == 0:
             return None
         errors: List[str] = UserBO.check_fields(update_src.__dict__, UserBO.to_check)
-        assert len(errors) == 0, errors
+        if len(errors) > 0:
+            raise HTTPException(
+                status_code=422,
+                detail=errors,
+            )
         for col in cols_to_upd:
             if update_src.id == -1 and col.name == User.usercreationdate.name:
                 value = DateTime.now_time()
