@@ -2946,6 +2946,19 @@ COMMIT;
 
 
 
+BEGIN;
+
+-- Running upgrade 032dfb7159d5 -> f38a881a1f6c
+
+SET LOCAL maintenance_work_mem = '8GB';
+SET LOCAL max_parallel_maintenance_workers = 8;
+CREATE INDEX obj_cnn_features_vector_hv_ivfflat_l2_5k_idx ON obj_cnn_features_vector
+ USING ivfflat ((features::halfvec(50)) halfvec_l2_ops) WITH (lists = 5000);
+
+UPDATE alembic_version SET version_num='f38a881a1f6c' WHERE alembic_version.version_num = '032dfb7159d5';
+
+COMMIT;
+
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;

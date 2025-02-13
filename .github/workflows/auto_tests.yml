@@ -1,6 +1,6 @@
 # This is a basic workflow to help you get started with Actions
 
-name: CI
+name: tests
 
 # Controls when the action will run.
 on:
@@ -52,7 +52,7 @@ jobs:
         --no-install-recommends --yes
     - run: python3.8 -m venv /venv
     - run: PATH=/venv/bin pip3 install --upgrade pip wheel
-    # Checkout. 
+    # Checkout.
     - uses: actions/checkout@v4
     # Run both tests and coverage
     - run: PATH=/venv/bin:$PATH pip3 install tox==3.24.3
