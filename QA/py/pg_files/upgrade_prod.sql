@@ -2906,47 +2906,6 @@ DROP TABLE mig_unq_classif_per_proj;
 UPDATE alembic_version SET version_num='032dfb7159d5' WHERE alembic_version.version_num = '4045b161563b';
 COMMIT;
 BEGIN;
--- Running upgrade 032dfb7159d5 -> 78b24e7ba52b
-
-ALTER TABLE projects ADD COLUMN access VARCHAR(1) NOT NULL;
--- PUBLIC ="1" when visible=True and no license
-UPDATE projects SET access = "1" WHERE visible=true AND license="";
--- OPEN="2" when visible=True and license = CC
-UPDATE projects SET access = "2" WHERE visible=true AND license!="" AND license!="copyright";
--- private when copyright or visible=False
-UPDATE projects SET set access = "0" WHERE visible=false OR license="copyright";
-
-ALTER TABLE projects ADD COLUMN formulae VARCHAR;
-
-UPDATE alembic_version SET version_num='78b24e7ba52b' WHERE alembic_version.version_num = '032dfb7159d5';
-
-COMMIT;
-BEGIN;
-
--- Running upgrade 78b24e7ba52b -> e6dda08ff48b
-
-CREATE TABLE organizations (
-    id SERIAL NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    directories VARCHAR(100)[],
-    PRIMARY KEY (id)
-);
-
-ALTER TABLE users ADD COLUMN type VARCHAR(10) NOT NULL;
-
-UPDATE users SET type='user';
-
-UPDATE users SET organisation = (SELECT TRIM(organisation) from users as u1 WHERE u1.id=users.id) ;
-INSERT INTO organizations (name) SELECT DISTINCT organisation FROM users WHERE organisation IS NOT NULL;
-ALTER TABLE users ADD CONSTRAINT users_organization FOREIGN KEY(organisation) REFERENCES organizations (name);
-
-UPDATE alembic_version SET version_num='e6dda08ff48b' WHERE alembic_version.version_num = '78b24e7ba52b';
-
-COMMIT;
-
-
-
-BEGIN;
 
 -- Running upgrade 032dfb7159d5 -> f38a881a1f6c
 
@@ -2956,6 +2915,47 @@ CREATE INDEX obj_cnn_features_vector_hv_ivfflat_l2_5k_idx ON obj_cnn_features_ve
  USING ivfflat ((features::halfvec(50)) halfvec_l2_ops) WITH (lists = 5000);
 
 UPDATE alembic_version SET version_num='f38a881a1f6c' WHERE alembic_version.version_num = '032dfb7159d5';
+
+COMMIT;
+
+BEGIN;
+-- Running upgrade f38a881a1f6c -> 78b24e7ba52b
+
+ALTER TABLE projects ADD COLUMN access VARCHAR(1);
+-- PUBLIC ="1" when visible=True and no license
+UPDATE projects SET access='1' WHERE visible=true AND (license='' OR license IS NULL);
+-- OPEN="2" when visible=True and license = CC
+UPDATE projects SET access='2' WHERE visible=true AND license!='' AND LOWER(license) NOT LIKE 'copyright';
+
+-- private when copyright or visible=False
+UPDATE projects SET access='0' WHERE visible=false OR LOWER(license) LIKE 'copyright';
+ALTER TABLE projects ALTER COLUMN access SET NOT NULL;
+ALTER TABLE projects ADD COLUMN formulae VARCHAR;
+
+UPDATE alembic_version SET version_num='78b24e7ba52b' WHERE alembic_version.version_num = 'f38a881a1f6c';
+
+COMMIT;
+BEGIN;
+
+-- Running upgrade 78b24e7ba52b -> e6dda08ff48b
+
+CREATE TABLE organizations (
+    id SERIAL NOT NULL,
+    name VARCHAR(255) UNIQUE NOT NULL,
+    directories VARCHAR(100)[],
+    PRIMARY KEY (id)
+);
+
+ALTER TABLE users ADD COLUMN type VARCHAR(10);
+
+UPDATE users SET type='user';
+ALTER TABLE users ALTER COLUMN type SET NOT NULL;
+UPDATE users SET organisation='NULL' WHERE organisation IS NULL;
+UPDATE users SET organisation=(SELECT TRIM(organisation) from users as u1 WHERE u1.id=users.id) ;
+INSERT INTO organizations (name) SELECT DISTINCT organisation FROM users WHERE organisation IS NOT NULL;
+ALTER TABLE users ADD CONSTRAINT users_organisation FOREIGN KEY(organisation) REFERENCES organizations(name);
+
+UPDATE alembic_version SET version_num='e6dda08ff48b' WHERE alembic_version.version_num = '78b24e7ba52b';
 
 COMMIT;
 

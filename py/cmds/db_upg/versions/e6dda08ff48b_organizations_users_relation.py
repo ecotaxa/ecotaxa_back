@@ -26,8 +26,11 @@ def upgrade():
         ),
         sa.PrimaryKeyConstraint("id"),
     )
+    op.execute("ALTER TABLE organizations ALTER name SET UNIQUE")
     op.add_column("users", sa.Column("type", sa.String(length=10), nullable=False))
     op.execute("UPDATE users SET type='{0}'".format(UserType.user.value))
+    op.execute("ALTER TABLE users ALTER COLUMN type SET NOT NULL")
+    op.execute("UPDATE users SET organisation='NULL' WHERE organisation IS NULL")
     op.execute(
         "UPDATE users SET organisation = (SELECT TRIM(organisation) from users as u1 WHERE u1.id=users.id) "
     )
@@ -36,7 +39,7 @@ def upgrade():
     )
 
     op.create_foreign_key(
-        "users_organization", "users", "organizations", ["organisation"], ["name"]
+        "users_organisation", "users", "organizations", ["organisation"], ["name"]
     )
 
     # ### end Alembic commands ###
