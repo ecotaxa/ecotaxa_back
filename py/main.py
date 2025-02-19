@@ -1911,6 +1911,8 @@ def update_project(
                 viewers=project.viewers,
                 license_=project.license,
                 bodc_vars=project.bodc_variables,
+                access=project.access,
+                formulae=project.formulae
             )
 
     with DBSyncService(Project, Project.projid, project_id) as ssce:
