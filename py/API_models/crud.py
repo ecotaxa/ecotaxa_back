@@ -8,38 +8,38 @@ from typing import Optional, Dict, List, Any, Union
 from BO.ColumnUpdate import ColUpdate
 from BO.DataLicense import LicenseEnum, AccessLevelEnum
 from BO.Job import DBJobStateEnum
-from BO.Collection import OrganisationIDT
+from BO.Collection import OrganisationIDT, CollectionIDT
 from BO.Project import ProjectUserStats, ProjectColumns
 from BO.ProjectSet import ProjectSetColumnStats
-from BO.Sample import SampleTaxoStats
-from BO.User import UserIDT, UserIDListT
+from BO.Sample import SampleTaxoStats,SampleIDT
+from BO.User import UserIDT
 from DB.Acquisition import Acquisition
 from DB.Collection import Collection
 from DB.Instrument import UNKNOWN_INSTRUMENT
-from DB.Job import Job
+from DB.Job import Job,JobIDT
 from DB.Process import Process
-from DB.Project import Project, ProjectIDListT
+from DB.Project import Project,ProjectIDT, ProjectIDListT
 from DB.Sample import Sample
 from DB.User import User, Guest
 from helpers.pydantic import BaseModel, Field, DescriptiveModel
 from .helpers.DBtoModel import combine_models
 from .helpers.DataclassToModel import dataclass_to_model_with_suffix
-
+from API_models.constants import FORMULAE
 # Enriched model
 FreeColT = Dict[str, str]
 
 # Minimal user information
 class _MinUserModel(DescriptiveModel):
-    id = Field(title="Id", description="The unique numeric id of this user.", example=1)
-    email = Field(
+    id: UserIDT = Field(title="Id", description="The unique numeric id of this user.", example=1)
+    email:str = Field(
         title="Email",
         description="User's email address, as text, used during registration.",
         example="ecotaxa.api.user@gmail.com",
     )
-    name = Field(
+    name:str = Field(
         title="Name", description="User's full name, as text.", example="userName"
     )
-    organisation = Field(
+    organisation:str = Field(
         title="Organisation",
         description="User's organisation name, as text.",
         example="Oceanographic Laboratory of Villefranche sur Mer - LOV",
@@ -47,7 +47,7 @@ class _MinUserModel(DescriptiveModel):
 
 
 class _UserCollectionModel(_MinUserModel):
-    orcid = Field(title="orcid", description="orcid unique identifier for this user")
+    orcid:str = Field(title="orcid", description="orcid unique identifier for this user")
 
 
 MinUserModel = combine_models(User, _MinUserModel)
@@ -55,7 +55,7 @@ UserCollectionModel = combine_models(User, _UserCollectionModel)
 
 
 class _GuestModel(_UserCollectionModel):
-    country = Field(
+    country:str = Field(
         title="Country",
         description="The country name, as text (but chosen in a consistent list).",
         example="France",
@@ -66,7 +66,7 @@ GuestModel = combine_models(Guest, _GuestModel)
 
 # Direct mirror of DB models, i.e. the minimal + the rest we want
 class _FullUserModel(_MinUserModel):
-    status = Field(
+    status:int = Field(
         default=1,
         title="Account status",
         description="Status of the user : 1 for active, 0 for inactive ,2 for pending, -1 for blocked",
@@ -77,17 +77,17 @@ class _FullUserModel(_MinUserModel):
         description="Timestamp status modification date",
         example="2020-11-05T12:31:48.299713",
     )
-    status_admin_comment = Field(
+    status_admin_comment:str = Field(
         title="Comment",
         description="Optional Users admininistrator comment about the account status.",
         example="",
     )
-    country = Field(
+    country:str = Field(
         title="Country",
         description="The country name, as text (but chosen in a consistent list).",
         example="France",
     )
-    orcid = Field(
+    orcid:str = Field(
         title="ORCID ID",
         description="The orcid id https://support.orcid.org.",
         example="0000-0001-2345-6789",
@@ -102,12 +102,12 @@ class _FullUserModel(_MinUserModel):
         description="Paragraph describing the usage of EcoTaxa made by the user.",
         example="Analysis of size and shapes of plastic particles",
     )
-    password = Field(
+    password :str = Field(
         title="User's password'",
         description="Encrypted (or not) password.",
         example="$foobar45$",
     )
-    mail_status = Field(
+    mail_status:bool = Field(
         title="Mail status",
         description="True for verified, False for waiting for verification, None for no action.",
         example=True,
@@ -123,59 +123,77 @@ _UserModelFromDB = combine_models(User, _FullUserModel)
 
 # TODO JCE - description example
 class _Project2Model(DescriptiveModel):
-    projid = Field(title="Project Id", description="The project Id.", example=4824)
-    title = Field(title="Title", description="The project title.", example="MyProject")
-    visible = Field(
-        title="Visible", description="The project visibility.", example=False
+    projid:ProjectIDT = Field(title="Project Id", description="The project Id.", example=4824)
+    title:str = Field(title="Title", description="The project title.", example="MyProject")
+    visible:bool = Field(
+        title="Visible", description="The project visibility. (deprecated) ", example=False
     )
-    status = Field(
+    status:str = Field(
         title="Status", description="The project status.", example="Annotate"
     )
-    objcount = Field(
+    objcount:float = Field(
         title="Object count", description="The number of objects.", example=32292.0
     )
-    pctvalidated = Field(
+    pctvalidated:float = Field(
         title="Percentage validated",
         description="Percentage of validated images.",
         example=0.015483711135885049,
     )
-    pctclassified = Field(
+    pctclassified:float = Field(
         title="Percentage classified",
         description="Percentage of classified images.",
         example=100.0,
     )
-    classifsettings = Field(
+    classifsettings :str= Field(
         title="Classification settings",
         description="",
         example="baseproject=1602\ncritvar=%area,angle,area,area_exc,bx,by,cdexc,centroids,circ.,circex,convarea,convperim,cv,elongation,esd,fcons,feret,feretareaexc,fractal,height,histcum1,histcum2,histcum3,intden,kurt,lat_end,lon_end,major,max,mean,meanpos,median,min,minor,mode,nb1,nb2,perim.,perimareaexc,perimferet,perimmajor,range,skelarea,skew,slope,sr,stddev,symetrieh,symetriehc,symetriev,symetrievc,thickr,width,x,xm,xstart,y,ym,ystart\nposttaxomapping=\nseltaxo=45074,84963,61990,13333,82399,61973,62005,25930,25932,61996,78426,81941,11514,85076,85061,30815,85185,92230,85079,84993,25824,85115,85004,26525,25944,11509,26524,92112,84976,25942,84980,85078,78418,84977,85060,61993,61991,85069,81871,74144,11758,72431,13381,11518,5,18758,85117,92042,84968,84997,87826,92236,92237,92039,84989,85193,83281,78412,92239,71617,81977,45071,12865,85044,81940,85067,12908,85116,56693,85008,92139,92068\nusemodel_foldername=testln1",
     )
-    classiffieldlist = Field(
+    classiffieldlist:str = Field(
         title="Classification field list",
         description="",
         example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]",
     )
-    popoverfieldlist = Field(
+    popoverfieldlist : str= Field(
         title="Pop over field list",
         description="",
         example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]",
     )
-    comments = Field(title="Comments", description="The project comments.", example="")
-    description = Field(
+    comments:str = Field(title="Comments", description="The project comments.", example="")
+    description : str= Field(
         title="Description",
         description="The project description, i.e. main traits.",
         example="",
     )
-    rf_models_used = Field(title="Rf models used", description="", example="")
-    cnn_network_id = Field(
+    rf_models_used :str= Field(title="Rf models used", description="", example="")
+    cnn_network_id:str = Field(
         title="Cnn network id", description="", example="SCN_zooscan_group1"
     )
-
+    license: LicenseEnum = Field(
+        title="License",
+        description="Data licence.",
+        default=LicenseEnum.Copyright,
+        example=LicenseEnum.CC_BY,
+    )
+    access: AccessLevelEnum = Field(
+        title="Access level",
+        description="""When "1" (PUBLIC), the project is visible by all users.""" + ", ".join(
+            [access.name + ': "' + str(access.value) + '"' for access in AccessLevelEnum]),
+        default=AccessLevelEnum.PUBLIC,
+        example=AccessLevelEnum.PUBLIC,
+    )
+    formulae: Optional[str] = Field(
+        title="Formulae",
+        description="Concentration formulae.",
+        default=FORMULAE,
+        example="",
+    )
 
 _ProjectModelFromDB = combine_models(Project, _Project2Model)
 
 
 class ProjectSummaryModel(BaseModel):
-    projid: int = Field(
+    projid:ProjectIDT = Field(
         title="Project Id", description="Project unique identifier.", example=1
     )
     title: str = Field(
@@ -206,20 +224,20 @@ class UserModelWithRights(_UserModelFromDB):
 # TODO JCE - description example
 # We exclude free columns from base model, they will be mapped in a dedicated sub-entity
 class _Sample2Model(DescriptiveModel):
-    sampleid = Field(title="Sample Id", description="The sample Id.", example=100)
-    projid = Field(title="Project Id", description="The project Id.", example=4)
-    orig_id = Field(
+    sampleid:SampleIDT = Field(title="Sample Id", description="The sample Id.", example=100)
+    projid:ProjectIDT = Field(title="Project Id", description="The project Id.", example=4)
+    orig_id :str = Field(
         title="Original id",
         description="Original sample ID from initial TSV load.",
         example="dewex_leg2_19",
     )
-    latitude = Field(
+    latitude:float = Field(
         title="Latitude", description="The latitude.", example=42.0231666666667
     )
-    longitude = Field(
+    longitude:float = Field(
         title="Longitude", description="The longitude.", example=4.71766666666667
     )
-    dataportal_descriptor = Field(
+    dataportal_descriptor:str = Field(
         title="Dataportal descriptor.", description="", example=""
     )
 
@@ -228,20 +246,20 @@ _SampleModelFromDB = combine_models(Sample, _Sample2Model)
 
 
 class _Acquisition2Model(DescriptiveModel):
-    acquisid = Field(
+    acquisid : int= Field(
         title="Acquisition Id", description="The acquisition Id.", example=144
     )
-    acq_sample_id = Field(
+    acq_sample_id : int = Field(
         title="Acquisition sample Id",
         description="The acquisition sample Id.",
         example=1039,
     )
-    orig_id = Field(
+    orig_id:str = Field(
         title="Original id",
         description="Original acquisition ID from initial TSV load.",
         example="uvp5_station1_cast1b",
     )
-    instrument = Field(
+    instrument:str = Field(
         title="Instrument", description="Instrument used.", example="uvp5"
     )
 
@@ -250,8 +268,8 @@ _AcquisitionModelFromDB = combine_models(Acquisition, _Acquisition2Model)
 
 
 class _Process2Model(DescriptiveModel):
-    processid = Field(title="Process id", description="The process Id.", example=1000)
-    orig_id = Field(
+    processid : int= Field(title="Process id", description="The process Id.", example=1000)
+    orig_id :str = Field(
         title="Original id",
         description="Original process ID from initial TSV load.",
         example="zooprocess_045",
@@ -263,31 +281,31 @@ _ProcessModelFromDB = combine_models(Process, _Process2Model)
 
 # TODO JCE - example
 class _Collection2Model(DescriptiveModel):
-    id = Field(title="Id", description="The collection Id.", example=1)
-    external_id = Field(title="External Id", description="The external Id.", example="")
-    external_id_system = Field(
+    id : CollectionIDT= Field(title="Id", description="The collection Id.", example=1)
+    external_id :str= Field(title="External Id", description="The external Id.", example="")
+    external_id_system :str = Field(
         title="External id system", description="The external Id system.", example=""
     )
-    title = Field(
+    title :str = Field(
         title="Title", description="The collection title.", example="My collection"
     )
-    short_title = Field(
+    short_title: str = Field(
         title="Short title",
         description="The collection short title.",
         example="My coll",
     )
-    citation = Field(
+    citation:str = Field(
         title="Citation", description="The collection citation.", example=""
     )
-    license = Field(
+    license:str = Field(
         title="License",
         description="The collection license.",
         example=LicenseEnum.CC_BY,
     )
-    abstract = Field(
+    abstract:str= Field(
         title="Abstract", description="The collection abstract.", example=""
     )
-    description = Field(
+    description:str = Field(
         title="Description", description="The collection description.", example=""
     )
 
@@ -350,6 +368,10 @@ class _AddedToProject(BaseModel):
         description="Viewers of this project, if not manager nor annotator.",
         default=[],
     )
+    contact: Optional[MinUserModel] = Field(
+        title="Contact",
+        description="The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.",
+    )
     instrument: Optional[str] = Field(
         title="Instrument",
         description="This project's instrument code.",
@@ -360,10 +382,6 @@ class _AddedToProject(BaseModel):
         description="This project's instrument BODC definition.",
         example="http://vocab.nerc.ac.uk/collection/L22/current/TOOL1581/",
     )
-    contact: Optional[MinUserModel] = Field(
-        title="Contact",
-        description="The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.",
-    )
 
     highest_right: str = Field(
         title="Highest right",
@@ -371,17 +389,10 @@ class _AddedToProject(BaseModel):
         default="",
         example="View",
     )
-    license: LicenseEnum = Field(
-        title="License",
-        description="Data licence.",
-        default=LicenseEnum.Copyright,
-        example=LicenseEnum.CC_BY,
-    )
-
     # owner: UserModel = Field(title="Owner of this project")
 
 
-class ProjectModel(_ProjectModelFromDB, _AddedToProject):
+class ProjectModel(_AddedToProject,_ProjectModelFromDB ):
     """
     Basic and computed information about the Project.
     """
@@ -389,7 +400,7 @@ class ProjectModel(_ProjectModelFromDB, _AddedToProject):
 
 class CollectionAggregatedRsp(BaseModel):
     """
-    collection model extended with computed informations about the collection projects
+    collection model extended with computed information about the collection projects
     """
 
     can_be_administered: bool = Field(
@@ -403,9 +414,10 @@ class CollectionAggregatedRsp(BaseModel):
         default=UNKNOWN_INSTRUMENT,
         example="UVP5",
     )
-    access: str = Field(
+    access: AccessLevelEnum = Field(
         title="Access",
-        description="The restricted access for collection projects.",
+        description="The restricted access for collection projects."+ ", ".join(
+            [access.name + ': "' + str(access.value) + '"' for access in AccessLevelEnum]),
         example=AccessLevelEnum.OPEN,
         default=AccessLevelEnum.OPEN,
     )
@@ -469,24 +481,24 @@ class SampleModel(_SampleModelFromDB):
 
 
 class _DBSampleTaxoStatsDescription(DescriptiveModel):
-    sample_id = Field(title="Sample id", description="The sample id.")
+    sample_id:SampleIDT = Field(title="Sample id", description="The sample id.")
     used_taxa = Field(
         title="Used taxa",
         description="The taxa/category ids used inside the sample. -1 for unclassified objects.",
     )
-    nb_unclassified = Field(
+    nb_unclassified :int= Field(
         title="Number unclassified",
         description="The number of unclassified objects inside the sample.",
     )
-    nb_validated = Field(
+    nb_validated:int = Field(
         title="Number validated",
         description="The number of validated objects inside the sample.",
     )
-    nb_dubious = Field(
+    nb_dubious : int = Field(
         title="Number dubious",
         description="The number of dubious objects inside the sample.",
     )
-    nb_predicted = Field(
+    nb_predicted :int = Field(
         title="Number predicted",
         description="The number of predicted objects inside the sample.",
     )
@@ -535,11 +547,11 @@ class CreateProjectReq(BaseModel):
         default=UNKNOWN_INSTRUMENT,
         example="UVP5",
     )
-    visible: bool = Field(
-        title="Visible",
-        description="When TRUE, the project is created visible by all users.",
-        default=True,
-        example=True,
+    access: AccessLevelEnum = Field(
+        title="Access",
+        description="""When "1" (PUBLIC), the project is created visible by all users.""" + ", ".join([access.name + ': "'+str(access.value)+'"' for access in AccessLevelEnum]),
+        default=AccessLevelEnum.PUBLIC,
+        example=AccessLevelEnum.PUBLIC,
     )
 
     class Config:
@@ -568,7 +580,7 @@ class BulkUpdateReq(BaseModel):
 
 # TODO: Derive from ProjectTaxoStats
 class ProjectTaxoStatsModel(BaseModel):
-    projid: int = Field(title="projid", description="The project id.", example=1)
+    projid: ProjectIDT = Field(title="projid", description="The project id.", example=1)
     used_taxa: List[int] = Field(
         title="used_taxa",
         description="The taxa/category ids used inside the project."
@@ -599,7 +611,7 @@ class ProjectTaxoStatsModel(BaseModel):
 
 
 class _DBProjectUserStatsDescription(DescriptiveModel):
-    projid = Field(title="Project id", description="The project id.")
+    projid: ProjectIDT= Field(title="Project id", description="The project id.")
     annotators = Field(
         title="Annotators",
         description="The users who ever decided on classification or state of objects.",
@@ -615,7 +627,7 @@ ProjectUserStatsModel = dataclass_to_model_with_suffix(
 
 
 class _DBProjectSetColumnStatDescription(DescriptiveModel):
-    proj_ids = Field(title="Projects IDs", description="Projects IDs from the call.")
+    proj_ids  = Field(title="Projects IDs", description="Projects IDs from the call.")
     columns = Field(title="Columns", description="Column names from the call.")
     total = Field(
         title="Total of rows", description="All rows regardless of emptiness."
@@ -634,7 +646,7 @@ ProjectSetColumnStatsModel = dataclass_to_model_with_suffix(
 
 
 class _ProjectColumnsDescription(DescriptiveModel):
-    projid = Field(title="Project ID", description="Project ID from the call.")
+    projid:ProjectIDT = Field(title="Project ID", description="Project ID from the call.")
     columns = Field(title="Columns", description="Column names from the call.")
     values = Field(title="All rows", description="All rows regardless of emptiness.")
 
@@ -709,7 +721,7 @@ class _AddedToCollection(BaseModel):
     )
 
 
-class CollectionModel(_CollectionModelFromDB, _AddedToCollection):
+class CollectionModel( _AddedToCollection, _CollectionModelFromDB):
     """
     Basic and computed information about the Collection.
     """
@@ -790,31 +802,31 @@ class CollectionReq(BaseModel):
 
 
 class _Job2Model(DescriptiveModel):
-    id = Field(title="id", description="Job unique identifier.", example=47445)
-    owner_id = Field(
+    id:JobIDT = Field(title="id", description="Job unique identifier.", example=47445)
+    owner_id :UserIDT= Field(
         title="owner_id",
         description="The user who created and thus owns the job. ",
         example=1,
     )
-    type = Field(
+    type:str = Field(
         title="type",
         description="The job type, e.g. import, export... ",
         example="Subset",
     )
-    state = Field(
+    state :str= Field(
         title="state",
         description="What the job is doing. Could be 'P' for Pending (Waiting for an execution thread), 'R' for Running (Being executed inside a thread), 'A' for Asking (Needing user information before resuming), 'E' for Error (Stopped with error), 'F' for Finished (Done).",
         example=DBJobStateEnum.Finished,
     )
-    step = Field(
+    step :str= Field(
         title="step", description="Where in the workflow the job is. ", example="null"
     )
-    progress_pct = Field(
+    progress_pct :int= Field(
         title="progress_pct",
         description="The progress percentage for UI. ",
         example=100,
     )
-    progress_msg = Field(
+    progress_msg :str= Field(
         title="progress_msg",
         description="The message for UI, short version. ",
         example="Done",
@@ -895,7 +907,7 @@ class ResetPasswordReq(BaseModel):
     Minimal user information need to reset the password
     """
 
-    id: int = Field(
+    id: UserIDT = Field(
         title="User Id",
         description="User unique identifier.",
         example=1,

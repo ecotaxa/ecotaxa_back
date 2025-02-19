@@ -59,7 +59,7 @@ class ProjectsService(Service):
         req.title = req.title.strip()
         new_prj.title = req.title
         new_prj.status = ANNOTATE_STATUS
-        new_prj.visible = req.visible
+        new_prj.access=req.access
         self.session.add(new_prj)
         self.session.flush()  # to get the project ID
         # Add the manage privilege & set user as contact
@@ -259,13 +259,12 @@ class ProjectsService(Service):
         """
         projects = ProjectBOSet(self.ro_session, project_ids, public=False)
         ret = []
-
+        columns: List = []
         if fields is not None and (
             fields[0 : len(FieldListType.default)] == FieldListType.default.value
             and len(fields) > 1
         ):
             project_columns: Dict = {}
-            columns: List = []
             project_columns[FieldListType.default] = [
                 "projid",
                 "title",
@@ -277,6 +276,8 @@ class ProjectsService(Service):
                 "cnn_network_id",
                 "license",
                 "status",
+                "access",
+                "formulae",
                 "userstats",
             ]
             project_columns[FieldListType.all] = project_columns[

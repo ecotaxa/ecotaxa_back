@@ -4,6 +4,7 @@ from urllib.parse import quote
 
 from starlette import status
 
+from BO.DataLicense import AccessLevelEnum
 from tests.credentials import (
     ADMIN_AUTH,
     ORDINARY_USER_USER_ID,
@@ -181,6 +182,8 @@ def test_update_prj(database, fastapi, caplog):
         "title": "Test Project Updates",
         "viewers": [],
         "visible": True,
+        "access":AccessLevelEnum.PUBLIC.value,
+        "formulae":None
     }
 
     read_json = rsp.json()
@@ -196,7 +199,7 @@ def test_update_prj(database, fastapi, caplog):
     url = PROJECT_UPDATE_URL.format(project_id=prj_id)
     upd_json["comments"] = "New comment"
     upd_json["contact"] = contact_usr
-    upd_json["visible"] = False
+    upd_json["access"] = AccessLevelEnum.PRIVATE.value
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -205,7 +208,7 @@ def test_update_prj(database, fastapi, caplog):
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.json() != ref_json
     assert rsp.json()["comments"] == "New comment"
-    assert rsp.json()["visible"] is False
+    assert rsp.json()["access"]==AccessLevelEnum.PRIVATE.value
 
     # For ecotaxa/ecotaxa_dev#602
     # Set no contact at all

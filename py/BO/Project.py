@@ -247,8 +247,10 @@ class ProjectBO(object):
         managers: List[Any],
         annotators: List[Any],
         viewers: List[Any],
-        license_: str,
+        license_: Optional[str],
         bodc_vars: Dict,
+        access:Optional[str],
+        formulae:Optional[str]
     ):
         assert contact is not None, "A valid Contact is needed."
         proj_id = self._project.projid
@@ -283,6 +285,8 @@ class ProjectBO(object):
         self._project.cnn_network_id = cnn_network_id
         self._project.comments = comments
         self._project.license = license_
+        self._project.access = access
+        self._project.formulae = formulae
         # Inverse for extracted values
         self._project.initclassiflist = ",".join(
             [str(cl_id) for cl_id in init_classif_list]
