@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2021  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-from API_models.constants import Constants
+from API_models.constants import Constants,FORMULAE
 from DB.helpers.Postgres import text
 from ..helpers.Service import Service
 
@@ -25,4 +25,5 @@ class ConstantsService(Service):
         ret.account_validation = self.config.get_account_validation() == "on"
         ret.email_verification = self.config.get_user_email_verification() == "on"
         ret.recaptchaid = self.config.get_recaptchaid() != None
+        ret.formulae=FORMULAE
         return ret
