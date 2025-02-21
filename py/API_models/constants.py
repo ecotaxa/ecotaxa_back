@@ -36,11 +36,12 @@ class Constants(BaseModel):
         },
     )
     access: Dict[str, str] = Field(
-        title="Projects access",
-        description="Projects access levels.",
+        title="Project access",
+        description="Project access levels.",
         default={st.name: st.value for st in AccessLevelEnum},
-        example={"public": "", "open": "O", "private": "P"},
+        example={"PUBLIC": "", "OPEN": "O", "PRIVATE": "P"},
     )
+
     app_manager: List[str] = Field(
         title="Application manager",
         description="The application manager identity (name, mail), from config file.",

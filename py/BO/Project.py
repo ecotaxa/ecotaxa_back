@@ -52,7 +52,7 @@ from DB.Object import (
     ObjectFields,
 )
 from DB.Process import Process
-from DB.Project import ProjectIDT, ProjectIDListT, Project
+from DB.Project import ProjectIDT, ProjectIDListT, Project,ANNOTATE_STATUS ,ANNOTATE_NO_PREDICTION , EXPLORE_ONLY
 from DB.Collection import CollectionProject, Collection
 from BO.Collection import MinimalCollectionBO
 from BO.User import UserIDT, UserIDListT, ContactUserBO
@@ -83,7 +83,9 @@ logger = get_logger(__name__)
 
 ChangeTypeT = Dict[int, Dict[str, int]]
 
-
+RestrictedStatus : Final = {
+ANNOTATE_STATUS :3,ANNOTATE_NO_PREDICTION :2, EXPLORE_ONLY:1
+}
 class MappingColumnEnum(str, Enum):
     obj: Final = "mappingobj"
     sample: Final = "mappingsample"
@@ -779,7 +781,7 @@ class ProjectBO(object):
             Sample.projid == prj_id
         )
 
-        ret = []
+        ret :List = []
         del_acquis_qry: Delete = Acquisition.__table__.delete().where(
             Acquisition.acq_sample_id.in_(soon_deleted_samples)
         )
@@ -1111,6 +1113,21 @@ class CollectionProjectBOSet(ProjectBOSet):
             if project.access > restricted_access:
                 noaccesses.append(project.projid)
         return restricted_access, noaccesses
+    def get_status_from_projects(self) -> Tuple[str, ProjectIDListT]:
+        """
+        return list of projects id validating the restricted_access.
+        """
+        nostatus: ProjectIDListT = []
+        restricted_status = min(
+            [RestrictedStatus[project.status] for project in self.projects]
+        )
+        status=""
+        for project in self.projects:
+            if  RestrictedStatus[project.status] > restricted_status:
+                nostatus.append(project.projid)
+            elif status =="" and RestrictedStatus[project.status] == restricted_status:
+                status=project.status
+        return status, nostatus
 
     def get_annotators_from_histo(
         self, session, status: Optional[int] = None

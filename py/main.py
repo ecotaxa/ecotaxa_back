@@ -606,7 +606,7 @@ def reset_user_password(
 @app.get(
     "/organizations/search",
     operation_id="search_organizations",
-    tags=["users"],
+    tags=["organizations"],
     responses={
         200: {
             "content": {
@@ -632,7 +632,6 @@ def search_organizations(
 ) -> List[str]:
     """
     **Search for organizations.**
-    So far, organizations are just names in users table.
     """
     with UserService() as sce:
         org_names = sce.search_organizations(name)

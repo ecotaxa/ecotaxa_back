@@ -505,7 +505,7 @@ class UserService(Service):
 
     def search_organizations(self, name: str) -> List[str]:
         """
-        Return the already-used org names with given pattern.
+        Return the org names with given pattern.
         """
         qry = self.ro_session.query(Organization.name)
         qry = qry.filter(Organization.name.ilike(name))

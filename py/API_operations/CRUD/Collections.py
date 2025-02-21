@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List, Union, Optional, Tuple, Dict, Any
+from typing import List, Union, Optional, Dict, Any
 from fastapi import HTTPException
 from API_models.crud import CreateCollectionReq, CollectionAggregatedRsp
 from API_models.exports import TaxonomyRecast
@@ -10,7 +10,7 @@ from BO.Collection import CollectionBO, CollectionIDT
 from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Rights import NOT_FOUND
 from BO.User import UserIDT
-from BO.Project import MappingColumnEnum, CollectionProjectBOSet
+from BO.Project import CollectionProjectBOSet
 from DB.Project import ProjectIDListT
 from DB.Collection import Collection
 from DB.TaxoRecast import DWCA_EXPORT_OPERATION
@@ -199,7 +199,10 @@ class CollectionsService(Service):
         datas["access"] = projectset.get_access_from_projects()
         excluded["access"] = datas["access"][1]
         datas["access"] = datas["access"][0]
-        for column in ["cnn_network_id", "instrument", "status"]:
+        datas["status"] = projectset.get_status_from_projects()
+        excluded["status"] = datas["status"][1]
+        datas["status"] = datas["status"][0]
+        for column in ["cnn_network_id", "instrument"]:
             datas[column] = projectset.get_common_from_projects(column)
             excluded[column] = datas[column][1]
             datas[column] = datas[column][0]
