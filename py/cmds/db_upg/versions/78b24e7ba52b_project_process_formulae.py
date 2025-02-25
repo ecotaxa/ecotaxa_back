@@ -25,11 +25,11 @@ def upgrade():
     op.execute("UPDATE projects set access='1' WHERE visible=true AND (license='' OR license IS NULL)")
     # OPEN="2" when visible=True and license = CC
     op.execute(
-        "UPDATE projects set access='2' WHERE visible=true AND license!='' AND LOWER(license) NOT LIKE 'copyright'"
+        "UPDATE projects set access='2' WHERE visible=true AND license!='' AND LOWER(license)!='copyright'"
     )
     # private when copyright or visible=False
     op.execute(
-        "UPDATE projects set access='0' WHERE visible=false OR LOWER(license) LIKE 'copyright'"
+        "UPDATE projects set access='0' WHERE visible=false OR LOWER(license)='copyright'"
     )
     op.execute("ALTER TABLE projects ALTER COLUMN access SET NOT NULL")
     op.add_column("projects", sa.Column("formulae", sa.VARCHAR(), nullable=True))

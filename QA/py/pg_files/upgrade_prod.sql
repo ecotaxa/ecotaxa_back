@@ -2925,10 +2925,10 @@ ALTER TABLE projects ADD COLUMN access VARCHAR(1);
 -- PUBLIC ="1" when visible=True and no license
 UPDATE projects SET access='1' WHERE visible=true AND (license='' OR license IS NULL);
 -- OPEN="2" when visible=True and license = CC
-UPDATE projects SET access='2' WHERE visible=true AND license!='' AND LOWER(license) NOT LIKE 'copyright';
+UPDATE projects SET access='2' WHERE visible=true AND license!='' AND LOWER(license)!='copyright';
 
 -- private when copyright or visible=False
-UPDATE projects SET access='0' WHERE visible=false OR LOWER(license) LIKE 'copyright';
+UPDATE projects SET access='0' WHERE visible=false OR LOWER(license)='copyright';
 ALTER TABLE projects ALTER COLUMN access SET NOT NULL;
 ALTER TABLE projects ADD COLUMN formulae VARCHAR;
 

@@ -1302,9 +1302,8 @@ class DescribedObjectBOSet(object):
         column_referencing_sql = (
             select_list + obj_where.get_sql() + order_clause.get_sql()
         )
-        selected_tables = FromClause(
-            f"(select :projid as projid) prjs"
-        )  # Prepare a future _set_ of projects
+        # TODO better select clause  to avoid a replace later in code
+        selected_tables = FromClause(f"(select :projid as projid) prjs")
         if "prj." in column_referencing_sql:
             selected_tables += (
                 f"{Project.__tablename__} prj ON prj.projid = prjs.projid"

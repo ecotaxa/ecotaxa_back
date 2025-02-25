@@ -20,6 +20,8 @@ from ..helpers.Service import Service
 
 logger = get_logger(__name__)
 
+DETAIL_COLLECTION_PUBLISHED = "Collection is published"
+
 
 class CollectionsService(Service):
     """
@@ -118,9 +120,11 @@ class CollectionsService(Service):
     def delete(self, current_user_id: UserIDT, coll_id: CollectionIDT) -> int:
         collection = self.query(current_user_id, coll_id, for_update=True)
         assert collection is not None, NOT_FOUND
-        CollectionBO.delete(self.session, coll_id)
-        self.session.commit()
-        return 0
+        ret = CollectionBO.delete(self.session, coll_id)
+        if ret:
+            return coll_id
+        else:
+            raise HTTPException(status_code=409, detail=DETAIL_COLLECTION_PUBLISHED)
 
     def update_taxo_recast(
         self, current_user_id: UserIDT, coll_id: CollectionIDT, recast: TaxonomyRecast
@@ -177,7 +181,9 @@ class CollectionsService(Service):
         current_user_id: UserIDT,
         project_ids: ProjectIDListT,
     ) -> CollectionAggregatedRsp:
-
+        """
+        aggregated fields from the collection project become properties
+        """
         projectset = CollectionProjectBOSet(
             session=self.ro_session, prj_ids=project_ids
         )
@@ -203,7 +209,7 @@ class CollectionsService(Service):
         excluded["status"] = datas["status"][1]
         datas["status"] = datas["status"][0]
         for column in ["cnn_network_id", "instrument"]:
-            datas[column] = projectset.get_common_from_projects(column)
+            datas[column] = projectset.get_common_attr_from_projects(column)
             excluded[column] = datas[column][1]
             datas[column] = datas[column][0]
         freecols = projectset.get_mapping_from_projects()

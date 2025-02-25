@@ -182,8 +182,8 @@ def test_update_prj(database, fastapi, caplog):
         "title": "Test Project Updates",
         "viewers": [],
         "visible": True,
-        "access":AccessLevelEnum.PUBLIC.value,
-        "formulae":None
+        "access": AccessLevelEnum.PUBLIC.value,
+        "formulae": None,
     }
 
     read_json = rsp.json()
@@ -208,7 +208,7 @@ def test_update_prj(database, fastapi, caplog):
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.json() != ref_json
     assert rsp.json()["comments"] == "New comment"
-    assert rsp.json()["access"]==AccessLevelEnum.PRIVATE.value
+    assert rsp.json()["access"] == AccessLevelEnum.PRIVATE.value
 
     # For ecotaxa/ecotaxa_dev#602
     # Set no contact at all

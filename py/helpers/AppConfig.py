@@ -96,12 +96,12 @@ class Config(object):
 
     def get_account_request_url(self) -> Optional[str]:
         # TODO find a way to have multi request url ( list of identified url ???)
-        url = self.parser.get("SERVERURL" or "").strip()
+        url = self.parser.get("SERVERURL","").strip()
         return url + ("/" if url[-1] != "/" else "")
 
     def get_users_files_dir(self) -> Optional[str]:
         # My files service
-        return self.parser.get("USERSFILESAREA" or "").strip()
+        return self.parser.get("USERSFILESAREA", "").strip()
 
     def get_cnf(self, key: str, default: Optional[str] = None) -> Optional[str]:
         # TODO: stop using so we can enumerate the keys

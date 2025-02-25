@@ -59,7 +59,7 @@ class ProjectsService(Service):
         req.title = req.title.strip()
         new_prj.title = req.title
         new_prj.status = ANNOTATE_STATUS
-        new_prj.access=req.access
+        new_prj.access = req.access
         self.session.add(new_prj)
         self.session.flush()  # to get the project ID
         # Add the manage privilege & set user as contact
@@ -266,38 +266,43 @@ class ProjectsService(Service):
         ):
             project_columns: Dict = {}
             project_columns[FieldListType.default] = [
-                "projid",
-                "title",
-                "instrument",
-                "contact",
-                "comments",
-                "initclassiflist",
-                "classiffieldlist",
-                "cnn_network_id",
-                "license",
-                "status",
-                "access",
-                "formulae",
-                "userstats",
+                Project.projid,
+                Project.title,
+                Project.instrument,
+                Project.comments,
+                Project.initclassiflist,
+                Project.classiffieldlist,
+                Project.cnn_network_id,
+                Project.license,
+                Project.status,
+                Project.access,
+                Project.formulae,
             ]
+
             project_columns[FieldListType.all] = project_columns[
                 FieldListType.default
             ] + [
-                "mappingobj",
-                "mappingsample",
-                "mappingprocess",
-                "mappingacq",
+                Project.mappingobj,
+                Project.mappingsample,
+                Project.mappingprocess,
+                Project.mappingacq,
             ]
             lfields = fields.split(",")
-            columns = project_columns[lfields.pop(0)] + lfields
-            if len(fields):
-                columns.extend(fields.split(","))
+            typelist = lfields.pop(0)
+            columns = project_columns[typelist]
+            columnplus = []
+            if typelist != FieldListType.all and len(lfields):
+                lfields = lfields[0].split(",")
+                for col in project_columns[FieldListType.all]:
+                    if col.name in lfields:
+                        columnplus.append(col)
+                columns.extend(columnplus)
 
         for project in projects.as_list():
             values = []
             for column in columns:
-                if hasattr(project, column):
-                    values.append(getattr(project, column))
+                if hasattr(project, column.name):
+                    values.append(getattr(project, column.name))
                 elif column == "userstats":
                     annotators = ProjectBO.read_user_stats(self.session, project_ids)
                     creators = []

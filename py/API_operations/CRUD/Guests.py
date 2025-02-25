@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
-# Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
+# Copyright (C) 2025  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
 from typing import Optional, List
@@ -8,8 +8,8 @@ from typing import Optional, List
 from fastapi import HTTPException
 from API_models.crud import GuestModel
 from BO.Rights import RightsBO, NOT_AUTHORIZED, NOT_FOUND
-from BO.User import GuestBO,GuestIDT, GuestIDListT, UserIDT
-from DB.Collection import CollectionUserRole,CollectionProject
+from BO.User import GuestBO, GuestIDT, GuestIDListT, UserIDT
+from DB.Collection import CollectionUserRole, CollectionProject
 from BO.Collection import CollectionIDListT
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from DB.ProjectPrivilege import ProjectPrivilege
@@ -49,7 +49,7 @@ class GuestService(Service):
         self,
         current_user_id: UserIDT,
         new_guest: GuestModel,
-        ) -> GuestIDT:
+    ) -> GuestIDT:
         # Must be manager to create an account
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         self._is_manager_throw(current_user)
@@ -76,7 +76,6 @@ class GuestService(Service):
         """
         Update a guest, who can be any guest of one of my collections if I'm an app manager.
         """
-        # current_user: Optional[User] = self.ro_session.query(User).get(current_user_id)
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         self._is_manager_throw(current_user)
         self._can_manage_guest_throw(current_user, guest_id)
@@ -112,21 +111,25 @@ class GuestService(Service):
         else:
             ret = self._get_guest_profile(db_guest)
         return ret
+
     @staticmethod
     def _get_guest_profile(db_guest: Guest) -> GuestModel:
         ret = GuestModel.from_orm(db_guest)
         return ret
-    def _limit_qry(self,current_user:User,qry):
+
+    def _limit_qry(self, current_user: User, qry):
         if not current_user.is_manager():
-            collection_ids=self._projects_managed_by(current_user)
-            qry = qry.join(CollectionUserRole).filter(CollectionUserRole.collection_id.in_(collection_ids))
+            collection_ids = self._projects_managed_by(current_user)
+            qry = qry.join(CollectionUserRole).filter(
+                CollectionUserRole.collection_id.in_(collection_ids)
+            )
         return qry
 
     def search(self, current_user_id: UserIDT, by_name: Optional[str]) -> List[Guest]:
         current_user = RightsBO.get_user_throw(self.ro_session, current_user_id)
         self._is_manager_throw(current_user)
         qry = self.ro_session.query(Guest)
-        qry=self._limit_qry(current_user,qry)
+        qry = self._limit_qry(current_user, qry)
         if by_name is not None:
             qry = qry.filter(Guest.name.ilike(by_name))
         else:
@@ -142,12 +145,12 @@ class GuestService(Service):
         """
         List all guests, or some of them by their ids, if requester is manager.
         """
-        #TODO use fields params
+        # TODO use fields params
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         self._is_manager_throw(current_user)
         ret = []
         # for faster display in test
-        #TODO query with a join on collection manager and current user plus collectionusersroles
+        # TODO query with a join on collection manager and current user plus collectionusersroles
         qry = self.ro_session.query(Guest)
         qry = self._limit_qry(current_user, qry)
         if len(guest_ids) > 0:
@@ -176,11 +179,12 @@ class GuestService(Service):
                 detail=detail,
             )
 
-    def _set_guest_row(self,
+    def _set_guest_row(
+        self,
         update_src: GuestModel,
         guest_to_update: Guest,
         cols_to_upd: List,
-          ):
+    ):
         """
         common to add or update a guest
         """
@@ -196,16 +200,16 @@ class GuestService(Service):
             if update_src.id == -1 and col.name == Guest.usercreationdate.name:
                 value = DateTime.now_time()
             else:
-                value = getattr(update_src,col.name)
+                value = getattr(update_src, col.name)
             setattr(guest_to_update, col.name, value)
         self.session.commit()
-        if guest_to_update.id>0:
-            action=ActivationType.update.name
+        if guest_to_update.id > 0:
+            action = ActivationType.update.name
         else:
             action = ActivationType.create.name
         logger.info("Guest %s :  '%s'" % (action, guest_to_update.email))
 
-    def _is_valid_person_throw(self, mod_src: GuestModel, guest_id: int) :
+    def _is_valid_person_throw(self, mod_src: GuestModel, guest_id: int):
         # check if it's a valid email - check should be done before exists but has to be compatible with data history
         if mod_src.name == "" or str(mod_src.organisation or "") == "":
             raise HTTPException(
@@ -223,40 +227,49 @@ class GuestService(Service):
             guest_id,
         )
 
-    def _is_manager_throw(self,user: User)->CollectionIDListT:
+    def _is_manager_throw(self, user: User) -> CollectionIDListT:
         """
         check if current_user can admin guest
         """
         if not user.is_manager():
-           collection_ids=self._projects_managed_by(user)
-           if len(collection_ids)==0:
-                    raise HTTPException(
+            collection_ids = self._projects_managed_by(user)
+            if len(collection_ids) == 0:
+                raise HTTPException(
                     status_code=403,
-                 detail=[NOT_AUTHORIZED],
+                    detail=[NOT_AUTHORIZED],
                 )
-           return collection_ids
+            return collection_ids
         return []
 
+    def _projects_managed_by(self, user: User) -> CollectionIDListT:
+        qry = (
+            self.ro_session.query(CollectionProject.collection_id)
+            .join(
+                ProjectPrivilege,
+                CollectionProject.project_id == ProjectPrivilege.projid,
+            )
+            .filter(ProjectPrivilege.member == user.id)
+            .filter(ProjectPrivilege.privilege == ProjectPrivilegeBO.MANAGE)
+        )
+        collection_ids = qry.all()
+        return collection_ids
 
-    def _projects_managed_by(self,user:User)->CollectionIDListT:
-       qry=self.ro_session.query(CollectionProject.collection_id).join(ProjectPrivilege,CollectionProject.project_id == ProjectPrivilege.projid).filter(ProjectPrivilege.member == user.id).filter(ProjectPrivilege.privilege==ProjectPrivilegeBO.MANAGE)
-       collection_ids =qry.all()
-       return collection_ids
-
-    def _can_manage_guest_throw(self,user:User,guest_id:GuestIDT):
+    def _can_manage_guest_throw(self, user: User, guest_id: GuestIDT):
         """
         check if user can update guest profile (has to be creator_users or associates_users  in a collection managed by the user)
         """
-        collection_ids=self._is_manager_throw(user)
+        collection_ids = self._is_manager_throw(user)
         if user.is_manager():
             return
-        qry= self.ro_session.query(CollectionUserRole.collection_id).filter(CollectionUserRole.collection_id.in_(collection_ids)).filter(CollectionUserRole.user_id==guest_id)
-        can_manage= qry.scalar()
+        qry = (
+            self.ro_session.query(CollectionUserRole.collection_id)
+            .filter(CollectionUserRole.collection_id.in_(collection_ids))
+            .filter(CollectionUserRole.user_id == guest_id)
+        )
+        can_manage = qry.scalar()
         if can_manage is not None:
             return
         raise HTTPException(
-                status_code=403,
-                detail=[NOT_AUTHORIZED],
-            )
-
-
+            status_code=403,
+            detail=[NOT_AUTHORIZED],
+        )

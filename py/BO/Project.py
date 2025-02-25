@@ -52,7 +52,14 @@ from DB.Object import (
     ObjectFields,
 )
 from DB.Process import Process
-from DB.Project import ProjectIDT, ProjectIDListT, Project,ANNOTATE_STATUS ,ANNOTATE_NO_PREDICTION , EXPLORE_ONLY
+from DB.Project import (
+    ProjectIDT,
+    ProjectIDListT,
+    Project,
+    ANNOTATE_STATUS,
+    ANNOTATE_NO_PREDICTION,
+    EXPLORE_ONLY,
+)
 from DB.Collection import CollectionProject, Collection
 from BO.Collection import MinimalCollectionBO
 from BO.User import UserIDT, UserIDListT, ContactUserBO
@@ -83,9 +90,13 @@ logger = get_logger(__name__)
 
 ChangeTypeT = Dict[int, Dict[str, int]]
 
-RestrictedStatus : Final = {
-ANNOTATE_STATUS :3,ANNOTATE_NO_PREDICTION :2, EXPLORE_ONLY:1
+RestrictedStatus: Final = {
+    ANNOTATE_STATUS: 3,
+    ANNOTATE_NO_PREDICTION: 2,
+    EXPLORE_ONLY: 1,
 }
+
+
 class MappingColumnEnum(str, Enum):
     obj: Final = "mappingobj"
     sample: Final = "mappingsample"
@@ -251,8 +262,8 @@ class ProjectBO(object):
         viewers: List[Any],
         license_: Optional[str],
         bodc_vars: Dict,
-        access:Optional[str],
-        formulae:Optional[str]
+        access: Optional[str],
+        formulae: Optional[str],
     ):
         assert contact is not None, "A valid Contact is needed."
         proj_id = self._project.projid
@@ -315,11 +326,11 @@ class ProjectBO(object):
                 if a_user.id == contact.id and a_right == ProjectPrivilegeBO.MANAGE:
                     extra = "C"
                     contact_used = True
-                projectpriv=ProjectPrivilege()
-                projectpriv.projid=proj_id
-                projectpriv.member=a_user.id
-                projectpriv.privilege=a_right
-                projectpriv.extra=extra
+                projectpriv = ProjectPrivilege()
+                projectpriv.projid = proj_id
+                projectpriv.member = a_user.id
+                projectpriv.privilege = a_right
+                projectpriv.extra = extra
                 session.add(projectpriv)
         # Sanity check
         assert (
@@ -707,10 +718,10 @@ class ProjectBO(object):
         )
         ret = []
         for r in qry:
-            #if r.contact_user_id:
-                #contact = ContactUserBO(id=r.contact_user_id,email=r.email,name=r.name, orcid=r.orcid or "None",organisation=r.organisation)
-            #else:
-               #contact = None
+            # if r.contact_user_id:
+            # contact = ContactUserBO(id=r.contact_user_id,email=r.email,name=r.name, orcid=r.orcid or "None",organisation=r.organisation)
+            # else:
+            # contact = None
             qry_proj = session.query(CollectionProject.project_id).where(
                 CollectionProject.collection_id == r.id
             )
@@ -781,7 +792,7 @@ class ProjectBO(object):
             Sample.projid == prj_id
         )
 
-        ret :List = []
+        ret: List = []
         del_acquis_qry: Delete = Acquisition.__table__.delete().where(
             Acquisition.acq_sample_id.in_(soon_deleted_samples)
         )
@@ -1100,7 +1111,6 @@ class CollectionProjectBOSet(ProjectBOSet):
         except AssertionError:
             return False
 
-
     def get_access_from_projects(self) -> Tuple[AccessLevelEnum, ProjectIDListT]:
         """
         return list of projects id validating the restricted_access.
@@ -1113,6 +1123,7 @@ class CollectionProjectBOSet(ProjectBOSet):
             if project.access > restricted_access:
                 noaccesses.append(project.projid)
         return restricted_access, noaccesses
+
     def get_status_from_projects(self) -> Tuple[str, ProjectIDListT]:
         """
         return list of projects id validating the restricted_access.
@@ -1121,12 +1132,12 @@ class CollectionProjectBOSet(ProjectBOSet):
         restricted_status = min(
             [RestrictedStatus[project.status] for project in self.projects]
         )
-        status=""
+        status = ""
         for project in self.projects:
-            if  RestrictedStatus[project.status] > restricted_status:
+            if RestrictedStatus[project.status] > restricted_status:
                 nostatus.append(project.projid)
-            elif status =="" and RestrictedStatus[project.status] == restricted_status:
-                status=project.status
+            elif status == "" and RestrictedStatus[project.status] == restricted_status:
+                status = project.status
         return status, nostatus
 
     def get_annotators_from_histo(
@@ -1187,7 +1198,7 @@ class CollectionProjectBOSet(ProjectBOSet):
         self,
     ) -> Dict[str, ContactUserListT]:
         """
-        Read aggregated Initial list of categories for these projects.
+        Read common privileges for these projects.
         """
         keys = {
             ProjectPrivilegeBO.VIEW: "viewers",
@@ -1196,7 +1207,7 @@ class CollectionProjectBOSet(ProjectBOSet):
         }
         projects = self.projects
         privileges: Dict[str, ContactUserListT] = {}
-        # set common priv for users in all projects
+        # set common privileges for users in all projects
         for key, value in keys.items():
             privileges[value] = list(
                 set.intersection(
@@ -1251,12 +1262,12 @@ class CollectionProjectBOSet(ProjectBOSet):
         dictmap = mappings.as_dict()
         return dictmap
 
-    def get_common_from_projects(
+    def get_common_attr_from_projects(
         self,
         column: str,
     ) -> Tuple[Optional[str], ProjectIDListT]:
         """
-        Read attribute for these projects. return None,projerr as soon as one project has a different one or value if all are equal.
+        Read common attribute for these projects. return None, projerr as soon as one project has a different one or value if all are equal.
         """
         values = [
             (project.projid, getattr(project, column, None))

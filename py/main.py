@@ -191,7 +191,7 @@ app = FastAPI(
         {"url": "/api", "description": "External access"},
         {"url": "/", "description": "Local access"},
     ],
-    default_response_class=MyORJSONResponse
+    default_response_class=MyORJSONResponse,
     # For later: Root path is in fact _removed_ from incoming requests, so not relevant here
 )
 
@@ -800,7 +800,7 @@ def list_collections(
     """
     **Search for collections.**
 
-    Note: Only manageable collections are returned.
+    Note: Only collections where the current user is manager are returned. All collections are returned if the user is application administrator
     """
     with CollectionsService() as sce:
         with RightsThrower():
@@ -1911,7 +1911,7 @@ def update_project(
                 license_=project.license,
                 bodc_vars=project.bodc_variables,
                 access=project.access,
-                formulae=project.formulae
+                formulae=project.formulae,
             )
 
     with DBSyncService(Project, Project.projid, project_id) as ssce:

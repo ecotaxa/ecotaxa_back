@@ -25,7 +25,16 @@ from BO.User import (
     PROFILE_TOKEN_AGE,
 )
 from DB.Project import ProjectIDT
-from DB.User import User, Role, UserRole, TempPasswordReset, UserStatus, UserType, Guest, Person
+from DB.User import (
+    User,
+    Role,
+    UserRole,
+    TempPasswordReset,
+    UserStatus,
+    UserType,
+    Guest,
+    Person,
+)
 from DB.Organization import Organization
 from helpers import DateTime
 from helpers.DynamicLogs import get_logger
@@ -108,7 +117,7 @@ class UserService(Service):
         no_bot: Optional[List[str]],
         token: Optional[str],
     ) -> UserIDT:
-        cols_to_upd:List=[]
+        cols_to_upd: List = []
         if new_user.id is None:
             new_user.id = -1
         if token is not None or current_user_id is None:
@@ -121,14 +130,14 @@ class UserService(Service):
             if self.verify_email is True:
                 if token:
                     if new_user.id > 0:
-                       # update a profile with information requested - status to 0
-                       user_id= self._modify_new_user(new_user, token)
-                       return user_id
+                        # update a profile with information requested - status to 0
+                        user_id = self._modify_new_user(new_user, token)
+                        return user_id
                     else:
-                       new_user.mail_status = True
-                       cols_to_upd.extend([User.mail_status])
+                        new_user.mail_status = True
+                        cols_to_upd.extend([User.mail_status])
                 else:
-                    #request email verification
+                    # request email verification
                     self._is_valid_user_throw(new_user, new_user.id)
                     new_user, _ = self._set_mail_status(new_user, False)
                     return -1
@@ -162,9 +171,9 @@ class UserService(Service):
         )
         if guest is None:
             usr = User()
-            #usr.name=new_user.name
-            #usr.email=new_user.email
-            #usr.organisation=new_user.organisation
+            # usr.name=new_user.name
+            # usr.email=new_user.email
+            # usr.organisation=new_user.organisation
             self.session.add(usr)
         else:
             usr = guest.to_user()
@@ -207,7 +216,7 @@ class UserService(Service):
                 detail=[NOT_AUTHORIZED],
             )
 
-    def _modify_new_user(self, new_user: UserModelWithRights, token: str)->UserIDT:
+    def _modify_new_user(self, new_user: UserModelWithRights, token: str) -> UserIDT:
         """
         user can modify major information before activation
         """
@@ -232,12 +241,12 @@ class UserService(Service):
         # update a profile with information requested by the main user admin - status to 0
         cols_to_upd = self.COMMON_UPDATABLE_COLS
         self._set_user_row(
-                new_user,
-                usr,
-                action_type=ActivationType.update,
-                cols_to_upd=cols_to_upd,
-                current_user=None,
-            )
+            new_user,
+            usr,
+            action_type=ActivationType.update,
+            cols_to_upd=cols_to_upd,
+            current_user=None,
+        )
         logger.info("User profile modified %s :  '%s'" % (new_user.email, user_id))
         return user_id
 
@@ -256,9 +265,7 @@ class UserService(Service):
             raise HTTPException(status_code=422, detail=[NOT_FOUND])
         self._is_valid_user_throw(update_src, user_to_update.id)
         if self._current_is_admin(current_user):
-            if (current_user.id == user_to_update.id
-                and update_src.status is None
-            ):
+            if current_user.id == user_to_update.id and update_src.status is None:
                 cols_to_upd = self.COMMON_UPDATABLE_COLS
             else:
                 cols_to_upd = self.ADMIN_UPDATABLE_COLS
@@ -325,9 +332,7 @@ class UserService(Service):
                 comment=comment,
             )
 
-    def search_by_id(
-        self, user_id: UserIDT
-    ) -> Optional[User]:
+    def search_by_id(self, user_id: UserIDT) -> Optional[User]:
         # TODO: Not consistent with others e.g. project.query()
         ret = self.ro_session.query(User).get(user_id)
         return ret
@@ -354,12 +359,14 @@ class UserService(Service):
         ret.can_do = [act.value for act in RightsBO.get_allowed_actions(db_usr)]
         ret.password = "?"
         return ret
+
     @staticmethod
     def _get_user_with_rights(db_usr: User) -> UserModelWithRights:
         ret = UserModelWithRights.from_orm(db_usr)
         ret.can_do = [act.value for act in RightsBO.get_allowed_actions(db_usr)]
         ret.password = "?"
         return ret
+
     @staticmethod
     def _get_user_profile(db_usr: User) -> UserModelWithRights:
         ret = UserModelWithRights.from_orm(db_usr)
@@ -394,7 +401,6 @@ class UserService(Service):
         List persons with the APP_ADMINISTRATOR role.
         """
         return self._get_users_with_role(Role.APP_ADMINISTRATOR)
-
 
     def list(
         self,
@@ -488,13 +494,13 @@ class UserService(Service):
         for col in cols_to_upd:
             if update_src.id == -1 and col.name == User.usercreationdate.name:
                 value = DateTime.now_time()
-            elif col==User.password:
+            elif col == User.password:
                 value = getattr(update_src, User.password.name)
                 if value not in ("", None):
                     with LoginService() as sce:
                         value = sce.hash_password(value)
             else:
-                value = getattr(update_src,col.name)
+                value = getattr(update_src, col.name)
             if update_src.id == -1 or value is not None:
                 setattr(user_to_update, col.name, value)
         if actions is not None:
@@ -525,11 +531,11 @@ class UserService(Service):
                 self.ro_session, user_data, _id
             )
             if valid:
-                #if guest found it is like user not found
-                if is_other is not None and is_other.type!=UserType.user:
+                # if guest found it is like user not found
+                if is_other is not None and is_other.type != UserType.user:
                     detail = [NOT_FOUND]
             elif is_other is not None:
-                if is_other.type==UserType.user:
+                if is_other.type == UserType.user:
                     detail = [DETAIL_EMAIL_OWNED_BY_OTHER]
                 else:
                     # this case can happen  when the same person is registered as guest and user with different email
@@ -548,7 +554,10 @@ class UserService(Service):
         return (
             self.verify_email == False
             or update_src.id == -1
-            or (update_src.email.lower() == user_to_update.email.lower() and user_to_update.mail_status )
+            or (
+                update_src.email.lower() == user_to_update.email.lower()
+                and user_to_update.mail_status
+            )
         )
 
     def _ask_activate_on(
@@ -564,7 +573,10 @@ class UserService(Service):
         confirmed = self.verify_email is not True or mail_status is True
         # email confirmation if email_verification is on
         just_confirmed = (
-            (update_src.id == -1 or (user_to_update.status == UserStatus.inactive.value))
+            (
+                update_src.id == -1
+                or (user_to_update.status == UserStatus.inactive.value)
+            )
             and confirmed
         ) and User.mail_status in cols_to_upd
         # TODO add "and confirmed"  for current_status_on when batch mail to modifiy email has been sent
@@ -622,7 +634,7 @@ class UserService(Service):
             # validate and throw error if needed
             self._validate_user_throw(update_src, user_to_update)
             # condition for mail_status==True
-            mail_status:bool = self._mail_status_on(update_src, user_to_update)
+            mail_status: bool = self._mail_status_on(update_src, user_to_update)
             # email is checked if the user is new
             if mail_status != user_to_update.mail_status:
                 update_src, add_cols = self._set_mail_status(
@@ -719,6 +731,7 @@ class UserService(Service):
                     assistance_email,
                     status_name=status_name,
                 )
+
     @staticmethod
     def _is_major_data_change(
         update_src: UserModelWithRights,
@@ -819,7 +832,10 @@ class UserService(Service):
                 id=update_src.id,
                 previous_email=previous_email,
             )
-            logger.info("User email [%s] '%s' : requested verification '%s'" % (str(update_src.id), action, update_src.email))
+            logger.info(
+                "User email [%s] '%s' : requested verification '%s'"
+                % (str(update_src.id), action, update_src.email)
+            )
         if has_to_refresh:
             update_src.mail_status_date = DateTime.now_time()
             status_cols = [User.mail_status_date]
@@ -916,7 +932,7 @@ class UserService(Service):
             or self._uservalidation is None
         ):
             return update_src, []
-        mail_status : bool = user.mail_status
+        mail_status: bool = user.mail_status
         if token is not None:
             email = self._uservalidation.get_email_from_token(token)
             user_id = self._uservalidation.get_id_from_token(token)
@@ -1139,9 +1155,9 @@ class UserService(Service):
                         TempPasswordReset
                     ).get(user_ask_reset.id)
                 if temp_rs is None:
-                    temp_rs=TempPasswordReset()
-                    temp_rs.user_id=user_ask_reset.id
-                    temp_rs.temp_password=hash_temp_password
+                    temp_rs = TempPasswordReset()
+                    temp_rs.user_id = user_ask_reset.id
+                    temp_rs.temp_password = hash_temp_password
                     self.session.add(temp_rs)
                 else:
                     temp_rs.temp_password = hash_temp_password

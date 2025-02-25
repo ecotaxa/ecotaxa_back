@@ -72,7 +72,7 @@ class Project(Model):
     fileloaded = Column(VARCHAR)
     rf_models_used = Column(VARCHAR)
     cnn_network_id = Column(VARCHAR(50))
-    # to calculate concentration
+    # project specific formulae used to calculate concentration and biovolume ( used in project summary export, and collection DarwinCore export)
     formulae = Column(VARCHAR)
     # Associated taxonomy statistics. Commented out to avoid that the ORM loads the whole list, which can be big.
     # taxo_stats = relationship("ProjectTaxoStat")

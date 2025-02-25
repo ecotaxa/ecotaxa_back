@@ -3,17 +3,11 @@ from helpers.httpexception import DETAIL_EMAIL_OWNED_BY_OTHER
 
 from tests.credentials import ADMIN_AUTH, USER_AUTH, ORDINARY_GUEST_GUEST_ID
 
-
-# noinspection PyPackageRequirements
-
-
 GUEST_UPDATE_URL = "/guests/{guest_id}"
-
 GUEST_CREATE_URL = "/guests/create"
-
 GUEST_GET_URL = "/guests"
 
-#WARNING must run after all test_user
+#WARNING must run after all test_user keep the test_v_guest.py name
 def test_guest_create(fastapi, caplog):
     caplog.set_level(logging.FATAL)
 

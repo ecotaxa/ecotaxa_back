@@ -119,7 +119,9 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
     ] = """
     A bit less abstract...
     """
-    the_coll["short_title"] = "my-tiny-title"
+    # short_title only on second round
+    if who == CREATOR_AUTH:
+        the_coll["short_title"] = "my-tiny-title"
     the_coll["associate_organisations"] = ["An org"]
     the_coll["creator_organisations"] = ["At least one (ONE)"]
     rsp = fastapi.put(url, headers=who, json=the_coll)
@@ -136,6 +138,11 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
     url = COLLECTION_SEARCH_URL.format(title="%coll%")
     rsp = fastapi.get(url, headers=who)
     assert rsp.status_code == status.HTTP_200_OK
+    if who == CREATOR_AUTH:
+        short_title = "my-tiny-title"
+    else:
+        short_title = None
+
     assert rsp.json() == [
         {
             "abstract": """
@@ -155,7 +162,7 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
             "project_ids": [prj_id],
             "provider_user": None,
             "title": "Test collection",
-            "short_title": "my-tiny-title",
+            "short_title": short_title,
         }
     ]
 
@@ -169,10 +176,11 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
     the_coll = {"project_ids": [prj_id]}
     rsp = fastapi.patch(url, headers=who, json=the_coll)
     assert rsp.status_code == status.HTTP_200_OK
-    # Search by short title
-    url = COLLECTION_EXACT_QUERY_URL.format(short_title="my-tiny-title")
-    rsp = fastapi.get(url, headers=who)
-    assert rsp.status_code == status.HTTP_200_OK
+    if who == CREATOR_AUTH:
+        # Search by short title
+        url = COLLECTION_EXACT_QUERY_URL.format(short_title="my-tiny-title")
+        rsp = fastapi.get(url, headers=who)
+        assert rsp.status_code == status.HTTP_200_OK
 
     # Wrong search by short title
     url = COLLECTION_EXACT_QUERY_URL.format(short_title="my-absent-title")
@@ -188,12 +196,15 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
     # Delete the collection
     url = COLLECTION_DELETE_URL.format(collection_id=coll_id)
     rsp = fastapi.delete(url, headers=who)
-    assert rsp.status_code == status.HTTP_200_OK
-
-    # Ensure it's gone
-    url = COLLECTION_QUERY_URL.format(collection_id=coll_id)
-    rsp = fastapi.get(url, headers=who)
-    assert rsp.status_code == status.HTTP_404_NOT_FOUND
+    if who == CREATOR_AUTH:
+        # collection is published cannot delete
+        assert rsp.status_code == 409
+    else:
+        assert rsp.status_code == status.HTTP_200_OK
+        # Ensure it's gone
+        url = COLLECTION_QUERY_URL.format(collection_id=coll_id)
+        rsp = fastapi.get(url, headers=who)
+        assert rsp.status_code == status.HTTP_404_NOT_FOUND
 
 
 def regrant_if_needed(fastapi, prj_id, who):

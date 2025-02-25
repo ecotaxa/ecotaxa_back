@@ -362,10 +362,6 @@ class ProjectExport(JobServiceBase):
 
         # Deal with mappings, the goal is to emit SQL which will reconstitute the TSV structure
         mappingset = ProjectSetMapping().load_from_projects(src_projects)
-        # object_mappings: Dict = coll.get_mapping_from_projects("mappingobj")
-        # sample_mappings: Dict = coll.get_mapping_from_projects("mappingsample")
-        # process_mappings: Dict = coll.get_mapping_from_projects("mappingprocess")
-        # acquisition_mappings: Dict = coll.get_mapping_from_projects("mappingacq")
         if "O" in req.tsv_entities:
             select_clause += "\n " + object_set.as_select_list(
                 "obf",
@@ -577,9 +573,9 @@ class ProjectExport(JobServiceBase):
                         img_with_rank = "{0}/{1}".format(
                             a_row["img_rank"], img_file_name
                         )
-                        a_row[
-                            "img_file_name"
-                        ] = img_with_rank  # write into TSV the corrected path
+                        a_row["img_file_name"] = (
+                            img_with_rank  # write into TSV the corrected path
+                        )
                         dst_path = "{0}/{1}".format(prev_value, img_with_rank)
                     if req.exp_type == ExportTypeEnum.general_tsv:
                         a_row["img_file_name"] = dst_path

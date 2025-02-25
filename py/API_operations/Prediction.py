@@ -70,8 +70,7 @@ class PredictForProject(JobServiceBase):
         with LogsSwitcher(self):
             self.do_prediction()
 
-    def do_prediction(self) -> None:
-        ...
+    def do_prediction(self) -> None: ...
 
 
 class PredictForProjects(JobServiceBase):
@@ -119,8 +118,7 @@ class PredictForProjects(JobServiceBase):
         with LogsSwitcher(self):
             self.do_prediction()
 
-    def do_prediction(self) -> None:
-        ...
+    def do_prediction(self) -> None: ...
 
 
 class PredictionDataService(Service):
