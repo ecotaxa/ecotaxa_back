@@ -43,8 +43,10 @@ class CollectionBO(object):
     """
     A Collection business object, i.e. as seen from users.
     """
-    modif =["title","citation","abstract","description","license"]
-    no_modif=["short_title", "external_id"]
+
+    modif = ["title", "citation", "abstract", "description", "license"]
+    no_modif = ["short_title", "external_id"]
+
     def __init__(self, collection: Collection):
         self._collection: Collection = collection
         # Composing project IDs
@@ -151,7 +153,10 @@ class CollectionBO(object):
         }
         by_role: Dict[str, Any] = {}
 
-        published = self._collection.short_title !="" and self._collection.short_title is not None
+        published = (
+            self._collection.short_title != ""
+            and self._collection.short_title is not None
+        )
         for key, value in collection_update.items():
             if key == "project_ids":
                 value.sort()
@@ -161,8 +166,9 @@ class CollectionBO(object):
             # Simple fields update
             if key in self.modif:
                 setattr(self._collection, key, value)
-            elif key in self.no_modif and not published:
-                setattr(self._collection, key, value)
+            elif key in self.no_modif:
+                if not published or value not in ["", "?"]:
+                    setattr(self._collection, key, value)
             elif key in ["provider_user", "contact_user"] and value is not None:
                 # Copy provider user id contact user id
                 setattr(self._collection, key + "_id", value["id"])
@@ -216,17 +222,20 @@ class CollectionBO(object):
                             collection_id=coll_id, organisation=an_org, role=a_role
                         )
                     )
-            if COLLECTION_ROLE_DATA_CREATOR in by_role["org"] and len(by_role["org"][COLLECTION_ROLE_DATA_CREATOR])>0:
+            if (
+                COLLECTION_ROLE_DATA_CREATOR in by_role["org"]
+                and len(by_role["org"][COLLECTION_ROLE_DATA_CREATOR]) > 0
+            ):
                 # First org is the institutionCode provider
                 inst_code_provider = by_role["org"][COLLECTION_ROLE_DATA_CREATOR][0]
                 inst_code_provider = inst_code_provider.strip()
                 session.add(
                     CollectionOrgaRole(
-                    collection_id=coll_id,
-                    organisation=inst_code_provider,
-                    role=COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER,
-                 )
-            )
+                        collection_id=coll_id,
+                        organisation=inst_code_provider,
+                        role=COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER,
+                    )
+                )
 
     def set_composing_projects(self, session: Session, project_ids: ProjectIDListT):
         """
@@ -288,13 +297,18 @@ class CollectionBO(object):
             return CollectionBO(ret).enrich()
 
     @staticmethod
-    def delete(session: Session, coll_id: CollectionIDT)->bool:
+    def delete(session: Session, coll_id: CollectionIDT) -> bool:
         """
         Completely remove the collection.
         Being just a set of project references, the pointed-at projects are not impacted.
         """
         # check if collection is published
-        published = session.query(Collection.short_title!=None).filter(Collection.short_title !="").filter(Collection.id == coll_id).scalar()
+        published = (
+            session.query(Collection.short_title != None)
+            .filter(Collection.short_title != "")
+            .filter(Collection.id == coll_id)
+            .scalar()
+        )
         if published is not None:
             return False
         # Remove links first
