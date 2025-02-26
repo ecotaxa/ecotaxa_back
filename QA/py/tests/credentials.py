@@ -1,4 +1,4 @@
-# These correspond to the rights in schema_prod.sql
+# These correspond to the rights in data_load.sql
 
 ADMIN_USER_ID = 1  # From default build
 ORDINARY_USER_USER_ID = 2
@@ -7,7 +7,7 @@ ORDINARY_USER2_USER_ID = 4
 REAL_USER_ID = 6
 ORDINARY_USER3_USER_ID = 8
 USERS_ADMIN_USER_ID = 7
-
+ORDINARY_GUEST_GUEST_ID = 13
 ADMIN_AUTH = {"Authorization": "Bearer " + str(ADMIN_USER_ID)}
 USER_AUTH = {"Authorization": "Bearer " + str(ORDINARY_USER_USER_ID)}
 CREATOR_AUTH = {"Authorization": "Bearer " + str(CREATOR_USER_ID)}

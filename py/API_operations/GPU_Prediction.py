@@ -13,18 +13,20 @@ import numpy as np
 
 from API_models.prediction import PredictionReq
 from BO.Classification import ClassifIDListT
-from BO.ObjectSet import DescribedObjectSet, EnumeratedObjectSet, ObjectIDListT
+from BO.ObjectSet import DescribedObjectSet, EnumeratedObjectSet
 from BO.Prediction import DeepFeatures
 from BO.Project import ProjectBO
 from BO.ProjectSet import LimitedInCategoriesProjectSet, FeatureConsistentProjectSet
 from BO.Rights import RightsBO, Action
 from BO.Training import TrainingBO
+from DB.Object import ObjectIDListT
 from DB.Project import ProjectIDT, Project
 from DB.helpers import Result
 from DB.helpers.Direct import text
 from ML.Deep_features_extractor import DeepFeaturesExtractor
 from ML.Random_forest_classifier import OurRandomForestClassifier
 from helpers.DynamicLogs import get_logger
+
 # TODO: Move somewhere else
 from helpers.Timer import CodeTimer
 from .ObjectManager import ObjectManager
@@ -104,9 +106,9 @@ class GPUPredictForProject(PredictForProject):
         logger.info(
             """
 To correct the situation, you might:
-In first step 'Choice of Learning Set data source', use fewer example projects.  
+In first step 'Choice of Learning Set data source', use fewer example projects.
 In second step 'Choice of Learning Set categories and size', where the learning set size is displayed:
-    - lower the number of objects per category (currently set at {}). 
+    - lower the number of objects per category (currently set at {}).
     - unselect some categories by clicking in '# source' column.""".format(
                 self.req.learning_limit
             )

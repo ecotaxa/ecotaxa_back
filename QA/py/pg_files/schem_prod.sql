@@ -25,7 +25,7 @@ CREATE EXTENSION IF NOT EXISTS pg_buffercache WITH SCHEMA public;
 
 
 --
--- Name: EXTENSION pg_buffercache; Type: COMMENT; Schema: -; Owner: 
+-- Name: EXTENSION pg_buffercache; Type: COMMENT; Schema: -; Owner:
 --
 
 COMMENT ON EXTENSION pg_buffercache IS 'examine the shared buffer cache';
@@ -39,7 +39,7 @@ CREATE EXTENSION IF NOT EXISTS tsm_system_time WITH SCHEMA public;
 
 
 --
--- Name: EXTENSION tsm_system_time; Type: COMMENT; Schema: -; Owner: 
+-- Name: EXTENSION tsm_system_time; Type: COMMENT; Schema: -; Owner:
 --
 
 COMMENT ON EXTENSION tsm_system_time IS 'TABLESAMPLE method which accepts time in milliseconds as a limit';
@@ -49,7 +49,7 @@ COMMENT ON EXTENSION tsm_system_time IS 'TABLESAMPLE method which accepts time i
 --
 
 -- doesn't work and should be there in ankane
--- CREATE EXTENSION IF NOT EXISTS vector; 
+-- CREATE EXTENSION IF NOT EXISTS vector;
 
 
 SET default_tablespace = '';
@@ -2847,4 +2847,3 @@ COPY public.roles (id, name) FROM stdin;
 2	Users Administrator
 3	Project creator
 \.
-

@@ -37,8 +37,11 @@ from API_models.crud import (
     ProjectModel,
     UserModelWithRights,
     MinUserModel,
+    GuestModel,
     CollectionModel,
+    CollectionAggregatedRsp,
     CreateCollectionReq,
+    CollectionReq,
     SampleModel,
     JobModel,
     BulkUpdateReq,
@@ -46,6 +49,7 @@ from API_models.crud import (
     ProjectTaxoStatsModel,
     ProjectUserStatsModel,
     ProjectSetColumnStatsModel,
+    ProjectColumnsModel,
     SampleTaxoStatsModel,
     ResetPasswordReq,
     UserActivateReq,
@@ -104,6 +108,7 @@ from API_operations.CRUD.ObjectParents import (
 )
 from API_operations.CRUD.Projects import ProjectsService
 from API_operations.CRUD.Users import UserService
+from API_operations.CRUD.Guests import GuestService
 from API_operations.Consistency import ProjectConsistencyChecker
 from API_operations.DBSyncService import DBSyncService
 from API_operations.JsonDumper import JsonDumper
@@ -133,11 +138,13 @@ from API_operations.imports.SimpleImport import SimpleImport
 from BG_operations.JobScheduler import JobScheduler
 from BO.Acquisition import AcquisitionBO
 from BO.Classification import HistoricalClassification, ClassifIDT
-from BO.Collection import CollectionBO
+from BO.Collection import (
+    CollectionBO,
+    MinimalCollectionBO,
+)
 from BO.ColumnUpdate import ColUpdateList
 from BO.Job import JobBO
 from BO.Object import ObjectBO
-from BO.ObjectSet import ObjectIDListT
 from BO.Process import ProcessBO
 from BO.Project import ProjectBO, ProjectUserStats
 from BO.ProjectSet import ProjectSetColumnStats
@@ -145,9 +152,10 @@ from BO.Sample import SampleBO, SampleTaxoStats
 from BO.Taxonomy import TaxonBO
 from BO.User import UserIDT
 from DB import Sample
+from DB.Object import ObjectIDListT
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
-from DB.User import User
+from DB.User import User, Guest
 from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
@@ -175,7 +183,7 @@ api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.40",
+    version="0.0.41",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -183,7 +191,7 @@ app = FastAPI(
         {"url": "/api", "description": "External access"},
         {"url": "/", "description": "Local access"},
     ],
-    default_response_class=MyORJSONResponse
+    default_response_class=MyORJSONResponse,
     # For later: Root path is in fact _removed_ from incoming requests, so not relevant here
 )
 
@@ -232,7 +240,7 @@ def login(params: LoginReq = Body(...)) -> str:
     """
     **Login barrier,**
 
-    If successful, the login will returns a **JWT** which will have to be used
+    If successful, the login will return a **JWT** which will have to be used
     in bearer authentication scheme for subsequent calls.
     """
     with LoginService() as sce:
@@ -255,11 +263,11 @@ def get_users(
         " \n **If several ids are provided**, one full info is returned per user.",
         example="1",
     ),
-    summary: Optional[bool] = Query(
-        default=None,
-        title="Summary",
-        description="Return users except rights and last_used_projects if set to True. For users list display purpose.",
-        example=True,
+    fields: Optional[str] = Query(
+        default="*default",
+        title="Fields",
+        description="Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+        example="*default,fieldlist",
     ),
     current_user: int = Depends(get_current_user),
 ) -> List[UserModelWithRights]:
@@ -271,7 +279,7 @@ def get_users(
     """
     with UserService() as sce:
         usr_ids = _split_num_list(ids)
-        return sce.list(current_user, usr_ids, summary=summary)
+        return sce.list(current_user, usr_ids, fields=fields)
 
 
 @app.get(
@@ -477,7 +485,7 @@ def get_admin_users(current_user: int = Depends(get_current_user)) -> List[User]
     🔒 Any authenticated user can access the list.
     """
     with UserService() as sce:
-        ret = sce.get_admin_users(current_user)
+        ret = sce.get_admin_users()
     return ret
 
 
@@ -497,7 +505,7 @@ def get_user(
     Returns **information about the user** corresponding to the given id.
     """
     with UserService() as sce:
-        ret = sce.search_by_id(current_user, user_id)
+        ret = sce.search_by_id(user_id)
     if ret is None:
         raise HTTPException(status_code=404, detail="User not found")
     return ret
@@ -598,7 +606,7 @@ def reset_user_password(
 @app.get(
     "/organizations/search",
     operation_id="search_organizations",
-    tags=["users"],
+    tags=["organizations"],
     responses={
         200: {
             "content": {
@@ -624,7 +632,6 @@ def search_organizations(
 ) -> List[str]:
     """
     **Search for organizations.**
-    So far, organizations are just names in users table.
     """
     with UserService() as sce:
         org_names = sce.search_organizations(name)
@@ -632,6 +639,114 @@ def search_organizations(
 
 
 # ######################## END OF ORGANIZATIONS
+
+
+@app.get(
+    "/guests",
+    operation_id="get_guests",
+    tags=["guests"],
+    response_model=List[GuestModel],
+)
+def get_guests(
+    ids: str = Query(
+        "",
+        title="Ids",
+        description="String containing the list of one or more id separated by non-num char. \n"
+        " \n **If several ids are provided**, one full info is returned per user.",
+        example="1",
+    ),
+    fields: Optional[str] = Query(
+        default="*default",
+        title="Fields",
+        description="Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+        example="*default,fieldlist",
+    ),
+    current_user: int = Depends(get_current_user),
+) -> List[GuestModel]:
+    """
+    Returns the list of **all guests** with their full information, or just some of them if their ids
+    are provided.
+
+    🔒 *For admins and managers only.*
+    """
+    with GuestService() as sce:
+        guest_ids = _split_num_list(ids)
+        return sce.list(current_user, guest_ids, fields=fields)
+
+
+@app.post(
+    "/guests/create",
+    operation_id="create_guest",
+    tags=["guests"],
+    responses={200: {"content": {"application/json": {"example": null}}}},
+)
+def create_guest(
+    guest: GuestModel = Body(...),
+    current_user: Optional[int] = Depends(get_optional_current_user),
+) -> None:
+    """
+    **Create a new guest**, return **NULL upon success.**
+
+    🔒 Depending on logged user, different authorizations apply:
+    - An administrator or user administrator or logged project manager can create a guest.
+    - An ordinary logged user cannot create another guest.
+
+    If back-end configuration for self-creation check is Google reCAPTCHA,
+    then no_bot is a pair [remote IP, reCAPTCHA response].
+    """
+    with GuestService() as sce:
+        with ValidityThrower(), RightsThrower():
+            _: UserIDT = sce.create_guest(current_user, guest)
+
+
+@app.put(
+    "/guests/{guest_id}",
+    operation_id="update_guest",
+    tags=["guests"],
+    responses={200: {"content": {"application/json": {"example": null}}}},
+)
+def update_guests(
+    guest: GuestModel,
+    guest_id: int = Path(
+        ..., description="Internal, numeric id of the guest.", example=760
+    ),
+    current_user: int = Depends(get_current_user),
+) -> None:
+    """
+    **Update the guest**, return **NULL upon success.**
+
+    🔒 Depending on logged user, different authorizations apply:
+    - An administrator or user administrator or manager user can change any field with respect of consistency.
+    """
+    with GuestService() as sce:
+        with ValidityThrower(), RightsThrower():
+            sce.update_guest(current_user, guest_id, guest)
+
+
+@app.get(
+    "/guests/search",
+    operation_id="search_guest",
+    tags=["guests"],
+    response_model=List[GuestModel],
+)
+def search_guest(
+    current_user: int = Depends(get_current_user),
+    by_name: Optional[str] = Query(
+        default=None,
+        title="search by name",
+        description="Search by name, use % for searching with 'any char'.",
+        example="%userNa%",
+    ),
+) -> List[Guest]:
+    """
+    **Search guests using various criteria**, search is case-insensitive and might contain % chars.
+    """
+    with GuestService() as sce:
+        ret = sce.search(current_user, by_name)
+    return ret
+
+
+# ######################## END OF PERSONS
 
 
 @app.post(
@@ -662,6 +777,38 @@ def create_collection(
 
 
 @app.get(
+    "/collections",
+    operation_id="list_collections",
+    tags=["collections"],
+    response_model=List[CollectionModel],
+)
+def list_collections(
+    collection_ids: Optional[str] = Query(
+        default=None,
+        title="Collection Ids",
+        description="limit the list to a set of ids.",
+        example="123,45",
+    ),
+    fields: Optional[str] = Query(
+        default="*default",
+        title="Fields",
+        description="Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+        example="*default,fieldlist",
+    ),
+    current_user: int = Depends(get_current_user),
+) -> List[CollectionBO]:
+    """
+    **Search for collections.**
+
+    Note: Only collections where the current user is manager are returned. All collections are returned if the user is application administrator
+    """
+    with CollectionsService() as sce:
+        with RightsThrower():
+            matching_collections = sce.list(current_user, collection_ids)
+    return matching_collections
+
+
+@app.get(
     "/collections/search",
     operation_id="search_collections",
     tags=["collections"],
@@ -673,6 +820,12 @@ def search_collections(
         title="Title",
         description="Search by title, use % for searching with 'any char'.",
         example="%coll%",
+    ),
+    fields: Optional[str] = Query(
+        default="*default",
+        title="Fields",
+        description="Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+        example="*default,fieldlist",
     ),
     current_user: int = Depends(get_current_user),
 ) -> List[CollectionBO]:
@@ -742,6 +895,37 @@ def collection_by_short_title(
 
 
 @app.get(
+    "/collections/aggregated_projects_properties",
+    operation_id="collection_aggregated_projects_properties",
+    tags=["collections"],
+    responses={200: {"content": {"application/json": {"example": {}}}}},
+    response_model=CollectionAggregatedRsp,
+    response_class=MyORJSONResponse,
+)
+def collection_aggregated_projects_properties(
+    project_ids: str = Query(
+        ...,
+        title="Project Ids",
+        description="String containing the list of one or more project id separated by non-num char. \n .",
+        example="1",
+    ),
+    current_user: int = Depends(get_current_user),
+) -> MyORJSONResponse:
+    """
+    **returns projectset calculated selected fields values  projects and list of rejected projects id.
+    Note: 'manage' right is required on all underlying projects.
+    """
+    with CollectionsService() as sce:
+        with RightsThrower():
+            prj_ids = _split_num_list(project_ids)
+            ret = sce.aggregated_from_projects(current_user, prj_ids)
+    if isinstance(ret, str):
+        raise HTTPException(status_code=404, detail=ret)
+    # TODO: Mettre les syncs dans les services, moins dégeu
+    return ret
+
+
+@app.get(
     "/collections/{collection_id}",
     operation_id="get_collection",
     tags=["collections"],
@@ -793,26 +977,39 @@ def update_collection(
 
      Note: The collection is updated only if manageable.
     """
+    collection_update = collection.dict()
     with CollectionsService() as sce:
         with RightsThrower():
-            present_collection = sce.query(current_user, collection_id, for_update=True)
-        if present_collection is None:
-            raise HTTPException(status_code=404, detail="Collection not found")
-        present_collection.update(
-            session=sce.session,
-            title=collection.title,
-            short_title=collection.short_title,
-            project_ids=collection.project_ids,
-            provider_user=collection.provider_user,
-            contact_user=collection.contact_user,
-            citation=collection.citation,
-            abstract=collection.abstract,
-            description=collection.description,
-            creator_users=collection.creator_users,
-            associate_users=collection.associate_users,
-            creator_orgs=collection.creator_organisations,
-            associate_orgs=collection.associate_organisations,
-        )
+            sce.update(current_user, collection_id, collection_update)
+
+
+@app.patch(
+    "/collections/{collection_id}",
+    operation_id="patch_collection",
+    tags=["collections"],
+    responses={200: {"content": {"application/json": {"example": null}}}},
+)
+def patch_collection(
+    collection: CollectionReq = Body(...),
+    collection_id: int = Path(
+        ...,
+        description="Internal, the unique numeric id of this collection.",
+        example=1,
+    ),
+    current_user: int = Depends(get_current_user),
+) -> None:
+    """
+    **Partial Update of the collection**. Note that some updates are silently failing when not compatible
+     with the composing projects.
+
+     **Returns NULL upon success.**
+
+     Note: The collection is partiallly updated only if manageable.
+    """
+    collection_update = collection.dict(exclude_unset=True)
+    with CollectionsService() as sce:
+        with RightsThrower():
+            sce.update(current_user, collection_id, collection_update)
 
 
 @app.put(
@@ -935,13 +1132,86 @@ MyORJSONResponse.register(User, UserModelWithRights)
 MyORJSONResponse.register(User, MinUserModel)
 MyORJSONResponse.register(TaxonBO, TaxonModel)
 MyORJSONResponse.register(ObjectSetQueryRsp, ObjectSetQueryRsp)
+MyORJSONResponse.register(CollectionBO, CollectionModel)
+MyORJSONResponse.register(CollectionAggregatedRsp, CollectionAggregatedRsp)
 MyORJSONResponse.register(Sample, SampleModel)
-
 project_model_columns = plain_columns(ProjectModel)
 
 
 # TODO JCE - description
 # TODO TODO TODO: No verification of GET query parameters by FastAPI. pydantic does POST models OK.
+@app.get(
+    "/projects",
+    operation_id="list_projects",
+    tags=["projects"],
+    response_model=List[ProjectModel],
+)
+async def list_projects(  # MyORJSONResponse -> JSONResponse -> Response -> await
+    current_user: Optional[int] = Depends(get_optional_current_user),
+    project_ids: Optional[str] = Query(
+        default=None,
+        title="Project Ids",
+        description="Limit the list to a set of ids.",
+        example="123,45",
+    ),
+    not_granted: bool = Query(
+        default=False,
+        title="Not granted",
+        description="Return projects on which the current user has _no permission_, but visible to him/her.",
+        example=False,
+    ),
+    for_managing: bool = Query(
+        default=False,
+        title="For managing",
+        description="Return projects that can be written to (including erased) by the current user.",
+        example=False,
+    ),
+    order_field: Optional[str] = Query(
+        default=None,
+        title="Order field",
+        description="One of %s" % list(project_model_columns.keys()),
+        example="instrument",
+    ),
+    fields: Optional[str] = Query(
+        default="*default",
+        title="Fields",
+        description="Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+        example="*default,fieldlist",
+    ),
+    window_start: Optional[int] = Query(
+        default=None,
+        title="Window start",
+        description="Skip `window_start` before returning data.",
+        example="0",
+    ),
+    window_size: Optional[int] = Query(
+        default=None,
+        title="Window size",
+        description="Return only `window_size` lines.",
+        example="100",
+    ),
+) -> MyORJSONResponse:  # List[ProjectBO]
+    """
+    Returns **projects which the current user has explicit permission to access, with fields options.**
+
+    Note that, for performance reasons, in returned ProjectModels, field 'highest_rank' is NOT valued
+    (unlike in simple query). The same information can be found in 'managers', 'annotators' and 'viewers' lists.
+    """
+    not_granted = not_granted
+    with ProjectsService() as sce:
+        ret = sce.list(
+            current_user_id=current_user,
+            not_granted=not_granted,
+            for_managing=for_managing,
+            fields=fields,
+        )
+    # The DB query takes a few ms, and enrich not much more, so we can afford to narrow the search on the result
+    ret = sort_and_prune(
+        ret, order_field, project_model_columns, window_start, window_size
+    )
+    return MyORJSONResponse(ret)
+
+
 @app.get(
     "/projects/search",
     operation_id="search_projects",
@@ -993,11 +1263,11 @@ async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> aw
         description="One of %s" % list(project_model_columns.keys()),
         example="instrument",
     ),
-    summary: Optional[bool] = Query(
-        default=None,
-        title="Summary",
-        description="Return projects except somme fields like bodc_variables if set to True. For projects list display purpose.",
-        example=True,
+    fields: Optional[str] = Query(
+        default="*default",
+        title="Fields",
+        description="Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+        example="*default,fieldlist",
     ),
     window_start: Optional[int] = Query(
         default=None,
@@ -1027,7 +1297,7 @@ async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> aw
             title_filter=title_filter,
             instrument_filter=instrument_filter,
             filter_subset=filter_subset,
-            summary=summary,
+            fields=fields,
         )
     # The DB query takes a few ms, and enrich not much more, so we can afford to narrow the search on the result
 
@@ -1112,6 +1382,59 @@ def project_query(
         with RightsThrower():
             ret = sce.query(current_user, project_id, for_managing, for_update=False)
         return ret
+
+
+@app.get(
+    "/projects/{project_id}/collections",
+    operation_id="project_collections",
+    tags=["projects"],
+    response_model=List[MinimalCollectionBO],
+)
+def project_collections(
+    project_id: int = Path(
+        ..., description="Internal, numeric id of the project.", example=1
+    ),
+    current_user: Optional[int] = Depends(get_optional_current_user),
+) -> List[MinimalCollectionBO]:
+    """
+    **Returns project collections list of id, title
+    """
+    with ProjectsService() as sce:
+        with RightsThrower():
+            ret = sce.in_collections(current_user, project_id)
+        return ret
+
+
+@app.get(
+    "/project_set/projects",
+    operation_id="project_set_get_projects",
+    tags=["projects"],
+    response_model=List[ProjectColumnsModel],
+    response_class=MyORJSONResponse,  # Force the ORJSON encoder
+)
+async def project_set_get_projects(  # MyORJSONResponse -> JSONResponse -> Response -> await
+    ids: str = Query(
+        ...,
+        title="Ids",
+        description="String containing the list of one or more project id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
+        example="1",
+    ),
+    fields: Optional[str] = Query(
+        default="*default",
+        title="Fields",
+        description="Return the default fields (typically used in conjunction with an additional field list). To return selected fields.",
+        example="*default,fieldlist",
+    ),
+    current_user: Optional[int] = Depends(get_optional_current_user),
+) -> MyORJSONResponse:  # List[ProjectColumnsModel]
+    """
+    **Returns projects statistics**, i.e. used taxa and classification states.
+    """
+    with ProjectsService() as sce:
+        num_prj_ids = _split_num_list(ids)
+        with RightsThrower():
+            ret = sce.read_projects_columns(current_user, num_prj_ids, fields)
+    return MyORJSONResponse(ret)
 
 
 @app.get(
@@ -1211,7 +1534,7 @@ def project_set_get_user_stats(
                     "example": {
                         "proj_ids": [1040, 4702],
                         "total": 54169,
-                        "columns": ["fre.area", "obj.depth_min"],
+                        "columns": ["classif", "obj.depth_min"],
                         "counts": [54169, 54169],
                         "variances": [1895031198.64, 0.000258],
                     }
@@ -1587,6 +1910,8 @@ def update_project(
                 viewers=project.viewers,
                 license_=project.license,
                 bodc_vars=project.bodc_variables,
+                access=project.access,
+                formulae=project.formulae,
             )
 
     with DBSyncService(Project, Project.projid, project_id) as ssce:
@@ -1971,7 +2296,7 @@ The column obj.imgcount contains the total count of images for the object.
 
 Use a comma to separate fields.
 
-💡 More help :
+More help :
 
 You can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.
 

@@ -4,6 +4,7 @@ from urllib.parse import quote
 
 from starlette import status
 
+from BO.DataLicense import AccessLevelEnum
 from tests.credentials import (
     ADMIN_AUTH,
     ORDINARY_USER_USER_ID,
@@ -53,13 +54,19 @@ def test_update_prj(database, fastapi, caplog):
             "email": "administrator",
             "id": 1,
             "name": "Application Administrator",
+            "organisation": "Institut de la Mer de Villefranche - IMEV",
         },
         "instrument": "UVP6",
         "instrument_url": "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/",
         "init_classif_list": [],
         "license": "",
         "managers": [
-            {"email": "administrator", "id": 1, "name": "Application Administrator"}
+            {
+                "email": "administrator",
+                "id": 1,
+                "name": "Application Administrator",
+                "organisation": "Institut de la Mer de Villefranche - IMEV",
+            }
         ],
         "obj_free_cols": {
             "%area": "n23",
@@ -175,6 +182,8 @@ def test_update_prj(database, fastapi, caplog):
         "title": "Test Project Updates",
         "viewers": [],
         "visible": True,
+        "access": AccessLevelEnum.PUBLIC.value,
+        "formulae": None,
     }
 
     read_json = rsp.json()
@@ -190,7 +199,7 @@ def test_update_prj(database, fastapi, caplog):
     url = PROJECT_UPDATE_URL.format(project_id=prj_id)
     upd_json["comments"] = "New comment"
     upd_json["contact"] = contact_usr
-    upd_json["visible"] = False
+    upd_json["access"] = AccessLevelEnum.PRIVATE.value
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -199,7 +208,7 @@ def test_update_prj(database, fastapi, caplog):
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.json() != ref_json
     assert rsp.json()["comments"] == "New comment"
-    assert rsp.json()["visible"] is False
+    assert rsp.json()["access"] == AccessLevelEnum.PRIVATE.value
 
     # For ecotaxa/ecotaxa_dev#602
     # Set no contact at all
@@ -216,6 +225,7 @@ def test_update_prj(database, fastapi, caplog):
         "id": ORDINARY_USER2_USER_ID,
         "name": "name",
         "email": "toto@titi.com",
+        "organisation": "OrgTest",
     }
     url = PROJECT_UPDATE_URL.format(project_id=prj_id)
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=wrong_contact_upd)
@@ -246,8 +256,18 @@ def test_update_prj_pred_settings(database, fastapi, caplog):
     assert rsp.status_code == status.HTTP_403_FORBIDDEN
 
     # Grant an ordinary user the annotator right
-    usr = {"id": ORDINARY_USER_USER_ID, "email": "ignored", "name": "see email"}
-    mgr = {"id": ORDINARY_USER2_USER_ID, "email": "ignored", "name": "see email"}
+    usr = {
+        "id": ORDINARY_USER_USER_ID,
+        "email": "ignored",
+        "name": "see email",
+        "organisation": "OrgTest",
+    }
+    mgr = {
+        "id": ORDINARY_USER2_USER_ID,
+        "email": "ignored",
+        "name": "see email",
+        "organisation": "OrgTest",
+    }
     read_json["annotators"].append(usr)
     read_json["managers"].append(mgr)
     read_json["contact"] = mgr  # Setting a manager and a contact is mandatory

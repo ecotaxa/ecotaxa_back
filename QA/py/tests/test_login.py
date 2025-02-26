@@ -68,7 +68,7 @@ def test_plain_API_login(database):
         "email": "creator",
         "id": 3,
         "name": "User Creating Projects",
-        "organisation": None,
+        "organisation": "org3",
         "usercreationdate": "2020-05-13T08:59:48.701060",
         "usercreationreason": None,
         "can_do": [1, 4],

@@ -61,7 +61,11 @@ class RightsBO(object):
 
     @staticmethod
     def user_wants(
-        session: Session, user_id: int, action: Action, prj_id: int
+        session: Session,
+        user_id: int,
+        action: Action,
+        prj_id: int,
+        update_preference: Optional[bool] = True,
     ) -> Tuple[User, Project]:
         """
         Check rights for the user to do this specific action onto this project.
@@ -103,7 +107,7 @@ class RightsBO(object):
             else:
                 raise Exception("Not implemented")
         # Keep the last accessed projects
-        if Preferences(user).add_recent_project(prj_id):
+        if update_preference == True and Preferences(user).add_recent_project(prj_id):
             session.commit()
         return user, project
 
@@ -178,11 +182,7 @@ class RightsBO(object):
         """Set roles so that list of actions is possible"""
         roles = set()
         for an_action in actions:
-            if an_action == Action.CREATE_TAXON:
-                pass
-            elif an_action == Action.CREATE_PROJECT:
-                pass
-            elif an_action == Action.ADMINISTRATE_USERS:
+            if an_action == Action.ADMINISTRATE_USERS:
                 roles.add(all_roles[Role.USERS_ADMINISTRATOR])
             elif an_action == Action.ADMINISTRATE_APP:
                 roles.add(all_roles[Role.APP_ADMINISTRATOR])

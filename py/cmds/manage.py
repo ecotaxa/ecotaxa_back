@@ -49,6 +49,7 @@ def _init_security(sess):
             email=THE_ADMIN,
             password=THE_ADMIN_PASSWORD,
             name="Application Administrator",
+            organisation="Institut de la Mer de Villefranche - IMEV",
         )
         all_roles = {a_role.name: a_role for a_role in sess.query(Role)}
         RightsBO.set_allowed_actions(adm_user, [Action.ADMINISTRATE_APP], all_roles)

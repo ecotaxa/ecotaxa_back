@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import List, TYPE_CHECKING, Iterable
 
-from BO.DataLicense import LicenseEnum
+from BO.DataLicense import LicenseEnum, AccessLevelEnum
 from DB.helpers.ORM import Model
 from .Instrument import Instrument
 from .helpers.DDL import Column, Sequence, Boolean, ForeignKey
@@ -42,6 +42,7 @@ class Project(Model):
     )
 
     visible = Column(Boolean(), default=True)
+    access = Column(VARCHAR(1), default=AccessLevelEnum.OPEN, nullable=False)
     license = Column(VARCHAR(16), default=LicenseEnum.NO_LICENSE, nullable=False)
     status = Column(
         VARCHAR(40), default=ANNOTATE_STATUS
@@ -71,7 +72,8 @@ class Project(Model):
     fileloaded = Column(VARCHAR)
     rf_models_used = Column(VARCHAR)
     cnn_network_id = Column(VARCHAR(50))
-
+    # project specific formulae used to calculate concentration and biovolume ( used in project summary export, and collection DarwinCore export)
+    formulae = Column(VARCHAR)
     # Associated taxonomy statistics. Commented out to avoid that the ORM loads the whole list, which can be big.
     # taxo_stats = relationship("ProjectTaxoStat")
 

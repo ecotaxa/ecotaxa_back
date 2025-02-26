@@ -359,7 +359,12 @@ def test_export_roundtrip_self(database, fastapi, caplog, export_method):
     qry_url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
     rsp = fastapi.get(qry_url, headers=ADMIN_AUTH)
     read_json = rsp.json()
-    usr = {"id": ORDINARY_USER_USER_ID, "email": "ignored", "name": "see email"}
+    usr = {
+        "id": ORDINARY_USER_USER_ID,
+        "email": "ignored",
+        "name": "see email",
+        "organisation": "OrgTest",
+    }
     read_json["annotators"].append(usr)
     upd_url = PROJECT_UPDATE_URL.format(project_id=prj_id)
     rsp = fastapi.put(upd_url, headers=ADMIN_AUTH, json=read_json)
@@ -481,7 +486,7 @@ def export_project_to_ftp(fastapi, prj_id, just_annots):
     req_and_filters = {  # Common param to both entry points
         "filters": {},
         "request": {
-            "project_id": prj_id,
+            "project_id": str(prj_id),
             "out_to_ftp": True,
         },
     }

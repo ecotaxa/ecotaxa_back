@@ -2,14 +2,20 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List, Union, Tuple, Optional
-
+from typing import List, Union, Tuple, Optional, Dict
 from API_models.crud import CreateProjectReq
 from BO.Classification import ClassifIDListT, ClassifIDT
 from BO.ObjectSet import EnumeratedObjectSet
-from BO.Project import ProjectBO, ProjectBOSet, ProjectTaxoStats, ProjectUserStats
+from BO.Project import (
+    ProjectBO,
+    ProjectBOSet,
+    ProjectTaxoStats,
+    ProjectUserStats,
+    ProjectColumns,
+)
+from BO.Collection import MinimalCollectionBO
 from BO.ProjectSet import ProjectSetColumnStats, LimitedInCategoriesProjectSet
-from BO.Rights import RightsBO, Action
+from BO.Rights import RightsBO, Action, NOT_FOUND
 from BO.User import UserIDT
 from DB.Project import Project, ANNOTATE_STATUS, ProjectIDT, ProjectIDListT
 from DB.Sample import Sample
@@ -18,6 +24,7 @@ from DB.helpers.ORM import clone_of
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
 from ..helpers.Service import Service
+from helpers.FieldListType import FieldListType
 
 logger = get_logger(__name__)
 
@@ -52,7 +59,7 @@ class ProjectsService(Service):
         req.title = req.title.strip()
         new_prj.title = req.title
         new_prj.status = ANNOTATE_STATUS
-        new_prj.visible = req.visible
+        new_prj.access = req.access
         self.session.add(new_prj)
         self.session.flush()  # to get the project ID
         # Add the manage privilege & set user as contact
@@ -68,7 +75,7 @@ class ProjectsService(Service):
         title_filter: str = "",
         instrument_filter: str = "",
         filter_subset: bool = False,
-        summary: bool = False,
+        fields: Optional[str] = FieldListType.default,
     ) -> List[ProjectBO]:
         # current_user: Optional[User]
         if current_user_id is None:
@@ -92,7 +99,7 @@ class ProjectsService(Service):
                 filter_subset,
             )
             projects = ProjectBOSet(
-                self.ro_session, matching_ids, public=False, summary=summary
+                self.ro_session, matching_ids, public=False, fields=fields
             )
         return projects.as_list()
 
@@ -228,4 +235,81 @@ class ProjectsService(Service):
             self.session, prj_ids, column_names, random_limit, categories
         )
         ret = learning_set.read_columns_stats()
+        return ret
+
+    def in_collections(
+        self,
+        current_user_id: Optional[UserIDT],
+        projid: ProjectIDT,
+    ) -> List[MinimalCollectionBO]:
+        """
+        Read classification statistics for these projects.
+        """
+        # add security barrier ?
+        return ProjectBO.in_collections(self.ro_session, projid)
+
+    def read_projects_columns(
+        self,
+        current_user_id: Optional[UserIDT],
+        project_ids: List[int],
+        fields: Optional[str] = FieldListType.default,
+    ) -> Optional[List[ProjectColumns]]:
+        """
+        Read values for specific columns for these projects.
+        """
+        projects = ProjectBOSet(self.ro_session, project_ids, public=False)
+        ret = []
+        columns: List = []
+        if fields is not None and (
+            fields[0 : len(FieldListType.default)] == FieldListType.default.value
+            and len(fields) > 1
+        ):
+            project_columns: Dict = {}
+            project_columns[FieldListType.default] = [
+                Project.projid,
+                Project.title,
+                Project.instrument,
+                Project.comments,
+                Project.initclassiflist,
+                Project.classiffieldlist,
+                Project.cnn_network_id,
+                Project.license,
+                Project.status,
+                Project.access,
+                Project.formulae,
+            ]
+
+            project_columns[FieldListType.all] = project_columns[
+                FieldListType.default
+            ] + [
+                Project.mappingobj,
+                Project.mappingsample,
+                Project.mappingprocess,
+                Project.mappingacq,
+            ]
+            lfields = fields.split(",")
+            typelist = lfields.pop(0)
+            columns = project_columns[typelist]
+            columnplus = []
+            if typelist != FieldListType.all and len(lfields):
+                lfields = lfields[0].split(",")
+                for col in project_columns[FieldListType.all]:
+                    if col.name in lfields:
+                        columnplus.append(col)
+                columns.extend(columnplus)
+
+        for project in projects.as_list():
+            values = []
+            for column in columns:
+                if hasattr(project, column.name):
+                    values.append(getattr(project, column.name))
+                elif column == "userstats":
+                    annotators = ProjectBO.read_user_stats(self.session, project_ids)
+                    creators = []
+                    for annotator in annotators[1].annotators:
+                        creators.append(annotator.id)
+                    values.append(creators)
+                else:
+                    values.append(NOT_FOUND)
+            ret.append(ProjectColumns(project.projid, columns, values))
         return ret

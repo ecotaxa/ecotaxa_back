@@ -5,18 +5,24 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Iterable
-from typing import TYPE_CHECKING
+from typing import Iterable, TYPE_CHECKING,Final
 
 from sqlalchemy import event, SmallInteger
+from sqlalchemy.engine import Connection
 
-from BO.helpers.TSVHelpers import none_to_empty
 from data.Countries import countries_by_name
-from .helpers import Session, Result
-from .helpers.DDL import Column, ForeignKey, Sequence, Integer, String, Boolean
-from .helpers.Direct import text, func
+from .helpers.DDL import (
+    Column,
+    ForeignKey,
+    Sequence,
+    Integer,
+    String,
+    Boolean,
+)
+from .helpers.Direct import func
 from .helpers.ORM import Model, relationship, Insert
-from .helpers.Postgres import TIMESTAMP
+from .helpers.Postgres import TIMESTAMP, VARCHAR
+from DB.Organization import my_before_organization
 
 if TYPE_CHECKING:
     from .ProjectPrivilege import ProjectPrivilege
@@ -29,28 +35,61 @@ class UserStatus(int, Enum):
     pending: Final = 2
 
 
-class User(Model):
+class UserType(str, Enum):
+    guest: Final = "guest"
+    user: Final = "user"
+
+
+class Person(Model):
     __tablename__ = "users"
     id: int = Column(Integer, Sequence("seq_users"), primary_key=True)
     email: str = Column(String(255), unique=True, nullable=False)
-    password: str = Column(String(255))
     name: str = Column(String(255), nullable=False)
-    organisation: str = Column(String(255))
+    country: str = Column(String(50))
+    orcid: str = Column(String(20), nullable=True)
+    type = Column(String(10))
+    usercreationdate = Column(TIMESTAMP, default=func.now())
+    organisation = Column(VARCHAR, ForeignKey("organizations.name"), nullable=False)
+    __mapper_args__ = {
+        "polymorphic_on": type,
+        "polymorphic_identity": "person",
+    }
+
+    def __str__(self):
+        return "{0} ({1})".format(self.name, self.email)
+
+
+class Guest(Person):
+    __mapper_args__ = {
+        "polymorphic_identity": "guest",
+    }
+
+    def to_user(self) -> User:
+        user = User()
+        user.id=self.id
+        user.name=self.name
+        user.email=self.email
+        user.country=self.country
+        user.orcid=self.orcid
+        user.usercreationdate=self.usercreationdate
+        user.organisation=self.organisation
+        return user
+
+
+class User(Person):
+    password: str = Column(String(255))
     status: int = Column(SmallInteger(), default=1)
     status_date = Column(TIMESTAMP)
     status_admin_comment: str = Column(String(255))
     preferences: str = Column(String(40000))
-    country: str = Column(String(50))
-    orcid: str = Column(String(20), nullable=True)
-    usercreationdate = Column(TIMESTAMP, default=func.now())
     usercreationreason = Column(String(1000))
-
     # Mail status: True for verified, default NULL
     mail_status: bool = Column(Boolean(), nullable=True)
     # Date the mail status was set
-    mail_status_date = Column(TIMESTAMP)
+    mail_status_date = Column(
+        TIMESTAMP
+    )  # The relationships are created in Relations.py but the typing here helps the IDE
 
-    # The relationships are created in Relations.py but the typing here helps the IDE
     roles: relationship
     # The projects that user has rights in, so he/she can participate at various levels.
     privs_on_projects: Iterable[ProjectPrivilege]
@@ -58,38 +97,38 @@ class User(Model):
     classified_objects: relationship
     # Preferences, per project, the global ones kept in field above.
     preferences_for_projects: relationship
+    __mapper_args__ = {
+        "polymorphic_identity": "user",
+    }
 
-    @staticmethod
-    def find_users(
-        session: Session, names: List[str], emails: List[str], found_users: dict
-    ):
-        """
-        Find the users in DB, by name or email.
-        :param session:
-        :param emails:
-        :param names:
-        :param found_users: A dict in
-        """
-        sql = text(
-            "SELECT id, LOWER(name), LOWER(email) "
-            "  FROM users "
-            " WHERE LOWER(name) = ANY(:nms) or email = ANY(:ems) "
-        )
-        res: Result = session.execute(sql, {"nms": names, "ems": emails})
-        for rec in res:
-            for u in found_users:
-                if (
-                    u == rec[1]
-                    or none_to_empty(found_users[u].get("email")).lower() == rec[2]
-                ):
-                    found_users[u]["id"] = rec[0]
+    def to_guest(self) -> Guest:
+        guest = Guest()
+        guest.id=self.id
+        guest.name=self.name
+        guest.email=self.email
+        guest.country= self.country
+        guest.orcid=self.orcid
+        guest.usercreationdate=self.usercreationdate
+        guest.organisation=self.organisation
+        return guest
 
     def has_role(self, role: str) -> bool:
         # TODO: Cache a bit. All roles are just python objects due to SQLAlchemy magic.
-        return role in [r.name for r in list(self.roles)]
+        return role in [r.name for r in self.roles]
+    def is_manager(self)->bool:
+        return (self.has_role(Role.APP_ADMINISTRATOR) or self.has_role(
+            Role.USERS_ADMINISTRATOR
+        ))
 
-    def __str__(self):
-        return "{0} ({1})".format(self.name, self.email)
+
+# associate the listener function with SomeClass,
+# to execute during the "before_insert" hook
+@event.listens_for(User, "before_insert")
+@event.listens_for(Guest, "before_insert")
+@event.listens_for(User, "before_update")
+@event.listens_for(Guest, "before_update")
+def my_before_person_organisation(mapper, connection: Connection, target):
+    my_before_organization(mapper, connection, target)
 
 
 class Role(Model):

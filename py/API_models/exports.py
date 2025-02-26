@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from enum import Enum
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 
 from pydantic import Extra, validator
 
@@ -24,6 +24,13 @@ class ExportTypeEnum(str, Enum):
         "CNC"  # Concentration summary https://github.com/ecotaxa/ecotaxa/issues/616
     )
     biovols = "BIV"  # Biovolume summary https://github.com/ecotaxa/ecotaxa/issues/617
+
+
+class ExportFileTypeEnum(str, Enum):
+    general_tsv = "general"
+    backup = "backup"
+    classification = "classification"
+    summary = "summary"
 
 
 class ExportSplitOptionsEnum(str, Enum):
@@ -73,14 +80,29 @@ class SummaryExportGroupingEnum(str, Enum):
     by_project = "P"  # Reserve for collections
 
 
-class ExportReq(BaseModel):
+class ProjectIdReq(BaseModel):
+    """
+    project_id or project_ids to export in a same zip with separated folders and tsv.
+    """
+
+    collection_id: Optional[int] = Field(
+        title="Collection Id",
+        description="The Collection to export if requested.",
+        default=None,
+        example=1,
+    )
+    project_id: Union[int, str] = Field(
+        title="Project Id",
+        description="The project(int) or projects (str, project ids list) to export.",
+        example=1,
+    )
+
+
+class ExportReq(ProjectIdReq):
     """
     Export request.
     """
 
-    project_id: int = Field(
-        title="Project Id", description="The project to export.", example=1
-    )
     exp_type: ExportTypeEnum = Field(
         title="Export type",
         description="The export type.",
@@ -198,14 +220,11 @@ class ExportReq(BaseModel):
         schema_extra = {"title": "Export request Model"}
 
 
-class GeneralExportReq(BaseModel):
+class GeneralExportReq(ProjectIdReq):
     """
     General purpose export request, produce a zip in a job with many options.
     """
 
-    project_id: int = Field(
-        title="Project Id", description="The project to export.", example=1
-    )
     split_by: ExportSplitOptionsEnum = Field(
         title="Split by",
         description="If not none, separate (in ZIP sub-directories) output per given field.",
@@ -262,14 +281,11 @@ class GeneralExportReq(BaseModel):
         schema_extra = {"title": "General Export request Model"}
 
 
-class SummaryExportReq(BaseModel):
+class SummaryExportReq(ProjectIdReq):
     """
     Summary export request.
     """
 
-    project_id: int = Field(
-        title="Project Id", description="The project to export.", example=1
-    )
     quantity: SummaryExportQuantitiesOptionsEnum = Field(
         title="Quantity",
         description="The quantity to compute. Abundance is always possible.",
@@ -322,14 +338,11 @@ class SummaryExportReq(BaseModel):
         schema_extra = {"title": "Summary Export request Model"}
 
 
-class BackupExportReq(BaseModel):
+class BackupExportReq(ProjectIdReq):
     """
     Backup export request.
     """
 
-    project_id: int = Field(
-        title="Project Id", description="The project to export.", example=1
-    )
     out_to_ftp: bool = Field(
         title="Out to ftp",
         description="Copy result file to FTP area. Original file is still available.",
@@ -435,7 +448,7 @@ class DarwinCoreExportReq(BaseModel):
 
 class ExportRsp(BaseModel):
     """
-    Export response, for all export jobs, either on Project or Collection
+    Export response, for all export jobs, either on Project or Collection.
     """
 
     errors: List[str] = Field(

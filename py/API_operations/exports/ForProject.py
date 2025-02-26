@@ -10,12 +10,13 @@ import os
 import re
 import zipfile
 from pathlib import Path
-from typing import Optional, Tuple, TextIO, Dict, List, Set, Any
+from typing import Optional, Tuple, TextIO, Dict, List, Set, Any, Union
 
 from API_models.exports import (
     ExportRsp,
     ExportReq,
     ExportTypeEnum,
+    ExportFileTypeEnum,
     SummaryExportGroupingEnum,
     GeneralExportReq,
     ExportSplitOptionsEnum,
@@ -26,8 +27,8 @@ from API_models.exports import (
     SummaryExportSumOptionsEnum,
 )
 from API_models.filters import ProjectFiltersDict
-from BO.Mappings import ProjectMapping
-from BO.ObjectSet import DescribedObjectSet
+from BO.Mappings import ProjectMapping, ProjectSetMapping, PREFIX_TO_TABLE
+from BO.ObjectSet import DescribedObjectSet, DescribedObjectBOSet
 from BO.ObjectSetQueryPlus import ResultGrouping, IterableRowsT, ObjectSetQueryPlus
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
@@ -38,7 +39,9 @@ from DB.Object import (
     DUBIOUS_CLASSIF_QUAL,
     PREDICTED_CLASSIF_QUAL,
 )
-from DB.Project import Project
+from BO.Project import MappingColumnEnum, CollectionProjectBOSet
+from DB.Project import Project, ProjectIDT, ProjectIDListT
+from DB.ProjectVariables import ProjectVariables
 from DB.helpers.Direct import text
 from DB.helpers.SQL import OrderClause
 from FS.CommonDir import ExportFolder
@@ -47,6 +50,7 @@ from helpers import (
     DateTime,
 )  # Need to keep the whole module imported, as the function is mocked
 from helpers.DynamicLogs import get_logger, LogsSwitcher
+
 from ..helpers.JobService import JobServiceBase, ArgsDict  # fmt:skip
 
 logger = get_logger(__name__)
@@ -71,9 +75,11 @@ class ProjectExport(JobServiceBase):
         """
         Initial run, basically just do security check and create the job.
         """
-        _user, _project = RightsBO.user_wants(
-            self.session, current_user_id, Action.READ, self.req.project_id
-        )
+        project_ids = str(self.req.project_id).split(",")
+        for project_id in project_ids:
+            _user, _project = RightsBO.user_wants(
+                self.session, current_user_id, Action.READ, int(project_id)
+            )
         # Security OK, create pending job
         self.create_job(self.JOB_TYPE, current_user_id)
         ret = ExportRsp(job_id=self.job_id)
@@ -104,6 +110,49 @@ class ProjectExport(JobServiceBase):
             return None
         return result["out_file"]
 
+    def do_export_projects(
+        self, project_ids: ProjectIDListT, progress_before_copy
+    ) -> int:
+        """
+        export project_id
+        """
+        logger.info(
+            "Input Param = %s project_ids = %s" % (self.req.__dict__, project_ids)
+        )
+        req = self.req
+
+        # Bulk of the job
+        if req.exp_type in (
+            ExportTypeEnum.general_tsv,
+            ExportTypeEnum.backup,
+            ExportTypeEnum.dig_obj_ident,
+        ):
+            nb_rows, nb_images = self.create_tsv(
+                project_ids, 10 if req.with_images else progress_before_copy
+            )
+            if req.with_images:
+                self.add_images(nb_images, 10, progress_before_copy)
+        elif req.exp_type == ExportTypeEnum.summary:
+            nb_rows = self.create_summary(project_ids)
+        elif req.exp_type in (
+            ExportTypeEnum.abundances,
+            ExportTypeEnum.concentrations,
+            ExportTypeEnum.biovols,
+        ):
+            nb_rows = self.create_sci_summary(project_ids)
+        else:
+            raise Exception("Unsupported export type : %s" % req.exp_type)
+        # Zip present log file as well
+        if req.exp_type not in (
+            ExportTypeEnum.summary,
+            ExportTypeEnum.abundances,
+            ExportTypeEnum.concentrations,
+            ExportTypeEnum.biovols,
+        ):
+            logger.info("Log in zip should end here.")
+            self.append_log_to_zip()
+        return nb_rows
+
     def do_export(self) -> None:
         """
         The real job.
@@ -113,11 +162,9 @@ class ProjectExport(JobServiceBase):
         logger.info("Input Param = %s" % (self.req.__dict__,))
         # A bit of forward-thinking... Leave 5% of progress bar for final copy
         progress_before_copy = 100
+        out_file_name = None
         if req.out_to_ftp:
             progress_before_copy = 95
-        # Fetch the source project
-        src_project = self.ro_session.query(Project).get(req.project_id)
-        assert src_project is not None
         # Force some implied (in UI) options.
         if req.only_annotations:
             req.exp_type = ExportTypeEnum.general_tsv  # No need for a subdir in ZIP
@@ -149,43 +196,42 @@ class ProjectExport(JobServiceBase):
                 req.tsv_entities += "S"
             if req.split_by == "acquisition" and "A" not in req.tsv_entities:
                 req.tsv_entities += "A"
-        # Bulk of the job
-        if req.exp_type in (
-            ExportTypeEnum.general_tsv,
-            ExportTypeEnum.backup,
-            ExportTypeEnum.dig_obj_ident,
-        ):
-            nb_rows, nb_images = self.create_tsv(
-                src_project, 10 if req.with_images else progress_before_copy
-            )
-            if req.with_images:
-                self.add_images(nb_images, 10, progress_before_copy)
-        elif req.exp_type == ExportTypeEnum.summary:
-            nb_rows = self.create_summary(src_project)
-        elif req.exp_type in (
-            ExportTypeEnum.abundances,
-            ExportTypeEnum.concentrations,
-            ExportTypeEnum.biovols,
-        ):
-            nb_rows = self.create_sci_summary(src_project)
+        done_infos: Dict = {}
+        if req.collection_id:
+            done_infos.update({"collection_id": req.collection_id})
+        project_ids = str(req.project_id).split(",")
+        if req.exp_type == ExportTypeEnum.backup:
+            # loop through projects
+            for project_id in project_ids:
+                nb_rows = self.do_export_projects(
+                    [int(project_id)], progress_before_copy
+                )
+                obj = {"rowcount": nb_rows, "out_file": self.out_file_name}
+                if req.collection_id or len(project_ids) > 1:
+                    obj.update({"project_id": project_id})
+                    done_infos.update({"project": obj})
+                else:
+                    done_infos = obj
+            if req.collection_id:
+                # make a zip containing every export file by project for the collection
+                logger.info("Build collection zip here.")
+                out_file_name = self.build_collection_zip()
+                done_infos.update({"out_file": out_file_name})
+                logger.info("End collection zip here.")
         else:
-            raise Exception("Unsupported export type : %s" % req.exp_type)
-        # Zip present log file as well
-        if req.exp_type not in (
-            ExportTypeEnum.summary,
-            ExportTypeEnum.abundances,
-            ExportTypeEnum.concentrations,
-            ExportTypeEnum.biovols,
-        ):
-            logger.info("Log in zip should end here.")
-            self.append_log_to_zip()
+            nb_rows = self.do_export_projects(
+                [int(project_id) for project_id in project_ids], progress_before_copy
+            )
+            done_infos.update({"rowcount": nb_rows, "out_file": self.out_file_name})
         # Final copy
         if req.out_to_ftp:
             self.update_progress(progress_before_copy, "Copying file to FTP")
             dest = ExportFolder(self.config.export_folder())
             # Disambiguate using the job ID
-            dest_name = "task_%d_%s" % (self.job_id, self.out_file_name)
-            dest.receive_from(self.out_path / self.out_file_name, dest_name)
+            if out_file_name is None:
+                out_file_name = self.out_file_name
+            dest_name = "task_%d_%s" % (self.job_id, out_file_name)
+            dest.receive_from(self.out_path / out_file_name, dest_name)
             logger.info("Result copied to %s", dest_name)
             final_message = (
                 "Export successful : File '%s' is available (as well)"
@@ -195,7 +241,9 @@ class ProjectExport(JobServiceBase):
             final_message = "Export successful"
 
         self.update_progress(100, final_message)
-        done_infos = {"rowcount": nb_rows, "out_file": self.out_file_name}
+        if out_file_name is not None and "out_file" not in done_infos:
+            self.out_file_name = out_file_name
+            done_infos.update({"out_file": self.out_file_name})
         self.set_job_result(errors=[], infos=done_infos)
 
     def append_log_to_zip(self) -> None:
@@ -209,24 +257,35 @@ class ProjectExport(JobServiceBase):
         zfile.write(self.log_file_path(), arcname="job_%d.log" % self.job_id)
         zfile.close()
 
-    def create_tsv(self, src_project: Project, end_progress: int) -> Tuple[int, int]:
+    def _get_fast_count(self, project_ids: ProjectIDListT) -> int:
+        # Get a fast count of the maximum of what to do
+        count_sql = (
+            "SELECT SUM(nbr) AS cnt FROM projects_taxo_stat WHERE projid IN :prjs"
+        )
+        res = self.ro_session.execute(text(count_sql), {"prjs": tuple(project_ids)})
+        obj_count = res.one()[0]
+        return obj_count
+
+    def create_tsv(
+        self, project_ids: ProjectIDListT, end_progress: int
+    ) -> Tuple[int, int]:
         """
         Create the TSV file.
         """
         req = self.req
-        proj_id = src_project.projid
         user_id = self._get_owner_id()
         self.update_progress(1, "Start TSV export")
         progress_range = end_progress - 1
-
         # Get a fast count of the maximum of what to do
-        count_sql = "SELECT SUM(nbr) AS cnt FROM projects_taxo_stat WHERE projid = :prj"
-        res = self.ro_session.execute(text(count_sql), {"prj": proj_id})
-        obj_count = res.one()[0]
-
+        obj_count = self._get_fast_count(project_ids)
         # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(
-            self.ro_session, src_project, user_id, self.filters
+        src_projects = (
+            self.ro_session.query(Project).where(Project.projid.in_(project_ids)).all()
+        )
+        assert src_projects is not None and len(src_projects) == len(project_ids)
+
+        object_set: DescribedObjectBOSet = DescribedObjectBOSet(
+            self.ro_session, project_ids, user_id, self.filters
         )
 
         date_fmt, time_fmt = "YYYYMMDD", "HH24MISS"
@@ -257,18 +316,18 @@ class ProjectExport(JobServiceBase):
             ).format(date_fmt, time_fmt)
         select_clause += (
             """
-                CASE obh.classif_qual 
+                CASE obh.classif_qual
                             WHEN '"""
             + VALIDATED_CLASSIF_QUAL
-            + """' then 'validated' 
+            + """' then 'validated'
                             WHEN '"""
             + PREDICTED_CLASSIF_QUAL
-            + """' then 'predicted' 
+            + """' then 'predicted'
                             WHEN '"""
             + DUBIOUS_CLASSIF_QUAL
-            + """' then 'dubious' 
-                            ELSE obh.classif_qual 
-                         END AS object_annotation_status,                
+            + """' then 'dubious'
+                            ELSE obh.classif_qual
+                         END AS object_annotation_status,
                          usr.name AS object_annotation_person_name, usr.email AS object_annotation_person_email,
                          """
             """
@@ -282,8 +341,8 @@ class ProjectExport(JobServiceBase):
             + """','"""
             + DUBIOUS_CLASSIF_QUAL
             + """') THEN TO_CHAR(obh.classif_date,'{1}') END AS object_annotation_time,"""
-            + """ 
-                         txo.display_name AS object_annotation_category 
+            + """
+                         txo.display_name AS object_annotation_category
                     """
         ).format(date_fmt, time_fmt)
         if (
@@ -302,35 +361,46 @@ class ProjectExport(JobServiceBase):
             select_clause += "\n, obh.complement_info"
 
         # Deal with mappings, the goal is to emit SQL which will reconstitute the TSV structure
-        src_mappings = ProjectMapping().load_from_project(src_project)
+        mappingset = ProjectSetMapping().load_from_projects(src_projects)
         if "O" in req.tsv_entities:
-            select_clause += "\n " + src_mappings.object_mappings.as_select_list("obf")
-
+            select_clause += "\n " + object_set.as_select_list(
+                "obf",
+                PREFIX_TO_TABLE["object"],
+                mappingset.object_mappings.tsv_cols_to_real,
+            )
         if "S" in req.tsv_entities:
             select_clause += "\n, sam.orig_id AS sample_id, sam.dataportal_descriptor AS sample_dataportal_descriptor "
-            select_clause += src_mappings.sample_mappings.as_select_list("sam")
-
+            select_clause += object_set.as_select_list(
+                "sam",
+                PREFIX_TO_TABLE["sample"],
+                mappingset.sample_mappings.tsv_cols_to_real,
+            )
         if "P" in req.tsv_entities:
             select_clause += "\n, prc.orig_id AS process_id "
-            select_clause += src_mappings.process_mappings.as_select_list("prc")
-
+            select_clause += object_set.as_select_list(
+                "prc",
+                PREFIX_TO_TABLE["process"],
+                mappingset.process_mappings.tsv_cols_to_real,
+            )
         if "A" in req.tsv_entities:
             select_clause += (
                 "\n, acq.orig_id AS acq_id, acq.instrument AS acq_instrument "
             )
-            select_clause += src_mappings.acquisition_mappings.as_select_list("acq")
-
+            select_clause += object_set.as_select_list(
+                "acq",
+                PREFIX_TO_TABLE["acq"],
+                mappingset.acquisition_mappings.tsv_cols_to_real,
+            )
         if req.exp_type == ExportTypeEnum.dig_obj_ident:
             select_clause += "\n, obh.objid"
-
         if req.with_internal_ids:
-            select_clause += """\n, obh.objid, 
-                    obh.acquisid AS processid_internal, obh.acquisid AS acq_id_internal, 
-                    sam.sampleid AS sample_id_internal, 
-                    obh.classif_id, obh.classif_who, 
-                    CASE WHEN obh.classif_qual = 'P' THEN obh.classif_id END AS classif_auto_id, 
-                    txp.name classif_auto_name, 
-                    obh.classif_score AS classif_auto_score, 
+            select_clause += """\n, obh.objid,
+                    obh.acquisid AS processid_internal, obh.acquisid AS acq_id_internal,
+                    sam.sampleid AS sample_id_internal,
+                    obh.classif_id, obh.classif_who,
+                    CASE WHEN obh.classif_qual = 'P' THEN obh.classif_id END AS classif_auto_id,
+                    txp.name classif_auto_name,
+                    obh.classif_score AS classif_auto_score,
                     CASE WHEN obh.classif_qual = 'P' THEN obh.classif_date END AS classif_auto_when,
                     HASHTEXT(obh.orig_id) object_random_value, obh.sunpos object_sunpos """
             if "S" in req.tsv_entities:
@@ -361,21 +431,20 @@ class ProjectExport(JobServiceBase):
         from_, where, params = object_set.get_sql(
             order_clause, select_clause, all_images=not req.only_first_image
         )
+        # possible sql injection avec le replace
         sql = (
             select_clause
             + " FROM "
-            + from_.get_sql()
+            + from_.get_sql().replace(":projid", str(params["projid"]))
             + where.get_sql()
             + order_clause.get_sql()
         )
         logger.info("Execute SQL : %s" % sql)
         logger.info("Params : %s" % params)
-
         res = self.ro_session.execute(text(sql), params)
 
         now_txt = DateTime.now_time().strftime("%Y%m%d_%H%M")
-        self.out_file_name = "export_{0:d}_{1:s}.{2}".format(proj_id, now_txt, "zip")
-
+        self._set_out_file_name("zip")
         produced_path = self.out_path / self.out_file_name
         zfile = zipfile.ZipFile(
             produced_path, "w", allowZip64=True, compression=zipfile.ZIP_DEFLATED
@@ -504,9 +573,9 @@ class ProjectExport(JobServiceBase):
                         img_with_rank = "{0}/{1}".format(
                             a_row["img_rank"], img_file_name
                         )
-                        a_row[
-                            "img_file_name"
-                        ] = img_with_rank  # write into TSV the corrected path
+                        a_row["img_file_name"] = (
+                            img_with_rank  # write into TSV the corrected path
+                        )
                         dst_path = "{0}/{1}".format(prev_value, img_with_rank)
                     if req.exp_type == ExportTypeEnum.general_tsv:
                         a_row["img_file_name"] = dst_path
@@ -530,7 +599,7 @@ class ProjectExport(JobServiceBase):
             if nb_rows % self.ROWS_REPORT_EVERY == 0:
                 msg = "Row %d of max %d" % (nb_rows, obj_count)
                 logger.info(msg)
-                self.update_progress(1 + progress_range / obj_count * nb_rows, msg)
+                self.update_progress(int(1 + progress_range / obj_count * nb_rows), msg)
         if csv_fd:
             csv_fd.close()  # Close last file
             self.store_tsv_into_zip(zfile, prev_value, csv_path)
@@ -588,6 +657,29 @@ class ProjectExport(JobServiceBase):
                     self.update_progress(progress, msg)
             zfile.close()
 
+    def build_collection_zip(self) -> str:
+        """
+        Copy log file of present job into currently produced zip.
+        """
+        now_txt = DateTime.now_time().strftime("%Y%m%d_%H%M")
+        out_file_name = "export_collection_{0:s}_{1:s}{2:s}".format(
+            str(self.req.collection_id), now_txt, ".zip"
+        )
+        produced_path = self.out_path / out_file_name
+        zfile = zipfile.ZipFile(
+            produced_path, "a", allowZip64=True, compression=zipfile.ZIP_DEFLATED
+        )
+        import glob
+
+        logger.info("Root path {0:s}", self.temp_for_jobs.base_dir_for(self.job_id))
+        for zip in glob.glob(
+            self.temp_for_jobs.base_dir_for(self.job_id).as_posix() + "/*.zip"
+        ):
+            logger.info("Project file to zip {0:s}".format(zip))
+            zfile.write(zip)
+        zfile.close()
+        return out_file_name
+
     def get_DOI_imgfile_name(
         self,
         objid: int,
@@ -614,12 +706,34 @@ class ProjectExport(JobServiceBase):
         # noinspection RegExpRedundantEscape
         return re.sub(R"[^a-zA-Z0-9 \.\-\(\)]", "_", str(name))
 
-    def _get_summary_file(self, src_project):
+    def _set_out_file_name(self, file_ext: str):
         now_txt = DateTime.now_time().strftime("%Y%m%d_%H%M")
-        self.out_file_name = "export_summary_{0:d}_{1:s}.tsv".format(
-            src_project.projid, now_txt
+        req = self.req
+        collection = (
+            hasattr(req, "collection_id")
+            and req.collection_id is not None
+            and int(req.collection_id) > 0
         )
+        if collection == True:
+            objid = str(req.collection_id)
+        else:
+            objid = str(req.project_id)
+        if collection == True:
+            prefix = "collection_"
+        else:
+            prefix = ""
+        exp_type = req.exp_type.value
+        self.out_file_name = "export_{0:s}_{1:s}_{2:s}_{3:s}.{4:s}".format(
+            prefix, exp_type, objid, now_txt, file_ext
+        )
+
+    def _get_out_file(self):
         out_file = self.temp_for_jobs.base_dir_for(self.job_id) / self.out_file_name
+        return out_file
+
+    def _get_summary_file(self):
+        self._set_out_file_name("tsv")
+        out_file = self._get_out_file()
         return out_file
 
     def _grouping_from_req(self, with_status_grouping: bool) -> ResultGrouping:
@@ -638,15 +752,13 @@ class ProjectExport(JobServiceBase):
             ret = ResultGrouping.with_status(ret)
         return ret
 
-    def create_summary(self, src_project: Project) -> int:
+    def create_summary(self, project_ids: ProjectIDListT) -> int:
         req = self.req
         self.update_progress(1, "Start Summary export")
-
-        out_file = self._get_summary_file(src_project)
-
+        out_file = self._get_summary_file()
         # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(
-            self.ro_session, src_project, self._get_owner_id(), self.filters
+        object_set: DescribedObjectBOSet = DescribedObjectBOSet(
+            self.ro_session, project_ids, self._get_owner_id(), self.filters
         )
 
         # The specialized SQL builder
@@ -675,7 +787,6 @@ class ProjectExport(JobServiceBase):
         # We want the count, that's the goal of all this
         aug_qry.add_selects(["txo.display_name", aug_qry.COUNT_STAR])
         aug_qry.set_grouping(self._grouping_from_req(False))
-
         msg = "Writing to file %s" % out_file
         self.update_progress(50, msg)
         nb_lines = aug_qry.write_result_to_csv(
@@ -768,7 +879,7 @@ class ProjectExport(JobServiceBase):
         without_zeroes: List[Dict[str, Any]],
         id_cols: List[str],
         zero_col: str,
-        object_set: DescribedObjectSet,
+        object_set: Union[DescribedObjectSet, DescribedObjectBOSet],
     ):
         """
         Produce lines with 0 abundance/concentration/biovolume for relevant (sample, status, category) triplets
@@ -836,29 +947,32 @@ class ProjectExport(JobServiceBase):
             ret = ["sam.orig_id", "acq.orig_id"]
         return ret + ["obh.classif_qual"]
 
-    def create_sci_summary(self, src_project: Project) -> int:
+    def create_sci_summary(self, project_ids: ProjectIDListT) -> int:
         """
         Assuming that the historical summary is a data one, compute 'scientific' summaries.
         """
         req = self.req
         user_id = self._get_owner_id()
         exp_type = req.exp_type
-        out_file = self._get_summary_file(src_project)
+        out_file = self._get_summary_file()
 
         # Ensure we work on validated objects only.
         # Not anymore, should user need to narrow the export the filters are available.
         # self.filters["statusfilter"] = "V"
         # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(
-            self.ro_session, src_project, user_id, self.filters
+        object_set: DescribedObjectBOSet = DescribedObjectBOSet(
+            self.ro_session, project_ids, user_id, self.filters
         )
         # The specialized SQL builder operates from the object set
         aug_qry = ObjectSetQueryPlus(object_set)
         aug_qry.remap_categories(req.pre_mapping)
         # Formulae default from the project but are overriden by the query
         formulae: Dict[str, str] = {}
-        if src_project.variables is not None:
-            formulae.update(src_project.variables.to_dict())
+        for project_id in project_ids:
+            variables = self.ro_session.query(ProjectVariables).get(project_id)
+            assert variables is not None
+            if variables is not None:
+                formulae.update(variables.to_dict())
         formulae.update(req.formulae)
         aug_qry.set_formulae(formulae)
         # Set common aliases, not all of them is always used
@@ -940,6 +1054,7 @@ class GeneralProjectExport(SpecializedProjectExport):
             else ""
         )
         return ExportReq(
+            collection_id=req.collection_id,
             project_id=req.project_id,
             exp_type=ExportTypeEnum.general_tsv,
             with_images=req.with_images != ExportImagesOptionsEnum.none,
@@ -973,6 +1088,7 @@ class SummaryProjectExport(SpecializedProjectExport):
             SummaryExportSumOptionsEnum.acquisition: SummaryExportGroupingEnum.by_subsample,
         }
         return ExportReq(
+            collection_id=req.collection_id,
             project_id=req.project_id,
             exp_type=new_type_to_old[req.quantity],
             sum_subtotal=new_level_to_old[req.summarise_by],
@@ -992,6 +1108,7 @@ class BackupProjectExport(SpecializedProjectExport):
     @staticmethod
     def new_to_old(req: BackupExportReq) -> ExportReq:
         return ExportReq(
+            collection_id=req.collection_id,
             project_id=req.project_id,
             exp_type=ExportTypeEnum.backup,
             with_images=True,

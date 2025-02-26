@@ -18,7 +18,6 @@ from BO.Mappings import TableMapping
 from BO.Object import ObjectBO
 from BO.ObjectSet import (
     DescribedObjectSet,
-    ObjectIDListT,
     EnumeratedObjectSet,
     ObjectIDWithParentsListT,
     ObjectSetFilter,
@@ -40,6 +39,7 @@ from DB.Object import (
     ObjectHeader,
 )
 from DB.Project import ProjectIDT, Project
+from DB.Object import ObjectIDListT
 from DB.helpers import Result
 from DB.helpers.Direct import text
 from DB.helpers.Postgres import db_server_now

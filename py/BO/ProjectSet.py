@@ -8,7 +8,7 @@
 #
 
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Generator, Tuple, Final
+from typing import List, Dict, Optional, Generator, Tuple, Final, Any
 
 import numpy as np
 from numpy import ndarray
@@ -16,11 +16,12 @@ from numpy import ndarray
 from API_models.filters import ProjectFiltersDict
 from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Object import ObjectBO
-from BO.ObjectSet import ObjectIDListT, DescribedObjectSet
+from BO.ObjectSet import DescribedObjectSet
 from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
 from DB import ObjectHeader
 from DB.Project import ProjectIDListT, Project
+from DB.Object import ObjectIDListT
 from DB.helpers import Session, Result
 from DB.helpers.Direct import text
 from DB.helpers.ORM import any_
@@ -295,7 +296,16 @@ class PermissionConsistentProjectSet(object):
         self.session = session
         self.prj_ids = prj_ids
 
-    def can_be_administered_by(self, user_id: UserIDT):
+    def can_be_administered_by(
+        self, user_id: UserIDT, update_preference: Optional[bool] = True
+    ):
         """We just expect an Exception thrown (or not)"""
         for a_prj_id in self.prj_ids:
-            RightsBO.user_wants(self.session, user_id, Action.ADMINISTRATE, a_prj_id)
+
+            RightsBO.user_wants(
+                self.session,
+                user_id,
+                Action.ADMINISTRATE,
+                a_prj_id,
+                update_preference=update_preference,
+            )

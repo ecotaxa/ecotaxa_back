@@ -3,7 +3,7 @@ import logging
 # noinspection PyPackageRequirements
 import pytest
 from starlette import status
-
+from fastapi import HTTPException
 from tests.credentials import ADMIN_AUTH, USER_AUTH, CREATOR_AUTH
 from tests.test_fastapi import PROJECT_QUERY_URL, USER_ME_URL
 from tests.test_update_prj import PROJECT_UPDATE_URL
@@ -119,22 +119,30 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
     ] = """
     A bit less abstract...
     """
-    the_coll["short_title"] = "my-tiny-title"
+    # short_title only on second round
+    if who == CREATOR_AUTH:
+        the_coll["short_title"] = "my-tiny-title"
     the_coll["associate_organisations"] = ["An org"]
     the_coll["creator_organisations"] = ["At least one (ONE)"]
     rsp = fastapi.put(url, headers=who, json=the_coll)
     assert rsp.status_code == status.HTTP_200_OK
 
     # Fail updating the project list
+    the_coll = {"project_ids": [prj_id, 1236]}
+    # with pytest.raises(Exception):
     url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
-    the_coll["project_ids"] = [1, 5, 6]
-    with pytest.raises(Exception):
-        rsp = fastapi.put(url, headers=who, json=the_coll)
+    rsp = fastapi.patch(url, headers=who, json=the_coll)
+    assert rsp.status_code == status.HTTP_404_NOT_FOUND
 
     # Search for it
     url = COLLECTION_SEARCH_URL.format(title="%coll%")
     rsp = fastapi.get(url, headers=who)
     assert rsp.status_code == status.HTTP_200_OK
+    if who == CREATOR_AUTH:
+        short_title = "my-tiny-title"
+    else:
+        short_title = None
+
     assert rsp.json() == [
         {
             "abstract": """
@@ -154,14 +162,25 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
             "project_ids": [prj_id],
             "provider_user": None,
             "title": "Test collection",
-            "short_title": "my-tiny-title",
+            "short_title": short_title,
         }
     ]
 
-    # Search by short title
-    url = COLLECTION_EXACT_QUERY_URL.format(short_title="my-tiny-title")
-    rsp = fastapi.get(url, headers=who)
+    # update the project_ids
+    url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
+    the_coll = {"project_ids": [6, prj_id]}
+    rsp = fastapi.patch(url, headers=who, json=the_coll)
     assert rsp.status_code == status.HTTP_200_OK
+    # reset to previous for compatibility with other tests
+    url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
+    the_coll = {"project_ids": [prj_id]}
+    rsp = fastapi.patch(url, headers=who, json=the_coll)
+    assert rsp.status_code == status.HTTP_200_OK
+    if who == CREATOR_AUTH:
+        # Search by short title
+        url = COLLECTION_EXACT_QUERY_URL.format(short_title="my-tiny-title")
+        rsp = fastapi.get(url, headers=who)
+        assert rsp.status_code == status.HTTP_200_OK
 
     # Wrong search by short title
     url = COLLECTION_EXACT_QUERY_URL.format(short_title="my-absent-title")
@@ -177,12 +196,15 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
     # Delete the collection
     url = COLLECTION_DELETE_URL.format(collection_id=coll_id)
     rsp = fastapi.delete(url, headers=who)
-    assert rsp.status_code == status.HTTP_200_OK
-
-    # Ensure it's gone
-    url = COLLECTION_QUERY_URL.format(collection_id=coll_id)
-    rsp = fastapi.get(url, headers=who)
-    assert rsp.status_code == status.HTTP_404_NOT_FOUND
+    if who == CREATOR_AUTH:
+        # collection is published cannot delete
+        assert rsp.status_code == 409
+    else:
+        assert rsp.status_code == status.HTTP_200_OK
+        # Ensure it's gone
+        url = COLLECTION_QUERY_URL.format(collection_id=coll_id)
+        rsp = fastapi.get(url, headers=who)
+        assert rsp.status_code == status.HTTP_404_NOT_FOUND
 
 
 def regrant_if_needed(fastapi, prj_id, who):

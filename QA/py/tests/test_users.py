@@ -82,7 +82,12 @@ def test_user_create_ordinary(monkeypatch, fastapi, caplog):
     config_captcha(monkeypatch)
     # Create user email no bot
     url = USER_CREATE_URL
-    usr_json = {"email": "ddduser5", "id": None, "name": "Ordinary User"}
+    usr_json = {
+        "email": "ddduser5",
+        "id": None,
+        "name": "Ordinary User",
+        "organisation": "Homework",
+    }
     rsp = fastapi.post(url, json=usr_json)
     assert rsp.status_code == 422
     assert rsp.json() == {"detail": ["reCaptcha verif needs data"]}
@@ -108,6 +113,7 @@ def test_user_create_ordinary(monkeypatch, fastapi, caplog):
         "id": None,
         "email": "ddduser56",
         "name": "not good email",
+        "organisation": "Homework",
     }
     rsp = fastapi.post(urlparams, json=usr_json)
     assert rsp.json() == None

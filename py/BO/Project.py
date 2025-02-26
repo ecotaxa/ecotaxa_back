@@ -3,6 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import typing
+from enum import Enum
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime
@@ -16,18 +17,28 @@ from typing import (
     OrderedDict as OrderedDictT,
     Set,
     Tuple,
+    cast,
+    Final,
 )
 
 from BO.Classification import ClassifIDListT
-from BO.Mappings import RemapOp, MappedTableTypeT, ProjectMapping, TableMapping
+from BO.Mappings import (
+    RemapOp,
+    MappedTableTypeT,
+    ProjectMapping,
+    TableMapping,
+    ProjectSetMapping,
+)
 from BO.Prediction import DeepFeatures
 from BO.ProjectPrivilege import ProjectPrivilegeBO
+from BO.DataLicense import AccessLevelEnum
 from BO.ProjectVars import ProjectVar
+from BO.Rights import RightsBO, Action
 from BO.SpaceTime import USED_FIELDS_FOR_SUNPOS, compute_sun_position
 from BO.User import (
     MinimalUserBO,
+    ContactUserListT,
     UserActivity,
-    UserIDT,
     MinimalUserBOListT,
     UserActivityListT,
 )
@@ -41,7 +52,17 @@ from DB.Object import (
     ObjectFields,
 )
 from DB.Process import Process
-from DB.Project import ProjectIDT, ProjectIDListT, Project
+from DB.Project import (
+    ProjectIDT,
+    ProjectIDListT,
+    Project,
+    ANNOTATE_STATUS,
+    ANNOTATE_NO_PREDICTION,
+    EXPLORE_ONLY,
+)
+from DB.Collection import CollectionProject, Collection
+from BO.Collection import MinimalCollectionBO
+from BO.User import UserIDT, UserIDListT, ContactUserBO
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.ProjectVariables import KNOWN_PROJECT_VARS
 from DB.ProjectVariables import ProjectVariables
@@ -63,10 +84,24 @@ from DB.helpers.ORM import (
 )
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
+from helpers.FieldListType import FieldListType
 
 logger = get_logger(__name__)
 
 ChangeTypeT = Dict[int, Dict[str, int]]
+
+RestrictedStatus: Final = {
+    ANNOTATE_STATUS: 3,
+    ANNOTATE_NO_PREDICTION: 2,
+    EXPLORE_ONLY: 1,
+}
+
+
+class MappingColumnEnum(str, Enum):
+    obj: Final = "mappingobj"
+    sample: Final = "mappingsample"
+    acq: Final = "mappingacq"
+    process: Final = "mappingprocess"
 
 
 @dataclass()
@@ -92,6 +127,17 @@ class ProjectUserStats:
     projid: ProjectIDT
     annotators: MinimalUserBOListT
     activities: UserActivityListT
+
+
+@dataclass()
+class ProjectColumns:
+    """
+    Column value for specific columns.
+    """
+
+    projid: ProjectIDT
+    columns: List[str]
+    values: List[str]
 
 
 # noinspection SqlDialectInspection
@@ -214,8 +260,10 @@ class ProjectBO(object):
         managers: List[Any],
         annotators: List[Any],
         viewers: List[Any],
-        license_: str,
+        license_: Optional[str],
         bodc_vars: Dict,
+        access: Optional[str],
+        formulae: Optional[str],
     ):
         assert contact is not None, "A valid Contact is needed."
         proj_id = self._project.projid
@@ -231,7 +279,7 @@ class ProjectBO(object):
                 a_var in KNOWN_PROJECT_VARS
             ), "Invalid project variable key: {}".format(a_var)
             try:
-                var_def = ProjectVar.from_project(a_var, its_def)
+                _ = ProjectVar.from_project(a_var, its_def)
             except TypeError as e:
                 errors.append("Error {} in formula '{}': ".format(str(e), its_def))
         assert len(errors) == 0, "There are formula errors: " + str(errors)
@@ -250,6 +298,8 @@ class ProjectBO(object):
         self._project.cnn_network_id = cnn_network_id
         self._project.comments = comments
         self._project.license = license_
+        self._project.access = access
+        self._project.formulae = formulae
         # Inverse for extracted values
         self._project.initclassiflist = ",".join(
             [str(cl_id) for cl_id in init_classif_list]
@@ -276,11 +326,12 @@ class ProjectBO(object):
                 if a_user.id == contact.id and a_right == ProjectPrivilegeBO.MANAGE:
                     extra = "C"
                     contact_used = True
-                session.add(
-                    ProjectPrivilege(
-                        projid=proj_id, member=a_user.id, privilege=a_right, extra=extra
-                    )
-                )
+                projectpriv = ProjectPrivilege()
+                projectpriv.projid = proj_id
+                projectpriv.member = a_user.id
+                projectpriv.privilege = a_right
+                projectpriv.extra = extra
+                session.add(projectpriv)
         # Sanity check
         assert (
             contact_used
@@ -477,6 +528,7 @@ class ProjectBO(object):
             logger,
         ):
             last_prj: Optional[int] = None
+            prj_stat = ProjectUserStats(0, [], [])
             for projid, user_id, user_name, cnt, last_date in pqry:
                 if last_date is None:
                     continue
@@ -640,6 +692,54 @@ class ProjectBO(object):
         ret = [an_id for an_id, in qry]
         return ret
 
+    @staticmethod
+    def in_collections(session: Session, projid: int) -> List[MinimalCollectionBO]:
+        """
+        :param session:
+        :param projid:
+        :return: The collection IDs the project belongs to.
+        """
+        qry = (
+            session.query(
+                Collection.id,
+                Collection.external_id,
+                Collection.title,
+                Collection.short_title,
+                Collection.provider_user_id,
+                Collection.contact_user_id,
+                User.name,
+                User.email,
+                User.orcid,
+                User.organisation,
+            )
+            .join(Collection.contact_user)
+            .join(CollectionProject)
+            .where(CollectionProject.project_id == projid)
+        )
+        ret = []
+        for r in qry:
+            # if r.contact_user_id:
+            # contact = ContactUserBO(id=r.contact_user_id,email=r.email,name=r.name, orcid=r.orcid or "None",organisation=r.organisation)
+            # else:
+            # contact = None
+            qry_proj = session.query(CollectionProject.project_id).where(
+                CollectionProject.collection_id == r.id
+            )
+            project_ids = [p.project_id for p in qry_proj]
+
+            ret.append(
+                MinimalCollectionBO(
+                    id=r.id,
+                    external_id=r.external_id or None,
+                    title=r.title,
+                    short_title=r.short_title or None,
+                    provider_user=r.provider_user_id,
+                    contact_user=r.contact_user_id or None,
+                    project_ids=project_ids,
+                )
+            )
+        return ret
+
     @classmethod
     def get_bounding_geo(
         cls, session: Session, project_ids: ProjectIDListT
@@ -692,7 +792,7 @@ class ProjectBO(object):
             Sample.projid == prj_id
         )
 
-        ret = []
+        ret: List = []
         del_acquis_qry: Delete = Acquisition.__table__.delete().where(
             Acquisition.acq_sample_id.in_(soon_deleted_samples)
         )
@@ -939,7 +1039,7 @@ class ProjectBOSet(object):
         session: Session,
         prj_ids: ProjectIDListT,
         public: bool = False,
-        summary: bool = False,
+        fields: Optional[str] = FieldListType.default,
     ):
         # Query the project and ORM-load neighbours as well, as they will be needed in enrich()
         qry = select(Project)
@@ -980,3 +1080,204 @@ class ProjectBOSet(object):
             return mini_set.projects[0]
         else:
             return None
+
+
+class CollectionProjectBOSet(ProjectBOSet):
+    """
+    Operations on the collection projects .
+    """
+
+    def __init__(
+        self,
+        session: Session,
+        prj_ids: ProjectIDListT,
+        public: bool = False,
+        fields: Optional[str] = FieldListType.default,
+    ):
+        super().__init__(session=session, prj_ids=prj_ids, public=public, fields=fields)
+
+    def can_be_administered_by(self, session: Session, user_id: UserIDT):
+        """We just expect an Exception thrown (or not)"""
+        try:
+            for project in self.projects:
+                RightsBO.user_wants(
+                    session,
+                    user_id,
+                    Action.ADMINISTRATE,
+                    project.projid,
+                    update_preference=False,
+                )
+            return True
+        except AssertionError:
+            return False
+
+    def get_access_from_projects(self) -> Tuple[AccessLevelEnum, ProjectIDListT]:
+        """
+        return list of projects id validating the restricted_access.
+        """
+        noaccesses: ProjectIDListT = []
+        restricted_access = max(
+            [cast(AccessLevelEnum, project.access) for project in self.projects]
+        )
+        for project in self.projects:
+            if project.access > restricted_access:
+                noaccesses.append(project.projid)
+        return restricted_access, noaccesses
+
+    def get_status_from_projects(self) -> Tuple[str, ProjectIDListT]:
+        """
+        return list of projects id validating the restricted_access.
+        """
+        nostatus: ProjectIDListT = []
+        restricted_status = min(
+            [RestrictedStatus[project.status] for project in self.projects]
+        )
+        status = ""
+        for project in self.projects:
+            if RestrictedStatus[project.status] > restricted_status:
+                nostatus.append(project.projid)
+            elif status == "" and RestrictedStatus[project.status] == restricted_status:
+                status = project.status
+        return status, nostatus
+
+    def get_annotators_from_histo(
+        self, session, status: Optional[int] = None
+    ) -> List[User]:
+        project_ids: ProjectIDListT = [project.projid for project in self.projects]
+        stats = ProjectBO.read_user_stats(session, project_ids)
+        ids: UserIDListT = []
+        for stat in stats:
+            ids = ids + [annotator.id for annotator in stat.annotators]
+        qry = session.query(
+            User.id, User.email, User.name, User.orcid, User.organisation
+        ).filter(User.id == any_(ids))
+        if status is not None:
+            qry = qry.filter(User.status == status)
+        users: List[User] = []
+        with CodeTimer("%s BO users query:" % len(ids), logger):
+            for u in qry:
+                # usr = ContactUserBO(
+                #    u.id, u.email, u.name, u.orcid or "None", u.organisation
+                # )
+                users.append(u)
+
+        return users
+
+    def get_initclassiflist_from_projects(
+        self,
+    ) -> str:
+        """
+        Read aggregated Initial list of categories for these projects.
+        """
+        ret: List = []
+        sep: str = ","
+        for project in self.projects:
+            initclassif = project.initclassiflist
+            if initclassif is not None:
+                ret = ret + initclassif.split(sep)
+        ret = list(set(ret))
+        return sep.join(ret)
+
+    @staticmethod
+    def _check_user_privilege(
+        user: User, privlist: ContactUserListT
+    ) -> ContactUserListT:
+        if user.status == UserStatus.active.value:
+            u: ContactUserBO = ContactUserBO(
+                user.id,
+                user.email,
+                user.name,
+                user.orcid or "None",
+                user.organisation or "(Independent)",
+            )
+            if u not in privlist:
+                privlist.append(u)
+        return privlist
+
+    def get_privileges_from_projects(
+        self,
+    ) -> Dict[str, ContactUserListT]:
+        """
+        Read common privileges for these projects.
+        """
+        keys = {
+            ProjectPrivilegeBO.VIEW: "viewers",
+            ProjectPrivilegeBO.ANNOTATE: "annotators",
+            ProjectPrivilegeBO.MANAGE: "managers",
+        }
+        projects = self.projects
+        privileges: Dict[str, ContactUserListT] = {}
+        # set common privileges for users in all projects
+        for key, value in keys.items():
+            privileges[value] = list(
+                set.intersection(
+                    *[set(getattr(project, value)) for project in projects]
+                )
+            )
+        # aggregate and remove anomalies from projects
+        for u in privileges[keys[ProjectPrivilegeBO.VIEW]]:
+            for k in [
+                keys[ProjectPrivilegeBO.ANNOTATE],
+                keys[ProjectPrivilegeBO.MANAGE],
+            ]:
+                if u in privileges[k]:
+                    privileges[k].remove(u)
+        for u in privileges[keys[ProjectPrivilegeBO.ANNOTATE]]:
+            if u in privileges[keys[ProjectPrivilegeBO.MANAGE]]:
+                privileges[keys[ProjectPrivilegeBO.MANAGE]].remove(u)
+        return privileges
+
+    def get_classiffieldlist_from_projects(
+        self,
+    ) -> str:
+        """
+        Read aggregated Fields available on sort & displayed field of Manual classif screen for these projects.
+        """
+        obj: Dict = {}
+        ret: List = []
+        linesep = "\n"
+        projects = self.projects
+        for project in projects:
+            if project.classiffieldlist is None:
+                fields = []
+            else:
+                fields = project.classiffieldlist.split(linesep)
+            for field in fields:
+                arrfield = field.split("=")
+                key = arrfield[0].strip()
+                if len(arrfield) == 2 and key != "" and key not in obj.keys():
+                    # for same var name add only the first
+                    obj[key] = arrfield[1].strip()
+        for k, v in obj.items():
+            ret.append(k + "=" + v)
+
+        return linesep.join(ret)
+
+    def get_mapping_from_projects(self) -> Dict[str, Dict[str, str]]:
+        """
+        Read common freecols for these projects. return List of common free cols names .
+        """
+        projects = [project._project for project in self.projects]
+        mappings: ProjectSetMapping = ProjectSetMapping().load_from_projects(projects)
+        dictmap = mappings.as_dict()
+        return dictmap
+
+    def get_common_attr_from_projects(
+        self,
+        column: str,
+    ) -> Tuple[Optional[str], ProjectIDListT]:
+        """
+        Read common attribute for these projects. return None, projerr as soon as one project has a different one or value if all are equal.
+        """
+        values = [
+            (project.projid, getattr(project, column, None))
+            for project in self.projects
+        ]
+        commonvalue = None
+        projerr: ProjectIDListT = []
+        for i, value in enumerate(values):
+            if i > 0 and value[1] != values[i - 1][1]:
+                projerr.append(value[0])
+        if len(projerr) == 0:
+            commonvalue = values[0][1]
+        return commonvalue, projerr

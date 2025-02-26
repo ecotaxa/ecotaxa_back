@@ -30,7 +30,7 @@ from BO.ObjectSetQueryPlus import (
     ObjectSetQueryPlus,
     TaxoRemappingWith0AsNoneT,
 )
-from BO.Project import ProjectBO, ProjectTaxoStats
+from BO.Project import ProjectBO, ProjectTaxoStats, ProjectIDListT
 from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Sample import SampleBO, SampleAggregForTaxon
 from BO.TaxonomySwitch import TaxonomyMapper
@@ -40,9 +40,11 @@ from DB.Collection import Collection
 from DB.Project import ProjectTaxoStat, Project
 from DB.Sample import Sample
 from DB.Taxonomy import Taxonomy
-from DB.User import User
+from DB.User import User, Person, Guest
+from DB.Organization import Organization, PeopleOrganizationDirectory
 from DB.WoRMs import WoRMS
 from DB.helpers import Session
+from DB.helpers.Direct import text
 from DB.helpers.Postgres import timestamp_to_str
 from data.Countries import countries_by_name
 from formats.DarwinCore.Archive import DwC_Archive, DwcArchive
@@ -55,6 +57,7 @@ from formats.DarwinCore.MoF import (
     SamplingInstrumentName,
     CountOfBiologicalEntity,
     ImagingInstrumentName,
+    #TODO replace ImagingInstrumentName par AnalyticalInstrumentName but keep the value
 )
 from formats.DarwinCore.models import (
     DwC_Event,
@@ -85,6 +88,7 @@ AbundancePerAcquisitionT = Dict[AcquisitionIDT, Dict[ClassifIDT, int]]
 LsidT = str  # Life Science Identifier @see https://en.wikipedia.org/wiki/LSID
 OccIDT = str  # An occurenceId, sampleid+taxon ID
 WoRMSAggregT = Dict[LsidT, Tuple[OccIDT, SampleAggregForTaxon, WoRMS]]
+ROLE_FOR_ASSOCIATE = "originator"
 
 
 class DarwinCoreExport(JobServiceBase):
@@ -100,6 +104,7 @@ class DarwinCoreExport(JobServiceBase):
     """
 
     JOB_TYPE = "DarwinCoreExport"
+    OCCURENCE_REPORT_EVERY = 10
 
     def init_args(self, args: ArgsDict) -> ArgsDict:
         # A bit unusual to find a method before init(), but here we can visually ensure
@@ -231,7 +236,13 @@ class DarwinCoreExport(JobServiceBase):
             # Produce the zip
             arch.build()
             self.log_stats()
-        self.set_job_result(self.errors, {"wrns": self.warnings})
+        logger.info("------------ produce zip -------------- %s", self.DWC_ZIP_NAME)
+        done_infos = {
+            "collection_id": self.collection.id,
+            "out_file": self.DWC_ZIP_NAME,
+        }
+        done_infos.update({"wrns": self.warnings})
+        self.set_job_result(self.errors, infos=done_infos)
 
     def add_absent_occurrences(
         self, taxa_per_sample: Dict[str, Set[ClassifIDT]], arch: DwcArchive
@@ -419,11 +430,11 @@ class DarwinCoreExport(JobServiceBase):
             else:
                 assert person is not None
                 associates.append(
-                    self.eml_person_to_associated_person(person, "originator")
+                    self.eml_person_to_associated_person(person, ROLE_FOR_ASSOCIATE)
                 )
         for an_org in the_collection.associate_organisations:
             person_from_org = self.organisation_to_eml_person(an_org)
-            role = "originator"
+            role = ROLE_FOR_ASSOCIATE
             if an_org == the_collection.code_provider_org:
                 role = "custody"
             associates.append(
@@ -444,7 +455,7 @@ class DarwinCoreExport(JobServiceBase):
                 % (len(abstract), self.MIN_ABSTRACT_CHARS)
             )
 
-        additional_info = None  # Just to see if it goes thru QC
+        additional_info = None  # Just to see if it goes through QC
         # additional_info = """  marine, harvested by iOBIS.
         # The OOV supported the financial effort of the survey.
         # We are grateful to the crew of the research boat at OOV that collected plankton during the temporal survey."""
@@ -599,6 +610,9 @@ class DarwinCoreExport(JobServiceBase):
             logger.info("Homonym samples: %s", samples_in_several_prjs)
         # Per_sample taxa, in plain taxo "space"
         taxa_per_sample: Dict[str, Set[ClassifIDT]] = {}
+        nb_sample = 0
+        sample_count = self._get_fast_count(the_collection.project_ids)
+        progress_range = 99
         for a_prj_id in the_collection.project_ids:
             samples = Sample.get_orig_id_and_model(self.ro_session, prj_id=a_prj_id)
             a_sample: Sample
@@ -649,12 +663,20 @@ class DarwinCoreExport(JobServiceBase):
                         "No occurrence added for sample %s"
                         % self._sample_ref_for_message(a_sample)
                     )
+                nb_sample += 1
+
+                if nb_sample % self.OCCURENCE_REPORT_EVERY == 0:
+                    msg = "Occurences %d of max %d" % (nb_sample, sample_count)
+                    logger.info(msg)
+                    self.update_progress(
+                        int(1 + progress_range / sample_count * nb_sample), msg
+                    )
                 # Taxa-level eMoFs
                 added_emofs = self.add_occurrence_eMoFs_for_sample(
                     sample=a_sample, arch=arch, event_id=event_id, predicted=False
                 )
                 if self.include_predicted:
-                    added_emofs_for_predicted = self.add_occurrence_eMoFs_for_sample(
+                   _ = self.add_occurrence_eMoFs_for_sample(
                         sample=a_sample, arch=arch, event_id=event_id, predicted=True
                     )
                 # Ensure EMOFs (in recast space) are also covered in occurrences (so far in raw space)
@@ -769,6 +791,13 @@ class DarwinCoreExport(JobServiceBase):
             arch.emofs.add(
                 SampleDeviceApertureAreaInSquareMeters(event_id, str(net_surf))
             )
+
+    def _get_fast_count(self, project_ids: ProjectIDListT) -> int:
+        # Get a fast count of the maximum of what to do
+        count_sql = "SELECT COUNT(*) FROM samples WHERE projid IN :prjs"
+        res = self.ro_session.execute(text(count_sql), {"prjs": tuple(project_ids)})
+        sample_count = res.one()[0]
+        return sample_count
 
     @lru_cache(maxsize=None)
     def _get_instrument_url_and_label(

@@ -38,7 +38,7 @@ pip3 install -r requirements.txt
 ```shell
 cp config.ini.template config.ini
 ```
-- Modification de `config.ini`, les entrées importantes étant : 
+- Modification de `config.ini`, les entrées importantes étant :
 ```ini
 # DB connectivity, the user must be able to read / write every PG object there
 DB_USER = postgres
@@ -68,9 +68,19 @@ Il faut également créer les dossiers correspondant aux chemins donnés dans `c
 
 - Création du conteneur docker de la base de données
 ```shell
-docker run -d -p 5432:5432 --name ecotaxa_db -e POSTGRES_PASSWORD=mysecretpassword -v `pwd`/pg_data:/var/lib/postgresql/data postgres:13.6
+docker run -d -p 5432:5432 --name ecotaxa_db -e POSTGRES_PASSWORD=mysecretpassword -v `pwd`/pg_data:/var/lib/postgresql/data postgres:14.15
 ```
 NB : `docker logs -f ecotaxa_db` permet de suivre les logs de la base créée.
+- modification de pg_hba.conf
+installer vim
+docker exec -it ecotaxa_db /bin/bash
+apt-get update
+apt-get install vim  
+cd /var/lib/postgresql/data
+vi pg_hba.conf  #remplacer scram-sha-256 par md5
+vi postgresql.conf #remplacer password_encryption scram-sha-256 par md5
+installer pgvector
+apt-get install postgresql-14-pgvector 
 - Création d'une base de données vide (utilise `config.ini`)
 ```shell
 PYTHONPATH=. python cmds/manage.py db create --password mysecretpassword --db-name ecotaxa
@@ -83,7 +93,7 @@ Cette commande va notamment créer un compte administrateur dont les identifiant
 
 ### Lancement du serveur du back
 
-Une fois les installations faites, le serveur est lancé avec uvicorn : 
+Une fois les installations faites, le serveur est lancé avec uvicorn :
 ```shell
 cd ~/ecotaxa_back/py
 source myvenv/bin/activate
@@ -131,7 +141,7 @@ cd ~/ecotaxa_front
 source venv/bin/activate
 python3.8 runserver.py
 ```
-L'application est accessible à l'adresse qui est donnée dans les logs du script : 
+L'application est accessible à l'adresse qui est donnée dans les logs du script :
 ```
 [...]
    WARNING: This is a development server. Do not use it in a production deployment.
@@ -144,7 +154,23 @@ L'application est accessible à l'adresse qui est donnée dans les logs du scrip
 
 - Création d'une base de données temporaire pour les tests
 ```shell
-docker run --name ecotaxa_tox -p 5440:5432 -d -e POSTGRES_PASSWORD=postgres12 -e POSTGRES_DB=ecotaxa4 postgres:13.6
+# if no postgresql installed 
+sudo apt-get update
+sudo apt-get install -y postgresql-client
+# docker image synchronized with the production version of postgresql
+docker run --name ecotaxa_tox -p 5440:5432 -d -e POSTGRES_PASSWORD=yourpassword -e POSTGRES_DB=ecotaxa postgres:14.5
+- modification de pg_hba.conf
+installer vim
+docker exec -it ecotaxa_tox /bin/bash
+apt-get update
+apt-get install vim  
+cd /var/lib/postgresql/data
+vi pg_hba.conf  #remplacer scram-sha-256 par md5
+vi postgresql.conf #remplacer password_encryption scram-sha-256 par md5
+installer pgvector
+apt-get install postgresql-14-pgvector 
+# or if postgresql image is sync. 
+docker start ecotaxa_tox
 ```
 - Lancement des tests avec tox
 ```shell
@@ -154,16 +180,16 @@ PYTHONPATH=. POSTGRES_HOST=localhost POSTGRES_PORT=5440 tox
 Une fois les tests terminés, il faut supprimer la base de données temporaire
 ```shell
 docker stop ecotaxa_tox
-docker rm ecotaxa_tox
+#docker rm ecotaxa_tox
 ```
 
-La page swagger <ROOTURL>/docs peut etre utilement utiliser pour tester les endpoints sans trop d'effort de configuration    .
+La page swagger <ROOTURL>/docs peut être utilement utiliser pour tester les endpoints sans trop d'effort de configuration    .
 
 # Import d'un projet de test
 
 Pour commencer à remplir une base de données vide, on peut importer un projet de test à partir d'un export EcoTaxa.
 
-- Pour obtenir un export à réinsérer : 
+- Pour obtenir un export à réinsérer :
 
 <img src="./images/export_button.png" width=500 />
 

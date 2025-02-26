@@ -6,17 +6,20 @@
 #
 from typing import Dict, List
 
-from BO.DataLicense import DataLicense
+from BO.DataLicense import DataLicense, AccessLevelEnum
+from DB.User import UserStatus, UserType
+from DB.Organization import PeopleOrganizationDirectory
 from BO.User import (
     USER_PWD_REGEXP,
     USER_PWD_REGEXP_DESCRIPTION,
     SHORT_TOKEN_AGE,
     PROFILE_TOKEN_AGE,
 )
-from DB.User import UserStatus
 from helpers.pydantic import BaseModel, Field
 
-
+FORMULAE ="""subsample_coef: 1/ssm.sub_part
+total_water_volume: sam.tot_vol/1000
+individual_volume: 4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3"""
 class Constants(BaseModel):
     """Values which can be considered identical over the lifetime of the back-end."""
 
@@ -32,6 +35,13 @@ class Constants(BaseModel):
             "": "Not chosen",
         },
     )
+    access: Dict[str, str] = Field(
+        title="Project access",
+        description="Project access levels.",
+        default={st.name: st.value for st in AccessLevelEnum},
+        example={"PUBLIC": "", "OPEN": "O", "PRIVATE": "P"},
+    )
+
     app_manager: List[str] = Field(
         title="Application manager",
         description="The application manager identity (name, mail), from config file.",
@@ -47,11 +57,23 @@ class Constants(BaseModel):
         min_items=1,
         example=["France"],
     )
+    people_organization_directories: Dict[str, str] = Field(
+        title="People and organizations directories",
+        description="Available directories to identify people and organizations in collections settings",
+        default={st.name: st.value for st in PeopleOrganizationDirectory},
+        example={"https://edmo.seadatanet.org/": "edmo", "https://orcid.org/": "orcid"},
+    )
     user_status: Dict[str, int] = Field(
         title="User status",
         description="Application User status values",
         default={st.name: st.value for st in UserStatus},
         example={"blocked": -1, "inactive": 0, "active": 1, "pending": 2},
+    )
+    user_type: Dict[str, str] = Field(
+        title="User status",
+        description="Application User type values",
+        default={st.name: st.value for st in UserType},
+        example={"guest": "guest"},
     )
     password_regexp: str = Field(
         title="Password regexp",
@@ -82,4 +104,9 @@ class Constants(BaseModel):
         title="Google ReCaptcha",
         description="use Google ReCaptcha",
         default=False,
+    )
+    formulae:str = Field(
+        title="Project Formulae",
+        description="Project default concentration formulae",
+        default=FORMULAE,
     )

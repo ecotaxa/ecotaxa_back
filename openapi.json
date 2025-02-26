@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.40"
+    "version":"0.0.41"
   },
   "servers":[
     {
@@ -21,7 +21,7 @@
           "authentification"
         ],
         "summary":"Login",
-        "description":"**Login barrier,**\n\nIf successful, the login will returns a **JWT** which will have to be used\nin bearer authentication scheme for subsequent calls.",
+        "description":"**Login barrier,**\n\nIf successful, the login will return a **JWT** which will have to be used\nin bearer authentication scheme for subsequent calls.",
         "operationId":"login",
         "requestBody":{
           "content":{
@@ -82,15 +82,16 @@
             "in":"query"
           },
           {
-            "description":"Return users except rights and last_used_projects if set to True. For users list display purpose.",
+            "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
             "required":false,
             "schema":{
-              "title":"Summary",
-              "type":"boolean",
-              "description":"Return users except rights and last_used_projects if set to True. For users list display purpose."
+              "title":"Fields",
+              "type":"string",
+              "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+              "default":"*default"
             },
-            "example":true,
-            "name":"summary",
+            "example":"*default,fieldlist",
+            "name":"fields",
             "in":"query"
           }
         ],
@@ -756,10 +757,10 @@
     "/organizations/search":{
       "get":{
         "tags":[
-          "users"
+          "organizations"
         ],
         "summary":"Search Organizations",
-        "description":"**Search for organizations.**\nSo far, organizations are just names in users table.",
+        "description":"**Search for organizations.**",
         "operationId":"search_organizations",
         "parameters":[
           {
@@ -806,6 +807,236 @@
             }
           }
         }
+      }
+    },
+    "/guests":{
+      "get":{
+        "tags":[
+          "guests"
+        ],
+        "summary":"Get Guests",
+        "description":"Returns the list of **all guests** with their full information, or just some of them if their ids\nare provided.\n\n🔒 *For admins and managers only.*",
+        "operationId":"get_guests",
+        "parameters":[
+          {
+            "description":"String containing the list of one or more id separated by non-num char. \n \n **If several ids are provided**, one full info is returned per user.",
+            "required":false,
+            "schema":{
+              "title":"Ids",
+              "type":"string",
+              "description":"String containing the list of one or more id separated by non-num char. \n \n **If several ids are provided**, one full info is returned per user.",
+              "default":""
+            },
+            "example":"1",
+            "name":"ids",
+            "in":"query"
+          },
+          {
+            "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+            "required":false,
+            "schema":{
+              "title":"Fields",
+              "type":"string",
+              "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+              "default":"*default"
+            },
+            "example":"*default,fieldlist",
+            "name":"fields",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Get Guests Guests Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/GuestModel"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/guests/create":{
+      "post":{
+        "tags":[
+          "guests"
+        ],
+        "summary":"Create Guest",
+        "description":"**Create a new guest**, return **NULL upon success.**\n\n🔒 Depending on logged user, different authorizations apply:\n- An administrator or user administrator or logged project manager can create a guest.\n- An ordinary logged user cannot create another guest.\n\nIf back-end configuration for self-creation check is Google reCAPTCHA,\nthen no_bot is a pair [remote IP, reCAPTCHA response].",
+        "operationId":"create_guest",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/GuestModel"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{},
+                "example":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/guests/{guest_id}":{
+      "put":{
+        "tags":[
+          "guests"
+        ],
+        "summary":"Update Guests",
+        "description":"**Update the guest**, return **NULL upon success.**\n\n🔒 Depending on logged user, different authorizations apply:\n- An administrator or user administrator or manager user can change any field with respect of consistency.",
+        "operationId":"update_guest",
+        "parameters":[
+          {
+            "description":"Internal, numeric id of the guest.",
+            "required":true,
+            "schema":{
+              "title":"Guest Id",
+              "type":"integer",
+              "description":"Internal, numeric id of the guest."
+            },
+            "example":760,
+            "name":"guest_id",
+            "in":"path"
+          }
+        ],
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/GuestModel"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{},
+                "example":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/guests/search":{
+      "get":{
+        "tags":[
+          "guests"
+        ],
+        "summary":"Search Guest",
+        "description":"**Search guests using various criteria**, search is case-insensitive and might contain % chars.",
+        "operationId":"search_guest",
+        "parameters":[
+          {
+            "description":"Search by name, use % for searching with 'any char'.",
+            "required":false,
+            "schema":{
+              "title":"search by name",
+              "type":"string",
+              "description":"Search by name, use % for searching with 'any char'."
+            },
+            "example":"%userNa%",
+            "name":"by_name",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Search Guest Guests Search Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/GuestModel"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
       }
     },
     "/collections/create":{
@@ -857,6 +1088,74 @@
         ]
       }
     },
+    "/collections":{
+      "get":{
+        "tags":[
+          "collections"
+        ],
+        "summary":"List Collections",
+        "description":"**Search for collections.**\n\nNote: Only collections where the current user is manager are returned. All collections are returned if the user is application administrator",
+        "operationId":"list_collections",
+        "parameters":[
+          {
+            "description":"limit the list to a set of ids.",
+            "required":false,
+            "schema":{
+              "title":"Collection Ids",
+              "type":"string",
+              "description":"limit the list to a set of ids."
+            },
+            "example":"123,45",
+            "name":"collection_ids",
+            "in":"query"
+          },
+          {
+            "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+            "required":false,
+            "schema":{
+              "title":"Fields",
+              "type":"string",
+              "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+              "default":"*default"
+            },
+            "example":"*default,fieldlist",
+            "name":"fields",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response List Collections Collections Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/CollectionModel"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
     "/collections/search":{
       "get":{
         "tags":[
@@ -876,6 +1175,19 @@
             },
             "example":"%coll%",
             "name":"title",
+            "in":"query"
+          },
+          {
+            "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+            "required":false,
+            "schema":{
+              "title":"Fields",
+              "type":"string",
+              "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+              "default":"*default"
+            },
+            "example":"*default,fieldlist",
+            "name":"fields",
             "in":"query"
           }
         ],
@@ -1002,6 +1314,58 @@
             }
           }
         }
+      }
+    },
+    "/collections/aggregated_projects_properties":{
+      "get":{
+        "tags":[
+          "collections"
+        ],
+        "summary":"Collection Aggregated Projects Properties",
+        "description":"**returns projectset calculated selected fields values  projects and list of rejected projects id.\nNote: 'manage' right is required on all underlying projects.",
+        "operationId":"collection_aggregated_projects_properties",
+        "parameters":[
+          {
+            "description":"String containing the list of one or more project id separated by non-num char. \n .",
+            "required":true,
+            "schema":{
+              "title":"Project Ids",
+              "type":"string",
+              "description":"String containing the list of one or more project id separated by non-num char. \n ."
+            },
+            "example":"1",
+            "name":"project_ids",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/CollectionAggregatedRsp"
+                },
+                "example":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
       }
     },
     "/collections/{collection_id}":{
@@ -1143,6 +1507,64 @@
                   "type":"integer"
                 },
                 "example":0
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      },
+      "patch":{
+        "tags":[
+          "collections"
+        ],
+        "summary":"Patch Collection",
+        "description":"**Partial Update of the collection**. Note that some updates are silently failing when not compatible\n with the composing projects.\n\n **Returns NULL upon success.**\n\n Note: The collection is partiallly updated only if manageable.",
+        "operationId":"patch_collection",
+        "parameters":[
+          {
+            "description":"Internal, the unique numeric id of this collection.",
+            "required":true,
+            "schema":{
+              "title":"Collection Id",
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this collection."
+            },
+            "example":1,
+            "name":"collection_id",
+            "in":"path"
+          }
+        ],
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/CollectionReq"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{},
+                "example":{}
               }
             }
           },
@@ -1319,6 +1741,136 @@
         ]
       }
     },
+    "/projects":{
+      "get":{
+        "tags":[
+          "projects"
+        ],
+        "summary":"List Projects",
+        "description":"Returns **projects which the current user has explicit permission to access, with fields options.**\n\nNote that, for performance reasons, in returned ProjectModels, field 'highest_rank' is NOT valued\n(unlike in simple query). The same information can be found in 'managers', 'annotators' and 'viewers' lists.",
+        "operationId":"list_projects",
+        "parameters":[
+          {
+            "description":"Limit the list to a set of ids.",
+            "required":false,
+            "schema":{
+              "title":"Project Ids",
+              "type":"string",
+              "description":"Limit the list to a set of ids."
+            },
+            "example":"123,45",
+            "name":"project_ids",
+            "in":"query"
+          },
+          {
+            "description":"Return projects on which the current user has _no permission_, but visible to him/her.",
+            "required":false,
+            "schema":{
+              "title":"Not granted",
+              "type":"boolean",
+              "description":"Return projects on which the current user has _no permission_, but visible to him/her.",
+              "default":false
+            },
+            "example":false,
+            "name":"not_granted",
+            "in":"query"
+          },
+          {
+            "description":"Return projects that can be written to (including erased) by the current user.",
+            "required":false,
+            "schema":{
+              "title":"For managing",
+              "type":"boolean",
+              "description":"Return projects that can be written to (including erased) by the current user.",
+              "default":false
+            },
+            "example":false,
+            "name":"for_managing",
+            "in":"query"
+          },
+          {
+            "description":"One of ['projid', 'title', 'visible', 'access', 'license', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']",
+            "required":false,
+            "schema":{
+              "title":"Order field",
+              "type":"string",
+              "description":"One of ['projid', 'title', 'visible', 'access', 'license', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']"
+            },
+            "example":"instrument",
+            "name":"order_field",
+            "in":"query"
+          },
+          {
+            "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+            "required":false,
+            "schema":{
+              "title":"Fields",
+              "type":"string",
+              "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+              "default":"*default"
+            },
+            "example":"*default,fieldlist",
+            "name":"fields",
+            "in":"query"
+          },
+          {
+            "description":"Skip `window_start` before returning data.",
+            "required":false,
+            "schema":{
+              "title":"Window start",
+              "type":"integer",
+              "description":"Skip `window_start` before returning data."
+            },
+            "example":"0",
+            "name":"window_start",
+            "in":"query"
+          },
+          {
+            "description":"Return only `window_size` lines.",
+            "required":false,
+            "schema":{
+              "title":"Window size",
+              "type":"integer",
+              "description":"Return only `window_size` lines."
+            },
+            "example":"100",
+            "name":"window_size",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response List Projects Projects Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/ProjectModel"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
     "/projects/search":{
       "get":{
         "tags":[
@@ -1406,27 +1958,28 @@
             "in":"query"
           },
           {
-            "description":"One of ['instrument', 'instrument_url', 'highest_right', 'projid', 'title', 'visible', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id']",
+            "description":"One of ['projid', 'title', 'visible', 'access', 'license', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']",
             "required":false,
             "schema":{
               "title":"Order field",
               "type":"string",
-              "description":"One of ['instrument', 'instrument_url', 'highest_right', 'projid', 'title', 'visible', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id']"
+              "description":"One of ['projid', 'title', 'visible', 'access', 'license', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']"
             },
             "example":"instrument",
             "name":"order_field",
             "in":"query"
           },
           {
-            "description":"Return projects except somme fields like bodc_variables if set to True. For projects list display purpose.",
+            "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
             "required":false,
             "schema":{
-              "title":"Summary",
-              "type":"boolean",
-              "description":"Return projects except somme fields like bodc_variables if set to True. For projects list display purpose."
+              "title":"Fields",
+              "type":"string",
+              "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
+              "default":"*default"
             },
-            "example":true,
-            "name":"summary",
+            "example":"*default,fieldlist",
+            "name":"fields",
             "in":"query"
           },
           {
@@ -1785,6 +2338,129 @@
         ]
       }
     },
+    "/projects/{project_id}/collections":{
+      "get":{
+        "tags":[
+          "projects"
+        ],
+        "summary":"Project Collections",
+        "description":"**Returns project collections list of id, title",
+        "operationId":"project_collections",
+        "parameters":[
+          {
+            "description":"Internal, numeric id of the project.",
+            "required":true,
+            "schema":{
+              "title":"Project Id",
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
+            },
+            "example":1,
+            "name":"project_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Project Collections Projects  Project Id  Collections Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/MinimalCollectionBO"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/project_set/projects":{
+      "get":{
+        "tags":[
+          "projects"
+        ],
+        "summary":"Project Set Get Projects",
+        "description":"**Returns projects statistics**, i.e. used taxa and classification states.",
+        "operationId":"project_set_get_projects",
+        "parameters":[
+          {
+            "description":"String containing the list of one or more project id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
+            "required":true,
+            "schema":{
+              "title":"Ids",
+              "type":"string",
+              "description":"String containing the list of one or more project id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project."
+            },
+            "example":"1",
+            "name":"ids",
+            "in":"query"
+          },
+          {
+            "description":"Return the default fields (typically used in conjunction with an additional field list). To return selected fields.",
+            "required":false,
+            "schema":{
+              "title":"Fields",
+              "type":"string",
+              "description":"Return the default fields (typically used in conjunction with an additional field list). To return selected fields.",
+              "default":"*default"
+            },
+            "example":"*default,fieldlist",
+            "name":"fields",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Project Set Get Projects Project Set Projects Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/ProjectColumnsModel"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
     "/project_set/taxo_stats":{
       "get":{
         "tags":[
@@ -1999,7 +2675,7 @@
                   ],
                   "total":54169,
                   "columns":[
-                    "fre.area",
+                    "classif",
                     "obj.depth_min"
                   ],
                   "counts":[
@@ -3181,12 +3857,12 @@
             "in":"path"
           },
           {
-            "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
+            "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
             "required":false,
             "schema":{
               "title":"Fields",
               "type":"string",
-              "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\n💡 More help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
+              "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
             },
             "example":"obj.longitude,fre.feret",
             "name":"fields",
@@ -5924,6 +6600,16 @@
   },
   "components":{
     "schemas":{
+      "AccessLevelEnum":{
+        "title":"AccessLevelEnum",
+        "enum":[
+          "1",
+          "2",
+          "0"
+        ],
+        "type":"string",
+        "description":"An enumeration."
+      },
       "AcquisitionModel":{
         "title":"AcquisitionModel",
         "required":[
@@ -5976,10 +6662,23 @@
         ],
         "type":"object",
         "properties":{
+          "collection_id":{
+            "title":"Collection Id",
+            "type":"integer",
+            "description":"The Collection to export if requested.",
+            "example":1
+          },
           "project_id":{
             "title":"Project Id",
-            "type":"integer",
-            "description":"The project to export.",
+            "anyOf":[
+              {
+                "type":"integer"
+              },
+              {
+                "type":"string"
+              }
+            ],
+            "description":"The project(int) or projects (str, project ids list) to export.",
             "example":1
           },
           "out_to_ftp":{
@@ -6377,17 +7076,204 @@
           }
         }
       },
-      "CollectionModel":{
-        "title":"Collection Model",
+      "CollectionAggregatedRsp":{
+        "title":"CollectionAggregatedRsp",
         "required":[
-          "project_ids",
-          "id",
-          "external_id",
-          "external_id_system",
-          "title"
+          "initclassiflist",
+          "classiffieldlist",
+          "cnn_network_id",
+          "status"
         ],
         "type":"object",
         "properties":{
+          "can_be_administered":{
+            "title":"Can be administered",
+            "type":"boolean",
+            "description":"Whether the current user is manager of all collection projects",
+            "default":false
+          },
+          "instrument":{
+            "title":"Instrument",
+            "type":"string",
+            "description":"The collection instrument from projects.",
+            "default":"?",
+            "example":"UVP5"
+          },
+          "access":{
+            "title":"Access",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/AccessLevelEnum"
+              }
+            ],
+            "description":"The restricted access for collection projects.PUBLIC: \"1\", OPEN: \"2\", PRIVATE: \"0\"",
+            "default":"2",
+            "example":"2"
+          },
+          "initclassiflist":{
+            "title":"Initial categories",
+            "type":"string",
+            "description":" Aggregated categories from the collection projects."
+          },
+          "classiffieldlist":{
+            "title":"Sorting fields",
+            "type":"string",
+            "description":" Aggregated sorting and displaying fields from the collection projects."
+          },
+          "cnn_network_id":{
+            "title":"Deep Features",
+            "type":"string",
+            "description":" Common deep features for the collection projects. Can be None (???)"
+          },
+          "status":{
+            "title":"Status",
+            "type":"string",
+            "description":" the restricted collection status calculated from projects."
+          },
+          "creator_users":{
+            "title":"Creator users",
+            "type":"array",
+            "items":{
+              "$ref":"#/components/schemas/UserCollectionModel"
+            },
+            "description":"Annotators extracted from history.",
+            "default":[]
+          },
+          "privileges":{
+            "title":"privileges",
+            "type":"object",
+            "additionalProperties":{
+              "type":"array",
+              "items":{
+                "$ref":"#/components/schemas/UserCollectionModel"
+              }
+            },
+            "description":"Aggregated user privileges of projects with user minimal right on projects",
+            "default":{
+              "managers":[],
+              "annotators":[],
+              "viewers":[]
+            },
+            "example":{
+              "managers":[],
+              "annotators":[],
+              "viewers":[]
+            }
+          },
+          "freecols":{
+            "title":"freecols",
+            "type":"object",
+            "additionalProperties":{
+              "type":"object",
+              "additionalProperties":{
+                "type":"string"
+              }
+            },
+            "description":"Common free cols of projects.",
+            "default":{},
+            "example":{
+              "mappingobj":{
+                "n01":"annotation_confidencepmax"
+              },
+              "mappingsample":{
+                "t01":"cruise",
+                "t02":"vessel",
+                "t03":"barcode"
+              },
+              "mappingprocess":{},
+              "mappingacq":{}
+            }
+          },
+          "excluded":{
+            "title":"excluded",
+            "type":"object",
+            "additionalProperties":{
+              "type":"array",
+              "items":{
+                "type":"integer"
+              }
+            },
+            "description":"Excluded projects for common values ",
+            "default":{},
+            "example":{
+              "status":[
+                1,
+                5,
+                12
+              ],
+              "access":[
+                1
+              ]
+            }
+          }
+        },
+        "description":"collection model extended with computed information about the collection projects"
+      },
+      "CollectionModel":{
+        "title":"Collection Model",
+        "required":[
+          "id",
+          "external_id",
+          "external_id_system",
+          "title",
+          "project_ids"
+        ],
+        "type":"object",
+        "properties":{
+          "id":{
+            "title":"Id",
+            "type":"integer",
+            "description":"The collection Id.",
+            "example":1
+          },
+          "external_id":{
+            "title":"External Id",
+            "type":"string",
+            "description":"The external Id.",
+            "example":""
+          },
+          "external_id_system":{
+            "title":"External id system",
+            "type":"string",
+            "description":"The external Id system.",
+            "example":""
+          },
+          "title":{
+            "title":"Title",
+            "type":"string",
+            "description":"The collection title.",
+            "example":"My collection"
+          },
+          "short_title":{
+            "title":"Short title",
+            "type":"string",
+            "description":"The collection short title.",
+            "example":"My coll"
+          },
+          "citation":{
+            "title":"Citation",
+            "type":"string",
+            "description":"The collection citation.",
+            "example":""
+          },
+          "license":{
+            "title":"License",
+            "type":"string",
+            "description":"The collection license.",
+            "example":"CC BY 4.0"
+          },
+          "abstract":{
+            "title":"Abstract",
+            "type":"string",
+            "description":"The collection abstract.",
+            "example":""
+          },
+          "description":{
+            "title":"Description",
+            "type":"string",
+            "description":"The collection description.",
+            "example":""
+          },
           "project_ids":{
             "title":"Project ids",
             "minItems":1,
@@ -6453,23 +7339,18 @@
             },
             "description":"Other\n        organisation(s) associated with the collection.",
             "default":[]
-          },
-          "id":{
-            "title":"Id",
-            "type":"integer",
-            "description":"The collection Id.",
-            "example":1
-          },
+          }
+        },
+        "description":"Basic and computed information about the Collection."
+      },
+      "CollectionReq":{
+        "title":"Update full or partial Collection Model",
+        "type":"object",
+        "properties":{
           "external_id":{
             "title":"External Id",
             "type":"string",
             "description":"The external Id.",
-            "example":""
-          },
-          "external_id_system":{
-            "title":"External id system",
-            "type":"string",
-            "description":"The external Id system.",
             "example":""
           },
           "title":{
@@ -6484,17 +7365,43 @@
             "description":"The collection short title.",
             "example":"My coll"
           },
+          "provider_user_id":{
+            "title":"Provider user Id",
+            "type":"integer",
+            "description":"Id of the person who\n        is responsible for the content of this metadata record. Writer of the title and abstract."
+          },
+          "contact_user_id":{
+            "title":"Contact user Id",
+            "type":"integer",
+            "description":"Id of the person who\n        should be contacted in cases of questions regarding the content of the dataset or any data restrictions.\n        This is also the person who is most likely to stay involved in the dataset the longest."
+          },
+          "project_ids":{
+            "title":"Project ids",
+            "minItems":1,
+            "type":"array",
+            "items":{
+              "type":"integer"
+            },
+            "description":"The list of composing project IDs.",
+            "example":[
+              1
+            ]
+          },
+          "license":{
+            "title":"License",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/LicenseEnum"
+              }
+            ],
+            "description":"The collection license.",
+            "example":"CC BY 4.0"
+          },
           "citation":{
             "title":"Citation",
             "type":"string",
             "description":"The collection citation.",
             "example":""
-          },
-          "license":{
-            "title":"License",
-            "type":"string",
-            "description":"The collection license.",
-            "example":"CC BY 4.0"
           },
           "abstract":{
             "title":"Abstract",
@@ -6507,9 +7414,61 @@
             "type":"string",
             "description":"The collection description.",
             "example":""
+          },
+          "creator_users":{
+            "title":"Creator users Ids",
+            "type":"array",
+            "items":{
+              "anyOf":[
+                {
+                  "type":"integer"
+                },
+                {}
+              ]
+            },
+            "description":"List of users id's or dict with name, organization for external persons."
+          },
+          "associate_users":{
+            "title":"Associate users",
+            "type":"array",
+            "items":{
+              "anyOf":[
+                {
+                  "type":"integer"
+                },
+                {}
+              ]
+            },
+            "description":"List of users id's or dict with name, organization for external persons."
+          },
+          "creator_organisations":{
+            "title":"Creator organisations Ids or names",
+            "type":"array",
+            "items":{
+              "anyOf":[
+                {
+                  "type":"string"
+                },
+                {}
+              ]
+            },
+            "description":"All\n        organisations who are responsible for the creation of the collection. Data creators should\n        receive credit for their work and should therefore be included in the citation."
+          },
+          "associate_organisations":{
+            "title":"Associate organisations",
+            "type":"array",
+            "items":{
+              "anyOf":[
+                {
+                  "type":"string"
+                },
+                {}
+              ]
+            },
+            "description":"Other\n        organisation(s) Ids or names associated with the collection."
           }
         },
-        "description":"Basic and computed information about the Collection."
+        "description":"update full or partial collection Request model"
       },
       "Constants":{
         "title":"Constants",
@@ -6535,6 +7494,24 @@
               "CC BY-NC 4.0":"<a href=\"https://creativecommons.org/licenses/by-nc/4.0/\" rel=\"nofollow\"><strong>CC-BY-NC</strong></a>: all registered EcoTaxa users are free to download, redistribute, modify, and build upon the data, as long as they cite the dataset and its authors, and do not use it for commercial purpose (\"primarily intended for or directed toward commercial advantage or monetary compensation\"). Other databases can index the data.",
               "Copyright":"<strong>Copyright</strong>: only contributors to this project have rights on this data. This prevents its distribution in any kind of database.",
               "":"Not chosen"
+            }
+          },
+          "access":{
+            "title":"Project access",
+            "type":"object",
+            "additionalProperties":{
+              "type":"string"
+            },
+            "description":"Project access levels.",
+            "default":{
+              "PUBLIC":"1",
+              "OPEN":"2",
+              "PRIVATE":"0"
+            },
+            "example":{
+              "PUBLIC":"",
+              "OPEN":"O",
+              "PRIVATE":"P"
             }
           },
           "app_manager":{
@@ -6568,6 +7545,22 @@
               "France"
             ]
           },
+          "people_organization_directories":{
+            "title":"People and organizations directories",
+            "type":"object",
+            "additionalProperties":{
+              "type":"string"
+            },
+            "description":"Available directories to identify people and organizations in collections settings",
+            "default":{
+              "orcid":"https://orcid.org/",
+              "edmo":"https://edmo.seadatanet.org/"
+            },
+            "example":{
+              "https://edmo.seadatanet.org/":"edmo",
+              "https://orcid.org/":"orcid"
+            }
+          },
           "user_status":{
             "title":"User status",
             "type":"object",
@@ -6586,6 +7579,21 @@
               "inactive":0,
               "active":1,
               "pending":2
+            }
+          },
+          "user_type":{
+            "title":"User status",
+            "type":"object",
+            "additionalProperties":{
+              "type":"string"
+            },
+            "description":"Application User type values",
+            "default":{
+              "guest":"guest",
+              "user":"user"
+            },
+            "example":{
+              "guest":"guest"
             }
           },
           "password_regexp":{
@@ -6623,6 +7631,12 @@
             "type":"boolean",
             "description":"use Google ReCaptcha",
             "default":false
+          },
+          "formulae":{
+            "title":"Project Formulae",
+            "type":"string",
+            "description":"Project default concentration formulae",
+            "default":"subsample_coef: 1/ssm.sub_part\ntotal_water_volume: sam.tot_vol/1000\nindividual_volume: 4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3"
           }
         },
         "description":"Values which can be considered identical over the lifetime of the back-end."
@@ -6681,12 +7695,16 @@
             "default":"?",
             "example":"UVP5"
           },
-          "visible":{
-            "title":"Visible",
-            "type":"boolean",
-            "description":"When TRUE, the project is created visible by all users.",
-            "default":true,
-            "example":true
+          "access":{
+            "title":"Access",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/AccessLevelEnum"
+              }
+            ],
+            "description":"When \"1\" (PUBLIC), the project is created visible by all users.PUBLIC: \"1\", OPEN: \"2\", PRIVATE: \"0\"",
+            "default":"1",
+            "example":"1"
           }
         }
       },
@@ -6860,10 +7878,23 @@
         ],
         "type":"object",
         "properties":{
+          "collection_id":{
+            "title":"Collection Id",
+            "type":"integer",
+            "description":"The Collection to export if requested.",
+            "example":1
+          },
           "project_id":{
             "title":"Project Id",
-            "type":"integer",
-            "description":"The project to export.",
+            "anyOf":[
+              {
+                "type":"integer"
+              },
+              {
+                "type":"string"
+              }
+            ],
+            "description":"The project(int) or projects (str, project ids list) to export.",
             "example":1
           },
           "exp_type":{
@@ -7031,7 +8062,7 @@
             "example":12376
           }
         },
-        "description":"Export response, for all export jobs, either on Project or Collection"
+        "description":"Export response, for all export jobs, either on Project or Collection."
       },
       "ExportSplitOptionsEnum":{
         "title":"ExportSplitOptionsEnum",
@@ -7065,10 +8096,23 @@
         ],
         "type":"object",
         "properties":{
+          "collection_id":{
+            "title":"Collection Id",
+            "type":"integer",
+            "description":"The Collection to export if requested.",
+            "example":1
+          },
           "project_id":{
             "title":"Project Id",
-            "type":"integer",
-            "description":"The project to export.",
+            "anyOf":[
+              {
+                "type":"integer"
+              },
+              {
+                "type":"string"
+              }
+            ],
+            "description":"The project(int) or projects (str, project ids list) to export.",
             "example":1
           },
           "split_by":{
@@ -7133,6 +8177,53 @@
         ],
         "type":"string",
         "description":"An enumeration."
+      },
+      "GuestModel":{
+        "title":"GuestModel",
+        "required":[
+          "id",
+          "email",
+          "name",
+          "organisation"
+        ],
+        "type":"object",
+        "properties":{
+          "id":{
+            "title":"Id",
+            "type":"integer",
+            "description":"The unique numeric id of this user.",
+            "example":1
+          },
+          "email":{
+            "title":"Email",
+            "type":"string",
+            "description":"User's email address, as text, used during registration.",
+            "example":"ecotaxa.api.user@gmail.com"
+          },
+          "name":{
+            "title":"Name",
+            "type":"string",
+            "description":"User's full name, as text.",
+            "example":"userName"
+          },
+          "country":{
+            "title":"Country",
+            "type":"string",
+            "description":"The country name, as text (but chosen in a consistent list).",
+            "example":"France"
+          },
+          "orcid":{
+            "title":"orcid",
+            "type":"string",
+            "description":"orcid unique identifier for this user"
+          },
+          "organisation":{
+            "title":"Organisation",
+            "type":"string",
+            "description":"User's organisation name, as text.",
+            "example":"Oceanographic Laboratory of Villefranche sur Mer - LOV"
+          }
+        }
       },
       "HTTPValidationError":{
         "title":"HTTPValidationError",
@@ -7624,7 +8715,8 @@
         "required":[
           "id",
           "email",
-          "name"
+          "name",
+          "organisation"
         ],
         "type":"object",
         "properties":{
@@ -7645,6 +8737,55 @@
             "type":"string",
             "description":"User's full name, as text.",
             "example":"userName"
+          },
+          "organisation":{
+            "title":"Organisation",
+            "type":"string",
+            "description":"User's organisation name, as text.",
+            "example":"Oceanographic Laboratory of Villefranche sur Mer - LOV"
+          }
+        }
+      },
+      "MinimalCollectionBO":{
+        "title":"MinimalCollectionBO",
+        "required":[
+          "id",
+          "title",
+          "provider_user",
+          "project_ids"
+        ],
+        "type":"object",
+        "properties":{
+          "id":{
+            "title":"Id",
+            "type":"integer"
+          },
+          "external_id":{
+            "title":"External Id",
+            "type":"string"
+          },
+          "title":{
+            "title":"Title",
+            "type":"string"
+          },
+          "short_title":{
+            "title":"Short Title",
+            "type":"string"
+          },
+          "provider_user":{
+            "title":"Provider User",
+            "type":"integer"
+          },
+          "contact_user":{
+            "title":"Contact User",
+            "type":"integer"
+          },
+          "project_ids":{
+            "title":"Project Ids",
+            "type":"array",
+            "items":{
+              "type":"integer"
+            }
           }
         }
       },
@@ -8349,6 +9490,33 @@
           }
         }
       },
+      "ProjectColumnsModel":{
+        "title":"ProjectColumnsModel",
+        "type":"object",
+        "properties":{
+          "projid":{
+            "title":"Project ID",
+            "type":"integer",
+            "description":"Project ID from the call."
+          },
+          "columns":{
+            "title":"Columns",
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "description":"Column names from the call."
+          },
+          "values":{
+            "title":"All rows",
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "description":"All rows regardless of emptiness."
+          }
+        }
+      },
       "ProjectFilters":{
         "title":"Project filters Model",
         "type":"object",
@@ -8637,10 +9805,109 @@
         "title":"ProjectModel",
         "required":[
           "projid",
-          "title"
+          "title",
+          "access",
+          "license"
         ],
         "type":"object",
         "properties":{
+          "projid":{
+            "title":"Project Id",
+            "type":"integer",
+            "description":"The project Id.",
+            "example":4824
+          },
+          "title":{
+            "title":"Title",
+            "type":"string",
+            "description":"The project title.",
+            "example":"MyProject"
+          },
+          "visible":{
+            "title":"Visible",
+            "type":"boolean",
+            "description":"The project visibility. (deprecated) ",
+            "example":false
+          },
+          "access":{
+            "title":"Access level",
+            "type":"string",
+            "description":"When \"1\" (PUBLIC), the project is visible by all users.PUBLIC: \"1\", OPEN: \"2\", PRIVATE: \"0\"",
+            "example":"1"
+          },
+          "license":{
+            "title":"License",
+            "type":"string",
+            "description":"Data licence.",
+            "example":"CC BY 4.0"
+          },
+          "status":{
+            "title":"Status",
+            "type":"string",
+            "description":"The project status.",
+            "example":"Annotate"
+          },
+          "objcount":{
+            "title":"Object count",
+            "type":"number",
+            "description":"The number of objects.",
+            "example":32292.0
+          },
+          "pctvalidated":{
+            "title":"Percentage validated",
+            "type":"number",
+            "description":"Percentage of validated images.",
+            "example":0.015483711135885049
+          },
+          "pctclassified":{
+            "title":"Percentage classified",
+            "type":"number",
+            "description":"Percentage of classified images.",
+            "example":100.0
+          },
+          "classifsettings":{
+            "title":"Classification settings",
+            "type":"string",
+            "example":"baseproject=1602\ncritvar=%area,angle,area,area_exc,bx,by,cdexc,centroids,circ.,circex,convarea,convperim,cv,elongation,esd,fcons,feret,feretareaexc,fractal,height,histcum1,histcum2,histcum3,intden,kurt,lat_end,lon_end,major,max,mean,meanpos,median,min,minor,mode,nb1,nb2,perim.,perimareaexc,perimferet,perimmajor,range,skelarea,skew,slope,sr,stddev,symetrieh,symetriehc,symetriev,symetrievc,thickr,width,x,xm,xstart,y,ym,ystart\nposttaxomapping=\nseltaxo=45074,84963,61990,13333,82399,61973,62005,25930,25932,61996,78426,81941,11514,85076,85061,30815,85185,92230,85079,84993,25824,85115,85004,26525,25944,11509,26524,92112,84976,25942,84980,85078,78418,84977,85060,61993,61991,85069,81871,74144,11758,72431,13381,11518,5,18758,85117,92042,84968,84997,87826,92236,92237,92039,84989,85193,83281,78412,92239,71617,81977,45071,12865,85044,81940,85067,12908,85116,56693,85008,92139,92068\nusemodel_foldername=testln1"
+          },
+          "classiffieldlist":{
+            "title":"Classification field list",
+            "type":"string",
+            "example":"depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]"
+          },
+          "popoverfieldlist":{
+            "title":"Pop over field list",
+            "type":"string",
+            "example":"depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]"
+          },
+          "comments":{
+            "title":"Comments",
+            "type":"string",
+            "description":"The project comments.",
+            "example":""
+          },
+          "description":{
+            "title":"Description",
+            "type":"string",
+            "description":"The project description, i.e. main traits.",
+            "example":""
+          },
+          "rf_models_used":{
+            "title":"Rf models used",
+            "type":"string",
+            "example":""
+          },
+          "cnn_network_id":{
+            "title":"Cnn network id",
+            "type":"string",
+            "example":"SCN_zooscan_group1"
+          },
+          "formulae":{
+            "title":"Formulae",
+            "type":"string",
+            "description":"Concentration formulae.",
+            "example":""
+          },
           "obj_free_cols":{
             "title":"Object free cols",
             "type":"object",
@@ -8746,6 +10013,15 @@
             "description":"Viewers of this project, if not manager nor annotator.",
             "default":[]
           },
+          "contact":{
+            "title":"Contact",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/MinUserModel"
+              }
+            ],
+            "description":"The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers."
+          },
           "instrument":{
             "title":"Instrument",
             "type":"string",
@@ -8758,111 +10034,12 @@
             "description":"This project's instrument BODC definition.",
             "example":"http://vocab.nerc.ac.uk/collection/L22/current/TOOL1581/"
           },
-          "contact":{
-            "title":"Contact",
-            "allOf":[
-              {
-                "$ref":"#/components/schemas/MinUserModel"
-              }
-            ],
-            "description":"The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers."
-          },
           "highest_right":{
             "title":"Highest right",
             "type":"string",
             "description":"The highest right for requester on this project. One of 'Manage', 'Annotate', 'View'.",
             "default":"",
             "example":"View"
-          },
-          "license":{
-            "title":"License",
-            "allOf":[
-              {
-                "$ref":"#/components/schemas/LicenseEnum"
-              }
-            ],
-            "description":"Data licence.",
-            "default":"Copyright",
-            "example":"CC BY 4.0"
-          },
-          "projid":{
-            "title":"Project Id",
-            "type":"integer",
-            "description":"The project Id.",
-            "example":4824
-          },
-          "title":{
-            "title":"Title",
-            "type":"string",
-            "description":"The project title.",
-            "example":"MyProject"
-          },
-          "visible":{
-            "title":"Visible",
-            "type":"boolean",
-            "description":"The project visibility.",
-            "example":false
-          },
-          "status":{
-            "title":"Status",
-            "type":"string",
-            "description":"The project status.",
-            "example":"Annotate"
-          },
-          "objcount":{
-            "title":"Object count",
-            "type":"number",
-            "description":"The number of objects.",
-            "example":32292.0
-          },
-          "pctvalidated":{
-            "title":"Percentage validated",
-            "type":"number",
-            "description":"Percentage of validated images.",
-            "example":0.015483711135885049
-          },
-          "pctclassified":{
-            "title":"Percentage classified",
-            "type":"number",
-            "description":"Percentage of classified images.",
-            "example":100.0
-          },
-          "classifsettings":{
-            "title":"Classification settings",
-            "type":"string",
-            "example":"baseproject=1602\ncritvar=%area,angle,area,area_exc,bx,by,cdexc,centroids,circ.,circex,convarea,convperim,cv,elongation,esd,fcons,feret,feretareaexc,fractal,height,histcum1,histcum2,histcum3,intden,kurt,lat_end,lon_end,major,max,mean,meanpos,median,min,minor,mode,nb1,nb2,perim.,perimareaexc,perimferet,perimmajor,range,skelarea,skew,slope,sr,stddev,symetrieh,symetriehc,symetriev,symetrievc,thickr,width,x,xm,xstart,y,ym,ystart\nposttaxomapping=\nseltaxo=45074,84963,61990,13333,82399,61973,62005,25930,25932,61996,78426,81941,11514,85076,85061,30815,85185,92230,85079,84993,25824,85115,85004,26525,25944,11509,26524,92112,84976,25942,84980,85078,78418,84977,85060,61993,61991,85069,81871,74144,11758,72431,13381,11518,5,18758,85117,92042,84968,84997,87826,92236,92237,92039,84989,85193,83281,78412,92239,71617,81977,45071,12865,85044,81940,85067,12908,85116,56693,85008,92139,92068\nusemodel_foldername=testln1"
-          },
-          "classiffieldlist":{
-            "title":"Classification field list",
-            "type":"string",
-            "example":"depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]"
-          },
-          "popoverfieldlist":{
-            "title":"Pop over field list",
-            "type":"string",
-            "example":"depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]"
-          },
-          "comments":{
-            "title":"Comments",
-            "type":"string",
-            "description":"The project comments.",
-            "example":""
-          },
-          "description":{
-            "title":"Description",
-            "type":"string",
-            "description":"The project description, i.e. main traits.",
-            "example":""
-          },
-          "rf_models_used":{
-            "title":"Rf models used",
-            "type":"string",
-            "example":""
-          },
-          "cnn_network_id":{
-            "title":"Cnn network id",
-            "type":"string",
-            "example":"SCN_zooscan_group1"
           }
         },
         "description":"Basic and computed information about the Project."
@@ -9380,10 +10557,23 @@
         ],
         "type":"object",
         "properties":{
+          "collection_id":{
+            "title":"Collection Id",
+            "type":"integer",
+            "description":"The Collection to export if requested.",
+            "example":1
+          },
           "project_id":{
             "title":"Project Id",
-            "type":"integer",
-            "description":"The project to export.",
+            "anyOf":[
+              {
+                "type":"integer"
+              },
+              {
+                "type":"string"
+              }
+            ],
+            "description":"The project(int) or projects (str, project ids list) to export.",
             "example":1
           },
           "quantity":{
@@ -9823,12 +11013,13 @@
           }
         }
       },
-      "UserModelWithRights":{
-        "title":"UserModelWithRights",
+      "UserCollectionModel":{
+        "title":"UserCollectionModel",
         "required":[
           "id",
           "email",
-          "name"
+          "name",
+          "organisation"
         ],
         "type":"object",
         "properties":{
@@ -9844,42 +11035,52 @@
             "description":"User's email address, as text, used during registration.",
             "example":"ecotaxa.api.user@gmail.com"
           },
-          "password":{
-            "title":"User's password'",
-            "type":"string",
-            "description":"Encrypted (or not) password.",
-            "example":"$foobar45$"
-          },
           "name":{
             "title":"Name",
             "type":"string",
             "description":"User's full name, as text.",
             "example":"userName"
           },
+          "orcid":{
+            "title":"orcid",
+            "type":"string",
+            "description":"orcid unique identifier for this user"
+          },
           "organisation":{
             "title":"Organisation",
             "type":"string",
             "description":"User's organisation name, as text.",
             "example":"Oceanographic Laboratory of Villefranche sur Mer - LOV"
-          },
-          "status":{
-            "title":"Account status",
+          }
+        }
+      },
+      "UserModelWithRights":{
+        "title":"UserModelWithRights",
+        "required":[
+          "id",
+          "email",
+          "name",
+          "organisation"
+        ],
+        "type":"object",
+        "properties":{
+          "id":{
+            "title":"Id",
             "type":"integer",
-            "description":"Status of the user : 1 for active, 0 for inactive ,2 for pending, -1 for blocked",
+            "description":"The unique numeric id of this user.",
             "example":1
           },
-          "status_date":{
-            "title":"status date",
+          "email":{
+            "title":"Email",
             "type":"string",
-            "description":"Timestamp status modification date",
-            "format":"date-time",
-            "example":"2020-11-05T12:31:48.299713"
+            "description":"User's email address, as text, used during registration.",
+            "example":"ecotaxa.api.user@gmail.com"
           },
-          "status_admin_comment":{
-            "title":"Comment",
+          "name":{
+            "title":"Name",
             "type":"string",
-            "description":"Optional Users admininistrator comment about the account status.",
-            "example":""
+            "description":"User's full name, as text.",
+            "example":"userName"
           },
           "country":{
             "title":"Country",
@@ -9899,6 +11100,37 @@
             "description":"The date of creation of the user, as text formatted according to the ISO 8601 standard.",
             "format":"date-time",
             "example":"2020-11-05T12:31:48.299713"
+          },
+          "organisation":{
+            "title":"Organisation",
+            "type":"string",
+            "description":"User's organisation name, as text.",
+            "example":"Oceanographic Laboratory of Villefranche sur Mer - LOV"
+          },
+          "password":{
+            "title":"User's password'",
+            "type":"string",
+            "description":"Encrypted (or not) password.",
+            "example":"$foobar45$"
+          },
+          "status":{
+            "title":"Account status",
+            "type":"integer",
+            "description":"Status of the user : 1 for active, 0 for inactive ,2 for pending, -1 for blocked",
+            "example":1
+          },
+          "status_date":{
+            "title":"status date",
+            "type":"string",
+            "description":"Timestamp status modification date",
+            "format":"date-time",
+            "example":"2020-11-05T12:31:48.299713"
+          },
+          "status_admin_comment":{
+            "title":"Comment",
+            "type":"string",
+            "description":"Optional Users admininistrator comment about the account status.",
+            "example":""
           },
           "usercreationreason":{
             "title":"User creation reason",

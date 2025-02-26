@@ -21,11 +21,12 @@ from typing import (
     Iterable,
     Callable,
     Final,
+    Union,
 )
 
 from BO.Classification import ClassifIDT
 from BO.ComputedVar import ComputedVar
-from BO.ObjectSet import DescribedObjectSet
+from BO.ObjectSet import DescribedObjectSet, DescribedObjectBOSet
 from BO.Vocabulary import Term
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Session, Row
@@ -86,7 +87,7 @@ class ObjectSetQueryPlus(object):
     OBJECT_PREFIX = "obj"
     KNOWN_PREFIXES: Final = [SAMPLE_PREFIX, SUBSAMPLE_PREFIX, OBJECT_PREFIX]
 
-    def __init__(self, obj_set: DescribedObjectSet):
+    def __init__(self, obj_set: Union[DescribedObjectSet, DescribedObjectBOSet]):
         self.obj_set = obj_set
         # Input data tweaking
         self.taxo_mapping: TaxoRemappingT = {}
@@ -293,7 +294,7 @@ class ObjectSetQueryPlus(object):
         sql = (
             select_clause
             + " FROM "
-            + from_.get_sql()
+            + from_.get_sql().replace(":projid", str(params["projid"]))
             + where.get_sql()
             + group_clause
             + order_clause.get_sql()

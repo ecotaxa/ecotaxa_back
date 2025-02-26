@@ -160,6 +160,7 @@ This series is part of the long term planktonic monitoring of
         # TODO: below is redundant with ID and ignored, but fails validation (http 422) if not set
         "email": "creator",
         "name": "User Creating Projects",
+        "organisation": "OrgTest",
     }
     the_coll["creator_users"] = [user_doing_all]
     the_coll["creator_organisations"] = ["Institut de la Mer de Villefranche (IMEV)"]
@@ -168,6 +169,7 @@ This series is part of the long term planktonic monitoring of
         # TODO: below is redundant with ID and ignored, but fails validation (http 422) if not set
         "email": "?",
         "name": ".",
+        "organisation": "OrgTest",
     }
     the_coll["provider_user"] = user_doing_all
     rsp = fastapi.put(url, headers=admin_or_creator, json=the_coll)
@@ -201,6 +203,7 @@ def test_emodnet_export(fastapi, exportable_collection, admin_or_creator, fixed_
     job_id = rsp.json()["job_id"]
     wait_for_stable(job_id)
     job_status = api_check_job_ok(fastapi, job_id)
+
     warns = job_status["result"]["wrns"]
     ref_warns = [
         "Could not extract sampling net name and features from sample 'm106_mn01_n1_sml' (in #%d): at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent."
@@ -423,6 +426,10 @@ def create_test_collection(database, fastapi, caplog, suffix, who=ADMIN_AUTH):
     )
     assert rsp.status_code == status.HTTP_200_OK
     coll_id = rsp.json()
+    url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
+    rsp = fastapi.patch(url, headers=who, json={"license": ""})
+    assert rsp.status_code == status.HTTP_200_OK
+
     return coll_id, coll_title, prj_id
 
 
