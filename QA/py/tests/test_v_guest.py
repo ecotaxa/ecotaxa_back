@@ -6,6 +6,7 @@ from tests.credentials import ADMIN_AUTH, USER_AUTH, ORDINARY_GUEST_GUEST_ID
 GUEST_UPDATE_URL = "/guests/{guest_id}"
 GUEST_CREATE_URL = "/guests/create"
 GUEST_GET_URL = "/guests"
+NEW_GUEST_ID = 13
 
 
 # WARNING must run after all test_user keep the test_v_guest.py name
@@ -32,7 +33,7 @@ def test_guest_create(fastapi, caplog):
     }
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=usr_json)
     assert rsp.status_code == 200
-    assert rsp.json() is None
+    assert rsp.json() == NEW_GUEST_ID
 
 
 def test_guest_update(fastapi, caplog):

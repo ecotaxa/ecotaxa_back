@@ -783,8 +783,8 @@ def create_guest(
     """
     with GuestService() as sce:
         with ValidityThrower(), RightsThrower():
-            guest: UserIDT = sce.create_guest(current_user, guest)
-    return guest
+            new_guest: GuestIDT = sce.create_guest(current_user, guest)
+    return new_guest
 
 
 @app.put(
