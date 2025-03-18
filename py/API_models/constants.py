@@ -7,8 +7,7 @@
 from typing import Dict, List
 
 from BO.DataLicense import DataLicense, AccessLevelEnum
-from DB.User import UserStatus, UserType
-from DB.Organization import PeopleOrganizationDirectory
+from DB.User import UserStatus, UserType, PeopleOrganizationDirectory
 from BO.User import (
     USER_PWD_REGEXP,
     USER_PWD_REGEXP_DESCRIPTION,
@@ -17,9 +16,11 @@ from BO.User import (
 )
 from helpers.pydantic import BaseModel, Field
 
-FORMULAE ="""subsample_coef: 1/ssm.sub_part
+FORMULAE = """subsample_coef: 1/ssm.sub_part
 total_water_volume: sam.tot_vol/1000
 individual_volume: 4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3"""
+
+
 class Constants(BaseModel):
     """Values which can be considered identical over the lifetime of the back-end."""
 
@@ -105,7 +106,7 @@ class Constants(BaseModel):
         description="use Google ReCaptcha",
         default=False,
     )
-    formulae:str = Field(
+    formulae: str = Field(
         title="Project Formulae",
         description="Project default concentration formulae",
         default=FORMULAE,

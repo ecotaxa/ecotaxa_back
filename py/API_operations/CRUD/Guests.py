@@ -197,11 +197,17 @@ class GuestService(Service):
                 detail=errors,
             )
         for col in cols_to_upd:
-            if update_src.id == -1 and col.name == Guest.usercreationdate.name:
-                value = DateTime.now_time()
+            if col == Guest.organisation:
+                org_id = GuestBO.get_organization_id(
+                    self.session, update_src.organisation
+                )
+                setattr(guest_to_update, "organization_id", org_id)
             else:
-                value = getattr(update_src, col.name)
-            setattr(guest_to_update, col.name, value)
+                if update_src.id == -1 and col == Guest.usercreationdate:
+                    value = DateTime.now_time()
+                else:
+                    value = getattr(update_src, col.name)
+                setattr(guest_to_update, col.name, value)
         self.session.commit()
         if guest_to_update.id > 0:
             action = ActivationType.update.name

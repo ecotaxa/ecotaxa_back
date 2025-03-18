@@ -8,7 +8,7 @@ import typer
 from API_operations.helpers.Service import Service
 from BO.Rights import RightsBO, Action
 from DB.Instrument import Instrument
-from DB.User import Role, User, Country
+from DB.User import Role, User, Country, Organization
 from DB.Views import views_creation_queries, views_deletion_queries
 from cmds.db_upg.db_conn import app_config  # type:ignore
 from data.Countries import countries_by_name
@@ -45,11 +45,23 @@ def _init_security(sess):
     if len(the_admin) == 0:
         typer.echo("Adding user '%s'" % THE_ADMIN)
         # noinspection PyArgumentList
+        # find org_id for organisation="Institut de la Mer de Villefranche - IMEV"
+        organisation = "Institut de la Mer de Villefranche - IMEV"
+        org_id = (
+            sess.query(Organization.id)
+            .filter(Organization.name.ilike(organisation))
+            .scalar()
+        )
+        if org_id is None:
+            org = Organization(name=organisation)
+            sess.add(org)
+            sess.commit()
+            org_id = org.id
         adm_user = User(
             email=THE_ADMIN,
             password=THE_ADMIN_PASSWORD,
             name="Application Administrator",
-            organisation="Institut de la Mer de Villefranche - IMEV",
+            organization_id=org_id,
         )
         all_roles = {a_role.name: a_role for a_role in sess.query(Role)}
         RightsBO.set_allowed_actions(adm_user, [Action.ADMINISTRATE_APP], all_roles)

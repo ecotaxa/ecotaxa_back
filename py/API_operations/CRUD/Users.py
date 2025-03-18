@@ -10,6 +10,7 @@ from sqlalchemy import func
 
 from API_models.crud import (
     UserModelWithRights,
+    MinUserModel,
     ProjectSummaryModel,
     ResetPasswordReq,
     UserActivateReq,
@@ -34,8 +35,9 @@ from DB.User import (
     UserType,
     Guest,
     Person,
+    Organization,
 )
-from DB.Organization import Organization
+
 from helpers import DateTime
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
@@ -127,7 +129,7 @@ class UserService(Service):
             # request email verification if  validation is on
             admin_user = None
             # check valid user
-            if self.verify_email is True:
+            if self.verify_email:
                 if token:
                     if new_user.id > 0:
                         # update a profile with information requested - status to 0
@@ -373,7 +375,9 @@ class UserService(Service):
         ret.password = "?"
         return ret
 
-    def search(self, current_user_id: UserIDT, by_name: Optional[str]) -> List[User]:
+    def search(
+        self, current_user_id: UserIDT, by_name: Optional[str]
+    ) -> List[MinUserModel]:
         _: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         qry = self.ro_session.query(User).filter(User.status == UserStatus.active.value)
         if by_name is not None:
@@ -492,17 +496,23 @@ class UserService(Service):
                 detail=errors,
             )
         for col in cols_to_upd:
-            if update_src.id == -1 and col.name == User.usercreationdate.name:
-                value = DateTime.now_time()
-            elif col == User.password:
-                value = getattr(update_src, User.password.name)
-                if value not in ("", None):
-                    with LoginService() as sce:
-                        value = sce.hash_password(value)
+            if col == User.organisation:
+                org_id = UserBO.get_organization_id(
+                    self.session, update_src.organisation
+                )
+                setattr(user_to_update, "organization_id", org_id)
             else:
-                value = getattr(update_src, col.name)
-            if update_src.id == -1 or value is not None:
-                setattr(user_to_update, col.name, value)
+                if update_src.id == -1 and col == User.usercreationdate:
+                    value = DateTime.now_time()
+                elif col == User.password:
+                    value = getattr(update_src, User.password.name)
+                    if value not in ("", None):
+                        with LoginService() as sce:
+                            value = sce.hash_password(value)
+                else:
+                    value = getattr(update_src, col.name)
+                if update_src.id == -1 or value is not None:
+                    setattr(user_to_update, col.name, value)
         if actions is not None:
             # Set roles so that requested actions will be possible
             all_roles = {a_role.name: a_role for a_role in self.session.query(Role)}
@@ -538,7 +548,7 @@ class UserService(Service):
                 if is_other.type == UserType.user:
                     detail = [DETAIL_EMAIL_OWNED_BY_OTHER]
                 else:
-                    # this case can happen  when the same person is registered as guest and user with different email
+                    # a case that can happen  when the same person is registered as guest and user with different email
                     # TODO case to be evaluated
                     detail = [DETAIL_EMAIL_OWNED_BY_OTHER]
 
@@ -813,17 +823,20 @@ class UserService(Service):
             and user is not None
             and str(user.email or "").lower() == str(update_src.email or "").lower()
             and mail_status == update_src.mail_status
-        ) or self.verify_email is not True:
+        ) or self.verify_email == False:
             return update_src, status_cols
         if action is None:
             action = ActivationType.create
         if (
-            mail_status == False or has_to_refresh == True
-        ) and self._uservalidation is not None:
+            (mail_status == False or has_to_refresh == True)
+            and self._uservalidation is not None
+            and (user is not None and not self._current_is_admin(user))
+        ):
             if user is None:
                 previous_email = None
             else:
                 previous_email = user.email
+
             assistance_email = self._get_assistance_email()
             self._uservalidation.request_email_verification(
                 update_src.email,

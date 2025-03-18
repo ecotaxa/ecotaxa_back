@@ -3,10 +3,8 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import re
-import functools
-from typing import List, Any, Optional, Set, cast, Dict, OrderedDict, Union
-from dataclasses import dataclass
-from BO.DataLicense import DataLicense, LicenseEnum
+from typing import List, Any, Optional, Set, Dict, Union
+from BO.DataLicense import LicenseEnum
 from BO.Sample import SampleOrigIDT
 from DB import Session
 from DB.Collection import (
@@ -21,12 +19,12 @@ from DB.Collection import (
 from DB.Project import ProjectIDListT, Project
 from DB.Object import ObjectHeader
 from DB.Sample import Sample
-from DB.User import User
-from DB.Organization import Organization
-from BO.User import UserIDT, UserIDListT, ContactUserBO
+from DB.User import User, Person, Organization, OrganizationIDT
+from DB.ProjectPrivilege import ProjectPrivilege
+from BO.User import UserIDT, GuestIDT, PersonBO
+from BO.ProjectPrivilege import ProjectPrivilegeBO
 from DB.helpers.ORM import contains_eager, func, any_
 from helpers.DynamicLogs import get_logger
-from helpers.FieldListType import FieldListType
 from pydantic import BaseModel
 
 logger = get_logger(__name__)
@@ -35,17 +33,14 @@ logger = get_logger(__name__)
 CollectionIDT = int
 CollectionIDListT = List[int]
 
-# Temporary until a proper entity appears
-OrganisationIDT = str
-
 
 class CollectionBO(object):
     """
     A Collection business object, i.e. as seen from users.
     """
 
-    modif = ["title", "citation", "abstract", "description", "license"]
-    no_modif = ["short_title", "external_id"]
+    modif = ["title", "citation", "abstract", "description", "license", "external_id"]
+    no_modif = ["short_title"]
 
     def __init__(self, collection: Collection):
         self._collection: Collection = collection
@@ -56,9 +51,9 @@ class CollectionBO(object):
         self.contact_user: Optional[User] = None
         self.creator_users: List[User] = []
         self.associate_users: List[User] = []
-        self.creator_organisations: List[OrganisationIDT] = []
-        self.associate_organisations: List[OrganisationIDT] = []
-        self.code_provider_org: Optional[OrganisationIDT] = None
+        self.creator_organisations: List[Organization] = []
+        self.associate_organisations: List[Organization] = []
+        self.code_provider_org: Optional[str] = None
 
     def enrich(self) -> "CollectionBO":
         """
@@ -91,9 +86,9 @@ class CollectionBO(object):
         provider = COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER
         for an_org_and_role in self._collection.organisations_by_role:
             if an_org_and_role.role == provider:
-                self.code_provider_org = an_org_and_role.organisation
+                self.code_provider_org = an_org_and_role.organization.name
             else:
-                by_role_org[an_org_and_role.role].append(an_org_and_role.organisation)
+                by_role_org[an_org_and_role.role].append(an_org_and_role.organization)
         return self
 
     def _read_composing_projects(self):
@@ -126,7 +121,7 @@ class CollectionBO(object):
     def _get_annotators_from_histo(
         session, project_ids: ProjectIDListT, status: Optional[int] = None
     ) -> List[UserIDT]:
-        pqry = session.query(User.id, User.organisation)
+        pqry = session.query(User)
         pqry.join(User, User.id == ObjectHeader.classif_who)
         pqry.filter(Project.projid == any_(project_ids))
         pqry.filter(ObjectHeader.classif_who == User.id)
@@ -152,7 +147,6 @@ class CollectionBO(object):
             },
         }
         by_role: Dict[str, Any] = {}
-
         published = (
             self._collection.short_title != ""
             and self._collection.short_title is not None
@@ -167,19 +161,22 @@ class CollectionBO(object):
             if key in self.modif:
                 setattr(self._collection, key, value)
             elif key in self.no_modif:
-                if not published or value not in ["", "?"]:
+                # short_title cannot be modified
+                if not published:
                     setattr(self._collection, key, value)
             elif key in ["provider_user", "contact_user"] and value is not None:
                 # Copy provider user id contact user id
-                setattr(self._collection, key + "_id", value["id"])
-            for k, val in by_role_schema.items():
-                if key in val.keys():
-                    if k not in by_role:
-                        by_role[k] = {}
-                    v = val[key]
-                    by_role[k][v] = value
-        if len(by_role.keys()) > 0:
-            self.add_collection_users(session, by_role)
+                id_user = self.get_user_id(session, value)
+                setattr(self._collection, key + "_id", id_user)
+            else:
+                for k, val in by_role_schema.items():
+                    if key in val.keys():
+                        if k not in by_role:
+                            by_role[k] = {}
+                        v = val[key]
+                        by_role[k][v] = value
+            if len(by_role.keys()) > 0:
+                self.add_collection_users(session, by_role)
         session.commit()
 
     def add_collection_users(
@@ -190,52 +187,53 @@ class CollectionBO(object):
         coll_id = self._collection.id
         #  diff-ing
         if "user" in by_role:
-            qry = session.query(CollectionUserRole).filter(
-                CollectionUserRole.collection_id == coll_id
+            _ = (
+                session.query(CollectionUserRole)
+                .filter(CollectionUserRole.collection_id == coll_id)
+                .delete()
             )
-            role_users = qry.all()
-            qry.delete()
             # Add all
             for a_role, a_user_list in by_role["user"].items():
 
                 for a_user in a_user_list:
-                    session.add(
-                        CollectionUserRole(
-                            collection_id=coll_id, user_id=a_user["id"], role=a_role
-                        )
-                    )
+                    user_id = CollectionBO.get_user_id(session, a_user)
+                    collurole = CollectionUserRole()
+                    collurole.collection_id = coll_id
+                    collurole.user_id = user_id
+                    collurole.role = a_role
+                    session.add(collurole)
 
         # Dispatch orgs by role
         if "org" in by_role:
             # Remove all to avoid diff-ing
-            qry = session.query(CollectionOrgaRole).filter(
-                CollectionOrgaRole.collection_id == coll_id
+            _ = (
+                session.query(CollectionOrgaRole)
+                .filter(CollectionOrgaRole.collection_id == coll_id)
+                .delete()
             )
-            role_org = qry.all()
-            qry.delete()
             # Add all
+            inst_code_provider = 0
             for a_role, an_org_list in by_role["org"].items():
                 for an_org in an_org_list:
-                    an_org = an_org.strip()
-                    session.add(
-                        CollectionOrgaRole(
-                            collection_id=coll_id, organisation=an_org, role=a_role
-                        )
-                    )
-            if (
-                COLLECTION_ROLE_DATA_CREATOR in by_role["org"]
-                and len(by_role["org"][COLLECTION_ROLE_DATA_CREATOR]) > 0
-            ):
-                # First org is the institutionCode provider
-                inst_code_provider = by_role["org"][COLLECTION_ROLE_DATA_CREATOR][0]
-                inst_code_provider = inst_code_provider.strip()
-                session.add(
-                    CollectionOrgaRole(
-                        collection_id=coll_id,
-                        organisation=inst_code_provider,
-                        role=COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER,
-                    )
-                )
+                    org_id = CollectionBO.get_organisation_id(session, an_org)
+                    collorole = CollectionOrgaRole()
+                    collorole.collection_id = coll_id
+                    collorole.organization_id = org_id
+                    collorole.role = a_role
+                    session.add(collorole)
+                    # First org is the institutionCode provider
+                    if (
+                        a_role == COLLECTION_ROLE_DATA_CREATOR
+                        and inst_code_provider == 0
+                        and org_id is not None
+                    ):
+                        inst_code_provider = org_id
+            if inst_code_provider > 0:
+                collorole = CollectionOrgaRole()
+                collorole.collection_id = coll_id
+                collorole.organization_id = inst_code_provider
+                collorole.role = COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER
+                session.add(collorole)
 
     def set_composing_projects(self, session: Session, project_ids: ProjectIDListT):
         """
@@ -258,6 +256,34 @@ class CollectionBO(object):
             ).delete()
         if len(to_add):
             self._add_composing_projects(session, to_add)
+
+    @staticmethod
+    def get_user_id(session: Session, a_user: Union[int, str, Dict]) -> Optional[int]:
+        if isinstance(a_user, int):
+            return a_user
+        if isinstance(a_user, str):
+            if "@" in a_user:
+                user_id = (
+                    session.query(Person.id).filter(Person.email.ilike(a_user)).scalar()
+                )
+            else:
+                user_id = (
+                    session.query(Person.id).filter(Person.name.ilike(a_user)).scalar()
+                )
+
+            return user_id
+        return a_user["id"]
+
+    @staticmethod
+    def get_organisation_id(
+        session: Session, a_org: Union[int, str, Dict]
+    ) -> Optional[int]:
+        if isinstance(a_org, int):
+            return a_org
+        if isinstance(a_org, str):
+            org_id = PersonBO.get_organization_id(session, a_org)
+            return org_id
+        return a_org["id"]
 
     def __getattr__(self, item):
         """Fallback for 'not found' field after the C getattr() call.
@@ -329,6 +355,67 @@ class CollectionBO(object):
     CODE_RE = re.compile(
         "\\(([A-Z]+)\\)$"
     )  # Quite strict, just uppercase letters at the end of the name
+
+    @staticmethod
+    def is_a_manager(session: Session, user: User) -> CollectionIDListT:
+        """
+        check if current_user can admin guest or organization
+        """
+        if not user.is_manager():
+            collection_ids = CollectionBO.projects_managed_by(session, user)
+            return collection_ids
+        return []
+
+    @staticmethod
+    def projects_managed_by(session: Session, user: User) -> CollectionIDListT:
+        """
+        common managers of a collection
+        """
+        qry = (
+            session.query(CollectionProject.collection_id)
+            .join(
+                ProjectPrivilege,
+                CollectionProject.project_id == ProjectPrivilege.projid,
+            )
+            .filter(ProjectPrivilege.member == user.id)
+            .filter(ProjectPrivilege.privilege == ProjectPrivilegeBO.MANAGE)
+        )
+        collection_ids = qry.all()
+        return collection_ids
+
+    @staticmethod
+    def can_manage_guest(session: Session, user: User, guest_id: GuestIDT) -> bool:
+        """
+        check if user can update guest profile (has to be creator_users or associates_users  in a collection managed by the user)
+        """
+        if user.is_manager():
+            return True
+        collection_ids = CollectionBO.is_a_manager(session, user)
+        qry = (
+            session.query(CollectionUserRole.collection_id)
+            .filter(CollectionUserRole.collection_id.in_(collection_ids))
+            .filter(CollectionUserRole.user_id == guest_id)
+        )
+        can_manage = qry.scalar()
+        return can_manage is not None
+
+    @staticmethod
+    def can_manage_organization(
+        session: Session, user: User, organization: OrganizationIDT
+    ) -> bool:
+        """
+        check if user can update organization name or directories (has to be creator_organisations or associates_organisations  in a collection managed by the user)
+        """
+        if user.is_manager():
+            return True
+        collection_ids = CollectionBO.is_a_manager(session, user)
+        qry = (
+            session.query(CollectionOrgaRole.collection_id)
+            .filter(CollectionOrgaRole.collection_id.in_(collection_ids))
+            .filter(CollectionOrgaRole.organisation == organization)
+        )
+        can_manage = qry.scalar()
+        return can_manage is not None
 
     def get_institution_code(self) -> str:
         """

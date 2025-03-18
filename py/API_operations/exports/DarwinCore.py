@@ -40,8 +40,7 @@ from DB.Collection import Collection
 from DB.Project import ProjectTaxoStat, Project
 from DB.Sample import Sample
 from DB.Taxonomy import Taxonomy
-from DB.User import User, Person, Guest
-from DB.Organization import Organization, PeopleOrganizationDirectory
+from DB.User import User, Organization, PeopleOrganizationDirectory
 from DB.WoRMs import WoRMS
 from DB.helpers import Session
 from DB.helpers.Direct import text
@@ -57,7 +56,7 @@ from formats.DarwinCore.MoF import (
     SamplingInstrumentName,
     CountOfBiologicalEntity,
     ImagingInstrumentName,
-    #TODO replace ImagingInstrumentName par AnalyticalInstrumentName but keep the value
+    # TODO replace ImagingInstrumentName par AnalyticalInstrumentName but keep the value
 )
 from formats.DarwinCore.models import (
     DwC_Event,
@@ -282,8 +281,9 @@ class DarwinCoreExport(JobServiceBase):
         return all_taxa
 
     @staticmethod
-    def organisation_to_eml_person(an_org: str) -> EMLPerson:
-        return EMLPerson(organizationName=an_org)
+    def organisation_to_eml_person(an_org: Organization) -> EMLPerson:
+        # an_org name for the moment - then will be edmo data in directories field
+        return EMLPerson(organizationName=an_org.name)
 
     @staticmethod
     def capitalize_name(name: str) -> str:
@@ -405,12 +405,10 @@ class DarwinCoreExport(JobServiceBase):
             self.errors.append(
                 "No valid data creator (user or organisation) found for EML metadata."
             )
-
         contact, errs = self.user_to_eml_person(the_collection.contact_user, "contact")
         if contact is None:
             self.errors.append("No valid contact user found for EML metadata.")
             self.warnings.extend(errs)
-
         provider, errs = self.user_to_eml_person(
             the_collection.provider_user, "provider"
         )
@@ -486,7 +484,7 @@ class DarwinCoreExport(JobServiceBase):
             keywords=[
                 "Plankton",
                 "Imaging",
-                "EcoTaxa"  # Not in list above
+                "EcoTaxa",  # Not in list above
                 # "Ligurian sea" TODO: Geo area?
                 # TODO: ZooProcess (from projects)
             ],
@@ -676,7 +674,7 @@ class DarwinCoreExport(JobServiceBase):
                     sample=a_sample, arch=arch, event_id=event_id, predicted=False
                 )
                 if self.include_predicted:
-                   _ = self.add_occurrence_eMoFs_for_sample(
+                    _ = self.add_occurrence_eMoFs_for_sample(
                         sample=a_sample, arch=arch, event_id=event_id, predicted=True
                     )
                 # Ensure EMOFs (in recast space) are also covered in occurrences (so far in raw space)

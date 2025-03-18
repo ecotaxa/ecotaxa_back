@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Iterable, TYPE_CHECKING,Final
+from typing import Iterable, TYPE_CHECKING, Final, Optional, List
 
 from sqlalchemy import event, SmallInteger
 from sqlalchemy.engine import Connection
@@ -21,8 +21,8 @@ from .helpers.DDL import (
 )
 from .helpers.Direct import func
 from .helpers.ORM import Model, relationship, Insert
-from .helpers.Postgres import TIMESTAMP, VARCHAR
-from DB.Organization import my_before_organization
+from .helpers.Postgres import TIMESTAMP, INTEGER
+
 
 if TYPE_CHECKING:
     from .ProjectPrivilege import ProjectPrivilege
@@ -40,6 +40,26 @@ class UserType(str, Enum):
     user: Final = "user"
 
 
+NO_ORGANIZATION_ADDED = "Error adding organization name"
+OrganizationIDT = int
+OrganizationIDListT = List[int]
+
+
+class PeopleOrganizationDirectory(str, Enum):
+    orcid: Final = "https://orcid.org/"
+    edmo: Final = "https://edmo.seadatanet.org/"
+
+
+class Organization(Model):
+    __tablename__ = "organizations"
+    id: int = Column(Integer, Sequence("organizations_id_seq"), primary_key=True)
+    name: str = Column(String(512), unique=True, nullable=False)
+    directories: Optional[str] = Column(String(2000), nullable=True)
+
+    def __str__(self):
+        return "{0} ({1})".format(self.name, self.directories)
+
+
 class Person(Model):
     __tablename__ = "users"
     id: int = Column(Integer, Sequence("seq_users"), primary_key=True)
@@ -49,11 +69,18 @@ class Person(Model):
     orcid: str = Column(String(20), nullable=True)
     type = Column(String(10))
     usercreationdate = Column(TIMESTAMP, default=func.now())
-    organisation = Column(VARCHAR, ForeignKey("organizations.name"), nullable=False)
+    organization_id = Column(INTEGER, ForeignKey("organizations.id"), nullable=True)
+    organization: Organization
     __mapper_args__ = {
         "polymorphic_on": type,
         "polymorphic_identity": "person",
     }
+
+    @property
+    def organisation(self):
+        if self.organization is None:
+            return ""
+        return self.organization.name
 
     def __str__(self):
         return "{0} ({1})".format(self.name, self.email)
@@ -66,13 +93,13 @@ class Guest(Person):
 
     def to_user(self) -> User:
         user = User()
-        user.id=self.id
-        user.name=self.name
-        user.email=self.email
-        user.country=self.country
-        user.orcid=self.orcid
-        user.usercreationdate=self.usercreationdate
-        user.organisation=self.organisation
+        user.id = self.id
+        user.name = self.name
+        user.email = self.email
+        user.country = self.country
+        user.orcid = self.orcid
+        user.usercreationdate = self.usercreationdate
+        user.organization_id = self.organization_id
         return user
 
 
@@ -103,32 +130,23 @@ class User(Person):
 
     def to_guest(self) -> Guest:
         guest = Guest()
-        guest.id=self.id
-        guest.name=self.name
-        guest.email=self.email
-        guest.country= self.country
-        guest.orcid=self.orcid
-        guest.usercreationdate=self.usercreationdate
-        guest.organisation=self.organisation
+        guest.id = self.id
+        guest.name = self.name
+        guest.email = self.email
+        guest.country = self.country
+        guest.orcid = self.orcid
+        guest.usercreationdate = self.usercreationdate
+        guest.organization_id = self.organization_id
         return guest
 
     def has_role(self, role: str) -> bool:
         # TODO: Cache a bit. All roles are just python objects due to SQLAlchemy magic.
         return role in [r.name for r in self.roles]
-    def is_manager(self)->bool:
-        return (self.has_role(Role.APP_ADMINISTRATOR) or self.has_role(
+
+    def is_manager(self) -> bool:
+        return self.has_role(Role.APP_ADMINISTRATOR) or self.has_role(
             Role.USERS_ADMINISTRATOR
-        ))
-
-
-# associate the listener function with SomeClass,
-# to execute during the "before_insert" hook
-@event.listens_for(User, "before_insert")
-@event.listens_for(Guest, "before_insert")
-@event.listens_for(User, "before_update")
-@event.listens_for(Guest, "before_update")
-def my_before_person_organisation(mapper, connection: Connection, target):
-    my_before_organization(mapper, connection, target)
+        )
 
 
 class Role(Model):

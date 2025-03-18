@@ -7,12 +7,7 @@
 #
 from __future__ import annotations
 
-from typing import (
-    Optional,
-    TYPE_CHECKING,
-    Iterable,
-    List
-)
+from typing import Optional, TYPE_CHECKING, Iterable, List
 
 from DB.helpers.ORM import Model
 from sqlalchemy import event
@@ -20,8 +15,9 @@ from sqlalchemy.engine import Connection
 from .helpers.DDL import Column, Sequence, ForeignKey, Index
 from .helpers.ORM import relationship
 from .helpers.Postgres import VARCHAR, INTEGER
-from DB.Organization import my_before_organization
 from DB.Project import Project
+from DB.User import Organization
+
 if TYPE_CHECKING:
     from .User import User
 
@@ -95,20 +91,20 @@ class CollectionOrgaRole(Model):
     __tablename__ = "collection_orga_role"
     """ n<->n valued relationship b/w collection and organisations """
     collection_id: int = Column(INTEGER, ForeignKey("collection.id"), primary_key=True)
-    organisation: str = Column(
-        VARCHAR, ForeignKey("organizations.name"), nullable=False
+    organization_id: str = Column(
+        INTEGER, ForeignKey("organizations.id"), nullable=False
     )
+    collection: relationship
+    organization: Organization
     role: str = Column(
         VARCHAR(1),  # 'C' for data Creator, 'A' for Associated 'person'
         nullable=False,
         primary_key=True,
     )
 
+    @property
+    def organisation(self):
+        return self.organization.name
+
     def __str__(self):
         return "{0},{1}:{2}".format(self.collection_id, self.organisation, self.role)
-
-
-@event.listens_for(CollectionOrgaRole, "before_insert")
-@event.listens_for(CollectionOrgaRole, "before_update")
-def my_before_orga_role(mapper, connection: Connection, target):
-    my_before_organization(mapper, connection, target)

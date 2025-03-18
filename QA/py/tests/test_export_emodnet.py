@@ -152,9 +152,9 @@ This series is part of the long term planktonic monitoring of
     # over its lifetime. It is currently supported directly by the Institut de la Mer
     # de Villefranche (IMEV), as part of its long term monitoring effort.
     """
-    the_coll[
-        "license"
-    ] = "CC BY 4.0"  # Would do nothing as the license comes from the underlying project
+    the_coll["license"] = (
+        "CC BY 4.0"  # Would do nothing as the license comes from the underlying project
+    )
     user_doing_all = {
         "id": REAL_USER_ID,
         # TODO: below is redundant with ID and ignored, but fails validation (http 422) if not set

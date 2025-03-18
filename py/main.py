@@ -38,6 +38,7 @@ from API_models.crud import (
     UserModelWithRights,
     MinUserModel,
     GuestModel,
+    OrganizationModel,
     CollectionModel,
     CollectionAggregatedRsp,
     CreateCollectionReq,
@@ -109,6 +110,7 @@ from API_operations.CRUD.ObjectParents import (
 from API_operations.CRUD.Projects import ProjectsService
 from API_operations.CRUD.Users import UserService
 from API_operations.CRUD.Guests import GuestService
+from API_operations.CRUD.Organizations import OrganizationService
 from API_operations.Consistency import ProjectConsistencyChecker
 from API_operations.DBSyncService import DBSyncService
 from API_operations.JsonDumper import JsonDumper
@@ -150,12 +152,12 @@ from BO.Project import ProjectBO, ProjectUserStats
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleBO, SampleTaxoStats
 from BO.Taxonomy import TaxonBO
-from BO.User import UserIDT
+from BO.User import UserIDT, GuestIDT
 from DB import Sample
 from DB.Object import ObjectIDListT
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
-from DB.User import User, Guest
+from DB.User import User, Guest, OrganizationIDT
 from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
@@ -633,9 +635,94 @@ def search_organizations(
     """
     **Search for organizations.**
     """
-    with UserService() as sce:
+    with OrganizationService() as sce:
         org_names = sce.search_organizations(name)
     return org_names
+
+
+@app.get(
+    "/organizations",
+    operation_id="get_organizations",
+    tags=["organizations"],
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": [
+                        "Oceanographic Laboratory of Villefranche sur Mer - LOV",
+                        "Developmental Biology Laboratory of Villefranche sur Mer - LBDV",
+                        "Sea Institute of Villefranche sur Mer - IMEV",
+                    ]
+                }
+            }
+        }
+    },
+    response_model=List[OrganizationModel],
+)
+def get_organizations(
+    ids: str = Query(
+        "",
+        title="Ids",
+        description="String containing the list of one or more id separated by non-num char. \n"
+        " \n **If several ids are provided**, one full info is returned per user.",
+        example="1",
+    ),
+    current_user: Optional[int] = Depends(get_optional_current_user),
+) -> List[OrganizationModel]:
+    """
+    **Search for organizations.**
+    """
+    with OrganizationService() as sce:
+        org_ids = _split_num_list(ids)
+        organizations = sce.list(current_user, org_ids)
+    return organizations
+
+
+@app.post(
+    "/organizations/create",
+    operation_id="create_organization",
+    tags=["organizations"],
+    responses={200: {"content": {"application/json": {"example": null}}}},
+)
+def create_organization(
+    organization: OrganizationModel = Body(...),
+    current_user: Optional[int] = Depends(get_optional_current_user),
+) -> OrganizationIDT:
+    """
+    **Create a new organization**, return **NULL upon success.**
+
+    🔒 Depending on logged user, different authorizations apply:
+    - An administrator or user administrator or logged project manager can create an organization.
+    - An ordinary logged user cannot create another organization this way.
+    """
+    with OrganizationService() as sce:
+        with ValidityThrower(), RightsThrower():
+            org: OrganizationIDT = sce.create_organization(current_user, organization)
+    return org
+
+
+@app.put(
+    "/organizations/{organization_id}",
+    operation_id="update_organization",
+    tags=["organizations"],
+    responses={200: {"content": {"application/json": {"example": null}}}},
+)
+def update_organization(
+    organization: OrganizationModel,
+    organization_id: int = Path(
+        ..., description="Internal, numeric id of the organization.", example=760
+    ),
+    current_user: int = Depends(get_current_user),
+) -> None:
+    """
+    **Update the organization**, return **NULL upon success.**
+
+    🔒 Depending on logged user, different authorizations apply:
+    - An administrator or user administrator or manager user can change any field with respect of consistency.
+    """
+    with OrganizationService() as sce:
+        with ValidityThrower(), RightsThrower():
+            sce.update_organization(current_user, organization_id, organization)
 
 
 # ######################## END OF ORGANIZATIONS
@@ -683,7 +770,7 @@ def get_guests(
 def create_guest(
     guest: GuestModel = Body(...),
     current_user: Optional[int] = Depends(get_optional_current_user),
-) -> None:
+) -> GuestIDT:
     """
     **Create a new guest**, return **NULL upon success.**
 
@@ -696,7 +783,8 @@ def create_guest(
     """
     with GuestService() as sce:
         with ValidityThrower(), RightsThrower():
-            _: UserIDT = sce.create_guest(current_user, guest)
+            guest: UserIDT = sce.create_guest(current_user, guest)
+    return guest
 
 
 @app.put(
@@ -910,7 +998,7 @@ def collection_aggregated_projects_properties(
         example="1",
     ),
     current_user: int = Depends(get_current_user),
-) -> MyORJSONResponse:
+) -> CollectionAggregatedRsp:
     """
     **returns projectset calculated selected fields values  projects and list of rejected projects id.
     Note: 'manage' right is required on all underlying projects.
@@ -961,7 +1049,7 @@ def get_collection(
     responses={200: {"content": {"application/json": {"example": null}}}},
 )
 def update_collection(
-    collection: CollectionModel = Body(...),
+    collection: CollectionReq = Body(...),
     collection_id: int = Path(
         ...,
         description="Internal, the unique numeric id of this collection.",

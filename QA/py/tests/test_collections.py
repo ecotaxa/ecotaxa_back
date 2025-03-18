@@ -142,19 +142,22 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
         short_title = "my-tiny-title"
     else:
         short_title = None
-
     assert rsp.json() == [
         {
             "abstract": """
     A bit less abstract...
     """,
-            "associate_organisations": ["An org"],
+            "associate_organisations": [
+                {"id": 8, "name": "An org", "directories": None}
+            ],
             "associate_users": [],
             "external_id": "?",
             "external_id_system": "?",
             "citation": None,
             "contact_user": None,
-            "creator_organisations": ["At least one (ONE)"],
+            "creator_organisations": [
+                {"id": 7, "name": "At least one (ONE)", "directories": None}
+            ],
             "creator_users": [],
             "description": None,
             "id": coll_id,

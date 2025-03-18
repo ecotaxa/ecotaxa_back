@@ -25,7 +25,7 @@ if True:
     from .ProjectPrivilege import ProjectPrivilege
     from .Sample import Sample
     from .Taxonomy import Taxonomy
-    from .User import User, Role
+    from .User import User, Guest, Role, Organization
     from .UserPreferences import UserPreferences
     from .Instrument import Instrument
 
@@ -47,7 +47,10 @@ if True:
 
     # User preferences
     User.preferences_for_projects = relationship(UserPreferences, lazy="dynamic")
-
+    # User organization
+    User.organization = relationship(Organization, uselist=False, lazy="joined")
+    # Guest organization
+    Guest.organization = relationship(Organization, uselist=False, lazy="joined")
     # Collection
     Collection.projects = relationship(
         Project, secondary=CollectionProject.__tablename__
@@ -63,11 +66,15 @@ if True:
         uselist=False,
     )
     Collection.users_by_role = relationship(CollectionUserRole, viewonly=True)
-    Collection.organisations_by_role = relationship(CollectionOrgaRole)
+    Collection.organisations_by_role = relationship(CollectionOrgaRole, viewonly=True)
 
     CollectionUserRole.collection = relationship(Collection, uselist=False)
     CollectionUserRole.user = relationship(User, uselist=False)  # type:ignore # case2
 
+    CollectionOrgaRole.collection = relationship(Collection, uselist=False)
+    CollectionOrgaRole.organization = relationship(
+        Organization, uselist=False
+    )  # type:ignore # case2
     # Ancilliary to project
     ProjectVariables.project = relationship(
         Project, viewonly=True

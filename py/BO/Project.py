@@ -710,7 +710,6 @@ class ProjectBO(object):
                 User.name,
                 User.email,
                 User.orcid,
-                User.organisation,
             )
             .join(Collection.contact_user)
             .join(CollectionProject)
@@ -718,10 +717,6 @@ class ProjectBO(object):
         )
         ret = []
         for r in qry:
-            # if r.contact_user_id:
-            # contact = ContactUserBO(id=r.contact_user_id,email=r.email,name=r.name, orcid=r.orcid or "None",organisation=r.organisation)
-            # else:
-            # contact = None
             qry_proj = session.query(CollectionProject.project_id).where(
                 CollectionProject.collection_id == r.id
             )
@@ -1148,9 +1143,7 @@ class CollectionProjectBOSet(ProjectBOSet):
         ids: UserIDListT = []
         for stat in stats:
             ids = ids + [annotator.id for annotator in stat.annotators]
-        qry = session.query(
-            User.id, User.email, User.name, User.orcid, User.organisation
-        ).filter(User.id == any_(ids))
+        qry = session.query(User).filter(User.id == any_(ids))
         if status is not None:
             qry = qry.filter(User.status == status)
         users: List[User] = []

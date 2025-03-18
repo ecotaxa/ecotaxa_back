@@ -2940,16 +2940,17 @@ BEGIN;
 -- Running upgrade 78b24e7ba52b -> e6dda08ff48b
 
 CREATE TABLE organizations (
-    id SERIAL NOT NULL,
+    id INTEGER SERIAL NOT NULL,
     name VARCHAR(255) UNIQUE NOT NULL,
-    directories VARCHAR(100)[],
-    PRIMARY KEY (id)
+    directories VARCHAR(2000),
+     PRIMARY KEY (id),
 );
 
 ALTER TABLE users ADD COLUMN type VARCHAR(10);
 
 UPDATE users SET type='user';
 ALTER TABLE users ALTER COLUMN type SET NOT NULL;
+
 UPDATE users SET organisation='NULL' WHERE organisation IS NULL;
 UPDATE users SET organisation=(SELECT TRIM(organisation) from users as u1 WHERE u1.id=users.id) ;
 INSERT INTO organizations (name) SELECT DISTINCT organisation FROM users WHERE organisation IS NOT NULL;
@@ -2958,7 +2959,27 @@ ALTER TABLE users ADD CONSTRAINT users_organisation FOREIGN KEY(organisation) RE
 UPDATE alembic_version SET version_num='e6dda08ff48b' WHERE alembic_version.version_num = '78b24e7ba52b';
 
 COMMIT;
+BEGIN;
 
+INFO  [alembic.runtime.migration] Running upgrade e6dda08ff48b -> 9f8174c268da, organization_id
+-- Running upgrade e6dda08ff48b -> 9f8174c268da
+
+ALTER TABLE collection_orga_role ADD COLUMN organization_id INTEGER ;
+
+ALTER TABLE collection_orga_role ADD CONSTRAINT collection_organization_fkey FOREIGN KEY(organization_id) REFERENCES organizations (id);
+INSERT INTO organizations (name) SELECT DISTINCT organisation FROM collection_orga_role WHERE organisation IS NOT NULL AND NOT EXISTS (SELECT organizations.id FROM organizations  WHERE organisation=organizations.name);
+UPDATE collection_orga_role SET organization_id=subquery.id FROM(SELECT id,name FROM organizations) AS subquery WHERE subquery.name LIKE collection_orga_role.organisation;
+ALTER TABLE collection_orga_role ALTER COLUMN organisation RENAME TO organization;
+ALTER TABLE users ADD COLUMN organization_id INTEGER;
+UPDATE users SET organization_id=subquery.id FROM(SELECT id,name FROM organizations) AS subquery WHERE subquery.name LIKE users.organisation;
+ALTER TABLE users ALTER COLUMN organisation RENAME TO organization;
+ALTER TABLE users DROP CONSTRAINT users_organisation;
+ALTER TABLE users ADD CONSTRAINT user_organization_fkey FOREIGN KEY(organization_id) REFERENCES organizations (id);
+ALTER TABLE collection_orga_role ALTER COLUMN organization_id SET NOT NULL;
+
+UPDATE alembic_version SET version_num='9f8174c268da' WHERE alembic_version.version_num = 'e6dda08ff48b';
+
+COMMIT;
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;

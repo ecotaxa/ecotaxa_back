@@ -5,16 +5,15 @@
 
 import json
 from dataclasses import dataclass
-from typing import Any, Final, List, Optional, Union, Dict,Type
+from typing import Any, Final, List, Optional, Union, Dict, Type
 
 from BO.Classification import ClassifIDListT
 from BO.Rights import RightsBO
 from BO.helpers.TSVHelpers import none_to_empty
 from DB import Session
-from DB.User import User, UserStatus, UserType, Person, Guest,Role
-from DB.Organization import Organization
+from DB.User import User, Person, Guest, Organization, OrganizationIDT
 from DB.UserPreferences import UserPreferences
-from DB.helpers.ORM import any_, or_, func
+from DB.helpers.ORM import any_, or_, func, text
 from helpers.DynamicLogs import get_logger
 
 
@@ -62,16 +61,33 @@ class PersonBO(object):
 
     _slots = ["name", "email", "organisation", "orcid", "country", "usercreationdate"]
     to_check = ["name", "email", "organisation", "country"]
+
     def __init__(self, dbitem: Union[Guest, User]):
         self._dbitem = dbitem
 
     def __getattr__(self, item):
-        """Fallback for 'not found' field after the C getattr() call.
-        If we did not enrich a Project field somehow then return it"""
+        """Fallback for 'not found' field after the C getattr() call."""
         return getattr(self._dbitem, item)
 
     @staticmethod
-    def check_fields(to_check_model:Dict, to_check: List[str]) -> List[str]:
+    def get_organization_id(session: Session, organisation: str) -> OrganizationIDT:
+        organisation = organisation.strip()
+        org_id = (
+            session.query(Organization.id)
+            .filter(Organization.name.ilike(organisation))
+            .scalar()
+        )
+        if org_id is None:
+            org_id = session.execute(
+                text(
+                    "insert into organizations(id,name) values(nextval('organizations_id_seq'),:nam) RETURNING id"
+                ),
+                {"nam": organisation},
+            ).scalar()
+        return org_id
+
+    @staticmethod
+    def check_fields(to_check_model: Dict, to_check: List[str]) -> List[str]:
         errors: List[str] = []
         for a_field in to_check:
             val = to_check_model[a_field]
@@ -83,7 +99,12 @@ class PersonBO(object):
         return errors
 
     @staticmethod
-    def find_items(cls:Union[Type[User],Type[Guest]],session:Session,names: List[str], emails: List[str], found_items: dict
+    def find_items(
+        cls: Union[Type[User], Type[Guest]],
+        session: Session,
+        names: List[str],
+        emails: List[str],
+        found_items: dict,
     ):
         """
         Find the persons in DB, by name or email.
@@ -120,9 +141,10 @@ class PersonBO(object):
             _id = person_data["id"]
         if _id != -1:
             qry = qry.filter(Person.id != _id)
-        qry= qry.filter( func.lower(Person.email) == func.lower(str(person_data["email"] or "")))
+        qry = qry.filter(
+            func.lower(Person.email) == func.lower(str(person_data["email"] or ""))
+        )
         return qry.scalar()
-
 
 
 class GuestBO(PersonBO):
@@ -268,9 +290,7 @@ class UserBO(PersonBO):
         )
 
     @staticmethod
-    def validate_usr(
-         user_model: Any, verify_password: bool = False
-    ) -> None:
+    def validate_usr(user_model: Any, verify_password: bool = False) -> None:
         """
         Validate basic rules on a user model before setting it into DB.
         TODO: Not done in pydantic, as there are non-complying values in the DB and that would prevent reading them.
@@ -282,12 +302,12 @@ class UserBO(PersonBO):
             from helpers.httpexception import DETAIL_PASSWORD_STRENGTH_ERROR
 
             new_password = getattr(user_model, User.password.name)
-            if not(new_password in ("", None) or UserBO.is_strong_password(
-                new_password
-            )):
+            if not (
+                new_password in ("", None) or UserBO.is_strong_password(new_password)
+            ):
                 errors.append(DETAIL_PASSWORD_STRENGTH_ERROR)
 
-        assert len(errors)==0, errors
+        assert len(errors) == 0, errors
 
     @staticmethod
     def is_strong_password(password: str) -> bool:
