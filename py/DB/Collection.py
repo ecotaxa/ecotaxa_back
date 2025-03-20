@@ -10,13 +10,11 @@ from __future__ import annotations
 from typing import Optional, TYPE_CHECKING, Iterable, List
 
 from DB.helpers.ORM import Model
-from sqlalchemy import event
-from sqlalchemy.engine import Connection
 from .helpers.DDL import Column, Sequence, ForeignKey, Index
 from .helpers.ORM import relationship
 from .helpers.Postgres import VARCHAR, INTEGER
 from DB.Project import Project
-from DB.User import Organization
+from DB.User import Organization, Guest
 
 if TYPE_CHECKING:
     from .User import User
@@ -82,6 +80,7 @@ class CollectionUserRole(Model):
     # The relationships are created in Relations.py but the typing here helps IDE
     collection: relationship
     user: User
+    guest: Guest
 
     def __str__(self) -> str:
         return "{0},{1}:{2}".format(self.collection_id, self.user_id, self.role)
@@ -92,7 +91,7 @@ class CollectionOrgaRole(Model):
     """ n<->n valued relationship b/w collection and organisations """
     collection_id: int = Column(INTEGER, ForeignKey("collection.id"), primary_key=True)
     organization_id: str = Column(
-        INTEGER, ForeignKey("organizations.id"), nullable=False
+        INTEGER, ForeignKey("organizations.id"), nullable=False, primary_key=True
     )
     collection: relationship
     organization: Organization

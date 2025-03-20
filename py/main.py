@@ -622,7 +622,7 @@ def reset_user_password(
             }
         }
     },
-    response_model=List[str],
+    response_model=List[OrganizationModel],
 )
 def search_organizations(
     name: str = Query(
@@ -631,7 +631,7 @@ def search_organizations(
         description="Search by name, use % for searching with 'any char'.",
         example="%vill%",
     )
-) -> List[str]:
+) -> List[OrganizationModel]:
     """
     **Search for organizations.**
     """

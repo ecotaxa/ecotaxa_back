@@ -70,10 +70,10 @@ if True:
 
     CollectionUserRole.collection = relationship(Collection, uselist=False)
     CollectionUserRole.user = relationship(User, uselist=False)  # type:ignore # case2
-
+    CollectionUserRole.guest = relationship(Guest, uselist=False)  # type:ignore # case2
     CollectionOrgaRole.collection = relationship(Collection, uselist=False)
     CollectionOrgaRole.organization = relationship(
-        Organization, uselist=False
+        Organization, uselist=False, lazy="joined"
     )  # type:ignore # case2
     # Ancilliary to project
     ProjectVariables.project = relationship(

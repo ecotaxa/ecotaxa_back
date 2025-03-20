@@ -186,15 +186,16 @@ class CollectionBO(object):
     ):
         coll_id = self._collection.id
         #  diff-ing
+
         if "user" in by_role:
             _ = (
                 session.query(CollectionUserRole)
                 .filter(CollectionUserRole.collection_id == coll_id)
                 .delete()
             )
+            session.flush()
             # Add all
             for a_role, a_user_list in by_role["user"].items():
-
                 for a_user in a_user_list:
                     user_id = CollectionBO.get_user_id(session, a_user)
                     collurole = CollectionUserRole()
@@ -211,6 +212,7 @@ class CollectionBO(object):
                 .filter(CollectionOrgaRole.collection_id == coll_id)
                 .delete()
             )
+            session.flush()
             # Add all
             inst_code_provider = 0
             for a_role, an_org_list in by_role["org"].items():

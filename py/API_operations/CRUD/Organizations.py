@@ -131,7 +131,7 @@ class OrganizationService(Service):
             qry = qry.filter(Organization.name.ilike(by_name))
         else:
             return []
-        return [a_rec.name for a_rec in qry]
+        return [a_rec for a_rec in qry]
 
     def list(
         self,
