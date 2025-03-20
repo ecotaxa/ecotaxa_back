@@ -818,19 +818,41 @@ def update_guests(
     response_model=List[GuestModel],
 )
 def search_guest(
-    current_user: int = Depends(get_current_user),
     by_name: Optional[str] = Query(
         default=None,
         title="search by name",
         description="Search by name, use % for searching with 'any char'.",
         example="%userNa%",
     ),
-) -> List[Guest]:
+    current_user: int = Depends(get_current_user),
+) -> List[GuestModel]:
     """
     **Search guests using various criteria**, search is case-insensitive and might contain % chars.
     """
     with GuestService() as sce:
         ret = sce.search(current_user, by_name)
+    return ret
+
+
+@app.get(
+    "/guests/{guest_id}",
+    operation_id="get_guest",
+    tags=["guests"],
+    response_model=GuestModel,
+)
+def get_guest(
+    guest_id: int = Path(
+        ..., description="Internal, the unique numeric id of this guest.", example=1
+    ),
+    current_user: int = Depends(get_current_user),
+) -> Optional[GuestModel]:
+    """
+    Returns **information about the user** corresponding to the given id.
+    """
+    with GuestService() as sce:
+        ret = sce.search_by_id(current_user, guest_id)
+    if ret is None:
+        raise HTTPException(status_code=404, detail="User not found")
     return ret
 
 

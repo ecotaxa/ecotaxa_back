@@ -76,7 +76,11 @@ class CollectionBO(object):
         }
         a_user_and_role: CollectionUserRole
         for a_user_and_role in self._collection.users_by_role:
-            by_role_usr[a_user_and_role.role].append(a_user_and_role.user)
+            if a_user_and_role.user is not None:
+                by_role_usr[a_user_and_role.role].append(a_user_and_role.user)
+            else:
+                print("----isguest", a_user_and_role.user_id)
+                by_role_usr[a_user_and_role.role].append(a_user_and_role.guest)
         # Dispatch orgs by role
         by_role_org = {
             COLLECTION_ROLE_DATA_CREATOR: self.creator_organisations,
@@ -193,7 +197,6 @@ class CollectionBO(object):
                 .filter(CollectionUserRole.collection_id == coll_id)
                 .delete()
             )
-            session.flush()
             # Add all
             for a_role, a_user_list in by_role["user"].items():
                 for a_user in a_user_list:
@@ -212,7 +215,6 @@ class CollectionBO(object):
                 .filter(CollectionOrgaRole.collection_id == coll_id)
                 .delete()
             )
-            session.flush()
             # Add all
             inst_code_provider = 0
             for a_role, an_org_list in by_role["org"].items():
@@ -261,6 +263,7 @@ class CollectionBO(object):
 
     @staticmethod
     def get_user_id(session: Session, a_user: Union[int, str, Dict]) -> Optional[int]:
+        print("a_user", a_user)
         if isinstance(a_user, int):
             return a_user
         if isinstance(a_user, str):
@@ -269,6 +272,7 @@ class CollectionBO(object):
                     session.query(Person.id).filter(Person.email.ilike(a_user)).scalar()
                 )
             else:
+                print("a_user", a_user.__dict__)
                 user_id = (
                     session.query(Person.id).filter(Person.name.ilike(a_user)).scalar()
                 )
