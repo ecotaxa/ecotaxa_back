@@ -785,7 +785,7 @@
                   "title":"Response Search Organizations Organizations Search Get",
                   "type":"array",
                   "items":{
-                    "type":"string"
+                    "$ref":"#/components/schemas/OrganizationModel"
                   }
                 },
                 "example":[
@@ -807,6 +807,173 @@
             }
           }
         }
+      }
+    },
+    "/organizations":{
+      "get":{
+        "tags":[
+          "organizations"
+        ],
+        "summary":"Get Organizations",
+        "description":"**Search for organizations.**",
+        "operationId":"get_organizations",
+        "parameters":[
+          {
+            "description":"String containing the list of one or more id separated by non-num char. \n \n **If several ids are provided**, one full info is returned per user.",
+            "required":false,
+            "schema":{
+              "title":"Ids",
+              "type":"string",
+              "description":"String containing the list of one or more id separated by non-num char. \n \n **If several ids are provided**, one full info is returned per user.",
+              "default":""
+            },
+            "example":"1",
+            "name":"ids",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Get Organizations Organizations Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/OrganizationModel"
+                  }
+                },
+                "example":[
+                  "Oceanographic Laboratory of Villefranche sur Mer - LOV",
+                  "Developmental Biology Laboratory of Villefranche sur Mer - LBDV",
+                  "Sea Institute of Villefranche sur Mer - IMEV"
+                ]
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/organizations/create":{
+      "post":{
+        "tags":[
+          "organizations"
+        ],
+        "summary":"Create Organization",
+        "description":"**Create a new organization**, return **NULL upon success.**\n\n🔒 Depending on logged user, different authorizations apply:\n- An administrator or user administrator or logged project manager can create an organization.\n- An ordinary logged user cannot create another organization this way.",
+        "operationId":"create_organization",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/OrganizationModel"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{},
+                "example":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/organizations/{organization_id}":{
+      "put":{
+        "tags":[
+          "organizations"
+        ],
+        "summary":"Update Organization",
+        "description":"**Update the organization**, return **NULL upon success.**\n\n🔒 Depending on logged user, different authorizations apply:\n- An administrator or user administrator or manager user can change any field with respect of consistency.",
+        "operationId":"update_organization",
+        "parameters":[
+          {
+            "description":"Internal, numeric id of the organization.",
+            "required":true,
+            "schema":{
+              "title":"Organization Id",
+              "type":"integer",
+              "description":"Internal, numeric id of the organization."
+            },
+            "example":760,
+            "name":"organization_id",
+            "in":"path"
+          }
+        ],
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/OrganizationModel"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{},
+                "example":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
       }
     },
     "/guests":{
@@ -925,6 +1092,55 @@
       }
     },
     "/guests/{guest_id}":{
+      "get":{
+        "tags":[
+          "guests"
+        ],
+        "summary":"Get Guest",
+        "description":"Returns **information about the user** corresponding to the given id.",
+        "operationId":"get_guest",
+        "parameters":[
+          {
+            "description":"Internal, the unique numeric id of this guest.",
+            "required":true,
+            "schema":{
+              "title":"Guest Id",
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this guest."
+            },
+            "example":1,
+            "name":"guest_id",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/GuestModel"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      },
       "put":{
         "tags":[
           "guests"
@@ -1443,7 +1659,7 @@
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/CollectionModel"
+                "$ref":"#/components/schemas/CollectionReq"
               }
             }
           },
@@ -7134,7 +7350,7 @@
             "title":"Creator users",
             "type":"array",
             "items":{
-              "$ref":"#/components/schemas/UserCollectionModel"
+              "$ref":"#/components/schemas/MinUserModel"
             },
             "description":"Annotators extracted from history.",
             "default":[]
@@ -7145,7 +7361,7 @@
             "additionalProperties":{
               "type":"array",
               "items":{
-                "$ref":"#/components/schemas/UserCollectionModel"
+                "$ref":"#/components/schemas/MinUserModel"
               }
             },
             "description":"Aggregated user privileges of projects with user minimal right on projects",
@@ -7317,7 +7533,7 @@
             "title":"Creator organisations",
             "type":"array",
             "items":{
-              "type":"string"
+              "$ref":"#/components/schemas/OrganizationModel"
             },
             "description":"All\n        organisations who are responsible for the creation of the collection. Data creators should\n        receive credit for their work and should therefore be included in the citation.",
             "default":[]
@@ -7335,7 +7551,7 @@
             "title":"Associate organisations",
             "type":"array",
             "items":{
-              "type":"string"
+              "$ref":"#/components/schemas/OrganizationModel"
             },
             "description":"Other\n        organisation(s) associated with the collection.",
             "default":[]
@@ -7365,14 +7581,24 @@
             "description":"The collection short title.",
             "example":"My coll"
           },
-          "provider_user_id":{
+          "provider_user":{
             "title":"Provider user Id",
-            "type":"integer",
+            "anyOf":[
+              {
+                "type":"integer"
+              },
+              {}
+            ],
             "description":"Id of the person who\n        is responsible for the content of this metadata record. Writer of the title and abstract."
           },
-          "contact_user_id":{
+          "contact_user":{
             "title":"Contact user Id",
-            "type":"integer",
+            "anyOf":[
+              {
+                "type":"integer"
+              },
+              {}
+            ],
             "description":"Id of the person who\n        should be contacted in cases of questions regarding the content of the dataset or any data restrictions.\n        This is also the person who is most likely to stay involved in the dataset the longest."
           },
           "project_ids":{
@@ -7447,7 +7673,7 @@
             "items":{
               "anyOf":[
                 {
-                  "type":"string"
+                  "type":"integer"
                 },
                 {}
               ]
@@ -7460,7 +7686,7 @@
             "items":{
               "anyOf":[
                 {
-                  "type":"string"
+                  "type":"integer"
                 },
                 {}
               ]
@@ -8213,9 +8439,10 @@
             "example":"France"
           },
           "orcid":{
-            "title":"orcid",
+            "title":"ORCID ID",
             "type":"string",
-            "description":"orcid unique identifier for this user"
+            "description":"The orcid id https://support.orcid.org.",
+            "example":"0000-0001-2345-6789"
           },
           "organisation":{
             "title":"Organisation",
@@ -9288,6 +9515,34 @@
           }
         },
         "description":"Classification summary from object set."
+      },
+      "OrganizationModel":{
+        "title":"OrganizationModel",
+        "required":[
+          "id",
+          "name"
+        ],
+        "type":"object",
+        "properties":{
+          "id":{
+            "title":"Organization Id",
+            "type":"integer",
+            "description":"OrganizationIDT unique identifier.",
+            "example":1
+          },
+          "name":{
+            "title":"Organization Name",
+            "type":"string",
+            "description":"Organization's full name, as text.",
+            "example":"OrganizationName"
+          },
+          "directories":{
+            "title":"Directories",
+            "type":"string",
+            "description":"References to official directories where the organization is referenced, separated by ,.",
+            "example":"edmo:1278"
+          }
+        }
       },
       "PredictionInfoRsp":{
         "title":"PredictionInfoRsp",
@@ -11013,47 +11268,6 @@
           }
         }
       },
-      "UserCollectionModel":{
-        "title":"UserCollectionModel",
-        "required":[
-          "id",
-          "email",
-          "name",
-          "organisation"
-        ],
-        "type":"object",
-        "properties":{
-          "id":{
-            "title":"Id",
-            "type":"integer",
-            "description":"The unique numeric id of this user.",
-            "example":1
-          },
-          "email":{
-            "title":"Email",
-            "type":"string",
-            "description":"User's email address, as text, used during registration.",
-            "example":"ecotaxa.api.user@gmail.com"
-          },
-          "name":{
-            "title":"Name",
-            "type":"string",
-            "description":"User's full name, as text.",
-            "example":"userName"
-          },
-          "orcid":{
-            "title":"orcid",
-            "type":"string",
-            "description":"orcid unique identifier for this user"
-          },
-          "organisation":{
-            "title":"Organisation",
-            "type":"string",
-            "description":"User's organisation name, as text.",
-            "example":"Oceanographic Laboratory of Villefranche sur Mer - LOV"
-          }
-        }
-      },
       "UserModelWithRights":{
         "title":"UserModelWithRights",
         "required":[
@@ -11101,12 +11315,6 @@
             "format":"date-time",
             "example":"2020-11-05T12:31:48.299713"
           },
-          "organisation":{
-            "title":"Organisation",
-            "type":"string",
-            "description":"User's organisation name, as text.",
-            "example":"Oceanographic Laboratory of Villefranche sur Mer - LOV"
-          },
           "password":{
             "title":"User's password'",
             "type":"string",
@@ -11150,6 +11358,12 @@
             "description":"Timestamp mail status modification date",
             "format":"date-time",
             "example":"2020-11-05T12:31:48.299713"
+          },
+          "organisation":{
+            "title":"Organisation",
+            "type":"string",
+            "description":"User's organisation name, as text.",
+            "example":"Oceanographic Laboratory of Villefranche sur Mer - LOV"
           },
           "can_do":{
             "title":"User's permissions",

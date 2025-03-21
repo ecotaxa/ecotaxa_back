@@ -79,7 +79,6 @@ class CollectionBO(object):
             if a_user_and_role.user is not None:
                 by_role_usr[a_user_and_role.role].append(a_user_and_role.user)
             else:
-                print("----isguest", a_user_and_role.user_id)
                 by_role_usr[a_user_and_role.role].append(a_user_and_role.guest)
         # Dispatch orgs by role
         by_role_org = {
