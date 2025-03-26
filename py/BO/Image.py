@@ -15,6 +15,8 @@ from FS.Vault import Vault
 
 SUPPORTED_FORMATS = {PngImageFile.format, JpegImageFile.format, GifImageFile.format}
 
+# increase maximum size to 20kx20k pixels
+PIL_Image.MAX_IMAGE_PIXELS = 20000*20000
 
 class ImageBO(object):
     """
