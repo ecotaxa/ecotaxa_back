@@ -36,11 +36,9 @@ def upgrade():
     op.execute(
         "INSERT INTO organizations (name) SELECT DISTINCT organisation FROM users WHERE organisation IS NOT NULL"
     )
-
     op.create_foreign_key(
         "users_organisation", "users", "organizations", ["organisation"], ["name"]
     )
-
     # ### end Alembic commands ###
 
 

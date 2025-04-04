@@ -9,6 +9,7 @@ from DB.Project import Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.User import User, Role, UserStatus
 from DB.helpers.ORM import Session
+from BO.DataLicense import AccessLevelEnum
 from .Preferences import Preferences
 from .ProjectPrivilege import ProjectPrivilegeBO
 
@@ -26,7 +27,6 @@ class Action(IntEnum):
 
 
 ACTION_TO_PRIV = {Action.ADMINISTRATE: ProjectPrivilegeBO.MANAGE}
-
 NOT_AUTHORIZED = "Not authorized"
 NOT_FOUND = "Not found"
 
@@ -88,6 +88,7 @@ class RightsBO(object):
                 for a_priv in user.privs_on_projects
                 if a_priv.projid == prj_id
             }
+
             if action == Action.ADMINISTRATE:
                 assert ProjectPrivilegeBO.MANAGE in rights_on_proj, NOT_AUTHORIZED
             elif action == Action.ANNOTATE:
@@ -99,7 +100,7 @@ class RightsBO(object):
             elif action == Action.READ:
                 # TODO: Bah, not nice either
                 assert (
-                    project.visible
+                    project.access == AccessLevelEnum.OPEN.value
                     or ProjectPrivilegeBO.VIEW in rights_on_proj
                     or ProjectPrivilegeBO.ANNOTATE in rights_on_proj
                     or ProjectPrivilegeBO.MANAGE in rights_on_proj
@@ -198,7 +199,7 @@ class RightsBO(object):
         project: Optional[Project] = session.query(Project).get(prj_id)
         # Check
         if project and action == Action.READ:
-            assert project.visible, NOT_AUTHORIZED
+            assert project.access == AccessLevelEnum.OPEN.value, NOT_AUTHORIZED
         else:
             assert False, NOT_AUTHORIZED
         return project
