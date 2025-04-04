@@ -24,6 +24,7 @@ class HomeCaptcha(object):
             recaptchasecret = str(config.get_recaptchasecret() or "")
             if recaptchasecret != "":
                 self.secret = recaptchasecret
+        self.max_token_length = config.get_max_captcha_token_length()
 
     def _daily_get_iplist(self):
         # no usage now
@@ -75,7 +76,7 @@ class HomeCaptcha(object):
             detail = ["invalid no_bot reason 1"]
         else:
             for a_str in no_bot:
-                if len(a_str) >= 1024:
+                if len(a_str) >= self.max_token_length:
                     detail = ["invalid no_bot reason 2"]
         if detail != []:
             raise HTTPException(
