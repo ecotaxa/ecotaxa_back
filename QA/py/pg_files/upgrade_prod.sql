@@ -2922,12 +2922,12 @@ BEGIN;
 -- Running upgrade f38a881a1f6c -> 78b24e7ba52b
 
 ALTER TABLE projects ADD COLUMN access VARCHAR(1);
--- PUBLIC ="1" when visible=True and no license
+-- PUBLIC="1" when visible=True and no license
 UPDATE projects SET access='1' WHERE visible=true AND (license='' OR license IS NULL);
--- OPEN="2" when visible=True and license = CC
+-- OPEN ="2"  when visible=True and license = CC
 UPDATE projects SET access='2' WHERE visible=true AND license!='' AND LOWER(license)!='copyright';
 
--- private when copyright or visible=False
+-- PRIVATE="0" when copyright or visible=False
 UPDATE projects SET access='0' WHERE visible=false OR LOWER(license)='copyright';
 ALTER TABLE projects ALTER COLUMN access SET NOT NULL;
 ALTER TABLE projects ADD COLUMN formulae VARCHAR;
@@ -2976,7 +2976,6 @@ ALTER TABLE users ALTER COLUMN organisation RENAME TO organization;
 ALTER TABLE users DROP CONSTRAINT users_organisation;
 ALTER TABLE users ADD CONSTRAINT user_organization_fkey FOREIGN KEY(organization_id) REFERENCES organizations (id);
 ALTER TABLE collection_orga_role ALTER COLUMN organization_id SET NOT NULL;
-
 UPDATE alembic_version SET version_num='9f8174c268da' WHERE alembic_version.version_num = 'e6dda08ff48b';
 
 COMMIT;

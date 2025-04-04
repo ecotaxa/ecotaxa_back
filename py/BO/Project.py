@@ -260,7 +260,6 @@ class ProjectBO(object):
         managers: List[Any],
         annotators: List[Any],
         viewers: List[Any],
-        license_: Optional[str],
         bodc_vars: Dict,
         access: Optional[str],
         formulae: Optional[str],
@@ -297,7 +296,6 @@ class ProjectBO(object):
         self._project.popoverfieldlist = popoverfieldlist
         self._project.cnn_network_id = cnn_network_id
         self._project.comments = comments
-        self._project.license = license_
         self._project.access = access
         self._project.formulae = formulae
         # Inverse for extracted values
@@ -630,10 +628,11 @@ class ProjectBO(object):
         if not_granted:
             if not user.has_role(Role.APP_ADMINISTRATOR):
                 # Add the projects for which no entry is found in ProjectPrivilege
+                sql_params.update({"private": AccessLevelEnum.PRIVATE.value})
                 sql += """
                        LEFT JOIN projectspriv prp ON prj.projid = prp.projid AND prp.member = :user_id
                       WHERE prp.member is null
-                        AND prj.visible """
+                        AND prj.access!= :private """
                 if for_managing:
                     # No right so no possibility to manage
                     sql += " AND False "
@@ -687,7 +686,7 @@ class ProjectBO(object):
         """
         pattern = "%" + title_filter + "%"
         qry = session.query(Project.projid)
-        qry = qry.filter(Project.visible)
+        qry = qry.filter(Project.access == AccessLevelEnum.OPEN.value)
         qry = qry.filter(Project.title.ilike(pattern))
         ret = [an_id for an_id, in qry]
         return ret
@@ -1214,9 +1213,11 @@ class CollectionProjectBOSet(ProjectBOSet):
                 keys[ProjectPrivilegeBO.MANAGE],
             ]:
                 if u in privileges[k]:
+                    print("remlove u " + k, u.name)
                     privileges[k].remove(u)
         for u in privileges[keys[ProjectPrivilegeBO.ANNOTATE]]:
             if u in privileges[keys[ProjectPrivilegeBO.MANAGE]]:
+                print("remlove u " + keys[ProjectPrivilegeBO.MANAGE], u.name)
                 privileges[keys[ProjectPrivilegeBO.MANAGE]].remove(u)
         return privileges
 

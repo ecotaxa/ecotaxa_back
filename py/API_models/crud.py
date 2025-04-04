@@ -221,12 +221,6 @@ class _Project2Model(DescriptiveModel):
     cnn_network_id: str = Field(
         title="Cnn network id", description="", example="SCN_zooscan_group1"
     )
-    license: LicenseEnum = Field(
-        title="License",
-        description="Data licence.",
-        default=LicenseEnum.Copyright,
-        example=LicenseEnum.CC_BY,
-    )
     access: AccessLevelEnum = Field(
         title="Access level",
         description="""When "1" (PUBLIC), the project is visible by all users."""

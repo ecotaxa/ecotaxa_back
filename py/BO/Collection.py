@@ -262,7 +262,6 @@ class CollectionBO(object):
 
     @staticmethod
     def get_user_id(session: Session, a_user: Union[int, str, Dict]) -> Optional[int]:
-        print("a_user", a_user)
         if isinstance(a_user, int):
             return a_user
         if isinstance(a_user, str):
@@ -335,8 +334,8 @@ class CollectionBO(object):
         """
         # check if collection is published
         published = (
-            session.query(Collection.short_title != None)
-            .filter(Collection.short_title != "")
+            session.query(Collection.external_id)
+            .filter(not_(Collection.external_id._in([None, "", "?"])))
             .filter(Collection.id == coll_id)
             .scalar()
         )

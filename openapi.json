@@ -2005,12 +2005,12 @@
             "in":"query"
           },
           {
-            "description":"One of ['projid', 'title', 'visible', 'access', 'license', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']",
+            "description":"One of ['projid', 'title', 'visible', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']",
             "required":false,
             "schema":{
               "title":"Order field",
               "type":"string",
-              "description":"One of ['projid', 'title', 'visible', 'access', 'license', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']"
+              "description":"One of ['projid', 'title', 'visible', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']"
             },
             "example":"instrument",
             "name":"order_field",
@@ -2174,12 +2174,12 @@
             "in":"query"
           },
           {
-            "description":"One of ['projid', 'title', 'visible', 'access', 'license', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']",
+            "description":"One of ['projid', 'title', 'visible', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']",
             "required":false,
             "schema":{
               "title":"Order field",
               "type":"string",
-              "description":"One of ['projid', 'title', 'visible', 'access', 'license', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']"
+              "description":"One of ['projid', 'title', 'visible', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']"
             },
             "example":"instrument",
             "name":"order_field",
@@ -10061,8 +10061,7 @@
         "required":[
           "projid",
           "title",
-          "access",
-          "license"
+          "access"
         ],
         "type":"object",
         "properties":{
@@ -10089,12 +10088,6 @@
             "type":"string",
             "description":"When \"1\" (PUBLIC), the project is visible by all users.PUBLIC: \"1\", OPEN: \"2\", PRIVATE: \"0\"",
             "example":"1"
-          },
-          "license":{
-            "title":"License",
-            "type":"string",
-            "description":"Data licence.",
-            "example":"CC BY 4.0"
           },
           "status":{
             "title":"Status",

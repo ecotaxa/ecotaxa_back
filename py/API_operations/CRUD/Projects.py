@@ -273,7 +273,6 @@ class ProjectsService(Service):
                 Project.initclassiflist,
                 Project.classiffieldlist,
                 Project.cnn_network_id,
-                Project.license,
                 Project.status,
                 Project.access,
                 Project.formulae,

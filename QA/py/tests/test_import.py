@@ -76,14 +76,15 @@ VARIOUS_STATES_DIR = DATA_DIR / "import_various_states"
 FILE_IMPORT_URL = "/file_import/{project_id}"
 
 
-def create_project(owner, title, instrument=None):
+def create_project(owner, title, instrument=None, access="1"):
     with ProjectsService() as sce:
         if instrument:
             prj_id = sce.create(
-                owner, CreateProjectReq(title=title, instrument=instrument)
+                owner,
+                CreateProjectReq(title=title, instrument=instrument, access=access),
             )
         else:
-            prj_id = sce.create(owner, CreateProjectReq(title=title))
+            prj_id = sce.create(owner, CreateProjectReq(title=title, access=access))
         return prj_id
 
 
@@ -335,7 +336,7 @@ def test_equal_dump_prj1(database, ccheck, caplog, tstlogs):
 @pytest.mark.parametrize("title", ["Test LS 2"])
 def test_import_uvp6(database, caplog, title):
     caplog.set_level(logging.DEBUG)
-    prj_id = create_project(ADMIN_USER_ID, title, "UVP6")
+    prj_id = create_project(ADMIN_USER_ID, title, "UVP6", "2")
     params = ImportReq(source_path=str(V6_FILE))
     with FileImport(prj_id, params) as sce:
         rsp: ImportRsp = sce.run(ADMIN_USER_ID)

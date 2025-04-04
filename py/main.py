@@ -2018,7 +2018,6 @@ def update_project(
                 managers=project.managers,
                 annotators=project.annotators,
                 viewers=project.viewers,
-                license_=project.license,
                 bodc_vars=project.bodc_variables,
                 access=project.access,
                 formulae=project.formulae,

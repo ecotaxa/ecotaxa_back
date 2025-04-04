@@ -59,7 +59,7 @@ def test_update_prj(database, fastapi, caplog):
         "instrument": "UVP6",
         "instrument_url": "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/",
         "init_classif_list": [],
-        "license": "",
+        # "license": "",
         "managers": [
             {
                 "email": "administrator",

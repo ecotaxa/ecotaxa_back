@@ -43,7 +43,6 @@ class Project(Model):
 
     visible = Column(Boolean(), default=True)
     access = Column(VARCHAR(1), default=AccessLevelEnum.OPEN, nullable=False)
-    license = Column(VARCHAR(16), default=LicenseEnum.NO_LICENSE, nullable=False)
     status = Column(
         VARCHAR(40), default=ANNOTATE_STATUS
     )  # Annotate, ExploreOnly, Annotate No Prediction
