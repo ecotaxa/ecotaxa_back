@@ -100,7 +100,8 @@ class RightsBO(object):
             elif action == Action.READ:
                 # TODO: Bah, not nice either
                 assert (
-                    project.access == AccessLevelEnum.OPEN.value
+                    project.access
+                    in [AccessLevelEnum.OPEN.value, AccessLevelEnum.PUBLIC.value]
                     or ProjectPrivilegeBO.VIEW in rights_on_proj
                     or ProjectPrivilegeBO.ANNOTATE in rights_on_proj
                     or ProjectPrivilegeBO.MANAGE in rights_on_proj

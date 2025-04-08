@@ -333,9 +333,12 @@ class CollectionBO(object):
         Being just a set of project references, the pointed-at projects are not impacted.
         """
         # check if collection is published
+        # TODO ugly filter
         published = (
             session.query(Collection.external_id)
-            .filter(not_(Collection.external_id._in([None, "", "?"])))
+            .filter(Collection.external_id is not None)
+            .filter(Collection.external_id != "")
+            .filter(Collection.external_id != "?")
             .filter(Collection.id == coll_id)
             .scalar()
         )

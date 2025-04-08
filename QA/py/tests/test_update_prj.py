@@ -182,7 +182,7 @@ def test_update_prj(database, fastapi, caplog):
         "title": "Test Project Updates",
         "viewers": [],
         "visible": True,
-        "access": AccessLevelEnum.PUBLIC.value,
+        "access": AccessLevelEnum.OPEN.value,
         "formulae": None,
     }
 

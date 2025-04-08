@@ -122,6 +122,7 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
     # short_title only on second round
     if who == CREATOR_AUTH:
         the_coll["short_title"] = "my-tiny-title"
+        the_coll["external_id"] = "doi1234"
     the_coll["associate_organisations"] = ["An org"]
     the_coll["creator_organisations"] = ["At least one (ONE)"]
     rsp = fastapi.put(url, headers=who, json=the_coll)
@@ -140,8 +141,10 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
     assert rsp.status_code == status.HTTP_200_OK
     if who == CREATOR_AUTH:
         short_title = "my-tiny-title"
+        external_id = "doi1234"
     else:
         short_title = None
+        external_id = "?"
     assert rsp.json() == [
         {
             "abstract": """
@@ -151,7 +154,7 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
                 {"id": 8, "name": "An org", "directories": None}
             ],
             "associate_users": [],
-            "external_id": "?",
+            "external_id": external_id,
             "external_id_system": "?",
             "citation": None,
             "contact_user": None,
