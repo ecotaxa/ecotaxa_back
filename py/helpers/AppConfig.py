@@ -96,7 +96,7 @@ class Config(object):
 
     def get_account_request_url(self) -> Optional[str]:
         # TODO find a way to have multi request url ( list of identified url ???)
-        url = self.parser.get("SERVERURL","").strip()
+        url = self.parser.get("SERVERURL", "").strip()
         return url + ("/" if url[-1] != "/" else "")
 
     def get_users_files_dir(self) -> Optional[str]:
@@ -109,3 +109,6 @@ class Config(object):
 
     def list_cnf(self) -> KeysView[str]:
         return self.parser.keys()
+
+    def get_max_captcha_token_length(self) -> int:
+        return int(self.parser.get("MAX_CAPTCHA_TOKEN_LENGTH", "4096"))
