@@ -16,7 +16,6 @@ from API_models.exports import (
     ExportRsp,
     ExportReq,
     ExportTypeEnum,
-    ExportFileTypeEnum,
     SummaryExportGroupingEnum,
     GeneralExportReq,
     ExportSplitOptionsEnum,
@@ -27,7 +26,7 @@ from API_models.exports import (
     SummaryExportSumOptionsEnum,
 )
 from API_models.filters import ProjectFiltersDict
-from BO.Mappings import ProjectMapping, ProjectSetMapping, PREFIX_TO_TABLE
+from BO.Mappings import ProjectSetMapping, PREFIX_TO_TABLE
 from BO.ObjectSet import DescribedObjectSet, DescribedObjectBOSet
 from BO.ObjectSetQueryPlus import ResultGrouping, IterableRowsT, ObjectSetQueryPlus
 from BO.Rights import RightsBO, Action
@@ -39,8 +38,7 @@ from DB.Object import (
     DUBIOUS_CLASSIF_QUAL,
     PREDICTED_CLASSIF_QUAL,
 )
-from BO.Project import MappingColumnEnum, CollectionProjectBOSet
-from DB.Project import Project, ProjectIDT, ProjectIDListT
+from DB.Project import Project, ProjectIDListT
 from DB.ProjectVariables import ProjectVariables
 from DB.helpers.Direct import text
 from DB.helpers.SQL import OrderClause
@@ -76,10 +74,17 @@ class ProjectExport(JobServiceBase):
         Initial run, basically just do security check and create the job.
         """
         project_ids = str(self.req.project_id).split(",")
+        if self.JOB_TYPE == "BackupExport" or (
+            self.JOB_TYPE == "GeneralExport" and self.req.with_images
+        ):
+            action = Action.ADMINISTRATE
+        else:
+            action = Action.ANNOTATE
         for project_id in project_ids:
-            _user, _project = RightsBO.user_wants(
-                self.session, current_user_id, Action.READ, int(project_id)
+            _user, _project = RightsBO.user_wants_export(
+                self.session, current_user_id, action, int(project_id)
             )
+
         # Security OK, create pending job
         self.create_job(self.JOB_TYPE, current_user_id)
         ret = ExportRsp(job_id=self.job_id)

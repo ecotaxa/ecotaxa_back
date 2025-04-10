@@ -114,6 +114,62 @@ class RightsBO(object):
         return user, project
 
     @staticmethod
+    def user_wants_export(
+        session: Session,
+        user_id: int,
+        action: Action,
+        prj_id: int,
+        update_preference: Optional[bool] = True,
+    ) -> Tuple[User, Project]:
+        # TODO: temp function created to address the specific rights on export
+        """
+        Check rights for the user to do this specific action onto this project exports.
+        """
+        # Load ORM entities
+        # user: Optional[User] = session.query(User).get(user_id)
+        user: User = RightsBO.get_user_throw(session, user_id)
+        # assert user is not None, NOT_AUTHORIZED
+        project: Optional[Project] = session.query(Project).get(prj_id)
+        assert project is not None, NOT_FOUND
+        # Check
+        if user.has_role(Role.APP_ADMINISTRATOR):
+            # King of the world
+            pass
+        else:
+            a_priv: ProjectPrivilege
+            # Collect privileges for user on project
+            rights_on_proj = {
+                a_priv.privilege
+                for a_priv in user.privs_on_projects
+                if a_priv.projid == prj_id
+            }
+
+            if action == Action.ADMINISTRATE:
+                assert (
+                    project.access == AccessLevelEnum.OPEN.value
+                    or ProjectPrivilegeBO.MANAGE in rights_on_proj
+                ), NOT_AUTHORIZED
+            elif action == Action.ANNOTATE:
+                # TODO: Bah, not nice
+                assert (
+                    project.access == AccessLevelEnum.OPEN.value
+                    or ProjectPrivilegeBO.ANNOTATE in rights_on_proj
+                    or ProjectPrivilegeBO.MANAGE in rights_on_proj
+                ), NOT_AUTHORIZED
+            elif action == Action.READ:
+                # TODO: Bah, not nice either
+                assert (
+                    project.access == AccessLevelEnum.OPEN.value
+                    or ProjectPrivilegeBO.VIEW in rights_on_proj
+                ), NOT_AUTHORIZED
+            else:
+                raise Exception("Not implemented")
+        # Keep the last accessed projects
+        if update_preference == True and Preferences(user).add_recent_project(prj_id):
+            session.commit()
+        return user, project
+
+    @staticmethod
     def highest_right_on(user: User, prj_id: int) -> str:
         """
         Return the highest right for this user onto this project.

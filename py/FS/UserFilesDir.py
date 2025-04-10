@@ -8,6 +8,7 @@ import shutil
 import tarfile
 import zipfile
 from glob import iglob
+
 # import magic
 from pathlib import Path
 from typing import Optional, List, NamedTuple, Dict
@@ -90,6 +91,7 @@ class UserFilesDirectory(object):
                 file.write(buff)  # type:ignore # Mypy is unaware of async read result
                 buff = await stream.read(1024)
         if zipfile.is_zipfile(source_path.as_posix()):
+            # or str(source_path).lower().endswith(".zip"):
             await self.unpack_zip(source_path, base_path.absolute())
         elif tarfile.is_tarfile(source_path.as_posix()):
             await self.unpack_tar(source_path, base_path.absolute())
