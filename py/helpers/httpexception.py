@@ -25,5 +25,7 @@ DETAIL_INVALID_ZIP_FILE = "zipfile is corrupt"
 DETAIL_INVALID_LARGE_ZIP_FILE = "big zipfile not zip64 encoded"
 DETAIL_FILE_PROTECTED = "directory or file is protected"
 DETAIL_SSL_ERROR = "SSL ERROR"
-DETAIL_SAME_NAME_IN_TRASH = "same folder or file name already in trash. not moved"
+DETAIL_SAME_NAME_IN_TRASH = (
+    "same folder or file name already in trash. Please delete from trash and try again."
+)
 DETAIL_ALREADY_EXISTS = "Already exists"
