@@ -38,6 +38,10 @@ class CollectionsService(Service):
             self.session, req.project_ids
         ).can_be_administered_by(current_user_id)
         coll_id = CollectionBO.create(self.session, req.title, req.project_ids)
+        if isinstance(coll_id, str):
+            raise HTTPException(
+                status_code=422, detail=coll_id + "\n Collection not created"
+            )
         return coll_id
 
     def update(
@@ -56,7 +60,11 @@ class CollectionsService(Service):
         present_collection = self.query(current_user_id, collection_id, for_update=True)
         if present_collection is None:
             raise HTTPException(status_code=404, detail="Collection not found")
-        present_collection.update(session=self.session, collection_update=req)
+        res = present_collection.update(session=self.session, collection_update=req)
+        if isinstance(res, str):
+            raise HTTPException(
+                status_code=422, detail=res + "\n Collection not updated"
+            )
 
     def list(
         self, current_user_id: UserIDT, collection_ids: Optional[str] = None

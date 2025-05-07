@@ -101,7 +101,7 @@ class CollectionBO(object):
         self,
         session: Session,
         project_ids: ProjectIDListT,
-    ):
+    ) -> Optional[str]:
         """
         Add the given projects into DB, doing sanity checks.
         """
@@ -110,15 +110,20 @@ class CollectionBO(object):
             contains_eager(Project.all_samples)
         )
         db_projects = qry.all()
-        assert len(db_projects) == len(project_ids)
-        # Loop on projects, adding them and collecting aggregated data
         problems: List[str] = []
-        a_db_project: Project
-        for a_db_project in db_projects:
-            self._collection.projects.append(a_db_project)
+        if len(db_projects) != len(project_ids):
+            problems.append(
+                "One or more projects has no sample and can't be added to the collection."
+            )
+        # Loop on projects, adding them and collecting aggregated data
+        else:
+            a_db_project: Project
+            for a_db_project in db_projects:
+                self._collection.projects.append(a_db_project)
 
-        # Report (brutally) problems
-        assert len(problems) == 0, "\n".join(problems)
+        if len(problems):
+            return "\n".join(problems)
+        return None
 
     @staticmethod
     def _get_annotators_from_histo(
@@ -138,7 +143,7 @@ class CollectionBO(object):
         self,
         session: Session,
         collection_update: Dict[str, Any],
-    ):
+    ) -> Optional[str]:
         by_role_schema = {
             "user": {
                 "creator_users": COLLECTION_ROLE_DATA_CREATOR,
@@ -159,7 +164,10 @@ class CollectionBO(object):
                 value.sort()
                 # projects update using given list
                 # Redo sanity check & aggregation as underlying projects might have changed (or not as stated just above. lol)
-                self.set_composing_projects(session, value)
+                res = self.set_composing_projects(session, value)
+                # return problems - will be catched by service
+                if res is not None:
+                    return res
             # Simple fields update
             if key in self.modif:
                 setattr(self._collection, key, value)
@@ -238,7 +246,9 @@ class CollectionBO(object):
                 collorole.role = COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER
                 session.add(collorole)
 
-    def set_composing_projects(self, session: Session, project_ids: ProjectIDListT):
+    def set_composing_projects(
+        self, session: Session, project_ids: ProjectIDListT
+    ) -> Optional[str]:
         """
         Core of the function: setting the composed projects.
         """
@@ -258,7 +268,10 @@ class CollectionBO(object):
                 CollectionProject.project_id.in_(to_remove)
             ).delete()
         if len(to_add):
-            self._add_composing_projects(session, to_add)
+            res = self._add_composing_projects(session, to_add)
+            return res
+        elif len(self.project_ids) == 0:
+            return "No project in the collection"
 
     @staticmethod
     def get_user_id(session: Session, a_user: Union[int, str, Dict]) -> Optional[int]:
@@ -297,7 +310,7 @@ class CollectionBO(object):
     @staticmethod
     def create(
         session: Session, title: str, project_ids: ProjectIDListT
-    ) -> CollectionIDT:
+    ) -> Union[CollectionIDT, str]:
         """
         Create using minimum fields.
         """
@@ -310,9 +323,12 @@ class CollectionBO(object):
         session.add(db_coll)
         session.flush()  # to get the collection ID
         bo_coll = CollectionBO(db_coll)
-        bo_coll._add_composing_projects(session, project_ids)
-        session.commit()
-        return bo_coll.id
+        res = bo_coll._add_composing_projects(session, project_ids)
+        if res is None:
+            session.commit()
+            return bo_coll.id
+        else:
+            return res
 
     @staticmethod
     def get_one(session: Session, coll_id: CollectionIDT) -> Optional["CollectionBO"]:

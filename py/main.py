@@ -880,9 +880,6 @@ def create_collection(
     with CollectionsService() as sce:
         with RightsThrower():
             ret = sce.create(current_user, params)
-    if isinstance(ret, str):
-        raise HTTPException(status_code=404, detail=ret)
-    # TODO: Mettre les syncs dans les services, moins dégeu
     return ret
 
 
