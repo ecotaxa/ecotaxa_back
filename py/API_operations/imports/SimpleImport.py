@@ -114,7 +114,9 @@ class SimpleImport(ImportServiceBase):
         # Recompute stats and so on
         ProjectBO.do_after_load(self.session, self.prj_id)
         self.session.commit()
-
+        if len(errors) == 0:
+            # delete if imported from myfiles
+            self.remove_source_path()
         self.set_job_result(errors=errors, infos={"nb_images": nb_images})
 
     # Form fields to TSV values

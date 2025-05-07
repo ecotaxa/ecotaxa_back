@@ -5,7 +5,7 @@
 import os
 import zipfile
 from abc import ABC
-from typing import Union
+from typing import Union, Optional
 
 from API_models.imports import ImportReq, SimpleImportReq
 from API_operations.helpers.JobService import JobServiceOnProjectBase, ArgsDict
@@ -25,6 +25,7 @@ class ImportServiceBase(JobServiceOnProjectBase, ABC):
     """
 
     req: Union[ImportReq, SimpleImportReq]
+    from_myfiles: Optional[UserIDT] = None
 
     def __init__(self, prj_id: int, req: Union[ImportReq, SimpleImportReq]):
         super().__init__(prj_id)
@@ -47,6 +48,7 @@ class ImportServiceBase(JobServiceOnProjectBase, ABC):
             source_dir_or_zip.lstrip(os.path.sep)
         )
         if my_files_source_dir.exists():
+            self.from_myfiles = owner_id
             return str(my_files_source_dir)
         elif UserDirectory(owner_id).contains(source_dir_or_zip):
             # OK
@@ -66,3 +68,14 @@ class ImportServiceBase(JobServiceOnProjectBase, ABC):
             with zipfile.ZipFile(input_path, "r") as z:
                 z.extractall(source_dir_or_zip)
         return source_dir_or_zip
+
+    def remove_source_path(self):
+        my_files_source_dir = UserFilesDirectory(self.from_myfiles)._root_path.joinpath(
+            self.req.source_path.lstrip(os.path.sep)
+        )
+        if self.from_myfiles is None:
+            return
+        assert ".." not in str(self.req.source_path), "Forbidden"
+        if my_files_source_dir.exists():
+            UserFilesDirectory(self.from_myfiles).remove(self.req.source_path)
+            logger.info("Moved to Trash: " + self.req.source_path)

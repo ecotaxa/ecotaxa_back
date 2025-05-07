@@ -239,7 +239,7 @@ class FileImport(ImportServiceBase):
         emails = [
             cast(str, x.get("email")) for x in users_found.values() if x.get("email")
         ]
-        UserBO.find_items(User,session, names, emails, users_found)
+        UserBO.find_items(User, session, names, emails, users_found)
         logger.info("Users Found for all TSVs = %s", users_found)
 
     @staticmethod
@@ -352,4 +352,6 @@ class FileImport(ImportServiceBase):
 
         msg = "Total of %d rows loaded" % row_count
         logger.info(msg)
+        # delete if imported from myfiles
+        self.remove_source_path()
         self.set_job_result(errors=[], infos={"rowcount": row_count})
