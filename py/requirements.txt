@@ -43,6 +43,8 @@ lxml-stubs==0.2.0
 requests==2.26.0
 types-requests==2.25.6
 python-multipart==0.0.5
+# mime type for import
+python-magic==0.4.27
 # Auth validation
 itsdangerous==2.0.1
 passlib==1.7.4

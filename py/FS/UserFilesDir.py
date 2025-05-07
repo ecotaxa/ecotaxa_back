@@ -8,10 +8,11 @@ import shutil
 import tarfile
 import zipfile
 from glob import iglob
+import asyncio
 
-# import magic
+import magic
 from pathlib import Path
-from typing import Optional, List, NamedTuple, Dict
+from typing import Optional, List, NamedTuple, Dict, Tuple
 
 from fastapi import HTTPException
 from starlette.datastructures import UploadFile
@@ -57,7 +58,7 @@ class UserFilesDirectory(object):
 
     USER_DIR_PATTERN = "ecotaxa_user.%d"
     TRASH_DIRECTORY = "trash."
-    COMPRESSED_PATTERN = "ecotaxa_*"
+    COMPRESSED_PATTERN = "*"
     ARCHIVE_EXTENSIONS = ["zip", "tar", "gzip", "tar.gz", "tar.bz2", "tar.xz", "gz"]
     TSV = ".tsv"
 
@@ -91,19 +92,14 @@ class UserFilesDirectory(object):
                 file.write(buff)  # type:ignore # Mypy is unaware of async read result
                 buff = await stream.read(1024)
         if zipfile.is_zipfile(source_path.as_posix()):
-            # or str(source_path).lower().endswith(".zip"):
             await self.unpack_zip(source_path, base_path.absolute())
         elif tarfile.is_tarfile(source_path.as_posix()):
             await self.unpack_tar(source_path, base_path.absolute())
-        # should always be zip but ...
         elif self._is_gz(source_path.as_posix()):
             name = name.replace(".gz", "")
             await self.unpack_gz(
                 source_path, base_path.absolute().joinpath(name.lstrip(os.path.sep))
             )
-
-        else:
-            print("not zipped", str(source_path))
         return str(source_path)
 
     def list(self, sub_path: str) -> List[DirEntryT]:
@@ -143,7 +139,6 @@ class UserFilesDirectory(object):
         self._is_trash_dir_throw(dest_name)
         source_path: Path = self._root_path.joinpath(source_name.lstrip(os.path.sep))
         dest_path: Path = self._root_path.joinpath(dest_name.lstrip(os.path.sep))
-
         self.ensure_exists(dest_path.parent)
         if dest_path.is_dir():
             if dest_path.joinpath(source_path.stem).exists():
@@ -202,6 +197,30 @@ class UserFilesDirectory(object):
         ospath = self._root_path.joinpath(path.lstrip(os.path.sep))
         return shutil.disk_usage(ospath)
 
+    def extract_archive(self, archive, path: Path):
+        archive.testzip()
+        filenames = archive.namelist()
+        extracted = []
+        archive.extractall(path)
+        for filename in filenames:
+            file_ext, compressed_path, mime_type = self.get_file_info(filename, path)
+            if mime_type in accepted_mime_types:
+                extracted.append(filename)
+            else:
+                try:
+                    os.remove(compressed_path)
+                except Exception as e:
+                    _log_exception_throw(e)
+                logger.info("NOT EXTRACTED ", str(compressed_path))
+        return extracted
+
+    def get_file_info(self, filename: str, path: Path) -> Tuple[str, Path, str]:
+        file_ext = filename.split(".")[-1]
+        parts = filename.split(os.path.sep)
+        filepath = path.joinpath(str(Path(parts[0])), os.path.sep.join(parts[1:]))
+        mime_type = magic.from_file(str(filepath), mime=True)
+        return file_ext, filepath, mime_type
+
     @staticmethod
     def ensure_exists(path: Path) -> None:
         if not path.exists():
@@ -211,9 +230,7 @@ class UserFilesDirectory(object):
                 pass
 
     def _has_accepted_format(self, path: Path, filename: str) -> bool:
-        mime_type = "application/zip"
-        # mime = magic.Magic(mime=True)
-        # mime_type = mime.from_file(file)
+        mime_type = magic.from_file(filename, mime=True)
         if mime_type in accepted_mime_types:
             return True
         logger.info(
@@ -226,32 +243,13 @@ class UserFilesDirectory(object):
         self.list_errors.update({"Not accepted": path_error})
         return False
 
-    async def unpack_only_zip(self, input_path: Path, path: Path):
-        zip_file = input_path.as_posix()
-        try:
-            with zipfile.ZipFile(zip_file, "r", allowZip64=True) as archive:
-                archive.extractall(path)
-                for zip_f in iglob(str(path.joinpath("*/*.zip"))):
-                    zip_path = Path(zip_f)
-                    if not zip_path.is_dir():
-                        if zipfile.is_zipfile(zip_path) == True:
-                            sub_path = zip_path.parent
-                            await self.unpack_only_zip(zip_path, sub_path)
-                    elif not self._has_accepted_format(path, zip_f):
-                        os.remove(zip_path)
-                        self.list_errors.update({"Not accepted": zip_f})
-
-            os.remove(zip_file)
-        except Exception as e:
-            _log_exception_throw(e)
-
     async def unpack_zip(self, input_path: Path, path: Path):
         compressed_file = input_path.as_posix()
         try:
             with zipfile.ZipFile(compressed_file, "r", allowZip64=True) as archive:
-                archive.extractall(path)
-            await self.unpack_archives(path)
+                filenames = self.extract_archive(archive, path)
             os.remove(compressed_file)
+            await self.recursive_unpack(path, filenames)
         except Exception as e:
             _log_exception_throw(e)
 
@@ -259,9 +257,9 @@ class UserFilesDirectory(object):
         compressed_file = input_path.as_posix()
         try:
             with tarfile.open(compressed_file, "r") as archive:
-                archive.extractall(path)
-            await self.unpack_archives(path)
+                filenames = self.extract_archive(archive, path)
             os.remove(compressed_file)
+            await self.recursive_upack(path, filenames)
         except Exception as e:
             _log_exception_throw(e)
 
@@ -272,33 +270,47 @@ class UserFilesDirectory(object):
                 with open(path.as_posix(), "wb") as decompressed_file:
                     decompressed_file.write(gzip.decompress(archive.read()))
             os.remove(compressed_file)
+            await self.dispatch_unpack(compressed_file.name, path)
         except Exception as e:
             _log_exception_throw(e)
 
-    async def unpack_archives(self, path: Path):
+    async def recursive_unpack(self, path: Path, filenames: List[str]):
         try:
-            for archive_ext in self.ARCHIVE_EXTENSIONS:
-                await self.recursive_unpack(archive_ext, path)
-
+            for f in asyncio.as_completed(
+                [self.dispatch_unpack(compressed_f, path) for compressed_f in filenames]
+            ):
+                await f
         except Exception as e:
+            print("______errror RECURS" + str(path), e)
             _log_exception_throw(e)
 
-    async def recursive_unpack(self, archive_ext: str, path: Path):
-        for compressed_f in iglob(
-            str(path.joinpath(self.COMPRESSED_PATTERN + "." + archive_ext))
+    async def dispatch_unpack(self, compressed_f: str, path: Path):
+        file_ext, compressed_path, mime_type = self.get_file_info(compressed_f, path)
+        # file_ext = compressed_f.split(".")[-1]
+        # parts = compressed_f.split(os.path.sep)
+        # compressed_path = path.joinpath(
+        #    str(Path(parts[0])), os.path.sep.join(parts[1:])
+        # )
+        if (
+            file_ext in self.ARCHIVE_EXTENSIONS
+            and not compressed_path.is_dir()
+            and not self._is_trash_dir(str(path))
         ):
-            compressed_path = Path("**/" + compressed_f)
-            if not compressed_path.is_dir() and not self._is_trash_dir(compressed_f):
-                sub_path = compressed_path.parent
-                if zipfile.is_zipfile(compressed_path):
-                    await self.unpack_zip(compressed_path, sub_path)
-                elif tarfile.is_tarfile(compressed_path):
-                    await self.unpack_tar(compressed_path, sub_path)
-                elif self._is_gz(compressed_path.as_posix()):
-                    await self.unpack_gz(compressed_path, sub_path)
-                elif not self._has_accepted_format(path, compressed_f):
-                    os.remove(compressed_path)
-                    self.list_errors.update({"Not accepted": compressed_f})
+            sub_path = Path(".".join(str(compressed_path).split(".")[:-1]))
+            print(
+                "__________________compr " + file_ext + "path=" + str(path),
+                str(compressed_path),
+            )
+            if zipfile.is_zipfile(compressed_path.as_posix()):
+                print("----iszipfile___path=" + str(compressed_path))
+                await self.unpack_zip(compressed_path, sub_path)
+            elif tarfile.is_tarfile(compressed_path.as_posix()):
+                await self.unpack_tar(compressed_path, sub_path)
+            elif self._is_gz(compressed_path.as_posix()):
+                await self.unpack_gz(compressed_path, sub_path)
+            elif not self._has_accepted_format(sub_path, compressed_f):
+                os.remove(compressed_path)
+                self.list_errors.update({"Not accepted": compressed_f})
 
 
 def _log_exception_throw(e: Exception):
