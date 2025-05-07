@@ -189,6 +189,7 @@ class CollectionBO(object):
             if len(by_role.keys()) > 0:
                 self.add_collection_users(session, by_role)
         session.commit()
+        return None
 
     def add_collection_users(
         self,
@@ -272,6 +273,7 @@ class CollectionBO(object):
             return res
         elif len(self.project_ids) == 0:
             return "No project in the collection"
+        return None
 
     @staticmethod
     def get_user_id(session: Session, a_user: Union[int, str, Dict]) -> Optional[int]:

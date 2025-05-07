@@ -70,11 +70,11 @@ class ImportServiceBase(JobServiceOnProjectBase, ABC):
         return source_dir_or_zip
 
     def remove_source_path(self):
+        if self.from_myfiles is None:
+            return
         my_files_source_dir = UserFilesDirectory(self.from_myfiles)._root_path.joinpath(
             self.req.source_path.lstrip(os.path.sep)
         )
-        if self.from_myfiles is None:
-            return
         assert ".." not in str(self.req.source_path), "Forbidden"
         if my_files_source_dir.exists():
             UserFilesDirectory(self.from_myfiles).remove(self.req.source_path)

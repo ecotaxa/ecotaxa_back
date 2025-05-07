@@ -7,10 +7,8 @@ import os
 import shutil
 import tarfile
 import zipfile
-from glob import iglob
 import asyncio
-
-import magic
+from magic_rs import from_path
 from pathlib import Path
 from typing import Optional, List, NamedTuple, Dict, Tuple
 
@@ -66,6 +64,7 @@ class UserFilesDirectory(object):
         users_files_dir = Config().get_users_files_dir()
         self.user_id = user_id
         self.list_errors: Dict[str, str] = {}
+        print("--------------self.user_id " + str(type(self.user_id)), self.user_id)
         self._root_path = Path(
             str(users_files_dir or ""), self.USER_DIR_PATTERN % self.user_id
         )
@@ -198,12 +197,17 @@ class UserFilesDirectory(object):
         return shutil.disk_usage(ospath)
 
     def extract_archive(self, archive, path: Path):
-        archive.testzip()
-        filenames = archive.namelist()
+        if hasattr(archive, "testzip"):
+            archive.testzip()
+        if hasattr(archive, "namelist"):
+            filenames = archive.namelist()
+        else:
+            # tarfile
+            filenames = archive.getnames()
         extracted = []
         archive.extractall(path)
         for filename in filenames:
-            file_ext, compressed_path, mime_type = self.get_file_info(filename, path)
+            file_ext, compressed_path, mime_type = self._get_file_info(filename, path)
             if mime_type in accepted_mime_types:
                 extracted.append(filename)
             else:
@@ -214,15 +218,17 @@ class UserFilesDirectory(object):
                 logger.info("NOT EXTRACTED ", str(compressed_path))
         return extracted
 
-    def get_file_info(self, filename: str, path: Path) -> Tuple[str, Path, str]:
+    @staticmethod
+    def _get_file_info(filename: str, path: Path) -> Tuple[str, Path, str]:
         file_ext = filename.split(".")[-1]
         parts = filename.split(os.path.sep)
         filepath = path.joinpath(str(Path(parts[0])), os.path.sep.join(parts[1:]))
-        mime_type = magic.from_file(str(filepath), mime=True)
+        py_magic = from_path(str(filepath))
+        mime_type = py_magic.mime_type()
         return file_ext, filepath, mime_type
 
     @staticmethod
-    def ensure_exists(path: Path) -> None:
+    def ensure_exists(path: Path):
         if not path.exists():
             try:
                 path.mkdir(parents=True)
@@ -230,7 +236,8 @@ class UserFilesDirectory(object):
                 pass
 
     def _has_accepted_format(self, path: Path, filename: str) -> bool:
-        mime_type = magic.from_file(filename, mime=True)
+        py_magic = from_path(filename)
+        mime_type = py_magic.mime_type()
         if mime_type in accepted_mime_types:
             return True
         logger.info(
@@ -259,7 +266,7 @@ class UserFilesDirectory(object):
             with tarfile.open(compressed_file, "r") as archive:
                 filenames = self.extract_archive(archive, path)
             os.remove(compressed_file)
-            await self.recursive_upack(path, filenames)
+            await self.recursive_unpack(path, filenames)
         except Exception as e:
             _log_exception_throw(e)
 
@@ -269,8 +276,9 @@ class UserFilesDirectory(object):
             with open(compressed_file, "rb") as archive:
                 with open(path.as_posix(), "wb") as decompressed_file:
                     decompressed_file.write(gzip.decompress(archive.read()))
+            name = str(compressed_file).split(os.path.sep)[-1]
             os.remove(compressed_file)
-            await self.dispatch_unpack(compressed_file.name, path)
+            await self.dispatch_unpack(name, path)
         except Exception as e:
             _log_exception_throw(e)
 
@@ -285,7 +293,7 @@ class UserFilesDirectory(object):
             _log_exception_throw(e)
 
     async def dispatch_unpack(self, compressed_f: str, path: Path):
-        file_ext, compressed_path, mime_type = self.get_file_info(compressed_f, path)
+        file_ext, compressed_path, mime_type = self._get_file_info(compressed_f, path)
         # file_ext = compressed_f.split(".")[-1]
         # parts = compressed_f.split(os.path.sep)
         # compressed_path = path.joinpath(

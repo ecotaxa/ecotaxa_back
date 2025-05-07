@@ -45,6 +45,8 @@ passlib==1.7.4
 # A bit of html
 jinja2==3.0.1
 aiofiles==0.7.0
+# mime type for import
+magic-rs==0.2.0
 # Analyzis of XLSX data sources
 openpyxl==3.0.9
 openpyxl-stubs==0.1.21
