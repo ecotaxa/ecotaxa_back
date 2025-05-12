@@ -64,7 +64,6 @@ class UserFilesDirectory(object):
         users_files_dir = Config().get_users_files_dir()
         self.user_id = user_id
         self.list_errors: Dict[str, str] = {}
-        print("--------------self.user_id " + str(type(self.user_id)), self.user_id)
         self._root_path = Path(
             str(users_files_dir or ""), self.USER_DIR_PATTERN % self.user_id
         )
