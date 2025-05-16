@@ -18,7 +18,9 @@ from BO.User import UserIDT
 from DB.User import User
 from FS.CommonDir import CommonFolder
 from FS.UserFilesDir import UserFilesDirectory
+from helpers.CustomException import BaseAppException, UnprocessableEntityException
 from helpers.DynamicLogs import get_logger
+from helpers.httpexception import DETAIL_NOTHING_DONE, DETAIL_UNKNOWN_ERROR
 from .helpers.Service import Service
 
 logger = get_logger(__name__)
@@ -63,7 +65,15 @@ class UserFilesFolderService(Service):
         if path is not None:
             path = self._can_use_dir_throw(path)
         logger.info("Adding '%s' ('%s') for '%s'", path, file_name, current_user.name)
-        ret = await UserFilesDirectory(current_user_id).add_file(file_name, path, file)
+        try:
+            ret = await UserFilesDirectory(current_user_id).add_file(
+                file_name, path, file
+            )
+        except UnprocessableEntityException as e:
+            raise HTTPException(status_code=e.status_code, detail=e.message)
+        except Exception as e:
+            print("e----", e)
+            raise HTTPException(status_code=500, detail=DETAIL_UNKNOWN_ERROR)
         return ret
 
     def list(self, sub_path: str, current_user_id: UserIDT) -> DirectoryModel:
@@ -87,6 +97,11 @@ class UserFilesFolderService(Service):
             # Prevent hammering on the endpoint
             time.sleep(0.5)
             assert False, "Not found"
+        except UnprocessableEntityException as e:
+            raise HTTPException(status_code=e.status_code, detail=e.message)
+        except Exception as e:
+            print("e----", e)
+            raise HTTPException(status_code=500, detail=DETAIL_UNKNOWN_ERROR)
 
         # Format data to return
         entries = [
@@ -104,8 +119,14 @@ class UserFilesFolderService(Service):
         dest_path = self._can_use_dir_throw(source_path, exclude_path=["/"])
         if not Path(dest_path).exists():
             folder = UserFilesDirectory(current_user_id)
-            return folder.create(source_path)
-        return ""
+            try:
+                ret = folder.create(source_path)
+            except UnprocessableEntityException as e:
+                raise HTTPException(status_code=e.status_code, detail=e.message)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=DETAIL_UNKNOWN_ERROR)
+            return ret
+        raise HTTPException(status_code=422, detail=[DETAIL_NOTHING_DONE])
 
     def remove(self, source_path: str, current_user_id: UserIDT):
         """
@@ -115,7 +136,12 @@ class UserFilesFolderService(Service):
         _: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         source_path = self._can_use_dir_throw(source_path, exclude_path=["/"])
         folder = UserFilesDirectory(current_user_id)
-        folder.remove(source_path)
+        try:
+            folder.remove(source_path)
+        except UnprocessableEntityException as e:
+            raise HTTPException(status_code=e.status_code, detail=e.message)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=DETAIL_UNKNOWN_ERROR)
 
     def move(self, source_path: str, dest_path: str, current_user_id: UserIDT) -> str:
         """
@@ -126,5 +152,10 @@ class UserFilesFolderService(Service):
         source_path = self._can_use_dir_throw(source_path)
         dest_path = self._can_use_dir_throw(dest_path)
         folder = UserFilesDirectory(current_user_id)
-        dest_path = folder.move(source_path, dest_path)
+        try:
+            dest_path = folder.move(source_path, dest_path)
+        except (BaseAppException, UnprocessableEntityException) as e:
+            raise HTTPException(status_code=e.status_code, detail=e.message)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=DETAIL_UNKNOWN_ERROR)
         return dest_path

@@ -12,13 +12,13 @@ from magic_rs import from_path
 from pathlib import Path
 from typing import Optional, List, NamedTuple, Dict, Tuple
 
-from fastapi import HTTPException
 from starlette.datastructures import UploadFile
 
 from BO.User import UserIDT
 from FS.CommonDir import CommonFolder, DirEntryT
 from helpers.AppConfig import Config
 from helpers.DynamicLogs import get_logger
+from helpers.CustomException import BaseAppException, UnprocessableEntityException
 from helpers.httpexception import (
     DETAIL_INVALID_ZIP_FILE,
     DETAIL_INVALID_LARGE_ZIP_FILE,
@@ -125,7 +125,7 @@ class UserFilesDirectory(object):
         if self._root_path.joinpath(
             path.lstrip(os.path.sep)
         ) == self._root_path.joinpath(self.TRASH_DIRECTORY):
-            raise HTTPException(status_code=422, detail=[DETAIL_FILE_PROTECTED])
+            raise UnprocessableEntityException(DETAIL_FILE_PROTECTED)
 
     def _is_trash_dir(self, path: str):
         return self._root_path.joinpath(
@@ -140,10 +140,10 @@ class UserFilesDirectory(object):
         self.ensure_exists(dest_path.parent)
         if dest_path.is_dir():
             if dest_path.joinpath(source_path.stem).exists():
-                raise HTTPException(status_code=422, detail=DETAIL_NOTHING_DONE)
+                raise UnprocessableEntityException(DETAIL_NOTHING_DONE)
         elif dest_path.exists():
             # can't rename
-            raise HTTPException(status_code=422, detail=DETAIL_NOTHING_DONE)
+            raise UnprocessableEntityException(DETAIL_NOTHING_DONE)
         try:
             shutil.move(str(source_path), dest_path)
         except Exception as e:
@@ -161,10 +161,7 @@ class UserFilesDirectory(object):
             if os.path.exists(
                 self._root_path.joinpath(self.TRASH_DIRECTORY + os.path.sep + path)
             ):
-                raise HTTPException(
-                    status_code=422,
-                    detail=[DETAIL_SAME_NAME_IN_TRASH],
-                )
+                raise UnprocessableEntityException(DETAIL_SAME_NAME_IN_TRASH)
             else:
                 try:
                     self.ensure_exists(self._root_path.joinpath(self.TRASH_DIRECTORY))
@@ -187,7 +184,7 @@ class UserFilesDirectory(object):
         self._is_trash_dir_throw(path[0 : len(self.TRASH_DIRECTORY + os.path.sep)])
         source_path: Path = self._root_path.joinpath(path.lstrip(os.path.sep))
         if source_path.exists():
-            return ""
+            raise UnprocessableEntityException(DETAIL_NOTHING_DONE)
         self.ensure_exists(source_path)
         return str(source_path)
 
@@ -288,7 +285,6 @@ class UserFilesDirectory(object):
             ):
                 await f
         except Exception as e:
-            print("______errror RECURS" + str(path), e)
             _log_exception_throw(e)
 
     async def dispatch_unpack(self, compressed_f: str, path: Path):
@@ -304,12 +300,7 @@ class UserFilesDirectory(object):
             and not self._is_trash_dir(str(path))
         ):
             sub_path = Path(".".join(str(compressed_path).split(".")[:-1]))
-            print(
-                "__________________compr " + file_ext + "path=" + str(path),
-                str(compressed_path),
-            )
             if zipfile.is_zipfile(compressed_path.as_posix()):
-                print("----iszipfile___path=" + str(compressed_path))
                 await self.unpack_zip(compressed_path, sub_path)
             elif tarfile.is_tarfile(compressed_path.as_posix()):
                 await self.unpack_tar(compressed_path, sub_path)
@@ -322,18 +313,12 @@ class UserFilesDirectory(object):
 
 def _log_exception_throw(e: Exception):
     if isinstance(e, zipfile.BadZipFile):
-        raise HTTPException(
-            status_code=422,
-            detail=[DETAIL_INVALID_ZIP_FILE],
-        )
+        logger.error(DETAIL_INVALID_ZIP_FILE)
+        raise UnprocessableEntityException(DETAIL_INVALID_ZIP_FILE) from e
     elif isinstance(e, zipfile.LargeZipFile):
         # activate zip64
-        raise HTTPException(
-            status_code=422,
-            detail=[DETAIL_INVALID_LARGE_ZIP_FILE],
-        )
+        logger.error(DETAIL_INVALID_LARGE_ZIP_FILE)
+        raise UnprocessableEntityException(DETAIL_INVALID_LARGE_ZIP_FILE) from e
     else:
-        raise HTTPException(
-            status_code=500,
-            detail=[DETAIL_UNKNOWN_ERROR],
-        )
+        logger.error(DETAIL_UNKNOWN_ERROR)
+        raise BaseAppException(DETAIL_UNKNOWN_ERROR) from e
