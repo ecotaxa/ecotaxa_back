@@ -11,7 +11,7 @@ EcoTaxa is a web application destined to process the large number of images gene
 
 This is the backend part of the application, which is coupled with a [front-end](https://github.com/ecotaxa/ecotaxa_front). 
 
-In `docker` you can find build scripts, as well as a simple docker-compose configuration for setting up a server quickly, without impacting your whole system. It also embeds a PgAdmin4 docker image.
+In `docker` you can find build scripts.
 
 The simplest way to set up a running instance is to follow the [all_in_one instructions](https://github.com/ecotaxa/ecotaxa_front/tree/master/docker/all_in_one). This will give you a solution but probably not scale to be a production environment.
 
