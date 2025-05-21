@@ -830,13 +830,12 @@ class UserService(Service):
         if (
             (mail_status == False or has_to_refresh == True)
             and self._uservalidation is not None
-            and (user is not None and not self._current_is_admin(user))
+            and (user is None or not self._current_is_admin(user))
         ):
             if user is None:
                 previous_email = None
             else:
                 previous_email = user.email
-
             assistance_email = self._get_assistance_email()
             self._uservalidation.request_email_verification(
                 update_src.email,
