@@ -156,11 +156,14 @@ L'application est accessible à l'adresse qui est donnée dans les logs du scrip
   ``  
 - development  
   ```shell
-  npm run dev  
+  npm run dev  ```
  - style.css , the bundle main.js --> appli/static/src/main.js (for dev js and css are included in js)    
 - production  
 ```npm run build ```
-build before launching docker creation, dist files are in appli/static/gui/dist. add them to github before launching a docker build  
+build before launching docker creation, dist files are in appli/static/gui/dist. 
+Add them to github before launching a docker build_prod 
+- Internationalization : 
+instructions for messages update are in messages/README.md 
 ## Launch tests  
   
 ### Backend test
@@ -205,25 +208,16 @@ The swagger <ROOTURL>/docs page can be used to test endpoints without too much c
 To start filling an empty database, you can import a test project from an EcoTaxa export.  
   
 - To obtain an export to be reinserted :  
-  
-<img src="./images/export_button.png" width=500 />  
-  
-<img src="./images/export_params.png" width=500 />  
+  create an export backup job of a project ( the menu appears when "settings" has been clicked on the projects list) 
   
 The resulting .zip export should be placed in the folder given for `SERVERLOADAREA` in `config.ini` (`~/srv_fics` in our example) or uploaded via the myfiles entrypoint or "import from My Files" in the frontend.
   
 - For data import to work, the taxonomy must be synchronized. You can do this by clicking on the warning popup that appears when you're connected (if clicking on “Synchronize to check EcoTaxa version” sends you to an error page, check in `config.ini` that you have set `TAXOSERVER_URL = http://ecotaxoserver.obs-vlfr.fr`).  
   
-<img src="./images/taxo_synchro.png" width=500 />  
+- You can then create a project by clicking on “Create project” on top of the projects list page. To import data into the new project :    
   
-- You can then create a project by clicking on “Create project” on the same page. To import data into the new project :  
-  
-<img src="./images/import_button.png" width=500 />  
-  
-- Select "General Import" then "Import from My Files" or “Choose a folder or zip file on the server” (the export.zip file should appear in the list) then click on “Select to import” and submit the form.  
-  
-<img src="./images/import_page.png" width=500 />  
-  
+	- Select "General Import" then "Import from My Files" or “Choose a folder or zip file on the server” (the export.zip file 	should appear in the list) then click on “Select to import” and submit the form.  
+   
 A question will be asked during import to map the users mentioned in the export archive to the users present in this local version of EcoTaxa. Simply answer “Application Administrator” for each name to complete the import.  
   
 # Installation for launching predictions
