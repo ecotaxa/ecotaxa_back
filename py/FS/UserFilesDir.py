@@ -231,7 +231,7 @@ class UserFilesDirectory(object):
             py_magic = from_path(str(filepath))
             mime_type = py_magic.mime_type()
         except Exception:
-            mime_type = None
+            mime_type = "none"
 
         return file_ext, filepath, mime_type
 
