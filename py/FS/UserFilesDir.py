@@ -35,6 +35,7 @@ accepted_mime_types = [
     "application/gzip",
     "application/x-tar",
     "text/plain",
+    "text/csv",
     "text/tab-separated-values",
     "image/jpeg",
     "image/png",
@@ -202,16 +203,23 @@ class UserFilesDirectory(object):
             filenames = archive.getnames()
         extracted = []
         archive.extractall(path)
+        more_mime = {
+            "csv": "text/csv",
+            "txt": "text/plain",
+            "tsv": "text/tab-separated-values",
+        }
         for filename in filenames:
             file_ext, compressed_path, mime_type = self._get_file_info(filename, path)
             if mime_type in accepted_mime_types:
+                extracted.append(filename)
+            elif file_ext in more_mime.keys():
                 extracted.append(filename)
             else:
                 try:
                     os.remove(compressed_path)
                 except Exception as e:
                     _log_exception_throw(e)
-                logger.info("NOT EXTRACTED ", str(compressed_path))
+                logger.info("NOT EXTRACTED '%s' ", str(compressed_path))
         return extracted
 
     @staticmethod
@@ -219,8 +227,12 @@ class UserFilesDirectory(object):
         file_ext = filename.split(".")[-1]
         parts = filename.split(os.path.sep)
         filepath = path.joinpath(str(Path(parts[0])), os.path.sep.join(parts[1:]))
-        py_magic = from_path(str(filepath))
-        mime_type = py_magic.mime_type()
+        try:
+            py_magic = from_path(str(filepath))
+            mime_type = py_magic.mime_type()
+        except Exception:
+            mime_type = None
+
         return file_ext, filepath, mime_type
 
     @staticmethod
@@ -251,8 +263,9 @@ class UserFilesDirectory(object):
         try:
             with zipfile.ZipFile(compressed_file, "r", allowZip64=True) as archive:
                 filenames = self.extract_archive(archive, path)
+            if len(filenames):
+                await self.recursive_unpack(path, filenames)
             os.remove(compressed_file)
-            await self.recursive_unpack(path, filenames)
         except Exception as e:
             _log_exception_throw(e)
 
@@ -261,8 +274,9 @@ class UserFilesDirectory(object):
         try:
             with tarfile.open(compressed_file, "r") as archive:
                 filenames = self.extract_archive(archive, path)
+            if len(filenames):
+                await self.recursive_unpack(path, filenames)
             os.remove(compressed_file)
-            await self.recursive_unpack(path, filenames)
         except Exception as e:
             _log_exception_throw(e)
 
@@ -273,8 +287,8 @@ class UserFilesDirectory(object):
                 with open(path.as_posix(), "wb") as decompressed_file:
                     decompressed_file.write(gzip.decompress(archive.read()))
             name = str(compressed_file).split(os.path.sep)[-1]
-            os.remove(compressed_file)
             await self.dispatch_unpack(name, path)
+            os.remove(compressed_file)
         except Exception as e:
             _log_exception_throw(e)
 

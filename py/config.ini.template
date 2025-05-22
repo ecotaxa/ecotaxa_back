@@ -52,16 +52,18 @@ SECURITY_PASSWORD_SALT = zzzzzz
 # key can be shared with the front
 MAILSERVICE_SECRET_KEY = THIS KEY MUST BE CHANGED ANS IS ONLY FOR TOKENS SENT BY MAIL
 MAILSERVICE_SALT = "saltservicemail_salt"
-
+# email address used in account management : mandatory - 0 email - 1 pwd - 2 - dns - [...3 smtp port - 4 imap port]
 SENDER_ACCOUNT = senderaccountmail@testmail.com, senderpwd, senderdns, 465
 
 # EcoTaxa instance id
-INSTANCE_ID = EcoTaxa .01
+INSTANCE_ID = EcoTaxa.01
 # email verification request before user creation
 USER_EMAIL_VERIFICATION = off
 
 #if "on" - account validation is needed for registration and account major data modification
 ACCOUNT_VALIDATION = off
+# account mail templates
+DIR_MAIL_TEMPLATES = /config_templates/account_validation_mails
 # comment next line if no ticket software is used or account validation if off
 #ADD_TICKET = ***
 #FRONT URL
@@ -69,3 +71,4 @@ SERVERURL = https://localfronturl:5001
 
 #user directory root
 USERSFILESAREA = /eco_users_files
+

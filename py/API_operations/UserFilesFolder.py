@@ -72,7 +72,6 @@ class UserFilesFolderService(Service):
         except UnprocessableEntityException as e:
             raise HTTPException(status_code=e.status_code, detail=e.message)
         except Exception as e:
-            print("e----", e)
             raise HTTPException(status_code=500, detail=DETAIL_UNKNOWN_ERROR)
         return ret
 
