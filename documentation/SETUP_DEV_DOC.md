@@ -25,7 +25,8 @@ The source code is in `ecotaxa_back/py/`, and requires python3.8.
  -  Clone the back repository : https://github.com/ecotaxa/ecotaxa_back  
  - Creation of a virtual environment for back libraries  
 ```shell  
-cd ~/ecotaxa_back/pypython3.8 -m venv myvenvsource myvenv/bin/activate
+cd ~/ecotaxa_back/py
+python3.8 -m venv myvenvsource myvenv/bin/activate
 ```  
  - Library installation (`libjpeg` is required for MacOS only)  
 ```shell  
