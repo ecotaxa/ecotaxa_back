@@ -164,7 +164,7 @@ Note: Running the frontend dev command in the dev_gui directory launches the bac
  *style.css , the bundle main.js --> appli/static/src/main.js (for dev js and css are included in js) *   
 - production  
 ``` shell 
-- npm run build 
+ npm run build 
 ```
 build before launching docker creation, dist files are in appli/static/gui/dist. 
 Add them to github before launching a docker build_prod 
