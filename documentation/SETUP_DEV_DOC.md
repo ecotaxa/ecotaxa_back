@@ -102,11 +102,13 @@ This command will create an administrator account whose credentials are given in
 ### Launch the backend server 
   
 Once the installations are complete, the server is launched with uvicorn :  
-``` shell  
-cd ~/ecotaxa_back/pysource myvenv/bin/activatepython3.8 run.py uvicorn
+```shell
+cd ~/ecotaxa_back/py
+source myvenv/bin/activate
+python3.8 run.py uvicorn
 ```  
 If the last command returns the error `[Errno 98] Address already in use`, then run it with a new value for the APP_PORT environment variable (which is 8000 by default), for example :  
-``` shell  
+```shell  
 APP_PORT=8097 python3.8 run.py uvicorn  
 ```  
   
@@ -117,10 +119,12 @@ APP_PORT=8097 python3.8 run.py uvicorn
 - Clone the frontend repository https://github.com/ecotaxa/ecotaxa_front  
 - Creating a virtual environment for frontend libraries  
 ```shell  
-cd ~/ecotaxa_frontpython3.8 -m venv venv --without-pipsource venv/bin/activate
+cd ~/ecotaxa_front
+python3.8 -m venv venv --without-pip
+source venv/bin/activate
 ```  
 - Install libraries with a modified version of pip  : https://bootstrap.pypa.io/get-pip.py  
-``` shell  
+```shell  
 wget https://bootstrap.pypa.io/get-pip.pypython3.8 get-pip.pypython3.8 -m pip install -r requirements.txt
 ```  
 - Create a `config.cfg` file in `~/ecotaxa_front/config/` with the following contents (update `BACKEND_URL` with the correct value of `APP_PORT` if necessary) :  
@@ -139,7 +143,9 @@ APP_GUI_MESSAGE_FILE = "app_gui_messages.json"
 Once the installations are done, the launch script is in `runserver.py`  
   
 ```shell  
-cd ~/ecotaxa_frontsource venv/bin/activatepython3.8 runserver.py
+cd ~/ecotaxa_front
+source venv/bin/activate
+python3.8 runserver.py
 ```  
 The application can be accessed at the address given in the script logs :  
 ```  
@@ -158,17 +164,17 @@ Note: Running the frontend dev command in the dev_gui directory launches the bac
    ```
    ( - B docker to user docker ecotaxa_db , -P path/to/ecotaxa_back if ecotaxa_back local dev repo is not ../ecotaxa_back)  
 - New interface (which is being deployed since 2023-Q4)    
-  ```shell
-  cd ecotaxa_front/dev_gui
-  ```  
+```shell
+cd ecotaxa_front/dev_gui
+```  
 - development  (runs ecotaxa_back run.py and ecotaxa_front runserver.py with webpack watch)
-  ``` shell
-  npm run dev 
-   ```
+```shell
+ npm run dev
+```
  *style.css , the bundle main.js --> appli/static/src/main.js (for dev js and css are included in js) *   
 - production  
-``` shell 
- npm run build 
+```shell
+npm run build 
 ```
 build before launching docker creation, dist files are in appli/static/gui/dist. 
 Add them to github before launching a docker build_prod 
@@ -200,15 +206,16 @@ vi pg_hba.conf  #remplacer scram-sha-256 par md5
 vi postgresql.conf #remplacer password_encryption scram-sha-256 par md5  
 ```
 - next time use 
-```
+```shell
  docker start ecotaxa_tox  
 ```  
 - Launching tests with tox  
-```
-cd ~/ecotaxa_back/QA/pyPYTHONPATH=. POSTGRES_HOST=localhost POSTGRES_PORT=5440 tox  
+```shell
+cd ~/ecotaxa_back/QA/py
+PYTHONPATH=. POSTGRES_HOST=localhost POSTGRES_PORT=5440 tox  
 ```  
 - Once the tests are complete, the temporary database can be stopped.  
-``` 
+```shell 
 docker stop ecotaxa_tox#docker rm ecotaxa_tox  
 ```  
   
@@ -238,19 +245,21 @@ To be able to run predictions, you need to run the `gpu_jobs_runner.py` script, 
 ## Librairies installation  
   
 - Virtual environment creation  
-```
+```shell
 cd ~/ecotaxa_back/pypython3.8 -m venv gpu_venvsource gpu_venv/bin/activate
 ```  
 - Installation of the libraries required for `gpu_jobs_runner.py`.  
-```
+```shell
 pip3 install --upgrade pip wheelpip3 install -r gpu_jobs_reqs.txt
 ```  
   
 ## Launch a prediction  
   
 - Running the script  
-```  
-cd ~/ecotaxa_back/pysource gpu_venv/bin/activatepython3.8 gpu_jobs_runner.py
+```shell  
+cd ~/ecotaxa_back/py
+source gpu_venv/bin/activate
+python3.8 gpu_jobs_runner.py
 ```  
 If this returns an error concerning protobuf, then you can `export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python` and run again.  
   
