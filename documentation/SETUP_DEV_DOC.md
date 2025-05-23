@@ -90,7 +90,7 @@ vi postgresql.conf #remplacer password_encryption scram-sha-256 par md5
 PYTHONPATH=. python cmds/manage.py db create --password mysecretpassword --db-name ecotaxa  
 ```  
 - Filling the base with default data 
-```  shell
+```shell
 PYTHONPATH=. python cmds/manage.py db build  
 ```  
 This command will create an administrator account whose credentials are given in `~/ecotaxa_back/py/cmds/manage.py` (THE_ADMIN and THE_ADMIN_PASSWORD). To use them in the interface, you may need to ensure that THE_ADMIN is in the format of an e-mail address, as it is checked in the frontend.      
@@ -178,19 +178,16 @@ instructions for messages update are in messages/README.md
 - Creation of a temporary test database  
 
 - if no postgresql installed 
-```
-shell  
+```shell  
 sudo apt-get update  
 sudo apt-get install -y postgresql-client
 ```  
 - docker image synchronized with the production version of postgresql  
-```
-shell
+```shell
 docker run --name ecotaxa_tox -p 5440:5432 -d -e POSTGRES_PASSWORD=yourpassword -e POSTGRES_DB=ecotaxa pgvector/pgvector:pg14 
 ``` 
 - edit pg_hba.conf  
-```
-shell
+```shell
 installer vim  
 docker exec -it ecotaxa_tox /bin/bash  
 apt-get update  
@@ -200,16 +197,14 @@ vi postgresql.conf #remplacer password_encryption scram-sha-256 par md5
 ``
 - next time use 
 ```
-shell
  docker start ecotaxa_tox  
 ```  
 - Launching tests with tox  
 ```
-shell  
 cd ~/ecotaxa_back/QA/pyPYTHONPATH=. POSTGRES_HOST=localhost POSTGRES_PORT=5440 tox  
 ```  
 - Once the tests are complete, the temporary database can be stopped.  
-```shell  
+``` 
 docker stop ecotaxa_tox#docker rm ecotaxa_tox  
 ```  
   
@@ -239,18 +234,18 @@ To be able to run predictions, you need to run the `gpu_jobs_runner.py` script, 
 ## Librairies installation  
   
 - Virtual environment creation  
-```shell  
+```
 cd ~/ecotaxa_back/pypython3.8 -m venv gpu_venvsource gpu_venv/bin/activate
 ```  
 - Installation of the libraries required for `gpu_jobs_runner.py`.  
-```shell  
+```
 pip3 install --upgrade pip wheelpip3 install -r gpu_jobs_reqs.txt
 ```  
   
 ## Launch a prediction  
   
 - Running the script  
-```shell  
+```  
 cd ~/ecotaxa_back/pysource gpu_venv/bin/activatepython3.8 gpu_jobs_runner.py
 ```  
 If this returns an error concerning protobuf, then you can `export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python` and run again.  
