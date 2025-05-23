@@ -26,11 +26,14 @@ The source code is in `ecotaxa_back/py/`, and requires python3.8.
  - Creation of a virtual environment for back libraries  
 ```shell  
 cd ~/ecotaxa_back/py
-python3.8 -m venv myvenvsource myvenv/bin/activate
+python3.8 -m venv myvenv
+source myvenv/bin/activate
+
 ```  
  - Library installation (`libjpeg` is required for MacOS only)  
 ```shell  
-pip3 install --upgrade pip wheel# brew install libjpeg  
+pip3 install --upgrade pip wheel 
+# brew install libjpeg  
 pip3 install -r requirements.txt
 ```  
  - Creation of the configuration file `config.ini` from the template given in `~/ecotaxa_back/py/` :  
