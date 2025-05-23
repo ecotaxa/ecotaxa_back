@@ -98,11 +98,11 @@ This command will create an administrator account whose credentials are given in
 ### Launch the backend server 
   
 Once the installations are complete, the server is launched with uvicorn :  
-```shell  
+``` shell  
 cd ~/ecotaxa_back/pysource myvenv/bin/activatepython3.8 run.py uvicorn
 ```  
 If the last command returns the error `[Errno 98] Address already in use`, then run it with a new value for the APP_PORT environment variable (which is 8000 by default), for example :  
-```shell  
+``` shell  
 APP_PORT=8097 python3.8 run.py uvicorn  
 ```  
   
@@ -116,11 +116,11 @@ APP_PORT=8097 python3.8 run.py uvicorn
 cd ~/ecotaxa_frontpython3.8 -m venv venv --without-pipsource venv/bin/activate
 ```  
 - Install libraries with a modified version of pip  : https://bootstrap.pypa.io/get-pip.py  
-```shell  
+``` shell  
 wget https://bootstrap.pypa.io/get-pip.pypython3.8 get-pip.pypython3.8 -m pip install -r requirements.txt
 ```  
 - Create a `config.cfg` file in `~/ecotaxa_front/config/` with the following contents (update `BACKEND_URL` with the correct value of `APP_PORT` if necessary) :  
-```ini  
+``` ini  
 # Flask application debug, set to True to see more traces  
 DEBUG = True  
 # The key is used for signing exchanges b/w navigator and present server (cookies)  
@@ -137,33 +137,40 @@ Once the installations are done, the launch script is in `runserver.py`
 ```shell  
 cd ~/ecotaxa_frontsource venv/bin/activatepython3.8 runserver.py
 ```  
-L'application est accessible à l'adresse qui est donnée dans les logs du script :  
+The application can be accessed at the address given in the script logs :  
 ```  
 [...]  
  WARNING: This is a development server. Do not use it in a production deployment. * Running on http://193.50.102.43:5001/ (Press CTRL+C to quit)
  ```  
+Note: Running the frontend dev command in the dev_gui directory launches the backend server and frontend server
 ### Frontend development 
 - install  npm
  ```npm install
  ```    
 - edit [package.json](https://github.com/ecotaxa/ecotaxa_front/blob/master/dev_gui/package.json) add -P pathto/ecotaxa_back` if ecotaxa_back local repo is not  ../ecotaxa_back  
 - *old Interface*  
-   ```./run_ecotaxa.sh  
+   ```shell
+   ./run_ecotaxa.sh  
    ```
    ( - B docker to user docker ecotaxa_db , -P path/to/ecotaxa_back if ecotaxa_back local dev repo is not ../ecotaxa_back)  
 - New interface (which is being deployed since 2023-Q4)    
-  ```cd ecotaxa_front/dev_gui
-  ``  
-- development  
   ```shell
-  npm run dev  ```
- - style.css , the bundle main.js --> appli/static/src/main.js (for dev js and css are included in js)    
+  cd ecotaxa_front/dev_gui
+  ``  
+- development  (runs ecotaxa_back run.py and ecotaxa_front runserver.py with webpack watch)
+  ``` shell
+  npm run dev 
+   ```
+ *style.css , the bundle main.js --> appli/static/src/main.js (for dev js and css are included in js) *   
 - production  
-```npm run build ```
+``` shell 
+- npm run build 
+```
 build before launching docker creation, dist files are in appli/static/gui/dist. 
 Add them to github before launching a docker build_prod 
 - Internationalization : 
 instructions for messages update are in messages/README.md 
+- 
 ## Launch tests  
   
 ### Backend test
@@ -171,16 +178,19 @@ instructions for messages update are in messages/README.md
 - Creation of a temporary test database  
 
 - if no postgresql installed 
-```shell  
+```
+shell  
 sudo apt-get update  
 sudo apt-get install -y postgresql-client
 ```  
 - docker image synchronized with the production version of postgresql  
-```shell
+```
+shell
 docker run --name ecotaxa_tox -p 5440:5432 -d -e POSTGRES_PASSWORD=yourpassword -e POSTGRES_DB=ecotaxa pgvector/pgvector:pg14 
 ``` 
 - edit pg_hba.conf  
-```shell
+```
+shell
 installer vim  
 docker exec -it ecotaxa_tox /bin/bash  
 apt-get update  
@@ -189,11 +199,13 @@ vi pg_hba.conf  #remplacer scram-sha-256 par md5
 vi postgresql.conf #remplacer password_encryption scram-sha-256 par md5  
 ``
 - next time use 
-```shell
+```
+shell
  docker start ecotaxa_tox  
 ```  
 - Launching tests with tox  
-```shell  
+```
+shell  
 cd ~/ecotaxa_back/QA/pyPYTHONPATH=. POSTGRES_HOST=localhost POSTGRES_PORT=5440 tox  
 ```  
 - Once the tests are complete, the temporary database can be stopped.  
@@ -228,16 +240,19 @@ To be able to run predictions, you need to run the `gpu_jobs_runner.py` script, 
   
 - Virtual environment creation  
 ```shell  
-cd ~/ecotaxa_back/pypython3.8 -m venv gpu_venvsource gpu_venv/bin/activate```  
+cd ~/ecotaxa_back/pypython3.8 -m venv gpu_venvsource gpu_venv/bin/activate
+```  
 - Installation of the libraries required for `gpu_jobs_runner.py`.  
 ```shell  
-pip3 install --upgrade pip wheelpip3 install -r gpu_jobs_reqs.txt```  
+pip3 install --upgrade pip wheelpip3 install -r gpu_jobs_reqs.txt
+```  
   
 ## Launch a prediction  
   
 - Running the script  
 ```shell  
-cd ~/ecotaxa_back/pysource gpu_venv/bin/activatepython3.8 gpu_jobs_runner.py```  
+cd ~/ecotaxa_back/pysource gpu_venv/bin/activatepython3.8 gpu_jobs_runner.py
+```  
 If this returns an error concerning protobuf, then you can `export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python` and run again.  
   
 - Once the script has run, you can make a prediction using the classification interface  
