@@ -156,7 +156,7 @@ Note: Running the frontend dev command in the dev_gui directory launches the bac
 - New interface (which is being deployed since 2023-Q4)    
   ```shell
   cd ecotaxa_front/dev_gui
-  ``  
+  ```  
 - development  (runs ecotaxa_back run.py and ecotaxa_front runserver.py with webpack watch)
   ``` shell
   npm run dev 
@@ -170,7 +170,7 @@ build before launching docker creation, dist files are in appli/static/gui/dist.
 Add them to github before launching a docker build_prod 
 - Internationalization : 
 instructions for messages update are in messages/README.md 
-- 
+
 ## Launch tests  
   
 ### Backend test
@@ -194,7 +194,7 @@ apt-get update
 apt-get install vim cd /var/lib/postgresql/data  
 vi pg_hba.conf  #remplacer scram-sha-256 par md5  
 vi postgresql.conf #remplacer password_encryption scram-sha-256 par md5  
-``
+```
 - next time use 
 ```
  docker start ecotaxa_tox  
@@ -210,7 +210,7 @@ docker stop ecotaxa_tox#docker rm ecotaxa_tox
   
 The swagger <ROOTURL>/docs page can be used to test endpoints without too much configuration effort.  
   
-# Import a test project  
+## Import a test project  
   
 To start filling an empty database, you can import a test project from an EcoTaxa export.  
   
@@ -227,7 +227,7 @@ The resulting .zip export should be placed in the folder given for `SERVERLOADAR
    
 A question will be asked during import to map the users mentioned in the export archive to the users present in this local version of EcoTaxa. Simply answer “Application Administrator” for each name to complete the import.  
   
-# Installation for launching predictions
+## Installation for launching predictions
   
 To be able to run predictions, you need to run the `gpu_jobs_runner.py` script, which requires libraries that are not part of the requirements already installed. The best solution is to create a new virtual environment.    
   
