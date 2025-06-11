@@ -14,7 +14,7 @@ from cmds.db_upg.db_conn import app_config  # type:ignore
 from data.Countries import countries_by_name
 from data.Instruments import DEFAULT_INSTRUMENTS
 
-THE_ADMIN = "administrator"
+THE_ADMIN = "administrator@email.test"
 THE_ADMIN_PASSWORD = "ecotaxa"
 
 app = typer.Typer()
@@ -130,7 +130,7 @@ CREATE_DB_SQL = """
 create DATABASE %s
 WITH ENCODING='UTF8'
 OWNER=%s
-TEMPLATE=template0 LC_CTYPE='C' LC_COLLATE='C' CONNECTION LIMIT=-1;
+TEMPLATE=template0 LC_CTYPE='C' LC_COLLATE='C' CONNECTION LIMIT=-1
 """
 
 
@@ -138,7 +138,10 @@ TEMPLATE=template0 LC_CTYPE='C' LC_COLLATE='C' CONNECTION LIMIT=-1;
 def create(user: str = "postgres", password: str = "", db_name: str = ""):
     super_conn = Service.build_super_connection(app_config, user, password)
     db_create_sql = CREATE_DB_SQL % (db_name, app_config.get_cnf("DB_USER"))
-    super_conn.exec_outside_transaction(db_create_sql)
+    try:
+        super_conn.exec_outside_transaction(db_create_sql)
+    except:
+        pass
 
 
 @db_app.command(help="Completely drop the DB.")

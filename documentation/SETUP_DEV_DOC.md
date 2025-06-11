@@ -180,6 +180,9 @@ build before launching docker creation, dist files are in appli/static/gui/dist.
 Add them to github before launching a docker build_prod 
 - Internationalization : 
 instructions for messages update are in messages/README.md 
+- 
+### Internationalization
+Please see the short install and update documentation [https://github.com/ecotaxa/ecotaxa_front/blob/master/messages/gui/readme.md] (messages/gui/readme.md)
 
 ## Launch tests  
   

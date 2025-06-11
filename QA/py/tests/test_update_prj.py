@@ -51,7 +51,7 @@ def test_update_prj(database, fastapi, caplog):
         "cnn_network_id": None,
         "comments": None,
         "contact": {
-            "email": "administrator",
+            "email": "administrator@email.test",
             "id": 1,
             "name": "Application Administrator",
             "organisation": "Institut de la Mer de Villefranche - IMEV",
@@ -62,7 +62,7 @@ def test_update_prj(database, fastapi, caplog):
         # "license": "",
         "managers": [
             {
-                "email": "administrator",
+                "email": "administrator@email.test",
                 "id": 1,
                 "name": "Application Administrator",
                 "organisation": "Institut de la Mer de Villefranche - IMEV",

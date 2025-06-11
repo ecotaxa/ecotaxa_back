@@ -10645,7 +10645,7 @@
             "additionalProperties":{
               "type":"string"
             },
-            "description":":imgdate, imgtime, latitude, longitude, depthmin, depthmax, taxolb, userlb, status",
+            "description":":imgdate, imgtime, latitude, longitude, depthmin, depthmax, taxolb, userlb, datelb, status",
             "example":{
               "latitude":43.69,
               "longitude":7.3
@@ -10666,6 +10666,7 @@
               "depthmax",
               "taxolb",
               "userlb",
+              "datelb",
               "status"
             ]
           }

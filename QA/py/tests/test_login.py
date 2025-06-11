@@ -30,7 +30,9 @@ def test_plain_API_login(database):
     assert rsp.status_code == status.HTTP_403_FORBIDDEN
 
     # Plaintext password in DB
-    rsp = client.post(url, json={"username": "administrator", "password": "ecotaxa"})
+    rsp = client.post(
+        url, json={"username": "administrator@email.test", "password": "ecotaxa"}
+    )
     assert rsp.status_code == status.HTTP_200_OK
 
     # Good password but inactive account

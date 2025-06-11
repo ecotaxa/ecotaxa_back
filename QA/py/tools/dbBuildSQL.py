@@ -75,8 +75,8 @@ class EcoTaxaExistingDB(object):
         os.environ["APP_CONFIG"] = conf_file.absolute().as_posix()
 
 
-DB_NAME = "ecotaxa4"
-DB_PASSWORD = "postgres12"
+DB_NAME = "ecotaxa"
+DB_PASSWORD = "mysecretpassword"
 
 
 class EcoTaxaDBFrom0(object):
