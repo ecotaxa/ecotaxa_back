@@ -104,6 +104,7 @@ class SimpleImportFields(str, Enum):
     depthmax = "depthmax"
     taxolb = "taxolb"
     userlb = "userlb"
+    datelb = "datelb"
     status = "status"
 
 

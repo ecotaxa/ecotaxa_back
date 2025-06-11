@@ -5,7 +5,6 @@
 import hashlib
 from pathlib import Path
 from typing import List, Dict, Optional
-
 from API_models.imports import SimpleImportReq, SimpleImportRsp, SimpleImportFields
 from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping
@@ -130,6 +129,7 @@ class SimpleImport(ImportServiceBase):
         SimpleImportFields.depthmax: "object_depth_max",
         SimpleImportFields.taxolb: "object_annotation_category_id",
         SimpleImportFields.userlb: "object_annotation_person_name",
+        SimpleImportFields.datelb: "object_annotation_date",
         SimpleImportFields.status: "object_annotation_status",
     }
     FIELD_TO_FORM: Dict[str, SimpleImportFields] = {
@@ -141,6 +141,7 @@ class SimpleImport(ImportServiceBase):
         "object_time",
         "object_annotation_status",
         "object_annotation_person_name",
+        "object_annotation_date",
     )
 
     def make_header(self) -> str:
@@ -196,8 +197,10 @@ class SimpleImport(ImportServiceBase):
         "depthmax": ObjectHeader.depth_from_txt,
         "taxolb": lambda x: int(x),
         "userlb": lambda x: int(x),
+        "datelb": ObjectHeader.date_from_txt,
         "status": lambda x: x,
     }
+    DEPENDS = ["taxolb", "userlb", "datelb", "status"]
 
     def _validate(self) -> SimpleImportRsp:
         """
@@ -216,6 +219,19 @@ class SimpleImport(ImportServiceBase):
             try:
                 valid_def(a_val)
             except ValueError:
-                errors.append("'%s' is not a valid value for %s" % (a_val, a_key))
+                message = "'%s' is not a valid value for %s" % (a_val, a_key)
+                errors.append(message)
+        for depend in self.DEPENDS:
+            if values.get(SimpleImportFields[depend]) is not None:
+                self.DEPENDS.remove(depend)
+                for dep in self.DEPENDS:
+                    val = values.get(SimpleImportFields[dep])
+                    if val is None:
+                        message = (
+                            "'%s' is not a valid value for %s as at least one annotation value is set."
+                            % (val, dep)
+                        )
+                        errors.append(message)
+                        self.DEPENDS.remove(dep)
         ret = SimpleImportRsp(errors=errors, job_id=0)
         return ret
