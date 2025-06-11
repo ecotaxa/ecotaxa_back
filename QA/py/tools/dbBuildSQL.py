@@ -76,7 +76,7 @@ class EcoTaxaExistingDB(object):
 
 
 DB_NAME = "ecotaxa"
-DB_PASSWORD = "mysecretpassword"
+DB_PASSWORD = "postgres12"
 
 
 class EcoTaxaDBFrom0(object):
