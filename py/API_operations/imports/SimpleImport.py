@@ -189,18 +189,23 @@ class SimpleImport(ImportServiceBase):
         bundle.add_tsv(dest_file)
 
     VALIDATIONS = {
-        "imgdate": ObjectHeader.date_from_txt,
-        "imgtime": ObjectHeader.time_from_txt,
-        "latitude": ObjectHeader.latitude_from_txt,
-        "longitude": ObjectHeader.longitude_from_txt,
-        "depthmin": ObjectHeader.depth_from_txt,
-        "depthmax": ObjectHeader.depth_from_txt,
-        "taxolb": lambda x: int(x),
-        "userlb": lambda x: int(x),
-        "datelb": ObjectHeader.date_from_txt,
-        "status": lambda x: x,
+        SimpleImportFields.imgdate: ObjectHeader.date_from_txt,
+        SimpleImportFields.imgtime: ObjectHeader.time_from_txt,
+        SimpleImportFields.latitude: ObjectHeader.latitude_from_txt,
+        SimpleImportFields.longitude: ObjectHeader.longitude_from_txt,
+        SimpleImportFields.depthmin: ObjectHeader.depth_from_txt,
+        SimpleImportFields.depthmax: ObjectHeader.depth_from_txt,
+        SimpleImportFields.taxolb: lambda x: int(x),
+        SimpleImportFields.userlb: lambda x: int(x),
+        SimpleImportFields.datelb: ObjectHeader.date_from_txt,
+        SimpleImportFields.status: lambda x: x,
     }
-    DEPENDS = ["taxolb", "userlb", "datelb", "status"]
+    DEPENDS = [
+        SimpleImportFields.taxolb,
+        SimpleImportFields.userlb,
+        SimpleImportFields.datelb,
+        SimpleImportFields.status,
+    ]
 
     def _validate(self) -> SimpleImportRsp:
         """
@@ -219,19 +224,19 @@ class SimpleImport(ImportServiceBase):
             try:
                 valid_def(a_val)
             except ValueError:
-                message = "'%s' is not a valid value for %s" % (a_val, a_key)
+                message = "'%s' is not a valid value for %s" % (a_val, a_key.value)
                 errors.append(message)
         for depend in self.DEPENDS:
             if values.get(SimpleImportFields[depend]) is not None:
-                self.DEPENDS.remove(depend)
-                for dep in self.DEPENDS:
+                depends = [x for x in self.DEPENDS if x not in depend]
+                for dep in depends:
                     val = values.get(SimpleImportFields[dep])
                     if val is None:
                         message = (
                             "'%s' is not a valid value for %s as at least one annotation value is set."
-                            % (val, dep)
+                            % (val, dep.value)
                         )
                         errors.append(message)
-                        self.DEPENDS.remove(dep)
+                break
         ret = SimpleImportRsp(errors=errors, job_id=0)
         return ret

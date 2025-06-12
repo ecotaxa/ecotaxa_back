@@ -23,7 +23,7 @@ from API_operations.imports.SimpleImport import SimpleImport
 from starlette import status
 
 from tests.credentials import ADMIN_USER_ID, CREATOR_AUTH, CREATOR_USER_ID
-from tests.test_import import PLAIN_DIR, PLAIN_FILE, create_project, PLAIN_FILE_PATH
+from tests.test_import import PLAIN_DIR, create_project, PLAIN_FILE_PATH
 from tests.jobs import wait_for_stable, api_wait_for_stable_job, check_job_ok
 
 IMPORT_IMAGES_URL = "/simple_import/{project_id}?dry_run={dry_run}"
@@ -39,19 +39,49 @@ def test_import_images_only(database, caplog, title):
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, title)
 
-    vals = {"latitude": "abcde", "longitude": "456.5", "depthmin": "very very low"}
+    vals: Dict[SimpleImportFields, str] = {
+        SimpleImportFields.latitude: "abcde",
+        SimpleImportFields.longitude: "456.5",
+        SimpleImportFields.depthmin: "very very low",
+    }
     params = SimpleImportReq(task_id=0, source_path=str(PLAIN_DIR), values=vals)
     with SimpleImport(prj_id, params, dry_run=True) as sce:
         rsp = sce.run(ADMIN_USER_ID)
     assert rsp.errors == [
-        "'abcde' is not a valid value for SimpleImportFields.latitude",
-        "'456.5' is not a valid value for SimpleImportFields.longitude",
-        "'very very low' is not a valid value for SimpleImportFields.depthmin",
+        "'abcde' is not a valid value for latitude",
+        "'456.5' is not a valid value for longitude",
+        "'very very low' is not a valid value for depthmin",
+    ]
+    vals[SimpleImportFields.latitude] = "43.8802"
+    vals[SimpleImportFields.longitude] = "7.2329"
+    vals[SimpleImportFields.depthmin] = "500"
+    # check classif params
+    vals[SimpleImportFields.status] = "V"
+    params = SimpleImportReq(task_id=0, source_path=str(PLAIN_DIR), values=vals)
+    with SimpleImport(prj_id, params, dry_run=True) as sce:
+        rsp = sce.run(ADMIN_USER_ID)
+    assert rsp.errors == [
+        "'None' is not a valid value for taxolb as at least one annotation value is set.",
+        "'None' is not a valid value for userlb as at least one annotation value is set.",
+        "'None' is not a valid value for datelb as at least one annotation value is set.",
+    ]
+    vals[SimpleImportFields.userlb] = "2"
+    params = SimpleImportReq(task_id=0, source_path=str(PLAIN_DIR), values=vals)
+    with SimpleImport(prj_id, params, dry_run=True) as sce:
+        rsp = sce.run(ADMIN_USER_ID)
+    assert rsp.errors == [
+        "'None' is not a valid value for taxolb as at least one annotation value is set.",
+        "'None' is not a valid value for datelb as at least one annotation value is set.",
+    ]
+    vals[SimpleImportFields.taxolb] = "12"
+    params = SimpleImportReq(task_id=0, source_path=str(PLAIN_DIR), values=vals)
+    with SimpleImport(prj_id, params, dry_run=True) as sce:
+        rsp = sce.run(ADMIN_USER_ID)
+    assert rsp.errors == [
+        "'None' is not a valid value for datelb as at least one annotation value is set."
     ]
     # Do real import
-    vals["latitude"] = "43.8802"
-    vals["longitude"] = "7.2329"
-    vals["depthmin"] = "500"
+    vals[SimpleImportFields.datelb] = "20240706"
     params.values = vals
     with SimpleImport(prj_id, params, dry_run=False) as sce:
         rsp: SimpleImportRsp = sce.run(ADMIN_USER_ID)
@@ -71,8 +101,8 @@ def test_import_images_only(database, caplog, title):
         rsp: SimpleImportRsp = sce.run(ADMIN_USER_ID)
     job_id2 = rsp.job_id
     assert job_id2 > job_id
-    job = wait_for_stable(job_id2)
-    print("\n2:".join(caplog.messages))
+    _ = wait_for_stable(job_id2)
+    print("\n:".join(caplog.messages))
     for a_msg in caplog.records:
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
         assert "++ ID" not in a_msg.getMessage()
@@ -102,5 +132,5 @@ def test_api_import_images(fastapi, caplog, title):
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
     assert job_id > 0
-    job = api_wait_for_stable_job(fastapi, job_id)
+    _ = api_wait_for_stable_job(fastapi, job_id)
     return prj_id
