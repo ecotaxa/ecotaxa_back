@@ -31,10 +31,11 @@ class UserFilesFolderService(Service):
     A service for storing/cleaning user specific folders.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, quota: Optional[int] = None) -> None:
         super().__init__()
 
-    def _can_use_dir_throw(self, path: str, exclude_path: Optional[list] = None) -> str:
+    @staticmethod
+    def _can_use_dir_throw(path: str, exclude_path: Optional[list] = None) -> str:
         excludes = [".", "..", ""]
         if exclude_path is not None:
             excludes.extend(exclude_path)
@@ -66,12 +67,11 @@ class UserFilesFolderService(Service):
             path = self._can_use_dir_throw(path)
         logger.info("Adding '%s' ('%s') for '%s'", path, file_name, current_user.name)
         try:
-            ret = await UserFilesDirectory(current_user_id).add_file(
-                file_name, path, file
-            )
+            folder = UserFilesDirectory(current_user_id)
+            ret = await folder.add_file(file_name, path, file)
         except UnprocessableEntityException as e:
             raise HTTPException(status_code=e.status_code, detail=e.message)
-        except Exception as e:
+        except Exception:
             raise HTTPException(status_code=500, detail=DETAIL_UNKNOWN_ERROR)
         return ret
 
@@ -99,7 +99,6 @@ class UserFilesFolderService(Service):
         except UnprocessableEntityException as e:
             raise HTTPException(status_code=e.status_code, detail=e.message)
         except Exception as e:
-            print("e----", e)
             raise HTTPException(status_code=500, detail=DETAIL_UNKNOWN_ERROR)
 
         # Format data to return
@@ -122,7 +121,7 @@ class UserFilesFolderService(Service):
                 ret = folder.create(source_path)
             except UnprocessableEntityException as e:
                 raise HTTPException(status_code=e.status_code, detail=e.message)
-            except Exception as e:
+            except Exception:
                 raise HTTPException(status_code=500, detail=DETAIL_UNKNOWN_ERROR)
             return ret
         raise HTTPException(status_code=422, detail=[DETAIL_NOTHING_DONE])
@@ -139,7 +138,7 @@ class UserFilesFolderService(Service):
             folder.remove(source_path)
         except UnprocessableEntityException as e:
             raise HTTPException(status_code=e.status_code, detail=e.message)
-        except Exception as e:
+        except Exception:
             raise HTTPException(status_code=500, detail=DETAIL_UNKNOWN_ERROR)
 
     def move(self, source_path: str, dest_path: str, current_user_id: UserIDT) -> str:
@@ -155,6 +154,6 @@ class UserFilesFolderService(Service):
             dest_path = folder.move(source_path, dest_path)
         except (BaseAppException, UnprocessableEntityException) as e:
             raise HTTPException(status_code=e.status_code, detail=e.message)
-        except Exception as e:
+        except Exception:
             raise HTTPException(status_code=500, detail=DETAIL_UNKNOWN_ERROR)
         return dest_path
