@@ -103,6 +103,10 @@ class Config(object):
         # My files service
         return self.parser.get("USERSFILESAREA", "").strip()
 
+    def get_users_files_life(self) -> Optional[str]:
+        # My files service
+        return self.parser.get("TIMETOLIVE", "").strip()
+
     def get_cnf(self, key: str, default: Optional[str] = None) -> Optional[str]:
         # TODO: stop using so we can enumerate the keys
         return self.parser.get(key, default)

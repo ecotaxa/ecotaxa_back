@@ -71,4 +71,5 @@ SERVERURL = https://localfronturl:5001
 
 #user directory root
 USERSFILESAREA = /eco_users_files
-
+# number of days before deleting my files directories
+TIMETOLIVE = 20
