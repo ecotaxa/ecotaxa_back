@@ -104,21 +104,21 @@ class CleanUsersFilesJobService(JobServiceBase):
             dirs: List[str] = item[1]
             if len(dirs) == 0:
                 break
-            for _dir in dirs:
-                if _dir is None:
+            for a_dir in dirs:
+                if a_dir is None:
                     continue
                 try:
-                    _ = _dir.index(
+                    _ = a_dir.index(
                         UserFilesDirectory.USER_DIR_PATTERN.replace("%d", "")
                     )
 
                 except ValueError:
                     try:
-                        _ = _dir.index(
+                        _ = a_dir.index(
                             UserFilesDirectory.TRASH_DIRECTORY.replace("%d", "")
                         )
                     except ValueError:
-                        dirname = os.path.join(str(root), str(_dir))
+                        dirname = os.path.join(str(root), str(a_dir))
                         if os.path.exists(dirname):
                             tf = int(os.path.getctime(dirname))
                             if tf < old:
