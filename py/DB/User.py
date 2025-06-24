@@ -8,7 +8,6 @@ from enum import Enum
 from typing import Iterable, TYPE_CHECKING, Final, Optional, List
 
 from sqlalchemy import event, SmallInteger
-from sqlalchemy.engine import Connection
 
 from data.Countries import countries_by_name
 from .helpers.DDL import (
