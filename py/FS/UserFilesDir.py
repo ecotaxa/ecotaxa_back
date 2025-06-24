@@ -10,10 +10,8 @@ import zipfile
 import asyncio
 from magic_rs import from_path
 from pathlib import Path
-from typing import Optional, List, NamedTuple, Dict, Tuple
-
+from typing import Optional, List, Dict, Tuple
 from starlette.datastructures import UploadFile
-
 from BO.User import UserIDT
 from FS.CommonDir import CommonFolder, DirEntryT
 from helpers.AppConfig import Config
@@ -42,12 +40,6 @@ accepted_mime_types = [
     "image/x-png",
     "image/tiff",
 ]
-
-
-class DiskUsage(NamedTuple):
-    total: int
-    used: int
-    free: int
 
 
 class UserFilesDirectory(object):
@@ -189,10 +181,6 @@ class UserFilesDirectory(object):
         self.ensure_exists(source_path)
         return str(source_path)
 
-    def disk_usage(self, path: str) -> shutil._ntuple_diskusage:
-        ospath = self._root_path.joinpath(path.lstrip(os.path.sep))
-        return shutil.disk_usage(ospath)
-
     def extract_archive(self, archive, path: Path):
         if hasattr(archive, "testzip"):
             archive.testzip()
@@ -303,11 +291,6 @@ class UserFilesDirectory(object):
 
     async def dispatch_unpack(self, compressed_f: str, path: Path):
         file_ext, compressed_path, mime_type = self._get_file_info(compressed_f, path)
-        # file_ext = compressed_f.split(".")[-1]
-        # parts = compressed_f.split(os.path.sep)
-        # compressed_path = path.joinpath(
-        #    str(Path(parts[0])), os.path.sep.join(parts[1:])
-        # )
         if (
             file_ext in self.ARCHIVE_EXTENSIONS
             and not compressed_path.is_dir()
