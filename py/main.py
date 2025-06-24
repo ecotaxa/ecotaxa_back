@@ -128,6 +128,7 @@ from API_operations.UserFolder import UserFolderService, CommonFolderService
 from API_operations.admin.Database import DatabaseService
 from API_operations.admin.ImageManager import ImageManagerService
 from API_operations.admin.NightlyJob import NightlyJobService
+from API_operations.admin.CleanUsersFilesJob import CleanUsersFilesJobService
 from API_operations.exports.DarwinCore import DarwinCoreExport
 from API_operations.exports.ForProject import (
     ProjectExport,
@@ -157,7 +158,7 @@ from DB import Sample
 from DB.Object import ObjectIDListT
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
-from DB.User import User, Guest, OrganizationIDT
+from DB.User import User, OrganizationIDT
 from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
@@ -830,7 +831,18 @@ def search_guest(
     **Search guests using various criteria**, search is case-insensitive and might contain % chars.
     """
     with GuestService() as sce:
-        ret = sce.search(current_user, by_name)
+        guests = sce.search(current_user, by_name)
+    ret: List = [
+        GuestModel(
+            id=guest.id,
+            name=guest.name,
+            email=guest.email,
+            orcid=guest.orcid,
+            country=guest.country,
+            organisation=guest.organisation,
+        )
+        for guest in guests
+    ]
     return ret
 
 
@@ -850,10 +862,17 @@ def get_guest(
     Returns **information about the user** corresponding to the given id.
     """
     with GuestService() as sce:
-        ret = sce.search_by_id(current_user, guest_id)
-    if ret is None:
+        guest = sce.search_by_id(current_user, guest_id)
+    if guest is None:
         raise HTTPException(status_code=404, detail="User not found")
-    return ret
+    return GuestModel(
+        id=guest.id,
+        name=guest.name,
+        email=guest.email,
+        orcid=guest.orcid,
+        country=guest.country,
+        organisation=guest.organisation,
+    )
 
 
 # ######################## END OF PERSONS
@@ -3576,6 +3595,23 @@ def nightly_maintenance(current_user: int = Depends(get_current_user)) -> int:
 
 
 @app.get(
+    "/admin/usersfiles",
+    operation_id="usersfiles_maintenance",
+    tags=["WIP"],
+    include_in_schema=False,
+    response_model=str,
+)
+def usersfiles_maintenance(current_user: int = Depends(get_current_user)) -> int:
+    """
+    Do nightly cleanups and calculations.
+    """
+    with CleanUsersFilesJobService() as sce:
+        with RightsThrower():
+            ret: int = sce.run(current_user)
+    return ret
+
+
+@app.get(
     "/admin/monitor",
     operation_id="activity_monitor",
     tags=["MONITOR"],
@@ -3966,7 +4002,9 @@ def list_my_files(
 async def put_my_file(  # async due to await file store
     file: UploadFile = File(..., title="File", description=""),
     path: Optional[str] = Form(
-        title="Path", description="The client-side full path of the file.", default=None
+        title="Path",
+        description="The destination path of the file.",
+        default=None,
     ),
     current_user: int = Depends(get_current_user),
 ) -> str:
@@ -4002,12 +4040,12 @@ async def put_my_file(  # async due to await file store
 def move_file(  # async due to await file move
     source_path: str = Form(
         title="Source Path",
-        description="The client-side full path of the file or directory to be moved.",
+        description="The  path of the file or directory to be moved.",
         default=None,
     ),
     dest_path: str = Form(
         title="Destination Path",
-        description="The client-side full path of the destination file or directory.",
+        description="The path of the destination file or directory.",
         default=None,
     ),
     current_user: int = Depends(get_current_user),
@@ -4034,7 +4072,7 @@ def move_file(  # async due to await file move
 def remove_file(
     source_path: str = Form(
         title="Source Path",
-        description="The client-side full path of the file  or directory to be removed.",
+        description="The path of the file  or directory to be removed.",
         default=None,
     ),
     current_user: int = Depends(get_current_user),
@@ -4067,7 +4105,7 @@ def remove_file(
 async def create_file(  # async due to await file store
     source_path: str = Form(
         title="Source Path",
-        description="The client-side full path of the file or directory to be moved.",
+        description="The path of the file or directory to be moved.",
         default=None,
     ),
     current_user: int = Depends(get_current_user),
