@@ -65,9 +65,8 @@ class JobScheduler(Service):
     INCLUDE: ClassVar[List[str]] = []
     # A single runner per process
     the_runner: Optional[JobRunner] = None  # Only written by JobTimer_s_
-    the_timer: Optional[
-        threading.Timer
-    ] = None  # First creation by Main, replacements by JobTimer_s_
+    the_timer: Optional[threading.Timer] = None
+    # First creation by Main, replacements by JobTimer_s_
     do_run: Event = Event()  # R/W by Main & JobTimer
     todo_on_idle: Optional[Callable] = None
 
