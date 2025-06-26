@@ -128,7 +128,6 @@ from API_operations.UserFolder import UserFolderService, CommonFolderService
 from API_operations.admin.Database import DatabaseService
 from API_operations.admin.ImageManager import ImageManagerService
 from API_operations.admin.NightlyJob import NightlyJobService
-from API_operations.admin.CleanUsersFilesJob import CleanUsersFilesJobService
 from API_operations.exports.DarwinCore import DarwinCoreExport
 from API_operations.exports.ForProject import (
     ProjectExport,
@@ -3589,23 +3588,6 @@ def nightly_maintenance(current_user: int = Depends(get_current_user)) -> int:
     Do nightly cleanups and calculations.
     """
     with NightlyJobService() as sce:
-        with RightsThrower():
-            ret: int = sce.run(current_user)
-    return ret
-
-
-@app.get(
-    "/admin/usersfiles",
-    operation_id="usersfiles_maintenance",
-    tags=["WIP"],
-    include_in_schema=False,
-    response_model=str,
-)
-def usersfiles_maintenance(current_user: int = Depends(get_current_user)) -> int:
-    """
-    Do nightly cleanups and calculations.
-    """
-    with CleanUsersFilesJobService() as sce:
         with RightsThrower():
             ret: int = sce.run(current_user)
     return ret

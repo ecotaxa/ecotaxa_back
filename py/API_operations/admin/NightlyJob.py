@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Tuple, Any, List
 
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
+from API_operations.admin.CleanUsersFilesJob import CleanUsersFilesJobService
 from BO.Job import JobBO
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO
@@ -51,8 +52,9 @@ class NightlyJobService(JobServiceBase):
         _user = RightsBO.user_has_role(
             self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
         )
-        # Security OK, create pending job
         self.create_job(self.JOB_TYPE, current_user_id)
+        logger.info("Start // Users Files Maintenance Job")
+        self.users_files_maintenance(current_user_id)
         return self.job_id
 
     def do_background(self) -> None:
@@ -197,6 +199,14 @@ class NightlyJobService(JobServiceBase):
                 )
                 no_problem = False
         return no_problem
+
+    def users_files_maintenance(self, current_user_id) -> int:
+        """
+        Do nightly cleanups of users My Files.
+        """
+
+        with CleanUsersFilesJobService() as sce:
+            _ = sce.run(current_user_id)
 
 
 @dataclass
