@@ -54,7 +54,7 @@ class NightlyJobService(JobServiceBase):
         )
         self.create_job(self.JOB_TYPE, current_user_id)
         logger.info("Start // Users Files Maintenance Job")
-        self.users_files_maintenance(current_user_id)
+        _ = self.users_files_maintenance(current_user_id)
         return self.job_id
 
     def do_background(self) -> None:
@@ -206,7 +206,8 @@ class NightlyJobService(JobServiceBase):
         """
 
         with CleanUsersFilesJobService() as sce:
-            _ = sce.run(current_user_id)
+            ret = sce.run(current_user_id)
+        return ret
 
 
 @dataclass
