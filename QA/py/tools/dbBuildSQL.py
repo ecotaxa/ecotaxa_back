@@ -18,6 +18,7 @@ psql_bin = "psql"
 # If we already have a server don't create one, e.g. in GitHub action
 PG_HOST = environ.get("POSTGRES_HOST")
 PG_PORT = environ.get("POSTGRES_PORT")
+
 if PG_HOST and PG_PORT:
     PG_PORT = int(PG_PORT)
 else:
@@ -213,6 +214,7 @@ class EcoTaxaDBFrom0(object):
     CAPTCHA_LIST = (
         Path(dirname(realpath(__file__))) / ".." / ".." / ".." / "utils"
     ).resolve()
+    TIMETOLIVE = 10
     CONF = f"""
 [default]
 [conf]
@@ -246,6 +248,7 @@ ACCOUNT_VALIDATION = off
 ADD_TICKET = ***
 DIR_MAIL_TEMPLATES = {DIR_TEMPLATES}
 SERVERURL= http://localhost:8000
+TIMETOLIVE = {TIMETOLIVE}
 """
 
     def write_config(self):

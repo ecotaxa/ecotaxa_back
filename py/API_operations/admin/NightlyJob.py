@@ -4,12 +4,15 @@
 #
 # Maintenance operations on the DB.
 #
+import os
+import time
+import shutil
 import datetime
 from dataclasses import dataclass
-from typing import Tuple, Any, List
+from typing import Tuple, Any, List, Optional, Iterator
 
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
-from API_operations.admin.CleanUsersFilesJob import CleanUsersFilesJobService
+from FS.UserFilesDir import UserFilesDirectory
 from BO.Job import JobBO
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO
@@ -53,8 +56,6 @@ class NightlyJobService(JobServiceBase):
             self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
         )
         self.create_job(self.JOB_TYPE, current_user_id)
-        logger.info("Start Users Files Maintenance Job")
-        _ = self.users_files_maintenance(current_user_id)
         return self.job_id
 
     def do_background(self) -> None:
@@ -81,8 +82,9 @@ class NightlyJobService(JobServiceBase):
         self.compute_all_projects_stats(all_prj_ids, 30, 60)
         self.refresh_taxo_tree_stats(60)
         self.clean_old_jobs(75)
+        self.users_files_maintenance()
         const_status = self.check_consistency(80, 100)
-        if const_status is False:
+        if not const_status:
             self.set_job_result(
                 errors=["See log for consistency problems"], infos={"status": "error"}
             )
@@ -200,14 +202,61 @@ class NightlyJobService(JobServiceBase):
                 no_problem = False
         return no_problem
 
-    def users_files_maintenance(self, current_user_id) -> int:
+    def users_files_maintenance(self) -> None:
         """
-        Do nightly cleanups of users My Files.
+        delete users directories older than TIME_TO_LIVE
         """
+        logger.info("Start Users Files Maintenance")
+        timelive: Optional[str] = self.config.get_users_files_life()
+        if timelive is None:
+            return None
+        time_to_live = int(timelive) * 3600 * 24  # in seconds
+        usersfiles: Optional[str] = self.config.get_users_files_dir()
+        if usersfiles is None:
+            return None
+        users_files_dir = usersfiles
+        logger.info("Starting removing directories older than %s day(s)", str(timelive))
+        now = time.time()
+        old = now - time_to_live
+        old = int(old)
+        td = time.ctime(old)
+        logger.info("Find and remove directories created before %s", str(td))
+        logger.info("root directory '%s'", str(users_files_dir))
+        items: Iterator[Tuple[str, List[Any], List[Any]]] = os.walk(
+            users_files_dir, topdown=True
+        )
+        for item in items:
+            root: str = item[0]
+            dirs: List[str] = item[1]
+            if len(dirs) == 0:
+                break
+            for a_dir in dirs:
+                if a_dir is None:
+                    continue
+                try:
+                    _ = a_dir.index(
+                        UserFilesDirectory.USER_DIR_PATTERN.replace("%d", "")
+                    )
 
-        with CleanUsersFilesJobService() as sce:
-            ret = sce.run(current_user_id)
-        return ret
+                except ValueError:
+                    try:
+                        _ = a_dir.index(
+                            UserFilesDirectory.TRASH_DIRECTORY.replace("%d", "")
+                        )
+                    except ValueError:
+                        dirname = os.path.join(str(root), str(a_dir))
+                        if os.path.exists(dirname):
+                            tf = int(os.path.getctime(dirname))
+                            if tf < old:
+                                try:
+                                    shutil.rmtree(dirname)
+                                    logger.info(
+                                        "Removed '%s' created on %s ",
+                                        (dirname, str(time.ctime(tf))),
+                                    )
+                                except Exception as e:
+                                    logger.error(e)
+        return None
 
 
 @dataclass
