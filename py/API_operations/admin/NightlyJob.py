@@ -53,7 +53,7 @@ class NightlyJobService(JobServiceBase):
             self.ro_session, current_user_id, Role.APP_ADMINISTRATOR
         )
         self.create_job(self.JOB_TYPE, current_user_id)
-        logger.info("Start // Users Files Maintenance Job")
+        logger.info("Start Users Files Maintenance Job")
         _ = self.users_files_maintenance(current_user_id)
         return self.job_id
 
