@@ -42,6 +42,15 @@ accepted_mime_types = [
 ]
 
 
+class AsyncException(Exception):
+    def __init__(self, message, *args, **kwargs):
+        self.message = message
+        super(*args, **kwargs)
+
+    def __str__(self):
+        return self.message
+
+
 class UserFilesDirectory(object):
     """
     Base directory for storing user files.
@@ -252,7 +261,7 @@ class UserFilesDirectory(object):
             with zipfile.ZipFile(compressed_file, "r", allowZip64=True) as archive:
                 filenames = self.extract_archive(archive, path)
             if len(filenames):
-                await self.recursive_unpack(path, filenames)
+                asyncio.run(self.recursive_unpack(path, filenames))
             os.remove(compressed_file)
         except Exception as e:
             _log_exception_throw(e)
@@ -263,7 +272,7 @@ class UserFilesDirectory(object):
             with tarfile.open(compressed_file, "r") as archive:
                 filenames = self.extract_archive(archive, path)
             if len(filenames):
-                await self.recursive_unpack(path, filenames)
+                asyncio.run(self.recursive_unpack(path, filenames))
             os.remove(compressed_file)
         except Exception as e:
             _log_exception_throw(e)
@@ -281,13 +290,15 @@ class UserFilesDirectory(object):
             _log_exception_throw(e)
 
     async def recursive_unpack(self, path: Path, filenames: List[str]):
-        try:
-            for f in asyncio.as_completed(
-                [self.dispatch_unpack(compressed_f, path) for compressed_f in filenames]
-            ):
-                await f
-        except Exception as e:
-            _log_exception_throw(e)
+        aws = []
+        for compressed_f in filenames:
+            aws.append(asyncio.create_task(self.dispatch_unpack(compressed_f, path)))
+        done, pending = await asyncio.wait(aws, return_when=asyncio.FIRST_EXCEPTION)
+        for task in done:
+            try:
+                await task
+            except AsyncException as e:
+                _log_exception_throw(e)
 
     async def dispatch_unpack(self, compressed_f: str, path: Path):
         file_ext, compressed_path, mime_type = self._get_file_info(compressed_f, path)
