@@ -221,7 +221,6 @@ class NightlyJobService(JobServiceBase):
         old = int(old)
         td = time.ctime(old)
         logger.info("Find and remove directories created before %s", str(td))
-        logger.info("root directory '%s'", str(users_files_dir))
         items: Iterator[Tuple[str, List[Any], List[Any]]] = os.walk(
             users_files_dir, topdown=True
         )
@@ -256,6 +255,7 @@ class NightlyJobService(JobServiceBase):
                                     )
                                 except Exception as e:
                                     logger.error(e)
+        logger.info("End removing directories older than %s day(s)", str(timelive))
         return None
 
 
