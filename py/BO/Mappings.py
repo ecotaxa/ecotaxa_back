@@ -46,7 +46,13 @@ ANNOTATION_FIELDS: Final = {
         "field": "classif_qual",
         "type": "t",
     },
+    "object_annotation_hierarchy": {
+        "table": "",
+        "field": "object_annotation_hierarchy",
+        "type": "t",
+    },
 }
+
 DOUBLED_FIELDS: Final = {
     # Added to object_annotation_date
     "object_annotation_time": {
@@ -129,7 +135,9 @@ PREDEFINED_FIELDS: Final = {
 # C'est un set de table 😁
 POSSIBLE_TABLES: Final = set(
     [v["table"] for v in PREDEFINED_FIELDS.values()] + [ObjectFields.__tablename__]
-)  # No hard-coded mapping for this one anymore
+) - set(
+    [""]
+)  # No hard-coded mapping for this one anymore - "" for generated fields
 
 PARENT_CLASSES: Final[Dict[str, ParentTableClassT]] = OrderedDict(
     [
