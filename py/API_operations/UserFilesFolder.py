@@ -80,6 +80,8 @@ class UserFilesFolderService(Service):
         List the files in given subpath of the private folder.
         """
         # Leading / implies root directory
+        if sub_path == "":
+            sub_path = "/"
         _: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         sub_path = self._can_use_dir_throw(sub_path)
         folder = UserFilesDirectory(current_user_id)
