@@ -4054,7 +4054,7 @@ def move_file(  # async due to await file move
 def remove_file(
     source_path: str = Form(
         title="Source Path",
-        description="The path of the file  or directory to be removed.",
+        description="The path of the file  or directory to be removed. * for all files and directories",
         default=None,
     ),
     current_user: int = Depends(get_current_user),

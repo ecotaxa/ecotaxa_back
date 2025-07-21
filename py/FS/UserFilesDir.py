@@ -142,6 +142,14 @@ class UserFilesDirectory(object):
         return str(dest_path)
 
     def remove(self, path: str):
+        if path == "*":
+            for item in os.listdir(self._root_path):
+                if (
+                    self._root_path.joinpath(item).is_file()
+                    or item != self.TRASH_DIRECTORY
+                ):
+                    self.remove(item)
+            return
         self._is_trash_dir_throw(path)
         source_path: Path = self._root_path.joinpath(path.lstrip(os.path.sep))
         # send to trash if not in trash
