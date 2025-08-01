@@ -248,7 +248,6 @@ class ProjectBO(object):
         session: Session,
         instrument: Optional[str],
         title: str,
-        visible: Optional[bool],
         status: Optional[str],
         description: Optional[str],
         init_classif_list: List[int],
@@ -289,7 +288,6 @@ class ProjectBO(object):
         # Fields update
         self._project.instrument_id = instrument
         self._project.title = title
-        self._project.visible = visible
         self._project.status = status
         self._project.description = description
         self._project.classiffieldlist = classiffieldlist

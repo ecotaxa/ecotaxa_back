@@ -2005,12 +2005,12 @@
             "in":"query"
           },
           {
-            "description":"One of ['projid', 'title', 'visible', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']",
+            "description":"One of ['projid', 'title', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']",
             "required":false,
             "schema":{
               "title":"Order field",
               "type":"string",
-              "description":"One of ['projid', 'title', 'visible', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']"
+              "description":"One of ['projid', 'title', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']"
             },
             "example":"instrument",
             "name":"order_field",
@@ -2174,12 +2174,12 @@
             "in":"query"
           },
           {
-            "description":"One of ['projid', 'title', 'visible', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']",
+            "description":"One of ['projid', 'title', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']",
             "required":false,
             "schema":{
               "title":"Order field",
               "type":"string",
-              "description":"One of ['projid', 'title', 'visible', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']"
+              "description":"One of ['projid', 'title', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']"
             },
             "example":"instrument",
             "name":"order_field",
@@ -6340,7 +6340,7 @@
         ]
       }
     },
-    "/my_files/":{
+    "/my_files":{
       "post":{
         "tags":[
           "Files"
@@ -6352,7 +6352,7 @@
           "content":{
             "multipart/form-data":{
               "schema":{
-                "$ref":"#/components/schemas/Body_put_user_file_my_files__post"
+                "$ref":"#/components/schemas/Body_put_user_file_my_files_post"
               }
             }
           },
@@ -6364,7 +6364,7 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "title":"Response Put User File My Files  Post",
+                  "title":"Response Put User File My Files Post",
                   "type":"string"
                 },
                 "example":"/ftp_plankton/Ecotaxa_Data_to_import/uploadedFile.zip"
@@ -7039,8 +7039,8 @@
           }
         }
       },
-      "Body_put_user_file_my_files__post":{
-        "title":"Body_put_user_file_my_files__post",
+      "Body_put_user_file_my_files_post":{
+        "title":"Body_put_user_file_my_files_post",
         "required":[
           "file"
         ],
@@ -7863,6 +7863,23 @@
             "type":"string",
             "description":"Project default concentration formulae",
             "default":"subsample_coef: 1/ssm.sub_part\ntotal_water_volume: sam.tot_vol/1000\nindividual_volume: 4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3"
+          },
+          "default_project_access":{
+            "title":"access level",
+            "type":"string",
+            "description":"Project default access level",
+            "default":"1"
+          },
+          "max_upload_size":{
+            "title":"Max file size",
+            "type":"integer",
+            "description":"My Files max file upload size (bytes)",
+            "default":681574400
+          },
+          "time_to_live":{
+            "title":"Time to live",
+            "type":"string",
+            "description":"My Files number of days before deleting directories"
           }
         },
         "description":"Values which can be considered identical over the lifetime of the back-end."
@@ -10076,12 +10093,6 @@
             "type":"string",
             "description":"The project title.",
             "example":"MyProject"
-          },
-          "visible":{
-            "title":"Visible",
-            "type":"boolean",
-            "description":"The project visibility. (deprecated) ",
-            "example":false
           },
           "access":{
             "title":"Access level",

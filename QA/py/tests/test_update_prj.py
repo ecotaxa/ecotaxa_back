@@ -181,7 +181,6 @@ def test_update_prj(database, fastapi, caplog):
         "status": "Annotate",
         "title": "Test Project Updates",
         "viewers": [],
-        "visible": True,
         "access": AccessLevelEnum.OPEN.value,
         "formulae": None,
     }

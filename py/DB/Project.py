@@ -40,8 +40,6 @@ class Project(Model):
     instrument_id: str = Column(
         VARCHAR(32), ForeignKey(Instrument.instrument_id), nullable=False
     )
-
-    visible = Column(Boolean(), default=True)
     access = Column(VARCHAR(1), default=AccessLevelEnum.OPEN, nullable=False)
     status = Column(
         VARCHAR(40), default=ANNOTATE_STATUS
