@@ -17,7 +17,7 @@ from BO.User import UserIDT
 from FS.CommonDir import CommonFolder, DirEntryT
 from helpers.AppConfig import Config
 from helpers.DynamicLogs import get_logger
-from helpers.CustomException import BaseAppException, UnprocessableEntityException
+from helpers.CustomException import UnprocessableEntityException
 from helpers.httpexception import (
     DETAIL_INVALID_ZIP_FILE,
     DETAIL_INVALID_LARGE_ZIP_FILE,
@@ -67,6 +67,7 @@ class UserFilesDirectory(object):
             str(users_files_dir or ""), self.USER_DIR_PATTERN % self.user_id
         )
         self.TRASH_DIRECTORY += str(self.user_id)
+        self.compressed_origin: Optional[Path] = None
 
     async def add_file(self, name: str, path: Optional[str], stream: UploadFile) -> str:
         """
@@ -88,6 +89,10 @@ class UserFilesDirectory(object):
             while len(buff) != 0:
                 file.write(buff)  # type:ignore # Mypy is unaware of async read result
                 buff = await stream.read(1024)
+        file_ext, compressed_path, mime_type = self._get_file_info(
+            name.lstrip(os.path.sep), base_path.absolute()
+        )
+        self.compressed_origin = compressed_path
         self.dispatch_unpack(name.lstrip(os.path.sep), base_path.absolute())
         return str(source_path)
 
@@ -252,41 +257,50 @@ class UserFilesDirectory(object):
             return True
         logger.info(
             "File format not accepted '%s' '%s' , user_id '%s'",
-            path,
-            filename,
+            str(path),
+            str(filename),
             str(self.user_id),
         )
         path_error = str(path.joinpath(filename.lstrip(os.path.sep)))
         self.list_errors.update({"Not accepted": path_error})
         return False
 
-    def unpack_zip(self, input_path: Path, path: Path):
+    def unpack_zip(self, input_path: Path, path: Path, prefix: str = ""):
         compressed_file = input_path.as_posix()
         try:
             with zipfile.ZipFile(compressed_file, "r", allowZip64=True) as archive:
                 filenames = self.extract_archive(archive, path)
+            sub_path = path
             if len(filenames):
-                for compressed_f in filenames:
-                    self.dispatch_unpack(compressed_f, path)
+                for i, compressed_f in enumerate(filenames):
+                    if (
+                        i == 0
+                        and prefix != ""
+                        and compressed_f[0 : len(prefix)] != prefix
+                    ):
+                        sub_path = path.joinpath(prefix)
+                    self.dispatch_unpack(compressed_f, sub_path)
             os.remove(compressed_file)
-        except zipfile.BadZipfile as e:
-            _log_exception_throw(e)
-        except ValueError as e:
-            _log_exception_throw(e)
-        except Exception as e:
-            _log_exception_throw(e)
+        except (zipfile.BadZipfile, ValueError, Exception) as e:
+            _log_exception_throw(e, self.compressed_origin)
 
-    def unpack_tar(self, input_path: Path, path: Path):
+    def unpack_tar(self, input_path: Path, path: Path, prefix: str = ""):
         compressed_file = input_path.as_posix()
         try:
             with tarfile.open(compressed_file, "r") as archive:
                 filenames = self.extract_archive(archive, path)
             if len(filenames):
-                for compressed_f in filenames:
+                for i, compressed_f in enumerate(filenames):
+                    if (
+                        i == 0
+                        and prefix != ""
+                        and compressed_f[0 : len(prefix)] != prefix
+                    ):
+                        compressed_f = prefix + compressed_f
                     self.dispatch_unpack(compressed_f, path)
             os.remove(compressed_file)
-        except Exception as e:
-            _log_exception_throw(e)
+        except (ValueError, Exception) as e:
+            _log_exception_throw(e, self.compressed_origin)
 
     def unpack_gz(self, input_path: Path, path: Path):
         compressed_file = input_path.as_posix()
@@ -297,8 +311,8 @@ class UserFilesDirectory(object):
             name = str(compressed_file).split(os.path.sep)[-1]
             self.dispatch_unpack(name, path)
             os.remove(compressed_file)
-        except Exception as e:
-            _log_exception_throw(e)
+        except (ValueError, Exception) as e:
+            _log_exception_throw(e, self.compressed_origin)
 
     def dispatch_unpack(self, compressed_f: str, path: Path):
         file_ext, compressed_path, mime_type = self._get_file_info(compressed_f, path)
@@ -309,10 +323,16 @@ class UserFilesDirectory(object):
         ):
             parts = str(compressed_path).split(os.path.sep)
             sub_path = Path(os.path.sep.join(parts[:-1]))
+            prefixes = parts[-1].split(".")
+            prefix = ".".join(prefixes[:-1])
+            print(" prefix=", prefix)
+            if prefix == "temp":
+                prefix = ""
+            print(" prefix aft=", prefix)
             if zipfile.is_zipfile(compressed_path.as_posix()):
-                self.unpack_zip(compressed_path, sub_path)
+                self.unpack_zip(compressed_path, sub_path, prefix)
             elif tarfile.is_tarfile(compressed_path.as_posix()):
-                self.unpack_tar(compressed_path, sub_path)
+                self.unpack_tar(compressed_path, sub_path, prefix)
             elif self._is_gz(compressed_path.as_posix()):
                 self.unpack_gz(compressed_path, sub_path)
             elif not self._has_accepted_format(sub_path, compressed_f):
@@ -320,14 +340,20 @@ class UserFilesDirectory(object):
                 self.list_errors.update({"Not accepted": compressed_f})
 
 
-def _log_exception_throw(e: Exception):
+def _log_exception_throw(e: Exception, path: Optional[Path] = None):
     if isinstance(e, zipfile.BadZipFile):
-        logger.error(DETAIL_INVALID_ZIP_FILE)
-        raise UnprocessableEntityException(DETAIL_INVALID_ZIP_FILE) from e
+        message = DETAIL_INVALID_ZIP_FILE
+        code = 422
     elif isinstance(e, zipfile.LargeZipFile):
         # activate zip64
-        logger.error(DETAIL_INVALID_LARGE_ZIP_FILE)
-        raise UnprocessableEntityException(DETAIL_INVALID_LARGE_ZIP_FILE) from e
+        message = DETAIL_INVALID_LARGE_ZIP_FILE
+        code = 422
     else:
-        logger.error(DETAIL_UNKNOWN_ERROR)
-        raise BaseAppException(DETAIL_UNKNOWN_ERROR) from e
+        message = DETAIL_UNKNOWN_ERROR
+        code = 500
+    logger.error(message + " " + str(path))
+    if path is not None:
+        os.remove(path)
+        parts = str(path).split(".")
+        shutil.rmtree(Path(".".join(parts[:-1])))
+    raise
