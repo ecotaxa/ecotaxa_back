@@ -27,7 +27,7 @@ from tests.test_import import PLAIN_DIR, create_project, PLAIN_FILE_PATH
 from tests.jobs import wait_for_stable, api_wait_for_stable_job, check_job_ok
 
 IMPORT_IMAGES_URL = "/simple_import/{project_id}?dry_run={dry_run}"
-UPLOAD_FILE_URL = "/my_files/"
+UPLOAD_FILE_URL = "/my_files"
 
 
 # @pytest.mark.skip()

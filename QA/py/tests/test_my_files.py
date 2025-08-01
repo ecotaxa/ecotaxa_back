@@ -26,6 +26,8 @@ from tests.test_import import (
 )
 from tests.test_import_simple import UPLOAD_FILE_URL
 
+SEPARATOR = "/"
+
 
 @pytest.mark.parametrize("title", ["Try my files"])
 def test_my_files(fastapi, caplog, tstlogs, title):
@@ -51,7 +53,7 @@ def test_my_files(fastapi, caplog, tstlogs, title):
     upload_file(fastapi, tstlogs / DEST_FILE_NAME2, TAG)
 
     # The tag becomes a top-level directory
-    list_rsp = fastapi.get(UPLOAD_FILE_URL, headers=CREATOR_AUTH)
+    list_rsp = fastapi.get(UPLOAD_FILE_URL + SEPARATOR, headers=CREATOR_AUTH)
     assert list_rsp.status_code == 200
     my_files_root: Dict = list_rsp.json()
     assert my_files_root["path"] == ""
@@ -64,7 +66,7 @@ def test_my_files(fastapi, caplog, tstlogs, title):
     }
 
     # The files are stored in the subdirectory
-    list_rsp = fastapi.get(UPLOAD_FILE_URL + TAG, headers=CREATOR_AUTH)
+    list_rsp = fastapi.get(UPLOAD_FILE_URL + SEPARATOR + TAG, headers=CREATOR_AUTH)
     assert list_rsp.status_code == 200
     my_files_subdir: Dict = list_rsp.json()
     assert my_files_subdir["path"] == TAG
