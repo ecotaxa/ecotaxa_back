@@ -8,8 +8,9 @@ import os
 import time
 import shutil
 import datetime
+from glob import glob
 from dataclasses import dataclass
-from typing import Tuple, Any, List, Optional, Iterator
+from typing import Tuple, Any, List, Optional
 
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
 from FS.UserFilesDir import UserFilesDirectory
@@ -25,6 +26,7 @@ from DB.helpers import Session
 from DB.helpers.Direct import text
 from FS.TempDirForTasks import TempDirForTasks
 from helpers.DynamicLogs import get_logger, LogsSwitcher
+from pathlib import Path
 
 logger = get_logger(__name__)
 
@@ -42,6 +44,7 @@ class NightlyJobService(JobServiceBase):
     def __init__(self) -> None:
         super().__init__()
         self.curr = 0
+        self.trashdirpattern = ""
 
     def init_args(self, args: ArgsDict) -> ArgsDict:
         """No job param"""
@@ -82,8 +85,8 @@ class NightlyJobService(JobServiceBase):
         self.compute_all_projects_stats(all_prj_ids, 30, 60)
         self.refresh_taxo_tree_stats(60)
         self.clean_old_jobs(75)
-        self.users_files_maintenance()
-        const_status = self.check_consistency(80, 100)
+        const_status = self.check_consistency(80, 90)
+        self.users_files_maintenance(90, 100)
         if not const_status:
             self.set_job_result(
                 errors=["See log for consistency problems"], infos={"status": "error"}
@@ -202,15 +205,61 @@ class NightlyJobService(JobServiceBase):
                 no_problem = False
         return no_problem
 
-    def users_files_maintenance(self) -> None:
+    def get_tree_time(self, path: Path, ptime: int) -> int:
+        """return max creation time of subdirs in seconds"""
+        dtime = ptime
+        for entry in os.scandir(path):
+            if entry.name[0 : len(self.trashdirpattern)] == self.trashdirpattern:
+                continue
+            try:
+                is_dir = entry.is_dir(follow_symlinks=False)
+            except OSError as error:
+                logger.error("Error calling is_dir():", error)
+                continue
+            if is_dir:
+                dtime = int(os.path.getctime(entry.path))
+
+                if ptime > dtime:
+                    dtime = self.get_tree_time(Path(entry.path), dtime)
+        return dtime
+
+    @staticmethod
+    def _delete_definitely(item: Path, tf: int, prefix: Optional[str] = None):
+        if prefix is None:
+            name = str(item)
+        else:
+            name = str(item).replace(prefix, "")
+        if item.is_dir():
+            try:
+                shutil.rmtree(item)
+                logger.info("Directory '%s' removed '%s'", name, time.ctime(tf))
+            except Exception as e:
+                logger.error("Error deleting directory '%s' '%s' ", name, str(e))
+        else:
+            try:
+                os.remove(item)
+                logger.info("File '%s' removed '%s'", name, time.ctime(tf))
+            except Exception as e:
+                logger.error("Error deleting file '%s' '%s' ", name, str(e))
+
+    def users_files_maintenance(self, start: int, end: int) -> None:
         """
         delete users directories older than TIME_TO_LIVE
         """
         logger.info("Start Users Files Maintenance")
-        timelive: Optional[str] = self.config.get_users_files_life()
-        if timelive is None:
+        self.update_progress(start, "User Files Maintenance")
+        timelive: Optional[str] = self.config.get_time_to_live()
+        if timelive is None or timelive == "":
             return None
+        if int(timelive) > 0:
+            # 10 times less for trash to live
+            trashlive = int(timelive) / 10
+            if trashlive < 1:
+                trashlive = 1
+        else:
+            trashlive = 1
         time_to_live = int(timelive) * 3600 * 24  # in seconds
+        trash_to_live = trashlive * 3600 * 24  # in seconds
         usersfiles: Optional[str] = self.config.get_users_files_dir()
         if usersfiles is None:
             return None
@@ -219,43 +268,47 @@ class NightlyJobService(JobServiceBase):
         now = time.time()
         old = now - time_to_live
         old = int(old)
+        trashtime = now - trash_to_live
         td = time.ctime(old)
         logger.info("Find and remove directories created before %s", str(td))
-        items: Iterator[Tuple[str, List[Any], List[Any]]] = os.walk(
-            users_files_dir, topdown=True
-        )
-        for item in items:
-            root: str = item[0]
-            dirs: List[str] = item[1]
-            if len(dirs) == 0:
-                break
-            for a_dir in dirs:
-                if a_dir is None:
-                    continue
-                try:
-                    _ = a_dir.index(
-                        UserFilesDirectory.USER_DIR_PATTERN.replace("%d", "")
-                    )
-
-                except ValueError:
-                    try:
-                        _ = a_dir.index(
-                            UserFilesDirectory.TRASH_DIRECTORY.replace("%d", "")
-                        )
-                    except ValueError:
-                        dirname = os.path.join(str(root), str(a_dir))
-                        if os.path.exists(dirname):
-                            tf = int(os.path.getctime(dirname))
+        userdirpattern = UserFilesDirectory.USER_DIR_PATTERN.replace("%d", "")
+        self.trashdirpattern = UserFilesDirectory.TRASH_DIRECTORY.replace("%d", "")
+        # remove trashed dir and files older than trash_to_live
+        for entry in glob(
+            users_files_dir
+            + os.path.sep
+            + userdirpattern
+            + "*"
+            + os.path.sep
+            + self.trashdirpattern
+            + "*"
+            + os.path.sep
+            + "*"
+        ):
+            item = Path(entry)
+            tf = int(os.path.getctime(item))
+            if tf < trashtime:
+                self._delete_definitely(item, tf, users_files_dir)
+        # non recursive, only first level directories check and remove as it may lose coherence
+        for entry in glob(users_files_dir + os.path.sep + userdirpattern + "*"):
+            item = Path(entry)
+            if item.is_dir():
+                for subdir in os.scandir(item):
+                    item = Path(subdir)
+                    if item.name[0 : len(self.trashdirpattern)] != self.trashdirpattern:
+                        name = str(item).replace(str(users_files_dir), "")
+                        if os.path.exists(item):
+                            is_dir = item.is_dir()
+                            if is_dir:
+                                tf = self.get_tree_time(
+                                    item, int(os.path.getctime(entry))
+                                )
+                            else:
+                                tf = int(os.path.getctime(item))
                             if tf < old:
-                                try:
-                                    shutil.rmtree(dirname)
-                                    logger.info(
-                                        "Removed '%s' created on %s ",
-                                        (dirname, str(time.ctime(tf))),
-                                    )
-                                except Exception as e:
-                                    logger.error(e)
+                                self._delete_definitely(item, tf, users_files_dir)
         logger.info("End removing directories older than %s day(s)", str(timelive))
+        self.update_progress(end, "Users Files Maintenance terminated")
         return None
 
 
