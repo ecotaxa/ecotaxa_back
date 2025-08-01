@@ -173,11 +173,6 @@ class _Project2Model(DescriptiveModel):
     title: str = Field(
         title="Title", description="The project title.", example="MyProject"
     )
-    visible: bool = Field(
-        title="Visible",
-        description="The project visibility. (deprecated) ",
-        example=False,
-    )
     status: str = Field(
         title="Status", description="The project status.", example="Annotate"
     )

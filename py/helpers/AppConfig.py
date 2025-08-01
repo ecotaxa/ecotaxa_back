@@ -103,9 +103,9 @@ class Config(object):
         # My files service
         return self.parser.get("USERSFILESAREA", "").strip()
 
-    def get_users_files_life(self) -> Optional[str]:
+    def get_time_to_live(self) -> Optional[str]:
         # My files service
-        return self.parser.get("TIMETOLIVE", "").strip()
+        return self.parser.get("TIMETOLIVE", None).strip()
 
     def get_cnf(self, key: str, default: Optional[str] = None) -> Optional[str]:
         # TODO: stop using so we can enumerate the keys
@@ -116,3 +116,6 @@ class Config(object):
 
     def get_max_captcha_token_length(self) -> int:
         return int(self.parser.get("MAX_CAPTCHA_TOKEN_LENGTH", "4096"))
+
+    def get_max_upload_size(self) -> int:
+        return int(self.parser.get("MAX_UPLOAD_SIZE", "665600"))

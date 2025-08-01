@@ -4,7 +4,7 @@
 #
 # Exported constants, to avoid data duplication b/w back-end and front-end
 #
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from BO.DataLicense import DataLicense, AccessLevelEnum
 from DB.User import UserStatus, UserType, PeopleOrganizationDirectory
@@ -110,4 +110,19 @@ class Constants(BaseModel):
         title="Project Formulae",
         description="Project default concentration formulae",
         default=FORMULAE,
+    )
+    default_project_access: str = Field(
+        title="access level",
+        description="Project default access level",
+        default=AccessLevelEnum.PUBLIC,
+    )
+    max_upload_size: int = Field(
+        title="Max file size",
+        description="My Files max file upload size (bytes)",
+        default=681574400,
+    )
+    time_to_live: Optional[str] = Field(
+        title="Time to live",
+        description="My Files number of days before deleting directories",
+        default=None,
     )
