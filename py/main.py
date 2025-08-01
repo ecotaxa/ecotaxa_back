@@ -2021,7 +2021,6 @@ def update_project(
                 session=sce.session,
                 instrument=project.instrument,
                 title=project.title,
-                visible=project.visible,
                 status=project.status,
                 description=project.description,
                 init_classif_list=project.init_classif_list,
@@ -3879,7 +3878,7 @@ def list_user_files(
 
 
 @app.post(
-    "/my_files/",
+    "/my_files",
     operation_id="post_user_file",
     tags=["Files"],
     responses={
