@@ -260,9 +260,7 @@ class CollectionBO(object):
             a_prj_id for a_prj_id in project_ids if a_prj_id not in self.project_ids
         ]
         to_remove = [
-            a_prj_id
-            for a_prj_id in self.project_ids
-            if a_prj_id not in self.project_ids
+            a_prj_id for a_prj_id in self.project_ids if a_prj_id not in project_ids
         ]
         if len(to_remove) > 0:
             session.query(CollectionProject).filter(
