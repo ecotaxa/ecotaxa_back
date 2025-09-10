@@ -147,13 +147,19 @@ class UserFilesDirectory(object):
         return str(dest_path)
 
     def remove(self, path: str):
-        if path == "*":
-            for item in os.listdir(self._root_path):
+        if path == "*" or self._is_trash_dir(str(path)):
+            if path == "*":
+                pathtoremove = self._root_path
+                path = ""
+            else:
+                pathtoremove = self._root_path.joinpath(path)
+                path = path + os.path.sep
+            for item in os.listdir(pathtoremove):
                 if (
-                    self._root_path.joinpath(item).is_file()
+                    pathtoremove.joinpath(item).is_file()
                     or item != self.TRASH_DIRECTORY
                 ):
-                    self.remove(item)
+                    self.remove(path + item)
             return
         self._is_trash_dir_throw(path)
         source_path: Path = self._root_path.joinpath(path.lstrip(os.path.sep))
@@ -210,7 +216,6 @@ class UserFilesDirectory(object):
             filenames = archive.getnames()
         extracted = []
         archive.extractall(path.as_posix())
-
         more_mime = {
             "csv": "text/csv",
             "txt": "text/plain",
@@ -265,21 +270,22 @@ class UserFilesDirectory(object):
         self.list_errors.update({"Not accepted": path_error})
         return False
 
-    def unpack_zip(self, input_path: Path, path: Path, prefix: str = ""):
+    def _process_filenames(self, filenames: List[str], path: Path):
+        if len(filenames):
+            for i, compressed_f in enumerate(filenames):
+                parts = compressed_f.split(os.path.sep)
+                if len(parts) == 1:
+                    sub_path = path.joinpath(compressed_f.split(".")[0])
+                else:
+                    sub_path = path
+                self.dispatch_unpack(compressed_f, sub_path)
+
+    def unpack_zip(self, input_path: Path, path: Path):
         compressed_file = input_path.as_posix()
         try:
             with zipfile.ZipFile(compressed_file, "r", allowZip64=True) as archive:
                 filenames = self.extract_archive(archive, path)
-            sub_path = path
-            if len(filenames):
-                for i, compressed_f in enumerate(filenames):
-                    if (
-                        i == 0
-                        and prefix != ""
-                        and compressed_f[0 : len(prefix)] != prefix
-                    ):
-                        sub_path = path.joinpath(prefix)
-                    self.dispatch_unpack(compressed_f, sub_path)
+            self._process_filenames(filenames, path)
             os.remove(compressed_file)
         except (zipfile.BadZipfile, ValueError, Exception) as e:
             _log_exception_throw(e, self.compressed_origin)
@@ -289,26 +295,21 @@ class UserFilesDirectory(object):
         try:
             with tarfile.open(compressed_file, "r") as archive:
                 filenames = self.extract_archive(archive, path)
-            if len(filenames):
-                for i, compressed_f in enumerate(filenames):
-                    if (
-                        i == 0
-                        and prefix != ""
-                        and compressed_f[0 : len(prefix)] != prefix
-                    ):
-                        compressed_f = prefix + compressed_f
-                    self.dispatch_unpack(compressed_f, path)
+            self._process_filenames(filenames, path)
             os.remove(compressed_file)
         except (ValueError, Exception) as e:
             _log_exception_throw(e, self.compressed_origin)
 
     def unpack_gz(self, input_path: Path, path: Path):
         compressed_file = input_path.as_posix()
+        parts = str(compressed_file).split(".")
+        decompressed_file = ".".join(parts[:-1])
         try:
             with open(compressed_file, "rb") as archive:
-                with open(path.as_posix(), "wb") as decompressed_file:
-                    decompressed_file.write(gzip.decompress(archive.read()))
-            name = str(compressed_file).split(os.path.sep)[-1]
+                with open(decompressed_file, "wb") as decompressed:
+                    decompressed.write(gzip.decompress(archive.read()))
+                    decompressed.close()
+            name = str(decompressed_file).split(os.path.sep)[-1]
             self.dispatch_unpack(name, path)
             os.remove(compressed_file)
         except (ValueError, Exception) as e:
@@ -323,16 +324,10 @@ class UserFilesDirectory(object):
         ):
             parts = str(compressed_path).split(os.path.sep)
             sub_path = Path(os.path.sep.join(parts[:-1]))
-            prefixes = parts[-1].split(".")
-            prefix = ".".join(prefixes[:-1])
-            print(" prefix=", prefix)
-            if prefix == "temp":
-                prefix = ""
-            print(" prefix aft=", prefix)
             if zipfile.is_zipfile(compressed_path.as_posix()):
-                self.unpack_zip(compressed_path, sub_path, prefix)
+                self.unpack_zip(compressed_path, sub_path)
             elif tarfile.is_tarfile(compressed_path.as_posix()):
-                self.unpack_tar(compressed_path, sub_path, prefix)
+                self.unpack_tar(compressed_path, sub_path)
             elif self._is_gz(compressed_path.as_posix()):
                 self.unpack_gz(compressed_path, sub_path)
             elif not self._has_accepted_format(sub_path, compressed_f):
@@ -355,5 +350,7 @@ def _log_exception_throw(e: Exception, path: Optional[Path] = None):
     if path is not None:
         os.remove(path)
         parts = str(path).split(".")
-        shutil.rmtree(Path(".".join(parts[:-1])))
+        toremove = Path(".".join(parts[:-1]))
+        if toremove.exists():
+            shutil.rmtree(toremove)
     raise
