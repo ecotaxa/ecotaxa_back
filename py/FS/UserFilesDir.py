@@ -272,13 +272,8 @@ class UserFilesDirectory(object):
 
     def _process_filenames(self, filenames: List[str], path: Path):
         if len(filenames):
-            for i, compressed_f in enumerate(filenames):
-                parts = compressed_f.split(os.path.sep)
-                if len(parts) == 1:
-                    sub_path = path.joinpath(compressed_f.split(".")[0])
-                else:
-                    sub_path = path
-                self.dispatch_unpack(compressed_f, sub_path)
+            for compressed_f in filenames:
+                self.dispatch_unpack(compressed_f, path)
 
     def unpack_zip(self, input_path: Path, path: Path):
         compressed_file = input_path.as_posix()
@@ -290,7 +285,7 @@ class UserFilesDirectory(object):
         except (zipfile.BadZipfile, ValueError, Exception) as e:
             _log_exception_throw(e, self.compressed_origin)
 
-    def unpack_tar(self, input_path: Path, path: Path, prefix: str = ""):
+    def unpack_tar(self, input_path: Path, path: Path):
         compressed_file = input_path.as_posix()
         try:
             with tarfile.open(compressed_file, "r") as archive:
@@ -317,6 +312,7 @@ class UserFilesDirectory(object):
 
     def dispatch_unpack(self, compressed_f: str, path: Path):
         file_ext, compressed_path, mime_type = self._get_file_info(compressed_f, path)
+
         if (
             file_ext in self.ARCHIVE_EXTENSIONS
             and not compressed_path.is_dir()
@@ -324,6 +320,13 @@ class UserFilesDirectory(object):
         ):
             parts = str(compressed_path).split(os.path.sep)
             sub_path = Path(os.path.sep.join(parts[:-1]))
+            parts = compressed_f.split(os.path.sep)
+            if parts[0] == "":
+                parts = parts[1:]
+            if len(parts) == 1 and parts[0] != "temp.zip":
+                parts = parts[0].split(".")[:-1]
+                sub_path = sub_path.joinpath(".".join(parts))
+
             if zipfile.is_zipfile(compressed_path.as_posix()):
                 self.unpack_zip(compressed_path, sub_path)
             elif tarfile.is_tarfile(compressed_path.as_posix()):
