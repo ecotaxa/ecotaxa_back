@@ -93,7 +93,7 @@ class UserFilesDirectory(object):
             name.lstrip(os.path.sep), base_path.absolute()
         )
         self.compressed_origin = compressed_path
-        self.dispatch_unpack(name.lstrip(os.path.sep), base_path.absolute())
+        self.dispatch_unpack(compressed_path, base_path.absolute())
         return str(source_path)
 
     def list(self, sub_path: str) -> List[DirEntryT]:
@@ -208,13 +208,17 @@ class UserFilesDirectory(object):
         ospath = self._root_path.joinpath(path.lstrip(os.path.sep))
         return shutil.disk_usage(ospath)
 
-    def extract_archive(self, archive, path: Path):
+    def extract_archive(self, archive, filepath: str, path: Path):
         if hasattr(archive, "namelist"):
             filenames = archive.namelist()
         else:
             # tarfile
             filenames = archive.getnames()
         extracted = []
+        sub_path = filepath[len(str(path)) :]
+        sub_path = ".".join(sub_path[1:].split(".")[:-1]) + os.path.sep
+        if sub_path != "temp/" and (filenames[0][0 : len(sub_path)] != sub_path):
+            path = path.joinpath(sub_path[:-1])
         archive.extractall(path.as_posix())
         more_mime = {
             "csv": "text/csv",
@@ -225,6 +229,12 @@ class UserFilesDirectory(object):
             file_ext, compressed_path, mime_type = self._get_file_info(filename, path)
             if mime_type in accepted_mime_types:
                 extracted.append(filename)
+                if (
+                    file_ext in self.ARCHIVE_EXTENSIONS
+                    and not compressed_path.is_dir()
+                    and not self._is_trash_dir(str(path))
+                ):
+                    self.dispatch_unpack(compressed_path, path)
             elif file_ext in more_mime.keys():
                 extracted.append(filename)
             elif os.path.isdir(compressed_path):
@@ -232,7 +242,7 @@ class UserFilesDirectory(object):
             else:
                 os.remove(compressed_path)
                 logger.info("NOT EXTRACTED '%s' ", str(compressed_path))
-        return extracted
+        return sub_path
 
     @staticmethod
     def _get_file_info(filename: str, path: Path) -> Tuple[str, Path, Optional[str]]:
@@ -270,17 +280,11 @@ class UserFilesDirectory(object):
         self.list_errors.update({"Not accepted": path_error})
         return False
 
-    def _process_filenames(self, filenames: List[str], path: Path):
-        if len(filenames):
-            for compressed_f in filenames:
-                self.dispatch_unpack(compressed_f, path)
-
     def unpack_zip(self, input_path: Path, path: Path):
         compressed_file = input_path.as_posix()
         try:
             with zipfile.ZipFile(compressed_file, "r", allowZip64=True) as archive:
-                filenames = self.extract_archive(archive, path)
-            self._process_filenames(filenames, path)
+                self.extract_archive(archive, compressed_file, path)
             os.remove(compressed_file)
         except (zipfile.BadZipfile, ValueError, Exception) as e:
             _log_exception_throw(e, self.compressed_origin)
@@ -289,8 +293,7 @@ class UserFilesDirectory(object):
         compressed_file = input_path.as_posix()
         try:
             with tarfile.open(compressed_file, "r") as archive:
-                filenames = self.extract_archive(archive, path)
-            self._process_filenames(filenames, path)
+                self.extract_archive(archive, compressed_file, path)
             os.remove(compressed_file)
         except (ValueError, Exception) as e:
             _log_exception_throw(e, self.compressed_origin)
@@ -305,37 +308,21 @@ class UserFilesDirectory(object):
                     decompressed.write(gzip.decompress(archive.read()))
                     decompressed.close()
             name = str(decompressed_file).split(os.path.sep)[-1]
-            self.dispatch_unpack(name, path)
+            self.dispatch_unpack(path.joinpath(name), path)
             os.remove(compressed_file)
         except (ValueError, Exception) as e:
             _log_exception_throw(e, self.compressed_origin)
 
-    def dispatch_unpack(self, compressed_f: str, path: Path):
-        file_ext, compressed_path, mime_type = self._get_file_info(compressed_f, path)
-
-        if (
-            file_ext in self.ARCHIVE_EXTENSIONS
-            and not compressed_path.is_dir()
-            and not self._is_trash_dir(str(path))
-        ):
-            parts = str(compressed_path).split(os.path.sep)
-            sub_path = Path(os.path.sep.join(parts[:-1]))
-            parts = compressed_f.split(os.path.sep)
-            if parts[0] == "":
-                parts = parts[1:]
-            if len(parts) == 1 and parts[0] != "temp.zip":
-                parts = parts[0].split(".")[:-1]
-                sub_path = sub_path.joinpath(".".join(parts))
-
-            if zipfile.is_zipfile(compressed_path.as_posix()):
-                self.unpack_zip(compressed_path, sub_path)
-            elif tarfile.is_tarfile(compressed_path.as_posix()):
-                self.unpack_tar(compressed_path, sub_path)
-            elif self._is_gz(compressed_path.as_posix()):
-                self.unpack_gz(compressed_path, sub_path)
-            elif not self._has_accepted_format(sub_path, compressed_f):
-                os.remove(compressed_path)
-                self.list_errors.update({"Not accepted": compressed_f})
+    def dispatch_unpack(self, compressed_path: Path, path: Path):
+        if zipfile.is_zipfile(compressed_path.as_posix()):
+            self.unpack_zip(compressed_path, path)
+        elif tarfile.is_tarfile(compressed_path.as_posix()):
+            self.unpack_tar(compressed_path, path)
+        elif self._is_gz(compressed_path.as_posix()):
+            self.unpack_gz(compressed_path, path)
+        elif not self._has_accepted_format(path, str(compressed_path)):
+            os.remove(compressed_path)
+            self.list_errors.update({"Not accepted": str(compressed_path)})
 
 
 def _log_exception_throw(e: Exception, path: Optional[Path] = None):
@@ -349,7 +336,7 @@ def _log_exception_throw(e: Exception, path: Optional[Path] = None):
     else:
         message = DETAIL_UNKNOWN_ERROR
         code = 500
-    logger.error(message + " " + str(path))
+    logger.error(str(code) + " " + message + " " + str(path))
     if path is not None:
         os.remove(path)
         parts = str(path).split(".")
