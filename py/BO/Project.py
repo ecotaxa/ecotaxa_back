@@ -597,6 +597,7 @@ class ProjectBO(object):
         title_filter: str = "",
         instrument_filter: str = "",
         filter_subset: bool = False,
+        project_ids: str = "",
     ) -> List[ProjectIDT]:
         """
         :param session:
@@ -666,7 +667,11 @@ class ProjectBO(object):
         if filter_subset:
             sql += """
                      AND NOT prj.title ILIKE '%%subset%%'  """
-
+        if project_ids != "":
+            sql_params.update(
+                {"pids": tuple([int(p.strip()) for p in project_ids.split(",")])}
+            )
+            sql += """ AND prj.projid IN :pids """
         with CodeTimer("Projects.projects_for_user query (ids):", logger):
             res: Result = session.execute(text(sql), sql_params)
             # single-element tuple :( DBAPI
@@ -675,17 +680,21 @@ class ProjectBO(object):
 
     @staticmethod
     def list_public_projects(
-        session: Session, title_filter: str = ""
+        session: Session, title_filter: str = "", project_ids: str = ""
     ) -> List[ProjectIDT]:
         """
         :param session:
         :param title_filter: If set, filter out the projects with title not matching the required string.
         :return: The project IDs
         """
-        pattern = "%" + title_filter + "%"
+        public = [AccessLevelEnum.OPEN.value, AccessLevelEnum.PUBLIC.value]
         qry = session.query(Project.projid)
-        qry = qry.filter(Project.access == AccessLevelEnum.OPEN.value)
-        qry = qry.filter(Project.title.ilike(pattern))
+        qry = qry.filter(Project.access.in_(public))
+        if title_filter != "":
+            qry = qry.filter(Project.title.ilike("%" + title_filter + "%"))
+        if project_ids != "":
+            pids = [p.strip() for p in project_ids.split(",")]
+            qry = qry.filter(Project.projid.in_(pids))
         ret = [an_id for an_id, in qry]
         return ret
 

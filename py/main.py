@@ -1322,12 +1322,12 @@ async def list_projects(  # MyORJSONResponse -> JSONResponse -> Response -> awai
     Note that, for performance reasons, in returned ProjectModels, field 'highest_rank' is NOT valued
     (unlike in simple query). The same information can be found in 'managers', 'annotators' and 'viewers' lists.
     """
-    not_granted = not_granted
     with ProjectsService() as sce:
         ret = sce.list(
             current_user_id=current_user,
             not_granted=not_granted,
             for_managing=for_managing,
+            project_ids=project_ids,
             fields=fields,
         )
     # The DB query takes a few ms, and enrich not much more, so we can afford to narrow the search on the result

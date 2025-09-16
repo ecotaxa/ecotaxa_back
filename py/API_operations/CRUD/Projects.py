@@ -67,6 +67,46 @@ class ProjectsService(Service):
         self.session.commit()
         return new_prj.projid
 
+    def list(
+        self,
+        current_user_id: Optional[int],
+        for_managing: bool = False,
+        not_granted: bool = False,
+        project_ids: Optional[str] = None,
+        fields: Optional[str] = FieldListType.default,
+    ) -> List[ProjectBO]:
+        # current_user: Optional[User]
+        if project_ids is None:
+            project_ids = ""
+
+        if current_user_id is None:
+            # For public
+            matching_ids = ProjectBO.list_public_projects(
+                self.ro_session, "", project_ids
+            )
+            projects = ProjectBOSet(self.session, matching_ids, public=True)
+        else:
+            # No rights checking as basically everyone can see all projects
+            # current_user = self.ro_session.query(User).get(current_user_id)
+            current_user: User = RightsBO.get_user_throw(
+                self.ro_session, current_user_id
+            )
+            # assert current_user is not None
+            matching_ids = ProjectBO.projects_for_user(
+                self.ro_session,
+                current_user,
+                for_managing,
+                not_granted,
+                "",
+                "",
+                False,
+                project_ids,
+            )
+            projects = ProjectBOSet(
+                self.ro_session, matching_ids, public=False, fields=fields
+            )
+        return projects.as_list()
+
     def search(
         self,
         current_user_id: Optional[int],
