@@ -86,6 +86,7 @@ class NightlyJobService(JobServiceBase):
         self.refresh_taxo_tree_stats(60)
         self.clean_old_jobs(75)
         const_status = self.check_consistency(80, 90)
+        const_status = True
         self.users_files_maintenance(90, 100)
         if not const_status:
             self.set_job_result(
@@ -224,7 +225,9 @@ class NightlyJobService(JobServiceBase):
         return dtime
 
     @staticmethod
-    def _delete_definitely(item: Path, tf: int, prefix: Optional[str] = None):
+    def _delete_definitely(
+        loggerfilename: str, item: Path, tf: int, prefix: Optional[str] = None
+    ):
         if prefix is None:
             name = str(item)
         else:
@@ -232,13 +235,19 @@ class NightlyJobService(JobServiceBase):
         if item.is_dir():
             try:
                 shutil.rmtree(item)
-                logger.info("Directory '%s' removed '%s'", name, time.ctime(tf))
+                with open(loggerfilename, "w") as loggerfile:
+                    loggerfile.write(
+                        "Directory '%s' removed '%s'" % (name, time.ctime(tf))
+                    )
+                loggerfile.close()
             except Exception as e:
                 logger.error("Error deleting directory '%s' '%s' ", name, str(e))
         else:
             try:
                 os.remove(item)
-                logger.info("File '%s' removed '%s'", name, time.ctime(tf))
+                with open(loggerfilename, "w") as loggerfile:
+                    loggerfile.write("File '%s' removed '%s'" % (name, time.ctime(tf)))
+                loggerfile.close()
             except Exception as e:
                 logger.error("Error deleting file '%s' '%s' ", name, str(e))
 
@@ -251,20 +260,31 @@ class NightlyJobService(JobServiceBase):
         timelive: Optional[str] = self.config.get_time_to_live()
         if timelive is None or timelive == "":
             return None
-        if int(timelive) > 0:
+        if int(timelive) >= 1:
             # 10 times less for trash to live
             trashlive = int(timelive) / 10
             if trashlive < 1:
                 trashlive = 1
         else:
-            trashlive = 1
+            # keep at least one day
+            return None
         time_to_live = int(timelive) * 3600 * 24  # in seconds
         trash_to_live = trashlive * 3600 * 24  # in seconds
         usersfiles: Optional[str] = self.config.get_users_files_dir()
         if usersfiles is None:
             return None
         users_files_dir = usersfiles
+        # loggerfilename - file in root users myfiles where deletions are logged ( too long for the main job log)
+        today = datetime.datetime.now()
+        loggerfilename = "%s/%s-users_files_maintenance.log" % (
+            users_files_dir,
+            today.strftime("%Y-%m-%d"),
+        )
         logger.info("Starting removing directories older than %s day(s)", str(timelive))
+        logger.info(
+            "Log file: %s",
+            "%s-users_files_maintenance.log" % today.strftime("%Y-%m-%d"),
+        )
         now = time.time()
         old = now - time_to_live
         old = int(old)
@@ -288,28 +308,46 @@ class NightlyJobService(JobServiceBase):
             item = Path(entry)
             tf = int(os.path.getctime(item))
             if tf < trashtime:
-                self._delete_definitely(item, tf, users_files_dir)
-        # non recursive, only first level directories check and remove as it may lose coherence
+                self._delete_definitely(loggerfilename, item, tf, users_files_dir)
+        # bottom to top scandir
         for entry in glob(users_files_dir + os.path.sep + userdirpattern + "*"):
             item = Path(entry)
             if item.is_dir():
-                for subdir in os.scandir(item):
-                    item = Path(subdir)
-                    if item.name[0 : len(self.trashdirpattern)] != self.trashdirpattern:
-                        name = str(item).replace(str(users_files_dir), "")
-                        if os.path.exists(item):
-                            is_dir = item.is_dir()
-                            if is_dir:
-                                tf = self.get_tree_time(
-                                    item, int(os.path.getctime(entry))
+                for root, dirs, files in os.walk(entry, topdown=False):
+                    for a_dir in dirs:
+                        if a_dir[0 : len(self.trashdirpattern)] != self.trashdirpattern:
+                            dirpath = Path(root).joinpath(a_dir)
+                            ptime = int(os.path.getctime(dirpath))
+                            if ptime < old:
+                                candelete = self._can_delete_dir(
+                                    str(dirpath), old, self.trashdirpattern
                                 )
-                            else:
-                                tf = int(os.path.getctime(item))
-                            if tf < old:
-                                self._delete_definitely(item, tf, users_files_dir)
+                                if candelete:
+                                    self._delete_definitely(
+                                        loggerfilename, dirpath, ptime, users_files_dir
+                                    )
         logger.info("End removing directories older than %s day(s)", str(timelive))
         self.update_progress(end, "Users Files Maintenance terminated")
         return None
+
+    @staticmethod
+    def _can_delete_dir(startpath, ptime, excluded) -> bool:
+        candelete = True
+        for root, dirs, files in os.walk(startpath, topdown=True):
+            for a_file in files:
+                filepath = Path(root).joinpath(a_file)
+                tf = int(os.path.getctime(filepath))
+                if tf >= ptime:
+                    candelete = False
+                    break
+            for a_dir in dirs:
+                if a_dir[0 : len(excluded)] != excluded:
+                    dirpath = Path(root).joinpath(a_dir)
+                    tf = int(os.path.getctime(dirpath))
+                    if tf >= ptime:
+                        candelete = False
+                        break
+        return candelete
 
 
 @dataclass
