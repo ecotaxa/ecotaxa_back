@@ -2022,7 +2022,6 @@ def update_project(
                 instrument=project.instrument,
                 title=project.title,
                 status=project.status,
-                description=project.description,
                 init_classif_list=project.init_classif_list,
                 classiffieldlist=project.classiffieldlist,
                 popoverfieldlist=project.popoverfieldlist,

@@ -249,7 +249,6 @@ class ProjectBO(object):
         instrument: Optional[str],
         title: str,
         status: Optional[str],
-        description: Optional[str],
         init_classif_list: List[int],
         classiffieldlist: Optional[str],
         popoverfieldlist: Optional[str],
@@ -289,7 +288,7 @@ class ProjectBO(object):
         self._project.instrument_id = instrument
         self._project.title = title
         self._project.status = status
-        self._project.description = description
+        # self._project.description = description
         self._project.classiffieldlist = classiffieldlist
         self._project.popoverfieldlist = popoverfieldlist
         self._project.cnn_network_id = cnn_network_id

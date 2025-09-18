@@ -156,7 +156,6 @@ def test_update_prj(database, fastapi, caplog):
             "time": "t03",
         },
         "projid": prj_id,
-        "description": None,
         "rf_models_used": None,
         "sample_free_cols": {
             "argoid": "t17",
