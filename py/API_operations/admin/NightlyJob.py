@@ -86,7 +86,6 @@ class NightlyJobService(JobServiceBase):
         self.refresh_taxo_tree_stats(60)
         self.clean_old_jobs(75)
         const_status = self.check_consistency(80, 90)
-        const_status = True
         self.users_files_maintenance(90, 100)
         if not const_status:
             self.set_job_result(
@@ -313,6 +312,7 @@ class NightlyJobService(JobServiceBase):
         for entry in glob(users_files_dir + os.path.sep + userdirpattern + "*"):
             item = Path(entry)
             if item.is_dir():
+                pathtodelete = []
                 for root, dirs, files in os.walk(entry, topdown=False):
                     for a_dir in dirs:
                         if a_dir[0 : len(self.trashdirpattern)] != self.trashdirpattern:
@@ -323,9 +323,17 @@ class NightlyJobService(JobServiceBase):
                                     str(dirpath), old, self.trashdirpattern
                                 )
                                 if candelete:
-                                    self._delete_definitely(
-                                        loggerfilename, dirpath, ptime, users_files_dir
-                                    )
+                                    todel: Tuple[Path, int] = (dirpath, ptime)
+                                    pathtodelete.append(todel)
+
+                if len(pathtodelete) > 0:
+                    for todel in pathtodelete:
+                        self._delete_definitely(
+                            loggerfilename,
+                            todel[0],
+                            todel[1],
+                            users_files_dir,
+                        )
         logger.info("End removing directories older than %s day(s)", str(timelive))
         self.update_progress(end, "Users Files Maintenance terminated")
         return None

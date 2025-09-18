@@ -211,6 +211,9 @@ class EcoTaxaDBFrom0(object):
         / ".."
         / "config_templates/account_validation_mails"
     ).resolve()
+    DIR_USERS_FILES = (
+        Path(dirname(realpath(__file__))) / ".." / ".." / ".." / "eco_users_files"
+    ).resolve()
     CAPTCHA_LIST = (
         Path(dirname(realpath(__file__))) / ".." / ".." / ".." / "utils"
     ).resolve()
@@ -248,6 +251,8 @@ ACCOUNT_VALIDATION = off
 ADD_TICKET = ***
 DIR_MAIL_TEMPLATES = {DIR_TEMPLATES}
 SERVERURL= http://localhost:8000
+USERSFILESAREA = {DIR_USERS_FILES}
+MAX_UPLOAD_SIZE = 681574400
 TIMETOLIVE = {TIMETOLIVE}
 """
 
