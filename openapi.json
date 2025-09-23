@@ -2005,12 +2005,12 @@
             "in":"query"
           },
           {
-            "description":"One of ['projid', 'title', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']",
+            "description":"One of ['projid', 'title', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']",
             "required":false,
             "schema":{
               "title":"Order field",
               "type":"string",
-              "description":"One of ['projid', 'title', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']"
+              "description":"One of ['projid', 'title', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']"
             },
             "example":"instrument",
             "name":"order_field",
@@ -2174,12 +2174,12 @@
             "in":"query"
           },
           {
-            "description":"One of ['projid', 'title', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']",
+            "description":"One of ['projid', 'title', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']",
             "required":false,
             "schema":{
               "title":"Order field",
               "type":"string",
-              "description":"One of ['projid', 'title', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'description', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']"
+              "description":"One of ['projid', 'title', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']"
             },
             "example":"instrument",
             "name":"order_field",
@@ -6333,6 +6333,7 @@
             }
           }
         },
+        "deprecated":true,
         "security":[
           {
             "BearerOrCookieAuth":[]
@@ -6346,7 +6347,6 @@
           "Files"
         ],
         "summary":"Put User File",
-        "description":"**Upload a file for the current user.**\n\nThe returned text will contain a server-side path which is usable for some file-related operations.\n\n*e.g. import.*",
         "operationId":"post_user_file",
         "requestBody":{
           "content":{
@@ -6382,6 +6382,7 @@
             }
           }
         },
+        "deprecated":true,
         "security":[
           {
             "BearerOrCookieAuth":[]
@@ -6392,7 +6393,7 @@
     "/common_files/":{
       "get":{
         "tags":[
-          "Files"
+          "CommonFiles"
         ],
         "summary":"List Common Files",
         "description":"**List the common files** which are usable for some file-related operations.\n\n*e.g. import.*",
@@ -10143,12 +10144,6 @@
             "title":"Comments",
             "type":"string",
             "description":"The project comments.",
-            "example":""
-          },
-          "description":{
-            "title":"Description",
-            "type":"string",
-            "description":"The project description, i.e. main traits.",
             "example":""
           },
           "rf_models_used":{
