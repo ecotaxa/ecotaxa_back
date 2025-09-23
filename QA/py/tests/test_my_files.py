@@ -27,6 +27,7 @@ from tests.test_import import (
 from tests.test_import_simple import UPLOAD_FILE_URL
 
 SEPARATOR = "/"
+DIRPATH = "XXX"
 
 
 @pytest.mark.parametrize("title", ["Try my files"])
@@ -37,22 +38,20 @@ def test_my_files(fastapi, caplog, tstlogs, title):
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(CREATOR_USER_ID, title)
 
-    TAG = "XXX"
-
     DEST_FILE_NAME = "LOKI_46-24hours_01.zip"
     # Copy an existing test file into current dir, simulating client side
     shutil.copyfile(SHARED_DIR / V6_FILE, tstlogs / DEST_FILE_NAME)
     # Upload this file
-    upload_file(fastapi, tstlogs / DEST_FILE_NAME, TAG)
+    upload_file(fastapi, DEST_FILE_NAME, DIRPATH + "/" + DEST_FILE_NAME, tstlogs)
 
     # And another
     DEST_FILE_NAME2 = "readme.txt"
     # Copy an existing test file into current dir, simulating client side
     shutil.copyfile(SHARED_DIR / "HOWTO.txt", tstlogs / DEST_FILE_NAME2)
     # Upload this file
-    upload_file(fastapi, tstlogs / DEST_FILE_NAME2, TAG)
+    upload_file(fastapi, DEST_FILE_NAME2, DIRPATH + "/" + DEST_FILE_NAME2, tstlogs)
 
-    # The tag becomes a top-level directory
+    # The pathparam becomes a top-level directory
     list_rsp = fastapi.get(UPLOAD_FILE_URL + SEPARATOR, headers=CREATOR_AUTH)
     assert list_rsp.status_code == 200
     my_files_root: Dict = list_rsp.json()
@@ -60,16 +59,16 @@ def test_my_files(fastapi, caplog, tstlogs, title):
     assert len(my_files_root["entries"]) == 1
     assert my_files_root["entries"][0] == {
         "mtime": "",
-        "name": TAG,
+        "name": DIRPATH,
         "size": 0,
         "type": "D",
     }
 
     # The files are stored in the subdirectory
-    list_rsp = fastapi.get(UPLOAD_FILE_URL + SEPARATOR + TAG, headers=CREATOR_AUTH)
+    list_rsp = fastapi.get(UPLOAD_FILE_URL + SEPARATOR + DIRPATH, headers=CREATOR_AUTH)
     assert list_rsp.status_code == 200
     my_files_subdir: Dict = list_rsp.json()
-    assert my_files_subdir["path"] == TAG
+    assert my_files_subdir["path"] == DIRPATH
     assert (
         len(my_files_subdir["entries"]) == 2
     )  # The second file being .txt will have 0 size on re-read
@@ -91,8 +90,8 @@ def test_my_files(fastapi, caplog, tstlogs, title):
     # The below (unfortunately) hard-coded path is valid on current configuration of EcoTaxa
     file_path = "/tmp/ecotaxa_user.{}/{}/{}".format(
         CREATOR_USER_ID,  # Should come from /api/users/me
-        TAG,  # existing tag, created the on the first file creation with it
-        DEST_FILE_NAME,  # can come from an entry in GET /my_files/TAG
+        DIRPATH,  # existing tag, created the on the first file creation with it
+        DEST_FILE_NAME,  # can come from an entry in GET /my_files/DIRPATH
     )
     req = {"source_path": file_path}
     rsp = fastapi.post(url, headers=CREATOR_AUTH, json=req)
@@ -102,14 +101,18 @@ def test_my_files(fastapi, caplog, tstlogs, title):
     api_check_job_ok(fastapi, job_id)
 
 
-def upload_file(fastapi, dest_file_name, tag):
-    with open(dest_file_name, "rb") as fin:
+def upload_file(fastapi, dest_file_name, pathparam, tstlogs):
+    print("uploadfile----------" + str(dest_file_name), pathparam)
+    with open(tstlogs / dest_file_name, "rb") as fin:
         upload_rsp = fastapi.post(
             UPLOAD_FILE_URL,
             headers=CREATOR_AUTH,
-            data={"tag": tag},  # /!\ If no tag -> random use-once directory!
+            data={
+                "path": pathparam
+            },  # /!\ If no pathparam error-> random use-once directory!
             files={"file": fin},
         )
         assert upload_rsp.status_code == 200
         srv_file_path = upload_rsp.json()
-        assert tag in srv_file_path
+        print("srv_file", srv_file_path)
+        assert DIRPATH in srv_file_path

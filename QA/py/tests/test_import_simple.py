@@ -27,7 +27,7 @@ from tests.test_import import PLAIN_DIR, create_project, PLAIN_FILE_PATH
 from tests.jobs import wait_for_stable, api_wait_for_stable_job, check_job_ok
 
 IMPORT_IMAGES_URL = "/simple_import/{project_id}?dry_run={dry_run}"
-UPLOAD_FILE_URL = "/my_files"
+UPLOAD_FILE_URL = "/user_files/"
 
 
 # @pytest.mark.skip()
@@ -118,10 +118,11 @@ def test_api_import_images(fastapi, caplog, title):
     """
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(CREATOR_USER_ID, title)
-
     with open(PLAIN_FILE_PATH, "rb") as fin:
         upload_rsp = fastapi.post(
-            UPLOAD_FILE_URL, headers=CREATOR_AUTH, files={"file": fin}
+            UPLOAD_FILE_URL,
+            headers=CREATOR_AUTH,
+            files={"file": fin},
         )
         assert upload_rsp.status_code == 200
         srv_file_path = upload_rsp.json()

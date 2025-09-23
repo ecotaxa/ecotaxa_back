@@ -124,7 +124,7 @@ from API_operations.Subset import SubsetServiceOnProject
 from API_operations.TaxoManager import TaxonomyChangeService, CentralTaxonomyService
 from API_operations.TaxonomyService import TaxonomyService
 from API_operations.UserFilesFolder import UserFilesFolderService
-from API_operations.UserFolder import UserFolderService, CommonFolderService
+from API_operations.CommonFolder import CommonFolderService
 from API_operations.admin.Database import DatabaseService
 from API_operations.admin.ImageManager import ImageManagerService
 from API_operations.admin.NightlyJob import NightlyJobService
@@ -3859,6 +3859,7 @@ def erase_job(
     operation_id="list_user_files",
     tags=["Files"],
     response_model=DirectoryModel,
+    deprecated=True,
 )
 def list_user_files(
     sub_path: str,  # = Query(..., title="Sub path", description="", example=""),
@@ -3870,10 +3871,9 @@ def list_user_files(
 
     *e.g. import.*
     """
-    with UserFolderService() as sce:
-        with RightsThrower():
-            file_list = sce.list(sub_path, current_user)
-    return file_list
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE, detail=["Use user_files instead"]
+    )
 
 
 @app.post(
@@ -3890,6 +3890,7 @@ def list_user_files(
         }
     },
     response_model=str,
+    deprecated=True,
 )
 async def put_user_file(  # async due to await file store
     file: UploadFile = File(..., title="File", description=""),
@@ -3903,24 +3904,16 @@ async def put_user_file(  # async due to await file store
     ),
     current_user: int = Depends(get_current_user),
 ) -> str:
-    """
-    **Upload a file for the current user.**
-
-    The returned text will contain a server-side path which is usable for some file-related operations.
-
-    *e.g. import.*
-    """
-    with UserFolderService() as sce:
-        with ValidityThrower(), RightsThrower():
-            assert ".." not in str(path) + str(tag), "Forbidden"
-            file_name = await sce.store(current_user, file, path, tag)
-        return file_name
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE, detail=["Use user_files instead"]
+    )
 
 
+# ####################### START OF COMMON FILES
 @app.get(
     "/common_files/",
     operation_id="list_common_files",
-    tags=["Files"],
+    tags=["CommonFiles"],
     response_model=DirectoryModel,
 )
 def list_common_files(
@@ -3940,7 +3933,7 @@ def list_common_files(
     return file_list
 
 
-# ######################## END OF FILES
+# ######################## END OF COMMON FILES
 # ######################## START OF USERS FILES
 @app.get(
     "/user_files/{sub_path:path}",
