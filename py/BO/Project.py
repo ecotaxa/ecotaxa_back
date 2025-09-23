@@ -686,7 +686,7 @@ class ProjectBO(object):
         :param title_filter: If set, filter out the projects with title not matching the required string.
         :return: The project IDs
         """
-        public = [AccessLevelEnum.PUBLIC.value]
+        public = [AccessLevelEnum.OPEN.value, AccessLevelEnum.PUBLIC.value]
         qry = session.query(Project.projid)
         qry = qry.filter(Project.access.in_(public))
         if title_filter != "":
