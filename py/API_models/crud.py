@@ -207,11 +207,6 @@ class _Project2Model(DescriptiveModel):
     comments: str = Field(
         title="Comments", description="The project comments.", example=""
     )
-    description: str = Field(
-        title="Description",
-        description="The project description, i.e. main traits.",
-        example="",
-    )
     rf_models_used: str = Field(title="Rf models used", description="", example="")
     cnn_network_id: str = Field(
         title="Cnn network id", description="", example="SCN_zooscan_group1"
