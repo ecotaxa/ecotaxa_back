@@ -269,7 +269,10 @@ class UserFilesDirectory(object):
                 pass
 
     def _has_accepted_format(self, path: Path, filename: str) -> bool:
-        py_magic = from_path(filename)
+        with open(str(path.joinpath(filename.lstrip(os.path.sep))), "rb") as f:
+            data = f.read()
+        py_magic = from_bytes(data)
+        # py_magic = from_path(str(filepath))
         mime_type = py_magic.mime_type()
         if mime_type in accepted_mime_types:
             return True
