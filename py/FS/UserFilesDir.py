@@ -7,7 +7,7 @@ import os
 import shutil
 import tarfile
 import zipfile
-from magic_rs import from_path
+from magic_rs import from_path, from_bytes
 from pathlib import Path
 from typing import Optional, List, NamedTuple, Dict, Tuple
 
@@ -250,7 +250,10 @@ class UserFilesDirectory(object):
         parts = filename.split(os.path.sep)
         filepath = path.joinpath(str(Path(parts[0])), os.path.sep.join(parts[1:]))
         try:
-            py_magic = from_path(str(filepath))
+            with open(str(filepath), "rb") as f:
+                data = f.read()
+            py_magic = from_bytes(data)
+            # py_magic = from_path(str(filepath))
             mime_type = py_magic.mime_type()
         except Exception:
             mime_type = None
