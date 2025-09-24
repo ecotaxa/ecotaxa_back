@@ -7,7 +7,7 @@ import os
 import shutil
 import tarfile
 import zipfile
-from magic_rs import from_path, from_bytes
+from magic_rs import from_bytes
 from pathlib import Path
 from typing import Optional, List, NamedTuple, Dict, Tuple
 
@@ -253,7 +253,6 @@ class UserFilesDirectory(object):
             with open(str(filepath), "rb") as f:
                 data = f.read()
             py_magic = from_bytes(data)
-            # py_magic = from_path(str(filepath))
             mime_type = py_magic.mime_type()
         except Exception:
             mime_type = None
@@ -268,21 +267,20 @@ class UserFilesDirectory(object):
             except FileExistsError:
                 pass
 
-    def _has_accepted_format(self, path: Path, filename: str) -> bool:
-        with open(str(path.joinpath(filename.lstrip(os.path.sep))), "rb") as f:
+    def _has_accepted_format(self, path: Path, filepath: str) -> bool:
+        with open(filepath, "rb") as f:
             data = f.read()
         py_magic = from_bytes(data)
-        # py_magic = from_path(str(filepath))
         mime_type = py_magic.mime_type()
         if mime_type in accepted_mime_types:
             return True
         logger.info(
             "File format not accepted '%s' '%s' , user_id '%s'",
             str(path),
-            str(filename),
+            str(filepath),
             str(self.user_id),
         )
-        path_error = str(path.joinpath(filename.lstrip(os.path.sep)))
+        path_error = str(path.joinpath(filepath.lstrip(os.path.sep)))
         self.list_errors.update({"Not accepted": path_error})
         return False
 
