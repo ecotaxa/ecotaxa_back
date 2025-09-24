@@ -55,6 +55,7 @@ def test_my_files(fastapi, caplog, tstlogs, title):
     list_rsp = fastapi.get(UPLOAD_FILE_URL + SEPARATOR, headers=CREATOR_AUTH)
     assert list_rsp.status_code == 200
     my_files_root: Dict = list_rsp.json()
+    print("----files_root", my_files_root)
     assert my_files_root["path"] == ""
     assert len(my_files_root["entries"]) == 1
     assert my_files_root["entries"][0] == {
