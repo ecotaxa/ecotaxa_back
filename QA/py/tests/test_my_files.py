@@ -39,6 +39,7 @@ def test_my_files(fastapi, caplog, tstlogs, title):
     prj_id = create_project(CREATOR_USER_ID, title)
 
     DEST_FILE_NAME = "LOKI_46-24hours_01.zip"
+    DEST_DIR_NAME = "LOKI_46-24hours_01"
     # Copy an existing test file into current dir, simulating client side
     shutil.copyfile(SHARED_DIR / V6_FILE, tstlogs / DEST_FILE_NAME)
     # Upload this file
@@ -57,7 +58,7 @@ def test_my_files(fastapi, caplog, tstlogs, title):
     my_files_root: Dict = list_rsp.json()
     assert my_files_root["path"] == ""
     assert len(my_files_root["entries"]) == 2
-    assert my_files_root["entries"][0] == {
+    assert my_files_root["entries"][1] == {
         "mtime": "",
         "name": DIRPATH,
         "size": 0,
@@ -65,16 +66,18 @@ def test_my_files(fastapi, caplog, tstlogs, title):
     }
 
     # The files are stored in the subdirectory
-    list_rsp = fastapi.get(UPLOAD_FILE_URL + SEPARATOR + DIRPATH, headers=CREATOR_AUTH)
+    DIRDEST = DIRPATH + SEPARATOR + DEST_DIR_NAME
+    list_rsp = fastapi.get(UPLOAD_FILE_URL + SEPARATOR + DIRDEST, headers=CREATOR_AUTH)
     assert list_rsp.status_code == 200
     my_files_subdir: Dict = list_rsp.json()
-    assert my_files_subdir["path"] == DIRPATH
+    assert my_files_subdir["path"] == DIRDEST
     assert (
         len(my_files_subdir["entries"]) == 1
     )  # The second file being .txt will have 0 size on re-read
-    the_file = [fil for fil in my_files_subdir["entries"] if fil["size"] == 22654][0]
-    del the_file["mtime"]  # Unpredictable
-    assert the_file == {"name": DEST_FILE_NAME, "size": 22654, "type": "F"}
+    # test no longer valid as the zip is deleted after successful unzip
+    # the_file = [fil for fil in my_files_subdir["entries"] if fil["size"] == 22654][0]
+    # del the_file["mtime"]  # Unpredictable
+    # assert the_file == {"name": DEST_FILE_NAME, "size": 22654, "type": "F"}
 
     # Import the file without the right path -> Error
     url = FILE_IMPORT_URL.format(project_id=prj_id)
