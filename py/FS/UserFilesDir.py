@@ -250,7 +250,7 @@ class UserFilesDirectory(object):
         parts = filename.split(os.path.sep)
         filepath = path.joinpath(str(Path(parts[0])), os.path.sep.join(parts[1:]))
         try:
-            py_magic = from_path(filepath)
+            py_magic = from_path(str(filepath))
             mime_type = py_magic.mime_type()
         except (CantMatchTypeError, Exception):
             mime_type = None
