@@ -58,7 +58,7 @@ def test_my_files(fastapi, caplog, tstlogs, title):
     my_files_root: Dict = list_rsp.json()
     assert my_files_root["path"] == ""
     assert len(my_files_root["entries"]) == 2
-    assert my_files_root["entries"][1] == {
+    assert my_files_root["entries"][0] == {
         "mtime": "",
         "name": DIRPATH,
         "size": 0,
