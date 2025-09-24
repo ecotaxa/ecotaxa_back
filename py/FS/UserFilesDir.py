@@ -7,7 +7,7 @@ import os
 import shutil
 import tarfile
 import zipfile
-from magic_rs import from_bytes
+from magic_rs import from_path, CantMatchTypeError
 from pathlib import Path
 from typing import Optional, List, NamedTuple, Dict, Tuple
 
@@ -250,11 +250,9 @@ class UserFilesDirectory(object):
         parts = filename.split(os.path.sep)
         filepath = path.joinpath(str(Path(parts[0])), os.path.sep.join(parts[1:]))
         try:
-            with open(str(filepath), "rb") as f:
-                data = f.read()
-            py_magic = from_bytes(data)
+            py_magic = from_path(filepath)
             mime_type = py_magic.mime_type()
-        except Exception:
+        except (CantMatchTypeError, Exception):
             mime_type = None
 
         return file_ext, filepath, mime_type
@@ -268,10 +266,12 @@ class UserFilesDirectory(object):
                 pass
 
     def _has_accepted_format(self, path: Path, filepath: str) -> bool:
-        with open(filepath, "rb") as f:
-            data = f.read()
-        py_magic = from_bytes(data)
-        mime_type = py_magic.mime_type()
+
+        try:
+            py_magic = from_path(filepath)
+            mime_type = py_magic.mime_type()
+        except (CantMatchTypeError, Exception):
+            mime_type = None
         if mime_type in accepted_mime_types:
             return True
         logger.info(
