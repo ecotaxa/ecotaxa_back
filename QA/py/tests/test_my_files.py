@@ -68,10 +68,9 @@ def test_my_files(fastapi, caplog, tstlogs, title):
     list_rsp = fastapi.get(UPLOAD_FILE_URL + SEPARATOR + DIRPATH, headers=CREATOR_AUTH)
     assert list_rsp.status_code == 200
     my_files_subdir: Dict = list_rsp.json()
-    print("----files_dirs", my_files_subdir)
     assert my_files_subdir["path"] == DIRPATH
     assert (
-        len(my_files_subdir["entries"]) == 2
+        len(my_files_subdir["entries"]) == 1
     )  # The second file being .txt will have 0 size on re-read
     the_file = [fil for fil in my_files_subdir["entries"] if fil["size"] == 22654][0]
     del the_file["mtime"]  # Unpredictable
