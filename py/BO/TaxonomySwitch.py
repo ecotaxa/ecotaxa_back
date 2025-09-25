@@ -57,25 +57,27 @@ class TaxonomyMapper(object):
                 to_worms.check_sums()
             TaxonomyMapper.TO_WORMS = to_worms
 
-        # Some taxa have a directly declared (in ToWoRMs, i.e. in golden XLSX) correspondance
-        # ⚠ These might be Morpho ones? Or not... TODO: Check
-        direct_ids = set(to_worms.done_remaps.keys()).intersection(self.taxa_ids)
-        for a_direct_id in list(direct_ids):
+        # TODO: The conditions under which we have no target are unclear,
+        #   I guess it's due to the XLSX being inconsistent?
+        valid_remaps = {k: v for k, v in to_worms.done_remaps.items() if v is not None}
+
+        def add_phylo_to_ret(direct_id: int):
             # Get the mapping
-            aphia_id = to_worms.done_remaps[a_direct_id]
-            if aphia_id is None:
-                # TODO: The conditions under which we have no target are unclear, I guess it's due to the XLSX being inconsistent?
-                # No mapping -> re-add to auto matching to come, who knows...
-                direct_ids.remove(a_direct_id)
-                continue
+            aphia_id = valid_remaps[direct_id]
             worms_rec = self.session.query(WoRMS).get(aphia_id)
             assert worms_rec is not None
-            ret.add_phylos({a_direct_id: worms_rec})
+            ret.add_phylos({direct_id: worms_rec})
+
+        # Some taxa have a directly declared (in ToWoRMs, i.e. in golden XLSX) correspondance
+        # ⚠ These might be Morpho ones? Or not... TODO: Check
+        direct_ids = set(valid_remaps.keys()).intersection(self.taxa_ids)
+        for a_direct_id in direct_ids:
+            add_phylo_to_ret(a_direct_id)
 
         # Do "auto" matching of the rest
         ids_for_auto_match = self.taxa_ids.difference(direct_ids)
 
-        # Split in two sets, the Phylo and the Morpho ones
+        # Split into two sets, the Phylo and the Morpho ones
         phylo_auto_ids = TaxonomyBO.keep_phylo(self.session, list(ids_for_auto_match))
         morpho_auto_ids = list(ids_for_auto_match.difference(phylo_auto_ids))
 
@@ -91,6 +93,13 @@ class TaxonomyMapper(object):
                     # Add e.g. M1 -> P
                     ret.add_morpho(a_morpho_id, a_parent_id)
                     break
+
+        # ToWoRMs, i.e. in golden XLSX mapping of missing phylos, basically just-now added Morphos parents.
+        uncovered_but_golden = set(valid_remaps.keys()).intersection(
+            ret.uncovered_phylo()
+        )
+        for an_id in uncovered_but_golden:
+            add_phylo_to_ret(an_id)
 
         # Do more matches
         phylo_auto_ids.update(ret.uncovered_phylo())
