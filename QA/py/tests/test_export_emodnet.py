@@ -210,7 +210,6 @@ def test_emodnet_export(fastapi, exportable_collection, admin_or_creator, fixed_
         % prj_id,
         "Could not extract sampling net name and features from sample 'm106_mn01_n2_sml' (in #%d): at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent."
         % prj_id,
-        "No occurrence added for sample 'm106_mn01_n2_sml' (in #%d)" % prj_id,
         "Could not extract sampling net name and features from sample 'm106_mn01_n3_sml' (in #%d): at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent."
         % prj_id,
         "Could not extract sampling net name and features from sample 'm106_mn04_n4_sml' (in #%d): at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent."
@@ -243,8 +242,7 @@ def test_emodnet_export(fastapi, exportable_collection, admin_or_creator, fixed_
         % prj_id,
         "Could not extract sampling net name and features from sample 'm106_mn04_n4_sml' (in #%d): at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent."
         % prj_id2,
-        "No occurrence added for sample 'm106_mn04_n4_sml' (in #%d)" % prj_id2,
-        "Stats: predicted:2 validated:19 produced to zip:9 not produced (M):12 not produced (P):0",
+        "Stats: predicted:2 validated:19 produced to zip:21 not produced (M):0 not produced (P):0",
     ]
     assert warns == ref_warns
     assert rsp.json()["errors"] == []
