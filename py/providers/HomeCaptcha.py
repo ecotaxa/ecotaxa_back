@@ -20,6 +20,7 @@ class HomeCaptcha(object):
 
         config = Config()
         self.recaptchaid = str(config.get_recaptchaid() or "")
+        self.all_in_one = config.get_all_in_one() == "on"
         if self.recaptchaid != "":
             recaptchasecret = str(config.get_recaptchasecret() or "")
             if recaptchasecret != "":
@@ -45,6 +46,8 @@ class HomeCaptcha(object):
             }
             url_captcha = "https://www.google.com/recaptcha/api/siteverify"
 
+        elif self.all_in_one:
+            return None
         else:
             params = {
                 "r": response,

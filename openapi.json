@@ -7881,6 +7881,12 @@
             "title":"Time to live",
             "type":"string",
             "description":"My Files number of days before deleting directories"
+          },
+          "all_in_one":{
+            "title":"All in One",
+            "type":"boolean",
+            "description":"local install - run without network access",
+            "default":false
           }
         },
         "description":"Values which can be considered identical over the lifetime of the back-end."

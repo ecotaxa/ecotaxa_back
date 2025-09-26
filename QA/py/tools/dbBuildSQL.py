@@ -19,6 +19,7 @@ psql_bin = "psql"
 PG_HOST = environ.get("POSTGRES_HOST")
 PG_PORT = environ.get("POSTGRES_PORT")
 
+
 if PG_HOST and PG_PORT:
     PG_PORT = int(PG_PORT)
 else:

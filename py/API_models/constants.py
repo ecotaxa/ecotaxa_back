@@ -126,3 +126,8 @@ class Constants(BaseModel):
         description="My Files number of days before deleting directories",
         default=None,
     )
+    all_in_one: bool = Field(
+        title="All in One",
+        description="local install - run without network access",
+        default=False,
+    )

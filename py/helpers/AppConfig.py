@@ -80,6 +80,9 @@ class Config(object):
     def get_recaptchasecret(self) -> Optional[str]:
         return self.parser.get("RECAPTCHASECRET")
 
+    def get_all_in_one(self) -> Optional[str]:
+        return self.parser.get("ALL_IN_ONE")
+
     def get_mailservice_secret_key(self) -> Optional[str]:
         return self.parser.get("MAILSERVICE_SECRET_KEY")
 
