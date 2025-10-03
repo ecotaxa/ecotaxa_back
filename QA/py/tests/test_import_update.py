@@ -18,6 +18,7 @@ from tests.test_import import (
     IMPORT_TOT_VOL,
     do_import,
     IMPORT_TOT_VOL_UPDATE,
+    IMPORT_TOT_VOL_BAD_UPDATE,
 )
 
 
@@ -98,6 +99,24 @@ def test_import_update_sample_meta(fastapi, caplog, tstlogs):
         "Updating samples 'm106_mn01_n1_sml' using [('t05', \"'999999'->'5.75'\")]"
     ]
 
+    do_import_update(
+        prj_id, caplog, "Yes", str(IMPORT_TOT_VOL_BAD_UPDATE), expected_errors=True
+    )
+    print("Import update 2:" + "\n".join(caplog.messages))
+    upds = [msg for msg in caplog.messages if msg.startswith("Updating")]
+    # Process IDs are not unique nor structural anymore, feel free to update
+    assert upds == [
+        "Updating process 'zooprocess_m106_mn01_n1_sml_typo' using [('orig_id', \"'zooprocess_m106_mn01_n1_sml'->'zooprocess_m106_mn01_n1_sml_typo'\")]",
+        "Updating process 'zooprocess_m106_mn01_n1_sml' using [('orig_id', \"'zooprocess_m106_mn01_n1_sml_typo'->'zooprocess_m106_mn01_n1_sml'\")]",
+    ]
+    errs = [
+        a_msg.getMessage() for a_msg in caplog.records if a_msg.levelno == logging.ERROR
+    ]
+    assert errs == [
+        "Invalid acq_id value 'generic_m106_mn01_n1_sml_typo'. Your TSV is inconsistent.",
+        "Invalid sample_id value 'm106_mn01_n1_sml_typo'. Your TSV is inconsistent.",
+    ]
+
 
 def test_import_update_various(fastapi, caplog, tstlogs):
     """Update TSVs"""
@@ -153,7 +172,7 @@ def test_import_update_various(fastapi, caplog, tstlogs):
 
 
 # Ensure that re-updating updates nothing. This is tricky due to floats storage on DB.
-def do_import_update(prj_id, caplog, classif, source):
+def do_import_update(prj_id, caplog, classif, source, expected_errors=False):
     params = ImportReq(
         skip_existing_objects=True, update_mode=classif, source_path=source
     )
@@ -178,8 +197,9 @@ def do_import_update(prj_id, caplog, classif, source):
         job = wait_for_stable(rsp.job_id)
     check_job_ok(job)
     # Check that all went fine
-    for a_msg in caplog.records:
-        assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
+    if not expected_errors:
+        for a_msg in caplog.records:
+            assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
     # #498: No extra parent should be created
     for a_msg in caplog.records:
         assert "++ ID" not in a_msg.getMessage()

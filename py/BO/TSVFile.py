@@ -20,8 +20,11 @@ from typing import (
     TextIO,
 )
 
+# noinspection PyPackageRequirements
+from PIL import Image as PIL_Image  # type: ignore
+
 import BO.Mappings as GlobalMapping
-from BO.Mappings import ProjectMapping, ParentTableClassT
+from BO.Mappings import ProjectMapping, ParentTableClassT, TABLE_TO_PREFIX
 from BO.SpaceTime import compute_sun_position, USED_FIELDS_FOR_SUNPOS
 from BO.Training import TrainingBOProvider, PredictionBO
 from BO.helpers.ImportHelpers import (
@@ -48,11 +51,7 @@ from DB.Sample import Sample
 from DB.helpers import Session
 from DB.helpers.Bean import Bean
 from DB.helpers.ORM import detach_from_session
-
-# noinspection PyPackageRequirements
-from PIL import Image as PIL_Image  # type: ignore
 from helpers.DynamicLogs import get_logger
-
 from .Image import ImageBO
 from .ObjectSet import EnumeratedObjectSet
 from .User import UserIDT
@@ -233,9 +232,9 @@ class TSVFile(object):
                                 "score": classif_score,
                             }
                         )
-                        object_head_to_write[
-                            "classif_date"
-                        ] = training.training.training_start
+                        object_head_to_write["classif_date"] = (
+                            training.training.training_start
+                        )
                         training.advance()
 
                     # Attempt to compute sun position
@@ -277,9 +276,9 @@ class TSVFile(object):
 
                 if new_records > 1:
                     # We now have an Id from sequences, so reference it.
-                    how.existing_objects[
-                        object_head_to_write.orig_id
-                    ] = object_head_to_write.objid
+                    how.existing_objects[object_head_to_write.orig_id] = (
+                        object_head_to_write.objid
+                    )
                     how.image_ranks_per_obj[object_head_to_write.objid] = set()
                 else:
                     # The key already exists with same value, checked in @see self.create_or_link_slaves
@@ -382,11 +381,9 @@ class TSVFile(object):
                 object_head_to_write["classif_date"] = start_time
             object_head_to_write["classif_score"] = None
         elif state is None:
-            object_head_to_write["classif_id"] = object_head_to_write[
-                "classif_who"
-            ] = object_head_to_write["classif_date"] = object_head_to_write[
-                "classif_score"
-            ] = None
+            object_head_to_write["classif_id"] = object_head_to_write["classif_who"] = (
+                object_head_to_write["classif_date"]
+            ) = object_head_to_write["classif_score"] = None
         return state
 
     @staticmethod
@@ -526,9 +523,9 @@ class TSVFile(object):
             )
             # Store acquisition object for later reference, but detach it from ORM,
             # otherwise the simple call to .pk() below provokes a select :(
-            how.existing_acquisitions[
-                (sample_orig_id, acquis_orig_id)
-            ] = detach_from_session(session, new_acquis)
+            how.existing_acquisitions[(sample_orig_id, acquis_orig_id)] = (
+                detach_from_session(session, new_acquis)
+            )
             # Store current PK for following level
             acquis_pk = new_acquis.acquisid
             upper_level_created = True
@@ -607,7 +604,11 @@ class TSVFile(object):
                     parent_pk = parent.acquisid if parent else None
                 if parent is None:
                     # No parent found for update, thus we cannot locate children, as there
-                    # is an implicit relationship just by the fact that the 3 are on the same line
+                    # is an implicit relationship just by the fact that the 3 keys are on the same line
+                    key_name = TABLE_TO_PREFIX[parent_class.__tablename__] + "_id"
+                    logger.error(
+                        f"Invalid {key_name} value '{parent_orig_id}'. Your TSV is inconsistent."
+                    )
                     break
                 # Collect the PK for children in case we need to use a __DUMMY
                 upper_level_pk = parent_pk
