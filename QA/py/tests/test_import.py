@@ -72,6 +72,8 @@ BREAKING_HIERARCHY_DIR = DATA_DIR / "import_issues" / "breaking_hierarchy"
 EMPTY_TSV_IN_UPD_DIR = DATA_DIR / "import_test_upd_empty"
 AMBIG_DIR = DATA_DIR / "import de categories ambigues"
 VARIOUS_STATES_DIR = DATA_DIR / "import_various_states"
+IMPORT_TOT_VOL = DATA_DIR / "import_test_tot_vol"
+IMPORT_TOT_VOL_UPDATE = DATA_DIR / "import_test_tot_vol_update"
 
 FILE_IMPORT_URL = "/file_import/{project_id}"
 

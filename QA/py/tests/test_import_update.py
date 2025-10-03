@@ -15,6 +15,9 @@ from tests.test_import import (
     import_various,
     import_plain,
     PLAIN_DIR,
+    IMPORT_TOT_VOL,
+    do_import,
+    IMPORT_TOT_VOL_UPDATE,
 )
 
 
@@ -70,6 +73,30 @@ def test_import_update(fastapi, caplog, tstlogs):
     assert upds == []
     with AsciiDumper() as dump_sce:
         dump_sce.run(projid=prj_id, out=tstlogs / "after_upd_3.txt")
+
+
+def test_import_update_sample_meta(fastapi, caplog, tstlogs):
+    """Update TSV has a != free col sample_tot_vol"""
+    caplog.set_level(logging.DEBUG)
+    prj_id = create_project(ADMIN_USER_ID, "Test Import update sample meta")
+
+    # Plain import first
+    do_import(prj_id, IMPORT_TOT_VOL, ADMIN_USER_ID)
+    with AsciiDumper() as dump_sce:
+        dump_sce.run(projid=prj_id, out=tstlogs / "before_upd_tot_vol.txt")
+
+    # Update using initial import data, should do nothing
+    do_import_update(prj_id, caplog, "Yes", str(IMPORT_TOT_VOL))
+    print("Import update 0:" + "\n".join(caplog.messages))
+    upds = [msg for msg in caplog.messages if msg.startswith("Updating")]
+    assert upds == []
+
+    do_import_update(prj_id, caplog, "Yes", str(IMPORT_TOT_VOL_UPDATE))
+    print("Import update 1:" + "\n".join(caplog.messages))
+    upds = [msg for msg in caplog.messages if msg.startswith("Updating")]
+    assert upds == [
+        "Updating samples 'm106_mn01_n1_sml' using [('t05', \"'999999'->'5.75'\")]"
+    ]
 
 
 def test_import_update_various(fastapi, caplog, tstlogs):
