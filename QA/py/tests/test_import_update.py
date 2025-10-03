@@ -110,7 +110,9 @@ def test_import_update_sample_meta(fastapi, caplog, tstlogs):
         "Updating process 'zooprocess_m106_mn01_n1_sml' using [('orig_id', \"'zooprocess_m106_mn01_n1_sml_typo'->'zooprocess_m106_mn01_n1_sml'\")]",
     ]
     errs = [
-        a_msg.getMessage() for a_msg in caplog.records if a_msg.levelno == logging.ERROR
+        a_msg.getMessage()
+        for a_msg in caplog.records
+        if a_msg.levelno == logging.WARNING and a_msg.getMessage().startswith("Invalid")
     ]
     assert errs == [
         "Invalid acq_id value 'generic_m106_mn01_n1_sml_typo'. Your TSV is inconsistent.",
