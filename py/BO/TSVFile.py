@@ -606,7 +606,7 @@ class TSVFile(object):
                     # No parent found for update, thus we cannot locate children, as there
                     # is an implicit relationship just by the fact that the 3 keys are on the same line
                     key_name = TABLE_TO_PREFIX[parent_class.__tablename__] + "_id"
-                    logger.error(
+                    logger.warning(
                         f"Invalid {key_name} value '{parent_orig_id}'. Your TSV is inconsistent."
                     )
                     break
