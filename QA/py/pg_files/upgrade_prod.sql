@@ -2979,6 +2979,15 @@ ALTER TABLE collection_orga_role ALTER COLUMN organization_id SET NOT NULL;
 UPDATE alembic_version SET version_num='9f8174c268da' WHERE alembic_version.version_num = 'e6dda08ff48b';
 
 COMMIT;
+BEGIN;
+
+INFO  [alembic.runtime.migration] Running upgrade 9f8174c268da -> fc9fb059120c, remove_project_description
+-- Running upgrade 9f8174c268da -> fc9fb059120c
+UPDATE projects SET comments = CONCAT(description,' Comments: ',comments);
+
+UPDATE alembic_version SET version_num='fc9fb059120c' WHERE alembic_version.version_num = '9f8174c268da';
+
+COMMIT;
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;
