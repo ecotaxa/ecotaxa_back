@@ -112,7 +112,7 @@ class OrganizationService(Service):
             collection_ids = CollectionBO.projects_managed_by(
                 self.ro_session, current_user
             )
-            qry = qry.join(CollectionUserRole).filter(
+            qry = qry.join(CollectionUserRole.collection).filter(
                 CollectionUserRole.collection_id.in_(collection_ids)
             )
         return qry

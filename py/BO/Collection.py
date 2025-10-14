@@ -402,8 +402,11 @@ class CollectionBO(object):
             )
             .filter(ProjectPrivilege.member == user.id)
             .filter(ProjectPrivilege.privilege == ProjectPrivilegeBO.MANAGE)
+            .group_by(CollectionProject.collection_id)
         )
-        collection_ids = qry.all()
+        collection_ids = []
+        for collection_id in qry:
+            collection_ids.append(collection_id[0])
         return collection_ids
 
     @staticmethod

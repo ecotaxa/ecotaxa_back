@@ -120,7 +120,7 @@ class GuestService(Service):
     def _limit_qry(self, current_user: User, qry):
         if not current_user.is_manager():
             collection_ids = self._projects_managed_by(current_user)
-            qry = qry.join(CollectionUserRole).filter(
+            qry = qry.join(CollectionUserRole.collection).filter(
                 CollectionUserRole.collection_id.in_(collection_ids)
             )
         return qry
