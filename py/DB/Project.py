@@ -64,7 +64,6 @@ class Project(Model):
         VARCHAR
     )  # Fields available on popover of Manual classif screen
     comments = Column(VARCHAR)
-    description = Column(VARCHAR)
     # Note: It's loaded file_s_
     fileloaded = Column(VARCHAR)
     rf_models_used = Column(VARCHAR)
