@@ -12,7 +12,6 @@ down_revision = "e6dda08ff48b"
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 
 def upgrade():
@@ -36,13 +35,11 @@ def upgrade():
     op.execute(
         "UPDATE collection_orga_role SET organization_id=subquery.id FROM(SELECT id,name FROM organizations) AS subquery WHERE subquery.name LIKE collection_orga_role.organisation;"
     )
-    op.execute(
-        "ALTER TABLE collection_orga_role RENAME COLUMN organisation TO organization;"
-    )
+    # op.execute("ALTER TABLE collection_orga_role RENAME COLUMN organisation TO organization;")
     op.execute(
         "UPDATE users SET organization_id=subquery.id FROM(SELECT id,name FROM organizations) AS subquery WHERE subquery.name LIKE users.organisation;"
     )
-    op.execute("ALTER TABLE users RENAME COLUMN organisation TO organization;")
+    # op.execute("ALTER TABLE users RENAME COLUMN organisation TO organization;")
     op.execute(
         "ALTER TABLE collection_orga_role ALTER COLUMN organization_id SET NOT NULL;"
     )
@@ -50,8 +47,8 @@ def upgrade():
     op.create_foreign_key(
         "user_organization_fkey", "users", "organizations", ["organization_id"], ["id"]
     )
-    # op.drop_column("collection_orga_role", "organisation")
-    # op.drop_column("users", "organisation")
+    op.drop_column("collection_orga_role", "organisation")
+    op.drop_column("users", "organisation")
     # ### end Alembic commands ###
 
 
@@ -62,6 +59,9 @@ def downgrade():
         sa.Column(
             "organisation", sa.VARCHAR(length=255), autoincrement=False, nullable=True
         ),
+    )
+    op.execute(
+        "UPDATE users SET organisation=subquery.name FROM(SELECT id,name FROM organizations) AS subquery WHERE subquery.id LIKE users.organization_id;"
     )
     op.drop_constraint("user_organization_fkey", "users", type_="foreignkey")
     op.create_foreign_key(
@@ -75,6 +75,9 @@ def downgrade():
     op.add_column(
         "collection_orga_role",
         sa.Column("organisation", sa.VARCHAR(length=255), nullable=False),
+    )
+    op.execute(
+        "UPDATE collection_orga_role SET organisation=subquery.name FROM(SELECT id,name FROM organizations) AS subquery WHERE subquery.id LIKE collection_orga_role.organization_id;"
     )
     op.drop_constraint(
         "collection_organization_fkey", "collection_orga_role", type_="foreignkey"
