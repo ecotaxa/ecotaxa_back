@@ -9,8 +9,9 @@ from fastapi import HTTPException
 from API_models.crud import GuestModel
 from BO.Rights import RightsBO, NOT_AUTHORIZED, NOT_FOUND
 from BO.User import GuestBO, GuestIDT, GuestIDListT, UserIDT
+from DB import Organization
 from DB.Collection import CollectionUserRole, CollectionProject
-from BO.Collection import CollectionIDListT
+from BO.Collection import CollectionIDListT, CollectionBO
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.User import Person, User, Guest
@@ -119,7 +120,9 @@ class GuestService(Service):
 
     def _limit_qry(self, current_user: User, qry):
         if not current_user.is_manager():
-            collection_ids = self._projects_managed_by(current_user)
+            collection_ids = CollectionBO.projects_managed_by(
+                self.ro_session, current_user
+            )
             qry = qry.join(CollectionUserRole.collection).filter(
                 CollectionUserRole.collection_id.in_(collection_ids)
             )
@@ -129,7 +132,9 @@ class GuestService(Service):
         current_user = RightsBO.get_user_throw(self.ro_session, current_user_id)
         self._is_manager_throw(current_user)
         qry = self.ro_session.query(Guest)
-        qry = self._limit_qry(current_user, qry)
+        qry = self._limit_qry(current_user, qry).filter(
+            Guest.id == CollectionUserRole.user_id
+        )
         if by_name is not None:
             qry = qry.filter(Guest.name.ilike(by_name))
         else:
