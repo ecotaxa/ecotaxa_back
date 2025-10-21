@@ -2339,6 +2339,26 @@ def instrument_query(
 
 # ######################## END OF INSTRUMENT
 
+@app.get(
+    "/processes/search",
+    operation_id="processes_search",
+    tags=["processes"],
+    response_model=List[ProcessModel],
+)
+def processes_search(
+    project_id: int = Query(
+        ..., title="Project id", description="The project id.", example=1
+    ),
+    current_user: Optional[int] = Depends(get_optional_current_user),
+) -> List[ProcessBO]:
+    """
+    Returns the **list of all processes for a given project**.
+    """
+    with ProcessesService() as sce:
+        with RightsThrower():
+            ret = sce.search(current_user, project_id)
+        return ret
+
 
 @app.post(
     "/process_set/update",
