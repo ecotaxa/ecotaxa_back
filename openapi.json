@@ -6292,104 +6292,6 @@
         ]
       }
     },
-    "/my_files/{sub_path}":{
-      "get":{
-        "tags":[
-          "Files"
-        ],
-        "summary":"List User Files",
-        "description":"**List the private files** which are usable for some file-related operations.\nA sub_path starting with \"/\" is considered relative to user folder.\n\n*e.g. import.*",
-        "operationId":"list_user_files",
-        "parameters":[
-          {
-            "required":true,
-            "schema":{
-              "title":"Sub Path",
-              "type":"string"
-            },
-            "name":"sub_path",
-            "in":"path"
-          }
-        ],
-        "responses":{
-          "200":{
-            "description":"Successful Response",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/DirectoryModel"
-                }
-              }
-            }
-          },
-          "422":{
-            "description":"Validation Error",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "deprecated":true,
-        "security":[
-          {
-            "BearerOrCookieAuth":[]
-          }
-        ]
-      }
-    },
-    "/my_files":{
-      "post":{
-        "tags":[
-          "Files"
-        ],
-        "summary":"Put User File",
-        "operationId":"post_user_file",
-        "requestBody":{
-          "content":{
-            "multipart/form-data":{
-              "schema":{
-                "$ref":"#/components/schemas/Body_put_user_file_my_files_post"
-              }
-            }
-          },
-          "required":true
-        },
-        "responses":{
-          "200":{
-            "description":"Successful Response",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "title":"Response Put User File My Files Post",
-                  "type":"string"
-                },
-                "example":"/ftp_plankton/Ecotaxa_Data_to_import/uploadedFile.zip"
-              }
-            }
-          },
-          "422":{
-            "description":"Validation Error",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "deprecated":true,
-        "security":[
-          {
-            "BearerOrCookieAuth":[]
-          }
-        ]
-      }
-    },
     "/common_files/":{
       "get":{
         "tags":[
@@ -6442,11 +6344,11 @@
     "/user_files/{sub_path}":{
       "get":{
         "tags":[
-          "Myfiles"
+          "MyFiles"
         ],
-        "summary":"List My Files",
+        "summary":"List User Files",
         "description":"**List the private files** from user files directory  which are usable for some file-related operations.\nA sub_path starting with \"/\" is considered relative to user folder.\n\n*e.g. import.*",
-        "operationId":"list_my_files",
+        "operationId":"list_user_files",
         "parameters":[
           {
             "required":true,
@@ -6490,16 +6392,16 @@
     "/user_files/":{
       "post":{
         "tags":[
-          "Myfiles"
+          "MyFiles"
         ],
-        "summary":"Put My File",
+        "summary":"Put User File",
         "description":"**Upload a file for the current user files directory.**\n\nThe returned text will contain a server-side path which is usable for some file-related operations.\n\n*e.g. import.*",
-        "operationId":"post_my_file",
+        "operationId":"post_user_file",
         "requestBody":{
           "content":{
             "multipart/form-data":{
               "schema":{
-                "$ref":"#/components/schemas/Body_put_my_file_user_files__post"
+                "$ref":"#/components/schemas/Body_put_user_file_user_files__post"
               }
             }
           },
@@ -6511,7 +6413,7 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "title":"Response Put My File User Files  Post",
+                  "title":"Response Put User File User Files  Post",
                   "type":"string"
                 },
                 "example":"/ftp_plankton/Ecotaxa_Data_to_import/uploadedFile.zip"
@@ -6539,16 +6441,16 @@
     "/user_files/mv/":{
       "post":{
         "tags":[
-          "Myfiles"
+          "MyFiles"
         ],
-        "summary":"Move File",
+        "summary":"Move User File",
         "description":"**Move (or rename depending on source and dest path) a file or directory in the current user files directory.**\nThe returned text will contain a server-side path which is usable for some file-related operations.",
-        "operationId":"move_my_file",
+        "operationId":"move_user_file",
         "requestBody":{
           "content":{
             "application/x-www-form-urlencoded":{
               "schema":{
-                "$ref":"#/components/schemas/Body_move_file_user_files_mv__post"
+                "$ref":"#/components/schemas/Body_move_user_file_user_files_mv__post"
               }
             }
           }
@@ -6559,7 +6461,7 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "title":"Response Move File User Files Mv  Post",
+                  "title":"Response Move User File User Files Mv  Post",
                   "type":"string"
                 },
                 "example":"/ftp_plankton/Ecotaxa_Data_to_import/uploadedFile.zip"
@@ -6587,16 +6489,16 @@
     "/user_files/rm/":{
       "post":{
         "tags":[
-          "Myfiles"
+          "MyFiles"
         ],
-        "summary":"Remove File",
+        "summary":"Remove User File",
         "description":"**Remove a file, or directory in the current user files directory.**",
-        "operationId":"remove_my_file",
+        "operationId":"remove_user_file",
         "requestBody":{
           "content":{
             "application/x-www-form-urlencoded":{
               "schema":{
-                "$ref":"#/components/schemas/Body_remove_file_user_files_rm__post"
+                "$ref":"#/components/schemas/Body_remove_user_file_user_files_rm__post"
               }
             }
           }
@@ -6607,7 +6509,7 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "title":"Response Remove File User Files Rm  Post",
+                  "title":"Response Remove User File User Files Rm  Post",
                   "type":"integer"
                 },
                 "example":0
@@ -6635,16 +6537,16 @@
     "/user_files/create/":{
       "post":{
         "tags":[
-          "Myfiles"
+          "MyFiles"
         ],
-        "summary":"Create File",
+        "summary":"Create User File",
         "description":"**Create a new file or directory in the current user files directory.**\nThe returned text will contain a server-side path which is usable for some file-related operations.",
-        "operationId":"create_my_file",
+        "operationId":"create_user_file",
         "requestBody":{
           "content":{
             "application/x-www-form-urlencoded":{
               "schema":{
-                "$ref":"#/components/schemas/Body_create_file_user_files_create__post"
+                "$ref":"#/components/schemas/Body_create_user_file_user_files_create__post"
               }
             }
           }
@@ -6655,7 +6557,7 @@
             "content":{
               "application/json":{
                 "schema":{
-                  "title":"Response Create File User Files Create  Post",
+                  "title":"Response Create User File User Files Create  Post",
                   "type":"string"
                 },
                 "example":"/ftp_plankton/Ecotaxa_Data_to_import/uploadedFile.zip"
@@ -6908,14 +6810,14 @@
         },
         "description":"Backup export request."
       },
-      "Body_create_file_user_files_create__post":{
-        "title":"Body_create_file_user_files_create__post",
+      "Body_create_user_file_user_files_create__post":{
+        "title":"Body_create_user_file_user_files_create__post",
         "type":"object",
         "properties":{
           "source_path":{
             "title":"Source Path",
             "type":"string",
-            "description":"The path of the file or directory to be moved."
+            "description":"The path of the file or directory to be created."
           }
         }
       },
@@ -6989,8 +6891,8 @@
           }
         }
       },
-      "Body_move_file_user_files_mv__post":{
-        "title":"Body_move_file_user_files_mv__post",
+      "Body_move_user_file_user_files_mv__post":{
+        "title":"Body_move_user_file_user_files_mv__post",
         "type":"object",
         "properties":{
           "source_path":{
@@ -7021,8 +6923,8 @@
           }
         }
       },
-      "Body_put_my_file_user_files__post":{
-        "title":"Body_put_my_file_user_files__post",
+      "Body_put_user_file_user_files__post":{
+        "title":"Body_put_user_file_user_files__post",
         "required":[
           "file"
         ],
@@ -7040,32 +6942,8 @@
           }
         }
       },
-      "Body_put_user_file_my_files_post":{
-        "title":"Body_put_user_file_my_files_post",
-        "required":[
-          "file"
-        ],
-        "type":"object",
-        "properties":{
-          "file":{
-            "title":"File",
-            "type":"string",
-            "format":"binary"
-          },
-          "path":{
-            "title":"Path",
-            "type":"string",
-            "description":"The client-side full path of the file."
-          },
-          "tag":{
-            "title":"Tag",
-            "type":"string",
-            "description":"If a tag is provided, then all files with the same tag are grouped (in a sub-directory). Otherwise, a temp directory with only this file will be created."
-          }
-        }
-      },
-      "Body_remove_file_user_files_rm__post":{
-        "title":"Body_remove_file_user_files_rm__post",
+      "Body_remove_user_file_user_files_rm__post":{
+        "title":"Body_remove_user_file_user_files_rm__post",
         "type":"object",
         "properties":{
           "source_path":{

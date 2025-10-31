@@ -3853,60 +3853,6 @@ def erase_job(
 
 
 # ######################## END OF JOBS
-# TODO JCE - description example
-@app.get(
-    "/my_files/{sub_path:path}",
-    operation_id="list_user_files",
-    tags=["Files"],
-    response_model=DirectoryModel,
-    deprecated=True,
-)
-def list_user_files(
-    sub_path: str,  # = Query(..., title="Sub path", description="", example=""),
-    current_user: int = Depends(get_current_user),
-) -> DirectoryModel:
-    """
-    **List the private files** which are usable for some file-related operations.
-    A sub_path starting with "/" is considered relative to user folder.
-
-    *e.g. import.*
-    """
-    raise HTTPException(
-        status_code=status.HTTP_410_GONE, detail=["Use user_files instead"]
-    )
-
-
-@app.post(
-    "/my_files",
-    operation_id="post_user_file",
-    tags=["Files"],
-    responses={
-        200: {
-            "content": {
-                "application/json": {
-                    "example": "/ftp_plankton/Ecotaxa_Data_to_import/uploadedFile.zip"
-                }
-            }
-        }
-    },
-    response_model=str,
-    deprecated=True,
-)
-async def put_user_file(  # async due to await file store
-    file: UploadFile = File(..., title="File", description=""),
-    path: Optional[str] = Form(
-        title="Path", description="The client-side full path of the file.", default=None
-    ),
-    tag: Optional[str] = Form(
-        title="Tag",
-        description="If a tag is provided, then all files with the same tag are grouped (in a sub-directory). Otherwise, a temp directory with only this file will be created.",
-        default=None,
-    ),
-    current_user: int = Depends(get_current_user),
-) -> str:
-    raise HTTPException(
-        status_code=status.HTTP_410_GONE, detail=["Use user_files instead"]
-    )
 
 
 # ####################### START OF COMMON FILES
@@ -3937,11 +3883,11 @@ def list_common_files(
 # ######################## START OF USERS FILES
 @app.get(
     "/user_files/{sub_path:path}",
-    operation_id="list_my_files",
-    tags=["Myfiles"],
+    operation_id="list_user_files",
+    tags=["MyFiles"],
     response_model=DirectoryModel,
 )
-def list_my_files(
+def list_user_files(
     sub_path: str,  # = Query(..., title="Sub path", description="", example=""),
     current_user: int = Depends(get_current_user),
 ) -> DirectoryModel:
@@ -3959,8 +3905,8 @@ def list_my_files(
 
 @app.post(
     "/user_files/",
-    operation_id="post_my_file",
-    tags=["Myfiles"],
+    operation_id="post_user_file",
+    tags=["MyFiles"],
     responses={
         200: {
             "content": {
@@ -3972,7 +3918,7 @@ def list_my_files(
     },
     response_model=str,
 )
-async def put_my_file(  # async due to await file store
+async def put_user_file(  # async due to await file store
     file: UploadFile = File(..., title="File", description=""),
     path: Optional[str] = Form(
         title="Path",
@@ -3997,8 +3943,8 @@ async def put_my_file(  # async due to await file store
 
 @app.post(
     "/user_files/mv/",
-    operation_id="move_my_file",
-    tags=["Myfiles"],
+    operation_id="move_user_file",
+    tags=["MyFiles"],
     responses={
         200: {
             "content": {
@@ -4010,7 +3956,7 @@ async def put_my_file(  # async due to await file store
     },
     response_model=str,
 )
-def move_file(  # async due to await file move
+def move_user_file(  # async due to await file move
     source_path: str = Form(
         title="Source Path",
         description="The  path of the file or directory to be moved.",
@@ -4037,12 +3983,12 @@ def move_file(  # async due to await file move
 
 @app.post(
     "/user_files/rm/",
-    operation_id="remove_my_file",
-    tags=["Myfiles"],
+    operation_id="remove_user_file",
+    tags=["MyFiles"],
     responses={200: {"content": {"application/json": {"example": 0}}}},
     response_model=int,
 )
-def remove_file(
+def remove_user_file(
     source_path: str = Form(
         title="Source Path",
         description="The path of the file  or directory to be removed. * for all files and directories",
@@ -4062,8 +4008,8 @@ def remove_file(
 
 @app.post(
     "/user_files/create/",
-    operation_id="create_my_file",
-    tags=["Myfiles"],
+    operation_id="create_user_file",
+    tags=["MyFiles"],
     responses={
         200: {
             "content": {
@@ -4075,10 +4021,10 @@ def remove_file(
     },
     response_model=str,
 )
-async def create_file(  # async due to await file store
+async def create_user_file(  # async due to await file store
     source_path: str = Form(
         title="Source Path",
-        description="The path of the file or directory to be moved.",
+        description="The path of the file or directory to be created.",
         default=None,
     ),
     current_user: int = Depends(get_current_user),
