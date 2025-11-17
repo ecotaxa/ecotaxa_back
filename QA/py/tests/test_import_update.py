@@ -45,7 +45,7 @@ def test_import_update(fastapi, caplog, tstlogs):
     # 9 fields + 7 derived sun positions
     assert nb_upds == 16
     saves = [msg for msg in caplog.messages if "Batch save objects" in msg]
-    assert saves == ["Batch save objects of 0/0/0/0/0/0"] * 3
+    assert saves == ["Batch save objects of 0/0/0/0/0/0"] * 4
 
     # Update classif, 2 cells, one classif ID and one classif quality
     do_import_update(prj_id, caplog, "Cla", str(UPDATE_DIR))
@@ -56,7 +56,7 @@ def test_import_update(fastapi, caplog, tstlogs):
     nb_notfound = len(
         [msg for msg in caplog.messages if "not found while updating" in msg]
     )
-    assert nb_notfound == 2
+    assert nb_notfound == 3
     with AsciiDumper() as dump_sce:
         dump_sce.run(projid=prj_id, out=tstlogs / "after_upd.txt")
     # Check that all went fine
@@ -64,7 +64,7 @@ def test_import_update(fastapi, caplog, tstlogs):
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
     # ecotaxa/ecotaxa_dev#583: Check that no image was added during the update
     saves = [msg for msg in caplog.messages if "Batch save objects" in msg]
-    assert saves == ["Batch save objects of 0/0/0/0/0/0"] * 3
+    assert saves == ["Batch save objects of 0/0/0/0/0/0"] * 4
 
     # Update classif, no change -> No log line
     do_import_update(prj_id, caplog, "Yes", str(UPDATE_DIR))
@@ -141,15 +141,15 @@ def test_import_update_various(fastapi, caplog, tstlogs):
     print("Import update various 1:" + "\n".join(caplog.messages))
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
     # 9 fields + 7 derived sun positions - 3 different objects
-    assert nb_upds == 13
+    assert nb_upds == 14
     saves = [msg for msg in caplog.messages if "Batch save objects" in msg]
-    assert saves == ["Batch save objects of 0/0/0/0/0/0"] * 3
+    assert saves == ["Batch save objects of 0/0/0/0/0/0"] * 4
 
-    # Update classif, 2 cells, one classif ID and one classif quality
+    # Update classif, 2 cells, one classif ID and one classif quality + one fresh object to predicted
     do_import_update(prj_id, caplog, "Cla", str(UPDATE_DIR))
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
     print("Import update various 2:" + "\n".join(caplog.messages))
-    assert nb_upds == 4
+    assert nb_upds == 5
     nb_notfound = len(
         [msg for msg in caplog.messages if "not found while updating" in msg]
     )
@@ -161,7 +161,7 @@ def test_import_update_various(fastapi, caplog, tstlogs):
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
     # ecotaxa/ecotaxa_dev#583: Check that no image was added during the update
     saves = [msg for msg in caplog.messages if "Batch save objects" in msg]
-    assert saves == ["Batch save objects of 0/0/0/0/0/0"] * 3
+    assert saves == ["Batch save objects of 0/0/0/0/0/0"] * 4
 
     # Update classif, no change -> No log line
     do_import_update(prj_id, caplog, "Yes", str(UPDATE_DIR))
@@ -173,11 +173,8 @@ def test_import_update_various(fastapi, caplog, tstlogs):
         dump_sce.run(projid=prj_id, out=tstlogs / "after_upd_3.txt")
 
 
-# Ensure that re-updating updates nothing. This is tricky due to floats storage on DB.
-def do_import_update(prj_id, caplog, classif, source, expected_errors=False):
-    params = ImportReq(
-        skip_existing_objects=True, update_mode=classif, source_path=source
-    )
+def do_import_update(prj_id, caplog, mode, source, expected_errors=False):
+    params = ImportReq(skip_existing_objects=True, update_mode=mode, source_path=source)
     caplog.clear()
     with FileImport(prj_id, params) as sce:
         rsp: ImportRsp = sce.run(ADMIN_USER_ID)
