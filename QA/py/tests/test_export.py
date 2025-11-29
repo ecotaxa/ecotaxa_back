@@ -33,7 +33,13 @@ from tests.test_classification import (
     get_classif_history,
 )
 from tests.test_fastapi import PROJECT_QUERY_URL
-from tests.test_import import create_project, do_import, DATA_DIR, dump_project
+from tests.test_import import (
+    create_project,
+    do_import,
+    DATA_DIR,
+    dump_project,
+    PLUS_MORE_DIR,
+)
 from tests.test_import_update import do_import_update
 from tests.test_subentities import current_object
 from tests.test_update_prj import PROJECT_UPDATE_URL
@@ -80,6 +86,26 @@ def test_export_tsv(database, fastapi, caplog):
     # Add a sample spanning 2 days
     test_import_a_bit_more_skipping(database, caplog, "TSV export project")
 
+    # Backup export, the output is reused in another test
+    req_and_filters = {
+        "filters": {},
+        "request": {
+            "project_id": prj_id,
+        },
+    }
+    rsp = fastapi.post(
+        OBJECT_SET_BACKUP_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    download_and_unzip_and_check(fastapi, job_id, "bak_all_images")
+
+    # Add a complement of the new sample, for _several_ objects with composed taxon names
+    test_import_a_bit_more_skipping(
+        database, caplog, "TSV export project", str(PLUS_MORE_DIR)
+    )
+
     # Get the project for update
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
@@ -99,21 +125,6 @@ def test_export_tsv(database, fastapi, caplog):
 
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
     download_and_unzip_and_check(fastapi, job_id, "tsv_all_entities_no_img_no_ids")
-
-    # Backup export
-    req_and_filters = {
-        "filters": {},
-        "request": {
-            "project_id": prj_id,
-        },
-    }
-    rsp = fastapi.post(
-        OBJECT_SET_BACKUP_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
-    )
-    assert rsp.status_code == status.HTTP_200_OK
-
-    job_id = get_job_and_wait_until_ok(fastapi, rsp)
-    download_and_unzip_and_check(fastapi, job_id, "bak_all_images")
 
     # TSV export with IDs
     req_and_filters = {
