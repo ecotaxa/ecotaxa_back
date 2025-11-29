@@ -149,7 +149,7 @@ def test_export_conc_biovol(database, fastapi, caplog):
     assert len(obj_ids) == 15
     url = OBJECT_SET_CLASSIFY_URL
     obj_ids.sort()
-    just_some_objs = obj_ids[::2]
+    just_some_objs = obj_ids[::2]  # 1,3,5,...19
     classifications = [-1 for _obj in just_some_objs]  # Keep current
     rsp = fastapi.post(
         url,

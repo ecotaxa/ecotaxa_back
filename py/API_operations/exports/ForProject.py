@@ -11,6 +11,7 @@ import re
 import zipfile
 from pathlib import Path
 from typing import Optional, Tuple, TextIO, Dict, List, Set, Any, Union
+from zipfile import ZipFile
 
 from API_models.exports import (
     ExportRsp,
@@ -48,7 +49,6 @@ from helpers import (
     DateTime,
 )  # Need to keep the whole module imported, as the function is mocked
 from helpers.DynamicLogs import get_logger, LogsSwitcher
-
 from ..helpers.JobService import JobServiceBase, ArgsDict  # fmt:skip
 
 logger = get_logger(__name__)
@@ -336,7 +336,7 @@ class ProjectExport(JobServiceBase):
                          usr.name AS object_annotation_person_name, usr.email AS object_annotation_person_email,
                          """
             """
-                    CASE WHEN obh.classif_qual IN ('"""
+                            CASE WHEN obh.classif_qual IN ('"""
             + VALIDATED_CLASSIF_QUAL
             + """','"""
             + DUBIOUS_CLASSIF_QUAL
@@ -461,8 +461,14 @@ class ProjectExport(JobServiceBase):
             # Produce into the same temp file all the time, at zipping time the name in archive will vary
             prev_value = "NotAssigned"  # To trigger a sequence change immediately
         else:
-            # The zip will contain a single TSV with same base name as the zip
+            # The zip will contain a single TSV with the same base name as the zip
             prev_value = self.out_file_name.replace(".zip", "")
+
+        file_from_name = (
+            (lambda value: self.normalize_for_filename(str(value)))
+            if req.split_by == "taxon"
+            else lambda value: str(value)
+        )
 
         csv_path: Path = (
             self.out_path / csv_filename
@@ -523,11 +529,9 @@ class ProjectExport(JobServiceBase):
                 # Start of sequence, eventually end of previous sequence
                 if csv_fd:
                     csv_fd.close()  # Close previous file
-                    self.store_tsv_into_zip(zfile, prev_value, csv_path)
+                    self.store_tsv_into_zip(zfile, file_from_name(prev_value), csv_path)
                 if splitcsv:
                     prev_value = a_row[split_field]
-                    if req.split_by == "taxon":
-                        prev_value = self.normalize_for_filename(prev_value)
                 logger.info("Writing into temptask file %s", csv_filename)
                 if req.use_latin1:
                     csv_fd = open(csv_path, "w", encoding="latin_1")
@@ -570,7 +574,9 @@ class ProjectExport(JobServiceBase):
                     # - At the same place as their referring TSV for backups
                     # - In a subdirectory for general TSV
                     img_file_name = a_row["img_file_name"]
-                    dst_path = "{0}/{1}".format(prev_value, img_file_name)
+                    dst_path = "{0}/{1}".format(
+                        file_from_name(prev_value), img_file_name
+                    )
                     if dst_path in used_dst_pathes:
                         # Avoid duplicates in zip as only the last entry will be present during unzip
                         # root cause: for UVP6 bundles, the vignette and original image are both stored
@@ -607,19 +613,19 @@ class ProjectExport(JobServiceBase):
                 self.update_progress(int(1 + progress_range / obj_count * nb_rows), msg)
         if csv_fd:
             csv_fd.close()  # Close last file
-            self.store_tsv_into_zip(zfile, prev_value, csv_path)
+            self.store_tsv_into_zip(zfile, file_from_name(prev_value), csv_path)
         logger.info("Extracted %d rows", nb_rows)
         img_file_fd.close()
         if zfile:
             zfile.close()
         return nb_rows, nb_images
 
-    def store_tsv_into_zip(self, zfile, prev_value, in_file: Path) -> None:
+    def store_tsv_into_zip(self, zfile: ZipFile, file_part: str, in_file: Path) -> None:
         # Add a new file into the zip
-        name_in_zip = "ecotaxa_" + str(prev_value) + ".tsv"
+        name_in_zip = "ecotaxa_" + file_part + ".tsv"
         if self.req.exp_type == ExportTypeEnum.backup:
             # In a subdirectory for backup type
-            name_in_zip = str(prev_value) + os.sep + name_in_zip
+            name_in_zip = file_part + os.sep + name_in_zip
         logger.info("Storing into zip as %s", name_in_zip)
         zfile.write(in_file, arcname=name_in_zip)
 
