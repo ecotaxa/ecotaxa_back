@@ -40,7 +40,7 @@ from DB.Collection import Collection
 from DB.Project import ProjectTaxoStat, Project
 from DB.Sample import Sample
 from DB.Taxonomy import Taxonomy
-from DB.User import User, Organization, PeopleOrganizationDirectory
+from DB.User import User, Organization
 from DB.WoRMs import WoRMS
 from DB.helpers import Session
 from DB.helpers.Direct import text
@@ -381,7 +381,6 @@ class DarwinCoreExport(JobServiceBase):
         Various queries/copies on/from the projects for getting metadata.
         Also extract the institutionCode from the collection.
         """
-        ret = None
         the_collection: CollectionBO = CollectionBO(self.collection).enrich()
 
         identifier = EMLIdentifier(

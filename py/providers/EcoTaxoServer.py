@@ -29,7 +29,7 @@ class EcoTaxoServerClient(object):
         Issue a REST query on EcoTaxoServer
         """
         params = {
-            "id_instance": self.instance_id,
+            "id_instance": int(self.instance_id),
             "sharedsecret": self.secret_key,
             "ecotaxa_version": "2.5.11",  # TODO: Wondering why this param
         }
@@ -37,4 +37,4 @@ class EcoTaxoServerClient(object):
         r = requests.post(
             self.url + endpoint, params
         )  # TODO: Use some async lib instead of requests
-        return r.json()
+        return r

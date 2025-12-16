@@ -4073,12 +4073,12 @@
             "in":"path"
           },
           {
-            "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
+            "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance,aphia_id, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
             "required":false,
             "schema":{
               "title":"Fields",
               "type":"string",
-              "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
+              "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance,aphia_id, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
             },
             "example":"obj.longitude,fre.feret",
             "name":"fields",
@@ -5730,6 +5730,30 @@
             "in":"query"
           },
           {
+            "description":"Worms Aphia Id",
+            "required":true,
+            "schema":{
+              "title":"Aphia Id",
+              "type":"integer",
+              "description":"Worms Aphia Id"
+            },
+            "example":2367,
+            "name":"aphia_id",
+            "in":"query"
+          },
+          {
+            "description":"The Worms rank",
+            "required":true,
+            "schema":{
+              "title":"rank",
+              "type":"string",
+              "description":"The Worms rank"
+            },
+            "example":"Class",
+            "name":"rank",
+            "in":"query"
+          },
+          {
             "description":"It's not possible to create a root taxon.",
             "required":true,
             "schema":{
@@ -5856,6 +5880,98 @@
             "content":{
               "application/json":{
                 "schema":{}
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/searchworms/{name}":{
+      "get":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Search Worms Name",
+        "description":"Information about a single taxon in WoRMS reference, including its lineage.",
+        "operationId":"search_worms_name",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Name",
+              "type":"string"
+            },
+            "name":"name",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Search Worms Name Searchworms  Name  Get",
+                  "type":"array",
+                  "items":{
+                    "type":"object"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/addworms/":{
+      "post":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Add Worms Taxon",
+        "description":"add worms taxon with or without lineage information",
+        "operationId":"add_worms_taxon",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/TaxoWormsModel"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response"
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -7765,6 +7881,11 @@
             "type":"boolean",
             "description":"local install - run without network access",
             "default":false
+          },
+          "taxoserver_url":{
+            "title":"EcoTaxoServer URL",
+            "type":"string",
+            "description":"url of taxonomy server ecotaxoserver"
           }
         },
         "description":"Values which can be considered identical over the lifetime of the back-end."
@@ -10800,6 +10921,12 @@
             "description":"The taxon/category IDs.",
             "example":14334
           },
+          "aphia_id":{
+            "title":"Aphia Id",
+            "type":"integer",
+            "description":"The Worms aphia_id of the taxon.",
+            "example":"null"
+          },
           "renm_id":{
             "title":"Renm_id",
             "type":"integer",
@@ -10817,6 +10944,58 @@
             "type":"integer",
             "description":"1 if the taxon is in project list, 0 otherwise.",
             "example":0
+          }
+        }
+      },
+      "TaxoWormsModel":{
+        "title":"TaxoWormsModel",
+        "required":[
+          "name",
+          "lineage",
+          "status"
+        ],
+        "type":"object",
+        "properties":{
+          "aphia_id":{
+            "title":"AphiaId",
+            "type":"integer",
+            "description":"The unique numeric aphia_id of the taxon if in Worms.",
+            "example":12876
+          },
+          "rank":{
+            "title":"Rank",
+            "type":"string",
+            "description":"The rank in Worms of the taxon.",
+            "example":"Echinodermata X"
+          },
+          "name":{
+            "title":"Name",
+            "type":"string",
+            "description":"The name of the taxon.",
+            "example":"Echinodermata X"
+          },
+          "lineage":{
+            "title":"Taxon Worms lineage",
+            "type":"object",
+            "description":"The lineage of the taxon in Worms.",
+            "example":{
+              "2":{
+                "AphiaID":1,
+                "rank":"Superdomain",
+                "scientificname":"Biota"
+              }
+            }
+          },
+          "status":{
+            "title":"Worms taxon status",
+            "type":"string",
+            "description":"The taxon status in worms 'accepted' .",
+            "example":"accepted"
+          },
+          "creator_email":{
+            "title":"Creator email",
+            "description":"Email of the creator of the taxon.",
+            "example":"creator.user@emaim.com"
           }
         }
       },
@@ -10842,17 +11021,23 @@
             "description":"The unique numeric id of the taxon parent.",
             "example":11509
           },
+          "aphia_id":{
+            "title":"AphiaId",
+            "type":"integer",
+            "description":"The unique numeric aphia_id of the taxon if in Worms.",
+            "example":12876
+          },
+          "rank":{
+            "title":"Rank",
+            "type":"string",
+            "description":"The rank in Worms of the taxon.",
+            "example":"Echinodermata X"
+          },
           "name":{
             "title":"Name",
             "type":"string",
             "description":"The name of the taxon.",
             "example":"Echinodermata X"
-          },
-          "id_source":{
-            "title":"Id source",
-            "type":"string",
-            "description":"The source ID.",
-            "example":"70372"
           },
           "taxotype":{
             "title":"Taxo type",
@@ -10950,6 +11135,12 @@
             "type":"integer",
             "description":"The taxon/category IDs.",
             "example":1
+          },
+          "aphia_id":{
+            "title":"Aphia Id",
+            "type":"integer",
+            "description":"The Worms aphia_id of the taxon.",
+            "example":"null"
           },
           "renm_id":{
             "title":"Renm id",

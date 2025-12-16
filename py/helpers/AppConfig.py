@@ -122,3 +122,7 @@ class Config(object):
 
     def get_max_upload_size(self) -> int:
         return int(self.parser.get("MAX_UPLOAD_SIZE", "665600"))
+
+    def get_taxoserver_url(self) -> Optional[str]:
+        url = self.parser.get("TAXOSERVER_URL", "").strip()
+        return url + ("/" if url[-1] != "/" else "")

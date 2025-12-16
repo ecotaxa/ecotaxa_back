@@ -30,4 +30,5 @@ class ConstantsService(Service):
         ret.max_upload_size = self.config.get_max_upload_size()
         ret.time_to_live = self.config.get_time_to_live()
         ret.all_in_one = self.config.get_all_in_one() == "on"
+        ret.taxoserver_url = self.config.get_taxoserver_url()
         return ret

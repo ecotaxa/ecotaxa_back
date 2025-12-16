@@ -19,7 +19,7 @@ from BO.Taxonomy import TaxonomyBO
 from BO.User import UserIDT
 from DB.Project import ProjectTaxoStat
 from DB.Taxonomy import Taxonomy
-from DB.User import Role
+from DB.User import Role, User
 from DB.WoRMs import WoRMS
 from DB.helpers.Charset import to_latin1_compat
 from DB.helpers.ORM import any_, Session, Alias
@@ -29,6 +29,7 @@ from helpers.DynamicLogs import get_logger
 from providers.EcoTaxoServer import EcoTaxoServerClient
 from providers.WoRMS import WoRMSFinder
 from .helpers.Service import Service
+from API_models.taxonomy import TaxoWormsModel
 
 logger = get_logger(__name__)
 
@@ -498,7 +499,7 @@ class CentralTaxonomyService(Service):
     def get_taxon_by_id(self, taxon_id: int) -> str:
         """Read all taxon data from EcoTaxoServer"""
         ret = self.client.call("/gettaxon/", {"filtertype": "id", "id": taxon_id})
-        return ret
+        return ret.json()
 
     def add_taxon(self, current_user_id: UserIDT, taxon_params: Dict) -> str:
         # Security barrier, user must be admin or manager in any project
@@ -510,6 +511,23 @@ class CentralTaxonomyService(Service):
         )
         taxon_params["taxostatus"] = "N"
         ret = self.client.call("/settaxon/", taxon_params)
+        return ret.json()
+
+    def search_worms_name(self, name: str) -> List[Dict]:
+        ret = self.client.call("/wormstaxon/%s" % name, {})
+        ret = ret.json()
+        return ret
+
+    def add_worms_taxon(
+        self,
+        taxon: TaxoWormsModel,
+        current_user_id: UserIDT,
+    ) -> Dict:
+        _user = RightsBO.user_can_add_taxonomy(self.ro_session, current_user_id)
+        current_user: User = self.session.query(User).get(current_user_id)
+        taxon.creator_email = current_user.email
+        endpointparam: Dict[str, str] = {"taxon": json.dumps(taxon.dict())}
+        ret = self.client.call("/addwormstaxon/", endpointparam)
         return ret
 
     def push_stats(self) -> Any:
@@ -521,9 +539,10 @@ class CentralTaxonomyService(Service):
         # Push to central
         params = {"data": json.dumps(stats)}
         ret = self.client.call("/setstat/", params)
-        if "msg" in ret:
+        retstat = ret.json()
+        if "msg" in retstat:
             TaxonomyBO.update_tree_status(self.session)
-        return ret
+        return retstat
 
     # The columns received from EcoTaxoServer which can update the local tree
     UpdatableCols: Final = [
@@ -531,7 +550,8 @@ class CentralTaxonomyService(Service):
         "name",
         "taxotype",
         "taxostatus",
-        "id_source",
+        "aphia_id",
+        "rank",
         "id_instance",
         "rename_to",
         "display_name",
@@ -551,9 +571,10 @@ class CentralTaxonomyService(Service):
             max_updated = datetime.datetime(2000, 1, 1)
         # Ask central what changed since
         max_updated_str = max_updated.strftime("%Y-%m-%d %H:%M:%S")
-        updates = self.client.call(
+        ret = self.client.call(
             "/gettaxon/", {"filtertype": "since", "startdate": max_updated_str}
         )
+        updates = ret.json()
         # Note: The query on EcoTaxoServer uses >=, so the last updated taxon is always returned.
         if "msg" in updates:
             return {"error": updates["msg"]}

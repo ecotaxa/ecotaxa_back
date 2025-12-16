@@ -30,6 +30,7 @@ class TaxonBO(object):
     __slots__ = [
         "type",
         "id",
+        "aphia_id",
         "renm_id",
         "name",
         "nb_objects",
@@ -50,6 +51,7 @@ class TaxonBO(object):
         id_lineage: List[ClassifIDT],
         children: Optional[List[ClassifIDT]] = None,
         rename_id: Optional[int] = None,
+        aphia_id: Optional[int] = None,
     ):
         assert cat_type in ("P", "M")
         self.type = cat_type
@@ -59,6 +61,7 @@ class TaxonBO(object):
             assert isinstance(children, list), "Not a list: %s" % children
         self.id: int = id_lineage[0]
         self.renm_id = rename_id
+        self.aphia_id = aphia_id
         self.name = lineage[0]
         self.nb_objects: int = nb_objects if nb_objects is not None else 0
         self.nb_children_objects = (
@@ -83,7 +86,7 @@ class TaxonomyBO(object):
         """
         Return input IDs for the existing ones.
         """
-        sql = text("SELECT id " "  FROM taxonomy " " WHERE id = ANY (:een)")
+        sql = text("SELECT id " "  FROM taxonomy_worms " " WHERE id = ANY (:een)")
         res: Result = session.execute(sql, {"een": list(classif_id_seen)})
         return {an_id for an_id, in res}
 
@@ -93,7 +96,9 @@ class TaxonomyBO(object):
         Return input IDs, for the existing ones with 'P' type.
         """
         sql = text(
-            "SELECT id " "  FROM taxonomy " " WHERE id = ANY (:een) AND taxotype = 'P'"
+            "SELECT id "
+            "  FROM taxonomy_worms "
+            " WHERE id = ANY (:een) AND taxotype = 'P'"
         )
         res: Result = session.execute(sql, {"een": list(classif_id_seen)})
         return {an_id for an_id, in res}
@@ -108,8 +113,8 @@ class TaxonomyBO(object):
         sql = text(
             """SELECT t.id, lower(t.name) AS name, lower(t.display_name) AS display_name, 
                       lower(t.name)||'<'||lower(p.name) AS computedchevronname 
-                 FROM taxonomy t
-                LEFT JOIN taxonomy p on t.parent_id = p.id
+                 FROM taxonomy_worms t
+                LEFT JOIN taxonomy_worms p on t.parent_id = p.id
                 WHERE lower(t.name) = ANY(:nms) OR lower(t.display_name) = ANY(:dms) 
                     OR lower(t.name)||'<'||lower(p.name) = ANY(:chv) """
         )
@@ -141,8 +146,8 @@ class TaxonomyBO(object):
         ret = {}
         sql = text(
             """SELECT t.id, t.name, p.name AS parent_name
-                 FROM taxonomy t
-                LEFT JOIN taxonomy p ON t.parent_id = p.id
+                 FROM taxonomy_worms t
+                LEFT JOIN taxonomy_worms p ON t.parent_id = p.id
                 WHERE t.id = ANY(:ids) """
         )
         res: Result = session.execute(sql, {"ids": list(id_coll)})
@@ -152,12 +157,12 @@ class TaxonomyBO(object):
 
     RQ_CHILDREN: Final = """WITH RECURSIVE rq(id) 
                     AS (SELECT id 
-                          FROM taxonomy 
+                          FROM taxonomy_worms 
                          WHERE id = ANY(:ids)
                          UNION
                         SELECT t.id 
                           FROM rq 
-                          JOIN taxonomy t ON rq.id = t.parent_id )
+                          JOIN taxonomy_worms t ON rq.id = t.parent_id )
                    SELECT id FROM rq """
 
     @staticmethod
@@ -176,12 +181,12 @@ class TaxonomyBO(object):
         """
         sql = """(WITH RECURSIVE rq(id, name, parent_id) 
                    AS (SELECT id, name, parent_id, 1 AS rank 
-                         FROM taxonomy 
+                         FROM taxonomy_worms 
                         WHERE id = {0}
                        UNION
                        SELECT txpr.id, txpr.name, txpr.parent_id, rank+1 AS rank 
                          FROM rq 
-                         JOIN taxonomy txpr ON txpr.id = rq.parent_id)
+                         JOIN taxonomy_worms txpr ON txpr.id = rq.parent_id)
                     SELECT string_agg(name,'>') 
                       FROM (SELECT name 
                               FROM rq 
@@ -199,11 +204,11 @@ class TaxonomyBO(object):
         """
         sql = """(WITH RECURSIVE rq(leaf_id, lineage, root_id, parent_id) 
                  AS (SELECT id, name||'', id, parent_id
-                      FROM taxonomy
+                      FROM taxonomy_worms
                      UNION
                     SELECT rq.leaf_id , txpr.name||'>'||rq.lineage, txpr.id, txpr.parent_id
                       FROM rq 
-                      JOIN taxonomy txpr ON txpr.id = rq.parent_id)
+                      JOIN taxonomy_worms txpr ON txpr.id = rq.parent_id)
                 SELECT * FROM rq WHERE parent_id IS NULL)"""
         return sql
 
@@ -306,7 +311,7 @@ class TaxonomyBO(object):
         sql = text(
             """
         -- Reset all
-        UPDATE taxonomy 
+        UPDATE taxonomy_worms 
            SET nbrobj=0, nbrobjcum=NULL 
          WHERE nbrobj IS NULL or nbrobj != 0 or nbrobjcum IS NOT NULL;
         -- Set per-category number
@@ -314,25 +319,25 @@ class TaxonomyBO(object):
                        FROM projects_taxo_stat pts
                      -- historical: JOIN projects prj ON pts.projid=prj.projid AND prj.visible=true
                       WHERE nbr_v>0 GROUP BY id)
-        UPDATE taxonomy
+        UPDATE taxonomy_worms
            SET nbrobj=tsp.nbr
           FROM tsp
-         WHERE taxonomy.id = tsp.classif_id;
+         WHERE taxonomy_worms.id = tsp.classif_id;
         -- Set cumulated number, i.e. sum of numbers under a given node
         WITH cml AS (WITH RECURSIVE rq(id, nbrobj, parent_id) 
                      AS (SELECT id, nbrobj, parent_id, id as root
-                           FROM taxonomy
+                           FROM taxonomy_worms
                           UNION
                          SELECT txpr.id, txpr.nbrobj, txpr.parent_id, rq.root
                            FROM rq 
-                           JOIN taxonomy txpr ON txpr.parent_id = rq.id)
+                           JOIN taxonomy_worms txpr ON txpr.parent_id = rq.id)
                      SELECT root AS classif_id, sum(nbrobj) as nbr
                        FROM rq
                       GROUP BY root)
-        UPDATE taxonomy
+        UPDATE taxonomy_worms
            SET nbrobjcum=cml.nbr
           FROM cml
-         WHERE taxonomy.id = cml.classif_id;"""
+         WHERE taxonomy_worms.id = cml.classif_id;"""
         )
         session.execute(sql)
 
@@ -363,9 +368,9 @@ class TaxonomyBO(object):
         """
         Update the DB line with status of the taxonomy tree.
         """
-        TaxonomyBO.get_tree_status(
-            session
-        ).lastserverversioncheck_datetime = DateTime.now_time()
+        TaxonomyBO.get_tree_status(session).lastserverversioncheck_datetime = (
+            DateTime.now_time()
+        )
         session.commit()
 
     @staticmethod
@@ -435,6 +440,7 @@ class TaxonBOSet(object):
             tf.c.nbrobjcum,
             tf.c.display_name,
             tf.c.rename_to,
+            tf.c.aphia_id,
             tf.c.id,
             tf.c.name,
         ]
@@ -455,7 +461,8 @@ class TaxonBOSet(object):
         self.taxa: List[TaxonBO] = []
         for a_rec in res.fetchall():
             lst_rec = list(a_rec)
-            cat_type, nbobj1, nbobj2, display_name, rename_id = (
+            cat_type, nbobj1, nbobj2, display_name, rename_id, aphia_id = (
+                lst_rec.pop(0),
                 lst_rec.pop(0),
                 lst_rec.pop(0),
                 lst_rec.pop(0),
@@ -474,6 +481,7 @@ class TaxonBOSet(object):
                     lineage,
                     lineage_id,  # type:ignore
                     rename_id=rename_id,
+                    aphia_id=aphia_id,
                 )
             )
         self.get_children(session)

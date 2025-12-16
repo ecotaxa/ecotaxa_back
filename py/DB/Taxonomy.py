@@ -14,12 +14,13 @@ class Taxonomy(Model):
     A node in the taxonomy tree.
     """
 
-    __tablename__ = "taxonomy"
+    __tablename__ = "taxonomy_worms"
     # TODO: Remove the sequence. In fact, the unicity comes from EcoTaxoServer
     id: int = Column(INTEGER, Sequence("seq_taxonomy"), primary_key=True)
     parent_id = Column(INTEGER)
+    aphia_id = Column(INTEGER)
+    rank = Column(VARCHAR(24))
     name: str = Column(VARCHAR(100), nullable=False)
-    id_source = Column(VARCHAR(20))
     taxotype: str = Column(
         CHAR(1), nullable=False, server_default="P"
     )  # P = Phylo , M = Morpho
@@ -49,7 +50,7 @@ class Taxonomy(Model):
 
 
 Index("IS_TaxonomyParent", Taxonomy.parent_id)
-Index("IS_TaxonomySource", Taxonomy.id_source)
+Index("IS_TaxonomyAphiaId", Taxonomy.aphia_id)
 Index("IS_TaxonomyNameLow", func.lower(Taxonomy.name))
 Index(
     "IS_TaxonomyDispNameLow", func.lower(Taxonomy.display_name)

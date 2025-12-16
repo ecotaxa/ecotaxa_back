@@ -6,6 +6,7 @@
 #
 import os
 import time
+import json
 from logging import INFO
 from typing import Union, Tuple, List, Dict, Any, Optional
 
@@ -95,6 +96,7 @@ from API_models.taxonomy import (
     TaxonomyTreeStatus,
     TaxonUsageModel,
     TaxonCentral,
+    TaxoWormsModel,
 )
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
@@ -2434,7 +2436,7 @@ file_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_
 
 **Note that the following fields must be prefixed with the header "txo."** (for example → txo.display_name):
 
-creation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,
+creation_datetime, creator_email, display_name, id, id_instance,aphia_id, lastupdate_datetime,
 name, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.
 
 **All other fields must be prefixed by the header "fre."** (for example → fre.circ.).
@@ -3329,6 +3331,18 @@ def add_taxon_in_central(
         description="The taxon/category verbatim name.",
         example="Echinodermata",
     ),
+    aphia_id: int = Query(
+        ...,
+        title="Aphia Id",
+        description="Worms Aphia Id",
+        example=2367,
+    ),
+    rank: str = Query(
+        ...,
+        title="rank",
+        description="The Worms rank",
+        example="Class",
+    ),
     parent_id: int = Query(
         ...,
         title="Parent Id",
@@ -3492,6 +3506,44 @@ def matching_with_worms_nice(
             {"request": request, "matches": data, "params": params},
             headers=CRSF_header,
         )
+
+
+@app.get(
+    "/searchworms/{name}",
+    operation_id="search_worms_name",
+    tags=["Taxonomy Tree"],
+    response_model=Optional[List[Dict]],
+)
+def search_worms_name(
+    name: str,
+    _current_user: Optional[int] = Depends(get_optional_current_user),
+) -> Optional[List[Dict]]:
+    """
+    Information about a single taxon in WoRMS reference, including its lineage.
+    """
+    with CentralTaxonomyService() as sce:
+        ret = sce.search_worms_name(name)
+    return ret
+
+
+@app.post(
+    "/addworms/",
+    operation_id="add_worms_taxon",
+    tags=["Taxonomy Tree"],
+    response_class=Response,
+)
+def add_worms_taxon(
+    taxon: TaxoWormsModel = Body(...),
+    _current_user: Optional[int] = Depends(get_optional_current_user),
+) -> Response:
+    """
+    add worms taxon with or without lineage information
+    """
+    with CentralTaxonomyService() as sce:
+        ret = sce.add_worms_taxon(taxon, _current_user)
+    response = Response(json.dumps(ret.json()), media_type="application/json")
+    response.status_code = ret.status_code
+    return response
 
 
 # ######################## END OF TAXA_REF

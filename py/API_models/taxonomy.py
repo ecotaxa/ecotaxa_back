@@ -4,7 +4,7 @@
 #
 #  Models used in Taxonomy API operations.
 #
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict
 
 from API_models.crud import ProjectSummaryModel
 from API_models.helpers.DBtoModel import OrmConfig, combine_models
@@ -14,9 +14,16 @@ from helpers.pydantic import BaseModel, Field
 
 class TaxaSearchRsp(BaseModel):
     id: int = Field(title="Id", description="The taxon/category IDs.", example=14334)
+    aphia_id: Optional[int] = Field(
+        title="Aphia Id",
+        description="The Worms aphia_id of the taxon.",
+        default=None,
+        example="null",
+    )
     renm_id: Optional[int] = Field(
         title="Renm_id",
         description="The advised replacement ID if the taxon/category is deprecated.",
+        default=None,
         example="null",
     )
     text: str = Field(
@@ -33,6 +40,12 @@ class TaxaSearchRsp(BaseModel):
 class TaxonModel(BaseModel):
     __config__ = OrmConfig
     id: int = Field(title="Id", description="The taxon/category IDs.", example=1)
+    aphia_id: Optional[int] = Field(
+        title="Aphia Id",
+        description="The Worms aphia_id of the taxon.",
+        default=None,
+        example="null",
+    )
     renm_id: Optional[int] = Field(
         title="Renm id",
         description="The advised replacement ID if the taxon/category is deprecated.",
@@ -110,6 +123,37 @@ class TaxonomyTreeStatus(BaseModel):
     )
 
 
+class TaxoWormsModel(BaseModel):
+    aphia_id: Optional[int] = Field(
+        title="AphiaId",
+        description="The unique numeric aphia_id of the taxon if in Worms.",
+        example=12876,
+    )
+    rank: Optional[str] = Field(
+        title="Rank",
+        description="The rank in Worms of the taxon.",
+        example="Echinodermata X",
+    )
+    name: str = Field(
+        title="Name", description="The name of the taxon.", example="Echinodermata X"
+    )
+    lineage: Dict[str, Any] = Field(
+        title="Taxon Worms lineage",
+        description="The lineage of the taxon in Worms.",
+        example={"2": {"AphiaID": 1, "rank": "Superdomain", "scientificname": "Biota"}},
+    )
+    status: str = Field(
+        title="Worms taxon status",
+        description="The taxon status in worms 'accepted' .",
+        example="accepted",
+    )
+    creator_email: Any = Field(
+        title="Creator email",
+        description="Email of the creator of the taxon.",
+        example="creator.user@emaim.com",
+    )
+
+
 class _Taxo2Model(BaseModel):
     creation_datetime: Any = Field(
         title="Creation datetime",
@@ -129,11 +173,18 @@ class _Taxo2Model(BaseModel):
     id: Any = Field(
         title="Id", description="The unique numeric id of the taxon.", example=12876
     )
+    aphia_id: Optional[int] = Field(
+        title="AphiaId",
+        description="The unique numeric aphia_id of the taxon if in Worms.",
+        example=12876,
+    )
+    rank: Optional[str] = Field(
+        title="Rank",
+        description="The rank in Worms of the taxon.",
+        example="Echinodermata X",
+    )
     id_instance: Any = Field(
         title="Id instance", description="The instance Id.", example=1
-    )
-    id_source: Any = Field(
-        title="Id source", description="The source ID.", example="70372"
     )
     lastupdate_datetime: Any = Field(
         title="Last update datetime",
