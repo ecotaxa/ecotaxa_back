@@ -57,13 +57,16 @@ def test_my_files(fastapi, caplog, tstlogs, title):
     assert list_rsp.status_code == 200
     my_files_root: Dict = list_rsp.json()
     assert my_files_root["path"] == ""
-    assert len(my_files_root["entries"]) == 2
-    assert my_files_root["entries"][0] == {
-        "mtime": "",
-        "name": DIRPATH,
-        "size": 0,
-        "type": "D",
-    }
+    my_files_root["entries"].sort(key=lambda x: x["name"])
+    assert my_files_root["entries"] == [
+        {
+            "mtime": "",
+            "name": DIRPATH,
+            "size": 0,
+            "type": "D",
+        },
+        {"mtime": "", "name": "import_test", "size": 0, "type": "D"},
+    ]
 
     # The files are stored in the subdirectory
     DIRDEST = DIRPATH + SEPARATOR + DEST_DIR_NAME
@@ -73,7 +76,7 @@ def test_my_files(fastapi, caplog, tstlogs, title):
     assert my_files_subdir["path"] == DIRDEST
     assert (
         len(my_files_subdir["entries"]) == 1
-    )  # The second file being .txt will have 0 size on re-read
+    )  # The second file being .txt will have size 0 on re-read
     # test no longer valid as the zip is deleted after successful unzip
     # the_file = [fil for fil in my_files_subdir["entries"] if fil["size"] == 22654][0]
     # del the_file["mtime"]  # Unpredictable
@@ -90,7 +93,7 @@ def test_my_files(fastapi, caplog, tstlogs, title):
     assert "FileNotFoundError" in "".join(errors)
 
     # Import the file with the right path
-    # The below (unfortunately) hard-coded path is valid on current configuration of EcoTaxa
+    # The below (unfortunately) hard-coded path is valid on the current configuration of EcoTaxa
     file_path = "/tmp/ecotaxa_user.{}/{}/{}".format(
         CREATOR_USER_ID,  # Should come from /api/users/me
         DIRPATH,  # existing tag, created the on the first file creation with it

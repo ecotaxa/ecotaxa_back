@@ -115,7 +115,7 @@ def exportable_collection(database, fastapi, caplog, admin_or_creator):
     # Validate nearly everything, otherwise no export.
     obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id)
     assert len(obj_ids) == 20
-    # The first Actinopterygii object in m106_mn01_n3_sml remains Predicted and the second one is imported Validated
+    # The first Actinopterygii<egg<small object in m106_mn01_n3_sml remains Predicted, the second one is imported Validated
     actinopters = query_all_objects(fastapi, CREATOR_AUTH, prj_id, taxo="92731")
     assert len(actinopters) == 2
     for an_objid in actinopters:  # No need to validate any of them
@@ -463,7 +463,9 @@ def unzip_and_check(zip_content, ref_content, who):
             print(file_content)
             print()
             # Add CRs before and after for readability of the py version
-            all_in_one[name] = "\n" + file_content + "\n"
+            file_content = "\n" + file_content + "\n"
+            all_in_one[name] = file_content
+            assert file_content == ref_content[name]
     assert all_in_one == ref_content
 
 

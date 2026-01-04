@@ -2969,13 +2969,13 @@ ALTER TABLE collection_orga_role ADD COLUMN organization_id INTEGER ;
 ALTER TABLE collection_orga_role ADD CONSTRAINT collection_organization_fkey FOREIGN KEY(organization_id) REFERENCES organizations (id);
 INSERT INTO organizations (name) SELECT DISTINCT organisation FROM collection_orga_role WHERE organisation IS NOT NULL AND NOT EXISTS (SELECT organizations.id FROM organizations  WHERE organisation=organizations.name);
 UPDATE collection_orga_role SET organization_id=subquery.id FROM(SELECT id,name FROM organizations) AS subquery WHERE subquery.name LIKE collection_orga_role.organisation;
-ALTER TABLE collection_orga_role ALTER COLUMN organisation RENAME TO organization;
 ALTER TABLE users ADD COLUMN organization_id INTEGER;
 UPDATE users SET organization_id=subquery.id FROM(SELECT id,name FROM organizations) AS subquery WHERE subquery.name LIKE users.organisation;
-ALTER TABLE users ALTER COLUMN organisation RENAME TO organization;
 ALTER TABLE users DROP CONSTRAINT users_organisation;
 ALTER TABLE users ADD CONSTRAINT user_organization_fkey FOREIGN KEY(organization_id) REFERENCES organizations (id);
 ALTER TABLE collection_orga_role ALTER COLUMN organization_id SET NOT NULL;
+ALTER TABLE collection_orga_role DROP COLUMN organisation;
+ALTER TABLE users DROP COLUMN organisation;
 UPDATE alembic_version SET version_num='9f8174c268da' WHERE alembic_version.version_num = 'e6dda08ff48b';
 
 COMMIT;

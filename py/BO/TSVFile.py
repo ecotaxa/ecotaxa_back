@@ -374,6 +374,8 @@ class TSVFile(object):
             object_head_to_write["classif_who"] = None
             if object_head_to_write.get("classif_score") is None:
                 object_head_to_write["classif_score"] = PSEUDO_TRAINING_SCORE
+            if object_head_to_write.get("classif_date") is None:
+                object_head_to_write["classif_date"] = start_time
         elif state in (VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL):
             if object_head_to_write.get("classif_who") is None:
                 object_head_to_write["classif_who"] = current_user
