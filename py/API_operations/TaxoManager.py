@@ -567,7 +567,7 @@ class CentralTaxonomyService(Service):
         nbr_rows = len(updates)
         nbr_updates = nbr_inserts = 0
 
-        to_rename: Dict[ClassifIDT, ClassifIDT] = {}
+        to_delete: List[ClassifIDT] = []
 
         for a_json_taxon in updates:
             # Convert non-str fields
@@ -575,17 +575,20 @@ class CentralTaxonomyService(Service):
             lastupdate_datetime = datetime.datetime.strptime(
                 a_json_taxon["lastupdate_datetime"], "%Y-%m-%d %H:%M:%S"
             )
-            # Store rename intentions
-            if a_json_taxon["rename_to"]:
-                to_rename[json_taxon_id] = int(a_json_taxon["rename_to"])
+            must_delete = a_json_taxon["taxostatus"] == "X"
             # Read taxon from DB
             taxon = self.session.query(Taxonomy).get(json_taxon_id)
             if taxon is not None:
+                if must_delete:
+                    to_delete.append(json_taxon_id)
+                    continue
                 # The taxon is already present
                 if taxon.lastupdate_datetime == lastupdate_datetime:
                     continue  # already up to date
                 nbr_updates += 1
             else:
+                if must_delete:
+                    continue # Should not happen if timestamps are OK
                 # The taxon is not present, create it
                 nbr_inserts += 1
                 taxon = Taxonomy()
@@ -595,10 +598,9 @@ class CentralTaxonomyService(Service):
             for a_col in self.UpdatableCols:
                 setattr(taxon, a_col, a_json_taxon[a_col])
             taxon.lastupdate_datetime = lastupdate_datetime
-            self.session.commit()
-        # Manage rename_to
-        if len(to_rename) > 0:
-            TaxonomyBO.do_renames(self.session, to_rename)
+        if len(to_delete) > 0:
+            TaxonomyBO.do_deletes(self.session, to_delete)
+        self.session.commit()
 
         # if gvp('updatestat') == 'Y':
         #     msg = DoSyncStatUpdate()
