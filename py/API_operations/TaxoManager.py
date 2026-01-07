@@ -598,9 +598,12 @@ class CentralTaxonomyService(Service):
             for a_col in self.UpdatableCols:
                 setattr(taxon, a_col, a_json_taxon[a_col])
             taxon.lastupdate_datetime = lastupdate_datetime
+            # TODO: Below is mandatory as we alter trigger for fast deletion
+            # But we lose, in case of failure, the facility to re-sync, which is based on last
+            # updated date of taxonomy entries, nothing for deletes here.
+            self.session.commit()
         if len(to_delete) > 0:
             TaxonomyBO.do_deletes(self.session, to_delete)
-        self.session.commit()
 
         # if gvp('updatestat') == 'Y':
         #     msg = DoSyncStatUpdate()

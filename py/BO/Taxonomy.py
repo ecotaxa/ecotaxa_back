@@ -432,24 +432,27 @@ class TaxonomyBO(object):
         # *   **`taxonomy.parent_id`**: Although not explicitly defined with a `ForeignKey` constraint in the SQLAlchemy model (it is a simple `INTEGER` column), it logically points to `taxonomy.id` to represent the taxonomic tree structure.
         # *   **`taxonomy.rename_to`**: Similarly, this `INTEGER` column is used to store an "advised" target taxon for mass category changes, logically referring to another `taxonomy.id`.
         # *   **`taxo_recast.transforms`**: This `JSONB` column stores mapping in the form `{from:to}`, where both values are taxonomic IDs, though they are not enforced by database-level foreign key constraints.
-
-        # We want to protect 1. and 2.
-        logger.info("Taxo delete, list: %s", to_delete)
-        sql = text("SELECT DISTINCT objid FROM obj_head WHERE classif_id = ANY (:een)")
+        sql = text("SELECT DISTINCT id FROM taxonomy")
         res: Result = session.execute(sql, {"een": list(to_delete)})
-        prevent_obj_head = {an_id for an_id, in res}
+        present = {an_id for an_id, in res}
+        final_delete = present.intersection(to_delete)
+        # We want to protect 1. and 2.
+        logger.info("Taxo delete, list: %s", final_delete)
+        sql = text("SELECT DISTINCT objid FROM obj_head WHERE classif_id = ANY (:een)")
+        res2: Result = session.execute(sql, {"een": list(final_delete)})
+        prevent_obj_head = {an_id for an_id, in res2}
         if len(prevent_obj_head) > 0:
             logger.error("Unsafe deletion due to objects %s", prevent_obj_head)
         sql = text("SELECT DISTINCT objid FROM objectsclassifhisto WHERE classif_id = ANY (:een)")
-        res: Result = session.execute(sql, {"een": list(to_delete)})
-        prevent_obj_histo = {an_id for an_id, in res}
+        res3: Result = session.execute(sql, {"een": list(final_delete)})
+        prevent_obj_histo = {an_id for an_id, in res3}
         if len(prevent_obj_histo) > 0:
             logger.error("Unsafe deletion due to objects history %s", prevent_obj_histo)
         # assert len(prevent_obj_head) == 0 and len(prevent_obj_histo) == 0, "Cannot achieve safe deletion"
         logger.info("deleting categories")
         session.execute(text("alter table taxonomy disable trigger all"))
         try:
-            for a_taxon in to_delete:
+            for a_taxon in final_delete:
                 logger.info("deleting category %s", a_taxon)
                 taxon = session.query(Taxonomy).get(a_taxon)
                 session.delete(taxon)
