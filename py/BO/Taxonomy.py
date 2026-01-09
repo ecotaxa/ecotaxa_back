@@ -440,15 +440,16 @@ class TaxonomyBO(object):
         sql = text("SELECT DISTINCT id FROM taxonomy")
         res: Result = session.execute(sql, {"een": list(to_delete)})
         present = {an_id for an_id, in res}
-        final_delete = present.intersection(to_delete)
+        final_delete = sorted(list(present.intersection(to_delete)))
         # We want to protect 1. and 2.
-        logger.info("Taxo delete, list: %s", final_delete)
         sql = text("SELECT DISTINCT objid FROM obj_head WHERE classif_id = ANY (:een)")
         res2: Result = session.execute(sql, {"een": list(final_delete)})
         prevent_obj_head = {an_id for an_id, in res2}
         if len(prevent_obj_head) > 0:
             logger.error("Unsafe deletion due to objects %s", prevent_obj_head)
-        sql = text("SELECT DISTINCT objid FROM objectsclassifhisto WHERE classif_id = ANY (:een)")
+        sql = text(
+            "SELECT DISTINCT objid FROM objectsclassifhisto WHERE classif_id = ANY (:een)"
+        )
         res3: Result = session.execute(sql, {"een": list(final_delete)})
         prevent_obj_histo = {an_id for an_id, in res3}
         if len(prevent_obj_histo) > 0:
@@ -456,14 +457,14 @@ class TaxonomyBO(object):
         # assert len(prevent_obj_head) == 0 and len(prevent_obj_histo) == 0, "Cannot achieve safe deletion"
         logger.info("deleting categories")
         session.execute(text("alter table taxonomy disable trigger all"))
+        for i in range(0, len(final_delete), 20):
+            logger.info("Taxo delete, list: %s", final_delete[i : i + 20])
         try:
             for a_taxon in final_delete:
-                logger.info("deleting category %s", a_taxon)
                 taxon = session.query(Taxonomy).get(a_taxon)
                 session.delete(taxon)
         finally:
             session.execute(text("alter table taxonomy enable trigger all"))
-
 
 
 class TaxonBOSet(object):

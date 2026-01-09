@@ -609,7 +609,7 @@ class CentralTaxonomyService(Service):
                 nbr_updates += 1
             else:
                 if must_delete:
-                    continue # Should not happen if timestamps are OK
+                    continue  # Should not happen if timestamps are OK
                 # The taxon is not present, create it
                 nbr_inserts += 1
                 taxon = Taxonomy()
@@ -625,6 +625,7 @@ class CentralTaxonomyService(Service):
             self.session.commit()
         if len(to_delete) > 0:
             TaxonomyBO.do_deletes(self.session, to_delete)
+            self.session.commit()
 
         # if gvp('updatestat') == 'Y':
         #     msg = DoSyncStatUpdate()
