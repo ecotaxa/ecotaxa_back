@@ -4,7 +4,7 @@
 #
 #  Models used in Taxonomy API operations.
 #
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Any, Dict, Tuple
 
 from API_models.crud import ProjectSummaryModel
 from API_models.helpers.DBtoModel import OrmConfig, combine_models
@@ -33,19 +33,10 @@ class TaxaSearchRsp(BaseModel):
         title="Pr",
         description="1 if the taxon is in project list, 0 otherwise.",
         example=0,
-    )
-
-
-# TODO: dataclass_to_model(TaxonBO) to avoid repeated fields
-class TaxonModel(BaseModel):
+    )# TODO: dataclass_to_model(TaxonBO) to avoid repeated fields
+class TaxonModel_small(BaseModel):
     __config__ = OrmConfig
     id: int = Field(title="Id", description="The taxon/category IDs.", example=1)
-    aphia_id: Optional[int] = Field(
-        title="Aphia Id",
-        description="The Worms aphia_id of the taxon.",
-        default=None,
-        example="null",
-    )
     renm_id: Optional[int] = Field(
         title="Renm id",
         description="The advised replacement ID if the taxon/category is deprecated.",
@@ -58,6 +49,11 @@ class TaxonModel(BaseModel):
     type: str = Field(
         title="Type",
         description="The taxon/category type, 'M' for Morpho or 'P' for Phylo.",
+        example="P",
+    )
+    status: str = Field(
+        title="Status",
+        description="The taxon/category status, 'D' for Deprecated, 'A' for Approved or 'N' for Notapproved.",
         example="P",
     )
     nb_objects: int = Field(
@@ -84,6 +80,97 @@ class TaxonModel(BaseModel):
         title="Id lineage",
         description="The taxon/category IDs of ancestors, including self, in first.",
         example=[1],
+    )
+    children: List[int] = Field(
+        title="Children",
+        description="The taxon/category IDs of children.",
+        example=[
+            92952,
+            2,
+            92329,
+            85048,
+            4,
+            93599,
+            93687,
+            85011,
+            92951,
+            93698,
+            84961,
+            92696,
+            3,
+        ],
+    )
+
+# TODO: dataclass_to_model(TaxonBO) to avoid repeated fields
+class TaxonModel(BaseModel):
+    __config__ = OrmConfig
+    id: int = Field(title="Id", description="The taxon/category IDs.", example=1)
+    name: str = Field(
+        title="Name", description="The taxon/category verbatim name.", example="living"
+    )
+    type: str = Field(
+        title="Type",
+        description="The taxon/category type, 'M' for Morpho or 'P' for Phylo.",
+        example="P",
+    )
+    status: str = Field(
+        title="Status",
+        description="The taxon/category status, 'D' for Deprecated, 'A' for Approved or 'N' for Notapproved.",
+        example="P",
+    )
+    display_name: str = Field(
+        title="Display name",
+        description="The taxon/category display name.",
+        example="living<",
+    )
+    lineage: List[str] = Field(
+        title="Lineage",
+        description="The taxon/category name of ancestors, including self, in first.",
+        example=["living"],
+    )
+    id_lineage: List[int] = Field(
+        title="Id lineage",
+        description="The taxon/category IDs of ancestors, including self, in first.",
+        example=[1],    )
+    renm_id: Optional[int] = Field(
+        title="Renm id",
+        description="The advised replacement ID if the taxon/category is deprecated.",
+        default=None,
+        example="null",
+    )
+    nb_objects: int = Field(
+        title="Nb objects",
+        description="How many objects are classified in this category.",
+        example=34118,
+    )
+    nb_children_objects: int = Field(
+        title="Nb children objects",
+        description="How many objects are classified in this category children (not itself).",
+        example=30091727,
+    )
+    aphia_id: Optional[int] = Field(
+        title="Aphia ID",
+        description="The WoRMS aphia_id of the taxon.",
+        default=None,
+        example="null",
+    )
+    rank: Optional[str] = Field(
+        title="Rank",
+        description="The WoRMS rank of the taxon.",
+        default=None,
+        example="null",
+    )
+    closest_worms: Optional[int] = Field(
+        title="Closest WoRMS parent",
+        description="The id of the next WoRMS taxon.",
+        default=None,
+        example="null",
+    )
+    closest_phylo: Optional[int] = Field(
+        title="Closest Phylo parent",
+        description="The id of the closest parent Phylo taxon.",
+        default=None,
+        example="null",
     )
     children: List[int] = Field(
         title="Children",

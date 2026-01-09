@@ -12,7 +12,7 @@ from API_operations.helpers.Service import Service
 from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Project import ProjectBOSet
 from BO.ReClassifyLog import ReClassificationBO
-from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet, TaxonBOSetFromWoRMS
+from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet
 from BO.User import UserIDT, UserBO
 from DB.Project import ProjectTaxoStat, Project, ProjectIDT
 from DB.Taxonomy import Taxonomy
@@ -138,7 +138,7 @@ class TaxonomyService(Service):
 
     def query_set(self, taxon_ids: ClassifIDListT) -> List[TaxonBO]:
         ret = TaxonBOSet(self.ro_session, taxon_ids)
-        return ret.taxa
+        return ret.as_list()
 
     def most_used_non_advised(
         self, _current_user_id: Optional[UserIDT], taxon_ids: ClassifIDListT
@@ -161,17 +161,3 @@ class TaxonomyService(Service):
     ) -> List[Dict[str, Any]]:
         history = ReClassificationBO.history_for_project(self.ro_session, project_id)
         return history
-
-    def query_worms(self, aphia_id: ClassifIDT) -> Optional[TaxonBO]:
-        """
-        Return information about an entry in WoRMS table.
-        """
-        ret = self.query_worms_set([aphia_id])
-        if not ret:
-            return None
-        else:
-            return ret[0]
-
-    def query_worms_set(self, taxon_ids: ClassifIDListT) -> List[TaxonBO]:
-        ret = TaxonBOSetFromWoRMS(self.ro_session, taxon_ids)
-        return ret.taxa

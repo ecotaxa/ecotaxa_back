@@ -98,10 +98,10 @@ RestrictedStatus: Final = {
 
 
 class MappingColumnEnum(str, Enum):
-    obj: Final = "mappingobj"
-    sample: Final = "mappingsample"
-    acq: Final = "mappingacq"
-    process: Final = "mappingprocess"
+    obj = "mappingobj"
+    sample = "mappingsample"
+    acq = "mappingacq"
+    process = "mappingprocess"
 
 
 @dataclass()

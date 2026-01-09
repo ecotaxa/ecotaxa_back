@@ -33,7 +33,6 @@ from BO.ObjectSetQueryPlus import (
 from BO.Project import ProjectBO, ProjectTaxoStats, ProjectIDListT
 from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Sample import SampleBO, SampleAggregForTaxon
-from BO.TaxonomySwitch import TaxonomyMapper
 from BO.Vocabulary import Vocabulary, Units
 from BO.WoRMSification import WoRMSifier
 from DB.Collection import Collection
@@ -41,7 +40,6 @@ from DB.Project import ProjectTaxoStat, Project
 from DB.Sample import Sample
 from DB.Taxonomy import Taxonomy
 from DB.User import User, Organization
-from DB.WoRMs import WoRMS
 from DB.helpers import Session
 from DB.helpers.Direct import text
 from DB.helpers.Postgres import timestamp_to_str
@@ -86,7 +84,7 @@ logger = get_logger(__name__)
 AbundancePerAcquisitionT = Dict[AcquisitionIDT, Dict[ClassifIDT, int]]
 LsidT = str  # Life Science Identifier @see https://en.wikipedia.org/wiki/LSID
 OccIDT = str  # An occurenceId, sampleid+taxon ID
-WoRMSAggregT = Dict[LsidT, Tuple[OccIDT, SampleAggregForTaxon, WoRMS]]
+WoRMSAggregT = Dict[LsidT, Tuple[OccIDT, SampleAggregForTaxon, Taxonomy]]
 ROLE_FOR_ASSOCIATE = "originator"
 
 
@@ -573,8 +571,8 @@ class DarwinCoreExport(JobServiceBase):
         # Produce the coverage
         produced = set()
         for a_worms_entry in worms_targets:
-            rank = a_worms_entry.rank
-            value = a_worms_entry.scientificname
+            rank = a_worms_entry["rank"]
+            value = a_worms_entry["name"]
             assert rank is not None, "No rank for %s" % str(a_worms_entry)
             tracked = (rank, value)
             if tracked not in produced:
@@ -1046,7 +1044,7 @@ class DarwinCoreExport(JobServiceBase):
     @staticmethod
     def _occurrences_from_aggregations(
         aggregs: Dict[ClassifIDT, SampleAggregForTaxon],
-        phylo2worms: Dict[ClassifIDT, WoRMS],
+        phylo2worms: Dict[ClassifIDT, Taxonomy],
         event_id: str,
         predicted: bool,
         warnings: List[str],
@@ -1213,7 +1211,7 @@ class DarwinCoreExport(JobServiceBase):
         """
         return title
 
-    def keep_stats(self, taxon_info: WoRMS, count: int) -> None:
+    def keep_stats(self, taxon_info: Taxonomy, count: int) -> None:
         """
         Keep statistics per various entries.
         """
@@ -1222,7 +1220,7 @@ class DarwinCoreExport(JobServiceBase):
             taxon_info.rank, {"cnt": 0, "nms": set()}
         )
         stats["cnt"] += count
-        stats["nms"].add(taxon_info.scientificname)
+        stats["nms"].add(taxon_info.name)
 
     def log_stats(self) -> None:
         not_produced = sum(self.ignored_count.values())
@@ -1305,16 +1303,13 @@ class DarwinCoreExport(JobServiceBase):
                 used_and_recasted_taxa.add(to_)
 
         # Map all to WoRMS, the ones from projects and the recast target ones
-        self.recast_worms_ifier = TaxonomyMapper(
-            self.ro_session, list(used_and_recasted_taxa)
-        ).do_match()
-        self.recast_worms_ifier.taxotype_sanity_check()
+        self.recast_worms_ifier.do_match(self.ro_session, list(used_and_recasted_taxa))
 
         # Update recast to apply during calculations
         self.recast_worms_ifier.apply_recast(self.computations_taxo_recast)
 
         # Also prepare the recast-free version
-        self.worms_ifier = TaxonomyMapper(self.ro_session, list(used_taxa)).do_match()
+        self.worms_ifier.do_match(self.ro_session, list(used_taxa))
 
         # Prepare warnings for non-matches
         for an_id in self.recast_worms_ifier.unreferenced_ids(used_and_recasted_taxa):

@@ -2,11 +2,33 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-
+from typing import List
+from enum import Enum
 from .helpers.DDL import Index, Column, Sequence, ForeignKey
 from .helpers.Direct import func
 from .helpers.ORM import Model
 from .helpers.Postgres import VARCHAR, INTEGER, CHAR, TIMESTAMP
+
+TaxonomyIDT = int
+TaxonomyIDListT = List[int]
+
+
+class ExtendedEnum(Enum):
+
+    @classmethod
+    def list(cls):
+        return list(map(lambda c: c.value, cls))
+
+
+class TaxoStatus(str, ExtendedEnum):
+    approved = "A"
+    notapproved = "N"
+    deprecated = "D"
+
+
+class TaxoType(str, ExtendedEnum):
+    morpho = "M"
+    phylo = "P"
 
 
 class Taxonomy(Model):
@@ -14,7 +36,7 @@ class Taxonomy(Model):
     A node in the taxonomy tree.
     """
 
-    __tablename__ = "taxonomy_worms"
+    __tablename__ = "taxonomy"
     # TODO: Remove the sequence. In fact, the unicity comes from EcoTaxoServer
     id: int = Column(INTEGER, Sequence("seq_taxonomy"), primary_key=True)
     parent_id = Column(INTEGER)
