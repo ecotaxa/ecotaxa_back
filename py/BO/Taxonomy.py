@@ -424,6 +424,47 @@ class TaxonomyBO(object):
         #     !!!! ECOPART LINK !!!!
         #     appli.part.prj.GlobalTaxoCompute()
 
+    @classmethod
+    def do_deletes(cls, session: Session, to_delete: List[ClassifIDT]) -> None:
+        #### Direct Foreign Keys to `taxonomy.id`
+        # 1.  **`obj_head.classif_id`**: Points to `taxonomy.id`. This represents the current classification of an object.
+        # 2.  **`objectsclassifhisto.classif_id`**: Points to `taxonomy.id` (with `ondelete="CASCADE"`). This stores the history of classifications for an object.
+        # 3.  **`taxo_change_log.to_id`**: Points to `taxonomy.id` (with `ondelete="CASCADE"`). This logs the target taxon in a mass classification change.
+        # 4.  **`taxo_change_log.from_id`**: Points to `taxonomy.id` (with `ondelete="CASCADE"`). This logs the original taxon in a mass classification change.
+        # 5.  **`prediction.classif_id`**: Points to `taxonomy.id` (with `ondelete="CASCADE"`). This stores the predicted taxon for an object.
+        # 6.  **`prediction_histo.classif_id`**: Points to `taxonomy.id` (with `ondelete="CASCADE"`). This stores the history of predicted taxa.
+        #### Other Implicit Relations
+        # *   **`taxonomy.parent_id`**: Although not explicitly defined with a `ForeignKey` constraint in the SQLAlchemy model (it is a simple `INTEGER` column), it logically points to `taxonomy.id` to represent the taxonomic tree structure.
+        # *   **`taxonomy.rename_to`**: Similarly, this `INTEGER` column is used to store an "advised" target taxon for mass category changes, logically referring to another `taxonomy.id`.
+        # *   **`taxo_recast.transforms`**: This `JSONB` column stores mapping in the form `{from:to}`, where both values are taxonomic IDs, though they are not enforced by database-level foreign key constraints.
+        sql = text("SELECT DISTINCT id FROM taxonomy")
+        res: Result = session.execute(sql, {"een": list(to_delete)})
+        present = {an_id for an_id, in res}
+        final_delete = present.intersection(to_delete)
+        # We want to protect 1. and 2.
+        logger.info("Taxo delete, list: %s", final_delete)
+        sql = text("SELECT DISTINCT objid FROM obj_head WHERE classif_id = ANY (:een)")
+        res2: Result = session.execute(sql, {"een": list(final_delete)})
+        prevent_obj_head = {an_id for an_id, in res2}
+        if len(prevent_obj_head) > 0:
+            logger.error("Unsafe deletion due to objects %s", prevent_obj_head)
+        sql = text("SELECT DISTINCT objid FROM objectsclassifhisto WHERE classif_id = ANY (:een)")
+        res3: Result = session.execute(sql, {"een": list(final_delete)})
+        prevent_obj_histo = {an_id for an_id, in res3}
+        if len(prevent_obj_histo) > 0:
+            logger.error("Unsafe deletion due to objects history %s", prevent_obj_histo)
+        # assert len(prevent_obj_head) == 0 and len(prevent_obj_histo) == 0, "Cannot achieve safe deletion"
+        logger.info("deleting categories")
+        session.execute(text("alter table taxonomy disable trigger all"))
+        try:
+            for a_taxon in final_delete:
+                logger.info("deleting category %s", a_taxon)
+                taxon = session.query(Taxonomy).get(a_taxon)
+                session.delete(taxon)
+        finally:
+            session.execute(text("alter table taxonomy enable trigger all"))
+
+
 
 class TaxonBOSet(object):
     """
