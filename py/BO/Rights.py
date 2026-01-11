@@ -230,7 +230,7 @@ class RightsBO(object):
             a_priv: ProjectPrivilege
             for a_priv in user.privs_on_projects:
                 if a_priv.privilege == ProjectPrivilegeBO.MANAGE:
-                    # If any is managed, OK
+                    # If any is managed, OK for managing a bit of taxo
                     ret.append(Action.CREATE_TAXON)
                     break
         return ret

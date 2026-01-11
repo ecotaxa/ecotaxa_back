@@ -3500,7 +3500,7 @@ def matching_with_worms_nice(
     "/searchworms/{name}",
     operation_id="search_worms_name",
     tags=["Taxonomy Tree"],
-    response_model=Optional[List[Dict]],
+    response_model=Optional[List[Dict]],  # type:ignore
 )
 def search_worms_name(
     name: str,
@@ -3518,7 +3518,7 @@ def search_worms_name(
     "/addworms/",
     operation_id="add_worms_taxon",
     tags=["Taxonomy Tree"],
-    response_model=Any,
+    response_model=Any,  # type:ignore
 )
 def add_worms_taxon(
     taxon: AddWormsTaxonModel = Body(...),

@@ -99,8 +99,7 @@ class CentralTaxonomyService(Service):
         aphia_id: int,
         current_user_id: UserIDT,
     ) -> Any:
-        _user = RightsBO.user_can_add_taxonomy(self.ro_session, current_user_id)
-        current_user: User = self.session.query(User).get(current_user_id)
+        current_user = RightsBO.user_can_add_taxonomy(self.ro_session, current_user_id)
         taxon = {"aphia_id": aphia_id, "creator_email": current_user.email}
         ret = self.client.call("/addwormstaxon/", taxon)
         return ret.json()
