@@ -50,8 +50,6 @@ class TaxonBO(object):
         "nb_children_objects",
         "aphia_id",
         "rank",
-        "closest_worms",
-        "closest_phylo",
         "children",
     ]
 
@@ -67,8 +65,6 @@ class TaxonBO(object):
         lineage_status: str,
         aphia_id: Optional[int] = None,
         rank: Optional[str] = None,
-        closest_worms: Optional[int] = None,
-        closest_phylo: Optional[int] = None,
         children: Optional[List[ClassifIDT]] = None,
         rename_id: Optional[int] = None,
     ):
@@ -93,8 +89,6 @@ class TaxonBO(object):
         self.lineage_status = lineage_status
         self.aphia_id = aphia_id
         self.rank = rank
-        self.closest_worms = closest_worms
-        self.closest_phylo = closest_phylo
         self.children = children
 
     def top_down_lineage(self, sep: str = ">"):
@@ -555,23 +549,13 @@ class TaxonBOSet(object):
             rename_id = lst_rec[6]
             aphia_id: Optional[int] = lst_rec[2]
             rank: Optional[str] = lst_rec[5]
-            numf = 7
+            numf = 7  # Number of fields in a block, i.e. a taxon
+            # Loop over self + parents to get ancestors' fields. Not the clearest code in the world.
             lineage_id = [an_id for an_id in lst_rec[0::numf] if an_id is not None]
             lineage_status = "".join(
                 [a_status for a_status in lst_rec[4::numf] if a_status is not None]
             )
             lineage = [name for name in lst_rec[1::numf] if name is not None]
-            closest_phylo: Optional[int] = None
-            if cat_type == "M":
-                next = [i for i, r in enumerate(lst_rec[3::numf]) if r == "P"]
-                if len(next):
-                    i = next[0]
-                    closest_phylo = lst_rec[0::numf][i]
-            closest_worms: Optional[int] = None
-            next = [i for i, r in enumerate(lst_rec[2::numf]) if r is not None]
-            if len(next):
-                i = next[0]
-                closest_worms = lst_rec[0::numf][i]
             # assert lineage_id[-1] in (1, 84960, 84959), "Unexpected root %s" % str(lineage_id[-1])
             self.taxa.append(
                 TaxonBO(
