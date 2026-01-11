@@ -50,6 +50,34 @@ class WoRMSBO(TaxonBO):
         self.kingdom = kingdom
 
 
+def create_worms_bo(taxon: TaxonBO) -> WoRMSBO:
+    # Find the kingdom in lineage
+    # The lineage is leaf-to-root, so kingdom is near the end
+    # "Biota" is usually at the very end (root)
+    # Kingdom is the one just before "Biota"
+    kingdom = None
+    if len(taxon.lineage) >= 2:
+        if taxon.lineage[-1] == "Biota":
+            kingdom = taxon.lineage[-2]
+        else:
+            kingdom = taxon.lineage[-1]
+    return WoRMSBO(
+        cat_type=taxon.type,
+        cat_status=taxon.status,
+        display_name=taxon.display_name,
+        nb_objects=taxon.nb_objects,
+        nb_children_objects=taxon.nb_children_objects,
+        lineage=taxon.lineage,
+        id_lineage=taxon.id_lineage,
+        lineage_status=taxon.lineage_status,
+        aphia_id=taxon.aphia_id,
+        rank=taxon.rank,
+        children=taxon.children,
+        rename_id=taxon.renm_id,
+        kingdom=kingdom,
+    )
+
+
 class WoRMSifier(object):
     """
     How to go from EcoTaxa IDs to WoRMS, for a set of taxa.
@@ -65,7 +93,7 @@ class WoRMSifier(object):
         # Get all parent ids
         parent_ids: Set[ClassifIDT] = set()
         for a_taxon in taxon_set.as_list():
-            parent_ids.update(a_taxon.id_lineage[:-1])
+            parent_ids.update(a_taxon.id_lineage[1:])
         parent_taxon_set = TaxonBOSet(session, list(parent_ids))
         # And all target renames
         rename_ids: Set[ClassifIDT] = set()
@@ -73,33 +101,6 @@ class WoRMSifier(object):
             if a_taxon.renm_id is not None:
                 rename_ids.add(a_taxon.renm_id)
         renamed_taxon_set = TaxonBOSet(session, list(rename_ids))
-
-        def create_worms_bo(taxon: TaxonBO) -> WoRMSBO:
-            # Find the kingdom in lineage
-            # The lineage is leaf-to-root, so kingdom is near the end
-            # "Biota" is usually at the very end (root)
-            # Kingdom is the one just before "Biota"
-            kingdom = None
-            if len(taxon.lineage) >= 2:
-                if taxon.lineage[-1] == "Biota":
-                    kingdom = taxon.lineage[-2]
-                else:
-                    kingdom = taxon.lineage[-1]
-            return WoRMSBO(
-                cat_type=taxon.type,
-                cat_status=taxon.status,
-                display_name=taxon.display_name,
-                nb_objects=taxon.nb_objects,
-                nb_children_objects=taxon.nb_children_objects,
-                lineage=taxon.lineage,
-                id_lineage=taxon.id_lineage,
-                lineage_status=taxon.lineage_status,
-                aphia_id=taxon.aphia_id,
-                rank=taxon.rank,
-                children=taxon.children,
-                rename_id=taxon.renm_id,
-                kingdom=kingdom,
-            )
 
         # Get closest phylos for morphos
         for a_taxon in taxon_set.as_list():

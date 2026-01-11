@@ -3421,11 +3421,11 @@ def query_taxa_in_worms(
     _current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> Optional[TaxonBO]:
     """
-    Information about a single taxon in WoRMS reference, including its lineage.
+    Information about a single taxon in WoRMS reference, including its lineage. Deprecated, use EcoTaxa tree.
     """
-    with TaxonomyService() as sce:
-        ret: Optional[TaxonBO] = sce.query_worms(aphia_id)
-    return ret
+    # with TaxonomyService() as sce:
+    #     ret: Optional[TaxonBO] = sce.query_worms(aphia_id)
+    return None
 
 
 @app.get(
