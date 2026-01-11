@@ -33,6 +33,7 @@ from BO.ObjectSetQueryPlus import (
 from BO.Project import ProjectBO, ProjectTaxoStats, ProjectIDListT
 from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Sample import SampleBO, SampleAggregForTaxon
+from BO.Taxonomy import TaxonBO
 from BO.Vocabulary import Vocabulary, Units
 from BO.WoRMSification import WoRMSifier
 from DB.Collection import Collection
@@ -84,7 +85,7 @@ logger = get_logger(__name__)
 AbundancePerAcquisitionT = Dict[AcquisitionIDT, Dict[ClassifIDT, int]]
 LsidT = str  # Life Science Identifier @see https://en.wikipedia.org/wiki/LSID
 OccIDT = str  # An occurenceId, sampleid+taxon ID
-WoRMSAggregT = Dict[LsidT, Tuple[OccIDT, SampleAggregForTaxon, Taxonomy]]
+WoRMSAggregT = Dict[LsidT, Tuple[OccIDT, SampleAggregForTaxon, TaxonBO]]
 ROLE_FOR_ASSOCIATE = "originator"
 
 
@@ -260,8 +261,8 @@ class DarwinCoreExport(JobServiceBase):
                     eventID=an_event_id,
                     occurrenceID=occurrence_id,
                     individualCount=0,
-                    scientificName=worms.scientificname,
-                    scientificNameID=worms.lsid,
+                    scientificName=worms.name,  # ETS stores scientificname as name,
+                    scientificNameID=worms.aphia_id,
                     kingdom=worms.kingdom,
                     occurrenceStatus=OccurrenceStatusEnum.absent,
                     basisOfRecord=BasisOfRecordEnum.machineObservation,
@@ -270,7 +271,7 @@ class DarwinCoreExport(JobServiceBase):
 
     @staticmethod
     def compute_all_seen_taxa(
-        taxa_per_sample: Dict[str, Set[ClassifIDT]]
+        taxa_per_sample: Dict[str, Set[ClassifIDT]],
     ) -> ClassifIDSetT:
         # Cumulate all categories
         all_taxa: ClassifIDSetT = set()
@@ -571,8 +572,8 @@ class DarwinCoreExport(JobServiceBase):
         # Produce the coverage
         produced = set()
         for a_worms_entry in worms_targets:
-            rank = a_worms_entry["rank"]
-            value = a_worms_entry["name"]
+            rank = a_worms_entry.rank
+            value = a_worms_entry.name
             assert rank is not None, "No rank for %s" % str(a_worms_entry)
             tracked = (rank, value)
             if tracked not in produced:
@@ -1022,8 +1023,8 @@ class DarwinCoreExport(JobServiceBase):
                 occurrenceID=occurrence_id,
                 # Below is better as an EMOF @see CountOfBiologicalEntity
                 # individualCount=individual_count,
-                scientificName=worms.scientificname,
-                scientificNameID=worms.lsid,
+                scientificName=worms.name,  # scientificname,
+                scientificNameID=worms.aphia_id,
                 kingdom=worms.kingdom,
                 occurrenceStatus=OccurrenceStatusEnum.present,
                 basisOfRecord=BasisOfRecordEnum.machineObservation,
@@ -1044,7 +1045,7 @@ class DarwinCoreExport(JobServiceBase):
     @staticmethod
     def _occurrences_from_aggregations(
         aggregs: Dict[ClassifIDT, SampleAggregForTaxon],
-        phylo2worms: Dict[ClassifIDT, Taxonomy],
+        phylo2worms: Dict[ClassifIDT, TaxonBO],
         event_id: str,
         predicted: bool,
         warnings: List[str],
@@ -1062,7 +1063,7 @@ class DarwinCoreExport(JobServiceBase):
             if worms is None:
                 not_found.add(an_id)
                 continue
-            worms_lsid = worms.lsid
+            worms_lsid = str(worms.aphia_id)
             assert worms_lsid is not None
             if worms_lsid not in by_lsid:
                 # Take the original taxo ID to build an occurrence ID
@@ -1094,7 +1095,7 @@ class DarwinCoreExport(JobServiceBase):
             by_lsid.items(),
             key=lambda itm: (
                 -itm[1][1].abundance,  # Aggreg abundance, desc
-                itm[1][2].lsid,  # To disambiguate
+                itm[1][2].aphia_id,  # To disambiguate
             ),
         )
         ret = OrderedDict(by_lsid_sorted)
@@ -1186,8 +1187,8 @@ class DarwinCoreExport(JobServiceBase):
             occ = DwC_Occurrence(
                 eventID=event_id,
                 occurrenceID=occurrence_id,
-                scientificName=worms.scientificname,
-                scientificNameID=worms.lsid,
+                scientificName=worms.name,
+                scientificNameID=worms.aphia_id,
                 kingdom=worms.kingdom,
                 occurrenceStatus=OccurrenceStatusEnum.present,
                 basisOfRecord=BasisOfRecordEnum.machineObservation,
@@ -1211,7 +1212,7 @@ class DarwinCoreExport(JobServiceBase):
         """
         return title
 
-    def keep_stats(self, taxon_info: Taxonomy, count: int) -> None:
+    def keep_stats(self, taxon_info: TaxonBO, count: int) -> None:
         """
         Keep statistics per various entries.
         """
@@ -1303,6 +1304,7 @@ class DarwinCoreExport(JobServiceBase):
                 used_and_recasted_taxa.add(to_)
 
         # Map all to WoRMS, the ones from projects and the recast target ones
+        # Note: It should now (Jan 2026) be straightforward as recast targets are all WoRMS
         self.recast_worms_ifier.do_match(self.ro_session, list(used_and_recasted_taxa))
 
         # Update recast to apply during calculations

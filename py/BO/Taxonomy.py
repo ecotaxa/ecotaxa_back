@@ -557,62 +557,43 @@ class TaxonBOSet(object):
             )
             lineage = [name for name in lst_rec[1::numf] if name is not None]
             # assert lineage_id[-1] in (1, 84960, 84959), "Unexpected root %s" % str(lineage_id[-1])
-            self.taxa.append(
-                TaxonBO(
-                    cat_type,
-                    cat_status,
-                    display_name,
-                    nbobj1,
-                    nbobj2,  # type:ignore
-                    lineage,
-                    lineage_id,  # type:ignore
-                    lineage_status,
-                    rename_id=rename_id,
-                    aphia_id=aphia_id,
-                    rank=rank,
-                    closest_worms=closest_worms,
-                    closest_phylo=closest_phylo,
-                )
+            taxon_bo = TaxonBO(
+                cat_type,
+                cat_status,
+                display_name,
+                nbobj1,
+                nbobj2,  # type:ignore
+                lineage,
+                lineage_id,  # type:ignore
+                lineage_status,
+                rename_id=rename_id,
+                aphia_id=aphia_id,
+                rank=rank,
             )
+            self.taxa.append(taxon_bo)
+        self.bos_per_id = {a_bo.id: a_bo for a_bo in self.taxa}
         self.get_children(session)
         self.get_cardinalities(session)
 
     def get_children(self, session: Session) -> None:
         # Enrich TaxonBOs with children
-        bos_per_id = {a_bo.id: a_bo for a_bo in self.taxa}
         tch = Taxonomy.__table__.alias("tch")
         qry = session.query(Taxonomy.id, tch.c.id)
         qry = qry.join(tch, tch.c.parent_id == Taxonomy.id)
-        qry = qry.filter(Taxonomy.id == any_(list(bos_per_id.keys())))
+        qry = qry.filter(Taxonomy.id == any_(list(self.bos_per_id.keys())))
         for an_id, a_child_id in qry:
-            bos_per_id[an_id].children.append(a_child_id)
+            self.bos_per_id[an_id].children.append(a_child_id)
 
     def get_cardinalities(self, session: Session):
         # Enrich TaxonBOs with number of objects. Due to ecotaxa/ecotaxa_dev#648, pick data from projects stats.
-        bos_per_id = {a_bo.id: a_bo for a_bo in self.taxa}
         qry = session.query(ProjectTaxoStat.id, func.sum(ProjectTaxoStat.nbr_v))
-        qry = qry.filter(ProjectTaxoStat.id == any_(list(bos_per_id.keys())))
+        qry = qry.filter(ProjectTaxoStat.id == any_(list(self.bos_per_id.keys())))
         qry = qry.group_by(ProjectTaxoStat.id)
         for an_id, a_sum in qry:
-            bos_per_id[an_id].nb_objects = a_sum
+            self.bos_per_id[an_id].nb_objects = a_sum
 
     def as_list(self) -> List[TaxonBO]:
         return self.taxa
 
-
-class StrictWoRMSSetFromTaxaSet(object):
-    """
-    Many taxa from WoRMS table, with lineage, fetched using the
-    strict method.
-    """
-
-    def __init__(self, session: Session, taxon_ids: ClassifIDListT):
-        # TODO: It's not clean to import a sce from a BO
-        from API_operations.TaxoManager import TaxonomyChangeService
-
-        # Do the matching right away, most strict way
-        match = TaxonomyChangeService.strict_match(session, taxon_ids)
-        # Format result
-        self.res = {}
-        for taxo, worms in match:
-            self.res[taxo.id] = worms
+    def get_by_id(self, taxon_id: ClassifIDT) -> TaxonBO:
+        return self.bos_per_id[taxon_id]
