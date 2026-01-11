@@ -96,7 +96,7 @@ from API_models.taxonomy import (
     TaxonomyTreeStatus,
     TaxonUsageModel,
     TaxonCentral,
-    TaxoWormsModel,
+    AddWormsTaxonModel,
 )
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
@@ -187,7 +187,7 @@ api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.41",
+    version="0.0.42",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",

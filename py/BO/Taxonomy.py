@@ -30,6 +30,7 @@ ClassifSetInfoT = Dict[ClassifIDT, Tuple[str, str]]
 
 logger = get_logger(__name__)
 
+
 class TaxonBO(object):
     """
     Holder of a node of a taxonomy tree. Used for Unieuk tree and for WoRMS one.
@@ -43,6 +44,7 @@ class TaxonBO(object):
         "display_name",
         "lineage",
         "id_lineage",
+        "lineage_status",
         "renm_id",
         "nb_objects",
         "nb_children_objects",
@@ -62,10 +64,11 @@ class TaxonBO(object):
         nb_children_objects: int,
         lineage: List[str],
         id_lineage: List[ClassifIDT],
-        aphia_id:Optional[int]=None,
-        rank:Optional[str]=None,
-        closest_worms:Optional[int]=None,
-        closest_phylo:Optional[int]=None,
+        lineage_status: str,
+        aphia_id: Optional[int] = None,
+        rank: Optional[str] = None,
+        closest_worms: Optional[int] = None,
+        closest_phylo: Optional[int] = None,
         children: Optional[List[ClassifIDT]] = None,
         rename_id: Optional[int] = None,
     ):
@@ -87,10 +90,11 @@ class TaxonBO(object):
         self.display_name = display_name
         self.lineage = lineage
         self.id_lineage = id_lineage
-        self.aphia_id=aphia_id
-        self.rank=rank
-        self.closest_worms=closest_worms
-        self.closest_phylo=closest_phylo
+        self.lineage_status = lineage_status
+        self.aphia_id = aphia_id
+        self.rank = rank
+        self.closest_worms = closest_worms
+        self.closest_phylo = closest_phylo
         self.children = children
 
     def top_down_lineage(self, sep: str = ">"):
@@ -117,9 +121,7 @@ class TaxonomyBO(object):
         Return input IDs, for the existing ones with 'P' type.
         """
         sql = text(
-            "SELECT id "
-            "  FROM taxonomy "
-            " WHERE id = ANY (:een) AND taxotype = 'P'"
+            "SELECT id " "  FROM taxonomy " " WHERE id = ANY (:een) AND taxotype = 'P'"
         )
         res: Result = session.execute(sql, {"een": list(classif_id_seen)})
         return {an_id for an_id, in res}
@@ -266,6 +268,7 @@ class TaxonomyBO(object):
                 tf.c.aphia_id,
                 tf.c.rename_to,
                 tf.c.display_name,
+                tf.c.taxostatus,
                 priority,
             ],
             bind=bind,
@@ -494,6 +497,8 @@ class TaxonomyBO(object):
                 session.delete(taxon)
         finally:
             session.execute(text("alter table taxonomy enable trigger all"))
+
+
 class TaxonBOSet(object):
     """
     Many taxa.
@@ -548,22 +553,25 @@ class TaxonBOSet(object):
             cat_type = lst_rec[3]
             cat_status = lst_rec[4]
             rename_id = lst_rec[6]
-            aphia_id : Optional[int]  = lst_rec[2]
-            rank : Optional[str]  = lst_rec[5]
+            aphia_id: Optional[int] = lst_rec[2]
+            rank: Optional[str] = lst_rec[5]
             numf = 7
             lineage_id = [an_id for an_id in lst_rec[0::numf] if an_id is not None]
+            lineage_status = "".join(
+                [a_status for a_status in lst_rec[4::numf] if a_status is not None]
+            )
             lineage = [name for name in lst_rec[1::numf] if name is not None]
-            closest_phylo:Optional[int]=None
-            closest_worms:Optional[int]=None
-            if cat_type=="M":
-                next=[i for i,r in enumerate(lst_rec[3::numf]) if r=="P"]
+            closest_phylo: Optional[int] = None
+            if cat_type == "M":
+                next = [i for i, r in enumerate(lst_rec[3::numf]) if r == "P"]
                 if len(next):
-                    i=next[0]
-                    closest_phylo=lst_rec[0::numf][i]
-            next=[i for i,r in enumerate(lst_rec[2::numf]) if r is not None]
+                    i = next[0]
+                    closest_phylo = lst_rec[0::numf][i]
+            closest_worms: Optional[int] = None
+            next = [i for i, r in enumerate(lst_rec[2::numf]) if r is not None]
             if len(next):
-                i=next[0]
-                closest_worms=lst_rec[0::numf][i]
+                i = next[0]
+                closest_worms = lst_rec[0::numf][i]
             # assert lineage_id[-1] in (1, 84960, 84959), "Unexpected root %s" % str(lineage_id[-1])
             self.taxa.append(
                 TaxonBO(
@@ -574,11 +582,12 @@ class TaxonBOSet(object):
                     nbobj2,  # type:ignore
                     lineage,
                     lineage_id,  # type:ignore
+                    lineage_status,
                     rename_id=rename_id,
                     aphia_id=aphia_id,
                     rank=rank,
                     closest_worms=closest_worms,
-                    closest_phylo=closest_phylo
+                    closest_phylo=closest_phylo,
                 )
             )
         self.get_children(session)
@@ -602,7 +611,6 @@ class TaxonBOSet(object):
         qry = qry.group_by(ProjectTaxoStat.id)
         for an_id, a_sum in qry:
             bos_per_id[an_id].nb_objects = a_sum
-
 
     def as_list(self) -> List[TaxonBO]:
         return self.taxa

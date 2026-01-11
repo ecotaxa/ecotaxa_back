@@ -92,7 +92,12 @@ class TaxonomyService(Service):
             renm_id = a_rec["rename_to"]
             is_preset = 1 if classif_id in preset else 0
             to_add = TaxaSearchRsp(
-                id=classif_id, renm_id=renm_id, text=a_rec["display_name"], pr=is_preset
+                id=classif_id,
+                aphia_id=a_rec["aphia_id"],
+                status=a_rec["taxostatus"],
+                renm_id=renm_id,
+                text=a_rec["display_name"],
+                pr=is_preset,
             )
             if classif_id in return_order:
                 mru_ret.append(to_add)

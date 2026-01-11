@@ -14,6 +14,11 @@ from helpers.pydantic import BaseModel, Field
 
 class TaxaSearchRsp(BaseModel):
     id: int = Field(title="Id", description="The taxon/category IDs.", example=14334)
+    status: str = Field(
+        title="Status",
+        description="The taxon/category status, 'D' for Deprecated, 'A' for Approved or 'N' for Not approved.",
+        example="P",
+    )
     aphia_id: Optional[int] = Field(
         title="Aphia Id",
         description="The Worms aphia_id of the taxon.",
@@ -33,73 +38,8 @@ class TaxaSearchRsp(BaseModel):
         title="Pr",
         description="1 if the taxon is in project list, 0 otherwise.",
         example=0,
-    )# TODO: dataclass_to_model(TaxonBO) to avoid repeated fields
-class TaxonModel_small(BaseModel):
-    __config__ = OrmConfig
-    id: int = Field(title="Id", description="The taxon/category IDs.", example=1)
-    renm_id: Optional[int] = Field(
-        title="Renm id",
-        description="The advised replacement ID if the taxon/category is deprecated.",
-        default=None,
-        example="null",
-    )
-    name: str = Field(
-        title="Name", description="The taxon/category verbatim name.", example="living"
-    )
-    type: str = Field(
-        title="Type",
-        description="The taxon/category type, 'M' for Morpho or 'P' for Phylo.",
-        example="P",
-    )
-    status: str = Field(
-        title="Status",
-        description="The taxon/category status, 'D' for Deprecated, 'A' for Approved or 'N' for Notapproved.",
-        example="P",
-    )
-    nb_objects: int = Field(
-        title="Nb objects",
-        description="How many objects are classified in this category.",
-        example=34118,
-    )
-    nb_children_objects: int = Field(
-        title="Nb children objects",
-        description="How many objects are classified in this category children (not itself).",
-        example=30091727,
-    )
-    display_name: str = Field(
-        title="Display name",
-        description="The taxon/category display name.",
-        example="living<",
-    )
-    lineage: List[str] = Field(
-        title="Lineage",
-        description="The taxon/category name of ancestors, including self, in first.",
-        example=["living"],
-    )
-    id_lineage: List[int] = Field(
-        title="Id lineage",
-        description="The taxon/category IDs of ancestors, including self, in first.",
-        example=[1],
-    )
-    children: List[int] = Field(
-        title="Children",
-        description="The taxon/category IDs of children.",
-        example=[
-            92952,
-            2,
-            92329,
-            85048,
-            4,
-            93599,
-            93687,
-            85011,
-            92951,
-            93698,
-            84961,
-            92696,
-            3,
-        ],
-    )
+    )  # TODO: dataclass_to_model(TaxonBO) to avoid repeated fields
+
 
 # TODO: dataclass_to_model(TaxonBO) to avoid repeated fields
 class TaxonModel(BaseModel):
@@ -131,7 +71,13 @@ class TaxonModel(BaseModel):
     id_lineage: List[int] = Field(
         title="Id lineage",
         description="The taxon/category IDs of ancestors, including self, in first.",
-        example=[1],    )
+        example=[1],
+    )
+    lineage_status: str = Field(
+        title="Id lineage",
+        description="The taxon ancestors' status, including self, in first.",
+        example="DDAAA",
+    )
     renm_id: Optional[int] = Field(
         title="Renm id",
         description="The advised replacement ID if the taxon/category is deprecated.",
@@ -210,34 +156,11 @@ class TaxonomyTreeStatus(BaseModel):
     )
 
 
-class TaxoWormsModel(BaseModel):
+class AddWormsTaxonModel(BaseModel):
     aphia_id: Optional[int] = Field(
         title="AphiaId",
-        description="The unique numeric aphia_id of the taxon if in Worms.",
+        description="The unique numeric aphia_id of the taxon in WoRMS.",
         example=12876,
-    )
-    rank: Optional[str] = Field(
-        title="Rank",
-        description="The rank in Worms of the taxon.",
-        example="Echinodermata X",
-    )
-    name: str = Field(
-        title="Name", description="The name of the taxon.", example="Echinodermata X"
-    )
-    lineage: Dict[str, Any] = Field(
-        title="Taxon Worms lineage",
-        description="The lineage of the taxon in Worms.",
-        example={"2": {"AphiaID": 1, "rank": "Superdomain", "scientificname": "Biota"}},
-    )
-    status: str = Field(
-        title="Worms taxon status",
-        description="The taxon status in worms 'accepted' .",
-        example="accepted",
-    )
-    creator_email: Any = Field(
-        title="Creator email",
-        description="Email of the creator of the taxon.",
-        example="creator.user@emaim.com",
     )
 
 
