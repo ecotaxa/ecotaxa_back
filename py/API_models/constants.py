@@ -134,5 +134,5 @@ class Constants(BaseModel):
     taxoserver_url: str = Field(
         title="EcoTaxoServer URL",
         description="url of taxonomy server ecotaxoserver",
-        default=None,
+        default="https://ecotaxoserver.obs-vlfr.fr/",
     )
