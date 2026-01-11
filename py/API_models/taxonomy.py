@@ -106,18 +106,6 @@ class TaxonModel(BaseModel):
         default=None,
         example="null",
     )
-    closest_worms: Optional[int] = Field(
-        title="Closest WoRMS parent",
-        description="The id of the next WoRMS taxon.",
-        default=None,
-        example="null",
-    )
-    closest_phylo: Optional[int] = Field(
-        title="Closest Phylo parent",
-        description="The id of the closest parent Phylo taxon.",
-        default=None,
-        example="null",
-    )
     children: List[int] = Field(
         title="Children",
         description="The taxon/category IDs of children.",

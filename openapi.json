@@ -11171,18 +11171,6 @@
             "description":"The WoRMS rank of the taxon.",
             "example":"null"
           },
-          "closest_worms":{
-            "title":"Closest WoRMS parent",
-            "type":"integer",
-            "description":"The id of the next WoRMS taxon.",
-            "example":"null"
-          },
-          "closest_phylo":{
-            "title":"Closest Phylo parent",
-            "type":"integer",
-            "description":"The id of the closest parent Phylo taxon.",
-            "example":"null"
-          },
           "children":{
             "title":"Children",
             "type":"array",
