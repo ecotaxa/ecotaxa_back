@@ -35,7 +35,7 @@ from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Sample import SampleBO, SampleAggregForTaxon
 from BO.Taxonomy import TaxonBO
 from BO.Vocabulary import Vocabulary, Units
-from BO.WoRMSification import WoRMSifier
+from BO.WoRMSification import WoRMSifier, WoRMSBO
 from DB.Collection import Collection
 from DB.Project import ProjectTaxoStat, Project
 from DB.Sample import Sample
@@ -85,7 +85,7 @@ logger = get_logger(__name__)
 AbundancePerAcquisitionT = Dict[AcquisitionIDT, Dict[ClassifIDT, int]]
 LsidT = str  # Life Science Identifier @see https://en.wikipedia.org/wiki/LSID
 OccIDT = str  # An occurenceId, sampleid+taxon ID
-WoRMSAggregT = Dict[LsidT, Tuple[OccIDT, SampleAggregForTaxon, TaxonBO]]
+WoRMSAggregT = Dict[LsidT, Tuple[OccIDT, SampleAggregForTaxon, WoRMSBO]]
 ROLE_FOR_ASSOCIATE = "originator"
 
 
@@ -1045,7 +1045,7 @@ class DarwinCoreExport(JobServiceBase):
     @staticmethod
     def _occurrences_from_aggregations(
         aggregs: Dict[ClassifIDT, SampleAggregForTaxon],
-        phylo2worms: Dict[ClassifIDT, TaxonBO],
+        phylo2worms: Dict[ClassifIDT, WoRMSBO],
         event_id: str,
         predicted: bool,
         warnings: List[str],
@@ -1212,7 +1212,7 @@ class DarwinCoreExport(JobServiceBase):
         """
         return title
 
-    def keep_stats(self, taxon_info: TaxonBO, count: int) -> None:
+    def keep_stats(self, taxon_info: WoRMSBO, count: int) -> None:
         """
         Keep statistics per various entries.
         """

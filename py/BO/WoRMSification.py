@@ -14,6 +14,42 @@ from BO.Taxonomy import TaxonBOSet, TaxonBO
 from DB.Taxonomy import TaxonomyIDT, TaxoType
 
 
+class WoRMSBO(TaxonBO):
+    __slots__ = ["kingdom"]
+
+    def __init__(
+        self,
+        cat_type: str,
+        cat_status: str,
+        display_name: str,
+        nb_objects: int,
+        nb_children_objects: int,
+        lineage: List[str],
+        id_lineage: List[ClassifIDT],
+        lineage_status: str,
+        aphia_id: Optional[int] = None,
+        rank: Optional[str] = None,
+        children: Optional[List[ClassifIDT]] = None,
+        rename_id: Optional[int] = None,
+        kingdom: Optional[str] = None,
+    ):
+        super().__init__(
+            cat_type,
+            cat_status,
+            display_name,
+            nb_objects,
+            nb_children_objects,
+            lineage,
+            id_lineage,
+            lineage_status,
+            aphia_id,
+            rank,
+            children,
+            rename_id,
+        )
+        self.kingdom = kingdom
+
+
 class WoRMSifier(object):
     """
     How to go from EcoTaxa IDs to WoRMS, for a set of taxa.
@@ -21,7 +57,7 @@ class WoRMSifier(object):
     """
 
     def __init__(self) -> None:
-        self.phylo2worms: Dict[ClassifIDT, TaxonBO] = {}
+        self.phylo2worms: Dict[ClassifIDT, WoRMSBO] = {}
         self.morpho2phylo: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
 
     def do_match(self, session: Session, taxa_ids: List[TaxonomyIDT]):
@@ -37,28 +73,56 @@ class WoRMSifier(object):
             if a_taxon.renm_id is not None:
                 rename_ids.add(a_taxon.renm_id)
         renamed_taxon_set = TaxonBOSet(session, list(rename_ids))
+
+        def create_worms_bo(taxon: TaxonBO) -> WoRMSBO:
+            # Find the kingdom in lineage
+            # The lineage is leaf-to-root, so kingdom is near the end
+            # "Biota" is usually at the very end (root)
+            # Kingdom is the one just before "Biota"
+            kingdom = None
+            if len(taxon.lineage) >= 2:
+                if taxon.lineage[-1] == "Biota":
+                    kingdom = taxon.lineage[-2]
+                else:
+                    kingdom = taxon.lineage[-1]
+            return WoRMSBO(
+                cat_type=taxon.type,
+                cat_status=taxon.status,
+                display_name=taxon.display_name,
+                nb_objects=taxon.nb_objects,
+                nb_children_objects=taxon.nb_children_objects,
+                lineage=taxon.lineage,
+                id_lineage=taxon.id_lineage,
+                lineage_status=taxon.lineage_status,
+                aphia_id=taxon.aphia_id,
+                rank=taxon.rank,
+                children=taxon.children,
+                rename_id=taxon.renm_id,
+                kingdom=kingdom,
+            )
+
         # Get closest phylos for morphos
         for a_taxon in taxon_set.as_list():
             if not a_taxon.type == TaxoType.morpho:
                 continue
             for parent_id in a_taxon.id_lineage[1:]:
-                if parent_taxon_set.get_by_id(parent_id) != TaxoType.morpho:
+                if parent_taxon_set.get_by_id(parent_id).type != TaxoType.morpho:
                     self.morpho2phylo[a_taxon.id] = parent_id
                     break
-            self.morpho2phylo[a_taxon.id] = None  # Can't resolve
+            else:
+                self.morpho2phylo[a_taxon.id] = None  # Can't resolve
         # Get closest WoRMS for phylos
         for a_taxon in taxon_set.as_list():
             if not a_taxon.type == TaxoType.phylo:
                 continue
             if a_taxon.aphia_id is not None:
-                self.phylo2worms[a_taxon.id] = a_taxon
+                self.phylo2worms[a_taxon.id] = create_worms_bo(a_taxon)
             elif a_taxon.renm_id is not None:
-                self.phylo2worms[a_taxon.id] = renamed_taxon_set.get_by_id(
-                    a_taxon.renm_id
-                )
+                renamed_taxon = renamed_taxon_set.get_by_id(a_taxon.renm_id)
+                self.phylo2worms[a_taxon.id] = create_worms_bo(renamed_taxon)
             # No solution, excluded taxon, will be signaled during export
 
-    def get_worms_targets(self) -> List[TaxonBO]:
+    def get_worms_targets(self) -> List[WoRMSBO]:
         return list(self.phylo2worms.values())
 
     def apply_recast(self, recast: TaxoRemappingT) -> None:
