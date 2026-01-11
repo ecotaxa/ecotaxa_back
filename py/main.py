@@ -3518,20 +3518,18 @@ def search_worms_name(
     "/addworms/",
     operation_id="add_worms_taxon",
     tags=["Taxonomy Tree"],
-    response_class=Response,
+    response_model=Any,
 )
 def add_worms_taxon(
     taxon: AddWormsTaxonModel = Body(...),
     _current_user: Optional[int] = Depends(get_optional_current_user),
-) -> Response:
+) -> Any:
     """
-    Add worms taxon with or without lineage information
+    Add worms taxon by its aphia_id
     """
     with CentralTaxonomyService() as sce:
-        ret = sce.add_worms_taxon(taxon.aphia_id, _current_user)
-    response = Response(json.dumps(ret.json()), media_type="application/json")
-    response.status_code = ret.status_code
-    return response
+        with RightsThrower():
+            return sce.add_worms_taxon(taxon.aphia_id, _current_user)
 
 
 # ######################## END OF TAXA_REF

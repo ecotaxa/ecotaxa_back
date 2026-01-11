@@ -5925,7 +5925,7 @@
           "Taxonomy Tree"
         ],
         "summary":"Add Worms Taxon",
-        "description":"Add worms taxon with or without lineage information",
+        "description":"Add worms taxon by its aphia_id",
         "operationId":"add_worms_taxon",
         "requestBody":{
           "content":{
@@ -5939,7 +5939,14 @@
         },
         "responses":{
           "200":{
-            "description":"Successful Response"
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Add Worms Taxon Addworms  Post"
+                }
+              }
+            }
           },
           "422":{
             "description":"Validation Error",

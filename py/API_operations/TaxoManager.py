@@ -23,7 +23,6 @@ from helpers import DateTime
 from helpers.DynamicLogs import get_logger
 from providers.EcoTaxoServer import EcoTaxoServerClient
 from .helpers.Service import Service
-from API_models.taxonomy import TaxoWormsModel
 
 logger = get_logger(__name__)
 
@@ -78,7 +77,7 @@ class CentralTaxonomyService(Service):
         ret = self.client.call("/gettaxon/", {"filtertype": "id", "id": taxon_id})
         return ret.json()
 
-    def add_taxon(self, current_user_id: UserIDT, taxon_params: Dict) -> str:
+    def add_taxon(self, current_user_id: UserIDT, taxon_params: Dict) -> Any:
         # Security barrier, user must be admin or manager in any project
         #                            creation_datetime: str, =
         _user = RightsBO.user_can_add_taxonomy(self.ro_session, current_user_id)
@@ -99,12 +98,12 @@ class CentralTaxonomyService(Service):
         self,
         aphia_id: int,
         current_user_id: UserIDT,
-    ) -> Dict:
+    ) -> Any:
         _user = RightsBO.user_can_add_taxonomy(self.ro_session, current_user_id)
         current_user: User = self.session.query(User).get(current_user_id)
         taxon = {"aphia_id": aphia_id, "creator_email": current_user.email}
         ret = self.client.call("/addwormstaxon/", taxon)
-        return ret
+        return ret.json()
 
     def push_stats(self) -> Any:
         """
