@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.41"
+    "version":"0.0.42"
   },
   "servers":[
     {
@@ -5730,30 +5730,6 @@
             "in":"query"
           },
           {
-            "description":"Worms Aphia Id",
-            "required":true,
-            "schema":{
-              "title":"Aphia Id",
-              "type":"integer",
-              "description":"Worms Aphia Id"
-            },
-            "example":2367,
-            "name":"aphia_id",
-            "in":"query"
-          },
-          {
-            "description":"The Worms rank",
-            "required":true,
-            "schema":{
-              "title":"rank",
-              "type":"string",
-              "description":"The Worms rank"
-            },
-            "example":"Class",
-            "name":"rank",
-            "in":"query"
-          },
-          {
             "description":"It's not possible to create a root taxon.",
             "required":true,
             "schema":{
@@ -5949,13 +5925,13 @@
           "Taxonomy Tree"
         ],
         "summary":"Add Worms Taxon",
-        "description":"add worms taxon with or without lineage information",
+        "description":"Add worms taxon with or without lineage information",
         "operationId":"add_worms_taxon",
         "requestBody":{
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/TaxoWormsModel"
+                "$ref":"#/components/schemas/AddWormsTaxonModel"
               }
             }
           },
@@ -6887,6 +6863,18 @@
               "bottomdepth":322,
               "ship":"suroit"
             }
+          }
+        }
+      },
+      "AddWormsTaxonModel":{
+        "title":"AddWormsTaxonModel",
+        "type":"object",
+        "properties":{
+          "aphia_id":{
+            "title":"AphiaId",
+            "type":"integer",
+            "description":"The unique numeric aphia_id of the taxon in WoRMS.",
+            "example":12876
           }
         }
       },
@@ -7885,7 +7873,8 @@
           "taxoserver_url":{
             "title":"EcoTaxoServer URL",
             "type":"string",
-            "description":"url of taxonomy server ecotaxoserver"
+            "description":"url of taxonomy server ecotaxoserver",
+            "default":"https://ecotaxoserver.obs-vlfr.fr/"
           }
         },
         "description":"Values which can be considered identical over the lifetime of the back-end."
@@ -10910,6 +10899,7 @@
         "title":"TaxaSearchRsp",
         "required":[
           "id",
+          "status",
           "text",
           "pr"
         ],
@@ -10920,6 +10910,12 @@
             "type":"integer",
             "description":"The taxon/category IDs.",
             "example":14334
+          },
+          "status":{
+            "title":"Status",
+            "type":"string",
+            "description":"The taxon/category status, 'D' for Deprecated, 'A' for Approved or 'N' for Not approved.",
+            "example":"P"
           },
           "aphia_id":{
             "title":"Aphia Id",
@@ -10944,58 +10940,6 @@
             "type":"integer",
             "description":"1 if the taxon is in project list, 0 otherwise.",
             "example":0
-          }
-        }
-      },
-      "TaxoWormsModel":{
-        "title":"TaxoWormsModel",
-        "required":[
-          "name",
-          "lineage",
-          "status"
-        ],
-        "type":"object",
-        "properties":{
-          "aphia_id":{
-            "title":"AphiaId",
-            "type":"integer",
-            "description":"The unique numeric aphia_id of the taxon if in Worms.",
-            "example":12876
-          },
-          "rank":{
-            "title":"Rank",
-            "type":"string",
-            "description":"The rank in Worms of the taxon.",
-            "example":"Echinodermata X"
-          },
-          "name":{
-            "title":"Name",
-            "type":"string",
-            "description":"The name of the taxon.",
-            "example":"Echinodermata X"
-          },
-          "lineage":{
-            "title":"Taxon Worms lineage",
-            "type":"object",
-            "description":"The lineage of the taxon in Worms.",
-            "example":{
-              "2":{
-                "AphiaID":1,
-                "rank":"Superdomain",
-                "scientificname":"Biota"
-              }
-            }
-          },
-          "status":{
-            "title":"Worms taxon status",
-            "type":"string",
-            "description":"The taxon status in worms 'accepted' .",
-            "example":"accepted"
-          },
-          "creator_email":{
-            "title":"Creator email",
-            "description":"Email of the creator of the taxon.",
-            "example":"creator.user@emaim.com"
           }
         }
       },
@@ -11121,11 +11065,13 @@
           "id",
           "name",
           "type",
-          "nb_objects",
-          "nb_children_objects",
+          "status",
           "display_name",
           "lineage",
           "id_lineage",
+          "lineage_status",
+          "nb_objects",
+          "nb_children_objects",
           "children"
         ],
         "type":"object",
@@ -11135,18 +11081,6 @@
             "type":"integer",
             "description":"The taxon/category IDs.",
             "example":1
-          },
-          "aphia_id":{
-            "title":"Aphia Id",
-            "type":"integer",
-            "description":"The Worms aphia_id of the taxon.",
-            "example":"null"
-          },
-          "renm_id":{
-            "title":"Renm id",
-            "type":"integer",
-            "description":"The advised replacement ID if the taxon/category is deprecated.",
-            "example":"null"
           },
           "name":{
             "title":"Name",
@@ -11160,17 +11094,11 @@
             "description":"The taxon/category type, 'M' for Morpho or 'P' for Phylo.",
             "example":"P"
           },
-          "nb_objects":{
-            "title":"Nb objects",
-            "type":"integer",
-            "description":"How many objects are classified in this category.",
-            "example":34118
-          },
-          "nb_children_objects":{
-            "title":"Nb children objects",
-            "type":"integer",
-            "description":"How many objects are classified in this category children (not itself).",
-            "example":30091727
+          "status":{
+            "title":"Status",
+            "type":"string",
+            "description":"The taxon/category status, 'D' for Deprecated, 'A' for Approved or 'N' for Notapproved.",
+            "example":"P"
           },
           "display_name":{
             "title":"Display name",
@@ -11199,6 +11127,54 @@
             "example":[
               1
             ]
+          },
+          "lineage_status":{
+            "title":"Id lineage",
+            "type":"string",
+            "description":"The taxon ancestors' status, including self, in first.",
+            "example":"DDAAA"
+          },
+          "renm_id":{
+            "title":"Renm id",
+            "type":"integer",
+            "description":"The advised replacement ID if the taxon/category is deprecated.",
+            "example":"null"
+          },
+          "nb_objects":{
+            "title":"Nb objects",
+            "type":"integer",
+            "description":"How many objects are classified in this category.",
+            "example":34118
+          },
+          "nb_children_objects":{
+            "title":"Nb children objects",
+            "type":"integer",
+            "description":"How many objects are classified in this category children (not itself).",
+            "example":30091727
+          },
+          "aphia_id":{
+            "title":"Aphia ID",
+            "type":"integer",
+            "description":"The WoRMS aphia_id of the taxon.",
+            "example":"null"
+          },
+          "rank":{
+            "title":"Rank",
+            "type":"string",
+            "description":"The WoRMS rank of the taxon.",
+            "example":"null"
+          },
+          "closest_worms":{
+            "title":"Closest WoRMS parent",
+            "type":"integer",
+            "description":"The id of the next WoRMS taxon.",
+            "example":"null"
+          },
+          "closest_phylo":{
+            "title":"Closest Phylo parent",
+            "type":"integer",
+            "description":"The id of the closest parent Phylo taxon.",
+            "example":"null"
           },
           "children":{
             "title":"Children",

@@ -92,20 +92,18 @@ class CentralTaxonomyService(Service):
 
     def search_worms_name(self, name: str) -> List[Dict]:
         ret = self.client.call("/wormstaxon/%s" % name, {})
-        print('ret----',ret)
         ret = ret.json()
         return ret
 
     def add_worms_taxon(
         self,
-        taxon: TaxoWormsModel,
+        aphia_id: int,
         current_user_id: UserIDT,
     ) -> Dict:
         _user = RightsBO.user_can_add_taxonomy(self.ro_session, current_user_id)
         current_user: User = self.session.query(User).get(current_user_id)
-        taxon.creator_email = current_user.email
-        endpointparam: Dict[str, str] = {"taxon": json.dumps(taxon.dict())}
-        ret = self.client.call("/addwormstaxon/", endpointparam)
+        taxon = {"aphia_id": aphia_id, "creator_email": current_user.email}
+        ret = self.client.call("/addwormstaxon/", taxon)
         return ret
 
     def push_stats(self) -> Any:

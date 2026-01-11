@@ -3331,18 +3331,6 @@ def add_taxon_in_central(
         description="The taxon/category verbatim name.",
         example="Echinodermata",
     ),
-    aphia_id: int = Query(
-        ...,
-        title="Aphia Id",
-        description="Worms Aphia Id",
-        example=2367,
-    ),
-    rank: str = Query(
-        ...,
-        title="rank",
-        description="The Worms rank",
-        example="Class",
-    ),
     parent_id: int = Query(
         ...,
         title="Parent Id",
@@ -3533,14 +3521,14 @@ def search_worms_name(
     response_class=Response,
 )
 def add_worms_taxon(
-    taxon: TaxoWormsModel = Body(...),
+    taxon: AddWormsTaxonModel = Body(...),
     _current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> Response:
     """
-    add worms taxon with or without lineage information
+    Add worms taxon with or without lineage information
     """
     with CentralTaxonomyService() as sce:
-        ret = sce.add_worms_taxon(taxon, _current_user)
+        ret = sce.add_worms_taxon(taxon.aphia_id, _current_user)
     response = Response(json.dumps(ret.json()), media_type="application/json")
     response.status_code = ret.status_code
     return response
