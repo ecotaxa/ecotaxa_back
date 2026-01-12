@@ -264,12 +264,12 @@ class LimitedInCategoriesProjectSet(FeatureConsistentProjectSet):
             " WHERE flat.objid IN "
             " ( SELECT q.objid FROM "
             " ( SELECT obh2.objid, ROW_NUMBER() OVER (PARTITION BY obh2.classif_id "
-            "                                         ORDER BY obh2.classif_id) rank "  # TODO obh2.random_value
+            "                                         ORDER BY obh2.classif_id) rrank "  # TODO obh2.random_value
             "     FROM %s obh2"
             "     JOIN acquisitions acq2 ON acq2.acquisid = obh2.acquisid"
             "     JOIN samples sam2 ON sam2.sampleid = acq2.acq_sample_id AND sam2.projid IN ({0})"
             "    WHERE obh2.classif_qual = 'V' AND obh2.classif_id IN ({2})) q"
-            "   WHERE rank <= {1} )" % ObjectHeader.__tablename__
+            "   WHERE rrank <= {1} )" % ObjectHeader.__tablename__
         ).format(prj_in_list, self.random_limit, categ_in_list)
         return sql
 

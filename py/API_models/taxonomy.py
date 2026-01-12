@@ -178,8 +178,8 @@ class _Taxo2Model(BaseModel):
     )
     rank: Optional[str] = Field(
         title="Rank",
-        description="The rank in Worms of the taxon.",
-        example="Echinodermata X",
+        description="The WoRMS rank of the taxon.",
+        example="Subphylum",
     )
     id_instance: Any = Field(
         title="Id instance", description="The instance Id.", example=1

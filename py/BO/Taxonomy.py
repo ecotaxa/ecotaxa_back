@@ -197,17 +197,17 @@ class TaxonomyBO(object):
         SQL for recursive '>'-separated names of parents.
         """
         sql = """(WITH RECURSIVE rq(id, name, parent_id) 
-                   AS (SELECT id, name, parent_id, 1 AS rank 
+                   AS (SELECT id, name, parent_id, 1 AS rrank 
                          FROM taxonomy 
                         WHERE id = {0}
                        UNION
-                       SELECT txpr.id, txpr.name, txpr.parent_id, rank+1 AS rank 
+                       SELECT txpr.id, txpr.name, txpr.parent_id, rrank+1 AS rrank 
                          FROM rq 
                          JOIN taxonomy txpr ON txpr.id = rq.parent_id)
                     SELECT string_agg(name,'>') 
                       FROM (SELECT name 
                               FROM rq 
-                          ORDER BY rank desc) q)""".format(
+                          ORDER BY rrank desc) q)""".format(
             ref_obj_id
         )
         return sql
