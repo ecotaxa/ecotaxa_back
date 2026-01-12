@@ -49,6 +49,9 @@ class WoRMSBO(TaxonBO):
         )
         self.kingdom = kingdom
 
+    def __repr__(self):
+        return f"WoRMSBO({self.id}: {self.display_name}, aphia={self.aphia_id}, rank={self.rank}, kingdom={self.kingdom})"
+
 
 def create_worms_bo(taxon: TaxonBO) -> WoRMSBO:
     # Find the kingdom in lineage
@@ -56,8 +59,8 @@ def create_worms_bo(taxon: TaxonBO) -> WoRMSBO:
     # "Biota" is usually at the very end (root)
     # Kingdom is the one just before "Biota"
     kingdom = None
-    if len(taxon.lineage) >= 2:
-        if taxon.lineage[-1] == "Biota":
+    if taxon.lineage[-1] == "Biota":
+        if len(taxon.lineage) >= 2:
             kingdom = taxon.lineage[-2]
         else:
             kingdom = taxon.lineage[-1]
@@ -89,31 +92,38 @@ class WoRMSifier(object):
         self.morpho2phylo: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
 
     def do_match(self, session: Session, taxa_ids: List[TaxonomyIDT]):
-        taxon_set = TaxonBOSet(session, taxa_ids)
+        req_taxon_set = TaxonBOSet(session, taxa_ids)
+
         # Get all parent ids
         parent_ids: Set[ClassifIDT] = set()
-        for a_taxon in taxon_set.as_list():
+        for a_taxon in req_taxon_set.as_list():
             parent_ids.update(a_taxon.id_lineage[1:])
         parent_taxon_set = TaxonBOSet(session, list(parent_ids))
-        # And all target renames
-        rename_ids: Set[ClassifIDT] = set()
-        for a_taxon in taxon_set.as_list():
-            if a_taxon.renm_id is not None:
-                rename_ids.add(a_taxon.renm_id)
-        renamed_taxon_set = TaxonBOSet(session, list(rename_ids))
 
+        added_phylos = set(taxa_ids)
         # Get closest phylos for morphos
-        for a_taxon in taxon_set.as_list():
+        for a_taxon in req_taxon_set.as_list():
             if not a_taxon.type == TaxoType.morpho:
                 continue
             for parent_id in a_taxon.id_lineage[1:]:
                 if parent_taxon_set.get_by_id(parent_id).type != TaxoType.morpho:
                     self.morpho2phylo[a_taxon.id] = parent_id
+                    added_phylos.add(parent_id)
                     break
             else:
                 self.morpho2phylo[a_taxon.id] = None  # Can't resolve
+
+        # And all target renames
+        rename_ids: Set[ClassifIDT] = set()
+        for a_taxon in req_taxon_set.as_list():
+            if a_taxon.renm_id is not None:
+                rename_ids.add(a_taxon.renm_id)
+        renamed_taxon_set = TaxonBOSet(session, list(rename_ids))
+
         # Get closest WoRMS for phylos
-        for a_taxon in taxon_set.as_list():
+        for a_taxon in (
+            req_taxon_set.as_list() + TaxonBOSet(session, list(added_phylos)).as_list()
+        ):
             if not a_taxon.type == TaxoType.phylo:
                 continue
             if a_taxon.aphia_id is not None:
@@ -121,7 +131,10 @@ class WoRMSifier(object):
             elif a_taxon.renm_id is not None:
                 renamed_taxon = renamed_taxon_set.get_by_id(a_taxon.renm_id)
                 self.phylo2worms[a_taxon.id] = create_worms_bo(renamed_taxon)
-            # No solution, excluded taxon, will be signaled during export
+            else:
+                print("No solution for", a_taxon)
+                # No solution, excluded taxon, will be signaled during export
+        print("Mapping: ", self.phylo2worms, self.morpho2phylo)
 
     def get_worms_targets(self) -> List[WoRMSBO]:
         return list(self.phylo2worms.values())
