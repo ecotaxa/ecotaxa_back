@@ -299,7 +299,7 @@ def test_classif(database, fastapi, caplog, tstlogs):
             "name": "Copepoda",
             "nb_children_objects": 0,
             "nb_objects": 0,
-            "rank": None,
+            "rank": "Class",
             "renm_id": None,
             "status": "A",
             "type": "P",
