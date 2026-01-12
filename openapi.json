@@ -10981,8 +10981,8 @@
           "rank":{
             "title":"Rank",
             "type":"string",
-            "description":"The rank in Worms of the taxon.",
-            "example":"Echinodermata X"
+            "description":"The WoRMS rank of the taxon.",
+            "example":"Subphylum"
           },
           "name":{
             "title":"Name",
