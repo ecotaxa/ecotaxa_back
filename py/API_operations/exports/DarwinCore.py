@@ -89,6 +89,12 @@ WoRMSAggregT = Dict[LsidT, Tuple[OccIDT, SampleAggregForTaxon, WoRMSBO]]
 ROLE_FOR_ASSOCIATE = "originator"
 
 
+def get_scientific_name_id(worms) -> str:
+    if worms.aphia_id == 1:
+        return "t"  # Value returned from API
+    return "urn:lsid:marinespecies.org:taxname:" + str(worms.aphia_id)
+
+
 class DarwinCoreExport(JobServiceBase):
     """
     EMODNet export.
@@ -262,7 +268,7 @@ class DarwinCoreExport(JobServiceBase):
                     occurrenceID=occurrence_id,
                     individualCount=0,
                     scientificName=worms.name,  # ETS stores scientificname as name,
-                    scientificNameID=worms.aphia_id,
+                    scientificNameID=get_scientific_name_id(worms),
                     kingdom=worms.kingdom,
                     occurrenceStatus=OccurrenceStatusEnum.absent,
                     basisOfRecord=BasisOfRecordEnum.machineObservation,
@@ -571,7 +577,7 @@ class DarwinCoreExport(JobServiceBase):
             return ret
         # Produce the coverage
         produced = set()
-        for a_worms_entry in worms_targets:
+        for a_worms_entry in sorted(worms_targets, key=lambda t: t.name):
             rank = a_worms_entry.rank
             value = a_worms_entry.name
             assert rank is not None, "No rank for %s" % str(a_worms_entry)
@@ -1024,7 +1030,7 @@ class DarwinCoreExport(JobServiceBase):
                 # Below is better as an EMOF @see CountOfBiologicalEntity
                 # individualCount=individual_count,
                 scientificName=worms.name,  # scientificname,
-                scientificNameID=worms.aphia_id,
+                scientificNameID=get_scientific_name_id(worms),
                 kingdom=worms.kingdom,
                 occurrenceStatus=OccurrenceStatusEnum.present,
                 basisOfRecord=BasisOfRecordEnum.machineObservation,
@@ -1188,7 +1194,7 @@ class DarwinCoreExport(JobServiceBase):
                 eventID=event_id,
                 occurrenceID=occurrence_id,
                 scientificName=worms.name,
-                scientificNameID=worms.aphia_id,
+                scientificNameID=get_scientific_name_id(worms),
                 kingdom=worms.kingdom,
                 occurrenceStatus=OccurrenceStatusEnum.present,
                 basisOfRecord=BasisOfRecordEnum.machineObservation,

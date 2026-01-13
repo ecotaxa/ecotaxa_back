@@ -8,8 +8,6 @@ from zipfile import ZipFile
 import pytest
 from starlette import status
 
-pytestmark = pytest.mark.skip(reason="Kept aside for now")
-
 from tests.credentials import (
     ADMIN_AUTH,
     REAL_USER_ID,

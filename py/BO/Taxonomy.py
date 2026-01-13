@@ -94,6 +94,9 @@ class TaxonBO(object):
     def top_down_lineage(self, sep: str = ">"):
         return sep.join(reversed(self.lineage))
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.id}: {self.display_name})"
+
 
 class TaxonomyBO(object):
     """
@@ -517,7 +520,7 @@ class TaxonBOSet(object):
         select_list.extend(
             [
                 text(
-                    "t%d.id, t%d.name, t%d.aphia_id, t%d.taxotype, t%d.taxostatus, t%d.rank,t%d.rename_to"
+                    "t%d.id, t%d.name, t%d.aphia_id, t%d.taxotype, t%d.taxostatus, t%d.rank, t%d.rename_to"
                     % (level, level, level, level, level, level, level)
                 )  # type:ignore
                 for level in range(1, TaxonomyBO.MAX_TAXONOMY_LEVELS)
@@ -544,11 +547,11 @@ class TaxonBOSet(object):
                 lst_rec.pop(0),
                 lst_rec.pop(0),
             )
+            aphia_id: Optional[int] = lst_rec[2]
             cat_type = lst_rec[3]
             cat_status = lst_rec[4]
-            rename_id = lst_rec[6]
-            aphia_id: Optional[int] = lst_rec[2]
             rank: Optional[str] = lst_rec[5]
+            rename_id = lst_rec[6]
             numf = 7  # Number of fields in a block, i.e. a taxon
             # Loop over self + parents to get ancestors' fields. Not the clearest code in the world.
             lineage_id = [an_id for an_id in lst_rec[0::numf] if an_id is not None]
