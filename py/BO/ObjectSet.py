@@ -78,7 +78,7 @@ from DB.helpers.Postgres import pg_insert, PgInsert
 from DB.helpers.SQL import WhereClause, SQLParamDict, FromClause, OrderClause
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
-
+from DB.Taxonomy import Taxonomy
 # Typings, to be clear that these are not e.g. project IDs
 # Object_id + parents + project
 ObjectIDWithParentsListT = List[ObjectIDWithParentsT]
@@ -652,6 +652,11 @@ class EnumeratedObjectSet(MappedTable):
         :param log_timestamp: The time to set on objects.
         :returns updated rows and a summary of changes, for MRU and logging.
         """
+        # get the deprecated inside classif_ids- cannot classify into a deprecated category
+
+        res=self.session.query(Taxonomy.id).filter(Taxonomy.id==any_(list(classif_ids))).filter(Taxonomy.taxostatus=='D').all()
+        deprecateds=[r[0] for r in res]
+        assert len(deprecateds)==0, "Cannot classify into deprecated categories."
         # Gather state of classification, for impacted objects, before the change. Keep a lock on rows.
         prev = self._fetch_classifs_and_lock()
 
