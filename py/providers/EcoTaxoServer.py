@@ -24,7 +24,7 @@ class EcoTaxoServerClient(object):
         self.instance_id = instance_id
         self.secret_key = secret_key
 
-    def call(self, endpoint: str, endpoint_params: Dict[str, Any]):
+    def call(self, endpoint: str, endpoint_params: Dict[str, Any],method:str='post'):
         """
         Issue a REST query on EcoTaxoServer
         """
@@ -34,7 +34,12 @@ class EcoTaxoServerClient(object):
             "ecotaxa_version": "2.5.11",  # TODO: Wondering why this param
         }
         params.update(endpoint_params)
-        r = requests.post(
-            self.url + endpoint, params
-        )  # TODO: Use some async lib instead of requests
+        if method=='get':
+            r = requests.get(
+                self.url + endpoint, params
+            )  # TODO: Use some async lib instead of requests
+        else:
+            r = requests.post(
+                self.url + endpoint, params
+            )  # TODO: Use some async lib instead of requests
         return r

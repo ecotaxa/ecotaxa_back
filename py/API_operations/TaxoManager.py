@@ -90,7 +90,7 @@ class CentralTaxonomyService(Service):
         return ret.json()
 
     def search_worms_name(self, name: str) -> List[Dict]:
-        ret = self.client.call("/wormstaxon/%s" % name, {})
+        ret = self.client.call("/wormstaxon/%s" % name, {},'get')
         ret = ret.json()
         return ret
 
