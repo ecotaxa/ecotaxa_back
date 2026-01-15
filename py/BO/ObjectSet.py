@@ -51,6 +51,7 @@ from BO.Training import TrainingBO, PredictionBO
 from BO.User import UserIDT
 from BO.helpers.MappedTable import MappedTable
 from DB import Session, Query, Process, Taxonomy, User, ObjectCNNFeatureVector
+from DB.Taxonomy import TaxoStatus
 from DB.Acquisition import Acquisition
 from DB.Image import Image
 from DB.Object import (
@@ -79,6 +80,7 @@ from DB.helpers.SQL import WhereClause, SQLParamDict, FromClause, OrderClause
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 from DB.Taxonomy import Taxonomy
+
 # Typings, to be clear that these are not e.g. project IDs
 # Object_id + parents + project
 ObjectIDWithParentsListT = List[ObjectIDWithParentsT]
@@ -655,8 +657,8 @@ class EnumeratedObjectSet(MappedTable):
         # get the deprecated inside classif_ids- cannot classify into a deprecated category
 
         res=self.session.query(Taxonomy.id).filter(Taxonomy.id==any_(list(classif_ids))).filter(Taxonomy.taxostatus=='D').all()
-        deprecateds=[r[0] for r in res]
-        assert len(deprecateds)==0, "Cannot classify into deprecated categories."
+        deprecateds = [r[0] for r in res]
+        assert len(deprecateds) == 0, "Cannot classify into deprecated categories."
         # Gather state of classification, for impacted objects, before the change. Keep a lock on rows.
         prev = self._fetch_classifs_and_lock()
 
@@ -679,6 +681,7 @@ class EnumeratedObjectSet(MappedTable):
             ObjectHeader.classif_date.name,
             ObjectHeader.classif_score.name,
         )
+        used_classifs = set()
         for obj_id, wanted in zip(self.object_ids, classif_ids):
             # Present state
             prev_obj = prev[obj_id]
@@ -691,6 +694,8 @@ class EnumeratedObjectSet(MappedTable):
                 next_classif_id = prev_classif_id
             else:
                 next_classif_id = wanted
+            used_classifs.add(prev_classif_id)
+            used_classifs.add(next_classif_id)
             # Prevent inconsistency, cannot classify to nothing
             if next_classif_id is None:
                 continue
@@ -733,6 +738,18 @@ class EnumeratedObjectSet(MappedTable):
         if len(updates) == 0:
             # Nothing to do
             return 0, all_changes
+
+        # Ensure no taxon from classif_ids (old or new) is deprecated
+        deprecated_taxa = (
+            self.session.query(Taxonomy.id)
+            .filter(
+                Taxonomy.id.in_(list(used_classifs)),
+                Taxonomy.taxostatus == TaxoStatus.deprecated,
+            )
+            .all()
+        )
+        if deprecated_taxa:
+            assert False, "Cannot classify or validate deprecated taxa"
 
         # Update of obj_head, grouped by similar operations.
         nb_updated = 0
@@ -778,6 +795,7 @@ class EnumeratedObjectSet(MappedTable):
         :param force: do not preserve protected states.
         :returns updated rows and a summary of changes, for stats.
         """
+
         # Gather state of classification, for impacted objects, before the change. Keep a lock on rows.
         prev = self._fetch_classifs_and_lock()
 
