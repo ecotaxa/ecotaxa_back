@@ -24,11 +24,11 @@ class EcoTaxoServerClient(object):
         self.instance_id = instance_id
         self.secret_key = secret_key
 
-    def call(self, endpoint: str, endpoint_params: Dict[str, Any],method:str='post'):
+    def call(self, endpoint: str, endpoint_params: Dict[str, Any],method: str='post'):
         """
         Issue a REST query on EcoTaxoServer
         """
-        params = {
+        params: Dict[str, Any] = {
             "id_instance": int(self.instance_id),
             "sharedsecret": self.secret_key,
             "ecotaxa_version": "2.5.11",  # TODO: Wondering why this param
