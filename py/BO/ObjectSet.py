@@ -654,6 +654,9 @@ class EnumeratedObjectSet(MappedTable):
         :param log_timestamp: The time to set on objects.
         :returns updated rows and a summary of changes, for MRU and logging.
         """
+        # Gather state of classification, for impacted objects, before the change. Keep a lock on rows.
+        prev = self._fetch_classifs_and_lock()
+
         # Cook a diff b/w present and wanted values, both for the update of obj_head and preparing the ones on _stat
         # Group the updates as lots of them are identical
         updates: Dict[Tuple[ClassifIDT, str], EnumeratedObjectSet] = {}
