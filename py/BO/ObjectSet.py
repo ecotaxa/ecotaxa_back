@@ -689,7 +689,8 @@ class EnumeratedObjectSet(MappedTable):
                 next_classif_id = prev_classif_id
             else:
                 next_classif_id = wanted
-            used_classifs.add(prev_classif_id)
+            if wanted_qualif != "=":  # special value for 'keep current qualification'
+                used_classifs.add(prev_classif_id)
             used_classifs.add(next_classif_id)
             # Prevent inconsistency, cannot classify to nothing
             if next_classif_id is None:
