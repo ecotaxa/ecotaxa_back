@@ -32,9 +32,6 @@ if True:
     # noinspection PyUnresolvedReferences
     from .TaxoRecast import TaxoRecast
 
-    # noinspection PyUnresolvedReferences
-    from .WoRMs import WoRMS
-
     from .Training import Training
 
     from .Prediction import Prediction

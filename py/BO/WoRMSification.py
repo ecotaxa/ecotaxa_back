@@ -4,64 +4,149 @@
 #
 # A description of transformation to the WoRMS taxonomic system.
 #
-from typing import Dict, Set, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Set
+
+from sqlalchemy.orm import Session
 
 from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.ObjectSetQueryPlus import TaxoRemappingT
-from BO.Taxonomy import TaxonBO
-from DB import WoRMS
+from BO.Taxonomy import TaxonBOSet, TaxonBO
+from DB.Taxonomy import TaxonomyIDT, TaxoType
+
+
+class WoRMSBO(TaxonBO):
+    __slots__ = ["kingdom"]
+
+    def __init__(
+        self,
+        cat_type: str,
+        cat_status: str,
+        display_name: str,
+        nb_objects: int,
+        nb_children_objects: int,
+        lineage: List[str],
+        id_lineage: List[ClassifIDT],
+        lineage_status: str,
+        aphia_id: Optional[int] = None,
+        rank: Optional[str] = None,
+        children: Optional[List[ClassifIDT]] = None,
+        rename_id: Optional[int] = None,
+        kingdom: Optional[str] = None,
+    ):
+        super().__init__(
+            cat_type,
+            cat_status,
+            display_name,
+            nb_objects,
+            nb_children_objects,
+            lineage,
+            id_lineage,
+            lineage_status,
+            aphia_id,
+            rank,
+            children,
+            rename_id,
+        )
+        self.kingdom = kingdom
+
+    def __repr__(self):
+        return f"WoRMSBO({self.id}: {self.display_name}, aphia={self.aphia_id}, rank={self.rank}, kingdom={self.kingdom})"
+
+
+def create_worms_bo(taxon: TaxonBO) -> WoRMSBO:
+    # Find the kingdom in lineage
+    # The lineage is leaf-to-root, so kingdom is near the end
+    # "Biota" is usually at the very end (root)
+    # Kingdom is the one just before "Biota"
+    kingdom = None
+    if taxon.lineage[-1] == "Biota":
+        if len(taxon.lineage) >= 2:
+            kingdom = taxon.lineage[-2]
+        else:
+            kingdom = ""  # No kingdom for the king of kingdoms
+    return WoRMSBO(
+        cat_type=taxon.type,
+        cat_status=taxon.status,
+        display_name=taxon.display_name,
+        nb_objects=taxon.nb_objects,
+        nb_children_objects=taxon.nb_children_objects,
+        lineage=taxon.lineage,
+        id_lineage=taxon.id_lineage,
+        lineage_status=taxon.lineage_status,
+        aphia_id=taxon.aphia_id,
+        rank=taxon.rank,
+        children=taxon.children,
+        rename_id=taxon.renm_id,
+        kingdom=kingdom,
+    )
 
 
 class WoRMSifier(object):
     """
-    How to go from UniEUK to WoRMS, for a set of taxa.
+    How to go from EcoTaxa IDs to WoRMS, for a set of taxa.
     The taxa might be Phylo (mapped to WoRMS) or Morpho (mapped to a Phylo itself mapped to WoRMS)
     """
 
     def __init__(self) -> None:
         # A dict with Phylo taxo ids->WoRMS entry. The taxa might be Morpho ones,
         #                         as the XLSX data source contains such mappings.
-        self.phylo2worms: Dict[ClassifIDT, WoRMS] = {}
+        self.phylo2worms: Dict[ClassifIDT, WoRMSBO] = {}
         # A dict with Morpho -> nearest_phylo mapping. None value means that there
         # is no "solution" for the "problem" of mapping this taxon, or that it was
         # purposing-ly discarded.
-        self.morpho2phylo: TaxoRemappingT = {}
+        self.morpho2phylo: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
 
-    def get_worms_targets(self) -> List[WoRMS]:
-        return [v for k, v in self.phylo2worms.items()]
+    def do_match(self, session: Session, taxa_ids: List[TaxonomyIDT]):
+        req_taxon_list = TaxonBOSet(session, taxa_ids).as_list()
+        # Get all parent ids
+        parent_ids: Set[ClassifIDT] = set()
+        for a_taxon in req_taxon_list:
+            parent_ids.update(a_taxon.id_lineage[1:])
+        parent_taxon_set = TaxonBOSet(session, list(parent_ids))
 
-    def add_phylos(self, assocs: Dict[ClassifIDT, WoRMS]) -> None:
-        """Add the associations from one system to the other"""
-        assert assocs.keys().isdisjoint(self.phylo2worms.keys())
-        self.phylo2worms.update(assocs)
-
-    def add_morpho(self, morpho_id: ClassifIDT, phylo_id: ClassifIDT) -> None:
-        """Store Morpho->Nearest Phylo relationship, knowing that we'll
-        need the phylo->WoRMS"""
-        self.morpho2phylo[morpho_id] = phylo_id
-
-    def uncovered_phylo(self) -> Set[ClassifIDT]:
-        """Return what is needed so that each Phylo has a WoRMS.
-        - phylo2worms.keys() have one by construction,
-        - morpho2phylo.values() _might_ not"""
-        ret = set()
-        phylo2worms = self.phylo2worms.keys()
-        for a_to in self.morpho2phylo.values():
-            if a_to is None or a_to in phylo2worms:
+        # Get closest phylos for morphos
+        added_phylos = set(taxa_ids)
+        for a_taxon in req_taxon_list:
+            if not a_taxon.type == TaxoType.morpho:
                 continue
-            ret.add(a_to)
-        return ret
+            for parent_id in a_taxon.id_lineage[1:]:
+                parent = parent_taxon_set.get_by_id(parent_id)
+                if parent.type != TaxoType.morpho:
+                    self.morpho2phylo[a_taxon.id] = parent_id
+                    added_phylos.add(parent_id)
+                    break
+            else:
+                self.morpho2phylo[a_taxon.id] = None  # Can't resolve
+        added_phylos_list = TaxonBOSet(session, list(added_phylos)).as_list()
 
-    def sanity_check(self, unieuk_per_id: Dict[ClassifIDT, TaxonBO]):
-        for a_morpho_id, a_phylo_id in self.morpho2phylo.items():
-            assert unieuk_per_id[a_morpho_id].type == "M"
-            if a_phylo_id is None:
-                continue
-            assert unieuk_per_id[a_phylo_id].type == "P"
+        # And all target renames
+        rename_ids: Set[ClassifIDT] = set()
+        for a_taxon in req_taxon_list + added_phylos_list:
+            if a_taxon.renm_id is not None:
+                rename_ids.add(a_taxon.renm_id)
+        renamed_taxon_set = TaxonBOSet(session, list(rename_ids))
 
-    def taxotype_sanity_check(self):
-        """Sanity check: no mapped P taxon is present anymore in the transformation to WoRMS"""
-        assert set(self.phylo2worms.keys()).isdisjoint(set(self.morpho2phylo.keys()))
+        # Get closest WoRMS for phylos
+        for a_taxon in req_taxon_list + added_phylos_list:
+            if a_taxon.type == TaxoType.phylo:
+                if a_taxon.aphia_id is not None:  # Closest WoRMS is self
+                    self.phylo2worms[a_taxon.id] = create_worms_bo(a_taxon)
+                elif a_taxon.renm_id is not None:
+                    renamed_taxon = renamed_taxon_set.get_by_id(a_taxon.renm_id)
+                    self.phylo2worms[a_taxon.id] = create_worms_bo(renamed_taxon)
+                else:
+                    print("No solution for Phylo", a_taxon)
+            else:
+                if a_taxon.renm_id is not None:
+                    self.morpho2phylo[a_taxon.id] = a_taxon.renm_id
+                else:
+                    print("No solution for Morpho", a_taxon)
+                # No solution, excluded taxon, will be signaled during export
+        print("Mapping phylo2worms: ", self.phylo2worms)
+        print("Mapping morpho2phylo: ", self.morpho2phylo)
+
+    def get_worms_targets(self) -> List[WoRMSBO]:
+        return list(self.phylo2worms.values())
 
     def apply_recast(self, recast: TaxoRemappingT) -> None:
         recast = recast.copy()  # We destroy it, protect the arg

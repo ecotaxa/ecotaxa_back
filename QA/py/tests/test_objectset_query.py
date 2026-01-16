@@ -103,7 +103,7 @@ def test_all_fields(database, fastapi, caplog):
     # Copy/paste from redoc API
     obj_fields = "classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id, classif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min, latitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos"
     img_fields = "file_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width"
-    txo_fields = "creation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime, name, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype"
+    txo_fields = "creation_datetime, creator_email, display_name, id, id_instance, aphia_id, lastupdate_datetime, name, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype"
     all_fields = (
         ["obj." + fld.strip() for fld in obj_fields.split(",")]
         + ["img." + fld.strip() for fld in img_fields.split(",")]

@@ -2961,7 +2961,7 @@ UPDATE alembic_version SET version_num='e6dda08ff48b' WHERE alembic_version.vers
 COMMIT;
 BEGIN;
 
-INFO  [alembic.runtime.migration] Running upgrade e6dda08ff48b -> 9f8174c268da, organization_id
+-- INFO  [alembic.runtime.migration] Running upgrade e6dda08ff48b -> 9f8174c268da, organization_id
 -- Running upgrade e6dda08ff48b -> 9f8174c268da
 
 ALTER TABLE collection_orga_role ADD COLUMN organization_id INTEGER ;
@@ -2979,15 +2979,38 @@ ALTER TABLE users DROP COLUMN organisation;
 UPDATE alembic_version SET version_num='9f8174c268da' WHERE alembic_version.version_num = 'e6dda08ff48b';
 
 COMMIT;
+
 BEGIN;
 
-INFO  [alembic.runtime.migration] Running upgrade 9f8174c268da -> fc9fb059120c, remove_project_description
+-- INFO  [alembic.runtime.migration] Running upgrade 9f8174c268da -> fc9fb059120c, remove_project_description
 -- Running upgrade 9f8174c268da -> fc9fb059120c
 UPDATE projects SET comments = CONCAT(description,' Comments: ',comments);
 
 UPDATE alembic_version SET version_num='fc9fb059120c' WHERE alembic_version.version_num = '9f8174c268da';
 
 COMMIT;
+
+-- Running upgrade fc9fb059120c -> 08807338f98d
+BEGIN;
+
+DROP INDEX worms_pp;
+
+DROP TABLE worms;
+
+ALTER TABLE taxonomy ADD COLUMN aphia_id INTEGER;
+
+ALTER TABLE taxonomy ADD COLUMN rank VARCHAR(24);
+
+DROP INDEX "IS_TaxonomySource";
+
+CREATE INDEX "IS_TaxonomyAphiaId" ON taxonomy (aphia_id);
+
+ALTER TABLE taxonomy DROP COLUMN id_source;
+
+UPDATE alembic_version SET version_num='08807338f98d' WHERE alembic_version.version_num = 'fc9fb059120c';
+
+COMMIT;
+
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;

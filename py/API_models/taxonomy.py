@@ -4,7 +4,7 @@
 #
 #  Models used in Taxonomy API operations.
 #
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict, Tuple
 
 from API_models.crud import ProjectSummaryModel
 from API_models.helpers.DBtoModel import OrmConfig, combine_models
@@ -14,9 +14,21 @@ from helpers.pydantic import BaseModel, Field
 
 class TaxaSearchRsp(BaseModel):
     id: int = Field(title="Id", description="The taxon/category IDs.", example=14334)
+    status: str = Field(
+        title="Status",
+        description="The taxon/category status, 'D' for Deprecated, 'A' for Approved or 'N' for Not approved.",
+        example="P",
+    )
+    aphia_id: Optional[int] = Field(
+        title="Aphia Id",
+        description="The Worms aphia_id of the taxon.",
+        default=None,
+        example="null",
+    )
     renm_id: Optional[int] = Field(
         title="Renm_id",
         description="The advised replacement ID if the taxon/category is deprecated.",
+        default=None,
         example="null",
     )
     text: str = Field(
@@ -26,19 +38,13 @@ class TaxaSearchRsp(BaseModel):
         title="Pr",
         description="1 if the taxon is in project list, 0 otherwise.",
         example=0,
-    )
+    )  # TODO: dataclass_to_model(TaxonBO) to avoid repeated fields
 
 
 # TODO: dataclass_to_model(TaxonBO) to avoid repeated fields
 class TaxonModel(BaseModel):
     __config__ = OrmConfig
     id: int = Field(title="Id", description="The taxon/category IDs.", example=1)
-    renm_id: Optional[int] = Field(
-        title="Renm id",
-        description="The advised replacement ID if the taxon/category is deprecated.",
-        default=None,
-        example="null",
-    )
     name: str = Field(
         title="Name", description="The taxon/category verbatim name.", example="living"
     )
@@ -47,15 +53,10 @@ class TaxonModel(BaseModel):
         description="The taxon/category type, 'M' for Morpho or 'P' for Phylo.",
         example="P",
     )
-    nb_objects: int = Field(
-        title="Nb objects",
-        description="How many objects are classified in this category.",
-        example=34118,
-    )
-    nb_children_objects: int = Field(
-        title="Nb children objects",
-        description="How many objects are classified in this category children (not itself).",
-        example=30091727,
+    status: str = Field(
+        title="Status",
+        description="The taxon/category status, 'D' for Deprecated, 'A' for Approved or 'N' for Notapproved.",
+        example="P",
     )
     display_name: str = Field(
         title="Display name",
@@ -71,6 +72,39 @@ class TaxonModel(BaseModel):
         title="Id lineage",
         description="The taxon/category IDs of ancestors, including self, in first.",
         example=[1],
+    )
+    lineage_status: str = Field(
+        title="Id lineage",
+        description="The taxon ancestors' status, including self, in first.",
+        example="DDAAA",
+    )
+    renm_id: Optional[int] = Field(
+        title="Renm id",
+        description="The advised replacement ID if the taxon/category is deprecated.",
+        default=None,
+        example="null",
+    )
+    nb_objects: int = Field(
+        title="Nb objects",
+        description="How many objects are classified in this category.",
+        example=34118,
+    )
+    nb_children_objects: int = Field(
+        title="Nb children objects",
+        description="How many objects are classified in this category children (not itself).",
+        example=30091727,
+    )
+    aphia_id: Optional[int] = Field(
+        title="Aphia ID",
+        description="The WoRMS aphia_id of the taxon.",
+        default=None,
+        example="null",
+    )
+    rank: Optional[str] = Field(
+        title="Rank",
+        description="The WoRMS rank of the taxon.",
+        default=None,
+        example="null",
     )
     children: List[int] = Field(
         title="Children",
@@ -110,6 +144,14 @@ class TaxonomyTreeStatus(BaseModel):
     )
 
 
+class AddWormsTaxonModel(BaseModel):
+    aphia_id: Optional[int] = Field(
+        title="AphiaId",
+        description="The unique numeric aphia_id of the taxon in WoRMS.",
+        example=12876,
+    )
+
+
 class _Taxo2Model(BaseModel):
     creation_datetime: Any = Field(
         title="Creation datetime",
@@ -129,11 +171,18 @@ class _Taxo2Model(BaseModel):
     id: Any = Field(
         title="Id", description="The unique numeric id of the taxon.", example=12876
     )
+    aphia_id: Optional[int] = Field(
+        title="AphiaId",
+        description="The unique numeric aphia_id of the taxon if in Worms.",
+        example=12876,
+    )
+    rank: Optional[str] = Field(
+        title="Rank",
+        description="The WoRMS rank of the taxon.",
+        example="Subphylum",
+    )
     id_instance: Any = Field(
         title="Id instance", description="The instance Id.", example=1
-    )
-    id_source: Any = Field(
-        title="Id source", description="The source ID.", example="70372"
     )
     lastupdate_datetime: Any = Field(
         title="Last update datetime",

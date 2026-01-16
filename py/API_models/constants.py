@@ -131,3 +131,8 @@ class Constants(BaseModel):
         description="local install - run without network access",
         default=False,
     )
+    taxoserver_url: str = Field(
+        title="EcoTaxoServer URL",
+        description="url of taxonomy server ecotaxoserver",
+        default="https://ecotaxoserver.obs-vlfr.fr/",
+    )

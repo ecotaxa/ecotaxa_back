@@ -6,6 +6,7 @@
 #
 import os
 import time
+import json
 from logging import INFO
 from typing import Union, Tuple, List, Dict, Any, Optional
 
@@ -95,6 +96,7 @@ from API_models.taxonomy import (
     TaxonomyTreeStatus,
     TaxonUsageModel,
     TaxonCentral,
+    AddWormsTaxonModel,
 )
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
@@ -185,7 +187,7 @@ api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.41",
+    version="0.0.42",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -2434,7 +2436,7 @@ file_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_
 
 **Note that the following fields must be prefixed with the header "txo."** (for example → txo.display_name):
 
-creation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,
+creation_datetime, creator_email, display_name, id, id_instance,aphia_id, lastupdate_datetime,
 name, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.
 
 **All other fields must be prefixed by the header "fre."** (for example → fre.circ.).
@@ -3419,11 +3421,11 @@ def query_taxa_in_worms(
     _current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> Optional[TaxonBO]:
     """
-    Information about a single taxon in WoRMS reference, including its lineage.
+    Information about a single taxon in WoRMS reference, including its lineage. Deprecated, use EcoTaxa tree.
     """
-    with TaxonomyService() as sce:
-        ret: Optional[TaxonBO] = sce.query_worms(aphia_id)
-    return ret
+    # with TaxonomyService() as sce:
+    #     ret: Optional[TaxonBO] = sce.query_worms(aphia_id)
+    return None
 
 
 @app.get(
@@ -3492,6 +3494,42 @@ def matching_with_worms_nice(
             {"request": request, "matches": data, "params": params},
             headers=CRSF_header,
         )
+
+
+@app.get(
+    "/searchworms/{name}",
+    operation_id="search_worms_name",
+    tags=["Taxonomy Tree"],
+    response_model=Optional[List[Dict]],  # type:ignore
+)
+def search_worms_name(
+    name: str,
+    _current_user: Optional[int] = Depends(get_optional_current_user),
+) -> Optional[List[Dict]]:
+    """
+    Information about a single taxon in WoRMS reference, including its lineage.
+    """
+    with CentralTaxonomyService() as sce:
+        ret = sce.search_worms_name(name)
+    return ret
+
+
+@app.post(
+    "/addworms/",
+    operation_id="add_worms_taxon",
+    tags=["Taxonomy Tree"],
+    response_model=Any,  # type:ignore
+)
+def add_worms_taxon(
+    taxon: AddWormsTaxonModel = Body(...),
+    _current_user: Optional[int] = Depends(get_optional_current_user),
+) -> Any:
+    """
+    Add worms taxon by its aphia_id
+    """
+    with CentralTaxonomyService() as sce:
+        with RightsThrower():
+            return sce.add_worms_taxon(taxon.aphia_id, _current_user)
 
 
 # ######################## END OF TAXA_REF

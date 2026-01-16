@@ -24,17 +24,22 @@ class EcoTaxoServerClient(object):
         self.instance_id = instance_id
         self.secret_key = secret_key
 
-    def call(self, endpoint: str, endpoint_params: Dict[str, Any]):
+    def call(self, endpoint: str, endpoint_params: Dict[str, Any],method: str='post'):
         """
         Issue a REST query on EcoTaxoServer
         """
-        params = {
-            "id_instance": self.instance_id,
+        params: Dict[str, Any] = {
+            "id_instance": int(self.instance_id),
             "sharedsecret": self.secret_key,
             "ecotaxa_version": "2.5.11",  # TODO: Wondering why this param
         }
         params.update(endpoint_params)
-        r = requests.post(
-            self.url + endpoint, params
-        )  # TODO: Use some async lib instead of requests
-        return r.json()
+        if method=='get':
+            r = requests.get(
+                self.url + endpoint, params
+            )  # TODO: Use some async lib instead of requests
+        else:
+            r = requests.post(
+                self.url + endpoint, params
+            )  # TODO: Use some async lib instead of requests
+        return r

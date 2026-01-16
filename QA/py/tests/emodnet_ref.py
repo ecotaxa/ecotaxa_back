@@ -82,20 +82,20 @@ This series is part of the long term planktonic monitoring of
     </temporalCoverage>
     <taxonomicCoverage>
       <taxonomicClassification>
-        <taxonRankName>Class</taxonRankName>
-        <taxonRankValue>Actinopterygii</taxonRankValue>
-      </taxonomicClassification>
-      <taxonomicClassification>
         <taxonRankName>Family</taxonRankName>
         <taxonRankValue>Oncaeidae</taxonRankValue>
       </taxonomicClassification>
       <taxonomicClassification>
-        <taxonRankName>Kingdom</taxonRankName>
-        <taxonRankValue>Biota</taxonRankValue>
+        <taxonRankName>Gigaclass</taxonRankName>
+        <taxonRankValue>Actinopterygii</taxonRankValue>
       </taxonomicClassification>
       <taxonomicClassification>
         <taxonRankName>Order</taxonRankName>
         <taxonRankValue>Cyclopoida</taxonRankValue>
+      </taxonomicClassification>
+      <taxonomicClassification>
+        <taxonRankName>Superdomain</taxonRankName>
+        <taxonRankValue>Biota</taxonRankValue>
       </taxonomicClassification>
     </taxonomicCoverage>
   </coverage>

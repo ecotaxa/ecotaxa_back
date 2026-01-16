@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.41"
+    "version":"0.0.42"
   },
   "servers":[
     {
@@ -4073,12 +4073,12 @@
             "in":"path"
           },
           {
-            "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
+            "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance,aphia_id, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
             "required":false,
             "schema":{
               "title":"Fields",
               "type":"string",
-              "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance, id_source, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
+              "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance,aphia_id, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
             },
             "example":"obj.longitude,fre.feret",
             "name":"fields",
@@ -5867,6 +5867,105 @@
         ]
       }
     },
+    "/searchworms/{name}":{
+      "get":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Search Worms Name",
+        "description":"Information about a single taxon in WoRMS reference, including its lineage.",
+        "operationId":"search_worms_name",
+        "parameters":[
+          {
+            "required":true,
+            "schema":{
+              "title":"Name",
+              "type":"string"
+            },
+            "name":"name",
+            "in":"path"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Search Worms Name Searchworms  Name  Get",
+                  "type":"array",
+                  "items":{
+                    "type":"object"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/addworms/":{
+      "post":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Add Worms Taxon",
+        "description":"Add worms taxon by its aphia_id",
+        "operationId":"add_worms_taxon",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/AddWormsTaxonModel"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Add Worms Taxon Addworms  Post"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
     "/admin/db/query":{
       "get":{
         "tags":[
@@ -6771,6 +6870,18 @@
               "bottomdepth":322,
               "ship":"suroit"
             }
+          }
+        }
+      },
+      "AddWormsTaxonModel":{
+        "title":"AddWormsTaxonModel",
+        "type":"object",
+        "properties":{
+          "aphia_id":{
+            "title":"AphiaId",
+            "type":"integer",
+            "description":"The unique numeric aphia_id of the taxon in WoRMS.",
+            "example":12876
           }
         }
       },
@@ -7765,6 +7876,12 @@
             "type":"boolean",
             "description":"local install - run without network access",
             "default":false
+          },
+          "taxoserver_url":{
+            "title":"EcoTaxoServer URL",
+            "type":"string",
+            "description":"url of taxonomy server ecotaxoserver",
+            "default":"https://ecotaxoserver.obs-vlfr.fr/"
           }
         },
         "description":"Values which can be considered identical over the lifetime of the back-end."
@@ -10789,6 +10906,7 @@
         "title":"TaxaSearchRsp",
         "required":[
           "id",
+          "status",
           "text",
           "pr"
         ],
@@ -10799,6 +10917,18 @@
             "type":"integer",
             "description":"The taxon/category IDs.",
             "example":14334
+          },
+          "status":{
+            "title":"Status",
+            "type":"string",
+            "description":"The taxon/category status, 'D' for Deprecated, 'A' for Approved or 'N' for Not approved.",
+            "example":"P"
+          },
+          "aphia_id":{
+            "title":"Aphia Id",
+            "type":"integer",
+            "description":"The Worms aphia_id of the taxon.",
+            "example":"null"
           },
           "renm_id":{
             "title":"Renm_id",
@@ -10842,17 +10972,23 @@
             "description":"The unique numeric id of the taxon parent.",
             "example":11509
           },
+          "aphia_id":{
+            "title":"AphiaId",
+            "type":"integer",
+            "description":"The unique numeric aphia_id of the taxon if in Worms.",
+            "example":12876
+          },
+          "rank":{
+            "title":"Rank",
+            "type":"string",
+            "description":"The WoRMS rank of the taxon.",
+            "example":"Subphylum"
+          },
           "name":{
             "title":"Name",
             "type":"string",
             "description":"The name of the taxon.",
             "example":"Echinodermata X"
-          },
-          "id_source":{
-            "title":"Id source",
-            "type":"string",
-            "description":"The source ID.",
-            "example":"70372"
           },
           "taxotype":{
             "title":"Taxo type",
@@ -10936,11 +11072,13 @@
           "id",
           "name",
           "type",
-          "nb_objects",
-          "nb_children_objects",
+          "status",
           "display_name",
           "lineage",
           "id_lineage",
+          "lineage_status",
+          "nb_objects",
+          "nb_children_objects",
           "children"
         ],
         "type":"object",
@@ -10950,12 +11088,6 @@
             "type":"integer",
             "description":"The taxon/category IDs.",
             "example":1
-          },
-          "renm_id":{
-            "title":"Renm id",
-            "type":"integer",
-            "description":"The advised replacement ID if the taxon/category is deprecated.",
-            "example":"null"
           },
           "name":{
             "title":"Name",
@@ -10969,17 +11101,11 @@
             "description":"The taxon/category type, 'M' for Morpho or 'P' for Phylo.",
             "example":"P"
           },
-          "nb_objects":{
-            "title":"Nb objects",
-            "type":"integer",
-            "description":"How many objects are classified in this category.",
-            "example":34118
-          },
-          "nb_children_objects":{
-            "title":"Nb children objects",
-            "type":"integer",
-            "description":"How many objects are classified in this category children (not itself).",
-            "example":30091727
+          "status":{
+            "title":"Status",
+            "type":"string",
+            "description":"The taxon/category status, 'D' for Deprecated, 'A' for Approved or 'N' for Notapproved.",
+            "example":"P"
           },
           "display_name":{
             "title":"Display name",
@@ -11008,6 +11134,42 @@
             "example":[
               1
             ]
+          },
+          "lineage_status":{
+            "title":"Id lineage",
+            "type":"string",
+            "description":"The taxon ancestors' status, including self, in first.",
+            "example":"DDAAA"
+          },
+          "renm_id":{
+            "title":"Renm id",
+            "type":"integer",
+            "description":"The advised replacement ID if the taxon/category is deprecated.",
+            "example":"null"
+          },
+          "nb_objects":{
+            "title":"Nb objects",
+            "type":"integer",
+            "description":"How many objects are classified in this category.",
+            "example":34118
+          },
+          "nb_children_objects":{
+            "title":"Nb children objects",
+            "type":"integer",
+            "description":"How many objects are classified in this category children (not itself).",
+            "example":30091727
+          },
+          "aphia_id":{
+            "title":"Aphia ID",
+            "type":"integer",
+            "description":"The WoRMS aphia_id of the taxon.",
+            "example":"null"
+          },
+          "rank":{
+            "title":"Rank",
+            "type":"string",
+            "description":"The WoRMS rank of the taxon.",
+            "example":"null"
           },
           "children":{
             "title":"Children",

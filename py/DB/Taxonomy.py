@@ -2,11 +2,33 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-
+from typing import List
+from enum import Enum
 from .helpers.DDL import Index, Column, Sequence, ForeignKey
 from .helpers.Direct import func
 from .helpers.ORM import Model
 from .helpers.Postgres import VARCHAR, INTEGER, CHAR, TIMESTAMP
+
+TaxonomyIDT = int
+TaxonomyIDListT = List[int]
+
+
+class ExtendedEnum(Enum):
+
+    @classmethod
+    def list(cls):
+        return list(map(lambda c: c.value, cls))
+
+
+class TaxoStatus(str, ExtendedEnum):
+    approved = "A"
+    notapproved = "N"
+    deprecated = "D"
+
+
+class TaxoType(str, ExtendedEnum):
+    morpho = "M"
+    phylo = "P"
 
 
 class Taxonomy(Model):
@@ -18,8 +40,9 @@ class Taxonomy(Model):
     # TODO: Remove the sequence. In fact, the unicity comes from EcoTaxoServer
     id: int = Column(INTEGER, Sequence("seq_taxonomy"), primary_key=True)
     parent_id = Column(INTEGER)
+    aphia_id = Column(INTEGER)
+    rank = Column(VARCHAR(24))
     name: str = Column(VARCHAR(100), nullable=False)
-    id_source = Column(VARCHAR(20))
     taxotype: str = Column(
         CHAR(1), nullable=False, server_default="P"
     )  # P = Phylo , M = Morpho
@@ -49,7 +72,7 @@ class Taxonomy(Model):
 
 
 Index("IS_TaxonomyParent", Taxonomy.parent_id)
-Index("IS_TaxonomySource", Taxonomy.id_source)
+Index("IS_TaxonomyAphiaId", Taxonomy.aphia_id)
 Index("IS_TaxonomyNameLow", func.lower(Taxonomy.name))
 Index(
     "IS_TaxonomyDispNameLow", func.lower(Taxonomy.display_name)
