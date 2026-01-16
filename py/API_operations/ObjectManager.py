@@ -545,8 +545,21 @@ SELECT {HINT} COUNT(*) nbr"""
             classif_ids_list, classif_scores_list = PredictionBO(
                 self.session, p_object_ids
             ).get_storable_predictions()
-            for a_list in classif_ids_list:  # Apply the change
-                a_list[a_list.index(only_taxon)] = forced_id
+            for a_classifs_list, a_scores_list in zip(
+                classif_ids_list, classif_scores_list
+            ):  # Apply the change
+                delta_score = None
+                if forced_id in a_classifs_list:
+                    # Renaming target is present already, prevent duplicate prediction (object, category)
+                    # which never comes from ML and is enforced in DB
+                    forced_index = a_classifs_list.index(forced_id)
+                    delta_score = a_scores_list[forced_index]
+                    del a_classifs_list[forced_index]
+                    del a_scores_list[forced_index]
+                src_index = a_classifs_list.index(only_taxon)
+                a_classifs_list[src_index] = forced_id
+                if delta_score is not None:
+                    a_scores_list[src_index] += delta_score
             obj_set = EnumeratedObjectSet(self.session, p_object_ids)
             nb_pred_upd, all_pred_changes = obj_set.classify_auto_mult(
                 training, classif_ids_list, classif_scores_list
