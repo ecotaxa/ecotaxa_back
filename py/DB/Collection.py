@@ -77,6 +77,7 @@ class CollectionUserRole(Model):
     collection_id: int = Column(INTEGER, ForeignKey("collection.id"), primary_key=True)
     user_id: int = Column(INTEGER, ForeignKey("users.id"), primary_key=True)
     role: str = Column(VARCHAR(1), nullable=False, primary_key=True)
+    display_order: int = Column(INTEGER)
     # The relationships are created in Relations.py but the typing here helps IDE
     collection: relationship
     user: User
@@ -100,7 +101,7 @@ class CollectionOrgaRole(Model):
         nullable=False,
         primary_key=True,
     )
-
+    display_order: int = Column(INTEGER)
     @property
     def organisation(self):
         return self.organization.name
