@@ -4,7 +4,7 @@
 #
 #  Models used in CRUD API_operations.
 #
-from typing import Optional, Dict, List, Any, Union
+from typing import Optional, Dict, List, Any, Union,Tuple
 from BO.ColumnUpdate import ColUpdate
 from BO.DataLicense import LicenseEnum, AccessLevelEnum
 from BO.Job import DBJobStateEnum
@@ -765,28 +765,29 @@ class _AddedToCollection(BaseModel):
         title="Creator users",
         description="""All people who
         are responsible for the creation of the collection. Data creators should receive credit
-        for their work and should therefore be included in the citation.""",
+        for their work and should therefore be included in the citation. (with display order)""",
         default=[],
     )
     creator_organisations: List[OrganizationModel] = Field(
         title="Creator organisations",
         description="""All
         organisations who are responsible for the creation of the collection. Data creators should
-        receive credit for their work and should therefore be included in the citation.""",
+        receive credit for their work and should therefore be included in the citation. (with display order)""",
         default=[],
     )
     associate_users: List[MinUserModel] = Field(
         title="Associate users",
         description="""Other person(s)
-        associated with the collection.""",
+        associated with the collection (with display order).""",
         default=[],
     )
     associate_organisations: List[OrganizationModel] = Field(
         title="Associate organisations",
         description="""Other
-        organisation(s) associated with the collection.""",
+        organisation(s) associated with the collection (with display order) .""",
         default=[],
     )
+    display_order:Dict[str,Any] = Field(title="Creators qand associates display order",description="display order of creators and asosciates (users and organizations) needed to publish", default={"creators":[],"associates":[]},example={"creators":["123_o","657_u","213_u"],"associates":["13_u","823_o","3_u"]})
 
 
 class CollectionModel(_AddedToCollection, _CollectionModelFromDB):
@@ -864,6 +865,7 @@ class CollectionReq(BaseModel):
         description="""Other
         organisation(s) Ids or names associated with the collection.""",
     )
+    display_order:Dict[str,Any] = Field(title="Creators qand associates display order",description="display order of creators and asosciates (users and organizations) needed to publish", default={"creators":[],"associates":[]},example={"creators":["123_o","657_u","213_u"],"associates":["13_u","823_o","3_u"]})
 
     class Config:
         schema_extra = {"title": "Update full or partial Collection Model"}

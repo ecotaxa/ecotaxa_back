@@ -200,3 +200,16 @@ class ImagingInstrumentName(DwC_ExtendedMeasurementOrFact):
             measurementUnit="Not applicable",
             measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/XXXX/",
         )
+
+
+class AnalyticalInstrumentName(DwC_ExtendedMeasurementOrFact):
+    def __init__(self,event_id:str,value_id: str,value: str):
+        super().__init__(
+            eventID=event_id,
+            measurementType="Analytical instrument name",
+            measurementTypeID="http://vocab.nerc.ac.uk/collection/P01/current/NMANINST/",
+            measurementValue=value,
+            measurementValueID=value_id,
+            measurementUnit="Not applicable",
+            measurementUnitID="http://vocab.nerc.ac.uk/collection/P06/current/XXXX/",
+        )
