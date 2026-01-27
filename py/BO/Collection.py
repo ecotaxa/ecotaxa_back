@@ -33,7 +33,19 @@ logger = get_logger(__name__)
 CollectionIDT = int
 CollectionIDListT = List[int]
 
-
+by_role_schema = {
+            "user": {
+                "creator_users": COLLECTION_ROLE_DATA_CREATOR,
+                "associate_users": COLLECTION_ROLE_ASSOCIATED_PERSON,
+            },
+            "org": {
+                "creator_organisations": COLLECTION_ROLE_DATA_CREATOR,
+                "associate_organisations": COLLECTION_ROLE_ASSOCIATED_PERSON,
+            },
+        }
+display_order_schema: Dict[str,List]= {"creators":[],"associates":[]}
+user_order_type="u"
+org_order_type="o"
 class CollectionBO(object):
     """
     A Collection business object, i.e. as seen from users.
@@ -54,6 +66,7 @@ class CollectionBO(object):
         self.creator_organisations: List[Organization] = []
         self.associate_organisations: List[Organization] = []
         self.code_provider_org: Optional[str] = None
+        self.display_order: Dict[str,Any] = display_order_schema
 
     def enrich(self) -> "CollectionBO":
         """
@@ -69,29 +82,7 @@ class CollectionBO(object):
             self.contact_user = self._collection.contact_user
         # Reconstitute project list
         self._read_composing_projects()
-        # Dispatch members by role
-        by_role_usr = {
-            COLLECTION_ROLE_DATA_CREATOR: self.creator_users,
-            COLLECTION_ROLE_ASSOCIATED_PERSON: self.associate_users,
-        }
-        a_user_and_role: CollectionUserRole
-        for a_user_and_role in self._collection.users_by_role:
-            if a_user_and_role.user is not None:
-                by_role_usr[a_user_and_role.role].append(a_user_and_role.user)
-            else:
-                by_role_usr[a_user_and_role.role].append(a_user_and_role.guest)
-        # Dispatch orgs by role
-        by_role_org = {
-            COLLECTION_ROLE_DATA_CREATOR: self.creator_organisations,
-            COLLECTION_ROLE_ASSOCIATED_PERSON: self.associate_organisations,
-        }
-        an_org_and_role: CollectionOrgaRole
-        provider = COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER
-        for an_org_and_role in self._collection.organisations_by_role:
-            if an_org_and_role.role == provider:
-                self.code_provider_org = an_org_and_role.organization.name
-            else:
-                by_role_org[an_org_and_role.role].append(an_org_and_role.organization)
+        self._get_by_role()
         return self
 
     def _read_composing_projects(self):
@@ -125,6 +116,77 @@ class CollectionBO(object):
             return "\n".join(problems)
         return None
 
+    def _get_by_role(self)->Dict[str,Any]:
+        # Order members by role
+        by_role_usr:Dict[str,Any] = { COLLECTION_ROLE_DATA_CREATOR: self.creator_users,
+            COLLECTION_ROLE_ASSOCIATED_PERSON: self.associate_users,
+        }
+        display_order=display_order_schema
+        display_order_creator: Dict[str,Any] = {}
+        display_order_associated: Dict[str,Any] = {}
+        ord_creator: Dict[str,Any] = {}
+        ord_assoc: Dict[str,Any] = {}
+        a_user_and_role: CollectionUserRole
+        for a_user_and_role in self._collection.users_by_role:
+
+            if a_user_and_role.display_order is None:
+                o = 0
+            else:
+                o = a_user_and_role.display_order
+            if str(o) not in ord_creator.keys():
+                ord_creator[str(o)] = []
+            if str(o) not in ord_assoc.keys():
+                ord_assoc[str(o)] = []
+            if a_user_and_role.user is not None:
+                by_role_usr[a_user_and_role.role].append(a_user_and_role.user)
+                if a_user_and_role.role==COLLECTION_ROLE_DATA_CREATOR:
+                    ord_creator[str(o)].append(str(a_user_and_role.user.id)+"_"+user_order_type)
+                else:
+                    ord_assoc[str(o)].append(str(a_user_and_role.user.id)+"_"+user_order_type)
+            else:
+                by_role_usr[a_user_and_role.role].append(a_user_and_role.guest)
+                if a_user_and_role.role==COLLECTION_ROLE_DATA_CREATOR:
+                    ord_creator[str(o)].append(str(a_user_and_role.guest.id)+"_"+user_order_type)
+                elif a_user_and_role==COLLECTION_ROLE_ASSOCIATED_PERSON:
+                    ord_assoc[str(o)].append(str(a_user_and_role.guest.id)+"_"+user_order_type)
+
+        display_order_creator.update(ord_creator)
+        display_order_associated.update(ord_assoc)
+        # Dispatch orgs by role
+        by_role_org = {
+            COLLECTION_ROLE_DATA_CREATOR: self.creator_organisations,
+            COLLECTION_ROLE_ASSOCIATED_PERSON: self.associate_organisations,
+        }
+        an_org_and_role: CollectionOrgaRole
+        provider = COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER
+        for an_org_and_role in self._collection.organisations_by_role:
+            if an_org_and_role.display_order is None:
+                o = 0
+            else:
+                o = an_org_and_role.display_order
+            if str(o) not in ord_creator.keys():
+                ord_creator[str(o)]=[]
+            if str(o) not in ord_assoc.keys():
+                ord_assoc[str(o)]=[]
+            if an_org_and_role.role==COLLECTION_ROLE_DATA_CREATOR:
+                ord_creator[str(o)].append(str(an_org_and_role.organization.id)+"_"+org_order_type)
+            elif an_org_and_role.role==COLLECTION_ROLE_ASSOCIATED_PERSON:
+                ord_assoc[str(o)].append(str(an_org_and_role.organization.id)+"_"+org_order_type)
+            if an_org_and_role.role == provider:
+                self.code_provider_org = an_org_and_role.organization.name
+            else:
+                by_role_org[an_org_and_role.role].append(an_org_and_role.organization)
+
+        display_order_creator.update(ord_creator)
+        display_order_associated.update(ord_assoc)
+        by_role:Dict[str,Any] = {"user":by_role_usr, "org":by_role_org}
+        for k, c in sorted(display_order_creator.items(), key=lambda item: int(item[0]) ):
+            display_order["creators"].extend(list(set(c)))
+        for k, v in sorted(display_order_associated.items(), key=lambda item: int(item[0])):
+            display_order["associates"].extend(list(set(v)))
+        self.display_order=display_order
+        return by_role
+
     @staticmethod
     def _get_annotators_from_histo(
         session, project_ids: ProjectIDListT, status: Optional[int] = None
@@ -144,16 +206,6 @@ class CollectionBO(object):
         session: Session,
         collection_update: Dict[str, Any],
     ) -> Optional[str]:
-        by_role_schema = {
-            "user": {
-                "creator_users": COLLECTION_ROLE_DATA_CREATOR,
-                "associate_users": COLLECTION_ROLE_ASSOCIATED_PERSON,
-            },
-            "org": {
-                "creator_organisations": COLLECTION_ROLE_DATA_CREATOR,
-                "associate_organisations": COLLECTION_ROLE_ASSOCIATED_PERSON,
-            },
-        }
         by_role: Dict[str, Any] = {}
         published = (
             self._collection.short_title != ""
@@ -187,6 +239,7 @@ class CollectionBO(object):
                         v = val[key]
                         by_role[k][v] = value
             if len(by_role.keys()) > 0:
+                self.display_order = collection_update["display_order"]
                 self.add_collection_users(session, by_role)
         session.commit()
         return None
@@ -198,7 +251,7 @@ class CollectionBO(object):
     ):
         coll_id = self._collection.id
         #  diff-ing
-
+        roles= {COLLECTION_ROLE_DATA_CREATOR : "creators", COLLECTION_ROLE_ASSOCIATED_PERSON : "associates"}
         if "user" in by_role:
             _ = (
                 session.query(CollectionUserRole)
@@ -213,7 +266,9 @@ class CollectionBO(object):
                     collurole.collection_id = coll_id
                     collurole.user_id = user_id
                     collurole.role = a_role
+                    collurole.display_order = self.display_order[roles[a_role]].index(str(user_id)+"_u")
                     session.add(collurole)
+
 
         # Dispatch orgs by role
         if "org" in by_role:
@@ -232,6 +287,7 @@ class CollectionBO(object):
                     collorole.collection_id = coll_id
                     collorole.organization_id = org_id
                     collorole.role = a_role
+                    collorole.display_order = self.display_order[roles[a_role]].index(str(org_id)+"_o")
                     session.add(collorole)
                     # First org is the institutionCode provider
                     if (
@@ -283,7 +339,6 @@ class CollectionBO(object):
                     session.query(Person.id).filter(Person.email.ilike(a_user)).scalar()
                 )
             else:
-                print("a_user", a_user.__dict__)
                 user_id = (
                     session.query(Person.id).filter(Person.name.ilike(a_user)).scalar()
                 )

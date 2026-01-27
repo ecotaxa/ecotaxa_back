@@ -7516,7 +7516,7 @@
             "items":{
               "$ref":"#/components/schemas/MinUserModel"
             },
-            "description":"All people who\n        are responsible for the creation of the collection. Data creators should receive credit\n        for their work and should therefore be included in the citation.",
+            "description":"All people who\n        are responsible for the creation of the collection. Data creators should receive credit\n        for their work and should therefore be included in the citation. (with display order)",
             "default":[]
           },
           "creator_organisations":{
@@ -7525,7 +7525,7 @@
             "items":{
               "$ref":"#/components/schemas/OrganizationModel"
             },
-            "description":"All\n        organisations who are responsible for the creation of the collection. Data creators should\n        receive credit for their work and should therefore be included in the citation.",
+            "description":"All\n        organisations who are responsible for the creation of the collection. Data creators should\n        receive credit for their work and should therefore be included in the citation. (with display order)",
             "default":[]
           },
           "associate_users":{
@@ -7534,7 +7534,7 @@
             "items":{
               "$ref":"#/components/schemas/MinUserModel"
             },
-            "description":"Other person(s)\n        associated with the collection.",
+            "description":"Other person(s)\n        associated with the collection (with display order).",
             "default":[]
           },
           "associate_organisations":{
@@ -7543,8 +7543,29 @@
             "items":{
               "$ref":"#/components/schemas/OrganizationModel"
             },
-            "description":"Other\n        organisation(s) associated with the collection.",
+            "description":"Other\n        organisation(s) associated with the collection (with display order) .",
             "default":[]
+          },
+          "display_order":{
+            "title":"Creators qand associates display order",
+            "type":"object",
+            "description":"display order of creators and asosciates (users and organizations) needed to publish",
+            "default":{
+              "creators":[],
+              "associates":[]
+            },
+            "example":{
+              "creators":[
+                "123_o",
+                "657_u",
+                "213_u"
+              ],
+              "associates":[
+                "13_u",
+                "823_o",
+                "3_u"
+              ]
+            }
           }
         },
         "description":"Basic and computed information about the Collection."
@@ -7682,6 +7703,27 @@
               ]
             },
             "description":"Other\n        organisation(s) Ids or names associated with the collection."
+          },
+          "display_order":{
+            "title":"Creators qand associates display order",
+            "type":"object",
+            "description":"display order of creators and asosciates (users and organizations) needed to publish",
+            "default":{
+              "creators":[],
+              "associates":[]
+            },
+            "example":{
+              "creators":[
+                "123_o",
+                "657_u",
+                "213_u"
+              ],
+              "associates":[
+                "13_u",
+                "823_o",
+                "3_u"
+              ]
+            }
           }
         },
         "description":"update full or partial collection Request model"

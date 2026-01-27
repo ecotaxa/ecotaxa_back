@@ -54,8 +54,7 @@ from formats.DarwinCore.MoF import (
     BiovolumeOfBiologicalEntity,
     SamplingInstrumentName,
     CountOfBiologicalEntity,
-    ImagingInstrumentName,
-    # TODO replace ImagingInstrumentName par AnalyticalInstrumentName but keep the value
+    AnalyticalInstrumentName,
 )
 from formats.DarwinCore.models import (
     DwC_Event,
@@ -90,10 +89,7 @@ ROLE_FOR_ASSOCIATE = "originator"
 
 
 def get_scientific_name_id(worms) -> str:
-    if worms.aphia_id == 1:
-        return "t"  # Value returned from API
     return "urn:lsid:marinespecies.org:taxname:" + str(worms.aphia_id)
-
 
 class DarwinCoreExport(JobServiceBase):
     """
@@ -396,15 +392,47 @@ class DarwinCoreExport(JobServiceBase):
         title = EMLTitle(title=the_collection.title)
 
         creators: List[EMLPerson] = []
-        for a_user in the_collection.creator_users:
-            person, errs = self.user_to_eml_person(a_user, "creator '%s'" % a_user.name)
-            if errs:
-                self.warnings.extend(errs)
+        creators_by_id: Dict[str,Any] = {str(a_user.id)+"_u":a_user for a_user in the_collection.creator_users}
+        creators_by_id.update({str(an_org.id)+"_o":an_org for an_org in the_collection.creator_organisations})
+        for an_id in the_collection.display_order["creators"]:
+            a_creator=creators_by_id[an_id]
+            if an_id[-1]=="u":
+                person, errs = self.user_to_eml_person(a_creator, "creator '%s'" % a_creator.name)
+                if errs:
+                    self.warnings.extend(errs)
+                else:
+                    assert person is not None
+                    creators.append(person)
             else:
-                assert person is not None
-                creators.append(person)
-        for an_org in the_collection.creator_organisations:
-            creators.append(self.organisation_to_eml_person(an_org))
+                creators.append(self.organisation_to_eml_person(a_creator))
+
+        associates: List[EMLAssociatedPerson] = []
+        associates_by_id: Dict[str,Any] = {str(a_user.id)+"_u":a_user for a_user in the_collection.associate_users}
+        associates_by_id.update({str(an_org.id)+"_o":an_org for an_org in the_collection.associate_organisations})
+        for an_id in the_collection.display_order["associates"]:
+            an_associate=associates_by_id[an_id]
+            if an_id[-1]=="u":
+                person, errs = self.user_to_eml_person(
+                    an_associate, "associated person %d" % an_associate.id
+                )
+                if errs:
+                    self.warnings.extend(errs)
+                else:
+                    assert person is not None
+                    associates.append(
+                        self.eml_person_to_associated_person(person, ROLE_FOR_ASSOCIATE)
+                    )
+            else:
+                person_from_org = self.organisation_to_eml_person(an_associate)
+            role = ROLE_FOR_ASSOCIATE
+            if an_associate == the_collection.code_provider_org:
+                role = "custody"
+            associates.append(
+                self.eml_person_to_associated_person(person_from_org, role)
+            )
+        # TODO if needed
+        # EMLAssociatedPerson = EMLPerson + specific role
+
         if len(creators) == 0:
             self.errors.append(
                 "No valid data creator (user or organisation) found for EML metadata."
@@ -421,30 +449,6 @@ class DarwinCoreExport(JobServiceBase):
                 "No valid metadata provider user found for EML metadata."
             )
             self.warnings.extend(errs)
-
-        associates: List[EMLAssociatedPerson] = []
-        for a_user in the_collection.associate_users:
-            person, errs = self.user_to_eml_person(
-                a_user, "associated person %d" % a_user.id
-            )
-            if errs:
-                self.warnings.extend(errs)
-            else:
-                assert person is not None
-                associates.append(
-                    self.eml_person_to_associated_person(person, ROLE_FOR_ASSOCIATE)
-                )
-        for an_org in the_collection.associate_organisations:
-            person_from_org = self.organisation_to_eml_person(an_org)
-            role = ROLE_FOR_ASSOCIATE
-            if an_org == the_collection.code_provider_org:
-                role = "custody"
-            associates.append(
-                self.eml_person_to_associated_person(person_from_org, role)
-            )
-
-        # TODO if needed
-        # EMLAssociatedPerson = EMLPerson + specific role
 
         publication_date = now_time().date().isoformat()
 
@@ -824,7 +828,7 @@ class DarwinCoreExport(JobServiceBase):
         """
         instrument_url_and_label = self._get_instrument_url_and_label(sample.project)
         if instrument_url_and_label is not None:
-            ins = ImagingInstrumentName(
+            ins = AnalyticalInstrumentName(
                 event_id=event_id,
                 value_id=instrument_url_and_label[0],
                 value=instrument_url_and_label[1],

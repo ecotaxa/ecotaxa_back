@@ -3010,7 +3010,17 @@ ALTER TABLE taxonomy DROP COLUMN id_source;
 UPDATE alembic_version SET version_num='08807338f98d' WHERE alembic_version.version_num = 'fc9fb059120c';
 
 COMMIT;
+BEGIN;
 
+-- Running upgrade 08807338f98d -> 287303b6d65c
+
+ALTER TABLE collection_orga_role ADD COLUMN display_order INTEGER;
+
+ALTER TABLE collection_user_role ADD COLUMN display_order INTEGER;
+
+UPDATE alembic_version SET version_num='287303b6d65c' WHERE alembic_version.version_num = '08807338f98d';
+
+COMMIT;
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;
