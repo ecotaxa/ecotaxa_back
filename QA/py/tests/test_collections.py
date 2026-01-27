@@ -110,6 +110,7 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
         "provider_user": None,
         "title": "Test collection",
         "short_title": None,
+        'display_order': {'associates': [], 'creators': []}
     }
 
     # Update the abstract
