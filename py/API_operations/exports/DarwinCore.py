@@ -424,12 +424,12 @@ class DarwinCoreExport(JobServiceBase):
                     )
             else:
                 person_from_org = self.organisation_to_eml_person(an_associate)
-            role = ROLE_FOR_ASSOCIATE
-            if an_associate == the_collection.code_provider_org:
-                role = "custody"
-            associates.append(
+                role = ROLE_FOR_ASSOCIATE
+                if an_associate == the_collection.code_provider_org:
+                    role = "custody"
+                associates.append(
                 self.eml_person_to_associated_person(person_from_org, role)
-            )
+                )
         # TODO if needed
         # EMLAssociatedPerson = EMLPerson + specific role
 
