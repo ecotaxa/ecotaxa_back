@@ -787,7 +787,7 @@ class _AddedToCollection(BaseModel):
         organisation(s) associated with the collection (with display order) .""",
         default=[],
     )
-    display_order:Dict[str,Any] = Field(title="Creators qand associates display order",description="display order of creators and asosciates (users and organizations) needed to publish", default={"creators":[],"associates":[]},example={"creators":["123_o","657_u","213_u"],"associates":["13_u","823_o","3_u"]})
+    display_order:Dict[str,Any] = Field(title="Creators and associates display order",description="display order of creators and asosciates (users and organizations) needed to publish", default={"creators":[],"associates":[]},example={"creators":["123_o","657_u","213_u"],"associates":["13_u","823_o","3_u"]})
 
 
 class CollectionModel(_AddedToCollection, _CollectionModelFromDB):
@@ -865,7 +865,7 @@ class CollectionReq(BaseModel):
         description="""Other
         organisation(s) Ids or names associated with the collection.""",
     )
-    display_order:Dict[str,Any] = Field(title="Creators qand associates display order",description="display order of creators and asosciates (users and organizations) needed to publish", default={"creators":[],"associates":[]},example={"creators":["123_o","657_u","213_u"],"associates":["13_u","823_o","3_u"]})
+    display_order:Dict[str,Any] = Field(title="Creators and associates display order",description="display order of creators and asosciates (users and organizations) needed to publish", default={"creators":[],"associates":[]},example={"creators":["123_o","657_u","213_u"],"associates":["13_u","823_o","3_u"]})
 
     class Config:
         schema_extra = {"title": "Update full or partial Collection Model"}
