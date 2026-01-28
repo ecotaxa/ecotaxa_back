@@ -241,7 +241,7 @@ class CollectionBO(object):
                             by_role[k] = {}
                         v = val[key]
                         by_role[k][v] = value
-        if len(by_role["user"]) > 0 or len(by_role["org"]) > 0:
+        if len(by_role) > 0 :
             self.display_order = collection_update["display_order"]
             self.add_collection_users(session, by_role)
         session.commit()
