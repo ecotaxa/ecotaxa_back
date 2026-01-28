@@ -50,7 +50,8 @@ class DatasetMetadata(object):
             xml_title = etree_sub_element(dataset, "title")
             xml_title.set("lang", a_title.lang)
             xml_title.text = a_title.title
-        for a_person in sorted(meta.creators, key=lambda creator: creator.json()):
+        # removed sorted as data are already sorted
+        for a_person in meta.creators:
             xml_person = etree_sub_element(dataset, "creator")
             self.person_to_xml(xml_person, a_person)
         for a_person in sorted(
@@ -58,7 +59,8 @@ class DatasetMetadata(object):
         ):
             xml_person = etree_sub_element(dataset, "metadataProvider")
             self.person_to_xml(xml_person, a_person)
-        for a_person in sorted(meta.associatedParties, key=lambda party: party.json()):
+        # removed sorted as data are already sorted
+        for a_person in meta.associatedParties:
             xml_person = etree_sub_element(dataset, "associatedParty")
             self.party_to_xml(xml_person, a_person)
         etree_sub_element(dataset, "pubDate").text = meta.pubDate

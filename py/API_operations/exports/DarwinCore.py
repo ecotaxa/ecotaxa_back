@@ -20,7 +20,7 @@ import BO.ProjectVarsDefault as DefaultVars
 from API_models.exports import ExportRsp, SciExportTypeEnum
 from BO.Acquisition import AcquisitionIDT
 from BO.Classification import ClassifIDT, ClassifIDSetT
-from BO.Collection import CollectionIDT, CollectionBO, creators_key,associates_key, user_order_type,org_order_type
+from BO.Collection import CollectionIDT, CollectionBO, creators_key,associates_key, user_order_type
 from BO.CommonObjectSets import CommonObjectSets
 from BO.DataLicense import LicenseEnum, DataLicense
 from BO.ObjectSet import DescribedObjectSet
@@ -430,7 +430,6 @@ class DarwinCoreExport(JobServiceBase):
                 )
         # TODO if needed
         # EMLAssociatedPerson = EMLPerson + specific role
-
         if len(creators) == 0:
             self.errors.append(
                 "No valid data creator (user or organisation) found for EML metadata."
@@ -632,6 +631,7 @@ class DarwinCoreExport(JobServiceBase):
                 if summ[0] is None or summ[1] is None:
                     self.empty_samples.append(self._sample_ref_for_message(a_sample))
                     continue
+                assert a_sample.latitude is not None and a_sample.longitude is not None
                 evt_date = self.event_date(summ[0], summ[1])
                 latitude = self.geo_to_txt(float(a_sample.latitude))
                 longitude = self.geo_to_txt(float(a_sample.longitude))
