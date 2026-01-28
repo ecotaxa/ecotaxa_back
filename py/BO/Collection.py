@@ -186,7 +186,6 @@ class CollectionBO(object):
             display_order[creators_key].extend(list(set(c)))
         for k, v in sorted(display_order_associated.items(), key=lambda associate: int(associate[0])):
             display_order[associates_key].extend(list(set(v)))
-        print('display_order',display_order)
         self.display_order=display_order
         return by_role
 
@@ -224,7 +223,7 @@ class CollectionBO(object):
                 if res is not None:
                     return res
             # Simple fields update
-            display_order=[]
+            display_order:Dict[str,Any]= {creators_key: [],associates_key: []}
             if key in self.modif:
                 setattr(self._collection, key, value)
             elif key in self.no_modif:
@@ -237,18 +236,14 @@ class CollectionBO(object):
                 setattr(self._collection, key + "_id", id_user)
             else:
                 for k, val in by_role_schema.items():
-                    if k=="user":
-                        display_order.append(str(value)+"_"+user_order_type)
-                    elif k=="org":
-                        display_order.append(str(value)+"_"+org_order_type)
                     if key in val.keys():
                         if k not in by_role:
                             by_role[k] = {}
                         v = val[key]
                         by_role[k][v] = value
-            if len(by_role.keys()) > 0:
-                self.display_order = display_order
-                self.add_collection_users(session, by_role)
+        if len(by_role["user"]) > 0 or len(by_role["org"]) > 0:
+            self.display_order = collection_update["display_order"]
+            self.add_collection_users(session, by_role)
         session.commit()
         return None
 
