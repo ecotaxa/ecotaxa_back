@@ -224,6 +224,7 @@ class CollectionBO(object):
                 if res is not None:
                     return res
             # Simple fields update
+            display_order=[]
             if key in self.modif:
                 setattr(self._collection, key, value)
             elif key in self.no_modif:
@@ -236,13 +237,17 @@ class CollectionBO(object):
                 setattr(self._collection, key + "_id", id_user)
             else:
                 for k, val in by_role_schema.items():
+                    if k=="user":
+                        display_order.append(str(value)+"_"+user_order_type)
+                    elif k=="org":
+                        display_order.append(str(value)+"_"+org_order_type)
                     if key in val.keys():
                         if k not in by_role:
                             by_role[k] = {}
                         v = val[key]
                         by_role[k][v] = value
             if len(by_role.keys()) > 0:
-                self.display_order = collection_update["display_order"]
+                self.display_order = display_order
                 self.add_collection_users(session, by_role)
         session.commit()
         return None
@@ -269,7 +274,7 @@ class CollectionBO(object):
                     collurole.collection_id = coll_id
                     collurole.user_id = user_id
                     collurole.role = a_role
-                    collurole.display_order = self.display_order[roles[a_role]].index(str(user_id)+"_u")
+                    collurole.display_order = self.display_order[roles[a_role]].index(str(user_id)+"_"+user_order_type)
                     session.add(collurole)
 
 
@@ -290,7 +295,7 @@ class CollectionBO(object):
                     collorole.collection_id = coll_id
                     collorole.organization_id = org_id
                     collorole.role = a_role
-                    collorole.display_order = self.display_order[roles[a_role]].index(str(org_id)+"_o")
+                    collorole.display_order = self.display_order[roles[a_role]].index(str(org_id)+"_"+org_order_type)
                     session.add(collorole)
                     # First org is the institutionCode provider
                     if (
