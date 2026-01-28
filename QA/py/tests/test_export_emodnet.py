@@ -24,6 +24,7 @@ from tests.emodnet_ref import (
 )
 from tests.export_shared import JOB_DOWNLOAD_URL
 from tests.formulae import uvp_formulae
+from tests.jobs import wait_for_stable, api_check_job_ok, api_check_job_failed
 from tests.test_classification import query_all_objects, OBJECT_SET_CLASSIFY_URL
 from tests.test_collections import (
     COLLECTION_CREATE_URL,
@@ -32,7 +33,6 @@ from tests.test_collections import (
     regrant_if_needed,
 )
 from tests.test_fastapi import PROJECT_QUERY_URL
-from tests.jobs import wait_for_stable, api_check_job_ok, api_check_job_failed
 from tests.test_update import ACQUISITION_SET_UPDATE_URL, SAMPLE_SET_UPDATE_URL
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
@@ -174,6 +174,20 @@ This series is part of the long term planktonic monitoring of
     the_coll["provider_user"] = user_doing_all
     rsp = fastapi.put(url, headers=admin_or_creator, json=the_coll)
     assert rsp.status_code == status.HTTP_200_OK
+    # Read-back for org Ids, we cannot fix creators order without them
+    url = COLLECTION_QUERY_URL.format(collection_id=coll_id)
+    rsp = fastapi.get(url, headers=admin_or_creator)
+    assert rsp.status_code == status.HTTP_200_OK
+    read = rsp.json()
+    station_id = read["creator_organisations"][0]["id"]
+    real_user_id = read["creator_users"][0]["id"]
+    url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
+    read["display_order"] = {  # This is EML order
+        "creators": [f"{real_user_id}_u", f"{station_id}_o"],
+    }
+    rsp = fastapi.put(url, headers=admin_or_creator, json=read)
+    assert rsp.status_code == status.HTTP_200_OK
+    # Store in ref
     all_colls[str(admin_or_creator)] = the_coll
     yield the_coll
 
