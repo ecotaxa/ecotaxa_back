@@ -43,9 +43,10 @@ by_role_schema = {
                 "associate_organisations": COLLECTION_ROLE_ASSOCIATED_PERSON,
             },
         }
-display_order_schema: Dict[str,List]= {"creators":[],"associates":[]}
-user_order_type="u"
-org_order_type="o"
+creators_key = "creators"
+associates_key = "associates"
+user_order_type = "u"
+org_order_type = "o"
 class CollectionBO(object):
     """
     A Collection business object, i.e. as seen from users.
@@ -66,7 +67,7 @@ class CollectionBO(object):
         self.creator_organisations: List[Organization] = []
         self.associate_organisations: List[Organization] = []
         self.code_provider_org: Optional[str] = None
-        self.display_order: Dict[str,Any] = display_order_schema
+        self.display_order: Dict[str,Any] = {creators_key:[],associates_key:[]}
 
     def enrich(self) -> "CollectionBO":
         """
@@ -121,7 +122,8 @@ class CollectionBO(object):
         by_role_usr:Dict[str,Any] = { COLLECTION_ROLE_DATA_CREATOR: self.creator_users,
             COLLECTION_ROLE_ASSOCIATED_PERSON: self.associate_users,
         }
-        display_order=display_order_schema
+
+        display_order: Dict[str,Any]= {creators_key:[],associates_key:[]}
         display_order_creator: Dict[str,Any] = {}
         display_order_associated: Dict[str,Any] = {}
         ord_creator: Dict[str,Any] = {}
@@ -180,10 +182,11 @@ class CollectionBO(object):
         display_order_creator.update(ord_creator)
         display_order_associated.update(ord_assoc)
         by_role:Dict[str,Any] = {"user":by_role_usr, "org":by_role_org}
-        for k, c in sorted(display_order_creator.items(), key=lambda item: int(item[0]) ):
-            display_order["creators"].extend(list(set(c)))
-        for k, v in sorted(display_order_associated.items(), key=lambda item: int(item[0])):
-            display_order["associates"].extend(list(set(v)))
+        for k, c in sorted(display_order_creator.items(), key=lambda creator: int(creator[0]) ):
+            display_order[creators_key].extend(list(set(c)))
+        for k, v in sorted(display_order_associated.items(), key=lambda associate: int(associate[0])):
+            display_order[associates_key].extend(list(set(v)))
+        print('display_order',display_order)
         self.display_order=display_order
         return by_role
 
@@ -251,7 +254,7 @@ class CollectionBO(object):
     ):
         coll_id = self._collection.id
         #  diff-ing
-        roles= {COLLECTION_ROLE_DATA_CREATOR : "creators", COLLECTION_ROLE_ASSOCIATED_PERSON : "associates"}
+        roles= {COLLECTION_ROLE_DATA_CREATOR : creators_key, COLLECTION_ROLE_ASSOCIATED_PERSON : associates_key}
         if "user" in by_role:
             _ = (
                 session.query(CollectionUserRole)

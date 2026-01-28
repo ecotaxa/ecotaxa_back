@@ -20,7 +20,7 @@ import BO.ProjectVarsDefault as DefaultVars
 from API_models.exports import ExportRsp, SciExportTypeEnum
 from BO.Acquisition import AcquisitionIDT
 from BO.Classification import ClassifIDT, ClassifIDSetT
-from BO.Collection import CollectionIDT, CollectionBO
+from BO.Collection import CollectionIDT, CollectionBO, creators_key,associates_key, user_order_type,org_order_type
 from BO.CommonObjectSets import CommonObjectSets
 from BO.DataLicense import LicenseEnum, DataLicense
 from BO.ObjectSet import DescribedObjectSet
@@ -139,6 +139,7 @@ class DarwinCoreExport(JobServiceBase):
         collection = self.ro_session.query(Collection).get(collection_id)
         assert collection is not None, "Invalid collection ID"
         self.collection: Collection = collection
+        self.the_collection: CollectionBO = CollectionBO(self.collection).enrich()
         self.dry_run: bool = dry_run
         self.include_predicted: bool = include_predicted
         # Args are serialized in JSON -> keys have become str and 0 val becomes None
@@ -382,21 +383,19 @@ class DarwinCoreExport(JobServiceBase):
         Various queries/copies on/from the projects for getting metadata.
         Also extract the institutionCode from the collection.
         """
-        the_collection: CollectionBO = CollectionBO(self.collection).enrich()
-
         identifier = EMLIdentifier(
-            packageId=the_collection.external_id,
-            system=the_collection.external_id_system,
+            packageId=self.the_collection.external_id,
+            system=self.the_collection.external_id_system,
         )
 
-        title = EMLTitle(title=the_collection.title)
+        title = EMLTitle(title=self.the_collection.title)
 
         creators: List[EMLPerson] = []
-        creators_by_id: Dict[str,Any] = {str(a_user.id)+"_u":a_user for a_user in the_collection.creator_users}
-        creators_by_id.update({str(an_org.id)+"_o":an_org for an_org in the_collection.creator_organisations})
-        for an_id in the_collection.display_order["creators"]:
+        creators_by_id: Dict[str,Any] = {str(a_user.id)+"_u":a_user for a_user in self.the_collection.creator_users}
+        creators_by_id.update({str(an_org.id)+"_o":an_org for an_org in self.the_collection.creator_organisations})
+        for an_id in self.the_collection.display_order[creators_key]:
             a_creator=creators_by_id[an_id]
-            if an_id[-1]=="u":
+            if an_id[-1]==user_order_type:
                 person, errs = self.user_to_eml_person(a_creator, "creator '%s'" % a_creator.name)
                 if errs:
                     self.warnings.extend(errs)
@@ -407,11 +406,11 @@ class DarwinCoreExport(JobServiceBase):
                 creators.append(self.organisation_to_eml_person(a_creator))
 
         associates: List[EMLAssociatedPerson] = []
-        associates_by_id: Dict[str,Any] = {str(a_user.id)+"_u":a_user for a_user in the_collection.associate_users}
-        associates_by_id.update({str(an_org.id)+"_o":an_org for an_org in the_collection.associate_organisations})
-        for an_id in the_collection.display_order["associates"]:
+        associates_by_id: Dict[str,Any] = {str(a_user.id)+"_u":a_user for a_user in self.the_collection.associate_users}
+        associates_by_id.update({str(an_org.id)+"_o":an_org for an_org in self.the_collection.associate_organisations})
+        for an_id in self.the_collection.display_order[associates_key]:
             an_associate=associates_by_id[an_id]
-            if an_id[-1]=="u":
+            if an_id[-1]==user_order_type:
                 person, errs = self.user_to_eml_person(
                     an_associate, "associated person %d" % an_associate.id
                 )
@@ -425,10 +424,9 @@ class DarwinCoreExport(JobServiceBase):
             else:
                 person_from_org = self.organisation_to_eml_person(an_associate)
                 role = ROLE_FOR_ASSOCIATE
-                if an_associate == the_collection.code_provider_org:
+                if an_associate == self.the_collection.code_provider_org:
                     role = "custody"
-                associates.append(
-                self.eml_person_to_associated_person(person_from_org, role)
+                associates.append(self.eml_person_to_associated_person(person_from_org, role)
                 )
         # TODO if needed
         # EMLAssociatedPerson = EMLPerson + specific role
@@ -437,12 +435,12 @@ class DarwinCoreExport(JobServiceBase):
             self.errors.append(
                 "No valid data creator (user or organisation) found for EML metadata."
             )
-        contact, errs = self.user_to_eml_person(the_collection.contact_user, "contact")
+        contact, errs = self.user_to_eml_person(self.the_collection.contact_user, "contact")
         if contact is None:
             self.errors.append("No valid contact user found for EML metadata.")
             self.warnings.extend(errs)
         provider, errs = self.user_to_eml_person(
-            the_collection.provider_user, "provider"
+            self.the_collection.provider_user, "provider"
         )
         if provider is None:
             self.errors.append(
@@ -452,7 +450,7 @@ class DarwinCoreExport(JobServiceBase):
 
         publication_date = now_time().date().isoformat()
 
-        abstract = the_collection.abstract
+        abstract = self.the_collection.abstract
         if not abstract:
             self.errors.append("Collection 'abstract' field is empty")
         elif len(abstract) < self.MIN_ABSTRACT_CHARS:
@@ -466,7 +464,7 @@ class DarwinCoreExport(JobServiceBase):
         # The OOV supported the financial effort of the survey.
         # We are grateful to the crew of the research boat at OOV that collected plankton during the temporal survey."""
 
-        coll_license: LicenseEnum = cast(LicenseEnum, the_collection.license)
+        coll_license: LicenseEnum = cast(LicenseEnum, self.the_collection.license)
         if coll_license not in self.OK_LICENSES:
             self.errors.append(
                 "Collection license should be one of %s to be accepted, not %s."
@@ -503,7 +501,7 @@ class DarwinCoreExport(JobServiceBase):
         now = now_time().replace(microsecond=0)
         meta_plus = EMLAdditionalMeta(dateStamp=now.isoformat())
 
-        coll_title = the_collection.title
+        coll_title = self.the_collection.title
         info_url = (
             "https://ecotaxa.obs-vlfr.fr/api/collections/by_title?q=%s"
             % quote_plus(coll_title)
@@ -516,7 +514,7 @@ class DarwinCoreExport(JobServiceBase):
         # TODO: a marine regions substitute
         # Note: below can be very long for big projects
         (min_lat, max_lat, min_lon, max_lon) = ProjectBO.get_bounding_geo(
-            self.session, the_collection.project_ids
+            self.session, self.the_collection.project_ids
         )
         geo_cov = EMLGeoCoverage(
             geographicDescription="See coordinates",
@@ -528,7 +526,7 @@ class DarwinCoreExport(JobServiceBase):
 
         # Note: below can be very long for big projects
         (min_date, max_date) = ProjectBO.get_date_range(
-            self.session, the_collection.project_ids
+            self.session, self.the_collection.project_ids
         )
         time_cov = EMLTemporalCoverage(
             beginDate=timestamp_to_str(min_date), endDate=timestamp_to_str(max_date)
@@ -562,7 +560,7 @@ class DarwinCoreExport(JobServiceBase):
             additionalMetadata=meta_plus,
             informationUrl=info_url,
         )
-        return ret, the_collection.get_institution_code()
+        return ret, self.the_collection.get_institution_code()
 
     def get_taxo_coverage(self) -> List[EMLTaxonomicClassification]:
         """
@@ -608,18 +606,16 @@ class DarwinCoreExport(JobServiceBase):
         Add DwC files into the archive: events, occurrences, eMoFs
             We produce sample-type events.
         """
-        the_collection: CollectionBO = CollectionBO(self.collection).enrich()
-
-        dataset_name = self.sanitize_title(self.collection.title)
-        samples_in_several_prjs = the_collection.homonym_samples(self.ro_session)
+        dataset_name = self.sanitize_title(self.the_collection.title)
+        samples_in_several_prjs = self.the_collection.homonym_samples(self.ro_session)
         if len(samples_in_several_prjs) > 0:
             logger.info("Homonym samples: %s", samples_in_several_prjs)
         # Per_sample taxa, in plain taxo "space"
         taxa_per_sample: Dict[str, Set[ClassifIDT]] = {}
         nb_sample = 0
-        sample_count = self._get_fast_count(the_collection.project_ids)
+        sample_count = self._get_fast_count(self.the_collection.project_ids)
         progress_range = 99
-        for a_prj_id in the_collection.project_ids:
+        for a_prj_id in self.the_collection.project_ids:
             samples = Sample.get_orig_id_and_model(self.ro_session, prj_id=a_prj_id)
             a_sample: Sample
             events = arch.events
