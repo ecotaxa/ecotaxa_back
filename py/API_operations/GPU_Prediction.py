@@ -218,7 +218,7 @@ In second step 'Choice of Learning Set categories and size', where the learning 
         """
         logger.info("Training the classifier")
         ret = OurRandomForestClassifier()
-        ret.learn_from(features, classif_ids)
+        ret.learn_from(features, np.fromiter(classif_ids, dtype=np.int64))
         logger.info("Done training the classifier")
 
         return ret
@@ -312,7 +312,9 @@ In second step 'Choice of Learning Set categories and size', where the learning 
             diag = self._ensure_deep_features_for(a_projid, model_name)
             logger.info(diag)
 
-    DEEP_EXTRACT_CHUNK = 10000
+    DEEP_EXTRACT_CHUNK = (
+        10000  # Send this number of images by batch to features calculator
+    )
 
     def _ensure_deep_features_for(self, proj_id: ProjectIDT, model_name: str) -> str:
         """

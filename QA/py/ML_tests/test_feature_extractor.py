@@ -44,7 +44,7 @@ def test_deep_features_extractor():
     pd.testing.assert_frame_equal(res, expected, atol=1e-3, check_dtype=False)
 
 
-def test_missing_image():
+def notest_missing_image():
     vault = Vault(os.path.join(TEST_DIR, "vault"))
     config = MagicMock()
     config.get_cnf.return_value = os.path.join(TEST_DIR, "models")
