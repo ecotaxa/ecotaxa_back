@@ -147,9 +147,10 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
     else:
         short_title = None
         external_id = "?"
+    print('rsp===', rsp.json())
     assert rsp.json() == [
         {
-            "abstract": """
+          "abstract": """   
     A bit less abstract...
     """,
             "associate_organisations": [
